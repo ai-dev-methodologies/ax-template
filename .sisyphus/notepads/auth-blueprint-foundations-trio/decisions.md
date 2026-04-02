@@ -1,0 +1,1 @@
+- Created blueprints/auth-manifest.yaml acting as the central machine-readable policy source for the auth blueprint, enforcing defaults like minimal UI state for /auth/me, explicit linking, and stateful refresh.
