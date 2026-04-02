@@ -1,0 +1,109 @@
+items:
+  - name: React official docs
+    type: official-doc
+    watch:
+      - release_notes
+      - deprecations
+      - api_convention_changes
+    cadence: monthly
+    stale_triggers:
+      - latest_doc_mismatch
+
+  - name: Spring Boot official docs
+    type: official-doc
+    watch:
+      - release_notes
+      - support_window
+      - deprecations
+    cadence: monthly
+    stale_triggers:
+      - latest_doc_mismatch
+      - unsupported_branch
+
+  - name: Spring Security official docs
+    type: official-doc
+    watch:
+      - oauth_jwt_guidance
+      - csrf_cors_guidance
+      - deprecations
+    cadence: monthly
+    stale_triggers:
+      - latest_doc_mismatch
+
+  - name: Spring Authorization Server samples
+    type: approved-github-ref
+    watch:
+      - semantic_tags
+      - structural_files
+      - issue_spike
+      - security_advisories
+      - meaningful_commit_cadence
+    cadence: monthly
+    stale_triggers:
+      - no_meaningful_commits_6m
+      - issue_spike_after_release
+      - critical_cve_unpatched
+
+  - name: JHipster generated output
+    type: approved-github-ref
+    watch:
+      - semantic_tags
+      - structural_files
+      - security_advisories
+      - generator_output_changes
+    cadence: monthly
+    stale_triggers:
+      - critical_cve_unpatched
+      - major_generator_shift_without_clear_migration
+
+  - name: Baeldung Spring Security examples
+    type: practical-ref
+    watch:
+      - api_pattern_updates
+      - deprecation_examples
+    cadence: quarterly
+    stale_triggers:
+      - examples_no_longer_match_official_guidance
+
+  - name: full-stack-fastapi-template
+    type: practical-ref
+    watch:
+      - auth_state_pattern_changes
+      - generated_client_pattern_changes
+      - testing_pattern_changes
+    cadence: quarterly
+    stale_triggers:
+      - structure_no_longer_relevant_for_decoupled_spa_reference
+
+  - name: ixartz SaaS Boilerplate
+    type: practical-ref
+    watch:
+      - auth_ux_pattern_changes
+      - testing_stack_changes
+      - middleware_auth_boundary_changes
+    cadence: quarterly
+    stale_triggers:
+      - excessive_framework_lock_in_for_generic_reuse
+
+  - name: orval
+    type: generator-tool
+    watch:
+      - semantic_tags
+      - output_breaking_changes
+      - ecosystem_compatibility
+      - security_advisories
+    cadence: monthly
+    stale_triggers:
+      - generated_output_breaking_change
+      - maintenance_drop
+
+  - name: kubb
+    type: generator-tool
+    watch:
+      - semantic_tags
+      - output_breaking_changes
+      - ecosystem_compatibility
+    cadence: monthly
+    stale_triggers:
+      - maintenance_drop
+      - excessive_churn

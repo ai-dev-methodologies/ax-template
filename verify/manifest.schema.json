@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ax-template.local/verify/manifest.schema.json",
+  "title": "Auth Manifest Minimal Verification Schema",
+  "description": "Minimal placeholder schema to enforce required top-level fields for the verify engine.",
+  "type": "object",
+  "properties": {
+    "template_id": { "type": "string" },
+    "family": { "type": "string" },
+    "status": { "type": "string" },
+    "stack": { "type": "object" },
+    "provider_policy": { "type": "object" },
+    "auth_state": { "type": "object" },
+    "rbac": { "type": "object" },
+    "account_linking": { "type": "object" },
+    "verification_policy": { "type": "object" },
+    "rate_limits": { "type": "object" },
+    "security_defaults": { "type": "object" },
+    "testing_baseline": { "type": "object" },
+    "verification_checkpoints": { "type": "array" },
+    "must_not": { "type": "array" },
+    "reject_if": { "type": "array" },
+    "source_precedence": { "type": "object" }
+  },
+  "required": [
+    "template_id",
+    "family",
+    "status",
+    "stack",
+    "provider_policy",
+    "auth_state",
+    "rbac",
+    "account_linking",
+    "verification_policy",
+    "rate_limits",
+    "security_defaults",
+    "testing_baseline",
+    "verification_checkpoints",
+    "must_not",
+    "reject_if",
+    "source_precedence"
+  ]
+}

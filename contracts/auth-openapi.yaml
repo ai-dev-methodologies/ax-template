@@ -1,0 +1,354 @@
+openapi: 3.0.3
+info:
+  title: ax-template Auth API
+  description: Static auth contract derived from auth manifest policy. Covers signup, login, refresh, explicit linking, and minimal UI state. Does not include user profile or role management endpoints.
+  version: 0.1.0
+servers:
+  - url: /api
+paths:
+  /auth/email/signup:
+    post:
+      summary: Sign up with email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        '201':
+          description: User created. May be in an unverified state based on policy.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [userId, verificationRequired]
+                properties:
+                  userId:
+                    type: string
+                    format: uuid
+                  verificationRequired:
+                    type: boolean
+        '400':
+          description: Validation error
+        '403':
+          description: Provider disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderDisabledError'
+
+  /auth/email/login:
+    post:
+      summary: Login with email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful. Access token returned, refresh token set via HttpOnly cookie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+          headers:
+            Set-Cookie:
+              description: HttpOnly refresh token cookie
+              schema:
+                type: string
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidCredentialsError'
+        '403':
+          description: Unverified user or provider disabled
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/UnverifiedUserError'
+                  - $ref: '#/components/schemas/ProviderDisabledError'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /auth/email/resend-verification:
+    post:
+      summary: Resend email verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Verification email sent
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /auth/verify-email:
+    get:
+      summary: Verify email token
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Email verified successfully
+        '400':
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpiredTokenError'
+
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      description: Expects refresh token in HttpOnly cookie. Handles refresh token rotation and races.
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+          headers:
+            Set-Cookie:
+              description: New HttpOnly refresh token cookie
+              schema:
+                type: string
+        '401':
+          description: Refresh denied or session invalid (e.g., token reused outside grace window)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshDeniedError'
+
+  /auth/logout:
+    post:
+      summary: Logout current session
+      description: Clears HttpOnly refresh cookie and revokes session.
+      responses:
+        '200':
+          description: Logged out successfully
+          headers:
+            Set-Cookie:
+              description: Cleared refresh token cookie
+              schema:
+                type: string
+
+  /auth/me:
+    get:
+      summary: Get minimal auth UI state
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Minimal auth state for UI
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthState'
+        '401':
+          description: Unauthorized
+
+  /auth/link-account:
+    post:
+      summary: Explicitly link another provider to current identity
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountLinkRequest'
+      responses:
+        '200':
+          description: Account linked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountLinkResponse'
+        '401':
+          description: Unauthorized
+        '409':
+          description: Account link conflict (e.g., already linked to another user)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountLinkConflictError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UserRole:
+      type: string
+      enum: [admin, manager, member]
+
+    VerificationState:
+      type: string
+      enum: [verified, unverified, expired]
+
+    ProviderLink:
+      type: object
+      required: [provider, connectedAt]
+      properties:
+        provider:
+          type: string
+          enum: [email, google, kakao]
+        connectedAt:
+          type: string
+          format: date-time
+        providerUserId:
+          type: string
+          description: External provider user identifier
+
+    AuthState:
+      type: object
+      required: [userId, email, roles, verificationState, providerLinks]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserRole'
+        verificationState:
+          $ref: '#/components/schemas/VerificationState'
+        providerLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderLink'
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    ProviderDisabledError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            provider:
+              type: string
+
+    RateLimitError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            retryAfter:
+              type: integer
+              description: Seconds to wait before retrying
+
+    InvalidCredentialsError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+
+    UnverifiedUserError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            email:
+              type: string
+
+    ExpiredTokenError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+
+    RefreshDeniedError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+
+    AccountLinkConflictError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            provider:
+              type: string
+
+    AccountLinkRequest:
+      type: object
+      required: [provider, idToken]
+      properties:
+        provider:
+          type: string
+          enum: [google, kakao]
+        idToken:
+          type: string
+          description: OIDC ID token or provider access token to verify identity
+
+    AccountLinkResponse:
+      type: object
+      required: [success, providerLinks]
+      properties:
+        success:
+          type: boolean
+        providerLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderLink'
+
+    RefreshResponse:
+      type: object
+      required: [accessToken, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        expiresIn:
+          type: integer
+          description: Access token expiration time in seconds
