@@ -20,8 +20,6 @@ not_for:
 
 provider_policy:
   enabled_candidates:
-    - google
-    - kakao
     - email
   disabled_behavior: structured_error
   schema_is_static: true
@@ -49,11 +47,6 @@ rbac:
     - manager
     - member
   role_management_out_of_scope: true
-
-account_linking:
-  mode: explicit
-  auto_merge_by_email: false
-  required_when_same_email_different_provider: true
 
 verification_policy:
   email_verification_required: true
@@ -100,7 +93,6 @@ must_not:
 
 reject_if:
   - missing_csrf_cors_defaults
-  - missing_account_linking_policy
   - missing_rate_limits
   - missing_unverified_state_handling
   - refresh_without_server_side_state
