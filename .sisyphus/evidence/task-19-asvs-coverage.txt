@@ -1,0 +1,2 @@
+ASVS coverage check:
+Spec: 23, Tags: 23, Covered: 23
