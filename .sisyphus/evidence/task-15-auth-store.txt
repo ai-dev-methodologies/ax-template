@@ -1,0 +1,11 @@
+Auth store tests: PASS
+ RUN  v4.1.2 /Users/kyjin/dev/own/ai-dev-methodologies/ai-dev-methodologies-hq/workspace/ax-template/frontend
+
+(node:82696) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  02:28:20
+   Duration  340ms (transform 24ms, setup 0ms, import 73ms, tests 18ms, environment 155ms)
+
