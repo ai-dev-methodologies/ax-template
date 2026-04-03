@@ -1,0 +1,11 @@
+Frontend page tests: PASS
+(node:43036) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:43035) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  17 passed (17)
+   Start at  02:39:53
+   Duration  1.05s (transform 198ms, setup 294ms, import 413ms, tests 213ms, environment 1.54s)
+
