@@ -1,0 +1,8 @@
+Security baseline tests: PASS
+- asvs_V3_4_1_cookieSecureFlag: PASS (Set-Cookie contains Secure)
+- asvs_V3_4_2_cookieHttpOnlyFlag: PASS (Set-Cookie contains HttpOnly)
+- asvs_V3_4_3_cookieSameSiteAttribute: PASS (Set-Cookie contains SameSite)
+- asvs_V4_2_2_antiCSRF_statelessJwtAllowsPostWithoutCsrfToken: PASS (201 without CSRF token)
+- jwt_algorithmNoneRejected: PASS (401 for alg=none JWT)
+- jwt_invalidSignatureRejected: PASS (401 for bad signature)
+BUILD SUCCESSFUL
