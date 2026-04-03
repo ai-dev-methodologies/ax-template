@@ -1,0 +1,32 @@
+Backend Bootstrap Evidence
+=========================
+Date: 2026-04-04
+
+1. Gradle wrapper: backend/gradlew exists, executable (-rwxr-xr-x), Gradle 8.5
+2. Build: ./gradlew build → BUILD SUCCESSFUL
+3. testAsvs: ./gradlew testAsvs → BUILD SUCCESSFUL (NO-SOURCE, as expected with no ASVS tests yet)
+4. Boot: ./gradlew bootRun → Started AuthBlueprintBackendApplication in 2.1s
+5. Health: curl localhost:8080/actuator/health → {"status":"UP"}
+
+Dependencies added:
+- spring-boot-starter-data-jpa
+- spring-boot-starter-actuator
+- h2 (runtimeOnly)
+- testcontainers:junit-jupiter (testImplementation)
+- testcontainers:postgresql (testImplementation)
+
+SecurityConfig changes:
+- CSRF disabled for /api/** (stateless JWT for SPA)
+- Session management set to STATELESS
+- Actuator endpoints permitted
+- H2 console permitted
+- JwtDecoder bean with generated RSA key pair for dev
+
+application.yml additions:
+- H2 in-memory datasource
+- JPA ddl-auto=create-drop
+- management.endpoints.web.exposure.include=health,mappings
+- H2 console enabled at /h2-console
+- open-in-view=false
+
+AuthServiceStub created (required for boot — AuthController depends on AuthService interface)
