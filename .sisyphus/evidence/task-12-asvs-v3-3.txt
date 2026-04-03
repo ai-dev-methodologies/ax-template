@@ -1,0 +1,4 @@
+Logout tests: PASS
+- asvs_V3_3_1_logoutInvalidatesSession: PASS (refresh token revoked after logout)
+- logout_clearsCookie: PASS (Set-Cookie contains refresh_token= and Max-Age=0)
+BUILD SUCCESSFUL

@@ -232,6 +232,23 @@ public class AuthServiceImpl {
         return new PasswordResetResponse("Password reset successful.");
     }
 
+    @Transactional
+    public void logout(String refreshToken, HttpServletResponse response) {
+        if (refreshToken != null) {
+            refreshTokenRepository.findByToken(refreshToken).ifPresent(rt -> {
+                if (!rt.isRevoked()) {
+                    rt.setRevoked(true);
+                    // Don't set revokedAt — prevents grace window bypass on revoked-by-logout tokens
+                    refreshTokenRepository.save(rt);
+                }
+            });
+        }
+        ResponseCookie cleared = ResponseCookie.from("refresh_token", "")
+                .httpOnly(true).secure(true).sameSite("Strict")
+                .path("/api/auth").maxAge(0).build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cleared.toString());
+    }
+
     public PasswordChangeResponse changePassword(String userId, String currentPassword, String newPassword) {
         UserEntity user = userRepository.findById(UUID.fromString(userId))
             .orElseThrow(() -> new RuntimeException("User not found"));
