@@ -1,0 +1,21 @@
+ASVS V3.x Refresh Token Rotation Tests: ALL PASS
+==================================================
+Date: 2026-04-04
+Test class: RefreshTokenAsvsTest (6 tests, 0 failures, 0 errors, 0 skipped)
+
+Tests:
+  1. asvs_V3_2_1_newSessionTokenOnAuth       PASSED (1.134s) - Each login issues unique refresh token
+  2. asvs_V3_7_1_fullSessionRequiredForSensitiveOps PASSED (0.133s) - /auth/me requires valid JWT
+  3. refresh_issuedNewTokens                  PASSED (0.198s) - POST /api/auth/refresh returns new access+refresh tokens
+  4. refresh_oldTokenInvalidatedAfterUse      PASSED (0.327s) - Old refresh token rejected after rotation (grace-window=0)
+  5. refresh_withInvalidToken_returnsUnauthorized PASSED (0.088s) - Invalid token returns 401
+  6. refresh_withoutCookie_returnsUnauthorized PASSED (0.096s) - Missing cookie returns 401
+
+Implementation:
+  - RefreshToken entity: @Entity with token, user, expiresAt, revoked, revokedAt
+  - RefreshTokenRepository: findByToken(), revokeAllByUser()
+  - AuthServiceImpl.refresh(): token rotation with grace window support
+  - AuthServiceImpl.login(): persists refresh token in DB
+  - RefreshAuthController: POST /api/auth/refresh with @CookieValue
+  - InvalidRefreshTokenException → 401 via AuthExceptionHandler
+  - Cookie: httpOnly, secure, sameSite=Strict, path=/api/auth, maxAge=7d
