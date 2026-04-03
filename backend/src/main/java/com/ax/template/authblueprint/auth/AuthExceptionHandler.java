@@ -27,4 +27,16 @@ public class AuthExceptionHandler {
     public Map<String, String> handleEmailNotVerified(EmailNotVerifiedException e) {
         return Map.of("message", "Email not verified");
     }
+
+    @ExceptionHandler(InvalidTokenException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, String> handleInvalidToken(InvalidTokenException e) {
+        return Map.of("message", e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public Map<String, String> handleInvalidRefreshToken(InvalidRefreshTokenException e) {
+        return Map.of("message", e.getMessage());
+    }
 }
