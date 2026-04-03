@@ -1,0 +1,4 @@
+E2E smoke test: PASS
+2 tests, 0 failures, 0 errors
+- fullAuthJourney_signupVerifyLoginMeLogout: PASS (0.873s)
+- passwordChangeJourney: PASS (0.436s)
