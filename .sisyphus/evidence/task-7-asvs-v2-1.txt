@@ -1,0 +1,2 @@
+ASVS V2.1.x signup tests: PASS
+BUILD SUCCESSFUL in 489ms
