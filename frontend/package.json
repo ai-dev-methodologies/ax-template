@@ -10,22 +10,25 @@
     "e2e:list": "playwright test --list"
   },
   "dependencies": {
+    "@types/react-router-dom": "^5.3.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.14.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.0.0",
     "@types/node": "^25.5.0",
-    "typescript": "^6.0.2",
-    "vitest": "^4.1.2",
-    "vite": "^6.0.0",
-    "@vitejs/plugin-react": "^4.3.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@testing-library/react": "^16.0.0",
-    "@testing-library/jest-dom": "^6.0.0",
-    "@testing-library/user-event": "^14.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^24.0.0",
     "msw": "^2.0.0",
-    "jsdom": "^24.0.0"
+    "typescript": "^6.0.2",
+    "vite": "^6.0.0",
+    "vitest": "^4.1.2"
   }
 }
