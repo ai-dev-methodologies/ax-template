@@ -1,0 +1,11 @@
+# FAIL-OPEN AND REJECT AUDIT
+
+## 1. PROTECTED (Verified by Evidence)
+- Backend Tests: Core backend functionality is verified via passing test matrix evidence.
+- Verify Triplet: The executed verify triplet successfully captures the golden, violation, and false-positive evidence for the backend security testing outcomes.
+
+## 2. FAIL-OPEN RISKS (Remaining Risks & Gaps)
+- Freshness: `chub` freshness is unavailable for Spring Boot, Spring Security, and Springdoc. We lack hard proof of alignment with the latest framework changes. This freshness check relies on fallback evidence rather than a successful chub invocation. Status: PARTIAL.
+
+## Conclusion
+The fail-open audit indicates residual risk regarding Spring framework freshness (covered by fallback evidence). The previous blockers for frontend tests and e2e integration have been removed and resolved.

@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: auth-blueprint-backend
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://issuer.placeholder.local
+
+auth:
+  providers:
+    email-enabled: true
+    google-enabled: true
+    kakao-enabled: true
+
+  refresh:
+    mode: stateful
+    grace-window-seconds: 30
+
+  account-linking:
+    explicit-required: true
+    auto-merge-by-email: false
+
+  verification:
+    separate-unverified-state: true
+
+  rbac:
+    roles:
+      - admin
+      - manager
+      - member
+
+  security:
+    csrf-required: true
+    cors-required: true
+
+  cors:
+    allowed-origins:
+      - http://localhost:3000
+    allowed-methods:
+      - GET
+      - POST
+      - OPTIONS

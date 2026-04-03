@@ -1,0 +1,20 @@
+Task: T2-3 minimal auth curated e2e execution
+Command: npm --prefix frontend exec playwright test frontend/tests/key-flow.spec.ts --reporter=line
+Date: 2026-04-03
+
+Outcome:
+- Playwright executed the auth curated spec in Chromium.
+- Spec name: auth curated local fallback path
+- Test results: 2 passed, 0 failed.
+
+Executed scenarios:
+1) loads app boundary for curated auth path
+   - Uses browser-executable fallback via page.setContent at app boundary.
+   - Verifies visible "App Entry" marker.
+2) covers provider-disabled fallback at app boundary
+   - Uses route mocking for /api/auth/email/login and returns 403 provider_disabled.
+   - Verifies fallback behavior without claiming backend auth endpoint availability.
+
+Notes:
+- This is a truthful app-boundary fallback execution under skeletal runtime.
+- No fake signup/verify/login backend flow was introduced.

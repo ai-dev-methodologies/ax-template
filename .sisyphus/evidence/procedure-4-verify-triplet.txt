@@ -1,0 +1,21 @@
+[verify-triplet] command: python3 verify/scripts/run_verify_triplet.py
+[verify-triplet] manifest: blueprints/auth-manifest.yaml
+[verify-triplet] schema: verify/manifest.schema.json
+[manifest-shape] PASS - manifest required keys present
+
+[golden]
+- verify/contract/golden-pass => PASS [OK] (expected pass for compliant fixtures)
+- verify/rbac/golden-pass => PASS [OK] (expected pass for compliant fixtures)
+- verify/security/golden-pass => PASS [OK] (expected pass for compliant fixtures)
+
+[violation]
+- verify/contract/violation-reject => REJECT [OK] (expected rejection for explicit violations)
+- verify/rbac/violation-reject => REJECT [OK] (expected rejection for explicit violations)
+- verify/security/violation-reject => REJECT [OK] (expected rejection for explicit violations)
+
+[false-positive]
+- verify/contract/false-positive-guard-pass => GUARD PASS [OK] (must not over-reject compliant risky cases)
+- verify/rbac/false-positive-guard-pass => GUARD PASS [OK] (must not over-reject compliant risky cases)
+- verify/security/false-positive-guard-pass => GUARD PASS [OK] (must not over-reject compliant risky cases)
+
+[verify-triplet-summary] PASS

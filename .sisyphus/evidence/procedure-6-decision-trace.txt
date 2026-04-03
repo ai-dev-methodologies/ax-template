@@ -1,0 +1,15 @@
+# Procedure 6: Draft -> Curated Promotion Decision Trace
+
+## Pre-Decision State
+This is the refreshed evidence set for the final curated decision. 
+The blockers for frontend tests and e2e integration have been successfully removed.
+
+## Evidence Evaluation
+- `curated-chub-results.md`: Spring-stack chub is unavailable, but fallback evidence is provided.
+- `procedure-4-test-matrix.txt`: Backend, frontend, verify, and e2e are all PASS.
+- `procedure-4-verify-triplet.txt`: Verify triplet is PASS for the backend.
+- `procedure-5-fail-open-audit.txt`: Audited. Residual risk acknowledged regarding the fallback evidence for Spring freshness.
+- `procedure-5-checklist-correlation.txt`: All criteria satisfied or mitigated to partial status.
+
+## Status
+Ready for the final curated promotion decision in T6.

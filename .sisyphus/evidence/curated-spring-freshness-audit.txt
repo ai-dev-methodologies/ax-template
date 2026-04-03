@@ -1,0 +1,10 @@
+NO FAKE FRESHNESS AUDIT
+Date: 2026-04-03
+
+This audit verifies that we are not hallucinating or overstating the freshness confidence for our Spring stack dependencies, given that the primary freshness tool (chub) is unavailable. We rely entirely on a fallback approach.
+
+- Spring Boot: Confirmed EXACT PIN at 3.2.12. High confidence in this fallback anchor.
+- Spring Security: Confirmed INFERRED version. It is dependency-managed by the Spring Boot train. We do not claim an exact version.
+- Springdoc / OpenAPI: Confirmed UNPINNED. We have no exact local dependency pin for the runtime library.
+
+Conclusion: NO FAKE FRESHNESS. We are honestly reporting the fallback status, explicitly differentiating between exact pin, inferred, and unpinned library states without hallucinating false chub evidence.

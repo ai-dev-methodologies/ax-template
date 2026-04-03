@@ -1,0 +1,1 @@
+- False file paths (`blueprints/auth/*`) were inadvertently added to `ACTIVE-LOOP.md` evidence list during Stage 3 state sync.

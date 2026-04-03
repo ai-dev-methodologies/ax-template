@@ -1,50 +1,12 @@
 {
-  "active_plan": "/Users/kyjin/dev/own/ai-dev-methodologies/ai-dev-methodologies-hq/workspace/ax-template/.sisyphus/plans/auth-blueprint-stage3-assets.md",
-  "started_at": "2026-04-02T09:02:42.637Z",
+  "active_plan": "/Users/kyjin/dev/own/ai-dev-methodologies/ai-dev-methodologies-hq/workspace/ax-template/.sisyphus/plans/auth-verification-framework.md",
+  "started_at": "2026-04-03T17:09:35.991Z",
   "session_ids": [
-    "ses_2b291c666ffe5xlCV43BIHFPf1",
-    "ses_2b28efa98ffeYhQCBSGbfxNbiw",
-    "ses_2b28efacaffeF2K5DhNc2Nkm0Y",
-    "ses_2b28efa7cffew72Gt3DpHOuMxO",
-    "ses_2b28efa5cffeHVcWPbshuTUQ3L",
-    "ses_2b28b0b5dffeMrbtrDCaz3BQbS",
-    "ses_2b2880d20ffekUXo8ybUrS8ohZ",
-    "ses_2b2850c30ffeT13bawtxnHn1YJ",
-    "ses_2b281c6bbffeLb1LSme92S26X6",
-    "ses_2b281c680ffehKSDXaw3xGKZjv",
-    "ses_2b281c662ffedLph25xL82Kj13",
-    "ses_2b281c69bffe7jmoIzCwNtp7b7",
-    "ses_2b275c332ffeNVAcQIu8uAGlsq"
+    "ses_2ad3ca501ffe7ZsEGRS1EkVkyu",
+    "ses_2abab4e84ffeq9Uim62VAHUkK4",
+    "ses_2abaae44dffezclFSxwEmr16Fv"
   ],
-  "plan_name": "auth-blueprint-stage3-assets",
+  "plan_name": "auth-verification-framework",
   "agent": "atlas",
-  "task_sessions": {
-    "todo:5": {
-      "task_key": "todo:5",
-      "task_label": "5",
-      "task_title": "Define scaffold draft asset set",
-      "session_id": "ses_2b28b0b5dffeMrbtrDCaz3BQbS",
-      "agent": "Sisyphus-Junior",
-      "category": "writing",
-      "updated_at": "2026-04-02T09:11:40.149Z"
-    },
-    "todo:7": {
-      "task_key": "todo:7",
-      "task_label": "7",
-      "task_title": "Define quality companion baseline",
-      "session_id": "ses_2b2880d20ffekUXo8ybUrS8ohZ",
-      "agent": "Sisyphus-Junior",
-      "category": "writing",
-      "updated_at": "2026-04-02T09:14:07.197Z"
-    },
-    "todo:8": {
-      "task_key": "todo:8",
-      "task_label": "8",
-      "task_title": "Prepare curated promotion evidence map",
-      "session_id": "ses_2b2850c30ffeT13bawtxnHn1YJ",
-      "agent": "Sisyphus-Junior",
-      "category": "writing",
-      "updated_at": "2026-04-02T09:17:26.052Z"
-    }
-  }
+  "task_sessions": {}
 }

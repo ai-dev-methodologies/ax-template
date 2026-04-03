@@ -1,0 +1,17 @@
+Task: T4 rerun safety after cleanup
+Date: 2026-04-03
+
+Rerun commands executed after cleanup:
+1. `gradle -p backend test`
+   - Result: BUILD SUCCESSFUL
+
+2. `npm --prefix frontend test`
+   - Result: Vitest passed (2 files, 5 tests)
+
+3. `npm --prefix frontend exec playwright test frontend/tests/key-flow.spec.ts --reporter=line`
+   - Result: 2 passed
+   - Note: npm still warns about forwarding `--reporter`, but Playwright executed successfully.
+
+Conclusion:
+- Cleanup did not break backend, frontend, or minimal Playwright fallback execution.
+- Workspace is in a rerunnable state after generated artifact normalization.

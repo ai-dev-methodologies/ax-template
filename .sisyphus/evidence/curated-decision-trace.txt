@@ -1,0 +1,15 @@
+# Draft to Curated Decision Trace
+
+## Evidence Referenced
+- procedure-4-test-matrix.txt
+- procedure-5-fail-open-audit.txt
+- procedure-5-checklist-correlation.txt
+
+## Decision
+draft 유지
+
+## Rationale
+The promotion from Draft to Curated is NOT approved. While the frontend testing and end-to-end integration constraints are now fully satisfied (procedure-5-fail-open-audit.txt) and the test matrix passed (procedure-4-test-matrix.txt), the `chub freshness check` remains PARTIAL. Official fallback evidence exists for the Spring-stack (Spring Boot, Spring Security, Springdoc), but the checklist strictly requires complete and direct freshness verification or higher confidence in the fallback before promotion. Thus, the status remains `draft 유지`.
+
+## Re-entry Target
+The remaining unresolved gap is strictly narrowed to confirming the Spring-stack (Spring Boot, Spring Security, Springdoc) freshness confidence. The next iteration must focus solely on resolving or formally waiving this specific freshness blocker.

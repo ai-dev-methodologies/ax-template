@@ -1,0 +1,21 @@
+FALLBACK FRESHNESS EVIDENCE - SPRING STACK
+Date: 2026-04-03
+Status: CHUB UNAVAILABLE - FALLBACK PATH ACTIVATED
+
+1. Spring Boot
+- Local Anchor Strength: Exact Pin
+- Version: 3.2.12 (from backend/build.gradle.kts)
+- Fallback Ref URL: https://docs.spring.io/spring-boot/docs/3.2.12/reference/html/
+- Relevance: High, exact match to local plugin version.
+
+2. Spring Security
+- Local Anchor Strength: Inferred / Dependency-Managed
+- Version: Inferred from Boot 3.2.x train
+- Fallback Ref URL: https://docs.spring.io/spring-security/reference/
+- Relevance: Medium, relying on transitive dependency management, no exact module pin locally.
+
+3. Springdoc / OpenAPI
+- Local Anchor Strength: Unpinned
+- Version: Unknown / N/A
+- Fallback Ref URL: https://springdoc.org/ / Official GitHub
+- Relevance: Low, weakest fallback as no runtime library pin exists locally.

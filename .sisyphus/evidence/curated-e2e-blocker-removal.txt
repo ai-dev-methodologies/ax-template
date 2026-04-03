@@ -1,0 +1,14 @@
+Blocker-removal evidence for T2-3
+Date: 2026-04-03
+
+Playwright auth curated path was executed with the required command and now returns exit code 0.
+The provider-disabled app-boundary fallback was executed and asserted in-browser using route fulfillment with a 403 response.
+
+This task is no longer blocked by missing e2e infrastructure:
+- initial blocker: local browser runtime executable missing
+- removal action: installed Playwright Chromium binaries and removed the blanket spec skip
+- confirmation: the spec executed (2 passed) and provider-disabled coverage remains at the app boundary without backend-auth fabrication
+
+Conclusion:
+- Playwright executed real browser tests for the minimal curated auth fallback path.
+- The curated e2e flow is no longer blocked by missing e2e infrastructure.

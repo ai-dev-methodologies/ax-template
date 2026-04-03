@@ -1,0 +1,3 @@
+Status: COMPLETED
+Decision: draft 유지
+See curated-decision-trace.txt for details.

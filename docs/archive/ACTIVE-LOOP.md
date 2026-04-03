@@ -50,13 +50,13 @@ failure notes:
 
 ---
 ## Stage 3. Canonical Draft Creation
-status: [~] in-progress
+status: [x] done
 re-entry target on failure: Reference Selection
 
-- [ ] scaffold 초안 존재
-- [ ] architecture baseline 초안 존재
-- [ ] quality companion 초안 존재
-- [ ] manifest 초안 존재
+- [x] scaffold 초안 존재
+- [x] architecture baseline 초안 존재
+- [x] quality companion 초안 존재
+- [x] manifest 초안 존재
 - [x] official_doc_refs / approved_github_refs / practical refs 채움
 - [x] must_not / reject_if / anti-pattern 정의
 - [x] testing baseline 정의
@@ -71,8 +71,7 @@ Evidence already available:
 - `verify/manifest.schema.json`
 
 failure notes:
-- scaffold / architecture baseline / quality companion의 실제 asset draft는 아직 남아 있다
-- curated 승격 전 Stage 3의 남은 자산 정리가 필요하다
+- 없음
 
 ---
 ## Stage 4. Curated Promotion Check
@@ -164,4 +163,4 @@ failure notes:
 reviewer sign-off:
 - 현재 상태는 `draft`가 맞다
 - foundations trio의 직접 산출물 4개는 생성 완료됐다
-- 다음 즉시 작업은 scaffold / architecture baseline / quality companion draft와 curated evidence 실행이다
+- 다음 즉시 작업은 new procedure/evidence execution이다

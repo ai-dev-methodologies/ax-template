@@ -1,0 +1,12 @@
+Drift Audit Evidence
+====================
+This audit confirms that the implementation wave skeleton stays aligned with Stage 3 scaffold/architecture baseline constraints.
+
+backend checks:
+- Contains no custom JWT filter: Standard Spring Security resource server setup is used exclusively.
+
+frontend checks:
+- /auth/me shape: Minimal shape implemented. Returns just the necessary user identity context securely.
+
+verify checks:
+- fail-closed: The verify skeleton implements a strict fail-closed intent for all authentication checks.

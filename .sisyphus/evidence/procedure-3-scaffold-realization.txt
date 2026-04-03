@@ -1,0 +1,14 @@
+Scaffold Realization Evidence
+=============================
+backend:
+- backend/build.gradle.kts
+- backend/src/main/java/com/ax/template/authblueprint
+
+frontend:
+- frontend/package.json
+- frontend/src/app/page.tsx
+- frontend/src/lib/auth/store.ts
+
+verify:
+- verify/README.md
+- verify/fixtures/golden

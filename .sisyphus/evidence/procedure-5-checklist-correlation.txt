@@ -1,0 +1,21 @@
+# Checklist Correlation Evidence (Draft -> Curated)
+
+- reference-selection 문서 존재: SATISFIED (Covered by Stage 3 completed drafts)
+- scaffold draft 존재: SATISFIED (Evidence: .sisyphus/evidence/procedure-3-scaffold-realization.txt)
+- architecture baseline draft 존재: SATISFIED (Evidence: .sisyphus/drafts/auth-blueprint-architecture-baseline.md, .sisyphus/evidence/procedure-3-drift-audit.txt)
+- quality companion draft 존재: SATISFIED (Evidence: .sisyphus/drafts/auth-blueprint-quality-companion.md)
+- manifest draft 존재: SATISFIED (Evidence: blueprints/auth-manifest.yaml)
+- official_doc_refs 채워짐: SATISFIED (Inside baseline drafts)
+- approved_github_refs 채워짐: SATISFIED (Inside baseline drafts)
+- practical refs 채워짐: SATISFIED (Inside baseline drafts)
+- must_not 정의: SATISFIED (Inside baseline drafts)
+- reject_if 정의: SATISFIED (Inside baseline drafts)
+- anti-pattern 정의: SATISFIED (Inside baseline drafts)
+- testing baseline 정의: SATISFIED (Inside quality companion)
+- verify checkpoints 정의: SATISFIED (Inside quality companion)
+- chub freshness check 통과: PARTIAL (Evidence: .sisyphus/evidence/curated-chub-results.md - React is fresh. Spring-stack is covered by fallback evidence)
+- reject simulation 통과: SATISFIED (Evidence: .sisyphus/evidence/procedure-4-verify-triplet.txt)
+- ACTIVE-LOOP evidence 존재: SATISFIED (Evidence: .sisyphus/evidence/procedure-5-fail-open-audit.txt - Frontend tests and e2e integration blockers are resolved)
+
+Unresolved Blockers:
+1. `chub` freshness availability: PARTIAL (Fallback evidence covers Spring Boot, Spring Security, and Springdoc)

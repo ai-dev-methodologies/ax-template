@@ -1,0 +1,14 @@
+Task: T4 generated artifact normalization
+Date: 2026-04-03
+
+Cleanup rules added:
+- `./.gitignore`: ignore `test-results/`
+- `backend/.gitignore`: ignore `.gradle/` and `build/`
+
+Cleanup commands executed:
+- `rm -rf backend/.gradle backend/build test-results`
+
+Post-cleanup observations:
+- Generated backend Gradle outputs were removed from the working tree.
+- Root Playwright `test-results/` output was removed from the working tree.
+- Cleanup was limited to generated artifacts and ignore hygiene only.

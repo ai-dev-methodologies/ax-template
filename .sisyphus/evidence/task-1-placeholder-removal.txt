@@ -1,0 +1,1 @@
+Deleted placeholder and skeleton files from backend, frontend, and verify
