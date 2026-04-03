@@ -8,16 +8,11 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.RSAPublicKey;
 import java.util.List;
 
 @Configuration
@@ -43,19 +38,6 @@ public class SecurityConfig {
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
 
         return http.build();
-    }
-
-    @Bean
-    JwtDecoder jwtDecoder() {
-        try {
-            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-            gen.initialize(2048);
-            KeyPair keyPair = gen.generateKeyPair();
-            RSAPublicKey publicKey = (RSAPublicKey) keyPair.getPublic();
-            return NimbusJwtDecoder.withPublicKey(publicKey).build();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to create JwtDecoder", e);
-        }
     }
 
     @Bean
