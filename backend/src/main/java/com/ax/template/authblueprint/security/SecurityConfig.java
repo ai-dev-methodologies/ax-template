@@ -28,9 +28,8 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers("/actuator/health", "/actuator/mappings").permitAll()
-                .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/email/password-change").authenticated()
-                .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/h2-console/**").permitAll()
                 .anyRequest().denyAll()

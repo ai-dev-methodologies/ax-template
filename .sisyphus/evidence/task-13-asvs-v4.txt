@@ -1,0 +1,7 @@
+/auth/me tests: PASS
+- asvs_V4_1_1_accessControlOnTrustedLayer: PASS (401 without auth)
+- asvs_V4_1_5_accessControlFailsSecurely: PASS (401 with tampered token)
+- asvs_V4_2_1_noIDOR: PASS (user1 token returns only user1 data)
+- asvs_V3_1_1_noTokenInURL: PASS (token in query param does not authenticate)
+- getMe_authenticatedUser_returnsProfile: PASS (returns email, userId)
+BUILD SUCCESSFUL
