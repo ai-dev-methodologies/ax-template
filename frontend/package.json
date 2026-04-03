@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
     "test": "vitest run",
     "e2e:list": "playwright test --list"
   },
@@ -14,6 +17,15 @@
     "@playwright/test": "^1.56.1",
     "@types/node": "^25.5.0",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "vite": "^6.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/user-event": "^14.0.0",
+    "msw": "^2.0.0",
+    "jsdom": "^24.0.0"
   }
 }

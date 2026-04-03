@@ -1,0 +1,4 @@
+Frontend bootstrap complete
+Build: SUCCESS
+assets
+index.html
