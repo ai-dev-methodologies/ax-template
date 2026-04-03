@@ -1,0 +1,16 @@
+ASVS V2.5.x password reset tests: PASS
+
+Tests verified:
+- asvs_V2_5_2_noSecurityQuestions: POST/GET /api/auth/email/security-question returns 404
+- asvs_V2_5_3_resetDoesNotRevealCurrentPassword: reset response contains no password data
+- asvs_V2_5_4_noDefaultAccounts: default credentials all return non-200
+- asvs_V2_1_6_passwordChangeRequiresCurrentAndNew: missing=400, wrong=401, correct=200
+- passwordReset_tokenSingleUse: second use of same token returns 400
+- passwordResetRequest_sameResponseForExistingAndNonexistentEmail: identical response prevents enumeration
+
+Endpoints implemented:
+- POST /api/auth/email/password-reset-request
+- POST /api/auth/email/password-reset
+- POST /api/auth/email/password-change (requires Bearer JWT)
+
+All 6 tests GREEN.

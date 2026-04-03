@@ -4,6 +4,7 @@ import com.ax.template.authblueprint.user.UserEntity;
 import com.ax.template.authblueprint.user.UserRepository;
 import com.ax.template.authblueprint.user.UserRole;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,17 +24,23 @@ public class AuthServiceImpl {
     private final JwtTokenService jwtTokenService;
     private final LoginRateLimiter rateLimiter;
     private final VerificationTokenRepository verificationTokenRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final long graceWindowSeconds;
 
     public AuthServiceImpl(UserRepository userRepository,
                            PasswordEncoder passwordEncoder,
                            JwtTokenService jwtTokenService,
                            LoginRateLimiter rateLimiter,
-                           VerificationTokenRepository verificationTokenRepository) {
+                           VerificationTokenRepository verificationTokenRepository,
+                           RefreshTokenRepository refreshTokenRepository,
+                           @Value("${auth.refresh.grace-window-seconds:30}") long graceWindowSeconds) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
         this.rateLimiter = rateLimiter;
         this.verificationTokenRepository = verificationTokenRepository;
+        this.refreshTokenRepository = refreshTokenRepository;
+        this.graceWindowSeconds = graceWindowSeconds;
     }
 
     public SignupResponse signup(SignupRequest request) {
@@ -85,6 +92,56 @@ public class AuthServiceImpl {
                 user.getId().toString(), user.getEmail());
         String refreshToken = UUID.randomUUID().toString();
 
+        RefreshToken rt = new RefreshToken();
+        rt.setToken(refreshToken);
+        rt.setUser(user);
+        rt.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
+        rt.setRevoked(false);
+        refreshTokenRepository.save(rt);
+
+        addRefreshCookie(response, refreshToken);
+
+        return new LoginResponse(accessToken, "Bearer", 3600);
+    }
+
+    @Transactional
+    public LoginResponse refresh(String refreshTokenValue, HttpServletResponse response) {
+        RefreshToken rt = refreshTokenRepository.findByToken(refreshTokenValue)
+                .orElseThrow(() -> new InvalidRefreshTokenException("Invalid refresh token"));
+
+        if (rt.getExpiresAt().isBefore(Instant.now())) {
+            throw new InvalidRefreshTokenException("Refresh token expired");
+        }
+
+        if (rt.isRevoked()) {
+            boolean withinGraceWindow = rt.getRevokedAt() != null
+                    && rt.getRevokedAt().plusSeconds(graceWindowSeconds).isAfter(Instant.now());
+            if (!withinGraceWindow) {
+                throw new InvalidRefreshTokenException("Refresh token revoked");
+            }
+        }
+
+        rt.setRevoked(true);
+        rt.setRevokedAt(Instant.now());
+        refreshTokenRepository.save(rt);
+
+        UserEntity user = rt.getUser();
+        String newAccessToken = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail());
+        String newRefreshToken = UUID.randomUUID().toString();
+
+        RefreshToken newRt = new RefreshToken();
+        newRt.setToken(newRefreshToken);
+        newRt.setUser(user);
+        newRt.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
+        newRt.setRevoked(false);
+        refreshTokenRepository.save(newRt);
+
+        addRefreshCookie(response, newRefreshToken);
+
+        return new LoginResponse(newAccessToken, "Bearer", 3600);
+    }
+
+    private void addRefreshCookie(HttpServletResponse response, String refreshToken) {
         ResponseCookie cookie = ResponseCookie.from("refresh_token", refreshToken)
                 .httpOnly(true)
                 .secure(true)
@@ -93,8 +150,6 @@ public class AuthServiceImpl {
                 .maxAge(Duration.ofDays(7))
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-
-        return new LoginResponse(accessToken, "Bearer", 3600);
     }
 
     @Transactional
