@@ -209,7 +209,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
 ## TODOs
 
-- [ ] 1. Archive governance docs + delete placeholder files
+- [x] 1. Archive governance docs + delete placeholder files
 
   **What to do**:
   - `git mv docs/governance/* docs/archive/governance/`
@@ -261,7 +261,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `chore: archive governance docs, delete placeholder files` | Files: docs/archive/**, backend/src/**, frontend/**
 
-- [ ] 2. Fix OpenAPI contract for ASVS alignment
+- [x] 2. Fix OpenAPI contract for ASVS alignment
 
   **What to do**:
   - `contracts/auth-openapi.yaml` 수정:
@@ -328,7 +328,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `fix(contract): align OpenAPI with ASVS L1 (password rules, add reset endpoint)` | Files: contracts/auth-openapi.yaml, blueprints/auth-manifest.yaml
 
-- [ ] 3. Create ASVS L1 verification checklist YAML
+- [x] 3. Create ASVS L1 verification checklist YAML
 
   **What to do**:
   - `specs/auth-asvs-l1.yaml` 생성 — email vertical slice에 적용 가능한 ASVS 항목만 pinned
@@ -374,7 +374,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `docs(specs): pin ASVS L1 verification items for email auth` | Files: specs/auth-asvs-l1.yaml, specs/auth-asvs-l1.docs.md
 
-- [ ] 4. Backend bootstrap — dependencies + compile + health check
+- [x] 4. Backend bootstrap — dependencies + compile + health check
 
   **What to do**:
   - **Gradle wrapper 생성**: `backend/` 디렉토리에서 `gradle wrapper --gradle-version 8.5` 실행하여 `backend/gradlew`, `backend/gradlew.bat`, `backend/gradle/wrapper/` 생성 (현재 repo에 wrapper 없음). **모든 후속 Task의 `./gradlew` 명령은 `backend/` 디렉토리에서 실행한다.**
@@ -429,7 +429,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `build(backend): add JPA, H2, Testcontainers, fix CSRF for SPA` | Files: backend/build.gradle.kts, backend/src/main/resources/application.yaml, backend/src/**/SecurityConfig.java
 
-- [ ] 5. Frontend bootstrap — Vite + deps + compile
+- [x] 5. Frontend bootstrap — Vite + deps + compile
 
   **What to do**:
   - `frontend/package.json`에 의존성 추가: vite, @vitejs/plugin-react, typescript, @testing-library/react, @testing-library/jest-dom, msw
@@ -481,7 +481,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `build(frontend): add Vite, testing-library, MSW, tsconfig` | Files: frontend/package.json, frontend/vite.config.ts, frontend/tsconfig.json
 
-- [ ] 6. TDD: User entity + password hashing + repository
+- [x] 6. TDD: User entity + password hashing + repository
 
   **What to do**:
   - **RED**: `UserEntity` 생성 테스트 작성 — email, hashedPassword, role, emailVerified, createdAt 필드 검증
@@ -527,7 +527,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(auth): User entity, repository, bcrypt password encoder` | Files: backend/src/main/java/**/User*.java, backend/src/test/java/**/User*.java
 
-- [ ] 7. TDD: Signup endpoint with ASVS password validation
+- [x] 7. TDD: Signup endpoint with ASVS password validation
 
   **What to do**:
   - **RED**: ASVS 테스트 먼저:
@@ -581,7 +581,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(auth): signup endpoint with ASVS V2.1.x password validation` | Files: backend/src/**/Auth*.java, backend/src/test/**/ASVS*.java
 
-- [ ] 8. TDD: Login endpoint + rate limiting
+- [x] 8. TDD: Login endpoint + rate limiting
 
   **What to do**:
   - **RED**: ASVS 테스트:
@@ -630,7 +630,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(auth): login endpoint with rate limiting [ASVS V2.2.1]` | Files: backend/src/**/Auth*.java, backend/src/test/**/ASVS*.java
 
-- [ ] 9. TDD: Email verification flow + resend
+- [x] 9. TDD: Email verification flow + resend
 
   **What to do**:
   - **RED**: 테스트 — 유효 토큰으로 verify 성공, 만료 토큰(24h) 거부, 이미 사용된 토큰 거부, 존재하지 않는 토큰 거부
@@ -686,7 +686,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(auth): email verification flow [ASVS V2.7.2, V2.7.3]` | Files: backend/src/**/Verification*.java, backend/src/test/**/ASVS*.java
 
-- [ ] 10. TDD: Password reset + password change
+- [x] 10. TDD: Password reset + password change
 
   **What to do**:
   - **RED**: ASVS 테스트:
@@ -745,7 +745,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(auth): password reset flow [ASVS V2.5.x]` | Files: backend/src/**/PasswordReset*.java, backend/src/test/**/ASVS*.java
 
-- [ ] 11. TDD: Refresh token rotation with grace window
+- [x] 11. TDD: Refresh token rotation with grace window
 
   **What to do**:
   - **RED**: ASVS 테스트:
@@ -785,7 +785,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(auth): refresh token rotation with grace window [ASVS V3.x]` | Files: backend/src/**/RefreshToken*.java, backend/src/test/**/ASVS*.java
 
-- [ ] 12. TDD: Logout + session invalidation
+- [x] 12. TDD: Logout + session invalidation
 
   **What to do**:
   - **RED**: ASVS 테스트:
@@ -821,7 +821,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(auth): logout with session invalidation [ASVS V3.3.1]` | Files: backend/src/**/Auth*.java, backend/src/test/**/ASVS*.java
 
-- [ ] 13. TDD: /auth/me + access control
+- [x] 13. TDD: /auth/me + access control
 
   **What to do**:
   - **RED**: ASVS 테스트:
@@ -860,7 +860,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(auth): /auth/me with access control [ASVS V4.x]` | Files: backend/src/**/Auth*.java, backend/src/test/**/ASVS*.java
 
-- [ ] 14. TDD: Security baseline — cookie flags, CSRF, CORS
+- [x] 14. TDD: Security baseline — cookie flags, CSRF, CORS
 
   **What to do**:
   - **RED**: ASVS 테스트:
@@ -911,7 +911,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(auth): security baseline — cookie flags, CSRF, JWT validation [ASVS V3.4.x, V4.2.2]` | Files: backend/src/**/SecurityConfig.java, backend/src/test/**/ASVS*.java
 
-- [ ] 15. Frontend: Auth store + API client + MSW mocks
+- [x] 15. Frontend: Auth store + API client + MSW mocks
 
   **What to do**:
   - OpenAPI 계약 기반 API client 생성 (fetch wrapper)
@@ -948,7 +948,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(frontend): auth store, API client, MSW mocks` | Files: frontend/src/lib/**, frontend/src/mocks/**, frontend/tests/**
 
-- [ ] 16. Frontend: Auth pages (signup, login, verify, dashboard-stub)
+- [x] 16. Frontend: Auth pages (signup, login, verify, dashboard-stub)
 
   **What to do**:
   - Signup page: email + password form, validation (12자 이상), 에러 표시
@@ -988,7 +988,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `feat(frontend): signup, login, verify, dashboard pages` | Files: frontend/src/pages/**, frontend/src/App.tsx
 
-- [ ] 17. Frontend: Vitest tests
+- [x] 17. Frontend: Vitest tests
 
   **What to do**:
   - 각 페이지 컴포넌트 렌더 테스트 (Testing Library)
@@ -1023,7 +1023,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `test(frontend): component + API integration tests` | Files: frontend/tests/**
 
-- [ ] 18. E2E integration smoke test
+- [x] 18. E2E integration smoke test
 
   **What to do**:
   - Backend + Frontend 동시 기동
@@ -1079,7 +1079,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews, then user okay):
 
   **Commit**: YES | Message: `test: E2E smoke — signup→verify→login→me→logout` | Files: backend/src/test/**/E2E*.java or scripts/e2e-smoke.sh
 
-- [ ] 19. ASVS compliance summary generation
+- [x] 19. ASVS compliance summary generation
 
   **What to do**:
   - `specs/auth-asvs-l1.yaml`의 모든 `applicable: true` 항목 순회

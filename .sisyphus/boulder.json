@@ -1,12 +1,16 @@
 {
-  "active_plan": "/Users/kyjin/dev/own/ai-dev-methodologies/ai-dev-methodologies-hq/workspace/ax-template/.sisyphus/plans/auth-verification-framework.md",
-  "started_at": "2026-04-03T17:09:35.991Z",
+  "active_plan": "/Users/kyjin/dev/own/ai-dev-methodologies/ai-dev-methodologies-hq/workspace/ax-template/.sisyphus/plans/auth-oauth-expansion.md",
+  "started_at": "2026-04-04T08:00:00.000Z",
   "session_ids": [
     "ses_2ad3ca501ffe7ZsEGRS1EkVkyu",
-    "ses_2abab4e84ffeq9Uim62VAHUkK4",
-    "ses_2abaae44dffezclFSxwEmr16Fv"
+    "ses_2a8cb82a9ffeQvwTyvobG3PmYw",
+    "ses_2a8c91160ffe6U7HcO35GuemLV",
+    "ses_2a8c5a5d2ffezA4bRz1OU68U0X",
+    "ses_2a8bc35f8ffefGty0uI1GdLo5D",
+    "ses_2a8adfdf3ffeTK5106rxYQkKDi",
+    "ses_2a8a5f644ffeALGJFDkSvedHti"
   ],
-  "plan_name": "auth-verification-framework",
+  "plan_name": "auth-oauth-expansion",
   "agent": "atlas",
   "task_sessions": {}
 }

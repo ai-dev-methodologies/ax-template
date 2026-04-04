@@ -72,11 +72,11 @@ class RefreshTokenAsvsTest {
     @Tag("ASVS-V3.7.1")
     void asvs_V3_7_1_fullSessionRequiredForSensitiveOps() throws Exception {
         // Accessing /auth/me without a valid token should fail
-        mockMvc.perform(get("/auth/me"))
+        mockMvc.perform(get("/api/auth/me"))
                 .andExpect(status().isUnauthorized());
 
         // With invalid bearer token should also fail
-        mockMvc.perform(get("/auth/me")
+        mockMvc.perform(get("/api/auth/me")
                 .header("Authorization", "Bearer invalid.token.here"))
                 .andExpect(status().isUnauthorized());
     }

@@ -1,3 +1,4 @@
+/// <reference types="@testing-library/jest-dom/vitest" />
 import React from 'react';
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
