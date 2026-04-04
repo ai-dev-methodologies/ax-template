@@ -21,8 +21,27 @@ not_for:
 provider_policy:
   enabled_candidates:
     - email
+    - google
+    - naver
+    - kakao
   disabled_behavior: structured_error
   schema_is_static: true
+
+oauth_providers:
+  google:
+    scope: "openid email profile"
+    user_info_fields: [email, name, picture]
+    auto_verify_email: true  # Google emails are pre-verified
+  naver:
+    scope: "profile email"
+    user_info_fields: [email, name, profile_image]
+    user_info_path: "response"  # Naver wraps user info in "response" key
+    auto_verify_email: true
+  kakao:
+    scope: "profile_nickname account_email"
+    user_info_fields: [email, nickname, profile_image]
+    user_info_path: "kakao_account"  # Kakao nests in "kakao_account"
+    auto_verify_email: false  # Kakao email may not be verified
 
 auth_state:
   access_token:

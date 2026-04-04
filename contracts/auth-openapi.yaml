@@ -261,6 +261,101 @@ paths:
         '401':
           description: Invalid current password
 
+  /auth/oauth/{provider}/authorize:
+    get:
+      summary: Redirect to OAuth provider authorization page
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, naver, kakao]
+      responses:
+        '302':
+          description: Redirect to OAuth provider
+
+  /auth/oauth/{provider}/callback:
+    get:
+      summary: Handle OAuth provider callback
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, naver, kakao]
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OAuth login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  tokenType:
+                    type: string
+                  expiresIn:
+                    type: integer
+                  isNewUser:
+                    type: boolean
+
+  /auth/oauth/link:
+    post:
+      summary: Link OAuth provider to existing account
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, code, state]
+              properties:
+                provider:
+                  type: string
+                  enum: [google, naver, kakao]
+                code:
+                  type: string
+                state:
+                  type: string
+      responses:
+        '200':
+          description: Provider linked successfully
+        '409':
+          description: Provider already linked to another account
+
+  /auth/oauth/unlink/{provider}:
+    delete:
+      summary: Unlink OAuth provider from account
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, naver, kakao]
+      responses:
+        '204':
+          description: Provider unlinked
+        '400':
+          description: Cannot unlink last auth method
+
 components:
   securitySchemes:
     bearerAuth:

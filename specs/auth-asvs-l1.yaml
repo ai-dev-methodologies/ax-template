@@ -171,13 +171,6 @@ items:
     verification_type: "N/A"
     applicable: false
     notes: "Not applicable: We do not use initial/default passwords."
-  - id: "ASVS-V2.8.1"
-    chapter: "V2 - Authentication"
-    requirement: "Verify that time-based OTP is supported."
-    test_method: "N/A"
-    verification_type: "N/A"
-    applicable: false
-    notes: "Not applicable: MFA is out of scope."
   - id: "ASVS-V3.4.4"
     chapter: "V3 - Session Management"
     requirement: "Verify that cookie-based session tokens use the __Host- prefix."
@@ -192,3 +185,27 @@ items:
     verification_type: "N/A"
     applicable: false
     notes: "Not applicable: Admin MFA is out of scope for now."
+  - id: "ASVS-V2.8.1"
+    chapter: "V2 - Authentication"
+    requirement: "Verify that OAuth state parameter is used to prevent CSRF attacks on authorization flow."
+    test_method: "asvs_V2_8_1_oauthStateParameterPreventsCsrf"
+    verification_type: "api_test"
+    applicable: true
+    notes: "API test: OAuth callback without valid state parameter → 403. State must be generated per-session, single-use, and verified on callback."
+    policy_ref: "blueprints/auth-manifest.yaml#oauth_providers"
+  - id: "ASVS-V2.8.2"
+    chapter: "V2 - Authentication"
+    requirement: "Verify that OAuth redirect URI is strictly validated against a whitelist."
+    test_method: "asvs_V2_8_2_oauthRedirectUriValidation"
+    verification_type: "api_test"
+    applicable: true
+    notes: "API test: OAuth authorize with manipulated redirect_uri → rejected. Only pre-registered callback URLs are accepted."
+    policy_ref: "blueprints/auth-manifest.yaml#oauth_providers"
+  - id: "ASVS-V2.8.3"
+    chapter: "V2 - Authentication"
+    requirement: "Verify that OAuth client secrets and tokens are not exposed to the browser or stored insecurely."
+    test_method: "asvs_V2_8_3_oauthSecretsNotExposed"
+    verification_type: "api_test"
+    applicable: true
+    notes: "API test: No endpoint response or error message contains client_secret. OAuth token exchange happens server-side only."
+    policy_ref: "blueprints/auth-manifest.yaml#oauth_providers"
