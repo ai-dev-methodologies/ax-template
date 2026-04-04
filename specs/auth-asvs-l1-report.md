@@ -1,6 +1,6 @@
 # ASVS L1 Compliance Summary
 
-Stack: Spring Boot + React | Scope: Email Auth Vertical Slice
+Stack: Spring Boot + React | Scope: Email + OAuth Auth
 
 | ASVS ID | Requirement | Test Method | Type | Status |
 |---------|-------------|-------------|------|--------|
@@ -27,5 +27,8 @@ Stack: Spring Boot + React | Scope: Email Auth Vertical Slice
 | ASVS-V4.1.5 | Verify that access controls fail securely. | asvs_V4_1_5_accessControlFailsSecurely | api_test | ✅ COVERED |
 | ASVS-V4.2.1 | Verify that the application protects against IDOR vulnerabil... | asvs_V4_2_1_noIDOR | api_test | ✅ COVERED |
 | ASVS-V4.2.2 | Verify that the application protects against CSRF vulnerabil... | asvs_V4_2_2_antiCSRF | api_test | ✅ COVERED |
+| ASVS-V2.8.1 | Verify that OAuth state parameter is used to prevent CSRF at... | asvs_V2_8_1_oauthStateParameterPreventsCsrf | api_test | ✅ COVERED |
+| ASVS-V2.8.2 | Verify that OAuth redirect URI is strictly validated against... | asvs_V2_8_2_oauthRedirectUriValidation | api_test | ✅ COVERED |
+| ASVS-V2.8.3 | Verify that OAuth client secrets and tokens are not exposed ... | asvs_V2_8_3_oauthSecretsNotExposed | api_test | ✅ COVERED |
 
-**Total**: 23 applicable items | **Covered**: 23 | **Missing**: 0
+**Total**: 26 applicable items | **Covered**: 26 | **Missing**: 0
