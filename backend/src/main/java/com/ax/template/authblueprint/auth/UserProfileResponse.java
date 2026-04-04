@@ -1,3 +1,10 @@
 package com.ax.template.authblueprint.auth;
 
-public record UserProfileResponse(String userId, String email, String role, boolean emailVerified) {}
+import java.util.List;
+
+public record UserProfileResponse(
+        String userId,
+        String email,
+        String role,
+        boolean emailVerified,
+        List<String> linkedProviders) {}

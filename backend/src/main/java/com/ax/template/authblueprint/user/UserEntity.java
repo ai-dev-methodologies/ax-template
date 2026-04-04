@@ -15,7 +15,7 @@ public class UserEntity {
     @Column(unique = true, nullable = false)
     private String email;
 
-    @Column(nullable = false)
+    @Column
     private String hashedPassword;
 
     @Enumerated(EnumType.STRING)

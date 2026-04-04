@@ -39,4 +39,10 @@ public class AuthExceptionHandler {
     public Map<String, String> handleInvalidRefreshToken(InvalidRefreshTokenException e) {
         return Map.of("message", e.getMessage());
     }
+
+    @ExceptionHandler(InvalidOAuthStateException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public Map<String, String> handleInvalidOAuthState(InvalidOAuthStateException e) {
+        return Map.of("message", "Invalid OAuth state");
+    }
 }

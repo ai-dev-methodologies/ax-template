@@ -30,6 +30,8 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/mappings").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/email/password-change").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/auth/oauth/link").authenticated()
+                .requestMatchers(HttpMethod.DELETE, "/api/auth/oauth/unlink/**").authenticated()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/h2-console/**").permitAll()
                 .anyRequest().denyAll()
@@ -44,7 +46,7 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("http://localhost:3000"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-CSRF-TOKEN"));
         configuration.setAllowCredentials(true);
 

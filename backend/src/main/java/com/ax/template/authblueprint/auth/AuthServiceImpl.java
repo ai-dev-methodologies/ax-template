@@ -77,7 +77,8 @@ public class AuthServiceImpl {
         }
 
         UserEntity user = userRepository.findByEmail(request.getEmail()).orElse(null);
-        if (user == null || !passwordEncoder.matches(request.getPassword(), user.getHashedPassword())) {
+        if (user == null || user.getHashedPassword() == null
+                || !passwordEncoder.matches(request.getPassword(), user.getHashedPassword())) {
             rateLimiter.recordFailedAttempt(request.getEmail());
             throw new InvalidCredentialsException("Invalid credentials");
         }
@@ -253,7 +254,7 @@ public class AuthServiceImpl {
         UserEntity user = userRepository.findById(UUID.fromString(userId))
             .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (!passwordEncoder.matches(currentPassword, user.getHashedPassword())) {
+        if (user.getHashedPassword() == null || !passwordEncoder.matches(currentPassword, user.getHashedPassword())) {
             throw new InvalidCredentialsException("Current password is incorrect");
         }
 
