@@ -1,0 +1,2 @@
+UserEntityTest: PASS
+PasswordEncoderTest: PASS
