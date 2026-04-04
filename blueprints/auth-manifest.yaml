@@ -120,3 +120,64 @@ practical_refs:
   - ixartz/SaaS-Boilerplate (ux/testing pattern only)
 
 last_reviewed_at: null
+
+# === GAP-REPORT FIX: JWT 정책 (Missing ❓ #1) ===
+jwt:
+  signing_algorithm: "RS256"          # 프로덕션 권장. 개발 환경에서는 HS256도 허용.
+  access_token_expiry: "1h"           # 1시간
+  refresh_token_expiry: "7d"          # 7일
+  key_management:
+    dev: "in-memory-generated"        # 개발: 앱 시작 시 RSA 키페어 자동 생성
+    prod: "environment-variable"      # 프로덕션: 환경변수로 키 주입
+  claims:
+    sub: "userId (UUID)"
+    email: "user email"
+    iat: "issued at"
+    exp: "expiration"
+
+# === GAP-REPORT FIX: 세션 무효화 전략 (Missing ❓ #2) ===
+session_invalidation:
+  strategy: "refresh-token-revocation"  # 권장: refresh token DB 삭제로 세션 무효화
+  access_token_note: "Access token은 stateless — 만료까지 유효. 짧은 expiry(1h)로 리스크 완화."
+  logout_behavior:
+    - "Refresh token DB에서 삭제"
+    - "Refresh cookie 클리어 (Max-Age=0)"
+    - "Access token은 만료까지 유효 (blocklist 선택적)"
+  alternative: "token-blocklist"        # 대안: in-memory blocklist (Redis 권장)
+
+# === GAP-REPORT FIX: CORS 정책 (Missing ❓ #5) ===
+cors:
+  allowed_origins:
+    dev: ["http://localhost:5173", "http://localhost:3000"]
+    prod: ["https://your-domain.com"]
+  allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  allowed_headers: ["Authorization", "Content-Type", "X-Requested-With"]
+  expose_headers: ["Set-Cookie"]
+  allow_credentials: true
+  max_age: 3600
+
+# === GAP-REPORT FIX: 테스트 시딩 메커니즘 (Missing ❓ #3) ===
+test_seeding:
+  strategy: "direct-db-insert"
+  description: >
+    테스트에서 verified user를 생성하려면 UserRepository.save()로 직접 DB에 넣는다.
+    verify-email 엔드포인트를 호출하지 않는다. @BeforeEach에서 emailVerified=true로 생성.
+  example: |
+    @BeforeEach
+    void seedVerifiedUser() {
+        UserEntity user = new UserEntity();
+        user.setEmail("test@test.com");
+        user.setHashedPassword(passwordEncoder.encode("securepassword12"));
+        user.setEmailVerified(true);
+        userRepository.save(user);
+    }
+
+# === GAP-REPORT FIX: 토큰 전달 방식 (Missing ❓ #4) ===
+token_delivery:
+  verification_token:
+    dev: "console-log"                  # 개발: System.out.println("[AUTH-TOKEN] type=VERIFY email=X token=Y")
+    prod: "email"                       # 프로덕션: 이메일 발송
+    log_format: "[AUTH-TOKEN] type={VERIFY|RESET} email={email} token={uuid}"
+  reset_token:
+    dev: "console-log"
+    prod: "email"

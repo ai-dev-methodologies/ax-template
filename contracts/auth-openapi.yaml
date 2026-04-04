@@ -40,6 +40,10 @@ paths:
                     type: boolean
         '400':
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
         '403':
           description: Provider disabled
           content:
@@ -310,12 +314,38 @@ components:
 
     ErrorResponse:
       type: object
-      required: [code, message]
+      required: [message]
       properties:
-        code:
-          type: string
         message:
           type: string
+          description: "Human-readable error message. For authentication errors, always returns generic message to prevent account enumeration."
+          example: "Invalid credentials"
+        code:
+          type: string
+          description: "Machine-readable error code"
+          example: "INVALID_CREDENTIALS"
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationErrorResponse:
+      type: object
+      required: [message, errors]
+      properties:
+        message:
+          type: string
+          example: "Validation failed"
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: "password"
+              message:
+                type: string
+                example: "must be at least 12 characters"
 
     ProviderDisabledError:
       allOf:
