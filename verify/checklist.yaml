@@ -31,3 +31,19 @@ checks:
   id: e2e-browser
   script: ./verify/check-e2e.sh
   type: automated
+- description: 'Google OAuth 전체 플로우: 로그인→콜백→JWT발급→/auth/me 프로필'
+  id: oauth-google-full-flow
+  script: ./verify/check-oauth-flow.sh google
+  type: automated
+- description: 'Kakao OAuth 전체 플로우: 로그인→콜백→JWT발급→/auth/me 프로필'
+  id: oauth-kakao-full-flow
+  script: ./verify/check-oauth-flow.sh kakao
+  type: automated
+- description: 'Naver OAuth 전체 플로우: 로그인→콜백→JWT발급→/auth/me 프로필'
+  id: oauth-naver-full-flow
+  script: ./verify/check-oauth-flow.sh naver
+  type: automated
+- description: '이메일 전체 플로우: 가입→인증→로그인→/auth/me→로그아웃'
+  id: email-full-flow
+  script: ./verify/check-email-flow.sh
+  type: automated

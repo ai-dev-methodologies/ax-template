@@ -26,14 +26,15 @@ public class OAuthService {
     private final ProviderLinkRepository providerLinkRepository;
     private final JwtTokenService jwtTokenService;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
 
     public OAuthService(ClientRegistrationRepository clientRegistrationRepository,
                         OAuthStateStore stateStore,
                         UserRepository userRepository,
                         ProviderLinkRepository providerLinkRepository,
                         JwtTokenService jwtTokenService,
-                        RefreshTokenRepository refreshTokenRepository) {
+                        RefreshTokenRepository refreshTokenRepository, RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
         this.clientRegistrationRepository = clientRegistrationRepository;
         this.stateStore = stateStore;
         this.userRepository = userRepository;
@@ -68,8 +69,14 @@ public class OAuthService {
         ClientRegistration registration = getRegistration(provider);
         String redirectUri = baseUrl + "/api/auth/oauth/" + provider + "/callback";
 
-        String accessToken = exchangeCodeForToken(registration, code, redirectUri);
-        Map<String, Object> userInfo = fetchUserInfo(registration, accessToken);
+        String accessToken;
+        Map<String, Object> userInfo;
+        try {
+            accessToken = exchangeCodeForToken(registration, code, redirectUri);
+            userInfo = fetchUserInfo(registration, accessToken);
+        } catch (Exception e) {
+            throw new ProviderUnavailableException(provider, e);
+        }
 
         String providerUserId = extractProviderUserId(provider, userInfo);
         String email = extractEmail(provider, userInfo);
