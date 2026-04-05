@@ -1,0 +1,55 @@
+template_id: "crud-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "CRUD 리소스 관리가 필요한 모듈"
+  - "사용자별 데이터 격리가 필요한 엔티티"
+
+not_for:
+  - "인증/세션 관리 (auth-blueprint 사용)"
+  - "파일 업로드/다운로드"
+  - "실시간 데이터 스트리밍"
+
+pagination:
+  max_page_size: 50
+  default_page_size: 20
+
+deletion:
+  strategy: "soft-delete"
+  field: "deleted"
+  timestamp_field: "deletedAt"
+
+audit:
+  fields: ["createdBy", "createdAt", "updatedBy", "updatedAt"]
+  created_by_source: "JWT subject claim"
+
+validation:
+  title_max_length: 255
+  description_max_length: 2000
+
+testing_baseline:
+  unit: "JUnit 5 + H2"
+  integration: "RestAssured + @SpringBootTest(RANDOM_PORT)"
+  tag: "CRUD"
+
+verification_checkpoints:
+  - "모든 CRUD 엔드포인트가 인증 필요"
+  - "사용자 간 데이터 격리 (IDOR 방지)"
+  - "입력 검증 + SQL injection 방지"
+  - "페이지네이션 max size 강제"
+  - "소프트 삭제 + 감사 필드"
+
+must_not:
+  - "하드 삭제 (물리 삭제)"
+  - "인증 없이 접근 가능한 CRUD 엔드포인트"
+  - "무제한 페이지 크기"
+
+reject_if:
+  - "IDOR 테스트 미통과"
+  - "SQL injection 테스트 미통과"
+  - "감사 필드 누락"
+
+source_precedence:
+  - "contracts/crud-openapi.yaml"
+  - "specs/crud-security.yaml"
+  - "blueprints/crud-manifest.yaml"

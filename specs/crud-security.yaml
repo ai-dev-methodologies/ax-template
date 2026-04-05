@@ -1,0 +1,61 @@
+version: "1.0.0"
+scope: "crud-resource-management"
+stack: "Spring Boot 3.2.x + React"
+standard: "OWASP Top 10 + Internal CRUD Security Rules"
+items:
+  - id: "CRUD-AUTH-1"
+    chapter: "Authorization"
+    requirement: "All CRUD endpoints require authentication (Bearer JWT)"
+    test_method: "crud_AUTH_1_allEndpointsRequireAuth"
+    verification_type: "api_test"
+    applicable: true
+    notes: "GET/POST/PUT/DELETE without Authorization header → 401"
+
+  - id: "CRUD-AUTH-2"
+    chapter: "Authorization"
+    requirement: "Users can only access their own resources (no IDOR)"
+    test_method: "crud_AUTH_2_noIdorBetweenUsers"
+    verification_type: "api_test"
+    applicable: true
+    notes: "User A creates resource → User B tries GET/PUT/DELETE → 403 or 404"
+
+  - id: "CRUD-VAL-1"
+    chapter: "Input Validation"
+    requirement: "Request body validated — required fields enforced, max lengths respected"
+    test_method: "crud_VAL_1_requestBodyValidation"
+    verification_type: "api_test"
+    applicable: true
+    notes: "POST with missing title → 400. POST with title > 255 chars → 400"
+
+  - id: "CRUD-VAL-2"
+    chapter: "Input Validation"
+    requirement: "SQL injection in input fields does not execute"
+    test_method: "crud_VAL_2_sqlInjectionPrevented"
+    verification_type: "api_test"
+    applicable: true
+    notes: "POST with title=\"'; DROP TABLE items; --\" → resource created with literal string, no SQL execution"
+
+  - id: "CRUD-PAG-1"
+    chapter: "Pagination"
+    requirement: "List endpoint returns paginated results with max page size enforced"
+    test_method: "crud_PAG_1_paginationMaxPageSize"
+    verification_type: "api_test"
+    applicable: true
+    notes: "GET /items?page=0&size=1000 → max 50 items returned"
+    policy_ref: "blueprints/crud-manifest.yaml#pagination.max_page_size"
+
+  - id: "CRUD-DEL-1"
+    chapter: "Deletion"
+    requirement: "Soft delete — resources are marked deleted, not physically removed"
+    test_method: "crud_DEL_1_softDeleteNotPhysical"
+    verification_type: "api_test"
+    applicable: true
+    notes: "DELETE /items/{id} → 204. GET /items/{id} → 404. But DB still has the row with deleted=true"
+
+  - id: "CRUD-AUD-1"
+    chapter: "Audit"
+    requirement: "Create and update operations record createdBy/updatedBy and timestamps"
+    test_method: "crud_AUD_1_auditFieldsPopulated"
+    verification_type: "api_test"
+    applicable: true
+    notes: "POST → response has createdAt, createdBy. PUT → response has updatedAt, updatedBy"

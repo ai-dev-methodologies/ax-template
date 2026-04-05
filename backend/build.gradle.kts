@@ -38,6 +38,12 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
+tasks.register<Test>("testCrud") {
+    useJUnitPlatform {
+        includeTags("CRUD")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")
