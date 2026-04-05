@@ -1,10 +1,16 @@
 let refreshPromise: Promise<boolean> | null = null;
 
+export const refreshMutex = {
+  isRefreshing: false,
+  queue: [] as Array<() => void>,
+};
+
 export async function tryRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
+  refreshMutex.isRefreshing = true;
   refreshPromise = doRefresh();
   try { return await refreshPromise; }
-  finally { refreshPromise = null; }
+  finally { refreshPromise = null; refreshMutex.isRefreshing = false; }
 }
 
 async function doRefresh(): Promise<boolean> {
