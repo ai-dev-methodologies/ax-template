@@ -16,7 +16,7 @@ export interface PasswordResetRequest { email: string; }
 export interface PasswordResetConfirm { token: string; newPassword: string; }
 export interface PasswordChangeRequest { currentPassword: string; newPassword: string; }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,

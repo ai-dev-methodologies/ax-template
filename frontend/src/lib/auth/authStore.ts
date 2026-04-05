@@ -6,6 +6,7 @@ interface AuthState {
   accessToken: string | null;
   isLoading: boolean;
   error: string | null;
+  meError: string | null;
 }
 
 interface AuthActions {
@@ -21,6 +22,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   accessToken: null,
   isLoading: false,
   error: null,
+  meError: null as string | null,
 
   signup: async (email, password) => {
     set({ isLoading: true, error: null });
@@ -58,10 +60,13 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     const token = get().accessToken;
     if (!token) return;
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
       const user = await authClient.me(token);
-      set({ user });
+      clearTimeout(timeout);
+      set({ user, meError: null });
     } catch (e: any) {
-      set({ error: e.message });
+      set({ meError: e.message || 'Failed to load profile' });
     }
   },
 

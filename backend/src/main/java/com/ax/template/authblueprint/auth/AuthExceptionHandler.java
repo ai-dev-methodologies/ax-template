@@ -45,4 +45,11 @@ public class AuthExceptionHandler {
     public Map<String, String> handleInvalidOAuthState(InvalidOAuthStateException e) {
         return Map.of("message", "Invalid OAuth state");
     }
+
+    @ExceptionHandler(ProviderUnavailableException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public Map<String, String> handleProviderUnavailable(ProviderUnavailableException e) {
+        return Map.of("message", "Provider temporarily unavailable: " + e.getProvider(), "fallback", "email");
+    }
+
 }

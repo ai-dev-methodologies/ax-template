@@ -1,25 +1,29 @@
 checks:
-  - id: "build"
-    description: "Backend builds successfully"
-    script: "cd backend && ./gradlew build -q"
-    type: "automated"
-  - id: "asvs-compliance"
-    description: "All ASVS spec items have @Tag tests and pass"
-    script: "cd backend && ./gradlew testAsvs -q"
-    type: "automated"
-  - id: "contract-match"
-    description: "OpenAPI contract paths match controller endpoints"
-    script: "./verify/check-contract.sh"
-    type: "automated"
-  - id: "no-hardcoded-secrets"
-    description: "No hardcoded passwords/secrets in source code"
-    script: "./verify/check-security.sh"
-    type: "automated"
-  - id: "rbac-configured"
-    description: "Role-based access control exists"
-    script: "./verify/check-rbac.sh"
-    type: "automated"
-  - id: "frontend-build"
-    description: "Frontend builds successfully"
-    script: "cd frontend && npm run build -s"
-    type: "automated"
+- description: Backend builds successfully
+  id: build
+  script: cd backend && ./gradlew build -q
+  type: automated
+- description: All ASVS spec items have @Tag tests and pass
+  id: asvs-compliance
+  script: cd backend && ./gradlew testAsvs -q
+  type: automated
+- description: OpenAPI contract paths match controller endpoints
+  id: contract-match
+  script: ./verify/check-contract.sh
+  type: automated
+- description: No hardcoded passwords/secrets in source code
+  id: no-hardcoded-secrets
+  script: ./verify/check-security.sh
+  type: automated
+- description: Role-based access control exists
+  id: rbac-configured
+  script: ./verify/check-rbac.sh
+  type: automated
+- description: Frontend builds successfully
+  id: frontend-build
+  script: cd frontend && npm run build -s
+  type: automated
+- description: OpenAPI schemas match TypeScript interfaces
+  id: type-sync
+  script: ./verify/check-types.sh
+  type: automated

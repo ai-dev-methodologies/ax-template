@@ -14,7 +14,7 @@ echo "[3/5] Contract Check..."
 ./verify/check-contract.sh
 echo "[4/5] Security Check..."
 ./verify/check-security.sh
-echo "[5/5] RBAC Check..."
+echo "[5/6] RBAC Check..."
 ./verify/check-rbac.sh
 echo ""
 echo "========================================="
