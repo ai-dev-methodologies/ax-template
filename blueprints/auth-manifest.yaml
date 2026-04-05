@@ -200,3 +200,40 @@ token_delivery:
   reset_token:
     dev: "console-log"
     prod: "email"
+
+# === CEO Review: 3-stage verification loop ===
+verification_stages:
+  stage_1_dev:
+    trigger: "during AI-assisted development"
+    script: "verify/check-contract.sh"
+    enforcement: "exit 1 on violation"
+  stage_2_local:
+    trigger: "before commit"
+    script: "verify/run-all.sh"
+    enforcement: "exit 1 blocks commit"
+  stage_3_ci:
+    trigger: "PR/CI pipeline"
+    script: "verify/ci-gate.sh"
+    enforcement: "exit 1 blocks merge"
+
+# === CEO Review: KPI ===
+kpi:
+  verification_pass_rate:
+    description: "verify/run-all.sh 통과율"
+    target: "100%"
+    measurement: "verify/run-all.sh exit code"
+  rework_rate:
+    description: "검증 실패 후 재작업 비율"
+    target: "<10%"
+    measurement: "git log에서 fix: 커밋 비율"
+  implementation_lead_time:
+    description: "spec 정의부터 testAsvs PASS까지 소요 시간"
+    target: "<2d per endpoint group"
+    measurement: "git log 타임스탬프 diff"
+
+# === CEO Review: Provider feature flags ===
+provider_flags:
+  email: true
+  google: true
+  naver: true
+  kakao: true
