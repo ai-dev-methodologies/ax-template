@@ -237,3 +237,12 @@ provider_flags:
   google: true
   naver: true
   kakao: true
+
+# === CEO Review: Auto-retry + HITL ===
+retry_policy:
+  max_retries: 2
+  auto_fix_actions:
+    - "rebuild backend"
+    - "rebuild frontend"
+  hitl_trigger: "all retries exhausted"
+  script: "verify/run-with-retry.sh"
