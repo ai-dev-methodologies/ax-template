@@ -27,3 +27,7 @@ checks:
   id: type-sync
   script: ./verify/check-types.sh
   type: automated
+- description: E2E browser tests pass (Playwright — requires servers running)
+  id: e2e-browser
+  script: ./verify/check-e2e.sh
+  type: automated

@@ -5,11 +5,12 @@ export default defineConfig({
   testMatch: ['**/*.spec.ts'],
   fullyParallel: false,
   retries: 0,
-  reporter: 'list',
+  timeout: 30000,
+  reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: 'http://localhost:5173',
     trace: 'off',
-    screenshot: 'off',
+    screenshot: 'only-on-failure',
     video: 'off',
   },
   projects: [
