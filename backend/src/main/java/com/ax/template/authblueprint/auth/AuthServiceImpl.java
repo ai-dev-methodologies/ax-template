@@ -90,7 +90,7 @@ public class AuthServiceImpl {
         rateLimiter.clearAttempts(request.getEmail());
 
         String accessToken = jwtTokenService.generateAccessToken(
-                user.getId().toString(), user.getEmail());
+                user.getId().toString(), user.getEmail(), user.getRole().name());
         String refreshToken = UUID.randomUUID().toString();
 
         RefreshToken rt = new RefreshToken();
@@ -127,7 +127,7 @@ public class AuthServiceImpl {
         refreshTokenRepository.save(rt);
 
         UserEntity user = rt.getUser();
-        String newAccessToken = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail());
+        String newAccessToken = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail(), user.getRole().name());
         String newRefreshToken = UUID.randomUUID().toString();
 
         RefreshToken newRt = new RefreshToken();

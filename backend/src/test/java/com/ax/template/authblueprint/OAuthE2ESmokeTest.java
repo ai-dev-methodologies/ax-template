@@ -43,7 +43,7 @@ class OAuthE2ESmokeTest {
         user.setEmailVerified(true);
         user = userRepository.save(user);
 
-        jwt = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail());
+        jwt = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail(), "MEMBER");
     }
 
     @Test

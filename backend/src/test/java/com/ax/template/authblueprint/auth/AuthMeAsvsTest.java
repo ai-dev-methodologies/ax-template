@@ -60,7 +60,7 @@ class AuthMeAsvsTest {
     @Tag("ASVS-V4.2.1")
     void asvs_V4_2_1_noIDOR() throws Exception {
         UserEntity user1 = userRepository.findByEmail("user1@example.com").orElseThrow();
-        String token1 = jwtTokenService.generateAccessToken(user1.getId().toString(), user1.getEmail());
+        String token1 = jwtTokenService.generateAccessToken(user1.getId().toString(), user1.getEmail(), "MEMBER");
 
         var result = mockMvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token1))
                 .andExpect(status().isOk()).andReturn();
@@ -78,7 +78,7 @@ class AuthMeAsvsTest {
     @Test
     void getMe_authenticatedUser_returnsProfile() throws Exception {
         UserEntity user = userRepository.findByEmail("user1@example.com").orElseThrow();
-        String token = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail());
+        String token = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail(), "MEMBER");
 
         mockMvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())

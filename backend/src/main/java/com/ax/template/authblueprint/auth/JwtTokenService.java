@@ -19,7 +19,7 @@ public class JwtTokenService {
         this.jwtEncoder = jwtEncoder;
     }
 
-    public String generateAccessToken(String userId, String email) {
+    public String generateAccessToken(String userId, String email, String role) {
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("auth-blueprint")
@@ -27,6 +27,7 @@ public class JwtTokenService {
                 .expiresAt(now.plus(ACCESS_TOKEN_EXPIRY_HOURS, ChronoUnit.HOURS))
                 .subject(userId)
                 .claim("email", email)
+                .claim("role", role)
                 .build();
         return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
     }

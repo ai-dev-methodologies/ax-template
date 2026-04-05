@@ -77,7 +77,7 @@ public class OAuthService {
         OAuthProvider oauthProvider = OAuthProvider.valueOf(provider.toUpperCase());
         UserEntity user = findOrCreateUser(oauthProvider, providerUserId, email);
 
-        String jwt = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail());
+        String jwt = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail(), user.getRole().name());
         String refreshToken = createRefreshToken(user);
         addRefreshCookie(response, refreshToken);
 
