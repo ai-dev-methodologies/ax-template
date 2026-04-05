@@ -6,7 +6,13 @@ git clone https://github.com/your-org/ax-template.git my-project
 cd my-project
 ```
 
-## 2. 환경변수 설정
+## 2. OAuth 키 발급 (SNS 로그인용)
+
+**[docs/OAUTH-SETUP-GUIDE.md](OAUTH-SETUP-GUIDE.md)** 참조 — Google, Kakao, Naver 각각 5분이면 무료 발급 가능합니다.
+
+키 발급 후 아래 환경변수를 설정하세요.
+
+## 2-1. 환경변수 설정
 ```bash
 export GOOGLE_CLIENT_ID=your-google-client-id
 export GOOGLE_CLIENT_SECRET=your-google-client-secret
