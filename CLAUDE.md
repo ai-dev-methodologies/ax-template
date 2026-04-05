@@ -98,3 +98,27 @@ ax-template/
 핵심: **Spec Trio** (Compliance Spec + API Contract + Policy Manifest) → TDD 구현 → 단일 명령 검증 (`./gradlew test{Domain}`).
 
 새 도메인 템플릿을 만들 때 `METHODOLOGY.md`의 5단계 + Dry-Run Checklist를 따른다.
+
+## Verification Scripts
+
+```bash
+verify/run-all.sh        # 전체 검증 (build + ASVS + contract + security + RBAC)
+verify/run-checklist.sh   # YAML 기반 자동화 체크리스트
+verify/ci-gate.sh         # CI 머지 게이트 (backend + frontend)
+verify/report-kpi.sh      # KPI 리포트 (통과율, 재작업률, 리드타임)
+```
+
+### 3단계 검증 루프
+1. **AI 작업 중**: `verify/check-contract.sh` — 계약 준수 즉시 확인
+2. **커밋 전**: `verify/run-all.sh` — 전체 검증 통과 필수
+3. **PR/CI**: `verify/ci-gate.sh` — 머지 차단 게이트
+
+## RBAC
+
+| 역할 | 접근 범위 |
+|------|----------|
+| ADMIN | `/api/admin/**` + 모든 인증 엔드포인트 |
+| MANAGER | 모든 인증 엔드포인트 |
+| MEMBER | 모든 인증 엔드포인트 |
+
+JWT에 `role` claim 포함. SecurityConfig에서 `hasAuthority("ROLE_ADMIN")` 검사.
