@@ -91,3 +91,10 @@ ax-template/
 | Email | signup, login, verify, refresh, logout, /me, password-reset/change, resend-verification | 23개 (V2.1.x, V2.2.1, V2.5.x, V2.7.x, V3.x, V4.x) |
 | OAuth | authorize, callback, link, unlink (Google/Naver/Kakao) | 3개 (V2.8.1, V2.8.2, V2.8.3) |
 | **Total** | **14 endpoints** | **26 ASVS items, 26 COVERED** |
+
+## Methodology
+
+이 프로젝트의 방법론은 `METHODOLOGY.md`에 문서화되어 있다.
+핵심: **Spec Trio** (Compliance Spec + API Contract + Policy Manifest) → TDD 구현 → 단일 명령 검증 (`./gradlew test{Domain}`).
+
+새 도메인 템플릿을 만들 때 `METHODOLOGY.md`의 5단계 + Dry-Run Checklist를 따른다.
