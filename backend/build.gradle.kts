@@ -13,6 +13,10 @@ java {
     }
 }
 
+springBoot {
+    buildInfo()
+}
+
 repositories {
     mavenCentral()
 }
@@ -25,6 +29,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-cache")
+    implementation("com.github.ben-manes.caffeine:caffeine")
 
     runtimeOnly("com.h2database:h2")
 
@@ -32,6 +38,8 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
+    testImplementation("io.rest-assured:rest-assured")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 }
 
 tasks.withType<Test> {
@@ -48,4 +56,21 @@ tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")
     }
+}
+
+tasks.register<Test>("testPractices") {
+    useJUnitPlatform {
+        includeTags("PRACTICES")
+    }
+}
+
+tasks.register<Exec>("specRefGuard") {
+    workingDir = rootDir.parentFile
+    commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")
+}
+
+tasks.register<Exec>("evalPractices") {
+    dependsOn("specRefGuard")
+    workingDir = rootDir.parentFile
+    commandLine = listOf("bash", "practices/evals/run.sh")
 }

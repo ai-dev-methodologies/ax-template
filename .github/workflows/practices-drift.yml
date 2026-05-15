@@ -1,0 +1,99 @@
+name: practices-drift
+
+# P2-A4 + P2-C1 — drift axis automation: weekly cron checks _MANIFEST.yaml fetched_at
+# fields and, when any snapshot is > 30 days old, refreshes via practices/upstream/fetch.sh
+# and opens a pull request with the diff.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"     # every Monday 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  drift-refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # branch push
+      pull-requests: write  # PR creation
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install --quiet pyyaml
+
+      - name: Compute snapshot ages
+        id: ages
+        run: |
+          python3 <<'PY'
+          import sys, yaml, datetime, os, pathlib
+          mf = pathlib.Path("practices/upstream/_MANIFEST.yaml")
+          if not mf.exists():
+              print("no _MANIFEST.yaml — nothing to drift-check")
+              sys.exit(0)
+          d = yaml.safe_load(mf.read_text()) or {}
+          now = datetime.datetime.now(datetime.timezone.utc)
+          stale = []
+          for s in d.get("snapshots", []):
+              try:
+                  fa = datetime.datetime.fromisoformat(s["fetched_at"].replace("Z", "+00:00"))
+                  age = (now - fa).days
+                  if age > 30:
+                      stale.append(f"{s['id']} ({age}d)")
+              except Exception as e:
+                  print(f"warn: parse failed for {s.get('id')}: {e}")
+          out = ";".join(stale)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"stale={out}\n")
+          print(f"stale snapshots: {out or '(none)'}")
+          PY
+
+      - name: Refresh snapshots
+        if: steps.ages.outputs.stale != ''
+        run: |
+          bash practices/upstream/fetch.sh
+
+      - name: Detect changes
+        if: steps.ages.outputs.stale != ''
+        id: diff
+        run: |
+          if git diff --quiet -- practices/upstream/_MANIFEST.yaml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no manifest changes after fetch — drift was transient or fetch failed"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- practices/upstream/
+          fi
+
+      - name: Create pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(practices): drift refresh — stale upstream snapshots"
+          title: "chore(practices): drift refresh (${{ steps.ages.outputs.stale }})"
+          body: |
+            Automated drift-axis refresh.
+
+            Stale snapshots detected (> 30 days):
+            ```
+            ${{ steps.ages.outputs.stale }}
+            ```
+
+            `practices/upstream/fetch.sh` was re-executed; `_MANIFEST.yaml` updated with
+            new `fetched_at` and SHA256. Snapshot bodies themselves are gitignored;
+            only the manifest is committed.
+
+            Review: confirm the new SHA differences are expected before merging.
+          branch: practices/drift-refresh
+          delete-branch: true
+          labels: |
+            practices-drift
+            maintenance
+            automated

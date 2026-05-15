@@ -1,0 +1,6 @@
+[submodule "practices/evals/fixtures/spring-petclinic"]
+	path = practices/evals/fixtures/spring-petclinic
+	url = https://github.com/spring-projects/spring-petclinic.git
+[submodule "practices/evals/fixtures/spring-realworld"]
+	path = practices/evals/fixtures/spring-realworld
+	url = https://github.com/gothinkster/spring-boot-realworld-example-app.git

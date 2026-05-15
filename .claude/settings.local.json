@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'p=$(jq -r .tool_input.file_path 2>/dev/null || echo \"\"); if [[ \"$p\" == */practices/rules/*.md ]] || [[ \"$p\" == */specs/spring-practices-l0.yaml ]] || [[ \"$p\" == *backend/src/*/practices/* ]]; then cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && bash practices/evals/spec_ref_guard.sh && bash practices/evals/substance_guard.sh && bash practices/evals/evidence_guard.sh; fi'",
+            "description": "Pre-edit: run practices/ hard gates when the edit target is a rule.md, the seed spec, or backend practices fixture"
+          }
+        ]
+      }
+    ]
+  }
+}

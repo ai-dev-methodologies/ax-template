@@ -55,10 +55,23 @@ spring:
       path: /h2-console
 
 management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
   endpoints:
     web:
       exposure:
-        include: health,mappings
+        include: health,info,mappings
+  info:
+    build:
+      enabled: true
 
 auth:
   providers:

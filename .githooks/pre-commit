@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — local enforcement of practices/ hard gates.
+#
+# Activate once per clone:
+#   bash practices/scripts/install-hooks.sh
+#
+# Every `git commit` runs the 4 binary guards. Any failure aborts the commit.
+# There is NO opt-out flag inside this script by design — overriding it requires
+# explicit maintainer action documented in practices/DECISIONS-P3.md §break-glass.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+# Skip when there are no practices/ or specs/ changes in the index — the gates only
+# care about that subtree, no point paying the cost on unrelated commits.
+if ! git diff --cached --name-only | grep -qE '^(practices/|specs/spring-practices-l0\.yaml|backend/src/.*/practices/)'; then
+    exit 0
+fi
+
+echo "[practices] commit touches practices/ — running 4 hard gates"
+
+fail=0
+for guard in \
+    practices/evals/spec_ref_guard.sh \
+    practices/evals/substance_guard.sh \
+    practices/evals/time_decay_guard.sh \
+    practices/evals/evidence_guard.sh
+do
+    if [[ -x "$guard" ]] || [[ -f "$guard" ]]; then
+        if ! bash "$guard"; then
+            echo "[practices] ✗ guard failed: $guard"
+            fail=$((fail + 1))
+        fi
+    fi
+done
+
+if [[ $fail -gt 0 ]]; then
+    echo ""
+    echo "[practices] $fail guard(s) failed — commit BLOCKED."
+    echo "[practices] Fix the violations above and run \`git commit\` again."
+    echo "[practices] Break-glass: documented in practices/DECISIONS-P3.md (Axis 3)."
+    exit 1
+fi
+
+# Stage 2: when backend java sources under practices/ change, run testPractices.
+# Pure rule.md commits skip this stage (no java change = no test impact).
+if git diff --cached --name-only | grep -qE '^backend/src/(main|test)/java/com/ax/template/authblueprint/practices/'; then
+    echo "[practices] backend changes detected — running ./gradlew testPractices"
+    if ! (cd backend && ./gradlew -q testPractices); then
+        echo "[practices] ✗ testPractices FAILED — commit BLOCKED"
+        echo "[practices] Fix the failing test(s) above and run \`git commit\` again."
+        exit 1
+    fi
+    echo "[practices] ✓ testPractices PASS"
+fi
+
+echo "[practices] all hard gates PASS — commit proceeds"
+exit 0

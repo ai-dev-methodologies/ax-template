@@ -1,0 +1,150 @@
+version: "3.0"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GATING
+# binary_only: true — the ONLY hard merge gates are:
+#   (a) spec_ref present in rule frontmatter  →  evals/spec_ref_guard.sh
+#   (b) ./gradlew test{Domain} PASS
+# All weighted axis scores below are ADVISORY only — they never block a merge.
+# ─────────────────────────────────────────────────────────────────────────────
+gating:
+  binary_only: true
+  hard_gates:
+    - spec_ref_present      # evals/spec_ref_guard.sh exits ≠ 0 if missing
+    - gradle_test_pass      # ./gradlew test{Domain} must exit 0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADVISORY AXES  (weights sum to 1.0 exactly)
+#
+# Each axis:
+#   weight    – fraction of composite advisory score (0.0–1.0)
+#   question  – maintainer review question (human-readable)
+#   automatic – checks run by evals/run.sh sub-scripts; results are REPORTED,
+#               never used as gate conditions
+# ─────────────────────────────────────────────────────────────────────────────
+axes:
+  detection:
+    weight: 0.25
+    question: "Does the rule reliably detect the anti-pattern in isolation,
+      without false positives on clean code?"
+    automatic:
+      - "semgrep_match: run Semgrep pattern against evals/fixtures/violation/;
+          assert ≥1 match found"
+      - "false_positive_check: run Semgrep pattern against evals/fixtures/clean/;
+          assert 0 matches"
+      - "spotbugs_check: run SpotBugs detector (if applicable) against violation
+          fixture; confirm finding reported"
+
+  outcome:
+    weight: 0.25
+    question: "Does applying this rule produce a measurable improvement in build
+      quality, test reliability, or runtime correctness?"
+    automatic:
+      - "gradle_test_delta: record ./gradlew test failure count before/after
+          applying rule to reference impl; delta must be ≥0 (no regressions)"
+      - "spotbugs_delta: record SpotBugs HIGH/CRITICAL count before/after rule
+          application; delta must be ≥0"
+      - "build_time_delta: measure build time change; emit WARN if >10% slower"
+
+  reference:
+    weight: 0.15
+    question: "Is the rule grounded in a verifiable upstream source (official
+      Spring docs, OWASP, CVE, or equivalent authoritative reference)?"
+    automatic:
+      - "spec_ref_valid: rule frontmatter spec_ref resolves to a real item id
+          in specs/*.yaml"
+      - "upstream_snapshot_fresh: upstream/_MANIFEST.yaml fetched_at for cited
+          source is within 90 days"
+      - "dead_link_check: HTTP HEAD on any URLs in rule body returns 2xx or 3xx"
+
+  portability:
+    weight: 0.20
+    question: "Does the rule apply correctly to a real-world Spring Boot project
+      outside this repository's reference implementation?"
+    automatic:
+      - "fixture_build_green: evals/portability/run.sh applies rule to petclinic
+          fixture and exits 0"
+      - "tag_test_pass: ./gradlew testPractices --tests matching rule tag exits 0
+          on petclinic fixture"
+      - "no_internal_package_ref: Semgrep pattern does not reference ax-template
+          internal package names"
+
+  drift:
+    weight: 0.15
+    question: "Is the rule still aligned with the upstream documentation version
+      it was written against?"
+    automatic:
+      - "fetched_at_within_90d: upstream/_MANIFEST.yaml entry for this rule's
+          source has fetched_at < 90 days; emit WARN if stale"
+      - "version_pin_present: rule frontmatter includes upstream_version field
+          (e.g., 'spring-boot: 3.x')"
+      - "changelog_scan: search upstream snapshot for breaking changes matching
+          rule keywords; emit WARN if found"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADVISORY METRICS — balance
+# Emits WARN (never blocks) when one category prefix exceeds warn_threshold
+# of total rules.  Enforced by _balance_guard.sh (advisory, exit 0 always).
+# ─────────────────────────────────────────────────────────────────────────────
+advisory_metrics:
+  balance:
+    warn_threshold: 0.25   # > 25% of rules in one category → WARN in report
+    categories:
+      # 21 Spring Boot concern categories (advisory catalog — not normative)
+      # History: 2026-05-15 initial 22 categories; 2026-05-16 native- removed (P2-D D3 REJECT)
+      # See practices/DECISIONS.md for category closure rationale.
+      - prefix: "persistence-"
+        description: "JPA/Hibernate query patterns, N+1 detection, fetch strategy"
+      - prefix: "transaction-"
+        description: "@Transactional correctness, self-invocation, propagation"
+      - prefix: "validation-"
+        description: "Bean Validation, mass assignment guard, input sanitization"
+      - prefix: "testing-"
+        description: "Test strategy, RestAssured black-box discipline, @Tag hygiene"
+      - prefix: "security-"
+        description: "Spring Security config, CSRF, method security, secret handling"
+      - prefix: "api-"
+        description: "REST API design, versioning, content negotiation, idempotency"
+      - prefix: "error-"
+        description: "Exception handling, @ControllerAdvice, RFC 7807 ProblemDetail"
+      - prefix: "logging-"
+        description: "Structured logging, MDC propagation, log level discipline"
+      - prefix: "config-"
+        description: "@ConfigurationProperties, environment profiles, secret injection"
+      - prefix: "cache-"
+        description: "Spring Cache abstraction, eviction policy, TTL configuration"
+      - prefix: "messaging-"
+        description: "Event-driven patterns, outbox pattern, idempotent consumer"
+      - prefix: "observability-"
+        description: "Micrometer metrics, distributed tracing, health endpoints"
+      - prefix: "dependency-"
+        description: "Constructor injection, circular dependency prevention, scope"
+      - prefix: "dto-"
+        description: "DTO/record patterns, mapping strategy, no entity in response"
+      - prefix: "migration-"
+        description: "Flyway/Liquibase discipline, repeatable scripts, baseline"
+      - prefix: "scheduling-"
+        description: "@Scheduled correctness, distributed lock, ShedLock"
+      - prefix: "async-"
+        description: "@Async thread pool configuration, CompletableFuture error propagation"
+      - prefix: "serialization-"
+        description: "Jackson configuration, polymorphism, date/time serialization"
+      - prefix: "health-"
+        description: "Actuator endpoint exposure, custom HealthIndicator"
+      - prefix: "batch-"
+        description: "Spring Batch job design, chunk size, restart strategy"
+      - prefix: "arch-"
+        description: "Universal architecture invariants (cyclic packages, layer boundary, JpaRepository extension). CLOSED — no new style-specific rules accepted (see DECISIONS.md P2-D D2)."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SELF-VERIFY CONTRACT (run manually to confirm rubric integrity)
+#
+#   python3 -c "
+#     import yaml, sys
+#     d = yaml.safe_load(open('practices/rubric.yaml'))
+#     w = sum(a['weight'] for a in d['axes'].values())
+#     assert abs(w - 1.0) < 1e-9, f'weights sum to {w}, not 1.0'
+#     assert d['gating']['binary_only'] == True, 'binary_only must be true'
+#     print('OK: weights =', w, '| binary_only = True')
+#   "
+# ─────────────────────────────────────────────────────────────────────────────

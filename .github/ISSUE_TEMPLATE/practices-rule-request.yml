@@ -1,0 +1,115 @@
+name: Practices — New Rule Request
+description: Propose a new rule for practices/. Evidence is required — Claude intuition and team folklore do not qualify.
+title: "[practices] propose: <one-line summary>"
+labels: ["practices-rule-request", "needs-evidence-review"]
+body:
+  - type: input
+    id: rule_slug
+    attributes:
+      label: Proposed rule slug
+      description: Lower-kebab-case, prefixed by category. Example — `cache-no-stampede`, `messaging-idempotent-consumer`.
+      placeholder: "category-prefix-short-name"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category prefix
+      description: One of the 22 advisory catalog prefixes (see practices/SKILL.md). Pick the closest fit.
+      options:
+        - lang
+        - core
+        - config
+        - web
+        - http
+        - persistence
+        - transaction
+        - migration
+        - security
+        - validation
+        - error
+        - api
+        - async
+        - messaging
+        - cache
+        - observability
+        - actuator
+        - testing
+        - build
+        - native
+        - arch
+        - quality
+    validations:
+      required: true
+
+  - type: textarea
+    id: rationale
+    attributes:
+      label: What pattern + concrete harm
+      description: 2-3 sentences. Describe the anti-pattern, the concrete failure mode it causes, and why "everyone knows" is not enough.
+      placeholder: "When X happens, Y silently degrades because ... A correct implementation would ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: External evidence (REQUIRED)
+      description: |
+        At least one authoritative citation. Acceptable: RFC, JEP, vendor reference, OWASP/CWE, peer-reviewed paper.
+        Not acceptable: blog posts, stack-overflow answers (unless they are the cited source of a downstream standard), Claude intuition, "everyone does it".
+
+        Provide URL(s). The maintainer will run `practices/upstream/fetch.sh` against each URL to snapshot it
+        and verify substring match against the rule body.
+      value: |
+        - <citation 1 — title>: <https://...>
+        - (add more rows as needed)
+    validations:
+      required: true
+
+  - type: textarea
+    id: example_incorrect
+    attributes:
+      label: Incorrect example (≥ 2 lines of Java code, no placeholder)
+      description: "`substance_guard` rejects 1-line examples and placeholder phrases (`no real example`, `placeholder`, `TODO`, `example only`)."
+      render: java
+    validations:
+      required: true
+
+  - type: textarea
+    id: example_correct
+    attributes:
+      label: Correct example (≥ 2 lines of Java code, no placeholder)
+      description: Same substance bar as above.
+      render: java
+    validations:
+      required: true
+
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: How will the rule be tested?
+      description: "What `@Tag(PRACTICES-<CAT>-<NNN>)` test will live under `backend/src/test/java/.../practices/`?"
+      placeholder: "e.g. a @SpringBootTest that calls the demo endpoint and asserts ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered (≥ 1, with reason rejected)
+      description: A rule with no documented alternatives is suspicious. `DECISIONS.md` will record at least one rejected alternative.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I read `practices/MAINTAINER.md` §5b "Rule Provenance Policy"
+          required: true
+        - label: I understand that my issue may be DEFERRED if external evidence is not authoritative
+          required: true
+        - label: I am willing to draft the PR (`spec item + @Tag test + rule.md`) myself if the rule is accepted

@@ -1,0 +1,86 @@
+name: practices-sentinel
+
+# P2-A5 — PR-time guard: AGENTS.md sha sentinel + spec_ref / substance / time_decay guards.
+# Runs on every push & PR. Any guard failing → CI red, blocking merge.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "practices/**"
+      - "specs/**"
+  pull_request:
+    paths:
+      - "practices/**"
+      - "specs/**"
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install --quiet pyyaml
+
+      - name: spec_ref_guard
+        run: bash practices/evals/spec_ref_guard.sh
+
+      - name: substance_guard
+        run: bash practices/evals/substance_guard.sh
+
+      - name: time_decay_guard
+        run: bash practices/evals/time_decay_guard.sh
+
+      - name: evidence_guard
+        run: bash practices/evals/evidence_guard.sh
+
+      - name: quote_match_check (advisory)
+        run: bash practices/evals/quote_match_check.sh
+        continue-on-error: true
+
+      - name: AGENTS.md sentinel — regenerate and assert no diff
+        run: |
+          bash practices/generate_agents.sh
+          if ! git diff --exit-code -- practices/AGENTS.md; then
+            echo "::error::practices/AGENTS.md is out of sync with rules/*.md."
+            echo "Run \`bash practices/generate_agents.sh\` locally and commit the result."
+            exit 1
+          fi
+
+      - name: Adversarial — missing_spec_ref must BLOCK
+        run: |
+          out="$(bash practices/evals/adversarial/run.sh --case missing_spec_ref 2>&1 || true)"
+          echo "$out"
+          echo "$out" | grep -q '^BLOCK ' || { echo "::error::adversarial missing_spec_ref did not BLOCK"; exit 1; }
+
+      - name: Adversarial — fake_good_rule must BLOCK
+        run: |
+          out="$(bash practices/evals/adversarial/run.sh --case fake_good_rule 2>&1 || true)"
+          echo "$out"
+          echo "$out" | grep -q '^BLOCK ' || { echo "::error::adversarial fake_good_rule did not BLOCK"; exit 1; }
+
+      - name: Adversarial — time_decay must BLOCK
+        run: |
+          out="$(bash practices/evals/adversarial/run.sh --case time_decay 2>&1 || true)"
+          echo "$out"
+          echo "$out" | grep -q '^BLOCK ' || { echo "::error::adversarial time_decay did not BLOCK"; exit 1; }
+
+      # P2-C4 — Outcome axis (advisory only, never failing CI). Install Semgrep and run.
+      - name: Install Semgrep (optional advisory)
+        run: pip install --quiet semgrep
+        continue-on-error: true
+
+      - name: Outcome axis advisory metrics
+        run: bash practices/evals/outcome/run.sh
+        continue-on-error: true
+
+      # P2-C5 — Trend dashboard: regenerate (advisory)
+      - name: Trend dashboard refresh
+        run: bash practices/evals/trend/run.sh
+        continue-on-error: true

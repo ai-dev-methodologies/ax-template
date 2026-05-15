@@ -25,11 +25,11 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
+            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**", "/practices/demo/**"))
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/actuator/health", "/actuator/mappings").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/mappings").permitAll()
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/api/items/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
@@ -38,6 +38,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/auth/oauth/unlink/**").authenticated()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/h2-console/**").permitAll()
+                .requestMatchers("/practices/demo/**").permitAll()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))

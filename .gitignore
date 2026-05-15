@@ -1,2 +1,6 @@
 test-results/
 .env.local
+
+# Practices upstream snapshots — large, regenerable via practices/upstream/fetch.sh,
+# and may contain false-positive secret patterns from public docs (e.g. Algolia search keys).
+practices/upstream/*.snapshot.md

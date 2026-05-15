@@ -1,0 +1,45 @@
+name: practices-chub-feedback
+
+# P2-C2 — Long-term ecosystem signal: when our 3-tier fetcher's tier-1 (chub) returns 0
+# Java/Spring documents in a sample probe, post a chub feedback message asking for
+# Java/Spring registration. Monthly cadence; idempotent — duplicates are dedup'd by the
+# chub feedback API via the repeated content.
+
+on:
+  schedule:
+    - cron: "0 7 1 * *"     # 1st of each month, 07:00 UTC
+  workflow_dispatch:
+
+jobs:
+  chub-feedback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node (chub requires)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install chub
+        run: npm install -g @aisuite/chub || true
+      - name: Probe Java/Spring registration
+        id: probe
+        run: |
+          if ! command -v chub >/dev/null 2>&1; then
+            echo "chub not installable in CI — skipping feedback"
+            echo "should_send=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          chub update >/dev/null 2>&1 || true
+          count=$(chub search "spring-boot" --json 2>/dev/null \
+            | python3 -c 'import sys,json; d=json.load(sys.stdin); print(len(d.get("results",[])))' \
+            || echo 0)
+          echo "tier1_count=$count" >> "$GITHUB_OUTPUT"
+          if [[ "$count" -eq 0 ]]; then
+            echo "should_send=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_send=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Post feedback
+        if: steps.probe.outputs.should_send == 'true'
+        run: |
+          chub feedback "ax-template practices/ would benefit from Java/Spring docs registration. Current chub registry returns 0 Java/Kotlin/Scala documents; our 3-tier upstream fetcher (practices/upstream/fetch.sh) skips tier-1 and falls back to Context7/WebFetch. Adding spring-boot, spring-security, hibernate, spring-data-jpa, and testcontainers-java would let maintainers cite chub IDs directly in rule frontmatter." || true

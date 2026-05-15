@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# .githooks/pre-push — full regression before pushing.
+#
+# Activated by practices/scripts/install-hooks.sh together with pre-commit.
+# Runs testPractices + testAsvs + testCrud whenever the local commits ahead of
+# the remote touch backend/, practices/, or the seed spec. No-op for commits that
+# only touch docs / .github / .omc / configuration outside the regression scope.
+#
+# Break-glass: same audit rule as pre-commit (PR title `[break-glass]:` + entry in
+# practices/break-glass-log.md). There is no --no-verify allowance.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+# Determine the range of commits being pushed. The remote sha/ref pairs arrive on stdin
+# per `man githooks`. If we cannot resolve a remote, default to comparing HEAD against
+# the upstream tracking branch (when set); otherwise run regardless to be safe.
+read_range() {
+    local local_ref local_sha remote_ref remote_sha
+    while read -r local_ref local_sha remote_ref remote_sha; do
+        if [[ -n "$remote_sha" && "$remote_sha" != "0000000000000000000000000000000000000000" ]]; then
+            echo "$remote_sha..$local_sha"
+            return
+        fi
+    done
+    # No remote sha (new branch). Compare against upstream if set, else against empty.
+    if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        echo "$(git rev-parse '@{u}')..HEAD"
+    else
+        echo ""
+    fi
+}
+
+RANGE="$(read_range)"
+
+# Skip when the push touches nothing under the regression scope.
+if [[ -n "$RANGE" ]]; then
+    if ! git diff --name-only "$RANGE" 2>/dev/null | grep -qE '^(backend/|practices/|specs/spring-practices-l0\.yaml)'; then
+        exit 0
+    fi
+fi
+
+echo "[practices] push detected — running full regression (testPractices + testAsvs + testCrud)"
+if ! (cd backend && ./gradlew -q testPractices testAsvs testCrud); then
+    echo "[practices] ✗ full regression FAILED — push BLOCKED"
+    echo "[practices] Inspect the failing tests above. Re-run locally:"
+    echo "[practices]   cd backend && ./gradlew testPractices testAsvs testCrud"
+    exit 1
+fi
+echo "[practices] ✓ full regression PASS — push proceeds"
+exit 0
