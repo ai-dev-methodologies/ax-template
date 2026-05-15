@@ -96,7 +96,12 @@ Tradeoff: no bypass strains emergency hotfixes; full bypass invites silent decay
 
 1. `bash practices/scripts/install-hooks.sh` — wires `.githooks/pre-commit` AND `.githooks/pre-push`
 2. Restart Claude Code in the repo to pick up `.claude/settings.local.json` (edit-time gate)
-3. Enable branch protection on `main`: require the `practices-sentinel` workflow PASS
+3. Apply main branch protection — codified, not click-ops:
+   - Source-of-truth JSON: `.github/rulesets/main-protection.json`
+   - Apply: `bash practices/scripts/setup-branch-protection.sh` (requires `gh auth login` + repo admin)
+   - Verify: `bash practices/scripts/setup-branch-protection.sh --check`
+   - Dry-run: `bash practices/scripts/setup-branch-protection.sh --dry-run`
+   - Policy locks in: linear history, PR-required, `practices-sentinel / guards` status check, `enforce_admins=true` (no admin bypass), no force-push, no deletions, required conversation resolution.
 
 ### Local gate stages (added 2026-05-15 after P2-B6 build-fail incident)
 
