@@ -29,8 +29,12 @@
    possible evidence the rule is not ax-template-specific opinion.
 2. **lang-records-for-dtos** passes vacuously on both fixtures because neither uses the
    `*Request` / `*Response` suffix convention. The rule is correct as written but its
-   *coverage* on external code is limited. Backlog: expand suffix set to include `Dto`,
-   `Form`, `Payload` after consulting more fixtures.
+   *coverage* on external code is limited.
+   - **N2 decision (2026-05-16): keep narrow.** Widening to `Dto` / `Form` / `Payload`
+     would introduce false positives on non-DTO classes that happen to end in those
+     names (e.g. `WebForm`, `JsonPayload`). False positives damage catalog trust more
+     than vacuous PASS damages coverage signal. Re-evaluation trigger: a Spring-blessed
+     style guide that endorses a specific DTO naming convention.
 3. **Three rules (arch-layer-boundary, no-system-streams, no-public-mutable-fields) pass
    on both fixtures** — strong portability signal. These can be considered "validated"
    beyond ax-template.

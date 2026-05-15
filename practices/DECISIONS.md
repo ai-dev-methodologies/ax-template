@@ -168,9 +168,19 @@ The provenance trail behind each disposition is the corresponding entry above
 balance-strict-25-percent). Re-evaluation triggers are documented per-candidate; without
 the trigger event, do not relitigate.
 
+## lang-records-for-dtos-widen — DEFERRED
+- Date: 2026-05-16
+- Decision: DEFER (keep rule's detection surface narrow at `*Request` / `*Response`)
+- Evidence considered: 2026-05-16 portability measurement — both spring-petclinic and spring-realworld passed vacuously (neither uses the `*Request` / `*Response` suffix convention).
+- Rationale: Widening to `Dto` / `Form` / `Payload` would expand the rule's reach across external fixtures but introduce false positives on non-DTO classes whose names happen to end in those tokens (e.g. `WebForm`, `JsonPayload`, `FormBuilder`). False positives damage catalog trust more than vacuous PASS damages coverage signal — and the four other portability-tested rules (cyclic-package, layer-boundary, no-system-streams, no-public-mutable-fields) already provide external validation of the catalog's portability claim.
+- Alternatives considered: ACCEPT broad suffix set (rejected — false-positive risk on generic naming); annotation-based detection like `@RecordDto` (rejected — fixture authors won't opt in, so still vacuous); leave at `*Request` / `*Response` (chosen — honest scope, documented limitation).
+- Re-evaluation trigger: a Spring-blessed style guide that endorses a specific DTO naming convention beyond `*Request` / `*Response`, OR portability measurement on a third fixture that demonstrates the rule failing to catch a real anti-pattern that the wider suffix set would have caught.
+
 # Audit
 
 - Last reviewed: 2026-05-16
 - Next scheduled review: when rule count crosses 100, or when a snapshot in `_MANIFEST.yaml` becomes stale (> 90 days, caught by `time_decay_guard`).
 - 2026-05-15 — DECISIONS-P3.md signed: multi-layer hard enforcement activated (`.githooks/pre-commit` + `.claude/settings.local.json` PreToolUse + `practices-sentinel.yml`).
 - 2026-05-16 — P2-D resolved: D1/D2/D3 REJECTED, D4 DEFERRED. Catalog narrows 22 → 21 categories (native removed). `rubric.yaml.advisory_metrics.balance.categories` updated. `MAINTAINER.md §4` updated.
+- 2026-05-16 — N1 codified: branch protection policy moved from click-ops to source-of-truth (`.github/rulesets/main-protection.json` + `practices/scripts/setup-branch-protection.sh`). DECISIONS-P3.md §Activation step 3 updated.
+- 2026-05-16 — N2 resolved: lang-records-for-dtos-widen DEFERRED. Rule's detection surface stays at `*Request` / `*Response`. Re-evaluation trigger: Spring-blessed style guide endorsement OR portability measurement on a 3rd fixture revealing a missed anti-pattern.
