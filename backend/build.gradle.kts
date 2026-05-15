@@ -64,6 +64,15 @@ tasks.register<Test>("testPractices") {
     }
 }
 
+tasks.register<Test>("testPortability") {
+    useJUnitPlatform {
+        includeTags("PORTABILITY")
+    }
+    // Fixtures must be built first: practices/evals/portability/run.sh --full
+    // If a fixture's classes dir is missing, the test is skipped via JUnit Assumptions
+    // (not failed) — see PortabilityFixtures.importFixture().
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")
