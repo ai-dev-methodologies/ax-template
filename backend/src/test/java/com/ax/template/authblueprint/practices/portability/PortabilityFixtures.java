@@ -26,6 +26,11 @@ final class PortabilityFixtures {
     static final Path REALWORLD_CLASSES = Paths.get(
             "../practices/evals/fixtures/spring-realworld/build/classes/java/main");
 
+    static final String MODULITH = "spring-modulith-example";
+    static final String MODULITH_ROOT_PKG = "de.codecentric.spring_modulith_example";
+    static final Path MODULITH_CLASSES = Paths.get(
+            "../practices/evals/fixtures/spring-modulith-example/target/classes");
+
     private PortabilityFixtures() {}
 
     static JavaClasses importFixture(String fixtureName, Path classesDir) {

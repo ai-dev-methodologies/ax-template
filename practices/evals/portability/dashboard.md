@@ -7,18 +7,19 @@
 
 | Run date | Fixtures | Tests | Pass | Fail | Notes |
 |----------|----------|-------|------|------|-------|
-| 2026-05-16 | spring-petclinic, spring-realworld | 12 | 11 | 1 | First measurement after D-stage; one real cycle found in realworld |
+| 2026-05-16 (initial) | spring-petclinic, spring-realworld | 12 | 11 | 1 | First measurement after D-stage; one real cycle found in realworld |
+| 2026-05-16 (N3) | + spring-modulith-example | 18 | 17 | 1 | Modulith added; all 5 rules PASS on modulith — modular monolith naturally cycle-free |
 
-## Per-rule per-fixture matrix (2026-05-16)
+## Per-rule per-fixture matrix (2026-05-16, post-N3)
 
-| Rule | spring-petclinic | spring-realworld | interpretation |
-|------|-----------------|-----------------|----------------|
-| arch-no-cyclic-package        | PASS | **FAIL** | realworld has Slice `application` ↔ Slice `infrastructure` bidirectional dependency — genuine architectural smell, rule unchanged |
-| arch-layer-boundary (Service depends on Controller) | PASS | PASS | universal |
-| arch-layer-boundary (Repository depends on Service/Controller) | PASS | PASS | universal |
-| lang-records-for-dtos          | PASS (vacuous — no *Request/*Response classes in fixture) | PASS (vacuous) | naming convention is ax-template-specific; rule passes vacuously elsewhere. Consider broadening the suffix set (Dto, Form, Payload) in a future revision |
-| quality-no-system-streams      | PASS | PASS | universal |
-| lang-no-public-mutable-fields | PASS | PASS | universal |
+| Rule | spring-petclinic | spring-realworld | spring-modulith-example | interpretation |
+|------|-----------------|-----------------|-------------------------|----------------|
+| arch-no-cyclic-package        | PASS | **FAIL** | PASS | realworld has Slice `application` ↔ Slice `infrastructure` bidirectional dependency — genuine architectural smell, rule unchanged. Modulith's modular monolith design is cycle-free as expected (3rd fixture confirms the rule's universality without ambiguity) |
+| arch-layer-boundary (Service depends on Controller) | PASS | PASS | PASS | universal (3-of-3 fixtures) |
+| arch-layer-boundary (Repository depends on Service/Controller) | PASS | PASS | PASS | universal (3-of-3 fixtures) |
+| lang-records-for-dtos          | PASS (vacuous) | PASS (vacuous) | PASS (vacuous) | naming convention is narrow by design — see N2 decision |
+| quality-no-system-streams      | PASS | PASS | PASS | universal (3-of-3 fixtures) |
+| lang-no-public-mutable-fields | PASS | PASS | PASS | universal (3-of-3 fixtures) |
 
 ## What this measurement teaches
 
@@ -43,7 +44,9 @@
 ## Re-running
 
 ```bash
-# Build fixtures first (Maven petclinic + Gradle realworld)
+# Build fixtures (Maven petclinic + Gradle realworld + Maven modulith).
+# JDK 21 is auto-detected on macOS via /usr/libexec/java_home -v 21.
+# Modulith requires JDK 21 — petclinic & realworld accept JDK 17+.
 bash practices/evals/portability/run.sh --full
 
 # Then run portability tests

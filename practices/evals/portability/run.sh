@@ -10,6 +10,17 @@ FIXTURES_DIR="practices/evals/fixtures"
 FULL=false
 [[ "${1:-}" == "--full" ]] && FULL=true
 
+# JDK 21 auto-detect for fixtures that require it (e.g. spring-modulith-example).
+# macOS: /usr/libexec/java_home -v 21. Linux/CI: rely on JAVA_HOME already pointing at 21.
+if [[ -z "${JAVA_HOME:-}" ]] || ! "${JAVA_HOME}/bin/java" -version 2>&1 | grep -q '"21'; then
+    if command -v /usr/libexec/java_home >/dev/null; then
+        if detected="$(/usr/libexec/java_home -v 21 2>/dev/null)"; then
+            export JAVA_HOME="$detected"
+            echo "[portability] JAVA_HOME → $JAVA_HOME (jdk 21 auto-detected)"
+        fi
+    fi
+fi
+
 echo "## Portability"
 echo ""
 echo "| Fixture | Build tool | Mode | Result |"

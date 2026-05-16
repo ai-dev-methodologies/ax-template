@@ -41,4 +41,17 @@ class PortabilityNoSystemStreamsTest {
                 .allowEmptyShould(true);
         rule.check(classes);
     }
+
+    @Test
+    void portability_QUALITY_001_modulith_doesNotCallSystemStreams() {
+        JavaClasses classes = PortabilityFixtures.importFixture(
+                PortabilityFixtures.MODULITH, PortabilityFixtures.MODULITH_CLASSES);
+        ArchRule rule = noClasses()
+                .should().callMethod(System.class, "out")
+                .orShould().callMethod(System.class, "err")
+                .orShould().accessField(System.class, "out")
+                .orShould().accessField(System.class, "err")
+                .allowEmptyShould(true);
+        rule.check(classes);
+    }
 }

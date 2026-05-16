@@ -33,4 +33,15 @@ class PortabilityCyclicPackageTest {
                 .allowEmptyShould(true)
                 .check(classes);
     }
+
+    @Test
+    void portability_ARCH_001_modulith_noCyclicPackageDependencies() {
+        JavaClasses classes = PortabilityFixtures.importFixture(
+                PortabilityFixtures.MODULITH, PortabilityFixtures.MODULITH_CLASSES);
+        SlicesRuleDefinition.slices()
+                .matching(PortabilityFixtures.MODULITH_ROOT_PKG + ".(*)..")
+                .should().beFreeOfCycles()
+                .allowEmptyShould(true)
+                .check(classes);
+    }
 }

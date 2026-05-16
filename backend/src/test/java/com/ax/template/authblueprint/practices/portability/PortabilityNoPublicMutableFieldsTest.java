@@ -33,6 +33,13 @@ class PortabilityNoPublicMutableFieldsTest {
         rule().check(classes);
     }
 
+    @Test
+    void portability_LANG_002_modulith_noPublicMutableInstanceFields() {
+        JavaClasses classes = PortabilityFixtures.importFixture(
+                PortabilityFixtures.MODULITH, PortabilityFixtures.MODULITH_CLASSES);
+        rule().check(classes);
+    }
+
     private static ArchRule rule() {
         return fields()
                 .that().areDeclaredInClassesThat().areNotRecords()

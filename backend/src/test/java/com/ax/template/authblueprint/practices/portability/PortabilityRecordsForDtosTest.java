@@ -38,4 +38,16 @@ class PortabilityRecordsForDtosTest {
                 .allowEmptyShould(true);
         rule.check(classes);
     }
+
+    @Test
+    void portability_LANG_001_modulith_dtoClassesAreRecords() {
+        JavaClasses classes = PortabilityFixtures.importFixture(
+                PortabilityFixtures.MODULITH, PortabilityFixtures.MODULITH_CLASSES);
+        ArchRule rule = classes()
+                .that().haveSimpleNameEndingWith("Request")
+                .or().haveSimpleNameEndingWith("Response")
+                .should().beRecords()
+                .allowEmptyShould(true);
+        rule.check(classes);
+    }
 }

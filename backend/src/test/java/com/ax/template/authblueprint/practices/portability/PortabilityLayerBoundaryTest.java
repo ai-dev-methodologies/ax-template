@@ -59,4 +59,27 @@ class PortabilityLayerBoundaryTest {
                 .allowEmptyShould(true);
         rule.check(classes);
     }
+
+    @Test
+    void portability_ARCH_002_modulith_servicesDoNotDependOnControllers() {
+        JavaClasses classes = PortabilityFixtures.importFixture(
+                PortabilityFixtures.MODULITH, PortabilityFixtures.MODULITH_CLASSES);
+        ArchRule rule = noClasses()
+                .that().haveSimpleNameEndingWith("Service")
+                .should().dependOnClassesThat().haveSimpleNameEndingWith("Controller")
+                .allowEmptyShould(true);
+        rule.check(classes);
+    }
+
+    @Test
+    void portability_ARCH_002_modulith_repositoriesDoNotDependOnControllersOrServices() {
+        JavaClasses classes = PortabilityFixtures.importFixture(
+                PortabilityFixtures.MODULITH, PortabilityFixtures.MODULITH_CLASSES);
+        ArchRule rule = noClasses()
+                .that().haveSimpleNameEndingWith("Repository")
+                .should().dependOnClassesThat().haveSimpleNameEndingWith("Controller")
+                .orShould().dependOnClassesThat().haveSimpleNameEndingWith("Service")
+                .allowEmptyShould(true);
+        rule.check(classes);
+    }
 }
