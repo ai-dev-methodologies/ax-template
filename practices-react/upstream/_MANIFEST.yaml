@@ -140,6 +140,24 @@ snapshots:
     sha: "8925884b2beaf11c2097be532bdcac95d9ef0e129b4bcbb3aa65ac341cc88a11"
     version_observed: "next@16.2.6"
 
+  - id: "nextjs-use-cache-private"
+    tier: 2
+    source: "https://nextjs.org/docs/app/api-reference/directives/use-cache-private"
+    via: "WebFetch"
+    fetched_at: "2026-05-13T00:00:00Z"
+    bytes: 2406
+    sha: "6824982bcc529d107cfbc4b99053e85ab570c6824553202c5deb219ea80ff9d0"
+    version_observed: "next@16.2.6"
+
+  - id: "nextjs-use-cache-remote"
+    tier: 2
+    source: "https://nextjs.org/docs/app/api-reference/directives/use-cache-remote"
+    via: "WebFetch"
+    fetched_at: "2026-05-13T00:00:00Z"
+    bytes: 4002
+    sha: "286648e52e62ec8b9168280353c48697579a8390736e958a673b1c0060162b38"
+    version_observed: "next@16.2.6"
+
   - id: "nextjs-fetching-data"
     tier: 2
     source: "https://nextjs.org/docs/app/getting-started/fetching-data"

@@ -381,6 +381,24 @@ items:
     applicable_to: [react, nextjs, vite]
     notes: "Rule body: practices-react/rules/rendering-script-defer-async.md."
 
+  - id: "REACT-PRACTICES-SERVER-010"
+    chapter: "Server / Cache (private)"
+    requirement: "'use cache: private' is an experimental escape hatch in Next.js 16.2.6 (not production-recommended). Use ONLY when refactoring the runtime read out of a cached scope is impractical, or when compliance forbids server-side storage. The cache is per-client browser-memory, lost on reload, not stored server-side, not allowed in Route Handlers, requires stale >= 30s, and cannot have a custom cache handler. connection() is forbidden inside."
+    test_method: "react_practices_SERVER_010_useCachePrivateEscapeHatch"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [nextjs]
+    notes: "Sibling of nextjs-use-cache (parent) and nextjs-use-cache-remote. Rule body: practices-react/rules/nextjs-use-cache-private.md."
+
+  - id: "REACT-PRACTICES-SERVER-011"
+    chapter: "Server / Cache (remote)"
+    requirement: "'use cache: remote' stores cache entries in a remote handler for cross-instance durable shared caching. Decision gate: (a) work is expensive/rate-limited/flaky/slow, (b) cache keys have low cardinality (high hit rate), (c) cache scope is shared across users. Forbidden cases: existing KV layer in front of the data source, sub-50ms operations, mostly-unique cache keys, rapidly-changing data. Nesting: remote+private forbidden in both directions."
+    test_method: "react_practices_SERVER_011_useCacheRemoteSharedDurable"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [nextjs]
+    notes: "Sibling of nextjs-use-cache (parent) and server-cache-lru (fallback). Rule body: practices-react/rules/nextjs-use-cache-remote.md."
+
   - id: "REACT-PRACTICES-RERENDER-002"
     chapter: "Re-render / Subscriptions"
     requirement: "When a dynamic value is only consumed inside a callback, do not subscribe via useSearchParams or similar reactive hooks. Read on-demand from window.location.search / document.cookie inside the handler. Subscriptions are reserved for values that drive rendered output."
