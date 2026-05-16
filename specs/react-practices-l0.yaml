@@ -381,6 +381,132 @@ items:
     applicable_to: [react, nextjs, vite]
     notes: "Rule body: practices-react/rules/rendering-script-defer-async.md."
 
+  - id: "REACT-PRACTICES-RERENDER-002"
+    chapter: "Re-render / Subscriptions"
+    requirement: "When a dynamic value is only consumed inside a callback, do not subscribe via useSearchParams or similar reactive hooks. Read on-demand from window.location.search / document.cookie inside the handler. Subscriptions are reserved for values that drive rendered output."
+    test_method: "react_practices_RERENDER_002_deferReadsToCallback"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/rerender-defer-reads.md."
+
+  - id: "REACT-PRACTICES-RERENDER-003"
+    chapter: "Re-render / Memo defaults"
+    requirement: "When a memoized component already has a non-primitive default parameter value (function/array/object), the default must be extracted to a module-level constant. This rule applies ONLY when the memo boundary is already justified — see RERENDER-001 for memo policy."
+    test_method: "react_practices_RERENDER_003_memoDefaultsAsConstants"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/rerender-memo-with-default-value.md."
+
+  - id: "REACT-PRACTICES-RERENDER-004"
+    chapter: "Re-render / Effect deps"
+    requirement: "useEffect dependencies must list only what the Effect actually reads, AT THE PRIMITIVE LEVEL. Listing the whole object causes Effect to re-run on unrelated field changes; listing fewer deps than the Effect reads creates a stale-closure bug (use useEffectEvent on 19.2+ instead)."
+    test_method: "react_practices_RERENDER_004_narrowEffectDeps"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/rerender-dependencies.md."
+
+  - id: "REACT-PRACTICES-RERENDER-005"
+    chapter: "Re-render / Derived signals"
+    requirement: "When the UI consumes only the threshold/derived signal (mobile vs desktop), subscribe to the derived boolean (useMediaQuery) rather than the continuous source (useWindowWidth). Keep the continuous source when exact pixel values are rendered or used in layout math."
+    test_method: "react_practices_RERENDER_005_subscribeToDerivedSignal"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rerender-derived-state.md."
+
+  - id: "REACT-PRACTICES-RERENDER-006"
+    chapter: "Re-render / Derivation"
+    requirement: "Values computable from current props and state must be derived during render, not stored in state and synced via useEffect. useMemo only for genuinely expensive derivation with profiler evidence."
+    test_method: "react_practices_RERENDER_006_deriveDuringRender"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Canonical React docs guidance ('You Might Not Need an Effect'). Rule body: practices-react/rules/rerender-derived-state-no-effect.md."
+
+  - id: "REACT-PRACTICES-RERENDER-007"
+    chapter: "Re-render / setState correctness"
+    requirement: "When the new state depends on the current state, use the functional update form: setState(curr => ...). Direct setState(...) closing over the state variable risks stale closures. Primary value is correctness; stable callback identity is the secondary benefit."
+    test_method: "react_practices_RERENDER_007_functionalSetStateUpdates"
+    verification_type: "lint"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Custom ESLint rule planned. Rule body: practices-react/rules/rerender-functional-setstate.md."
+
+  - id: "REACT-PRACTICES-RERENDER-008"
+    chapter: "Re-render / Initialization"
+    requirement: "When useState's initial value requires non-trivial sync computation (parsing storage, building indexes), pass an initializer function: useState(() => ...). Cheap literals and direct prop references stay as useState(value). Initializers must be pure (StrictMode may run them twice)."
+    test_method: "react_practices_RERENDER_008_lazyStateInit"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rerender-lazy-state-init.md."
+
+  - id: "REACT-PRACTICES-RERENDER-009"
+    chapter: "Re-render / useMemo policy"
+    requirement: "useMemo must NOT wrap simple primitive-result expressions (boolean OR, arithmetic, string concat). The memo overhead exceeds the cost. Exception: measured-expensive computation OR referential stability required by external API. React Compiler usually makes manual useMemo redundant entirely."
+    test_method: "react_practices_RERENDER_009_noUseMemoForSimplePrimitives"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rerender-simple-expression-in-memo.md."
+
+  - id: "REACT-PRACTICES-RERENDER-010"
+    chapter: "Re-render / Hook composition"
+    requirement: "When a single useMemo or useEffect performs independent tasks with different dependency sets, split into separate hooks so each task invalidates only on its own dependency change. Don't split tightly coupled logic into noise; compiler-on projects may auto-track finer boundaries."
+    test_method: "react_practices_RERENDER_010_splitIndependentHooks"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rerender-split-combined-hooks.md."
+
+  - id: "REACT-PRACTICES-RERENDER-011"
+    chapter: "Re-render / Effect-vs-handler"
+    requirement: "Side effects triggered by user actions (submit / click / drag) must run in the event handler, not be modeled as state + useEffect. Effects are reserved for synchronization with external systems caused by render/visibility/subscription state."
+    test_method: "react_practices_RERENDER_011_eventDrivenEffectsInHandlers"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Canonical React docs guidance. Rule body: practices-react/rules/rerender-move-effect-to-event.md."
+
+  - id: "REACT-PRACTICES-RERENDER-012"
+    chapter: "Re-render / Transitions"
+    requirement: "Use startTransition for non-urgent state updates that drive rendering (filtered list update behind a search input, tab content load). Do not use for imperative bookkeeping (scroll position, mouse tracking) — refs and throttle/rAF are the right tools there. Not a perf cure-all."
+    test_method: "react_practices_RERENDER_012_startTransitionForNonUrgentRenders"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rerender-transitions.md."
+
+  - id: "REACT-PRACTICES-RERENDER-013"
+    chapter: "Re-render / Deferred value"
+    requirement: "When an expensive derived render lags behind an urgent input, useDeferredValue combined with useMemo (with the deferred value as dependency) keeps the input snappy. The useMemo dep must be the DEFERRED value, not the urgent one. For very large datasets, fix the algorithmic cost first."
+    test_method: "react_practices_RERENDER_013_useDeferredValueWithMemoOnDeferred"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rerender-use-deferred-value.md."
+
+  - id: "REACT-PRACTICES-RERENDER-014"
+    chapter: "Re-render / Ref vs state"
+    requirement: "useRef for values that don't drive rendering (mouse positions, intervals, transient flags, frequently-updated metrics). useState ONLY for values the UI must reflect. Updating a ref does NOT trigger a re-render — use it whenever the UI doesn't need to."
+    test_method: "react_practices_RERENDER_014_refForTransientValues"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rerender-use-ref-transient-values.md."
+
+  - id: "REACT-PRACTICES-RERENDER-015"
+    chapter: "Re-render / Component definition"
+    requirement: "Components must NEVER be defined inside other components. A function literal at component body scope creates a new component type each render → full remount → lost state, focus, animations, effect setup/cleanup. Define at module scope; pass data as props."
+    test_method: "react_practices_RERENDER_015_noInlineComponentDefinition"
+    verification_type: "lint"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Custom ESLint rule planned. Highest-impact rerender rule. Rule body: practices-react/rules/rerender-no-inline-components.md."
+
   - id: "REACT-PRACTICES-SERVER-009"
     chapter: "Server / Post-response work"
     requirement: "Next.js after() is for BEST-EFFORT post-response work: analytics, audit logs where occasional loss is acceptable, cache warming, cleanup. Never use after() for critical operations (billing, payment confirmation, guaranteed notifications) — function instance may be killed shortly after response ships. Use a durable queue for critical work."
