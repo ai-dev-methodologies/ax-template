@@ -53,6 +53,24 @@ snapshots:
     sha: "8edb70b1728a600f43c380d295587473b891c6f8f79984848e5c4087b08d59d8"
     version_observed: "react@19.2"
 
+  - id: "react-19-lazy"
+    tier: 2
+    source: "https://react.dev/reference/react/lazy"
+    via: "WebFetch"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1309
+    sha: "836a75e4736e611fb81cca4879eb707cce715e46e1c1a6f38597abe214b3f6b7"
+    version_observed: "react@19.2"
+
+  - id: "nextjs-lazy-loading"
+    tier: 2
+    source: "https://nextjs.org/docs/app/guides/lazy-loading"
+    via: "WebFetch"
+    fetched_at: "2026-05-13T00:00:00Z"
+    bytes: 2164
+    sha: "0cf740df7578a55bb937651c1bac0e77148abff8416c27ed5812a9bf03eb0a72"
+    version_observed: "next@16.2.6"
+
   - id: "react-19-use"
     tier: 2
     source: "https://react.dev/reference/react/use"

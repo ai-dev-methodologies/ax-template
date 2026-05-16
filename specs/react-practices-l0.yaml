@@ -83,3 +83,39 @@ items:
     applicable: true
     applicable_to: [react, nextjs]
     notes: "Sibling rule of ADVANCED-001 (handler refs fallback). Rule body and evidence: practices-react/rules/advanced-use-latest.md."
+
+  - id: "REACT-PRACTICES-BUNDLE-002"
+    chapter: "Bundle / Code splitting"
+    requirement: "Heavy Client Components off the initial render path must be lazy-loaded. Use React.lazy + Suspense for portable code, next/dynamic for Next.js-specific options (ssr:false, loading:). Lazy declarations must be module top-level to avoid state-reset bugs."
+    test_method: "react_practices_BUNDLE_002_lazyHeavyClientComponents"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/bundle-dynamic-imports.md."
+
+  - id: "REACT-PRACTICES-BUNDLE-003"
+    chapter: "Bundle / Third-party deferral"
+    requirement: "Non-critical third-party SDKs/scripts must not block initial render. Use the framework's script primitive (next/script) for HTML <script> tags, dynamic import() for SDK modules, dynamic component import for vendor provider components."
+    test_method: "react_practices_BUNDLE_003_deferThirdParty"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/bundle-defer-third-party.md."
+
+  - id: "REACT-PRACTICES-BUNDLE-004"
+    chapter: "Bundle / Feature gating"
+    requirement: "Optional feature modules (admin tools, advanced editor, heavy visualizations) must load only when the feature is genuinely activated, via dynamic import() inside an effect/handler. Loading-state UI required. The typeof window guard inside useEffect is forbidden — it is dead code there."
+    test_method: "react_practices_BUNDLE_004_conditionalLoading"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Distinct from BUNDLE-005 (intent prefetch). Rule body: practices-react/rules/bundle-conditional.md."
+
+  - id: "REACT-PRACTICES-BUNDLE-005"
+    chapter: "Bundle / Intent prefetch"
+    requirement: "Heavy modules may be prefetched on STRONG user-intent signals (hover, focus, viewport-proximity, likely next-step routing) to reduce perceived latency. Weak signals (page load for all users, generic hover) are forbidden — that wastes bandwidth and is a static import in disguise."
+    test_method: "react_practices_BUNDLE_005_intentPreload"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Distinct from BUNDLE-004 (load on activation). Rule body: practices-react/rules/bundle-preload.md."
