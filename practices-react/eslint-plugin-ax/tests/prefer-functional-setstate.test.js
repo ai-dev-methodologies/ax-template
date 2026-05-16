@@ -30,6 +30,29 @@ test('ax/prefer-functional-setstate — RuleTester suite', () => {
           const onChange = (newName) => setName(newName)
         }
       `,
+      // Property name happens to match state name — must NOT match.
+      // `res.message`'s `message` is a property name on `res`, not a free
+      // reference to the state variable `message`.
+      `
+        function C() {
+          const [message, setMessage] = useState('')
+          authClient.verify().then((res) => setMessage(res.message))
+        }
+      `,
+      // Same shape with .catch(...)
+      `
+        function C() {
+          const [message, setMessage] = useState('')
+          authClient.verify().catch((err) => setMessage(err.message || 'failed'))
+        }
+      `,
+      // Object literal key matching state name — must NOT match.
+      `
+        function C() {
+          const [open, setOpen] = useState(false)
+          const closeOnly = () => setOpen({ open: false }.open === undefined)
+        }
+      `,
     ],
     invalid: [
       // Directly references state variable

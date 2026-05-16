@@ -83,6 +83,93 @@ test("react-async-parallel — RuleTester suite", () => {
           }
         `,
       },
+      // Playwright-style page actions — shared receiver = dependent.
+      // (Each `page.foo()` mutates the page; order matters by design.)
+      {
+        code: `
+          async function loginFlow(page) {
+            await page.goto('/login');
+            await page.fill('#email', 'test@test.com');
+            await page.fill('#password', 'secret');
+            await page.click('button[type=submit]');
+          }
+        `,
+      },
+      // Builder / fluent pattern — same receiver in a chain.
+      {
+        code: `
+          async function buildAndSend(client) {
+            await client.connect();
+            await client.authenticate('token');
+            await client.send({ kind: 'event' });
+            await client.disconnect();
+          }
+        `,
+      },
+      // 'this'-method sequence in a class — order-dependent.
+      {
+        code: `
+          class Service {
+            async run() {
+              await this.startTransaction();
+              await this.applyChanges();
+              await this.commitTransaction();
+            }
+          }
+        `,
+      },
+      // Chained member receiver — `db.users.find(...)` then `db.posts.find(...)`
+      // share root receiver `db`; treat as dependent (could be in a tx).
+      {
+        code: `
+          async function loadAll(db) {
+            await db.users.find();
+            await db.posts.find();
+          }
+        `,
+      },
+      // Receiver walk through CallExpression — `page.locator('x').fill('y')`
+      // has callee `page.locator('x').fill`, whose object is a CallExpression
+      // `page.locator('x')`. Descend into that call to find root `page`.
+      {
+        code: `
+          async function fillForm(page) {
+            await page.locator('input[type=email]').fill('a@b.com');
+            await page.locator('input[type=password]').fill('secret');
+            await page.getByRole('button').click();
+          }
+        `,
+      },
+      // Assertion wrapper — \`expect(page.x).toFoo()\` and \`expect(page.y).toBar()\`
+      // share root receiver \`expect\`. Playwright/jest matcher chains belong here.
+      {
+        code: `
+          async function asserts(page) {
+            await expect(page.locator('h1')).toContainText('Login');
+            await expect(page.getByText('Submit')).toBeVisible();
+            await expect(page.getByRole('button')).toBeEnabled();
+          }
+        `,
+      },
+      // Receiver of one await is referenced by the next — cross-receiver dep.
+      // `await page.goto(...)` mutates page; following `expect(page.x)` reads it.
+      {
+        code: `
+          async function loginPage(page) {
+            await page.goto('/login');
+            await expect(page.locator('h1')).toContainText('Login');
+          }
+        `,
+      },
+      // Symmetric direction — assertion first, then state-mutating call.
+      {
+        code: `
+          async function check(page) {
+            await expect(page.locator('h1')).toBeVisible();
+            await page.click('button');
+          }
+        `,
+      },
     ],
     invalid: [
       // Classic 3-call waterfall from Vercel's "Incorrect" example.

@@ -49,6 +49,19 @@ function expressionReferencesIdentifier(expr, name) {
   for (const key of Object.keys(expr)) {
     if (key === 'parent' || key === 'loc' || key === 'range' || key === 'type')
       continue
+    // Skip property keys of non-computed MemberExpressions — `obj.foo`'s
+    // `foo` is the property name on `obj`, not a free reference to a
+    // variable named `foo`. Without this skip, `setMessage(res.message)`
+    // would falsely match the state name `message`.
+    if (
+      expr.type === 'MemberExpression' &&
+      key === 'property' &&
+      !expr.computed
+    )
+      continue
+    // Same for ObjectExpression Property keys: `{ foo: x }` — `foo` is the
+    // key, not a reference.
+    if (expr.type === 'Property' && key === 'key' && !expr.computed) continue
     const child = expr[key]
     if (Array.isArray(child)) {
       if (expressionReferencesIdentifier(child, name)) return true

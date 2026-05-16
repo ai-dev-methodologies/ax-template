@@ -133,10 +133,48 @@ const rule = {
       return out;
     }
 
+    /**
+     * If the awaited call is a method call — return the *root receiver*
+     * identifier name. Used to detect builder / Playwright-style sequences
+     * where consecutive awaits target the same receiver and are therefore
+     * order-dependent even though no `const` binding is shared.
+     *
+     * Walks through chained MemberExpressions AND through intermediate
+     * CallExpressions:
+     *
+     *   page.foo()                        → "page"
+     *   page.x.foo()                      → "page"   (walk member chain)
+     *   page.locator('x').fill('y')       → "page"   (descend call → member → page)
+     *   expect(page.x).toContainText(...) → "expect" (descend call → expect identifier)
+     *   this.foo()                        → "<this>"
+     */
+    function methodReceiverName(callExpr) {
+      if (!callExpr || callExpr.type !== "CallExpression") return null;
+      const callee = callExpr.callee;
+      if (!callee || callee.type !== "MemberExpression") return null;
+      let obj = callee.object;
+      // Cap loop depth as a defensive measure against pathological trees.
+      for (let depth = 0; obj && depth < 50; depth++) {
+        if (obj.type === "MemberExpression") {
+          obj = obj.object;
+          continue;
+        }
+        if (obj.type === "CallExpression") {
+          // `foo(...).bar()` — receiver is the root of `foo`'s callee.
+          obj = obj.callee;
+          continue;
+        }
+        break;
+      }
+      if (obj && obj.type === "Identifier") return obj.name;
+      if (obj && obj.type === "ThisExpression") return "<this>";
+      return null;
+    }
+
     function checkBlock(blockNode) {
       const stmts = blockNode.body;
       // Collect index of statements that contribute a top-level await with a Call arg.
-      const awaitInfo = []; // {idx, defines: string[], referenced: Set<string>, reportNode}
+      const awaitInfo = []; // {idx, defines, referenced, receiver, reportNode}
       for (let i = 0; i < stmts.length; i++) {
         const stmt = stmts[i];
         const awaitExpr = topLevelAwait(stmt);
@@ -146,7 +184,8 @@ const rule = {
         if (awaitExpr.argument.type !== "CallExpression") continue;
         const defines = namesDefined(stmt);
         const referenced = collectReferencedIdentifiers(awaitExpr.argument);
-        awaitInfo.push({ idx: i, defines, referenced, reportNode: stmt });
+        const receiver = methodReceiverName(awaitExpr.argument);
+        awaitInfo.push({ idx: i, defines, referenced, receiver, reportNode: stmt });
       }
       // Compare each consecutive pair (in statement order).
       for (let k = 1; k < awaitInfo.length; k++) {
@@ -156,10 +195,27 @@ const rule = {
         // sits between them, e.g. logging, validation), skip — that something
         // may consume the previous await's value or have side effects.
         if (curr.idx !== prev.idx + 1) continue;
-        const sharesIdentifier = prev.defines.some((n) =>
-          curr.referenced.has(n),
-        );
-        if (sharesIdentifier) continue; // dependent — correct to await sequentially
+
+        // (a) Either await binds a name the next await reads → dependent.
+        if (prev.defines.some((n) => curr.referenced.has(n))) continue;
+
+        // (b) Both awaits are method calls on the same receiver identifier
+        // (`page.foo()` then `page.bar()`, or `this.x()` then `this.y()`).
+        // Such sequences are order-dependent by convention (builder / fluent
+        // API / Playwright page actions / database client transactions etc.).
+        // Flagging them is high false-positive risk; treat as dependent.
+        if (prev.receiver && curr.receiver && prev.receiver === curr.receiver) {
+          continue;
+        }
+
+        // (c) One await's receiver is referenced by the other await's
+        // expression — e.g. `await page.goto('/x')` followed by
+        // `await expect(page.locator('h1')).toBeVisible()`. The second
+        // await consumes `page` (which the first await mutated). Treat as
+        // dependent.
+        if (prev.receiver && curr.referenced.has(prev.receiver)) continue;
+        if (curr.receiver && prev.referenced.has(curr.receiver)) continue;
+
         context.report({
           node: curr.reportNode,
           messageId: "independentAwaits",
