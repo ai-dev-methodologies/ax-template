@@ -8,7 +8,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-008"
 verification:
   type: lint
   rule_id: "ax/no-falsy-numeric-render"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned: flag `numeric && <JSX>` patterns; safe `boolean && <JSX>` left alone."
 provenance:
   pilot: true

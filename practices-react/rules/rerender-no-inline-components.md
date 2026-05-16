@@ -8,7 +8,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-015"
 verification:
   type: lint
   rule_id: "ax/no-inline-component-definition"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned: flag function declarations inside other function components whose return type is JSX, except small inline render helpers explicitly returning array-of-JSX nodes."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:

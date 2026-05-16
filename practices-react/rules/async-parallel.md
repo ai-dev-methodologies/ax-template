@@ -16,7 +16,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-ASYNC-001"
 verification:
   type: eslint
   rule_id: "ax/react-async-parallel"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned; until shipped, peer-review checkpoint"
 provenance:
   pilot: true

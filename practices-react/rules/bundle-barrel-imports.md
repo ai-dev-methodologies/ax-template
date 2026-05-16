@@ -19,7 +19,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-BUNDLE-001"
 verification:
   type: eslint
   rule_id: "ax/no-broad-barrel-imports"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned: flag `import { ... } from 'X'` for X in a configurable allowlist of known-expensive packages, with an escape hatch for packages already auto-optimized by the project's bundler. Until shipped: peer-review checkpoint."
 provenance:
   pilot: true

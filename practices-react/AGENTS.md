@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "cbec0dc1d2caa975758c8073448fff83ad85394fa75d622fe50d084b95ed4c30"
+  source_concat_sha256: "8dc9f1aa067092a76988777ae1cfbc27f6f7fb6d242e1cb839ee9dd0c8f48322"
   rule_count: 67
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -828,7 +828,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-ASYNC-001"
 verification:
   type: eslint
   rule_id: "ax/react-async-parallel"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned; until shipped, peer-review checkpoint"
 provenance:
   pilot: true
@@ -1225,7 +1225,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-BUNDLE-001"
 verification:
   type: eslint
   rule_id: "ax/no-broad-barrel-imports"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned: flag `import { ... } from 'X'` for X in a configurable allowlist of known-expensive packages, with an escape hatch for packages already auto-optimized by the project's bundler. Until shipped: peer-review checkpoint."
 provenance:
   pilot: true
@@ -3707,7 +3707,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-001"
 verification:
   type: eslint
   rule_id: "ax/no-array-includes-in-loop"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned: flag `array.includes(...)` or `array.find(...)` inside an iteration callback (.filter / .map / for-of / while) when the same array is closed over and not mutated in the loop. Until shipped: peer review checkpoint."
 provenance:
   pilot: true
@@ -3829,7 +3829,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-012"
 verification:
   type: lint
   rule_id: "ax/no-array-mutate-on-state"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned: flag arr.sort()/arr.reverse()/arr.splice() where arr is a prop or state-derived value."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
@@ -4811,7 +4811,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-008"
 verification:
   type: lint
   rule_id: "ax/no-falsy-numeric-render"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned: flag `numeric && <JSX>` patterns; safe `boolean && <JSX>` left alone."
 provenance:
   pilot: true
@@ -6157,7 +6157,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-007"
 verification:
   type: lint
   rule_id: "ax/prefer-functional-setstate"
-  status: planned
+  status: shipped
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -6733,7 +6733,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-015"
 verification:
   type: lint
   rule_id: "ax/no-inline-component-definition"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned: flag function declarations inside other function components whose return type is JSX, except small inline render helpers explicitly returning array-of-JSX nodes."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:

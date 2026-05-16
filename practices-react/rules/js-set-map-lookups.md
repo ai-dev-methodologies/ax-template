@@ -16,7 +16,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-001"
 verification:
   type: eslint
   rule_id: "ax/no-array-includes-in-loop"
-  status: planned
+  status: shipped
   notes: "Custom ESLint rule planned: flag `array.includes(...)` or `array.find(...)` inside an iteration callback (.filter / .map / for-of / while) when the same array is closed over and not mutated in the loop. Until shipped: peer review checkpoint."
 provenance:
   pilot: true

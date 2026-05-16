@@ -8,7 +8,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-007"
 verification:
   type: lint
   rule_id: "ax/prefer-functional-setstate"
-  status: planned
+  status: shipped
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
