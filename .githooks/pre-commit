@@ -20,6 +20,20 @@ fi
 
 echo "[practices] commit touches practices/ — running 4 hard gates"
 
+# Stage 0 — AGENTS.md auto-regen + auto-stage. Without this, a rule.md edit that
+# shifts AGENTS.md's concatenated sha256 leaves AGENTS.md stale; sentinel CI catches
+# it post-push but the fix is still a manual rerun + recommit. Doing it here makes
+# the loop self-healing. Auto-staging only the AGENTS.md file (not the rule edit)
+# keeps the diff transparent.
+if git diff --cached --name-only | grep -qE '^practices/rules/.*\.md$|^practices/_template\.md$'; then
+    echo "[practices] rules/ changed — regenerating AGENTS.md"
+    bash practices/generate_agents.sh >/dev/null
+    if ! git diff --quiet -- practices/AGENTS.md; then
+        echo "[practices] AGENTS.md updated by regen — auto-staging"
+        git add practices/AGENTS.md
+    fi
+fi
+
 fail=0
 for guard in \
     practices/evals/spec_ref_guard.sh \
