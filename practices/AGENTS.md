@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "4c40a61cdd5967ac558927b393cf7b3623ee733a81e7be09a3dca3fa82e3b9b5"
+  source_concat_sha256: "4bdba738b5306139194e57e2dbada1892a859d5e67046ce612f76ad708bba5c0"
   rule_count: 64
   generated_by: "practices/generate_agents.sh"
 ---
@@ -1926,6 +1926,8 @@ evidence:
     citation: "Spring Framework Reference — Standard and Custom Events"
     url: "https://docs.spring.io/spring-framework/reference/core/beans/context-introduction.html#context-functionality-events"
 ---
+
+**Current ax-template adapter (2026-05-16):** `SpringEventMessagePublisher` (@Primary) — uses Spring's built-in `ApplicationEventPublisher` for in-process publish-subscribe, zero broker dependency. `InMemoryMessagePublisher` is the test-only impl (not @Component). Kafka/RabbitMQ adapters plug in behind the same interface when broker infrastructure is decided.
 
 ## Service-layer publishers must depend on an abstract MessagePublisher interface
 
