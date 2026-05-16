@@ -8,10 +8,12 @@ on:
     branches: [main]
     paths:
       - "practices/**"
+      - "practices-react/**"
       - "specs/**"
   pull_request:
     paths:
       - "practices/**"
+      - "practices-react/**"
       - "specs/**"
 
 jobs:
@@ -52,6 +54,31 @@ jobs:
             echo "Run \`bash practices/generate_agents.sh\` locally and commit the result."
             exit 1
           fi
+
+      # ── practices-react/ catalog (parallel to practices/) ──────────────────
+      - name: "[practices-react] spec_ref_guard"
+        run: bash practices/evals/spec_ref_guard.sh --catalog practices-react
+
+      - name: "[practices-react] time_decay_guard"
+        run: bash practices/evals/time_decay_guard.sh --catalog practices-react
+
+      - name: "[practices-react] evidence_guard"
+        run: bash practices/evals/evidence_guard.sh --catalog practices-react
+
+      - name: "[practices-react] AGENTS.md sentinel — regenerate and assert no diff"
+        run: |
+          bash practices-react/generate_agents.sh
+          if ! git diff --exit-code -- practices-react/AGENTS.md; then
+            echo "::error::practices-react/AGENTS.md is out of sync with rules/*.md."
+            echo "Run \`bash practices-react/generate_agents.sh\` locally and commit the result."
+            exit 1
+          fi
+
+      - name: "[practices-react] eslint-plugin-ax tests"
+        run: |
+          cd practices-react/eslint-plugin-ax
+          npm install --no-audit --no-fund --silent
+          npm test
 
       - name: Adversarial — missing_spec_ref must BLOCK
         run: |

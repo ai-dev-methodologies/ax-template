@@ -12,42 +12,68 @@ set -uo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-# Skip when there are no practices/ or specs/ changes in the index — the gates only
-# care about that subtree, no point paying the cost on unrelated commits.
-if ! git diff --cached --name-only | grep -qE '^(practices/|specs/spring-practices-l0\.yaml|backend/src/.*/practices/)'; then
+TOUCHES_PRACTICES=0
+TOUCHES_PRACTICES_REACT=0
+if git diff --cached --name-only | grep -qE '^(practices/|specs/spring-practices-l0\.yaml|backend/src/.*/practices/)'; then
+    TOUCHES_PRACTICES=1
+fi
+if git diff --cached --name-only | grep -qE '^(practices-react/|specs/react-practices-l0\.yaml)'; then
+    TOUCHES_PRACTICES_REACT=1
+fi
+
+# Skip when neither catalog is touched.
+if [[ $TOUCHES_PRACTICES -eq 0 && $TOUCHES_PRACTICES_REACT -eq 0 ]]; then
     exit 0
 fi
 
-echo "[practices] commit touches practices/ — running 4 hard gates"
-
-# Stage 0 — AGENTS.md auto-regen + auto-stage. Without this, a rule.md edit that
-# shifts AGENTS.md's concatenated sha256 leaves AGENTS.md stale; sentinel CI catches
-# it post-push but the fix is still a manual rerun + recommit. Doing it here makes
-# the loop self-healing. Auto-staging only the AGENTS.md file (not the rule edit)
-# keeps the diff transparent.
-if git diff --cached --name-only | grep -qE '^practices/rules/.*\.md$|^practices/_template\.md$'; then
-    echo "[practices] rules/ changed — regenerating AGENTS.md"
-    bash practices/generate_agents.sh >/dev/null
-    if ! git diff --quiet -- practices/AGENTS.md; then
-        echo "[practices] AGENTS.md updated by regen — auto-staging"
-        git add practices/AGENTS.md
-    fi
-fi
-
 fail=0
-for guard in \
-    practices/evals/spec_ref_guard.sh \
-    practices/evals/substance_guard.sh \
-    practices/evals/time_decay_guard.sh \
-    practices/evals/evidence_guard.sh
-do
-    if [[ -x "$guard" ]] || [[ -f "$guard" ]]; then
-        if ! bash "$guard"; then
-            echo "[practices] ✗ guard failed: $guard"
-            fail=$((fail + 1))
+
+if [[ $TOUCHES_PRACTICES -eq 1 ]]; then
+    echo "[practices] commit touches practices/ — running 4 hard gates"
+
+    # Stage 0 — AGENTS.md auto-regen + auto-stage for practices/.
+    if git diff --cached --name-only | grep -qE '^practices/rules/.*\.md$|^practices/_template\.md$'; then
+        echo "[practices] rules/ changed — regenerating AGENTS.md"
+        bash practices/generate_agents.sh >/dev/null
+        if ! git diff --quiet -- practices/AGENTS.md; then
+            echo "[practices] AGENTS.md updated by regen — auto-staging"
+            git add practices/AGENTS.md
         fi
     fi
-done
+
+    for guard in \
+        practices/evals/spec_ref_guard.sh \
+        practices/evals/substance_guard.sh \
+        practices/evals/time_decay_guard.sh \
+        practices/evals/evidence_guard.sh
+    do
+        if [[ -x "$guard" ]] || [[ -f "$guard" ]]; then
+            if ! bash "$guard"; then
+                echo "[practices] ✗ guard failed: $guard"
+                fail=$((fail + 1))
+            fi
+        fi
+    done
+fi
+
+if [[ $TOUCHES_PRACTICES_REACT -eq 1 ]]; then
+    echo "[practices-react] commit touches practices-react/ — running 3 hard gates"
+
+    # Stage 0 — AGENTS.md auto-regen + auto-stage for practices-react/.
+    if git diff --cached --name-only | grep -qE '^practices-react/rules/.*\.md$'; then
+        echo "[practices-react] rules/ changed — regenerating AGENTS.md"
+        bash practices-react/generate_agents.sh >/dev/null
+        if ! git diff --quiet -- practices-react/AGENTS.md; then
+            echo "[practices-react] AGENTS.md updated by regen — auto-staging"
+            git add practices-react/AGENTS.md
+        fi
+    fi
+
+    if ! bash practices-react/evals/run.sh; then
+        echo "[practices-react] ✗ gates failed"
+        fail=$((fail + 1))
+    fi
+fi
 
 if [[ $fail -gt 0 ]]; then
     echo ""
