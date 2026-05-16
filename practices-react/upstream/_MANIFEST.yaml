@@ -35,6 +35,24 @@ snapshots:
     bytes: 1441
     sha: "39ccb4a8bcac298c41217a8fce4c0fcfa159a17621a0224fe678ca89b313319f"
 
+  - id: "react-19-useeffectevent"
+    tier: 2
+    source: "https://react.dev/reference/react/useEffectEvent"
+    via: "WebFetch"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1584
+    sha: "55e422f96ac79c4d574d62e9d4e510728632e57780cff15b0c664c1bda75a677"
+    version_observed: "react@19.2"
+
+  - id: "react-you-might-not-need-effect"
+    tier: 2
+    source: "https://react.dev/learn/you-might-not-need-an-effect"
+    via: "WebFetch"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1681
+    sha: "8edb70b1728a600f43c380d295587473b891c6f8f79984848e5c4087b08d59d8"
+    version_observed: "react@19.2"
+
   - id: "react-19-use"
     tier: 2
     source: "https://react.dev/reference/react/use"

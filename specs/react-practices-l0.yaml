@@ -56,3 +56,30 @@ items:
     applicable: true
     applicable_to: [react, nextjs, vite]
     notes: "Static check planned via custom ESLint rule `ax/no-array-includes-in-loop`: flag `arr.includes(x)` or `arr.find(...)` inside `.filter`/`.map`/`for-of`/`while` when the array is closed over and not mutated inside the loop. Rule body and evidence: practices-react/rules/js-set-map-lookups.md."
+
+  - id: "REACT-PRACTICES-ADVANCED-001"
+    chapter: "Advanced / Effect callbacks"
+    requirement: "When subscribing to external listeners (window/document/SDK) inside an Effect, the callback identity must be stable from the Effect's perspective so subscriptions don't churn. On React 19.2+ use useEffectEvent. On older React (19.0/19.1 or 18.x) use the ref-backed pattern. Real dependencies must remain in the dependency array — refs/Effect Events must never be used to hide them."
+    test_method: "react_practices_ADVANCED_001_handlerRefFallback"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body and evidence: practices-react/rules/advanced-event-handler-refs.md (fallback). Sibling: practices-react/rules/advanced-use-latest.md (preferred 19.2+)."
+
+  - id: "REACT-PRACTICES-ADVANCED-002"
+    chapter: "Advanced / Initialization"
+    requirement: "App-wide one-time initialization (storage hydration, auth token check, analytics connect) must run at module scope (with optional typeof window guard) or be guarded by a module-level didInit flag. Plain useEffect([]) inside a component is not reliable for once-only behavior due to StrictMode dev double-mount and remount."
+    test_method: "react_practices_ADVANCED_002_initOncePerAppLoad"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body and evidence: practices-react/rules/advanced-init-once.md."
+
+  - id: "REACT-PRACTICES-ADVANCED-003"
+    chapter: "Advanced / Effect callbacks"
+    requirement: "On React 19.2+, callbacks consumed inside Effects that should NOT re-trigger the Effect on identity change must be wrapped with useEffectEvent. The Effect Event must never be called during render, passed to other components, or placed in dependency arrays. Effect Events must not hide dependencies that should legitimately re-run the Effect."
+    test_method: "react_practices_ADVANCED_003_useEffectEventStableCallback"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Sibling rule of ADVANCED-001 (handler refs fallback). Rule body and evidence: practices-react/rules/advanced-use-latest.md."
