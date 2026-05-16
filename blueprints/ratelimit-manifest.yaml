@@ -1,0 +1,60 @@
+template_id: "ratelimit-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "Public or semi-public HTTP API that must throttle abusive clients"
+  - "Per-tenant quota enforcement on shared multi-tenant endpoints"
+  - "Protective layer in front of expensive downstream operations"
+
+not_for:
+  - "Distributed rate limiting across multiple nodes (single-node Caffeine bucket only)"
+  - "Sliding-window precision (this template implements fixed window)"
+  - "Quotas measured in resource cost (tokens, bytes) — count-based only"
+
+policy:
+  # Hard ceilings — implementation MUST read from these keys
+  max_per_window: 5
+  window_millis: 1000
+
+  # Bucket key strategy
+  # Allowed: "header:X-API-Key" | "ip" | "principal"
+  # Tests use "header:X-API-Key" because IPs are unstable under random ephemeral ports
+  key_strategy: "header:X-API-Key"
+
+  # Behavior on key absence
+  # "reject" -> 400 BadRequest; "allow" -> bypass limit; "anonymous" -> use shared "anonymous" bucket
+  on_missing_key: "reject"
+
+  # Headers emitted on 429
+  retry_after_header: true
+
+  # Paths the filter applies to (Ant-style)
+  applies_to:
+    - "/api/ratelimit/**"
+
+testing_baseline:
+  unit: "n/a — filter behavior is verified end-to-end"
+  integration: "JUnit5 + RestAssured against @SpringBootTest random port"
+  e2e: "same as integration — black-box HTTP"
+
+verification_checkpoints:
+  - "RATELIMIT-1: max_per_window+1 → 429"
+  - "RATELIMIT-2: 429 response has Retry-After header"
+  - "RATELIMIT-3: distinct X-API-Key values have independent buckets"
+  - "RATELIMIT-4: after window_millis the bucket refills"
+
+must_not:
+  - "Block the entire JVM on a global lock during quota check"
+  - "Leak rate-limit state across X-API-Key boundaries"
+  - "Use System.currentTimeMillis() in a way that drifts the window per-thread"
+  - "Hardcode max_per_window / window_millis — must come from this manifest"
+
+reject_if:
+  - "429 response omits Retry-After"
+  - "Successful request count exceeds max_per_window within window"
+  - "Two clients with different keys cannot both succeed when one is throttled"
+
+source_precedence:
+  - "RFC 6585 §4 (HTTP 429 Too Many Requests)"
+  - "IETF draft-ietf-httpapi-ratelimit-headers (header conventions)"
+  - "OWASP API Security Top 10 — API4:2023 Unrestricted Resource Consumption"

@@ -1,0 +1,66 @@
+openapi: 3.0.3
+info:
+  title: "ax-template Rate Limit Reference API"
+  version: "0.1.0"
+  description: |
+    Reference endpoint for rate-limit blueprint. Exists solely so RATELIMIT-1..4
+    spec items can be validated end-to-end via RestAssured. Production projects
+    should apply the same filter to their real endpoints.
+servers:
+  - url: /api
+paths:
+  /ratelimit/ping:
+    get:
+      summary: "Reference endpoint subject to rate limiting"
+      parameters:
+        - in: header
+          name: X-API-Key
+          required: true
+          schema:
+            type: string
+          description: "Client identifier used as rate-limit bucket key"
+      responses:
+        '200':
+          description: Request accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+        '400':
+          description: Missing or empty X-API-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Quota exhausted for this client key within the active window
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 0
+              description: "Seconds the client should wait before retrying (RFC 6585 §4)"
+              required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        timestamp:
+          type: string
+          format: date-time

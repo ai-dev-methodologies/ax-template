@@ -1,0 +1,39 @@
+version: "1.0.0"
+scope: "api-rate-limiting"
+stack: "Spring Boot 3.2.x + Caffeine cache"
+standard: "RFC 6585 §4 (HTTP 429) + IETF draft-ietf-httpapi-ratelimit-headers"
+items:
+  - id: "RATELIMIT-1"
+    chapter: "Rejection"
+    requirement: "Requests beyond max-per-window are rejected with HTTP 429"
+    test_method: "ratelimit_1_rejectsBeyondMaxPerWindow"
+    verification_type: "api_test"
+    applicable: true
+    notes: "Send max+1 requests with same client key within window → first N succeed with 200, request N+1 → 429"
+    policy_ref: "blueprints/ratelimit-manifest.yaml#policy.max_per_window"
+
+  - id: "RATELIMIT-2"
+    chapter: "Headers"
+    requirement: "429 response includes Retry-After header per RFC 6585 §4"
+    test_method: "ratelimit_2_retryAfterHeaderOn429"
+    verification_type: "api_test"
+    applicable: true
+    notes: "Trigger 429 → response MUST include Retry-After header with a non-negative integer (delta-seconds)"
+
+  - id: "RATELIMIT-3"
+    chapter: "Isolation"
+    requirement: "Each client key has an independent quota — one client's exhaustion does not affect another"
+    test_method: "ratelimit_3_clientKeysIsolated"
+    verification_type: "api_test"
+    applicable: true
+    notes: "Client A exhausts quota (gets 429). Client B with different X-API-Key still succeeds with 200"
+    policy_ref: "blueprints/ratelimit-manifest.yaml#policy.key_strategy"
+
+  - id: "RATELIMIT-4"
+    chapter: "Window reset"
+    requirement: "After the window expires, the quota is refreshed and requests succeed again"
+    test_method: "ratelimit_4_quotaResetsAfterWindow"
+    verification_type: "api_test"
+    applicable: true
+    notes: "Client exhausts quota (429). Wait > window_millis. Next request → 200"
+    policy_ref: "blueprints/ratelimit-manifest.yaml#policy.window_millis"

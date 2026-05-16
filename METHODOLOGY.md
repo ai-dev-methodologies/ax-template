@@ -287,7 +287,9 @@ compliance spec 없이 기능을 구현하면 "무엇을 검증해야 하는지"
 
 ---
 
-## Appendix A: Worked Example — Auth Blueprint
+## Appendix A: Worked Examples
+
+### A.1 Auth Blueprint (origin)
 
 auth 템플릿은 이 방법론을 최초로 적용한 사례다.
 
@@ -301,6 +303,24 @@ auth 템플릿은 이 방법론을 최초로 적용한 사례다.
 
 **검증 결과**: 26/26 ASVS 항목 COVERED. VIOLATION 탐지 증명됨.
 **자가검증**: 별도 프로젝트에서 spec만 복사 → 구현 → 피드백 루프 동작 확인 (`docs/GAP-REPORT.md` 참조)
+
+### A.2 Rate-limit Blueprint (cross-domain generalization)
+
+methodology가 auth-style 도메인을 넘어 protective cross-cutting concern에도 동작하는지 검증한 두 번째 사례. auth (identity) / CRUD (resource ops) 와 의도적으로 다른 axis 선택.
+
+| Step | Rate-limit에서의 적용 | 파일 |
+|------|----------------------|------|
+| 1. Compliance Spec | RFC 6585 §4 + IETF draft → 4개 항목 (rejection / headers / isolation / window reset) | `specs/ratelimit-l0.yaml` |
+| 2. API Contract | 1 reference endpoint `/api/ratelimit/ping` + 429 with Retry-After 헤더 schema | `contracts/ratelimit-openapi.yaml` |
+| 3. Policy Manifest | window_millis, max_per_window, key_strategy, on_missing_key | `blueprints/ratelimit-manifest.yaml` |
+| 4. Portable Tests | 4개 @Tag 테스트 (RestAssured, RANDOM_PORT, properties 주입) | `backend/src/test/.../ratelimit/RateLimitComplianceTest.java` |
+| 5. Build Verification | `./gradlew testRateLimit` | `backend/build.gradle.kts` |
+
+**검증 결과**: 4/4 RATELIMIT 항목 PASS. VIOLATION 탐지 증명됨 (`max_per_window: 5 → 9999` 변조 시 4/4 FAILED).
+**일반화 신호**:
+- spec → manifest 의 `policy_ref` 패턴이 auth와 동일하게 작동 (정책값을 spec notes 에 하드코딩하지 않음)
+- RestAssured black-box 테스트가 auth와 별개 stack (Caffeine filter) 에서도 그대로 적용
+- 단일 명령(`./gradlew test{Domain}`) 검증이 새 도메인에서도 즉시 성립
 
 ---
 

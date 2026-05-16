@@ -64,6 +64,12 @@ tasks.register<Test>("testPractices") {
     }
 }
 
+tasks.register<Test>("testRateLimit") {
+    useJUnitPlatform {
+        includeTags("RATELIMIT")
+    }
+}
+
 tasks.register<Test>("testPortability") {
     useJUnitPlatform {
         includeTags("PORTABILITY")

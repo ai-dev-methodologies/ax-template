@@ -107,3 +107,10 @@ auth:
       - GET
       - POST
       - OPTIONS
+
+# Mirrors blueprints/ratelimit-manifest.yaml#policy
+ratelimit:
+  max-per-window: 5
+  window-millis: 1000
+  key-header: X-API-Key
+  on-missing-key: REJECT
