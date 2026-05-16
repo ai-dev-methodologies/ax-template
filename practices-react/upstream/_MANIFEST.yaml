@@ -87,6 +87,32 @@ snapshots:
     bytes: 1264
     sha: "b603074ea922690d188673887f201f8a6accd3c72559150d447f3488957ad0b3"
 
+  - id: "react-19-activity"
+    tier: 2
+    source: "https://react.dev/reference/react/Activity"
+    via: "WebSearch+synthesis"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1277
+    sha: "a19b6e69afc2859f490dffe86f17bc458cb1374066158e19e53c831183b8aa18"
+    version_observed: "react@19.2"
+
+  - id: "react-dom-resource-hints"
+    tier: 2
+    source: "https://react.dev/reference/react-dom"
+    via: "WebFetch+synthesis"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1536
+    sha: "9a0ba2b18acc1becbd7d833a4740bce0274c557f3abb426a7899ed1302f244a8"
+    version_observed: "react@19"
+
+  - id: "mdn-script-element"
+    tier: 1
+    source: "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script"
+    via: "WebFetch+synthesis"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1145
+    sha: "238245ac7cc6e356bbdc812c75129a776273ffc558b97ff61b0a0a1b83fe985a"
+
   - id: "react-19-use"
     tier: 2
     source: "https://react.dev/reference/react/use"

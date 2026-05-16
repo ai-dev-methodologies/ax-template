@@ -174,6 +174,105 @@ items:
     applicable_to: [nextjs, react]
     notes: "Rule body: practices-react/rules/server-parallel-fetching.md."
 
+  - id: "REACT-PRACTICES-RENDERING-001"
+    chapter: "Rendering / Animation"
+    requirement: "Whole-SVG transform/opacity animations apply to a wrapper div, not the <svg> element. Inner path/shape animation stays on SVG elements. will-change is applied only during active animation and removed when idle."
+    test_method: "react_practices_RENDERING_001_animateSVGWrapper"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rendering-animate-svg-wrapper.md."
+
+  - id: "REACT-PRACTICES-RENDERING-002"
+    chapter: "Rendering / content-visibility"
+    requirement: "Long static sections must use `content-visibility: auto` paired with realistic `contain-intrinsic-size` to defer off-screen layout/paint. Not a list virtualization replacement — DOM nodes still exist."
+    test_method: "react_practices_RENDERING_002_contentVisibility"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rendering-content-visibility.md."
+
+  - id: "REACT-PRACTICES-RENDERING-003"
+    chapter: "Rendering / JSX hoisting"
+    requirement: "When React Compiler is enabled, manual JSX hoisting is unnecessary. When compiler is off, hoist JSX only if it has zero dependencies on props/state/context/hooks/locale/auth/theme. Hoisting JSX that closes over any of those is a correctness bug."
+    test_method: "react_practices_RENDERING_003_hoistJSXOnlyWhenStatic"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rendering-hoist-jsx.md."
+
+  - id: "REACT-PRACTICES-RENDERING-004"
+    chapter: "Rendering / SVG optimization"
+    requirement: "SVGs ship through SVGO with measured precision (default `--precision=3`). Blanket `--precision=1` is forbidden without per-asset visual-regression check. Animated SVGs and viewBox-critical artwork preserve higher precision."
+    test_method: "react_practices_RENDERING_004_svgPrecisionMeasured"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rendering-svg-precision.md."
+
+  - id: "REACT-PRACTICES-RENDERING-005"
+    chapter: "Rendering / Hydration"
+    requirement: "Inline-script prehydration is used only for tiny deterministic boot values (theme/color-scheme/auth-shell). Values are whitelisted inline (no string interpolation of user-controlled data). CSP nonce attached. No fetch / heavy logic inside. Framework primitives (next-themes etc.) preferred where available."
+    test_method: "react_practices_RENDERING_005_inlineScriptPrehydrateSafely"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/rendering-hydration-no-flicker.md."
+
+  - id: "REACT-PRACTICES-RENDERING-006"
+    chapter: "Rendering / Hydration"
+    requirement: "`suppressHydrationWarning` is applied to the smallest element containing the known intentional text mismatch (timestamps, locale, randomized ids only). Never used to mask structural mismatches. Deterministic SSR or client-only render is preferred when feasible."
+    test_method: "react_practices_RENDERING_006_suppressHydrationNarrowly"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/rendering-hydration-suppress-warning.md."
+
+  - id: "REACT-PRACTICES-RENDERING-007"
+    chapter: "Rendering / Activity"
+    requirement: "React 19.2's <Activity> is used for expensive UI that toggles visibility frequently (tabs, drawers, panels). Reviewers must verify hidden mode's effect-unmount and update-deferral semantics are acceptable for the component."
+    test_method: "react_practices_RENDERING_007_activityForTogglingUI"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/rendering-activity.md."
+
+  - id: "REACT-PRACTICES-RENDERING-008"
+    chapter: "Rendering / Conditional"
+    requirement: "Numeric/falsy-tricky conditions in JSX use ternary `?:` or explicit `Boolean(x) &&`. Pure-boolean `&&` is permitted and idiomatic — the rule targets numeric/string/unknown-shape conditions where `0`/`NaN`/`''` render as visible text."
+    test_method: "react_practices_RENDERING_008_noFalsyNumericRender"
+    verification_type: "lint"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rendering-conditional-render.md."
+
+  - id: "REACT-PRACTICES-RENDERING-009"
+    chapter: "Rendering / Transitions"
+    requirement: "useTransition is used for non-urgent interruptible UI updates (search/filter/tab navigation). Network-lifecycle loading state (uploads, mutations, imperative async) uses explicit useState OR the data library's pending/error/data primitive OR React 19 use() + Suspense."
+    test_method: "react_practices_RENDERING_009_useTransitionScope"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rendering-usetransition-loading.md."
+
+  - id: "REACT-PRACTICES-RENDERING-010"
+    chapter: "Rendering / Resource hints"
+    requirement: "react-dom resource-hint APIs (prefetchDNS/preconnect/preload/preloadModule/preinit/preinitModule) are invoked in Server Components or layouts. preload/preinit are limited to critical above-the-fold resources. Framework primitives (next/font, next/Link prefetch, metadata API) are preferred where stronger."
+    test_method: "react_practices_RENDERING_010_resourceHintsServerSideCritical"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/rendering-resource-hints.md."
+
+  - id: "REACT-PRACTICES-RENDERING-011"
+    chapter: "Rendering / Script loading"
+    requirement: "Every <script> tag must declare defer or async (or be type=module which defers by default). Critical inline boot scripts (theme prehydration, <1KB, deterministic, CSP nonce) are an explicit exception. In Next.js, next/script with strategy is preferred over raw <script>."
+    test_method: "react_practices_RENDERING_011_scriptDeferAsync"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/rendering-script-defer-async.md."
+
   - id: "REACT-PRACTICES-SERVER-009"
     chapter: "Server / Post-response work"
     requirement: "Next.js after() is for BEST-EFFORT post-response work: analytics, audit logs where occasional loss is acceptable, cache warming, cleanup. Never use after() for critical operations (billing, payment confirmation, guaranteed notifications) — function instance may be killed shortly after response ships. Use a durable queue for critical work."
