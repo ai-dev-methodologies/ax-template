@@ -1,9 +1,15 @@
-# P3 — Developer-Side Enforcement Decision Sheet
+# P3 — Catalog Quality Enforcement (skill-internal only)
 
-> This file enumerates the open questions that **must** be answered before P3 work can
-> begin. The maintainer-side practices/ infrastructure (P0+P1+P2-A+P2-C) is in place and
-> can run without P3. But applying it to developer flows requires explicit choices on
-> seven axes below. Until these are decided, P3 stays out of scope.
+> **Scope correction 2026-05-16**: ax-template is a `/ax-transform` skill package source.
+> The skill must NOT enforce a fork-받은 팀's git workflow, branch protection, PR policy,
+> or human collaboration policy. P3 enforcement is therefore reduced to **catalog quality**:
+> the 4 binary hard gates (spec_ref / substance / time_decay / evidence) + AGENTS.md
+> sentinel + testPractices. Git workflow strength (branch protection on main, push-level
+> guards, [break-glass] PR title conventions) was REMOVED — that's fork-받은 팀의 결정.
+>
+> The original 7-axis sheet below is preserved for historical context. Axes 1–3 and 6–7
+> are explicitly **out of skill scope** going forward. Only the catalog-quality axes
+> (Stage 2 testPractices + 4 binary guards) remain skill-enforced.
 
 ## How to use
 
@@ -79,29 +85,27 @@ Tradeoff: no bypass strains emergency hotfixes; full bypass invites silent decay
 | Chosen profile | **Multi-layer hard enforcement** (overrides earlier "CI only" default) |
 | Notes | User instruction: "CI단으로 넘어가며 안되" — local commit-time + edit-time feedback required, no `--no-verify` blanket bypass. |
 
-### Effective axis values (overrides the §1–§7 defaults above)
+### Effective axis values — REDUCED to catalog-quality only (2026-05-16)
 
-| Axis | Chosen | Rationale |
-|------|--------|-----------|
-| 1. enforcement target | **CI + git pre-commit hook + git pre-push hook + Claude Code PreToolUse hook** (4 surfaces) | CI-only feedback is PR-time = too late. Local loops shorten to seconds. Pre-push adds full regression before any remote interaction. |
-| 2. enforcement strength | **Hard-block, unconditional** for the 4 binary gates | "템플릿을 지키지 않으면 무조건 실패." |
-| 3. escape hatch | **Break-glass only** — PR title `[break-glass]:` + audit entry in `practices/break-glass-log.md`, same commit | Auditable rather than free. |
-| 4. scope | All 4 hard gates (spec_ref + substance + time_decay + evidence). balance / outcome / quote_match remain advisory. | Matches rubric.yaml.gating.binary_only contract. |
-| 5. failure UX | Detailed violation list + rule.md link + suggested fix command | Lowest-friction recovery. |
-| 6. per-developer opt-out | **None.** | Uniform application. |
-| 7. adoption rollout | **Immediate hard** for the 13 currently-green rules. | All rules pass locally + in CI today; no rollout window needed. |
-| 8. rule request (new axis) | `.github/ISSUE_TEMPLATE/practices-rule-request.yml` — evidence required, maintainer review, requester drafts the PR | Open channel for new-rule proposals without bypassing provenance policy. |
+The skill only enforces what makes the **catalog itself** trustworthy. Git / branch
+/ PR / human-process axes are removed; fork받은 팀 decides those.
 
-### Activation steps for a fresh clone
+| Axis | In-skill behavior | Out-of-skill (fork-받은 팀 자율) |
+|------|-------------------|--------------------------------|
+| 1. enforcement target | Claude Code PreToolUse hook + git pre-commit hook (Stage 0 AGENTS.md regen + 4 binary guards + Stage 2 testPractices) + git pre-push hook (full regression) | Branch protection, PR-required policy, merge strategy, force-push allowance |
+| 2. enforcement strength | Hard-block, unconditional, for the 4 binary catalog-quality gates | Whether catalog gates also block merges in fork-받은 팀의 CI is their call |
+| 3. escape hatch | None at the catalog-quality layer — guards always run when their inputs change. (Hooks themselves are opt-in per clone via `install-hooks.sh`.) | Any human-process break-glass procedure is fork-받은 팀이 정함 |
+| 4. scope | 4 hard gates (spec_ref + substance + time_decay + evidence) + AGENTS.md sentinel + testPractices when backend/practices/ touched | balance / outcome / quote_match / portability remain advisory regardless of context |
+| 5. failure UX | Detailed violation list + rule.md link + actionable fix command | — |
+| 6. per-developer opt-out | None within catalog-quality (the hooks are mechanically uniform per clone). Skip is achieved by not installing hooks, which sentinel CI catches downstream when adopted | — |
+| 7. adoption rollout | Catalog-quality gates were live since P0 — no rollout window needed | Whether fork-받은 팀 promotes the same gates into their own CI is their staged decision |
 
-1. `bash practices/scripts/install-hooks.sh` — wires `.githooks/pre-commit` AND `.githooks/pre-push`
+### Activation steps for a fresh clone (catalog-quality only)
+
+1. `bash practices/scripts/install-hooks.sh` — wires `.githooks/pre-commit` AND `.githooks/pre-push` for catalog-quality regression
 2. Restart Claude Code in the repo to pick up `.claude/settings.local.json` (edit-time gate)
-3. Apply main branch protection — codified, not click-ops:
-   - Source-of-truth JSON: `.github/rulesets/main-protection.json`
-   - Apply: `bash practices/scripts/setup-branch-protection.sh` (requires `gh auth login` + repo admin)
-   - Verify: `bash practices/scripts/setup-branch-protection.sh --check`
-   - Dry-run: `bash practices/scripts/setup-branch-protection.sh --dry-run`
-   - Policy locks in: linear history, PR-required, `practices-sentinel / guards` status check, `enforce_admins=true` (no admin bypass), no force-push, no deletions, required conversation resolution.
+
+That's it. **No branch protection, no [break-glass] PR title, no `enforce_admins=true`** — those were removed when the skill scope was corrected. If a fork-받은 팀 wants any of that, they configure it in their own repo, in their own GitHub settings, with their own rules.
 
 ### Local gate stages (added 2026-05-15 after P2-B6 build-fail incident)
 
@@ -114,15 +118,11 @@ Tradeoff: no bypass strains emergency hotfixes; full bypass invites silent decay
 
 The incident that motivated stage 2 was P2-B6: a commit landed in which `Edit` silently failed on two source files (Read prerequisite not met), so the `MethodArgumentNotValidException` handler and the `/practices/demo/users` endpoint never existed in the committed code, yet the 4 binary guards passed and the commit was accepted. The build-time test was the only thing that would have caught it, and only sentinel CI (PR-time) was watching. Pre-commit stage 2 closes the loop locally.
 
-### Break-glass procedure (Axis 3 detail)
+### ~~Break-glass procedure~~ — REMOVED (2026-05-16)
 
-Used only when a critical hotfix must merge before the relevant guard can pass:
+The PR-title `[break-glass]:` convention assumed a fork-받은 팀이 PR-based workflow를 채택했다는 전제였음. ax-template은 git workflow를 강제하지 않으므로 이 procedure 자체가 skill scope 밖. Fork-받은 팀이 본인 workflow에 맞는 escape hatch을 정의함.
 
-1. PR title prefixed `[break-glass]: <one-line reason>`
-2. Same commit must add an entry to `practices/break-glass-log.md` (date / maintainer / guard bypassed / reason / planned remediation / re-evaluation date)
-3. The follow-up PR that re-imposes the guard must land within **14 days**
-
-Override without these three artifacts is a Methodology violation.
+Catalog-quality 자체에는 escape hatch가 없음 — 4 hard gates는 통과하거나 통과 못 하거나, binary. 통과 못 하면 commit/push 안 됨. 그게 catalog 신뢰의 기반.
 
 ---
 

@@ -1,55 +1,32 @@
 #!/usr/bin/env bash
-# .githooks/pre-push — Stage 0 main-direct guard + full regression before pushing.
+# .githooks/pre-push — full regression before pushing (advisory hook for ax-template).
 #
-# Activated by practices/scripts/install-hooks.sh together with pre-commit.
+# ax-template is a fork-base for AI transformation projects. The git workflow itself
+# (branch protection, PR policy, merge strategy) is NOT enforced by this template —
+# fork-받은 팀이 결정. This hook only protects catalog quality: it runs the binary
+# verification suite (testPractices + testAsvs + testCrud) before any push that
+# touches backend/, practices/, or the seed spec, so failed regressions cannot ship.
 #
-# Stage 0: any push that targets refs/heads/main while the local HEAD is also main
-# is blocked. main is reachable only via PR — methodology requires feature branch +
-# PR + sentinel-green before merge.
-#
-# Stage 1: full regression (testPractices + testAsvs + testCrud) when the local
-# commits ahead of the remote touch backend/, practices/, or the seed spec. No-op
-# for commits that only touch docs / .github / .omc / configuration outside scope.
-#
-# Break-glass: same audit rule as pre-commit (PR title `[break-glass]:` + entry in
-# practices/break-glass-log.md). There is no --no-verify allowance.
+# Activated by practices/scripts/install-hooks.sh together with pre-commit. The hook
+# is opt-in per clone; not installing it skips the regression locally but sentinel CI
+# remains the second line of defense for whichever git policy the fork-받은 팀 picks.
 set -uo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-# Capture the entire stdin payload once. Git feeds (local_ref local_sha remote_ref
-# remote_sha) lines on stdin per `man githooks`; the Stage 0 guard and the regression
-# range computation both need to read it.
-STDIN_PAYLOAD="$(cat)"
-
-# Stage 0 — direct push to main is forbidden. Methodology requires feature branch + PR.
-# Override is the same break-glass procedure as elsewhere (PR title `[break-glass]:` +
-# entry in practices/break-glass-log.md). No --no-verify allowance.
-current_branch="$(git rev-parse --abbrev-ref HEAD)"
-while read -r _local_ref _local_sha remote_ref _remote_sha; do
-    [[ -z "$remote_ref" ]] && continue
-    if [[ "$remote_ref" == "refs/heads/main" && "$current_branch" == "main" ]]; then
-        echo "[git] ✗ direct push to main is forbidden — methodology requires feature branch + PR" >&2
-        echo "[git]   1. git checkout -b feature/<topic>" >&2
-        echo "[git]   2. git push -u origin feature/<topic>" >&2
-        echo "[git]   3. gh pr create --base main --head feature/<topic>" >&2
-        echo "[git]   4. merge via PR (sentinel CI must be green first)" >&2
-        echo "[git] Break-glass: see practices/DECISIONS-P3.md §Axis 3" >&2
-        exit 1
-    fi
-done <<< "$STDIN_PAYLOAD"
-
-# Determine the range of commits being pushed. If we cannot resolve a remote, default
-# to comparing HEAD against the upstream tracking branch (when set); otherwise empty.
+# Determine the range of commits being pushed. Git feeds (local_ref local_sha
+# remote_ref remote_sha) on stdin per `man githooks`. If we cannot resolve a remote,
+# default to comparing HEAD against the upstream tracking branch (when set);
+# otherwise empty (skip).
 read_range() {
-    local _local_ref _local_sha remote_ref remote_sha
-    while read -r _local_ref _local_sha remote_ref remote_sha; do
+    local _local_ref _local_sha _remote_ref remote_sha
+    while read -r _local_ref _local_sha _remote_ref remote_sha; do
         if [[ -n "$remote_sha" && "$remote_sha" != "0000000000000000000000000000000000000000" ]]; then
             echo "$remote_sha..HEAD"
             return
         fi
-    done <<< "$STDIN_PAYLOAD"
+    done
     if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         echo "$(git rev-parse '@{u}')..HEAD"
     else

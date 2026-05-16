@@ -243,29 +243,34 @@ limitation.
 
 ---
 
-## 5c. Enforcement Layers (P3 — activated 2026-05-15)
+## 5c. Enforcement Layers (catalog quality only — scope-corrected 2026-05-16)
 
-`DECISIONS-P3.md` was signed on 2026-05-15 with the **multi-layer hard enforcement**
-profile. The four binary gates (`spec_ref` / `substance` / `time_decay` / `evidence`) now
-fail-close on three surfaces:
+ax-template is a `/ax-transform` skill package. The skill enforces **catalog quality**, not human collaboration policy. The four binary gates (`spec_ref` / `substance` / `time_decay` / `evidence`) plus AGENTS.md sentinel + testPractices fail-close on the following catalog-touching surfaces:
 
 | Surface | Trigger | File |
 |---------|---------|------|
 | 1. Claude Code PreToolUse | Write/Edit/MultiEdit on `practices/rules/*.md`, the seed spec, or `backend/src/.../practices/*` | `.claude/settings.local.json` |
-| 2a. Git pre-commit, stage 1 | every commit touching practices/ or the seed spec | 4 binary guards in `.githooks/pre-commit` |
-| 2b. Git pre-commit, stage 2 (added 2026-05-15) | commit touches `backend/src/{main,test}/java/.../practices/` | `./gradlew testPractices` runs inside `.githooks/pre-commit` |
-| 3. Git pre-push (added 2026-05-15) | local commits ahead of remote touch backend/, practices/, or seed spec | full regression `./gradlew testPractices testAsvs testCrud` in `.githooks/pre-push` |
-| 4. GitHub Actions (PR + main push) | `.github/workflows/practices-sentinel.yml` | already in place from P2-A5 |
+| 2a. Git pre-commit, stage 0 | commit touches `practices/rules/*.md` or `_template.md` | `.githooks/pre-commit` regenerates AGENTS.md + auto-stages it |
+| 2b. Git pre-commit, stage 1 | every commit touching practices/ or the seed spec | 4 binary guards in `.githooks/pre-commit` |
+| 2c. Git pre-commit, stage 2 | commit touches `backend/src/{main,test}/java/.../practices/` | `./gradlew testPractices` runs inside `.githooks/pre-commit` |
+| 3. Git pre-push | local commits ahead of remote touch backend/, practices/, or seed spec | full regression `./gradlew testPractices testAsvs testCrud` in `.githooks/pre-push` |
+| 4. GitHub Actions (PR + main push) | `.github/workflows/practices-sentinel.yml` runs the same gates | advisory probe at the source repo; fork-받은 팀이 본인 CI에 채택할지 결정 |
 
-There is **no `--no-verify` blanket bypass**. The only override is the documented
-break-glass procedure:
+### Not in this table (removed 2026-05-16)
 
-1. PR title prefixed `[break-glass]: <reason>`
-2. Same commit adds an entry to `practices/break-glass-log.md`
-3. Follow-up PR that re-imposes the bypassed guard lands within 14 days
+- **Branch protection on main** — fork-받은 팀의 repo settings 영역. ax-template은 강제 안 함.
+- **PR-required workflow / `[break-glass]:` title convention** — fork-받은 팀의 정책. 어떤 git workflow를 채택하든 catalog quality gates는 동일하게 작동.
+- **`enforce_admins=true`, `required_linear_history`, force-push 금지** — fork-받은 팀이 본인 정책으로 설정.
 
-A PR that lacks any of these three artifacts is a Methodology violation and must be
-rejected regardless of the urgency.
+skill을 채택한 팀이 자신의 정책으로 위 항목을 적용하든 안 하든 catalog 신뢰도는 영향받지 않음. catalog 게이트는 mechanical / binary / external-fact-anchored.
+
+### Why hooks are opt-in (`install-hooks.sh`)
+
+`.githooks/`는 클론마다 사용자가 명시적으로 `bash practices/scripts/install-hooks.sh`로 활성화해야 적용됨. 강제 설치 안 함 — fork-받은 팀이 본인 workflow에 통합하든, sentinel CI만 의존하든, hooks 없이 가든 자율. 다만 hooks를 활성화하면 commit/push 시 catalog quality gates가 fail-close — 이 동작은 binary.
+
+### Rule request channel
+
+새 룰 요청은 `.github/ISSUE_TEMPLATE/practices-rule-request.yml` issue template로. evidence URL 필수, maintainer review 후 PR 진행. 이건 fork-받은 팀의 PR 정책과는 별개 — 이 repo (ax-template skill source)에 룰 추가 시 사용.
 
 ### Rule request channel for non-maintainers
 
