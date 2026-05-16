@@ -151,3 +151,51 @@ If anything looks wrong: each commit is small and reversible. The largest change
 ---
 
 Sleep well. The work is on `origin/main`, the gates are green, and nothing is on fire.
+
+---
+
+# Morning Follow-up — N1–N4 Closure (2026-05-16 morning session)
+
+User reviewed the report and made decisions on N1–N4. All four are now closed.
+
+## Closure status
+
+| # | Decision | Result | Commits |
+|---|----------|--------|---------|
+| **N1** | Codify branch protection (A+B: script + Ruleset JSON) | DONE — `.github/rulesets/main-protection.json` + `practices/scripts/setup-branch-protection.sh`. User runs the script once after `gh auth login` to apply. DECISIONS-P3.md §Activation step 3 updated. | `31ba6de` |
+| **N2** | Keep `lang-records-for-dtos` suffix narrow (A) | DONE — DECISIONS.md entry "lang-records-for-dtos-widen — DEFERRED" with re-evaluation triggers. dashboard.md updated inline. No code change. | `45184b4` |
+| **N3** | Add 3rd fixture: spring-modulith-example (B) | DONE — submodule added (frademacher/spring-modulith-example, MIT, JDK 21, Maven). 5 PortabilityXxxTest classes extended with modulith case. portability/run.sh auto-detects JDK 21. testPortability now 18 tests / 17 PASS / 1 FAIL (the realworld cycle is corroborated, not tied — modulith and petclinic are both cycle-free). | `4255345` |
+| **N4** | gh CLI auth + sentinel CI status | DONE — gh auth ✅. Sentinel CI was FAILING since the squash because messaging adapter commit `766b6d1` skipped `generate_agents.sh`, leaving AGENTS.md sha stale. Fixed by regenerating AGENTS.md AND adding pre-commit Stage 0 (auto-regen + auto-stage) so the regression cannot recur. | `2b7df9c`, `fed511f` |
+
+## Sentinel CI verification
+
+| commit | sentinel | reason |
+|--------|----------|--------|
+| `4255345` (N3) | FAILURE | AGENTS.md sha drift carried forward from messaging adapter commit |
+| `2b7df9c` (N4 fix 1) | **SUCCESS** | AGENTS.md regenerated; sentinel green |
+| `fed511f` (N4 fix 2) | not triggered | only `.githooks/pre-commit` changed; outside sentinel's `paths: [practices/**, specs/**]` trigger filter — by design |
+
+main HEAD = `fed511f`. The most recent sentinel run on a sentinel-touching commit is `2b7df9c` SUCCESS. main is in a verified-green state.
+
+## What N4 fix prevents going forward
+
+Future commits that touch `practices/rules/*.md` automatically trigger pre-commit Stage 0:
+
+1. `bash practices/generate_agents.sh` (silent)
+2. If `practices/AGENTS.md` changed → `git add practices/AGENTS.md` (auto-stage)
+
+The developer's intended changes are not modified — only AGENTS.md is auto-staged. Sentinel CI remains the second line of defense for clones that have not run `practices/scripts/install-hooks.sh`.
+
+## Open items (non-blocking, lower priority)
+
+1. **N1 application step** — user still needs to run `bash practices/scripts/setup-branch-protection.sh` once after `gh auth login` to actually apply the protection. The policy is codified; the application is one-time.
+2. **Branch protection apply timing** — recommend doing this *after* the squash sentinel goes green a few more times (proves stability), so the first PR that gets the check applied is a normal one rather than a fix.
+
+## Net for the morning session
+
+- 5 commits added: `31ba6de` (N1), `45184b4` (N2), `4255345` (N3), `2b7df9c` (N4 fix 1), `fed511f` (N4 fix 2)
+- main went from 3 stale FAILURE sentinel runs → 1 verified-green sentinel run on the source-of-truth commit (`2b7df9c`)
+- 4 outstanding decisions resolved with full audit trail in DECISIONS.md / DECISIONS-P3.md / dashboard.md
+- 1 self-healing infrastructure improvement (pre-commit Stage 0) installed — drift class of bug closed permanently for future commits
+
+The catalog is in a steady state: 64 rules / 21 categories / 4 hard gates green / 3 portability fixtures / sentinel CI source-of-truth-green.
