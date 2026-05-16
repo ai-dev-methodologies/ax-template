@@ -57,6 +57,114 @@ items:
     applicable_to: [react, nextjs, vite]
     notes: "Static check planned via custom ESLint rule `ax/no-array-includes-in-loop`: flag `arr.includes(x)` or `arr.find(...)` inside `.filter`/`.map`/`for-of`/`while` when the array is closed over and not mutated inside the loop. Rule body and evidence: practices-react/rules/js-set-map-lookups.md."
 
+  - id: "REACT-PRACTICES-JS-002"
+    chapter: "JS / DOM"
+    requirement: "DOM style writes must be grouped before layout reads (offsetWidth, getBoundingClientRect, getComputedStyle). In React, prefer state-driven className over imperative ref.style mutations; reach for refs only for genuinely imperative cases."
+    test_method: "react_practices_JS_002_noLayoutThrash"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/js-batch-dom-css.md."
+
+  - id: "REACT-PRACTICES-JS-003"
+    chapter: "JS / Indexing"
+    requirement: "When joining two collections by a key in a hot path, build a Map(id → row) once instead of N .find() calls. Sibling to JS-001 (membership Set) — this rule covers join, not membership."
+    test_method: "react_practices_JS_003_buildMapForJoins"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/js-index-maps.md."
+
+  - id: "REACT-PRACTICES-JS-004"
+    chapter: "JS / Loop micro-opt"
+    requirement: "Deep stable property paths inside genuinely hot loops may be hoisted before the loop. Modern engines inline-cache property access; apply only with profiling evidence. The classic 'cache length' optimization is mostly noise on modern engines."
+    test_method: "react_practices_JS_004_cacheDeepStablePathInHotLoop"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/js-cache-property-access.md."
+
+  - id: "REACT-PRACTICES-JS-005"
+    chapter: "JS / Memoization"
+    requirement: "Pure deterministic functions called many times with the same inputs may be memoized in a BOUNDED module-level Map (LRU or explicit max size). Unbounded module-level caches are forbidden — they leak memory in long-lived processes. Cache keys must include locale/options/version, never user/tenant-scoped data without explicit scoping."
+    test_method: "react_practices_JS_005_boundedFunctionMemo"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Narrow scope: pure client/shared JS function memo. Server caches use sibling rules. Rule body: practices-react/rules/js-cache-function-results.md."
+
+  - id: "REACT-PRACTICES-JS-006"
+    chapter: "JS / Storage perf"
+    requirement: "Repeated synchronous browser-storage reads (localStorage, sessionStorage, document.cookie) in a hot path are cached in memory. SSR guard required (window/document undefined on server). Same-tab storage events do NOT fire on the writing tab — every local setItem must update the cache manually. Cross-tab invalidation via storage event; cookies revalidate on visibilitychange (best-effort)."
+    test_method: "react_practices_JS_006_storageReadCacheWithInvalidation"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Sibling client-localstorage-schema covers correctness; this rule is performance. Rule body: practices-react/rules/js-cache-storage.md."
+
+  - id: "REACT-PRACTICES-JS-007"
+    chapter: "JS / Array iteration"
+    requirement: "Multiple .filter/.map passes over the same array may be combined into one for-of loop when (a) the array is large (~1K+), (b) the path is hot, (c) intermediate arrays would be wasted. Not a blanket replacement — small or non-hot arrays favor readable pipelines. Preserve semantics: order, short-circuit, holes, side-effects."
+    test_method: "react_practices_JS_007_combineHotIterations"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/js-combine-iterations.md."
+
+  - id: "REACT-PRACTICES-JS-008"
+    chapter: "JS / Array equality"
+    requirement: "Array equality checks that invoke expensive comparison (sort, serialize, deep compare) must guard with an O(1) length check first. JSON.stringify equality is forbidden for objects with non-stable key order, NaN, undefined, Date, Map, Set, or function values."
+    test_method: "react_practices_JS_008_lengthGuardBeforeExpensiveCompare"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/js-length-check-first.md."
+
+  - id: "REACT-PRACTICES-JS-009"
+    chapter: "JS / Control flow"
+    requirement: "Return on first failure in validators and predicate searches unless the API contract requires collecting all errors (e.g. form validation showing all field errors at once). Sibling of async-defer-await for sync control flow."
+    test_method: "react_practices_JS_009_returnOnFirstFailure"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/js-early-exit.md."
+
+  - id: "REACT-PRACTICES-JS-010"
+    chapter: "JS / RegExp"
+    requirement: "Static regex patterns must be defined at module scope, not inside render. Dynamic patterns (from props/state) must be memoized with useMemo. Global (/g) and sticky (/y) regex instances have mutable lastIndex state — don't share across calls, or reset lastIndex before use, or use String.prototype.matchAll."
+    test_method: "react_practices_JS_010_hoistOrMemoRegex"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/js-hoist-regexp.md."
+
+  - id: "REACT-PRACTICES-JS-011"
+    chapter: "JS / Algorithms"
+    requirement: "Min/max selection uses a single pass O(n) loop, not O(n log n) sort. Math.min(...arr) / Math.max(...arr) hits engine call-argument limits — use loop form for arrays that could exceed ~125K elements. Empty-array and NaN behavior must be handled explicitly."
+    test_method: "react_practices_JS_011_singlePassMinMax"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/js-min-max-loop.md."
+
+  - id: "REACT-PRACTICES-JS-012"
+    chapter: "JS / Immutability"
+    requirement: "Arrays from React props or state must use ES2023 immutable variants (.toSorted, .toReversed, .toSpliced, .with) rather than mutating .sort, .reverse, .splice, [i]=v. For pre-ES2023 targets, use spread+sort fallback. Mutating props is a React contract violation."
+    test_method: "react_practices_JS_012_immutableArrayOps"
+    verification_type: "lint"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Custom ESLint rule planned: flag .sort/.reverse/.splice on prop-or-state arrays. Rule body: practices-react/rules/js-tosorted-immutable.md."
+
+  - id: "REACT-PRACTICES-JS-013"
+    chapter: "JS / Array transformation"
+    requirement: "Use flatMap(x => cond ? [y] : []) instead of map(x => cond ? y : null).filter(Boolean) — the latter silently drops legitimate falsy values (0, '', false). Primary win is semantic clarity; perf is one-pass but allocates small wrapper arrays."
+    test_method: "react_practices_JS_013_flatMapOverMapFilter"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/js-flatmap-filter.md."
+
   - id: "REACT-PRACTICES-ADVANCED-001"
     chapter: "Advanced / Effect callbacks"
     requirement: "When subscribing to external listeners (window/document/SDK) inside an Effect, the callback identity must be stable from the Effect's perspective so subscriptions don't churn. On React 19.2+ use useEffectEvent. On older React (19.0/19.1 or 18.x) use the ref-backed pattern. Real dependencies must remain in the dependency array — refs/Effect Events must never be used to hide them."
