@@ -147,6 +147,42 @@ items:
     applicable_to: [react, nextjs, vite]
     notes: "Rule body: practices-react/rules/client-passive-event-listeners.md."
 
+  - id: "REACT-PRACTICES-ASYNC-002"
+    chapter: "Async / Conditional"
+    requirement: "Async functions must place cheap guards (validation, early returns, permission gates that don't require expensive I/O) BEFORE expensive awaits. Don't await data on a code path that discards it. Exception: awaits whose purpose IS the side effect (auth, validation, audit log, transaction setup) must run regardless of return path."
+    test_method: "react_practices_ASYNC_002_deferAwaitToBranch"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/async-defer-await.md."
+
+  - id: "REACT-PRACTICES-ASYNC-003"
+    chapter: "Async / Dependency graphs"
+    requirement: "For promise graphs where some calls depend on others' outputs and some don't, the primary pattern is: initiate root promises, chain dependent promises via .then() from their input promise, await aggregate with Promise.all at the latest moment. Third-party DSLs (better-all) are an optional advanced tool, not the catalog's primary recommendation."
+    test_method: "react_practices_ASYNC_003_partialDepGraphChained"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Rule body: practices-react/rules/async-dependencies.md."
+
+  - id: "REACT-PRACTICES-ASYNC-004"
+    chapter: "Async / API routes"
+    requirement: "API routes and Server Actions must follow the init-early-await-late pattern WITHIN API-specific constraints: auth gate before any business work, mutations respect ordering, transactions scope work atomically, request signal propagated to fetches, rate-limit budget considered before fan-out, idempotency for concurrent invocations."
+    test_method: "react_practices_ASYNC_004_apiRouteParallelSafely"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [nextjs]
+    notes: "Specialization of ASYNC-001. Rule body: practices-react/rules/async-api-routes.md."
+
+  - id: "REACT-PRACTICES-ASYNC-005"
+    chapter: "Async / Streaming"
+    requirement: "When a page has both fast and slow content, the slow content must be wrapped in Suspense so the wrapper layout ships immediately. Promises must be created in Server Components and passed to Client Components as props (never created inside Client Component render). Client Components consume promises with use() inside Suspense. Layout-shift mitigation: fallback bounding box approximates final content."
+    test_method: "react_practices_ASYNC_005_suspenseStreamingForSlowRegions"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/async-suspense-boundaries.md."
+
   - id: "REACT-PRACTICES-CLIENT-004"
     chapter: "Client / Storage"
     requirement: "All localStorage access must be (a) keyed with a version suffix, (b) wrapped in try-catch (Safari private mode and quota overflow throw), (c) store the minimal field set the UI needs (no tokens, PII, full server objects), (d) guarded by typeof window check if the access can run during SSR. Migration code documented when version bumps."
