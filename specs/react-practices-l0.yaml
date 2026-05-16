@@ -1,0 +1,58 @@
+version: "0.1.0"
+scope: "react-practices-l0 — seed React/Next.js best-practice items projected by practices-react/rules/*.md. Stack-agnostic where possible; Next.js-specific items carry `applicable_to: nextjs`."
+stack: "React 19 / Next.js 16 (App Router) / TypeScript / ECMAScript 2024+"
+status: "seed — grows item-by-item as practices-react/rules ship through the 4-phase curation pipeline (multi-source → audit → codex consensus → time-decay refresh)"
+items:
+  - id: "REACT-PRACTICES-ASYNC-001"
+    chapter: "Async / Waterfalls"
+    requirement: "Independent async operations must be initiated before any of them is awaited; aggregate with Promise.all (or Promise.allSettled when partial-failure tolerance is required). Sequential awaits over independent calls block each call until the previous one resolves and constitute a waterfall."
+    test_method: "react_practices_ASYNC_001_initiateEarlyAwaitLate"
+    verification_type: "lint"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Static check planned via custom ESLint rule `ax/react-async-parallel`: flags two or more top-level await statements that share no await-bound identifiers in the same async function body where each awaited expression is a call. Rule body and evidence: practices-react/rules/async-parallel.md."
+
+  - id: "REACT-PRACTICES-BUNDLE-001"
+    chapter: "Bundle / Imports"
+    requirement: "Imports from packages with very large barrel files must either rely on the bundler's auto-optimization (e.g. Next.js experimental.optimizePackageImports default list), use a documented subpath export, or be transformed by a per-module mapping; private `dist/*` deep imports are forbidden because they couple to package internals."
+    test_method: "react_practices_BUNDLE_001_noBroadBarrelImports"
+    verification_type: "lint"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Static check planned via custom ESLint rule `ax/no-broad-barrel-imports`. Maintains an allowlist of packages already optimized by the project's bundler. Flags `import { ... } from 'X'` only when X is on the project's 'known expensive, not auto-optimized' list and the import is not from a documented subpath. Rule body and evidence: practices-react/rules/bundle-barrel-imports.md."
+
+  - id: "REACT-PRACTICES-SERVER-001"
+    chapter: "Server / Cache"
+    requirement: "Non-fetch async server work that may be invoked from multiple Server Components within a single request (DB queries, auth lookups, file I/O, expensive computations) must be deduplicated with React.cache(fn) defined at module scope. Arguments must be primitives or stable references (Object.is)."
+    test_method: "react_practices_SERVER_001_reactCacheModuleScopeDedup"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Static detection unreliable from AST alone. Reviewers confirm (a) module-scope `cache(fn)` definition, (b) primitive args / stable references, (c) Server-Component-only call sites, (d) not nested inside a 'use cache' boundary. Rule body and evidence: practices-react/rules/server-cache-react.md."
+
+  - id: "REACT-PRACTICES-SERVER-002"
+    chapter: "Server / Cache"
+    requirement: "In Next.js 16 with Cache Components enabled (`cacheComponents: true`), persistent / cross-request caching uses the `'use cache'` directive at file, component, or function level. Runtime APIs (cookies/headers/searchParams) must not be accessed inside cached scopes; values must be read outside and passed as arguments. Cache lifetime is controlled with `cacheLife` and invalidation with `cacheTag` / `updateTag`."
+    test_method: "react_practices_SERVER_002_useCacheDirective"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [nextjs]
+    notes: "Build-time enforcement by Next.js itself catches several constraint violations (forbidden runtime APIs inside cached scope, non-serializable args). Reviewer confirms appropriate apply level, cache key/closure semantics, and absence of build-hang anti-pattern (runtime Promise into cached scope). Rule body and evidence: practices-react/rules/nextjs-use-cache.md."
+
+  - id: "REACT-PRACTICES-RERENDER-001"
+    chapter: "Re-render / Memoization"
+    requirement: "Manual memoization (memo / useMemo / useCallback) is a fallback optimization, not a default. When React Compiler is enabled, do not add manual memo for ordinary re-render optimization (compiler handles it); manual memo is reserved for custom comparator cases or explicit migration leave-in-place. When React Compiler is not enabled, manual memo is allowed only after profiler evidence shows perceptible lag and parent's call site has been audited for stable-reference props."
+    test_method: "react_practices_RERENDER_001_profileBeforeMemo"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "PR review checks (a) whether React Compiler is configured (look for babel-plugin-react-compiler or equivalent), (b) profiler evidence in the PR description for new memo additions, (c) stable-reference audit for memoized component's props, (d) explicit justification + benchmark for custom comparator usage. Deep-equality comparators rejected without justification. Rule body and evidence: practices-react/rules/rerender-memo.md."
+
+  - id: "REACT-PRACTICES-JS-001"
+    chapter: "JavaScript / Data structures"
+    requirement: "When the same collection is queried for membership repeatedly in a hot path, build a Set or Map once and use has/get instead of Array.prototype.includes/find. Build cost is O(n), so the pattern only pays off when lookups are repeated. Object collections must use primitive keys (ids) — Set/Map matches objects by reference identity."
+    test_method: "react_practices_JS_001_setMapForRepeatedLookups"
+    verification_type: "lint"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Static check planned via custom ESLint rule `ax/no-array-includes-in-loop`: flag `arr.includes(x)` or `arr.find(...)` inside `.filter`/`.map`/`for-of`/`while` when the array is closed over and not mutated inside the loop. Rule body and evidence: practices-react/rules/js-set-map-lookups.md."

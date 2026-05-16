@@ -1,0 +1,103 @@
+version: "1.0"
+generated_at: "2026-05-16T00:00:00Z"
+catalog: practices-react
+notes: |
+  Upstream snapshots for practices-react/ catalog. Shape matches practices/upstream/_MANIFEST.yaml
+  so the same guards (time_decay_guard.sh / evidence_guard.sh / spec_ref_guard.sh) work uniformly
+  across both catalogs via the --catalog flag.
+
+  Tier convention:
+    tier 1 = primitive / spec (MDN, TC39, ECMA)
+    tier 2 = canonical vendor docs (React, Next.js)
+    tier 3 = curated agent catalog (Vercel react-best-practices = SEED, not authority)
+snapshots:
+  - id: "mdn-promise-all"
+    tier: 1
+    source: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/all"
+    via: "WebFetch"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1720
+    sha: "ff2089069bf746370f0d4f27bf443093e325c1ceb6dc9c52a7138637e1b8e0e5"
+
+  - id: "mdn-promise-allsettled"
+    tier: 1
+    source: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/allSettled"
+    via: "WebFetch"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1683
+    sha: "42d8cdd117afa44a7057496fb52cbe0020d1906740204bd98706c276df418cde"
+
+  - id: "mdn-set"
+    tier: 1
+    source: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set"
+    via: "WebFetch"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1441
+    sha: "39ccb4a8bcac298c41217a8fce4c0fcfa159a17621a0224fe678ca89b313319f"
+
+  - id: "react-19-use"
+    tier: 2
+    source: "https://react.dev/reference/react/use"
+    via: "WebFetch"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1846
+    sha: "f1b930810380f3a4c71b2a17800a634196b22cc58d08176ac49f127c9443a059"
+    version_observed: "react@19"
+
+  - id: "react-19-cache"
+    tier: 2
+    source: "https://react.dev/reference/react/cache"
+    via: "WebFetch"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 2915
+    sha: "76237c1b8d01614dd80f57d95475f1a6711eb765b3cee35cd72541b61b41096b"
+    version_observed: "react@19"
+
+  - id: "nextjs-use-cache-directive"
+    tier: 2
+    source: "https://nextjs.org/docs/app/api-reference/directives/use-cache"
+    via: "WebFetch"
+    fetched_at: "2026-05-13T00:00:00Z"
+    bytes: 4476
+    sha: "8925884b2beaf11c2097be532bdcac95d9ef0e129b4bcbb3aa65ac341cc88a11"
+    version_observed: "next@16.2.6"
+
+  - id: "nextjs-fetching-data"
+    tier: 2
+    source: "https://nextjs.org/docs/app/getting-started/fetching-data"
+    via: "WebFetch"
+    fetched_at: "2026-05-13T00:00:00Z"
+    bytes: 3705
+    sha: "e6ec1a6c9477cd3b5d42784b9db81472a11222c85c633e736a34484b0c2b3f9f"
+    version_observed: "next@16.2.6"
+
+  - id: "nextjs-optimize-package-imports"
+    tier: 2
+    source: "https://nextjs.org/docs/app/api-reference/config/next-config-js/optimizePackageImports"
+    via: "WebFetch"
+    fetched_at: "2026-05-13T00:00:00Z"
+    bytes: 2096
+    sha: "7282ac740aeca7791908816acdc47b0461b831a7ccca0a5d6ef7d99b49c4acd8"
+    version_observed: "next@16.2.6"
+
+  - id: "vercel-react-best-practices"
+    tier: 3
+    source: "https://github.com/vercel-labs/agent-skills/tree/main/skills/react-best-practices"
+    via: "claude-plugin"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 2217
+    sha: "844d30a22e664ec0b8c7e3b9a1c6f872497104fd00d59162f65917056e8d1883"
+    role: seed-catalog
+
+curation_pipeline:
+  description: "Each rule passes a 4-phase audit before shipping to rules/"
+  phases:
+    - id: A_reference_diversification
+      requirement: "At least 2 of role={canonical-react,canonical-nextjs,primitive-semantics,rfc} cite the rule"
+    - id: B_per_rule_audit
+      checks: [accuracy, freshness, completeness, gap_check]
+    - id: C_codex_consensus
+      requirement: "Independent second opinion via codex exec; agreement or recorded disagreement"
+    - id: D_continuous_refresh
+      requirement: "Each rule has next_review_by date; time_decay_guard BLOCKs on stale"
+  fail_open: false

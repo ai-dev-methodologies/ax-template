@@ -1,13 +1,32 @@
 #!/usr/bin/env bash
-# spec_ref_guard.sh — hard gate: every practices/rules/*.md must have a valid spec_ref
+# spec_ref_guard.sh — hard gate: every {catalog}/rules/*.md must have a valid spec_ref
 # Exit 1 if any rule is missing spec_ref or references a non-existent specs/*.yaml file.
 # Exit 0 if no rules exist or all rules pass.
+#
+# Usage:
+#   bash practices/evals/spec_ref_guard.sh                       # default catalog=practices
+#   bash practices/evals/spec_ref_guard.sh --catalog practices-react
+#   CATALOG=practices-react bash practices/evals/spec_ref_guard.sh
 
 set -euo pipefail
 
+CATALOG="${CATALOG:-practices}"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --catalog) CATALOG="$2"; shift 2 ;;
+        --catalog=*) CATALOG="${1#--catalog=}"; shift ;;
+        *) echo "spec_ref_guard: unknown arg: $1" >&2; exit 2 ;;
+    esac
+done
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-RULES_DIR="$REPO_ROOT/practices/rules"
+RULES_DIR="$REPO_ROOT/$CATALOG/rules"
+
+if [ ! -d "$RULES_DIR" ]; then
+    echo "spec_ref_guard: catalog '$CATALOG' has no rules/ dir at $RULES_DIR — nothing to check"
+    exit 0
+fi
 
 # Extract spec_ref value from YAML frontmatter (between first pair of --- lines)
 extract_spec_ref() {

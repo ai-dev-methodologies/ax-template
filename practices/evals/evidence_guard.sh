@@ -3,13 +3,35 @@
 #
 # Forbids rules whose claims are not anchored to a recorded external source. The rule body
 # itself is allowed to be Claude-authored; the *justification* must trace back to either
-# (a) a snapshot in practices/upstream/_MANIFEST.yaml, or (b) an explicit external citation
+# (a) a snapshot in {catalog}/upstream/_MANIFEST.yaml, or (b) an explicit external citation
 # (RFC, JEP, vendor docs, peer-reviewed paper).
 #
 # This gate is the answer to "why was this rule made?" — every rule must be auditable.
+#
+# Usage:
+#   bash practices/evals/evidence_guard.sh                       # default catalog=practices
+#   bash practices/evals/evidence_guard.sh --catalog practices-react
 set -uo pipefail
 
-cd "$(dirname "$0")/.."
+CATALOG="${CATALOG:-practices}"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --catalog) CATALOG="$2"; shift 2 ;;
+        --catalog=*) CATALOG="${1#--catalog=}"; shift ;;
+        *) echo "evidence_guard: unknown arg: $1" >&2; exit 2 ;;
+    esac
+done
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CATALOG_DIR="$REPO_ROOT/$CATALOG"
+
+if [ ! -d "$CATALOG_DIR" ]; then
+    echo "evidence_guard: catalog '$CATALOG' not found at $CATALOG_DIR — nothing to check"
+    exit 0
+fi
+
+cd "$CATALOG_DIR"
 
 violations=0
 shopt -s nullglob

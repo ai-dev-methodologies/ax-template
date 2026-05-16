@@ -4,3 +4,9 @@ test-results/
 # Practices upstream snapshots — large, regenerable via practices/upstream/fetch.sh,
 # and may contain false-positive secret patterns from public docs (e.g. Algolia search keys).
 practices/upstream/*.snapshot.md
+
+# node_modules anywhere (eslint-plugin-ax, future tooling)
+node_modules/
+
+# practices-react snapshots are SMALL (1-5KB), HAND-CURATED quote sets,
+# and serve as the evidence-anchor audit trail — track them, do NOT ignore.

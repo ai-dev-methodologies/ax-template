@@ -1,0 +1,21 @@
+{
+  "name": "@ax/eslint-plugin-ax",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Custom ESLint rules for the ax-template practices-react/ catalog. Each rule corresponds 1:1 to a practices-react/rules/*.md entry.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "peerDependencies": {
+    "eslint": ">=9.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  },
+  "keywords": ["eslint", "eslintplugin", "ax-template", "react", "nextjs"]
+}

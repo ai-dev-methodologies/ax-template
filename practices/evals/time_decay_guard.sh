@@ -1,11 +1,33 @@
 #!/usr/bin/env bash
 # practices/evals/time_decay_guard.sh — drift axis hard gate.
-# Reads practices/upstream/_MANIFEST.yaml; any snapshot whose fetched_at is older than
+# Reads {catalog}/upstream/_MANIFEST.yaml; any snapshot whose fetched_at is older than
 # the threshold (default 90 days) → BLOCK. This is the "stale upstream" tripwire that
 # prevents rules from anchoring to outdated documentation.
+#
+# Usage:
+#   bash practices/evals/time_decay_guard.sh                       # default catalog=practices
+#   bash practices/evals/time_decay_guard.sh --catalog practices-react
 set -uo pipefail
 
-cd "$(dirname "$0")/.."
+CATALOG="${CATALOG:-practices}"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --catalog) CATALOG="$2"; shift 2 ;;
+        --catalog=*) CATALOG="${1#--catalog=}"; shift ;;
+        *) echo "time_decay_guard: unknown arg: $1" >&2; exit 2 ;;
+    esac
+done
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CATALOG_DIR="$REPO_ROOT/$CATALOG"
+
+if [ ! -d "$CATALOG_DIR" ]; then
+    echo "time_decay_guard: catalog '$CATALOG' not found at $CATALOG_DIR — nothing to check"
+    exit 0
+fi
+
+cd "$CATALOG_DIR"
 
 MANIFEST="upstream/_MANIFEST.yaml"
 THRESHOLD_DAYS="${TIME_DECAY_THRESHOLD_DAYS:-90}"
