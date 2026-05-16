@@ -199,3 +199,60 @@ The developer's intended changes are not modified — only AGENTS.md is auto-sta
 - 1 self-healing infrastructure improvement (pre-commit Stage 0) installed — drift class of bug closed permanently for future commits
 
 The catalog is in a steady state: 64 rules / 21 categories / 4 hard gates green / 3 portability fixtures / sentinel CI source-of-truth-green.
+
+---
+
+# Scope Correction — 2026-05-16 (afternoon, post N1–N4 closure)
+
+User caught a fundamental misalignment after N1–N4 was reported as "complete":
+
+> "main에 바로 merge하는게 어디에 있냐.. 해당 작업 별도의 브랜치에서 한거 맞아?"
+
+The autonomous overnight run + morning N1–N4 work landed 9 commits directly on `main`. That violated the methodology's PR-required workflow assumption — but more importantly, it surfaced a deeper question: **why was the methodology forcing a PR workflow on this repo at all?**
+
+Then user clarified:
+
+> "git 이런 규칙은 싫은데? 다 제거해봐.. 그건 프로젝트별로 정책을 정하는거고 우리가 지금 개발하는건 ax 전환을 위한 구현 템플릿이야."
+
+And finally:
+
+> "ax(ai transformation)"
+
+> "해당 프로젝트는 /react-best-practices 처럼 스킬로 반영되는거 아니야?" → "B. ax-template 전체가 하나의 skill (/ax-transform)"
+
+## What this means
+
+ax-template is a **`/ax-transform` Claude Code plugin source**, not a fork-base whose maintainers dictate downstream collaboration policy. The skill enforces *catalog quality* (catalog rules anchor to external evidence, AGENTS.md stays sync'd, testPractices passes). The skill does NOT enforce *human collaboration policy* (git workflow, branch protection, PR-required, force-push allowance, break-glass conventions).
+
+## What was removed (commit f40dd19, refactor commit)
+
+- `.github/rulesets/main-protection.json` — DELETED (branch protection codification was scope creep)
+- `practices/scripts/setup-branch-protection.sh` — DELETED
+- `.githooks/pre-push` Stage 0 (block direct push to main) — REMOVED (catalog quality regression remains)
+- DECISIONS-P3.md 7-axis table — reduced to catalog-quality-only; break-glass procedure removed
+
+## What was added (subsequent commits)
+
+- `.claude-plugin/plugin.json` — proper Claude Code plugin manifest
+- `skills/ax-transform/SKILL.md` — skill entry point at the standard plugin layout (moved from top-level)
+- `README.md` — repo external entry point describing this is a skill source
+- `CLAUDE.md` — Project Identity rewritten to state ax-template = skill source
+
+## What was deleted as dead artifact
+
+- `practices/break-glass-log.md` — the break-glass procedure was removed; the log was its only consumer
+
+## Reframing of N1–N4
+
+| # | Original framing | Post-scope-correction framing |
+|---|------------------|-------------------------------|
+| N1 | Codify branch protection so the skill enforces it | DROPPED — branch protection is fork-received teamの policy, not the skill's |
+| N2 | Keep `lang-records-for-dtos` suffix narrow | UNCHANGED — catalog-quality decision, properly in skill scope |
+| N3 | Add 3rd portability fixture | UNCHANGED — catalog-quality decision, properly in skill scope |
+| N4 | Diagnose AGENTS.md sentinel CI failures | UNCHANGED — catalog-quality issue (sha drift). The fix (pre-commit Stage 0) stays |
+
+So N2 / N3 / N4 hold; N1 is rolled back. The N1 codification was a (well-intentioned) overreach.
+
+## Net for the closure
+
+The catalog itself is unchanged: still 64 rules, 21 categories, 4 hard gates green. The Spec Trio + verification feedback loop + AGENTS sentinel + pre-commit Stage 0 (auto-regen) all survive. What's gone is the part of the methodology that was reaching out of skill scope into "how the fork-받은 팀 should run their git." That part — by the user's correction — was never the skill's job.

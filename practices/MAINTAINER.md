@@ -224,11 +224,15 @@ Every accepted rule gets one entry in `practices/DECISIONS.md` with:
 Rejected rule candidates (P2-D class) also get a DECISIONS.md entry under "REJECTED /
 DEFERRED", so the same debate is not relitigated in six months.
 
-### P3 developer-side enforcement is gated on signed decisions
+### Catalog-quality enforcement is mechanical (no human-process gating)
 
-Developer-side enforcement (Claude Code hooks, IDE plugin, pre-commit, CI strength)
-requires explicit choices on seven axes recorded in `practices/DECISIONS-P3.md`. P3
-work cannot start until that sheet is signed.
+The 4 binary hard gates run unconditionally when their inputs change — they require no
+"signed enforcement decision" because they have no human-process surface. Local hooks
+are opt-in per clone via `bash practices/scripts/install-hooks.sh`; once installed,
+they fail-close on catalog quality without further configuration.
+
+Git-workflow / branch protection / PR-required policy is **out of skill scope** and is
+fork-받은 팀이 정함. See `DECISIONS-P3.md` for the scope-corrected enforcement table.
 
 ### Snapshot limitation (current; tracked)
 

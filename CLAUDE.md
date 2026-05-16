@@ -6,7 +6,7 @@
 
 핵심 가치는 "코드"가 아니라 **AI agent가 빠르게 이해하고 안전하게 작업할 수 있는 인프라**. 인증/CRUD 구현은 skill이 자신을 자신에게 적용한 reference workload — skill의 동작 시연.
 
-**Skill 진입점**: top-level `SKILL.md` (frontmatter `name: ax-transform`). AI agent가 skill invoke 시 첫 읽음.
+**Skill 진입점**: `skills/ax-transform/SKILL.md` (frontmatter `name: ax-transform`). Plugin manifest는 `.claude-plugin/plugin.json`. Claude Code plugin marketplace에 등록 시 `/plugin install ax-transform@<marketplace>` 로 설치 가능.
 
 ### 이 skill이 제공하는 것
 
@@ -114,8 +114,12 @@ cd frontend && npm run test
 
 ```
 ax-template/
-├── SKILL.md                   # /ax-transform skill 진입점 (frontmatter: name/description)
-├── CLAUDE.md                  # 본 문서 — project identity + methodology
+├── .claude-plugin/plugin.json # Claude Code plugin manifest
+├── skills/
+│   └── ax-transform/
+│       └── SKILL.md           # /ax-transform skill 진입점 (frontmatter: name/description)
+├── README.md                  # 외부 진입점 — repo의 첫 문서
+├── CLAUDE.md                  # 본 문서 — project identity + methodology (AI agent 진입)
 ├── METHODOLOGY.md             # 5-step blueprint playbook
 ├── specs/                     # 검증 스펙 (핵심 — spec-first)
 │   ├── auth-asvs-l1.yaml
