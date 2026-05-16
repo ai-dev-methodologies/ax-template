@@ -71,6 +71,22 @@ snapshots:
     sha: "0cf740df7578a55bb937651c1bac0e77148abff8416c27ed5812a9bf03eb0a72"
     version_observed: "next@16.2.6"
 
+  - id: "mdn-addeventlistener-passive"
+    tier: 1
+    source: "https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener"
+    via: "WebFetch"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1272
+    sha: "f1ad816347da2eba9667083471e3a7601831cb5270f155427657c0d281cb0ef4"
+
+  - id: "mdn-localstorage"
+    tier: 1
+    source: "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage"
+    via: "WebFetch"
+    fetched_at: "2026-05-16T00:00:00Z"
+    bytes: 1264
+    sha: "b603074ea922690d188673887f201f8a6accd3c72559150d447f3488957ad0b3"
+
   - id: "react-19-use"
     tier: 2
     source: "https://react.dev/reference/react/use"
