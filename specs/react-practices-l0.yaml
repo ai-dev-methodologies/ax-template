@@ -120,6 +120,69 @@ items:
     applicable_to: [react, nextjs, vite]
     notes: "Distinct from BUNDLE-004 (load on activation). Rule body: practices-react/rules/bundle-preload.md."
 
+  - id: "REACT-PRACTICES-SERVER-003"
+    chapter: "Server / Authentication"
+    requirement: "Every Server Action (function with 'use server' directive) must authenticate the caller, validate untrusted input, and authorize the operation INSIDE the action — not via middleware or layout only. Order: authenticate → validate → authorize → mutate."
+    test_method: "react_practices_SERVER_003_serverActionAuth"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [nextjs]
+    notes: "Rule body: practices-react/rules/server-auth-actions.md."
+
+  - id: "REACT-PRACTICES-SERVER-004"
+    chapter: "Server / Cache"
+    requirement: "Cross-request caching in Next.js 16+ should use 'use cache' (Cache Components). Manual LRU is a fallback when Cache Components is unavailable or when best-effort in-process caching scoped to a warm instance is the intent. Cache keys must include tenant/user scope where applicable; LRU is not coherent across instances."
+    test_method: "react_practices_SERVER_004_crossRequestLRUFallback"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/server-cache-lru.md."
+
+  - id: "REACT-PRACTICES-SERVER-005"
+    chapter: "Server / RSC props"
+    requirement: "Operations that create new references (.toSorted, .filter, .map, .slice, spread) at the Server→Client boundary break RSC payload dedup and re-serialize. For LARGE duplicated props, pass the canonical reference once and derive in the client; for small props, ignore this rule."
+    test_method: "react_practices_SERVER_005_rscPropDedupNotBroken"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/server-dedup-props.md."
+
+  - id: "REACT-PRACTICES-SERVER-006"
+    chapter: "Server / Module-scope I/O"
+    requirement: "Truly static asset I/O (fonts, templates, bundled config, logos) must be hoisted to module scope to run once per process instance. Request-, user-, tenant-scoped data, rotating secrets, live feature flags must NOT be hoisted — that's a correctness bug, not an optimization. Edge runtime cannot use node:fs."
+    test_method: "react_practices_SERVER_006_hoistStaticIOOnly"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/server-hoist-static-io.md."
+
+  - id: "REACT-PRACTICES-SERVER-007"
+    chapter: "Server / RSC serialization"
+    requirement: "Client Components must receive minimal explicit DTOs, not whole server entities. Whole entities risk leaking secrets, internal IDs, role flags, and audit metadata across the boundary, in addition to bloating payload. Define DTOs in a dedicated module; map at the boundary."
+    test_method: "react_practices_SERVER_007_minimizeClientPayloadDTO"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Rule body: practices-react/rules/server-serialization.md."
+
+  - id: "REACT-PRACTICES-SERVER-008"
+    chapter: "Server / Component composition"
+    requirement: "Server Component trees must be composed to parallelize independent data fetches. Three valid patterns: (1) sibling async components, (2) slot/children composition with Suspense, (3) Promise.all inside a single component. Dependent fetches stay sequential by design."
+    test_method: "react_practices_SERVER_008_parallelizeIndependentRSCFetches"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [nextjs, react]
+    notes: "Rule body: practices-react/rules/server-parallel-fetching.md."
+
+  - id: "REACT-PRACTICES-SERVER-009"
+    chapter: "Server / Post-response work"
+    requirement: "Next.js after() is for BEST-EFFORT post-response work: analytics, audit logs where occasional loss is acceptable, cache warming, cleanup. Never use after() for critical operations (billing, payment confirmation, guaranteed notifications) — function instance may be killed shortly after response ships. Use a durable queue for critical work."
+    test_method: "react_practices_SERVER_009_afterBestEffortOnly"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [nextjs]
+    notes: "Rule body: practices-react/rules/server-after-nonblocking.md."
+
   - id: "REACT-PRACTICES-CLIENT-001"
     chapter: "Client / Server-state dedup"
     requirement: "Client-Component server-state reads must go through a deduplicating cache layer (SWR / TanStack Query / RTK Query / framework Suspense+use()) when the same data may be requested by multiple component instances. Plain useEffect+fetch+setState is reserved for genuinely one-off init reads."
