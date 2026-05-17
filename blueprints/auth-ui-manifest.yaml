@@ -1,0 +1,60 @@
+# blueprints/auth-ui-manifest.yaml
+# UI Policy Manifest — auth domain, full_trio mode.
+# ADR: TD-2026-05-17-010 (Design-tokens manifest format, WCAG 2.2 + CWV-anchored)
+# ADR: TD-2026-05-17-007 (Frontend Spec Trio schema)
+#
+# trio_integrity_guard.sh validates:
+#   a11y.contrast_min >= 4.5  (WCAG 2.2 SC 1.4.3)
+#   cwv.lcp_ms <= 2500
+#   cwv.inp_ms <= 200
+#   cwv.cls <= 0.1
+#   motion.respect_prefers_reduced_motion == true
+
+domain: auth
+
+tokens_override:
+  color:
+    color_primary: "oklch(55% 0.22 250)"
+    color_primary_hover: "oklch(50% 0.22 250)"
+    color_surface: "oklch(99% 0 0)"
+    color_text: "oklch(18% 0 0)"
+    color_error: "oklch(55% 0.21 25)"
+  typography:
+    font_sans: "'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif"
+    text_base: "clamp(1rem, 0.92rem + 0.4vw, 1.125rem)"
+    text_heading: "clamp(1.5rem, 1.2rem + 1.5vw, 2rem)"
+  spacing:
+    space_form_gap: "clamp(1rem, 0.8rem + 1vw, 1.5rem)"
+    space_section: "clamp(2rem, 1.5rem + 2.5vw, 4rem)"
+  motion:
+    duration_fast: "150ms"
+    duration_normal: "300ms"
+    ease_out: "cubic-bezier(0.16, 1, 0.3, 1)"
+
+a11y:
+  wcag_level: "2.2-AA"
+  axe_rules:
+    - color-contrast
+    - label
+    - button-name
+    - form-field-multiple-labels
+    - aria-required-attr
+    - aria-valid-attr-value
+  contrast_min: 4.5
+
+cwv:
+  lcp_ms: 2500
+  inp_ms: 200
+  cls: 0.1
+  fcp_ms: 1500
+  tbt_ms: 200
+
+motion:
+  respect_prefers_reduced_motion: true
+  default_duration_ms: 300
+
+bundle_budgets:
+  landing_page_js_kb: 150
+  app_page_js_kb: 300
+  landing_page_css_kb: 30
+  app_page_css_kb: 50

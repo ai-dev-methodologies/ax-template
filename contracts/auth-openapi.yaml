@@ -8,6 +8,7 @@ servers:
 paths:
   /auth/email/signup:
     post:
+      operationId: emailSignup
       summary: Sign up with email
       requestBody:
         required: true
@@ -53,6 +54,7 @@ paths:
 
   /auth/email/login:
     post:
+      operationId: emailLogin
       summary: Login with email
       requestBody:
         required: true
@@ -102,6 +104,7 @@ paths:
 
   /auth/email/resend-verification:
     post:
+      operationId: emailResendVerification
       summary: Resend email verification
       requestBody:
         required: true
@@ -126,6 +129,7 @@ paths:
 
   /auth/email/verify-email:
     post:
+      operationId: emailVerify
       summary: Verify email token
       requestBody:
         required: true
@@ -149,6 +153,7 @@ paths:
 
   /auth/refresh:
     post:
+      operationId: tokenRefresh
       summary: Refresh access token
       description: Expects refresh token in HttpOnly cookie. Handles refresh token rotation and races.
       responses:
@@ -172,6 +177,7 @@ paths:
 
   /auth/logout:
     post:
+      operationId: logout
       summary: Logout current session
       description: Clears HttpOnly refresh cookie and revokes session.
       responses:
@@ -185,6 +191,7 @@ paths:
 
   /auth/me:
     get:
+      operationId: getAuthState
       summary: Get minimal auth UI state
       security:
         - bearerAuth: []
@@ -200,6 +207,7 @@ paths:
 
   /auth/email/password-reset-request:
     post:
+      operationId: emailPasswordResetRequest
       summary: Request password reset email
       requestBody:
         content:
@@ -217,6 +225,7 @@ paths:
 
   /auth/email/password-reset:
     post:
+      operationId: emailPasswordReset
       summary: Reset password using token
       requestBody:
         content:
@@ -239,6 +248,7 @@ paths:
 
   /auth/email/password-change:
     post:
+      operationId: emailPasswordChange
       summary: Change password (authenticated)
       security:
         - bearerAuth: []
@@ -263,6 +273,7 @@ paths:
 
   /auth/oauth/{provider}/authorize:
     get:
+      operationId: oauthAuthorize
       summary: Redirect to OAuth provider authorization page
       parameters:
         - name: provider
@@ -277,6 +288,7 @@ paths:
 
   /auth/oauth/{provider}/callback:
     get:
+      operationId: oauthCallback
       summary: Handle OAuth provider callback
       parameters:
         - name: provider
@@ -314,6 +326,7 @@ paths:
 
   /auth/oauth/link:
     post:
+      operationId: oauthLink
       summary: Link OAuth provider to existing account
       security:
         - bearerAuth: []
@@ -340,6 +353,7 @@ paths:
 
   /auth/oauth/unlink/{provider}:
     delete:
+      operationId: oauthUnlink
       summary: Unlink OAuth provider from account
       security:
         - bearerAuth: []

@@ -1,0 +1,170 @@
+# specs/auth-frontend-l0.yaml
+# Page Compliance Spec — auth domain, full_trio mode.
+# ADR: TD-2026-05-17-007 (Frontend Spec Trio schema)
+# ADR: TD-2026-05-17-001 (Next.js 16 App Router)
+# ADR: TD-2026-05-17-006 (Playwright + Vitest + MSW)
+#
+# Every item's backend_operation_id resolves to contracts/auth-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in specs/auth-asvs-l1.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+
+domain: auth
+domain_mode: full_trio
+backend_spec_ref: specs/auth-asvs-l1.yaml
+frontend_required: true
+
+items:
+  - id: AUTH-FE-001
+    requirement: "Signup page renders email and password fields and submits credentials to the backend signup endpoint"
+    backend_operation_id: emailSignup
+    backend_spec_ref: ASVS-V2.1.1
+    static_source_ref: []
+    test_method: "auth/signup.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-002
+    requirement: "Login page renders email and password fields and submits credentials to the backend login endpoint"
+    backend_operation_id: emailLogin
+    backend_spec_ref: ASVS-V2.2.1
+    static_source_ref: []
+    test_method: "auth/login.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-003
+    requirement: "Email verification page shows token-entry UI and calls the verify-email endpoint on submit"
+    backend_operation_id: emailVerify
+    backend_spec_ref: ASVS-V2.7.2
+    static_source_ref: []
+    test_method: "auth/verify-email.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-004
+    requirement: "Resend verification page shows a resend-email link and calls the resend-verification endpoint"
+    backend_operation_id: emailResendVerification
+    backend_spec_ref: ASVS-V2.7.3
+    static_source_ref: []
+    test_method: "auth/resend-verification.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-005
+    requirement: "Forgot-password page renders an email field and calls the password-reset-request endpoint on submit"
+    backend_operation_id: emailPasswordResetRequest
+    backend_spec_ref: ASVS-V2.5.3
+    static_source_ref: []
+    test_method: "auth/forgot-password.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-006
+    requirement: "Reset-password page renders new-password and confirm-password fields and calls the password-reset endpoint with the token from query params"
+    backend_operation_id: emailPasswordReset
+    backend_spec_ref: ASVS-V2.5.3
+    static_source_ref: []
+    test_method: "auth/reset-password.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-007
+    requirement: "Change-password page requires current password and new password inputs and calls the password-change endpoint"
+    backend_operation_id: emailPasswordChange
+    backend_spec_ref: ASVS-V2.1.6
+    static_source_ref: []
+    test_method: "auth/change-password.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-008
+    requirement: "OAuth callback page processes the provider callback and handles both success and error responses from the backend"
+    backend_operation_id: oauthCallback
+    backend_spec_ref: ASVS-V2.8.1
+    static_source_ref: []
+    test_method: "auth/oauth-callback.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-009
+    requirement: "Account-settings page shows linked OAuth providers and calls the oauth-link endpoint when user links a new provider"
+    backend_operation_id: oauthLink
+    backend_spec_ref: ASVS-V2.8.2
+    static_source_ref: []
+    test_method: "auth/account-settings-link.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-010
+    requirement: "Account-settings page calls the oauth-unlink endpoint when user removes a linked provider and validates the last-auth-method guard"
+    backend_operation_id: oauthUnlink
+    backend_spec_ref: ASVS-V2.8.3
+    static_source_ref: []
+    test_method: "auth/account-settings-unlink.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-011
+    requirement: "Auth-aware layout calls getAuthState on mount and redirects unauthenticated users to the login page"
+    backend_operation_id: getAuthState
+    backend_spec_ref: ASVS-V3.3.1
+    static_source_ref: []
+    test_method: "auth/auth-state-redirect.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  # Non-user-facing operations (omitted from UI coverage per full_trio semantics)
+  - id: AUTH-FE-012
+    requirement: "Token refresh is handled transparently by the HTTP client interceptor without a dedicated page"
+    backend_operation_id: tokenRefresh
+    backend_spec_ref: ASVS-V3.2.1
+    static_source_ref: []
+    test_method: "auth/token-refresh.unit.test.ts"
+    verification_type: unit_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-013
+    requirement: "Logout action clears local auth state and calls the logout endpoint then redirects to the login page"
+    backend_operation_id: logout
+    backend_spec_ref: ASVS-V3.3.1
+    static_source_ref: []
+    test_method: "auth/logout.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUTH-FE-014
+    requirement: "Login page renders OAuth provider buttons that redirect to the oauthAuthorize endpoint for each enabled provider"
+    backend_operation_id: oauthAuthorize
+    backend_spec_ref: ASVS-V2.8.1
+    static_source_ref: []
+    test_method: "auth/oauth-authorize-redirect.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false

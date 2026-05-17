@@ -1,0 +1,242 @@
+# contracts/auth-ui.yaml
+# UI Contract — auth domain, full_trio mode.
+# ADR: TD-2026-05-17-007 (Frontend Spec Trio schema)
+# ADR: TD-2026-05-17-001 (Next.js 16 App Router)
+#
+# All 14 backend operationIds from contracts/auth-openapi.yaml are covered.
+# Every route's backend_operation_id resolves against the backend_contract_ref.
+# static_source_ref is [] for all routes (full_trio: FORBIDDEN to be non-empty).
+
+domain: auth
+backend_contract_ref: contracts/auth-openapi.yaml
+routes:
+  - path: /signup
+    method: GET
+    backend_operation_id: emailSignup
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingSpinner
+      error: FormErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: null
+      on_success: /dashboard
+
+  - path: /login
+    method: GET
+    backend_operation_id: emailLogin
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingSpinner
+      error: FormErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: null
+      on_success: /dashboard
+
+  - path: /verify-email
+    method: GET
+    backend_operation_id: emailVerify
+    static_source_ref: []
+    params: {}
+    query:
+      token:
+        type: string
+        description: "Email verification token from query string"
+    states:
+      loading: LoadingSpinner
+      error: TokenErrorBanner
+      empty: null
+      success: VerificationSuccessMessage
+    redirects:
+      on_auth_required: /login
+      on_success: /login
+
+  - path: /resend-verification
+    method: GET
+    backend_operation_id: emailResendVerification
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingSpinner
+      error: FormErrorBanner
+      empty: null
+      success: ResendSuccessMessage
+    redirects:
+      on_auth_required: null
+      on_success: null
+
+  - path: /forgot-password
+    method: GET
+    backend_operation_id: emailPasswordResetRequest
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingSpinner
+      error: FormErrorBanner
+      empty: null
+      success: ResetEmailSentMessage
+    redirects:
+      on_auth_required: null
+      on_success: null
+
+  - path: /reset-password
+    method: GET
+    backend_operation_id: emailPasswordReset
+    static_source_ref: []
+    params: {}
+    query:
+      token:
+        type: string
+        description: "Password reset token from email link"
+    states:
+      loading: LoadingSpinner
+      error: TokenErrorBanner
+      empty: null
+      success: PasswordResetSuccessMessage
+    redirects:
+      on_auth_required: null
+      on_success: /login
+
+  - path: /settings/password
+    method: GET
+    backend_operation_id: emailPasswordChange
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingSpinner
+      error: FormErrorBanner
+      empty: null
+      success: PasswordChangedMessage
+    redirects:
+      on_auth_required: /login
+      on_success: null
+
+  - path: /oauth/callback
+    method: GET
+    backend_operation_id: oauthCallback
+    static_source_ref: []
+    params: {}
+    query:
+      code:
+        type: string
+        description: "OAuth authorization code"
+      state:
+        type: string
+        description: "OAuth state parameter for CSRF protection"
+      error:
+        type: string
+        description: "OAuth error code if authorization was denied"
+    states:
+      loading: OAuthCallbackSpinner
+      error: OAuthErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: /dashboard
+
+  - path: /settings/accounts
+    method: GET
+    backend_operation_id: oauthLink
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingSpinner
+      error: FormErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: null
+
+  - path: /settings/accounts/unlink/{provider}
+    method: GET
+    backend_operation_id: oauthUnlink
+    static_source_ref: []
+    params:
+      provider:
+        type: string
+        enum: [google, naver, kakao]
+    query: {}
+    states:
+      loading: LoadingSpinner
+      error: UnlinkErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: /settings/accounts
+
+  - path: /dashboard
+    method: GET
+    backend_operation_id: getAuthState
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingSpinner
+      error: AuthErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: null
+
+  - path: /login/oauth/{provider}
+    method: GET
+    backend_operation_id: oauthAuthorize
+    static_source_ref: []
+    params:
+      provider:
+        type: string
+        enum: [google, naver, kakao]
+    query: {}
+    states:
+      loading: OAuthRedirectSpinner
+      error: OAuthErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: null
+      on_success: null
+
+  - path: /auth/refresh
+    method: GET
+    backend_operation_id: tokenRefresh
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: null
+      error: null
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: null
+
+  - path: /logout
+    method: GET
+    backend_operation_id: logout
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: null
+      error: null
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: null
+      on_success: /login

@@ -16,15 +16,22 @@
 # Usage:
 #   bash practices/evals/trio_integrity_guard.sh [--root <repo_root>]
 #   bash practices/evals/trio_integrity_guard.sh --root practices/evals/fixtures/trio_integrity/pass
+#   bash practices/evals/trio_integrity_guard.sh --domain auth
+#   bash practices/evals/trio_integrity_guard.sh --fixture frontend/tests/_fixtures/spec-trio-coverage-fail/
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+DOMAIN_FILTER=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --root) REPO_ROOT="$2"; shift 2 ;;
         --root=*) REPO_ROOT="${1#--root=}"; shift ;;
+        --fixture) REPO_ROOT="$2"; shift 2 ;;
+        --fixture=*) REPO_ROOT="${1#--fixture=}"; shift ;;
+        --domain) DOMAIN_FILTER="$2"; shift 2 ;;
+        --domain=*) DOMAIN_FILTER="${1#--domain=}"; shift ;;
         *) echo "trio_integrity_guard: unknown arg: $1" >&2; exit 2 ;;
     esac
 done
@@ -38,14 +45,24 @@ if [ ! -f "$ALLOWLIST" ]; then
     exit 1
 fi
 
-python3 - "$REPO_ROOT" "$ALLOWLIST" <<'PY'
+python3 - "$REPO_ROOT" "$ALLOWLIST" "$DOMAIN_FILTER" <<'PY'
 import sys, pathlib, yaml
 
 repo_root = pathlib.Path(sys.argv[1]).resolve()
 allowlist_path = pathlib.Path(sys.argv[2]).resolve()
+domain_filter = sys.argv[3] if len(sys.argv) > 3 else ""
 
 data = yaml.safe_load(allowlist_path.read_text()) or {}
-domains = data.get("domains", {})
+all_domains = data.get("domains", {})
+
+# Apply --domain filter if provided
+if domain_filter:
+    if domain_filter not in all_domains:
+        print(f"trio_integrity_guard: domain '{domain_filter}' not in allowlist", file=sys.stderr)
+        sys.exit(2)
+    domains = {domain_filter: all_domains[domain_filter]}
+else:
+    domains = all_domains
 
 violations = []
 files_scanned = 0
