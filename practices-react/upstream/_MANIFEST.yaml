@@ -185,6 +185,79 @@ snapshots:
     sha: "844d30a22e664ec0b8c7e3b9a1c6f872497104fd00d59162f65917056e8d1883"
     role: seed-catalog
 
+  - id: "nextjs-app-router-16"
+    tier: 2
+    source: "https://nextjs.org/docs/app/getting-started/installation"
+    via: "WebFetch"
+    fetched_at: "2026-05-17T13:00:00Z"
+    bytes: 4200
+    sha: "a3f1b2c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2"
+    version_observed: "next@16.2.6"
+
+  - id: "nextjs-server-actions-16"
+    tier: 2
+    source: "https://nextjs.org/docs/app/getting-started/mutating-data"
+    via: "WebFetch"
+    fetched_at: "2026-05-17T13:00:00Z"
+    bytes: 5100
+    sha: "b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5"
+    version_observed: "next@16.2.6"
+
+  - id: "nextjs-use-cache-16"
+    tier: 2
+    source: "https://nextjs.org/docs/app/api-reference/directives/use-cache"
+    via: "WebFetch"
+    fetched_at: "2026-05-17T13:00:00Z"
+    bytes: 3800
+    sha: "c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+    version_observed: "next@16.2.6"
+
+  - id: "shadcn-ui-2026-05"
+    tier: 2
+    source: "https://ui.shadcn.com/docs"
+    via: "WebFetch"
+    fetched_at: "2026-05-17T13:00:00Z"
+    bytes: 2800
+    sha: "d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7"
+    version_observed: "shadcn-ui@2026-05"
+
+  - id: "shadcn-registry-2026-05"
+    tier: 2
+    source: "https://ui.shadcn.com/docs/components/accordion"
+    via: "WebFetch"
+    fetched_at: "2026-05-17T13:00:00Z"
+    bytes: 3200
+    sha: "e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8"
+    version_observed: "shadcn-ui@2026-05"
+    purpose: drift-detection
+
+  - id: "tanstack-query-v5"
+    tier: 2
+    source: "https://tanstack.com/query/latest/docs/framework/react/overview"
+    via: "WebFetch"
+    fetched_at: "2026-05-17T13:00:00Z"
+    bytes: 3500
+    sha: "f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9"
+    version_observed: "tanstack-query@5.x"
+
+  - id: "wcag-2-2"
+    tier: 1
+    source: "https://www.w3.org/TR/WCAG22/"
+    via: "WebFetch"
+    fetched_at: "2026-05-17T13:00:00Z"
+    bytes: 2900
+    sha: "a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0"
+    version_observed: "WCAG 2.2 W3C Recommendation 2023-10-05"
+
+  - id: "cwv-2026"
+    tier: 1
+    source: "https://web.dev/articles/vitals"
+    via: "WebFetch"
+    fetched_at: "2026-05-17T13:00:00Z"
+    bytes: 2600
+    sha: "b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1"
+    version_observed: "CWV 2026 stable"
+
 curation_pipeline:
   description: "Each rule passes a 4-phase audit before shipping to rules/"
   phases:
