@@ -285,6 +285,35 @@ snapshots:
     sha: "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"
     purpose: otp-input-evidence
 
+  - id: "tanstack-virtual-2026-05"
+    tier: 2
+    source: "https://tanstack.com/virtual/v3/docs/introduction"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 1920
+    sha: "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5"
+    version_observed: "@tanstack/react-virtual@3.x"
+    purpose: virtualized-table-evidence
+
+  - id: "react-19-error-boundary"
+    tier: 2
+    source: "https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 1760
+    sha: "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6"
+    version_observed: "react@19.2"
+    purpose: error-boundary-evidence
+
+  - id: "mdn-navigator-online-2026-05"
+    tier: 1
+    source: "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/onLine"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 1540
+    sha: "f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7"
+    purpose: offline-banner-evidence
+
 curation_pipeline:
   description: "Each rule passes a 4-phase audit before shipping to rules/"
   phases:
