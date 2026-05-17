@@ -1,0 +1,84 @@
+# blueprints/practices-ui-manifest.yaml
+# UI Policy Manifest — practices domain, frontend_only mode.
+#
+# Overrides design tokens for the practices catalog viewer.
+# trio_integrity_guard.sh validates:
+#   a11y.contrast_min >= 4.5  (WCAG 2.2 SC 1.4.3)
+#   cwv.lcp_ms <= 2500
+#   cwv.inp_ms <= 200
+#   cwv.cls <= 0.1
+#   motion.respect_prefers_reduced_motion == true
+
+domain: practices
+domain_mode: frontend_only
+
+tokens_override:
+  color:
+    color_primary: "oklch(48% 0.18 260)"
+    color_primary_hover: "oklch(43% 0.18 260)"
+    color_surface: "oklch(99% 0 0)"
+    color_surface_subtle: "oklch(97% 0.004 260)"
+    color_text: "oklch(18% 0 0)"
+    color_muted: "oklch(52% 0 0)"
+    color_error: "oklch(55% 0.21 25)"
+    color_border: "oklch(88% 0.004 260)"
+    color_impact_high: "oklch(55% 0.18 25)"
+    color_impact_medium: "oklch(60% 0.15 75)"
+    color_impact_low: "oklch(55% 0.12 145)"
+    color_tag_bg: "oklch(94% 0.008 260)"
+  typography:
+    font_sans: "'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif"
+    font_mono: "'JetBrains Mono', 'Fira Code', monospace"
+    text_base: "clamp(1rem, 0.92rem + 0.4vw, 1.125rem)"
+    text_heading: "clamp(1.5rem, 1.2rem + 1.5vw, 2rem)"
+    text_rule_title: "clamp(1.125rem, 1rem + 0.625vw, 1.25rem)"
+    text_code: "clamp(0.875rem, 0.82rem + 0.28vw, 0.9375rem)"
+  spacing:
+    space_rule_gap: "clamp(0.75rem, 0.6rem + 0.75vw, 1.25rem)"
+    space_section: "clamp(2rem, 1.5rem + 2.5vw, 4rem)"
+    space_tag_px: "0.5rem"
+    space_tag_py: "0.125rem"
+  motion:
+    duration_fast: "150ms"
+    duration_normal: "300ms"
+    ease_out: "cubic-bezier(0.16, 1, 0.3, 1)"
+
+a11y:
+  wcag_level: "2.2-AA"
+  axe_rules:
+    - color-contrast
+    - label
+    - button-name
+    - aria-required-attr
+    - aria-valid-attr-value
+    - heading-order
+  contrast_min: 4.5
+
+cwv:
+  lcp_ms: 2500
+  inp_ms: 200
+  cls: 0.1
+  fcp_ms: 1500
+  tbt_ms: 200
+
+motion:
+  respect_prefers_reduced_motion: true
+  default_duration_ms: 300
+
+bundle_budgets:
+  landing_page_js_kb: 150
+  app_page_js_kb: 300
+  landing_page_css_kb: 30
+  app_page_css_kb: 50
+
+static_loading:
+  strategy: server_components_fs
+  cache: react_cache
+  rationale: "Rules are static markdown files; read with fs.readFile in RSC, cache with React cache()"
+
+rule_display:
+  impact_badge: true
+  tags_visible: true
+  evidence_visible: true
+  markdown_rendered: true
+  code_highlight: true

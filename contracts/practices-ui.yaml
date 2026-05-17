@@ -1,0 +1,64 @@
+# contracts/practices-ui.yaml
+# UI Contract — practices domain, frontend_only mode.
+#
+# No backend OpenAPI to bind to (backend_contract_ref: null).
+# All routes have backend_operation_id: null and non-empty static_source_ref.
+# The practices viewer reads from static markdown files at build/request time.
+#
+# trio_integrity_guard --domain practices validates:
+#   - This file exists (MISSING_FRONTEND_SPEC)
+#   - All routes have backend_operation_id: null
+#   - All static_source_ref entries resolve to ≥1 file at repo root
+
+version: "1.0"
+domain: practices
+domain_mode: frontend_only
+backend_contract_ref: null
+
+routes:
+  - path: /practices
+    method: GET
+    backend_operation_id: null
+    static_source_ref:
+      - practices/AGENTS.md
+      - practices-react/AGENTS.md
+    description: "INDEX — list all Java + React rules with title, impact, tags; grouped by catalog"
+    states:
+      loading: LoadingBoundary
+      success: null
+      empty: EmptyState
+      error: null
+
+  - path: /practices/category/[prefix]
+    method: GET
+    backend_operation_id: null
+    static_source_ref:
+      - practices/rules/async-virtual-thread-executor.md
+      - practices-react/rules/async-parallel.md
+    description: "CATEGORY — rules filtered by prefix (e.g. async, cache, build)"
+    params:
+      prefix:
+        type: string
+        description: "Rule prefix (e.g. async, cache, security, bundle)"
+    states:
+      loading: LoadingBoundary
+      success: null
+      empty: EmptyState
+      error: null
+
+  - path: /practices/rule/[id]
+    method: GET
+    backend_operation_id: null
+    static_source_ref:
+      - practices/rules/async-virtual-thread-executor.md
+      - practices-react/rules/async-parallel.md
+    description: "DETAIL — single rule rendered as markdown with metadata (title, impact, tags, evidence)"
+    params:
+      id:
+        type: string
+        description: "Rule ID derived from filename without .md extension"
+    states:
+      loading: LoadingBoundary
+      success: null
+      empty: null
+      error: NotFoundBanner
