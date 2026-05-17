@@ -1,0 +1,119 @@
+# specs/audit-log-frontend-l0.yaml
+# Page Compliance Spec — audit-log domain, full_trio mode.
+#
+# Every item's backend_operation_id resolves to contracts/audit-log-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in specs/audit-log-l0.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+
+domain: audit-log
+domain_mode: full_trio
+backend_spec_ref: specs/audit-log-l0.yaml
+frontend_required: true
+
+items:
+  - id: AUDIT-FE-001
+    requirement: >
+      List page renders VirtualizedTable with audit log entries; handles >10k rows
+      without DOM node explosion (renders only visible rows via @tanstack/react-virtual).
+    backend_operation_id: listAuditLogs
+    backend_spec_ref: AUDIT-LIST-001
+    static_source_ref: []
+    test_method: "audit-log/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/audit-log-ui-manifest.yaml#performance"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUDIT-FE-002
+    requirement: >
+      List page renders FilterBar with filter inputs for actor, resource type,
+      action, outcome, and date range (from/to). Submitting the filter updates
+      the URL query params and re-fetches the list.
+    backend_operation_id: listAuditLogs
+    backend_spec_ref: AUDIT-LIST-002
+    static_source_ref: []
+    test_method: "audit-log/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/audit-log-ui-manifest.yaml#filter"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUDIT-FE-003
+    requirement: >
+      List page supports pagination via page + size query params; Pagination
+      component renders and links to prev/next pages.
+    backend_operation_id: listAuditLogs
+    backend_spec_ref: AUDIT-LIST-001
+    static_source_ref: []
+    test_method: "audit-log/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/audit-log-ui-manifest.yaml#pagination"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUDIT-FE-004
+    requirement: >
+      Detail page renders full metadata for a single audit log entry identified
+      by id from path params; displays actor, action, resource, outcome, timestamp,
+      correlationId, and JSON metadata preview.
+    backend_operation_id: getAuditLog
+    backend_spec_ref: AUDIT-LIST-001
+    static_source_ref: []
+    test_method: "audit-log/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/audit-log-ui-manifest.yaml#detail"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUDIT-FE-005
+    requirement: >
+      Export page renders a form with format selector (CSV/JSON) and optional
+      filter fields; onSubmit calls exportAuditLogs endpoint (POST) and shows
+      the returned jobId with a polling link to check export status.
+    backend_operation_id: exportAuditLogs
+    backend_spec_ref: AUDIT-EXPORT-001
+    static_source_ref: []
+    test_method: "audit-log/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/audit-log-ui-manifest.yaml#export"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUDIT-FE-006
+    requirement: >
+      Export page shows an access-denied notice when the current user lacks
+      ROLE_ADMIN or ROLE_AUDITOR; the export form is not rendered in that case.
+    backend_operation_id: exportAuditLogs
+    backend_spec_ref: AUDIT-EXPORT-002
+    static_source_ref: []
+    test_method: "audit-log/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/audit-log-ui-manifest.yaml#export"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUDIT-FE-007
+    requirement: >
+      List page shows EmptyState component when no audit log entries match the
+      current filter, with a prompt to clear filters.
+    backend_operation_id: listAuditLogs
+    backend_spec_ref: AUDIT-LIST-001
+    static_source_ref: []
+    test_method: "audit-log/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/audit-log-ui-manifest.yaml#empty_state"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: AUDIT-FE-008
+    requirement: >
+      List page shows ErrorBoundary when the listAuditLogs API call fails; the
+      error boundary renders a retry prompt without crashing the entire page.
+    backend_operation_id: listAuditLogs
+    backend_spec_ref: AUDIT-LIST-001
+    static_source_ref: []
+    test_method: "audit-log/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/audit-log-ui-manifest.yaml#error_handling"
+    coverage_threshold: 1.0
+    backend_only_marker: false

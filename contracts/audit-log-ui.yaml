@@ -1,0 +1,80 @@
+# contracts/audit-log-ui.yaml
+# UI contract for the audit-log domain.
+# Defines routes, components, and data bindings for the L4 audit-log frontend vertical.
+
+domain: audit-log
+domain_mode: full_trio
+backend_contract_ref: contracts/audit-log-openapi.yaml
+spec_ref: specs/audit-log-frontend-l0.yaml
+
+routes:
+  - path: "/(audit-log)"
+    component: AuditLogListPage
+    backend_operation_id: listAuditLogs
+    spec_items: [AUDIT-FE-001, AUDIT-FE-002, AUDIT-FE-003, AUDIT-FE-007, AUDIT-FE-008]
+    description: >
+      Paginated, filterable list of audit log entries. Uses VirtualizedTable for
+      performance with >10k rows. FilterBar provides actor/resource/action/outcome/date
+      filtering. Results update on filter change and are URL-synced.
+
+  - path: "/(audit-log)/[id]"
+    component: AuditLogDetailPage
+    backend_operation_id: getAuditLog
+    spec_items: [AUDIT-FE-004]
+    description: >
+      Full detail view for a single audit log entry. Shows all fields including
+      metadata JSON, correlationId, and userAgent.
+
+  - path: "/(audit-log)/export"
+    component: AuditLogExportPage
+    backend_operation_id: exportAuditLogs
+    spec_items: [AUDIT-FE-005, AUDIT-FE-006]
+    description: >
+      Export request form. Format selector (CSV/JSON) + optional filters.
+      Requires ROLE_ADMIN or ROLE_AUDITOR; shows access-denied notice for others.
+
+components:
+  AuditLogListPage:
+    imports_l2:
+      - virtualized-table    # handles >10k rows (SP15, AUDIT-FE-001)
+      - filter-bar            # actor/resource/action/outcome/date filters (AUDIT-FE-002)
+      - pagination            # page navigation (AUDIT-FE-003)
+      - empty-state           # no results with clear-filters prompt (AUDIT-FE-007)
+      - error-boundary        # API failure recovery (AUDIT-FE-008)
+    state:
+      filter: "URL query params (actorId, resourceType, action, outcome, from, to)"
+      pagination: "URL query params (page, size)"
+      data: "useQuery(listAuditLogs, { page, size, ...filters })"
+
+  AuditLogDetailPage:
+    imports_l2:
+      - detail-page           # L3 detail page skeleton
+    state:
+      data: "useQuery(getAuditLog, { id: params.id })"
+
+  AuditLogExportPage:
+    imports_l2:
+      - form                  # export request form
+    state:
+      submission: "useMutation(exportAuditLogs)"
+      jobId: "local state after submission"
+      authCheck: "session role check before rendering form"
+
+data_flows:
+  list:
+    trigger: "Page load or filter change"
+    request: "GET /api/audit-logs?page=N&size=50&actorId=...&resourceType=...&action=...&outcome=...&from=...&to=..."
+    response: "AuditLogPage { content[], totalElements, totalPages, page, size }"
+    binding: "VirtualizedTable.data = content; Pagination.totalPages = totalPages"
+
+  detail:
+    trigger: "Route param id changes"
+    request: "GET /api/audit-logs/{id}"
+    response: "AuditLogDetail { id, actorId, actorIp, action, resourceType, resourceId, outcome, timestamp, metadata, correlationId, userAgent }"
+    binding: "Detail fields mapped to labeled display rows"
+
+  export:
+    trigger: "User submits export form"
+    request: "POST /api/audit-logs/export { format, filters... }"
+    response: "ExportJobResponse { jobId, status: PENDING }"
+    post_submit: "Show jobId + link to poll GET /api/audit-logs/export/{jobId}"

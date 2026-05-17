@@ -1,0 +1,131 @@
+template_id: audit-log-ui-blueprint
+family: scaffold
+status: draft
+confidence: high
+stack:
+  frontend: next.js
+  contract: audit-log-openapi
+  repo_shape: single-repo
+
+# ─── Performance ─────────────────────────────────────────────────────────────
+# Audit logs can accumulate millions of rows. The UI MUST NOT attempt to render
+# all rows in the DOM at once.
+performance:
+  list_rendering:
+    strategy: server_side_pagination
+    page_sizes_allowed: [50, 100, 200]
+    default_page_size: 50
+    virtualization:
+      required: true
+      library: "@tanstack/react-virtual"
+      rationale: >
+        Even with server-side pagination, individual pages can contain 50–200 rows.
+        Virtualization ensures smooth scrolling and avoids layout thrash on low-end devices.
+      spec_item: AUDIT-FE-001
+  column_sort:
+    strategy: server_side       # Sort params sent to API; no client-side re-sort
+  initial_load_target_ms: 1000  # Time to meaningful paint of first 50 rows
+
+# ─── Filter ──────────────────────────────────────────────────────────────────
+filter:
+  fields:
+    - name: actorId
+      label: "Actor"
+      input_type: text
+      api_param: actorId
+    - name: resourceType
+      label: "Resource Type"
+      input_type: select
+      options_source: static     # e.g., ["payment", "user", "item"]
+      api_param: resourceType
+    - name: action
+      label: "Action"
+      input_type: text
+      api_param: action
+    - name: outcome
+      label: "Outcome"
+      input_type: select
+      options: [SUCCESS, FAILURE]
+      api_param: outcome
+    - name: from
+      label: "From"
+      input_type: datetime-local
+      api_param: from
+    - name: to
+      label: "To"
+      input_type: datetime-local
+      api_param: to
+  url_sync: true                # Filter state is persisted in URL query params
+  spec_item: AUDIT-FE-002
+
+# ─── Pagination ──────────────────────────────────────────────────────────────
+pagination:
+  strategy: page_number         # page=N&size=50
+  url_sync: true
+  show_total: true              # "Showing 1-50 of 12,483 entries"
+  spec_item: AUDIT-FE-003
+
+# ─── Detail ──────────────────────────────────────────────────────────────────
+detail:
+  fields_to_display:
+    - id
+    - actorId
+    - actorIp
+    - action
+    - resourceType
+    - resourceId
+    - outcome
+    - timestamp
+    - correlationId
+    - userAgent
+    - metadata                  # Rendered as collapsible JSON block
+  spec_item: AUDIT-FE-004
+
+# ─── Export ──────────────────────────────────────────────────────────────────
+export:
+  formats: [CSV, JSON]
+  authorization_check: "session role in [ADMIN, AUDITOR]"
+  access_denied_behavior: "render AccessDenied notice; do not render form"
+  post_submit_behavior: "show jobId + polling link + status badge"
+  poll_interval_ms: 3000        # Re-fetch status every 3 seconds while PENDING/PROCESSING
+  spec_items: [AUDIT-FE-005, AUDIT-FE-006]
+
+# ─── Empty state ─────────────────────────────────────────────────────────────
+empty_state:
+  message: "No audit log entries match your current filters."
+  cta: "Clear filters"
+  cta_action: "reset all filter params and refetch"
+  spec_item: AUDIT-FE-007
+
+# ─── Error handling ──────────────────────────────────────────────────────────
+error_handling:
+  list_page: "Wrap VirtualizedTable in ErrorBoundary; show retry prompt on API failure"
+  detail_page: "Show inline error state with back-navigation on 404/500"
+  export_page: "Show inline error message on POST failure"
+  spec_item: AUDIT-FE-008
+
+# ─── Accessibility ───────────────────────────────────────────────────────────
+a11y:
+  table:
+    - "VirtualizedTable must have role='grid' or role='table' on the container"
+    - "Column headers must use <th> with aria-sort for sortable columns"
+    - "Row click must be keyboard-accessible (Enter/Space)"
+  filter:
+    - "Filter inputs must have associated <label> elements"
+    - "Date inputs must use datetime-local with accessible label"
+  pagination:
+    - "Prev/Next buttons must have aria-label"
+    - "Current page must have aria-current='page'"
+
+# ─── RBAC UI enforcement ──────────────────────────────────────────────────────
+rbac:
+  list:
+    required_role: any_authenticated
+    unauthorized_action: redirect_to_login
+  detail:
+    required_role: any_authenticated
+    unauthorized_action: redirect_to_login
+  export:
+    required_role: [ADMIN, AUDITOR]
+    unauthorized_action: render_access_denied_notice
+    spec_item: AUDIT-FE-006
