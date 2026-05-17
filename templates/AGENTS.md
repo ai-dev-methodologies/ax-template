@@ -3,7 +3,7 @@ sentinel:
   source_concat_sha256: "93f41a7c7c85fcb18bde2bd4cb1977144e9b2bfbe8e652790f8289bdbee6067d"
   source_file_count: 14
   generated_by: "templates/generate_agents.sh"
-  generated_at: "2026-05-17T16:20:34Z"
+  generated_at: "2026-05-17T17:18:22Z"
 ---
 
 # templates/ — AGENTS.md (auto-generated)
