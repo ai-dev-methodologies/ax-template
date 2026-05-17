@@ -1,0 +1,91 @@
+template_id: notification-ui-blueprint
+family: scaffold
+status: draft
+confidence: medium
+stack:
+  frontend: react
+  framework: next.js
+  styling: tailwindcss
+  state: tanstack-query
+
+when_to_use:
+  - adding notification inbox to a React + Next.js app
+  - wiring notification bell with unread badge to app header
+  - per-user channel preference settings
+
+not_for:
+  - push notifications (native mobile)
+  - full messaging / chat UI
+  - bulk-send admin panels
+
+# ─── page policies ────────────────────────────────────────────────────────────
+
+inbox:
+  route: /(notification)/inbox
+  component_composition: [NotificationList, VirtualizedTable, FilterBar, EmptyState]
+  pagination: server-side   # page/size query params
+  filter_by_status: true    # UNREAD/READ/ALL toggle
+  default_status_filter: UNREAD
+  unread_badge: from-header   # reads X-Unread-Count response header
+  a11y:
+    aria_live: polite   # announce new notifications
+    role: list
+  trace:
+    NOTIF-FE-001: inbox loads + lists via virtualized-table
+    NOTIF-LIST-001: paginated list
+    NOTIF-LIST-002: status filter + badge
+
+detail:
+  route: /(notification)/[id]
+  component_composition: [NotificationItem, ConfirmDialog]
+  auto_mark_read: true    # call PATCH markNotificationRead on mount
+  dismiss_action: true    # DELETE dismissNotification → navigate /inbox
+  back_navigation: /inbox
+  trace:
+    NOTIF-FE-002: detail auto mark-read
+    NOTIF-FE-006: dismiss navigates to inbox
+    NOTIF-READ-001: idempotent mark-read
+    NOTIF-DISMISS-001: soft-delete dismiss
+
+settings:
+  route: /(notification)/settings
+  component_composition: [Switch, Button, FormField]
+  load_on_mount: GET getNotificationPreferences
+  submit_action: PATCH updateNotificationPreferences
+  partial_update: true    # only changed fields sent
+  optimistic_update: true   # toggle state updates immediately; reverts on error
+  trace:
+    NOTIF-FE-003: settings loads preferences
+    NOTIF-FE-004: settings submits patch
+
+bell:
+  component: NotificationBell
+  data_source: GET /api/notifications?status=UNREAD&size=1   # for unread count
+  unread_badge: X-Unread-Count header
+  poll_interval_ms: 30000   # 30s polling (SSE upgrade optional)
+  a11y:
+    aria_label: "Notifications ({{count}} unread)"
+    role: button
+  trace:
+    NOTIF-FE-005: bell shows unread count
+
+# ─── a11y policy ──────────────────────────────────────────────────────────────
+a11y:
+  wcag_level: AA
+  keyboard_nav: true
+  focus_management:
+    - after mark-read: focus stays on detail
+    - after dismiss: focus returns to inbox list item
+
+# ─── animation / UX policy ────────────────────────────────────────────────────
+motion:
+  unread_badge_animate: scale-in on count change
+  notification_item_enter: fade-in
+  mark_read_transition: opacity-reduce on READ status
+
+# ─── error handling policy ────────────────────────────────────────────────────
+errors:
+  list_failure: EmptyState with retry action
+  detail_not_found: redirect to /inbox (notification may have been dismissed elsewhere)
+  preferences_load_failure: show defaults (all enabled) with warning toast
+  mark_read_failure: optimistic update reverts; toast error shown

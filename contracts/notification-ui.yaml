@@ -1,0 +1,45 @@
+schema_version: "1.0"
+domain: notification
+domain_mode: full_trio
+backend_contract_ref: contracts/notification-openapi.yaml
+
+routes:
+  # ─── authenticated notification routes ──────────────────────────────────────
+  - path: "/(notification)/inbox"
+    label: "Notification Inbox"
+    backend_operation_id: listNotifications
+    description: "Paginated inbox list using VirtualizedTable; status filter UNREAD/READ/ALL; X-Unread-Count badge"
+
+  - path: "/(notification)/settings"
+    label: "Notification Settings"
+    backend_operation_id: getNotificationPreferences
+    description: "Per-user channel preference toggles (in-app, email); submits PATCH updateNotificationPreferences"
+
+  - path: "/(notification)/[id]"
+    label: "Notification Detail"
+    backend_operation_id: markNotificationRead
+    description: "Single notification view; auto-mark-read on mount; dismiss (DELETE) navigates back to inbox"
+
+  # ─── admin routes (optional) ────────────────────────────────────────────────
+  - path: "/(notification)/admin/send"
+    label: "Send Notification (Admin)"
+    backend_operation_id: sendNotification
+    description: "Admin form to send a notification to a target user (ROLE_ADMIN required)"
+    admin_only: true
+
+navigation:
+  sidebar_items:
+    - href: "/inbox"
+      label: "Inbox"
+      icon: "bell"
+      badge_source: "X-Unread-Count"
+    - href: "/settings"
+      label: "Settings"
+      icon: "settings"
+
+  header_bell:
+    component: NotificationBell
+    poll_interval_ms: 30000   # fallback polling when SSE unavailable
+    sse_endpoint: null        # optional: /api/notifications/stream (not in base spec)
+
+policy_ref: blueprints/notification-ui-manifest.yaml

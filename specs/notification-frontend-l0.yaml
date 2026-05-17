@@ -1,0 +1,81 @@
+# specs/notification-frontend-l0.yaml
+# Page Compliance Spec — notification domain, full_trio mode.
+# ADR: TD-2026-05-17-007 (Frontend Spec Trio schema)
+# ADR: TD-2026-05-17-001 (Next.js 16 App Router)
+# ADR: TD-2026-05-17-006 (Playwright + Vitest + MSW)
+#
+# Every item's backend_operation_id resolves to contracts/notification-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in specs/notification-l0.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+
+domain: notification
+domain_mode: full_trio
+backend_spec_ref: specs/notification-l0.yaml
+frontend_required: true
+
+items:
+  - id: NOTIF-FE-001
+    requirement: "Inbox page renders notification list using VirtualizedTable; supports status filter (UNREAD/READ/ALL); displays unread badge count from X-Unread-Count header"
+    backend_operation_id: listNotifications
+    backend_spec_ref: NOTIF-LIST-001
+    static_source_ref: []
+    test_method: "notification/inbox.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/notification-ui-manifest.yaml#inbox"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: NOTIF-FE-002
+    requirement: "Notification detail page loads a single notification and renders mark-read action; PATCH /api/notifications/{id}/read is called when the user reads the notification"
+    backend_operation_id: markNotificationRead
+    backend_spec_ref: NOTIF-READ-001
+    static_source_ref: []
+    test_method: "notification/detail.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/notification-ui-manifest.yaml#detail"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: NOTIF-FE-003
+    requirement: "Settings page renders notification preference form with inAppEnabled and emailEnabled toggles; PATCH /api/notifications/preferences is called on submit"
+    backend_operation_id: getNotificationPreferences
+    backend_spec_ref: NOTIF-PREF-001
+    static_source_ref: []
+    test_method: "notification/settings.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/notification-ui-manifest.yaml#settings"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: NOTIF-FE-004
+    requirement: "Settings page preference form submits PATCH /api/notifications/preferences with partial update; response updates the form state"
+    backend_operation_id: updateNotificationPreferences
+    backend_spec_ref: NOTIF-PREF-002
+    static_source_ref: []
+    test_method: "notification/settings-update.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/notification-ui-manifest.yaml#settings"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: NOTIF-FE-005
+    requirement: "NotificationBell component in the app header displays unread badge count; polling or SSE updates the count without full page reload"
+    backend_operation_id: listNotifications
+    backend_spec_ref: NOTIF-LIST-002
+    static_source_ref: []
+    test_method: "notification/bell.unit.test.ts"
+    verification_type: unit_test
+    policy_ref: "blueprints/notification-ui-manifest.yaml#bell"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: NOTIF-FE-006
+    requirement: "Dismiss action on notification detail page calls DELETE /api/notifications/{id} and navigates back to inbox"
+    backend_operation_id: dismissNotification
+    backend_spec_ref: NOTIF-DISMISS-001
+    static_source_ref: []
+    test_method: "notification/detail.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/notification-ui-manifest.yaml#detail"
+    coverage_threshold: 1.0
+    backend_only_marker: false
