@@ -1,0 +1,397 @@
+openapi: 3.0.3
+info:
+  title: ax-template Audit Log API
+  description: |
+    Audit log domain contract for ax-template. Covers list, get, and export operations.
+    5th domain blueprint following auth / CRUD / rate-limit / payment, using the same
+    5-step METHODOLOGY playbook.
+
+    **Immutability**: Audit log entries are read-only after creation. No PUT/PATCH/DELETE
+    endpoints are exposed. All mutations go through the @AuditLoggingAspect AOP interceptor.
+
+    **Authorization**:
+    - LIST / GET: requires authenticated session (any role).
+    - EXPORT: requires ROLE_ADMIN or ROLE_AUDITOR (see AUDIT-EXPORT-002).
+
+    **Pagination**: GET /api/audit-logs uses page+size. Default page size is 50.
+    Maximum page size is 200.
+
+    **Filtering**: All filter params are optional and combined with AND semantics.
+    Date params use ISO 8601 (e.g., 2025-01-01T00:00:00Z).
+
+    **Error format**: All non-2xx responses use RFC 7807 ProblemDetail with a stable `type` URI.
+  version: "0.1.0"
+servers:
+  - url: /api
+
+paths:
+  /audit-logs:
+    get:
+      operationId: listAuditLogs
+      summary: List audit log entries
+      description: |
+        Returns a paginated list of audit log entries, sorted by timestamp descending.
+        Supports filtering by actorId, resourceType, resourceId, action, outcome,
+        and date range.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Zero-based page number.
+        - in: query
+          name: size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: Page size (max 200).
+        - in: query
+          name: actorId
+          schema:
+            type: string
+          description: Filter by actor user ID.
+        - in: query
+          name: resourceType
+          schema:
+            type: string
+          description: Filter by resource type (e.g., "payment", "user", "item").
+        - in: query
+          name: resourceId
+          schema:
+            type: string
+          description: Filter by resource ID.
+        - in: query
+          name: action
+          schema:
+            type: string
+          description: Filter by action verb (e.g., "CREATE", "UPDATE", "DELETE").
+        - in: query
+          name: outcome
+          schema:
+            type: string
+            enum: [SUCCESS, FAILURE]
+          description: Filter by outcome.
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+          description: Filter entries with timestamp >= from (ISO 8601).
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+          description: Filter entries with timestamp <= to (ISO 8601).
+      responses:
+        '200':
+          description: Paginated audit log list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogPage'
+        '400':
+          description: Invalid query parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /audit-logs/{id}:
+    get:
+      operationId: getAuditLog
+      summary: Get a single audit log entry
+      description: |
+        Returns the full details of a single audit log entry by ID.
+        Returns 404 if not found (IDOR-safe: no 403 exposure of existence).
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Audit log entry ID.
+      responses:
+        '200':
+          description: Audit log entry detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogDetail'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Audit log entry not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /audit-logs/export:
+    post:
+      operationId: exportAuditLogs
+      summary: Request a bulk audit log export
+      description: |
+        Enqueues an asynchronous export job for audit log entries matching the given
+        filter criteria. Returns HTTP 202 with an export job ID.
+
+        Caller polls GET /api/audit-logs/export/{jobId} to check status.
+
+        **Authorization**: Requires ROLE_ADMIN or ROLE_AUDITOR (AUDIT-EXPORT-002).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequest'
+      responses:
+        '202':
+          description: Export job accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '400':
+          description: Invalid export request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '403':
+          description: Insufficient authority (requires ADMIN or AUDITOR role).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /audit-logs/export/{jobId}:
+    get:
+      operationId: getExportJobStatus
+      summary: Poll export job status
+      description: |
+        Returns the current status of an export job.
+        When status is COMPLETED, the response includes a download URL valid for 1 hour.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Export job ID returned by POST /api/audit-logs/export.
+      responses:
+        '200':
+          description: Export job status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobStatus'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Export job not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuditLogSummary:
+      type: object
+      required: [id, actorId, action, resourceType, resourceId, outcome, timestamp]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique audit log entry ID.
+        actorId:
+          type: string
+          description: User ID of the actor who performed the action (may be masked per PII policy).
+        actorIp:
+          type: string
+          description: IP address of the actor (masked per PII policy if pii.store-full=false).
+        action:
+          type: string
+          description: Action verb (e.g., CREATE, UPDATE, DELETE, LOGIN, EXPORT).
+        resourceType:
+          type: string
+          description: Type of the resource affected (e.g., payment, user, item).
+        resourceId:
+          type: string
+          description: ID of the resource affected.
+        outcome:
+          type: string
+          enum: [SUCCESS, FAILURE]
+          description: Whether the operation succeeded or failed.
+        timestamp:
+          type: string
+          format: date-time
+          description: When the operation occurred (UTC).
+
+    AuditLogDetail:
+      allOf:
+        - $ref: '#/components/schemas/AuditLogSummary'
+        - type: object
+          properties:
+            metadata:
+              type: object
+              additionalProperties: true
+              description: |
+                Optional structured metadata captured at the time of the operation.
+                Contents are domain-specific (e.g., changed fields, request parameters).
+            correlationId:
+              type: string
+              description: X-Correlation-Id from the originating request, for trace linkage.
+            userAgent:
+              type: string
+              description: User-Agent header value from the originating request.
+
+    AuditLogPage:
+      type: object
+      required: [content, totalElements, totalPages, page, size]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogSummary'
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of entries matching the filter.
+        totalPages:
+          type: integer
+          description: Total number of pages.
+        page:
+          type: integer
+          description: Current zero-based page number.
+        size:
+          type: integer
+          description: Page size used for this response.
+
+    ExportRequest:
+      type: object
+      required: [format]
+      properties:
+        format:
+          type: string
+          enum: [CSV, JSON]
+          description: Export file format.
+        actorId:
+          type: string
+          description: Filter by actor user ID (optional).
+        resourceType:
+          type: string
+          description: Filter by resource type (optional).
+        action:
+          type: string
+          description: Filter by action verb (optional).
+        outcome:
+          type: string
+          enum: [SUCCESS, FAILURE]
+          description: Filter by outcome (optional).
+        from:
+          type: string
+          format: date-time
+          description: Start of date range (optional, ISO 8601).
+        to:
+          type: string
+          format: date-time
+          description: End of date range (optional, ISO 8601).
+
+    ExportJobResponse:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          description: Unique export job ID. Use to poll status.
+        status:
+          type: string
+          enum: [PENDING]
+          description: Initial status is always PENDING.
+
+    ExportJobStatus:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+        downloadUrl:
+          type: string
+          description: |
+            Pre-signed download URL. Present only when status=COMPLETED.
+            Valid for 1 hour after generation.
+        errorMessage:
+          type: string
+          description: Error description. Present only when status=FAILED.
+        recordCount:
+          type: integer
+          format: int64
+          description: Number of records exported. Present when status=COMPLETED.
+
+    ProblemDetail:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Stable URI identifying the problem type.
+        title:
+          type: string
+          description: Short human-readable summary.
+        status:
+          type: integer
+          description: HTTP status code.
+        detail:
+          type: string
+          description: Human-readable explanation of the specific occurrence.
+        instance:
+          type: string
+          format: uri
+          description: URI reference identifying the specific occurrence.

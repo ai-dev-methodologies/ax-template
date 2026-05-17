@@ -1,0 +1,143 @@
+template_id: audit-log-blueprint
+family: scaffold
+status: draft
+confidence: high
+stack:
+  backend: spring-boot
+  contract: openapi
+  repo_shape: single-repo
+
+# ─── Audit policy ────────────────────────────────────────────────────────────
+# Defines what must be recorded, the non-blocking failure model, and immutability guarantee.
+audit_policy:
+  mandatory_fields:
+    - actorId        # Authenticated user ID from SecurityContext
+    - actorIp        # Remote IP from HttpServletRequest (subject to pii_redaction)
+    - action         # Verb: CREATE | UPDATE | DELETE | LOGIN | EXPORT | VIEW | ...
+    - resourceType   # Domain entity type (e.g., payment, user, item)
+    - resourceId     # Entity primary key as string
+    - outcome        # SUCCESS | FAILURE
+    - timestamp      # UTC instant of the operation
+    - correlationId  # X-Correlation-Id from the originating request
+
+  optional_fields:
+    - metadata       # Structured JSON: changed fields, request params, diff snapshot
+    - userAgent      # HTTP User-Agent for forensic tracing
+
+  non_blocking_failure:
+    description: >
+      If AuditLog persistence fails (e.g., DB error), the originating business operation
+      still completes normally. The aspect swallows the exception and logs at ERROR level.
+    mechanism: "@Transactional(propagation = REQUIRES_NEW) on AuditLogService.record()"
+    trace:
+      AUDIT-RECORD-003: non-blocking aspect failure model
+
+  immutability:
+    description: >
+      Audit entries are append-only. No UPDATE or DELETE is permitted from application code.
+      All JPA columns are marked updatable=false. AuditLogRepository exposes only
+      findAll/findById/save read/write operations — no deleteById.
+    trace:
+      AUDIT-RECORD-002: immutable column constraint + repository contract
+
+# ─── Retention tiers ─────────────────────────────────────────────────────────
+# Three standard retention tiers. Each resource type maps to a tier via
+# application properties: audit.retention.resource.<type>=SHORT|STANDARD|LONG
+retention:
+  tiers:
+    SHORT:
+      days_to_keep: 30
+      use_case: "Transient operational events (e.g., search queries, view events)"
+    STANDARD:
+      days_to_keep: 90
+      use_case: "Default for most resource mutations (CRUD operations)"
+    LONG:
+      days_to_keep: 365
+      use_case: "High-risk operations: auth events, payment mutations, admin actions"
+
+  defaults:
+    payment: LONG
+    auth: LONG
+    user: STANDARD
+    item: STANDARD
+    default: STANDARD
+
+  purge_schedule:
+    cron: "0 0 2 * * *"       # Daily at 02:00 UTC
+    warning_threshold: 10000  # Emit WARN log if deleted count exceeds this
+    trace:
+      AUDIT-RETENTION-001: purge-on-schedule
+      AUDIT-RETENTION-002: three-tier configuration
+      AUDIT-RETENTION-003: cron-schedule + warning threshold
+
+# ─── PII redaction policy ─────────────────────────────────────────────────────
+# By default, PII fields are stored in masked form. Set audit.pii.store-full=true
+# in application properties to disable masking (requires DPO approval in production).
+pii_redaction:
+  default: masked          # masked | full
+  pii_fields:
+    actorIp:
+      mask_pattern: "replace last octet with 'xxx' for IPv4; mask last 64 bits for IPv6"
+      example_masked: "192.168.1.xxx"
+    actorEmail:
+      mask_pattern: "first char + '***' + '@' + domain"
+      example_masked: "j***@example.com"
+    actorUsername:
+      mask_pattern: "first 3 chars + '***'"
+      example_masked: "joh***"
+  property: "audit.pii.store-full"
+  trace:
+    AUDIT-PII-001: pii-redaction-by-default
+
+# ─── Export policy ───────────────────────────────────────────────────────────
+export:
+  formats: [CSV, JSON]
+  authorization: "ROLE_ADMIN or ROLE_AUDITOR"
+  processing: async          # Returns 202; client polls for status
+  download_url_ttl_hours: 1  # Pre-signed URL valid for 1 hour after generation
+  max_records_per_export: 500000
+  job_statuses: [PENDING, PROCESSING, COMPLETED, FAILED]
+  trace:
+    AUDIT-EXPORT-001: async-export-with-job-id
+    AUDIT-EXPORT-002: admin-or-auditor-authz
+
+# ─── List policy ─────────────────────────────────────────────────────────────
+list_policy:
+  default_sort: "timestamp DESC"
+  default_page_size: 50
+  max_page_size: 200
+  filterable_fields:
+    - actorId
+    - resourceType
+    - resourceId
+    - action
+    - outcome
+    - from          # timestamp >= from (ISO 8601)
+    - to            # timestamp <= to (ISO 8601)
+  filter_combination: AND
+  trace:
+    AUDIT-LIST-001: paginated-list-with-total
+    AUDIT-LIST-002: multi-filter-support
+
+# ─── RBAC ────────────────────────────────────────────────────────────────────
+rbac:
+  LIST: "authenticated (any role)"
+  GET: "authenticated (any role)"
+  EXPORT: "ROLE_ADMIN or ROLE_AUDITOR"
+  trace:
+    AUDIT-EXPORT-002: export-authz-403
+
+# ─── AOP wiring ──────────────────────────────────────────────────────────────
+# @Audited annotation is the entry point for triggering audit log recording.
+# Apply @Audited to service methods that perform state-changing operations.
+aop_wiring:
+  annotation: "@Audited"
+  annotation_fields:
+    action: "Verb string (CREATE, UPDATE, DELETE, etc.)"
+    resourceType: "String constant identifying the entity type"
+  aspect: "AuditLoggingAspect (intercepts @Audited methods via @Around)"
+  resource_id_extraction:
+    strategy: >
+      AuditLoggingAspect inspects method parameters for an @ResourceId annotation or
+      looks for a field named 'id' / method named 'getId()' on the first argument.
+      Falls back to 'unknown' if no ID can be extracted.
