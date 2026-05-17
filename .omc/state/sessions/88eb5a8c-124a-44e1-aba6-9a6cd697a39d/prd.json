@@ -114,7 +114,7 @@
       "title": "P2 — RED tests (testPayment registered + 30-40 failing @Tag tests)",
       "priority": 8,
       "passes": false,
-      "progress": "Agent A (AUTHZ+IDEMP+MONEY) complete; awaiting B (STATE+REFUND+PROVIDER) and C (SEC+OBS+RECON)",
+      "progress": "Agents A + B complete (AUTHZ+IDEMP+MONEY+STATE+REFUND+PROVIDER); awaiting C (SEC+OBS+RECON)",
       "acceptanceCriteria": [
         "backend/build.gradle.kts has tasks.register<Test>(\"testPayment\") with includeTags(\"PAYMENT\")",
         "cd backend && ./gradlew tasks --all | grep testPayment confirms registration",
