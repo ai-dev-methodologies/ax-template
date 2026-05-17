@@ -1,0 +1,10 @@
+version: "1.0"
+scope: "fixture-auth"
+stack: "Spring Boot + React"
+items:
+  - id: "ASVS-V2.1.1"
+    chapter: "V2 - Authentication"
+    requirement: "User set passwords are at least 12 characters in length."
+    test_method: "auth_password_min_length"
+    verification_type: "api_test"
+    applicable: true

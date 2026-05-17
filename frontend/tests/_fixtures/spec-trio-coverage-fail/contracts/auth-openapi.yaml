@@ -1,0 +1,19 @@
+openapi: "3.0.3"
+info:
+  title: Auth API (fixture)
+  version: "1.0.0"
+paths:
+  /auth/email/signup:
+    post:
+      operationId: emailSignup
+      summary: Sign up with email
+      responses:
+        "201":
+          description: User created
+  /auth/email/login:
+    post:
+      operationId: emailLogin
+      summary: Login with email
+      responses:
+        "200":
+          description: Login successful

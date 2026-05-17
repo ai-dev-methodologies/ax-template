@@ -1,0 +1,25 @@
+domain: auth
+backend_spec_ref: specs/auth-asvs-l0.yaml
+frontend_required: true
+items:
+  - id: AUTH-FE-001
+    requirement: "Registration page allows user to sign up with email and password"
+    backend_operation_id: emailSignup
+    backend_spec_ref: ASVS-V2.1.1
+    static_source_ref: []
+    test_method: "auth/register.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#AUTH-FE-001"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+  - id: AUTH-FE-002
+    requirement: "Login page allows user to authenticate with valid credentials"
+    # Deliberately missing backend_operation_id — triggers NULL_OPERATION_ID in full_trio mode
+    backend_operation_id: null
+    backend_spec_ref: ASVS-V2.1.1
+    static_source_ref: []
+    test_method: "auth/login.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/auth-ui-manifest.yaml#AUTH-FE-002"
+    coverage_threshold: 1.0
+    backend_only_marker: false
