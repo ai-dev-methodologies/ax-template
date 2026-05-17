@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.payment;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -73,7 +74,13 @@ public class Payment {
     /**
      * Opaque tokenized payment method reference. PAN never stored — only the provider's
      * token. PAYMENT-SEC-001: never logged or surfaced in error responses.
+     *
+     * <p>P5 security-review (US-014 MEDIUM, defense-in-depth): {@code @JsonIgnore}
+     * prevents accidental serialization if the entity is ever returned directly from
+     * a controller. The current {@code PaymentController#paymentBody} already excludes
+     * the field; this annotation guards against future regressions.
      */
+    @JsonIgnore
     @Column(name = "payment_method_token", length = 512)
     private String paymentMethodToken;
 

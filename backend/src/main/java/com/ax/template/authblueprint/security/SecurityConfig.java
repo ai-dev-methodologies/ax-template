@@ -30,10 +30,12 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/mappings").permitAll()
-                // PAYMENT-OBS-001: reconciliation job heartbeat — permit-all so observability
-                // probes (and the related Micrometer counter) work without an admin token.
-                // Production deployments may guard this endpoint behind a scheduler/cron.
-                .requestMatchers(HttpMethod.POST, "/api/admin/reconciliation/run").permitAll()
+                // PAYMENT-AUTHZ-004: all /api/admin/** paths require ROLE_ADMIN —
+                // including the reconciliation heartbeat. The recon endpoint emits
+                // append-only ledger events (RECONCILIATION_DRIFT) plus increments
+                // observability counters; allowing unauthenticated access would let
+                // an adversary pollute the ledger and metric stream without audit.
+                // P5 security-review finding (US-014, HIGH): tightened from permitAll.
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/api/items/**").authenticated()
                 .requestMatchers("/api/payments/**").authenticated()

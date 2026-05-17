@@ -9,6 +9,8 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
+import java.net.URI;
+
 /**
  * RFC 7807 ProblemDetail responses for payment exceptions. Stable {@code type} URIs
  * enable programmatic handling per the OpenAPI contract.
@@ -20,7 +22,7 @@ public class PaymentExceptionHandler {
     @ExceptionHandler(PaymentValidationException.class)
     public ResponseEntity<ProblemDetail> handleValidation(PaymentValidationException ex) {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
-        pd.setType(java.net.URI.create("urn:ax:payment:validation-error"));
+        pd.setType(URI.create("urn:ax:payment:validation-error"));
         pd.setTitle("Validation error");
         pd.setDetail(ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
@@ -29,7 +31,7 @@ public class PaymentExceptionHandler {
     @ExceptionHandler(IllegalStateTransitionException.class)
     public ResponseEntity<ProblemDetail> handleIllegalTransition(IllegalStateTransitionException ex) {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
-        pd.setType(java.net.URI.create("urn:ax:payment:illegal-state-transition"));
+        pd.setType(URI.create("urn:ax:payment:illegal-state-transition"));
         pd.setTitle("Illegal state transition");
         pd.setDetail(ex.getMessage());
         pd.setProperty("currentState", ex.getCurrentState().name());
@@ -40,7 +42,7 @@ public class PaymentExceptionHandler {
     @ExceptionHandler(RefundException.class)
     public ResponseEntity<ProblemDetail> handleRefund(RefundException ex) {
         ProblemDetail pd = ProblemDetail.forStatus(ex.getStatus());
-        pd.setType(java.net.URI.create(ex.getTypeUri()));
+        pd.setType(URI.create(ex.getTypeUri()));
         pd.setTitle("Refund rejected");
         pd.setDetail(ex.getMessage());
         return ResponseEntity.status(ex.getStatus()).body(pd);
@@ -49,7 +51,7 @@ public class PaymentExceptionHandler {
     @ExceptionHandler(PaymentNotFoundException.class)
     public ResponseEntity<ProblemDetail> handleNotFound(PaymentNotFoundException ex) {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
-        pd.setType(java.net.URI.create("urn:ax:payment:not-found"));
+        pd.setType(URI.create("urn:ax:payment:not-found"));
         pd.setTitle("Payment not found");
         // PCI-safe: never include the requesting user id or payment-id in the response detail —
         // use a generic message to avoid IDOR enumeration cues.
@@ -60,7 +62,7 @@ public class PaymentExceptionHandler {
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<ProblemDetail> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
-        pd.setType(java.net.URI.create("urn:ax:payment:concurrent-modification"));
+        pd.setType(URI.create("urn:ax:payment:concurrent-modification"));
         pd.setTitle("Concurrent modification");
         pd.setDetail("payment was modified concurrently; retry the request");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
@@ -68,14 +70,41 @@ public class PaymentExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ProblemDetail> handleNotReadable(HttpMessageNotReadableException ex) {
-        // Distinguish float-JSON rejection from generic parse errors — PAYMENT-MONEY-002
-        String message = ex.getMostSpecificCause() != null
+        // P5 security-review (US-014 MEDIUM): sanitize Jackson exception detail to
+        // prevent leaking internal class names + field paths (e.g.,
+        // "through reference chain: com.ax.template.authblueprint.payment.CreatePaymentRequest[\"amount\"]").
+        // The float-rejection message from MoneyDeserializer is intentional and preserved
+        // because PaymentMoneyTest asserts it. Generic Jackson errors fall back to a
+        // safe message that does not surface package paths.
+        String causeMessage = ex.getMostSpecificCause() != null
             ? ex.getMostSpecificCause().getMessage()
             : ex.getMessage();
+        String safeDetail = sanitizeJacksonMessage(causeMessage);
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
-        pd.setType(java.net.URI.create("urn:ax:payment:validation-error"));
+        pd.setType(URI.create("urn:ax:payment:validation-error"));
         pd.setTitle("Validation error");
-        pd.setDetail(message == null ? "request body is unreadable" : message);
+        pd.setDetail(safeDetail);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
+    }
+
+    /**
+     * Strip Jackson's "(through reference chain: ...)" suffix and any class-FQN
+     * fragments to avoid leaking internal package names in 400 responses.
+     * Preserves the leading human-readable message (including MoneyDeserializer
+     * float-rejection text which PAYMENT-MONEY-002 asserts).
+     */
+    private static String sanitizeJacksonMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "request body is unreadable";
+        }
+        // Drop everything from "(through reference chain:" onward.
+        int chainIdx = message.indexOf("(through reference chain");
+        String head = (chainIdx >= 0) ? message.substring(0, chainIdx).trim() : message;
+        // Drop "at [Source: ...]" Jackson location markers.
+        int sourceIdx = head.indexOf(" at [Source:");
+        if (sourceIdx >= 0) {
+            head = head.substring(0, sourceIdx).trim();
+        }
+        return head.isEmpty() ? "request body is unreadable" : head;
     }
 }

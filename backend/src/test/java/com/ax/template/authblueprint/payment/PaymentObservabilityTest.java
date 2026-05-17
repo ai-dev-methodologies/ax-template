@@ -209,9 +209,12 @@ class PaymentObservabilityTest {
         // For RED: the counter reference itself will fail (not registered).
         double before = getCounterValue("recon_drift_detected_total");
 
-        // Trigger the reconciliation job via its actuator endpoint or direct invocation.
-        // In P3.0, ReconciliationJob will be invokable via a test helper or actuator.
+        // P5 security-review (US-014 HIGH): /api/admin/reconciliation/run now
+        // requires ROLE_ADMIN. Observability probe obtains an admin token to
+        // exercise the endpoint, consistent with PAYMENT-AUTHZ-004 audit posture.
+        String adminToken = obtainToken("recon-admin@obs001.test", "ADMIN");
         given()
+            .header("Authorization", "Bearer " + adminToken)
             .header("Content-Type", "application/json")
         .when().post("/api/admin/reconciliation/run")
         .then(); // status is irrelevant for RED — endpoint not implemented
