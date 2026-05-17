@@ -281,3 +281,17 @@ snapshots:
     fetched_at: "2026-05-15T16:30:00Z"
     bytes: 171356
     sha: "09d615670aae2af8ce03224955e939b81743599dfbd905db43cf69a730d9458e"
+  - id: "pci-dss-saq-a"
+    tier: 3
+    source: "https://www.pcisecuritystandards.org/document_library/?category=saqs"
+    via: "WebFetch"
+    fetched_at: "2026-05-17T00:00:00Z"
+    bytes: 5878
+    sha: "f49c158a8314bc68f478b62cc8d683647d05117586b29229cb420678bed42a9b"
+  - id: "iso-4217"
+    tier: 3
+    source: "https://www.iso.org/iso-4217-currency-codes.html"
+    via: "WebFetch"
+    fetched_at: "2026-05-17T00:00:00Z"
+    bytes: 5310
+    sha: "39a54c9bc0d5eae337138bfb0a1221b8d37a61bda815f550c4bda52c88513cee"

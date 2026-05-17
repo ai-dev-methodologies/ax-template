@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "4bdba738b5306139194e57e2dbada1892a859d5e67046ce612f76ad708bba5c0"
-  rule_count: 64
+  source_concat_sha256: "4f7e804a3f5b7b6fbfae15995d4adc9f6f17641d8a8521edb4b52ec2e92e7b17"
+  rule_count: 68
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -198,6 +198,79 @@ management:
 Verification: `./gradlew testPractices --tests "*RestrictExposure*"` reads `application.yml`, finds the `include:` line, rejects `*` wildcards, and rejects any of `env`, `beans`, `heapdump`, `threaddump`, `loggers`, `configprops`, `metrics`, `shutdown`.
 
 Reference: [Spring Boot — Exposing Endpoints](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.exposing)
+
+
+<!-- @source rules/api-idempotency-key-required.md -->
+
+---
+title: POST endpoints with non-idempotent side effects must require an Idempotency-Key header
+impact: HIGH
+impactDescription: "Network retries on POST without dedupe cause duplicate side effects (double charge, duplicate send)"
+tags:
+  - api
+  - http
+  - idempotency
+  - retry-safety
+spec_ref: "specs/payment-l0.yaml#PAYMENT-IDEMP-001"
+verification:
+  gradle_task: testPayment
+  tag: PAYMENT-IDEMP-001
+upstream:
+  - "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
+  - "https://docs.stripe.com/api/idempotent_requests"
+evidence:
+  - upstream_id: rfc-7807
+    section: "Problem Details for HTTP APIs — error envelope for the missing-key 400"
+    quote: "Problem Details"
+  - source_type: external
+    citation: "IETF draft — The Idempotency-Key HTTP Header Field (draft-ietf-httpapi-idempotency-key-header)"
+    url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
+  - source_type: external
+    citation: "Stripe API Reference — Idempotent requests"
+    url: "https://docs.stripe.com/api/idempotent_requests"
+---
+
+## POST endpoints with non-idempotent side effects must require an Idempotency-Key header
+
+**Impact: HIGH — Network retries on POST without dedupe cause duplicate side effects (double charge, duplicate send)**
+
+`POST` is the HTTP verb defined as non-idempotent: the IETF semantics allow each call to create a fresh resource or trigger a fresh side effect. Any production network — mobile, browser fetch with auto-retry, load balancer retries, service-mesh retries — will retry a request that timed out, returned 502, or lost its socket. Without a dedupe protocol the second attempt double-charges a card, double-sends an email, or double-creates a job. The de-facto fix, standardised by an IETF draft (`draft-ietf-httpapi-idempotency-key-header`) and implemented by Stripe, Adyen, Plaid, GitHub, and Square, is the `Idempotency-Key` request header: the client supplies a unique key per logical operation; the server caches the response keyed by `(principal, key)` for a TTL window (commonly 24 hours) and on a duplicate-key arrival returns the *cached* original response without re-executing the side effect.
+
+This rule applies to any POST endpoint whose execution has a non-idempotent side effect: payment authorize/capture/refund/void, notification dispatch (email / SMS / push), order placement, file upload finalize, webhook delivery. The rule does **not** apply to read-only POST endpoints (rare but valid) or to `PUT`/`DELETE` endpoints whose semantics are already idempotent by HTTP definition.
+
+**Incorrect — POST without idempotency key, retry replays the side effect:**
+
+```java
+@PostMapping("/api/payments")
+public PaymentResponse create(@Valid @RequestBody CreatePaymentRequest req) {
+    // network retry → second invocation → second charge
+    return paymentService.charge(req);
+}
+```
+
+**Correct — required header + dedupe store:**
+
+```java
+@PostMapping("/api/payments")
+public PaymentResponse create(
+        @RequestHeader(name = "Idempotency-Key", required = true) String idempotencyKey,
+        @Valid @RequestBody CreatePaymentRequest req,
+        Authentication auth) {
+    String principal = auth.getName();
+    return idempotencyStore.computeIfAbsent(principal, idempotencyKey,
+            () -> paymentService.charge(req));   // executes once per (principal, key)
+}
+// Missing header → @RequestHeader's required=true returns 400 with an RFC 7807
+// ProblemDetail describing the missing-header constraint.
+```
+
+The store layer (Caffeine, Redis, or a database table) MUST be atomic — `putIfAbsent` semantics or `SELECT ... FOR UPDATE` — so that concurrent duplicate requests with the same key collapse to one execution and the losers either wait for the result or receive the same cached payload. A non-atomic implementation re-creates the double-charge bug under racing retries.
+
+Verification: `./gradlew testPayment --tests "*Idempotency*"` exercises (a) missing-header → 400 RFC 7807, (b) duplicate-key within TTL → cached response, no second charge, (c) 5-thread concurrent same-key race → exactly one charge created. `Idempotency-Key` is the canonical header name; alternative names (`X-Idempotency-Key`, `Request-Id`) should be avoided for interop with PSP and platform tooling that assume the IETF draft name.
+
+Reference: [IETF draft — The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
+
+Reference: [Stripe API — Idempotent requests](https://docs.stripe.com/api/idempotent_requests)
 
 
 <!-- @source rules/api-no-entity-leak.md -->
@@ -1666,6 +1739,81 @@ Verification: `./gradlew testPractices --tests "*SharedClientSingleton*"` is a `
 Reference: [Spring Framework — RestClient](https://docs.spring.io/spring-framework/reference/integration/rest-clients.html#rest-restclient)
 
 
+<!-- @source rules/lang-bigdecimal-for-money.md -->
+
+---
+title: Monetary amounts must use BigDecimal — never float or double
+impact: HIGH
+impactDescription: "IEEE-754 binary floating point cannot represent most decimal fractions exactly; arithmetic on monetary doubles silently drifts"
+tags:
+  - lang
+  - money
+  - precision
+  - bigdecimal
+spec_ref: "specs/payment-l0.yaml#PAYMENT-MONEY-001"
+verification:
+  gradle_task: testPayment
+  tag: PAYMENT-MONEY-001
+upstream:
+  - "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
+  - "https://ieeexplore.ieee.org/document/8766229"
+evidence:
+  - upstream_id: iso-4217
+    section: "Amount representation rules — decimal-string vs minor-units"
+    quote: "JSON number with a decimal point"
+  - source_type: external
+    citation: "Effective Java (3rd ed., Joshua Bloch) — Item 60: Avoid float and double if exact answers are required"
+    url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
+  - source_type: external
+    citation: "IEEE 754-2019 — Standard for Floating-Point Arithmetic"
+    url: "https://ieeexplore.ieee.org/document/8766229"
+---
+
+## Monetary amounts must use BigDecimal — never float or double
+
+**Impact: HIGH — IEEE-754 binary floating point cannot represent most decimal fractions exactly; arithmetic on monetary doubles silently drifts**
+
+`double` and `float` are binary floating point — they can represent `0.5`, `0.25`, `0.75` exactly but cannot represent `0.1`, `0.2`, `0.3`, or any tenth that is not a sum of negative powers of two. The classic demonstration `0.1 + 0.2 == 0.30000000000000004` is harmless in a graph but catastrophic in a ledger: a refund computed as `paid - capturedAmount` over a few thousand line items will accumulate sub-cent rounding error that breaks reconciliation, fails audit invariants, and shows up months later as a `recon_drift_detected_total` counter incrementing in production. The Java standard library answer, codified in `java.math.BigDecimal` and recommended verbatim by *Effective Java* Item 60, is unconditional: monetary amounts use `BigDecimal`; never `double`, `float`, or `Number`. The compiler will not catch this — only a rule + a static-analysis scan will.
+
+**Tradeoff — long minor-units integer:** A legitimate alternative is to store an integer in the smallest subdivision of the currency (KRW 1000원 → `1000`, USD $10.99 → `1099`). This is what Stripe, Adyen, and most PSP REST APIs do because integers are exact end-to-end. The tradeoff is binding: **if** the codebase chooses `long` minor-units, **every** monetary field and every arithmetic step must commit to that representation. A mix of `BigDecimal` in some places and `long amountCents` in others reintroduces conversion bugs at every boundary. This rule mandates `BigDecimal` by default; a codebase-wide migration to `long` minor-units is permitted only if (a) documented in `DECISIONS.md`, (b) enforced by a separate ArchUnit rule asserting no `BigDecimal` appears in monetary positions, and (c) the per-currency scale check from `payment-iso-4217-currency.md` is rewritten to assert the integer's implicit scale matches the currency. The mixed form is what this rule rejects.
+
+**Incorrect — monetary fields typed as double, silent precision drift:**
+
+```java
+public class Payment {
+    private double amount;            // 0.1 + 0.2 → 0.30000000000000004
+    private double capturedAmount;
+    // partial-refund check uses subtraction → accumulates rounding error
+}
+```
+
+**Correct — BigDecimal with explicit scale at construction:**
+
+```java
+public class Payment {
+    private BigDecimal amount;
+    private BigDecimal capturedAmount;
+
+    public static Payment of(BigDecimal raw, String currency) {
+        int scale = Currency.getInstance(currency).getDefaultFractionDigits();
+        BigDecimal scaled = raw.setScale(scale, RoundingMode.UNNECESSARY);
+        return new Payment(scaled, scaled, currency);
+    }
+}
+// raw.setScale(scale, UNNECESSARY) throws ArithmeticException if the input
+// already has more decimals than the currency allows — surfaces scale
+// violations as 400 RFC 7807 rather than silent truncation.
+```
+
+A grep / ArchUnit rule completes the loop: scan the monetary package and assert `float` and `double` do not appear on any monetary-named field. Pair this rule with `payment-iso-4217-currency.md` (per-currency scale validation) and with a Jackson deserializer that rejects JSON `number` tokens with a decimal point (only integer minor units and explicit decimal strings are accepted on the wire).
+
+Verification: `./gradlew testPayment --tests "*Money*"` exercises the deserializer (float-token rejection), the scale validator (KRW with 2 decimals → 400, BHD with 2 decimals → 400 because BHD scale is 3), and a partial-refund-sum invariant test that subtracts repeated partial refunds from `capturedAmount` and asserts exact zero (no sub-cent drift). Static scan: `grep -rn 'float\|double' backend/src/main/java/.../payment/` returns 0 hits on monetary fields.
+
+Reference: [java.math.BigDecimal — Java SE 21 API documentation](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html)
+
+Reference: [IEEE 754-2019 — Standard for Floating-Point Arithmetic](https://ieeexplore.ieee.org/document/8766229)
+
+
 <!-- @source rules/lang-no-public-mutable-fields.md -->
 
 ---
@@ -1882,8 +2030,8 @@ A POJO with setters that the publisher pushes onto a queue can be mutated by the
 ```java
 public class OrderPlacedEvent {
     private String orderId;
-    private long amountCents;
-    public void setAmountCents(long v) { this.amountCents = v; }   // mutable AFTER publish
+    private String customerId;
+    public void setCustomerId(String v) { this.customerId = v; }   // mutable AFTER publish
     // ...
 }
 ```
@@ -1891,12 +2039,19 @@ public class OrderPlacedEvent {
 **Correct — record payload, every component final by construction:**
 
 ```java
-public record OrderPlacedEvent(String orderId, long amountCents, Instant placedAt) {}
+public record OrderPlacedEvent(String orderId, String customerId, Instant placedAt) {}
 
-OrderPlacedEvent evt = new OrderPlacedEvent("ord-123", 4_999L, Instant.now());
+OrderPlacedEvent evt = new OrderPlacedEvent("ord-123", "cust-42", Instant.now());
 publisher.publish(MessageTopics.ORDER_PLACED, evt);
 // no setters, every component final, equals/hashCode/toString auto-generated
 ```
+
+(Earlier iterations of this rule used `long amountCents` to illustrate a payload
+field. That example is intentionally avoided here because monetary fields are
+governed by `lang-bigdecimal-for-money.md`, which mandates `BigDecimal` unless
+the codebase commits whole-system to integer minor-units. Using a non-monetary
+field (`customerId`) keeps the immutability lesson clear without colliding with
+the monetary-precision rule.)
 
 Verification: `./gradlew testPractices --tests "*PayloadRecord*"` asserts `OrderPlacedEvent.class.isRecord()` and that every declared field is final.
 
@@ -2260,40 +2415,51 @@ Reference: [SLF4J Manual — MDC](https://www.slf4j.org/manual.html#mdc)
 <!-- @source rules/observability-no-pii-in-logs.md -->
 
 ---
-title: Redact PII before it enters a log statement
+title: Redact PII (including PAN) before it enters a log statement
 impact: HIGH
-impactDescription: "Application logs are indexed and retained; raw PII is a compliance + breach-radius hazard"
+impactDescription: "Application logs are indexed and retained; raw PII or PAN is a compliance + breach-radius hazard"
 tags:
   - observability
   - security
   - pii
+  - pci-dss
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-OBS-003"
 verification:
   gradle_task: testPractices
   tag: PRACTICES-OBS-003
 upstream:
   - "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+  - "https://www.pcisecuritystandards.org/document_library/?category=saqs"
 evidence:
   - upstream_id: owasp-logging-cheatsheet
     section: "OWASP Logging Cheat Sheet — Data to exclude"
     quote: "exclude"
+  - upstream_id: pci-dss-saq-a
+    section: "Requirement 3.4 — PAN rendered unreadable"
+    quote: "PAN is rendered unreadable anywhere it is stored"
   - source_type: external
     citation: "OWASP Logging Cheat Sheet — Data to exclude"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude"
+  - source_type: external
+    citation: "PCI-DSS v4.0 Requirement 3.4 — PAN rendered unreadable"
+    url: "https://www.pcisecuritystandards.org/document_library/"
 ---
 
-## Redact PII before it enters a log statement
+## Redact PII (including PAN) before it enters a log statement
 
-**Impact: HIGH — Application logs are indexed and retained; raw PII is a compliance + breach-radius hazard**
+**Impact: HIGH — Application logs are indexed and retained; raw PII or PAN is a compliance + breach-radius hazard**
 
 Logs flow through aggregators, SIEMs, retention buckets, backups, and developer terminals. Anything written to a log statement is — practically — broadcast to a wider audience than the original request handler ever was. Per the OWASP Logging Cheat Sheet, the safe default is to redact PII (email, phone, SSN, payment data, session tokens) *at the source*: before the string is handed to `log.info(...)`. Sanitising downstream (log scrubbers) is best-effort and routinely bypassed by new fields.
+
+For payment-handling code the bar is stricter: PCI-DSS Requirement 3.4 mandates that the Primary Account Number (PAN — the 13-19 digit card number) be rendered unreadable wherever it is stored, **including in application logs**. The token-vs-PAN distinction matters: an opaque provider-issued token is safe to log, but the raw PAN, CVV, expiration date, and any combination of those is Sensitive Authentication Data (SAD) that must never appear in plaintext. Use `@JsonIgnore` on PAN-bearing fields plus an explicit `toString()` override that returns `[REDACTED]`.
 
 **Incorrect — raw user data in a log message:**
 
 ```java
 String email = user.getEmail();
 String phone = user.getPhone();
-log.info("password reset for user " + email + " phone " + phone);
+String pan = paymentMethod.getPan();   // 16-digit card number
+log.info("password reset for user " + email + " phone " + phone + " card " + pan);
 ```
 
 **Correct — redactor at the boundary:**
@@ -2304,9 +2470,27 @@ log.info("password reset for user {}", PiiRedactor.redact(user.identifier()));
 log.atInfo().addKeyValue("user_id", user.id()).setMessage("password reset").log();
 ```
 
-Verification: `./gradlew testPractices --tests "*NoPiiInLogs*"` exercises the `PiiRedactor` over emails / phones / SSNs and asserts the original strings are gone, the redaction markers are present, and clean strings pass through unchanged.
+**Correct — PAN-bearing field with @JsonIgnore + toString override:**
+
+```java
+public final class PaymentMethodToken {
+    @JsonIgnore
+    private final String rawPan;   // never serialized to JSON, never logged
+
+    public PaymentMethodToken(String rawPan) { this.rawPan = rawPan; }
+
+    @Override
+    public String toString() {
+        return "[REDACTED]";   // log.info("token={}", token) → "token=[REDACTED]"
+    }
+}
+```
+
+Verification: `./gradlew testPractices --tests "*NoPiiInLogs*"` exercises the `PiiRedactor` over emails / phones / SSNs / 16-digit card numbers and asserts the original strings are gone, the redaction markers are present, and clean strings pass through unchanged. PAN coverage is additionally asserted by the Payment blueprint's `PanRedactionTest` (`./gradlew testPayment --tests "*PanRedaction*"`).
 
 Reference: [OWASP Logging Cheat Sheet — Data to exclude](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude)
+
+Reference: [PCI Security Standards Council — Document Library (PCI-DSS v4.0 Requirement 3.4)](https://www.pcisecuritystandards.org/document_library/)
 
 
 <!-- @source rules/observability-structured-logging.md -->
@@ -2360,6 +2544,93 @@ log.atInfo()
 Verification: `./gradlew testPractices --tests "*StructuredLogging*"` attaches a Logback ListAppender, exercises both code paths, and asserts the structured path emits `KeyValuePair`s while the concatenated path emits none.
 
 Reference: [SLF4J Fluent API](https://www.slf4j.org/manual.html#fluent) · [Logback Layouts](https://logback.qos.ch/manual/layouts.html)
+
+
+<!-- @source rules/payment-iso-4217-currency.md -->
+
+---
+title: Currency codes must be ISO 4217 alpha-3 and the amount scale must match the currency's minor-unit count
+impact: HIGH
+impactDescription: "A KRW amount with two decimal places, or a BHD amount with two decimals, silently misrepresents value by orders of magnitude"
+tags:
+  - payment
+  - validation
+  - iso-4217
+  - currency
+spec_ref: "specs/payment-l0.yaml#PAYMENT-MONEY-003"
+verification:
+  gradle_task: testPayment
+  tag: PAYMENT-MONEY-003
+upstream:
+  - "https://www.iso.org/iso-4217-currency-codes.html"
+  - "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Currency.html"
+evidence:
+  - upstream_id: iso-4217
+    section: "Minor unit (scale) per currency"
+    quote: "minor unit"
+  - source_type: external
+    citation: "ISO 4217 — Codes for the representation of currencies (ISO)"
+    url: "https://www.iso.org/iso-4217-currency-codes.html"
+  - source_type: external
+    citation: "java.util.Currency.getDefaultFractionDigits() — Java SE 21 API"
+    url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Currency.html#getDefaultFractionDigits()"
+---
+
+## Currency codes must be ISO 4217 alpha-3 and the amount scale must match the currency's minor-unit count
+
+**Impact: HIGH — A KRW amount with two decimal places, or a BHD amount with two decimals, silently misrepresents value by orders of magnitude**
+
+ISO 4217 fixes a three-letter alpha-3 code per currency (KRW, USD, JPY, EUR, BHD, ...) and the **minor-unit count** — the number of digits after the decimal separator that the currency uses canonically. KRW and JPY are 0-decimal currencies (한국 원 and 円 do not subdivide); USD, EUR, GBP and most others are 2-decimal; BHD, KWD, OMR are 3-decimal; UYW and CLF are 4-decimal. Treating one as another silently scales the value: `100` interpreted as KRW means 100원, but interpreted as USD-with-implicit-cents means $1.00 — a factor-of-100 discrepancy. The bug is hard to detect from the inside because the integer arithmetic is exact; only a per-currency validator that consults `Currency.getInstance(code).getDefaultFractionDigits()` catches it. Mandating both the code lookup (well-formed alpha-3) **and** the scale check (`BigDecimal.scale() == Currency.getDefaultFractionDigits()`) closes the gap.
+
+This rule sits in the `payment-*` namespace because — at the time of writing — Payment is the only multi-currency domain in the catalog. A future Invoice / FX / Billing blueprint with a second multi-currency surface would justify promoting this rule to `validation-currency-code.md` under the generic `validation-*` namespace; the promotion trigger is documented in `practices/DECISIONS.md`.
+
+**Incorrect — currency is an arbitrary string; amount scale is whatever the deserializer happened to produce:**
+
+```java
+public record CreatePaymentRequest(
+        BigDecimal amount,
+        String currency,           // accepts "krw", "krwon", "XYZ", anything
+        String orderId
+) {
+    // no validation: amount=10.99, currency="KRW" → stored as 10.99원
+    // (KRW has no sub-units; the .99 is silently meaningless)
+}
+```
+
+**Correct — Currency.getInstance + per-currency scale assertion:**
+
+```java
+public record CreatePaymentRequest(
+        @NotNull BigDecimal amount,
+        @NotBlank String currency,
+        @NotBlank String orderId
+) {}
+
+@Service
+public class CurrencyValidator {
+
+    public void validate(BigDecimal amount, String currency) {
+        Currency iso;
+        try {
+            iso = Currency.getInstance(currency);          // throws IllegalArgumentException if not ISO 4217
+        } catch (IllegalArgumentException e) {
+            throw new InvalidCurrencyException(currency);   // → 400 RFC 7807, type=urn:ax:payment:invalid-currency
+        }
+        int allowedScale = iso.getDefaultFractionDigits(); // KRW=0, USD=2, BHD=3
+        if (amount.scale() > allowedScale) {
+            throw new ScaleMismatchException(currency, allowedScale, amount.scale());
+        }
+    }
+}
+```
+
+Pair this rule with `lang-bigdecimal-for-money.md` (which forbids `double`/`float` for monetary fields) and with a Jackson deserializer that rejects JSON number tokens with a decimal point. The wire-side accepted shapes are **integer minor units** (KRW `1000`, USD `1099`, BHD `10250`) or **explicit decimal strings** with exactly `getDefaultFractionDigits()` digits after the point (KRW `"1000"`, USD `"10.99"`, BHD `"10.250"`). JSON floats are never accepted.
+
+Verification: `./gradlew testPayment --tests "*Currency*"` exercises: (a) `{"currency": "XYZ"}` → 400; (b) `{"currency": "KRW", "amount": "10.99"}` → 400 (scale violation); (c) `{"currency": "USD", "amount": "10.999"}` → 400 (3 digits > USD's 2); (d) `{"currency": "KRW", "amount": 1000}` → 201; (e) `{"currency": "BHD", "amount": "10.250"}` → 201 (3 digits matches BHD scale).
+
+Reference: [ISO 4217 — Codes for the representation of currencies](https://www.iso.org/iso-4217-currency-codes.html)
+
+Reference: [java.util.Currency — Java SE 21 API documentation](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Currency.html)
 
 
 <!-- @source rules/persistence-batch-inserts.md -->
@@ -2587,6 +2858,114 @@ public class Account {
 ```
 
 Verification: `./gradlew testPractices --tests "*OptimisticLocking*"` persists an entity, races two stale references, and asserts the loser throws `ObjectOptimisticLockingFailureException` / `OptimisticLockException`.
+
+Reference: [Hibernate User Guide — Optimistic Locking](https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#locking-optimistic)
+
+
+<!-- @source rules/persistence-state-machine-atomic.md -->
+
+---
+title: State machine transitions must be atomic — @Version + transactional boundary + explicit transition method
+impact: HIGH
+impactDescription: "Concurrent transitions on the same workflow entity must produce exactly one winner; the loser gets a 409, not a corrupted state"
+tags:
+  - persistence
+  - jpa
+  - state-machine
+  - concurrency
+spec_ref: "specs/payment-l0.yaml#PAYMENT-STATE-002"
+verification:
+  gradle_task: testPayment
+  tag: PAYMENT-STATE-002
+upstream:
+  - "https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html"
+  - "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#locking-optimistic"
+evidence:
+  - upstream_id: spring-tx-declarative
+    section: "Spring Framework — declarative transaction management"
+    quote: "transaction"
+  - source_type: external
+    citation: "Hibernate User Guide — Optimistic Locking (@Version)"
+    url: "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#locking-optimistic"
+  - source_type: external
+    citation: "Spring Data JPA — Locking"
+    url: "https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html"
+---
+
+## State machine transitions must be atomic — @Version + transactional boundary + explicit transition method
+
+**Impact: HIGH — Concurrent transitions on the same workflow entity must produce exactly one winner; the loser gets a 409, not a corrupted state**
+
+Any entity with a lifecycle — `WorkItem` (QUEUED → RUNNING → DONE → FAILED), `Order` (PENDING → CONFIRMED → SHIPPED → DELIVERED), `Subscription` (TRIAL → ACTIVE → PAUSED → CANCELLED), `Payment` (CREATED → AUTHORIZED → CAPTURED → REFUNDED) — encodes a transition graph. Three things must hold simultaneously, and the bug surface for missing any of them is identical: silent corruption of the entity's state under concurrency. (1) The legal transitions must live in a single dedicated method (or a `StateMachine` companion type) that throws on illegal events — no direct field mutation of the state column anywhere else in the codebase. (2) Each transition must execute inside a transactional boundary, so the state column write and any dependent writes (audit ledger, denormalized counters, outgoing event publish) commit atomically or roll back together. (3) The entity must carry `@Version` so that two concurrent transactions racing the same entity collide on optimistic-lock check — one wins, the other surfaces as `ObjectOptimisticLockingFailureException` which the exception handler translates to HTTP 409. `persistence-optimistic-locking.md` covers the @Version primitive in isolation; this rule combines it with the dedicated transition method and the transactional boundary, which is the shape required for any workflow state machine.
+
+**Incorrect — direct field mutation, no @Version, no transition method:**
+
+```java
+@Entity
+public class WorkItem {
+    @Id @GeneratedValue Long id;
+    @Enumerated(EnumType.STRING) WorkState state;
+    // no @Version — two concurrent transitions both succeed, last writer wins
+}
+
+@Service
+public class WorkService {
+    @Transactional
+    public void markRunning(long id) {
+        WorkItem item = repo.findById(id).orElseThrow();
+        item.setState(WorkState.RUNNING);          // direct mutation, no transition check
+        repo.save(item);
+    }
+
+    @Transactional
+    public void markDone(long id) {
+        WorkItem item = repo.findById(id).orElseThrow();
+        item.setState(WorkState.DONE);             // can be called from QUEUED — skips RUNNING
+        repo.save(item);
+    }
+}
+```
+
+**Correct — dedicated transition method on the entity + @Version + transactional caller:**
+
+```java
+@Entity
+public class WorkItem {
+    @Id @GeneratedValue Long id;
+
+    @Enumerated(EnumType.STRING)
+    private WorkState state;
+
+    @Version
+    private long version;             // optimistic lock — bumped on every persist
+
+    public void transition(WorkEvent event) {
+        WorkState next = WorkStateMachine.next(this.state, event);
+        if (next == null) {
+            throw new IllegalStateTransitionException(this.state, event);
+        }
+        this.state = next;            // single mutation site, gated by the state machine
+    }
+
+    public WorkState state() { return state; }
+}
+
+@Service
+public class WorkService {
+    @Transactional
+    public void apply(long id, WorkEvent event) {
+        WorkItem item = repo.findById(id).orElseThrow();
+        item.transition(event);       // throws on illegal event
+        repo.save(item);              // @Version mismatch → ObjectOptimisticLockingFailureException → 409
+    }
+}
+```
+
+The `WorkStateMachine.next(state, event)` pure function returns the next state or `null` for an illegal transition. The exception handler maps `IllegalStateTransitionException` to HTTP 409 with an RFC 7807 `application/problem+json` body that includes `currentState` and `attemptedEvent` extensions, so clients can react programmatically.
+
+Verification: `./gradlew testPayment --tests "*StateMachine*"` exercises the legal-transition matrix (all defined transitions succeed; all undefined transitions throw `IllegalStateTransitionException`) and a concurrent-transition race test — two threads call `transition(CAPTURE)` on the same `AUTHORIZED` entity simultaneously; one succeeds, the other receives 409 via the optimistic-lock collision.
+
+Reference: [Spring Data JPA — Locking](https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html)
 
 Reference: [Hibernate User Guide — Optimistic Locking](https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#locking-optimistic)
 

@@ -228,7 +228,11 @@
       "id": "US-015",
       "title": "P6 — Payment-derived catalog rules (post-audit, 3-5 rules)",
       "priority": 15,
-      "passes": false,
+      "passes": true,
+      "completed_commit": "TBD",
+      "rules_added": 4,
+      "snapshots_added": 2,
+      "note": "Wave 6 (Opus) — P6 catalog growth from Payment blueprint per P1.5 audit (commit f4c14ee). 1 extension (observability-no-pii-in-logs: PAN coverage + PCI-DSS 3.4 evidence) + 3 new generic rules (api-idempotency-key-required, lang-bigdecimal-for-money, persistence-state-machine-atomic) + 1 payment-specific rule (payment-iso-4217-currency) = 4 new files in practices/rules/, total 68 (was 64). 2 new upstream snapshots: pci-dss-saq-a (PCI-DSS Req 3.4/6.5/4.1) + iso-4217 (currency code + per-currency scale). rfc-7807 snapshot already present from prior work, reused. messaging-payload-record.md reconciled: long amountCents example replaced with String customerId to avoid cross-rule tension with lang-bigdecimal-for-money; cross-reference note added. AGENTS.md regenerated: 68 rules, sha=4f7e804a3f5b7b6fbfae15995d4adc9f6f17641d8a8521edb4b52ec2e92e7b17. 4 Java hard gates exit 0; testPractices exit 0; testPayment 47/47 GREEN; testAsvs/testCrud/testRateLimit no regression; practices-react 3 gates exit 0.",
       "acceptanceCriteria": [
         "3-5 new rules added to practices/rules/ (or extensions to existing rules) per the P1.5 generalization audit (US-007). NOT a fixed quota of 5",
         "Each new rule .md file has all required frontmatter: spec_ref, evidence (with URL + quote + upstream_id), substance (Incorrect/Correct examples), verification.tag, verification.gradle_task",

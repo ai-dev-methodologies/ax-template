@@ -32,8 +32,8 @@ A POJO with setters that the publisher pushes onto a queue can be mutated by the
 ```java
 public class OrderPlacedEvent {
     private String orderId;
-    private long amountCents;
-    public void setAmountCents(long v) { this.amountCents = v; }   // mutable AFTER publish
+    private String customerId;
+    public void setCustomerId(String v) { this.customerId = v; }   // mutable AFTER publish
     // ...
 }
 ```
@@ -41,12 +41,19 @@ public class OrderPlacedEvent {
 **Correct — record payload, every component final by construction:**
 
 ```java
-public record OrderPlacedEvent(String orderId, long amountCents, Instant placedAt) {}
+public record OrderPlacedEvent(String orderId, String customerId, Instant placedAt) {}
 
-OrderPlacedEvent evt = new OrderPlacedEvent("ord-123", 4_999L, Instant.now());
+OrderPlacedEvent evt = new OrderPlacedEvent("ord-123", "cust-42", Instant.now());
 publisher.publish(MessageTopics.ORDER_PLACED, evt);
 // no setters, every component final, equals/hashCode/toString auto-generated
 ```
+
+(Earlier iterations of this rule used `long amountCents` to illustrate a payload
+field. That example is intentionally avoided here because monetary fields are
+governed by `lang-bigdecimal-for-money.md`, which mandates `BigDecimal` unless
+the codebase commits whole-system to integer minor-units. Using a non-monetary
+field (`customerId`) keeps the immutability lesson clear without colliding with
+the monetary-precision rule.)
 
 Verification: `./gradlew testPractices --tests "*PayloadRecord*"` asserts `OrderPlacedEvent.class.isRecord()` and that every declared field is final.
 
