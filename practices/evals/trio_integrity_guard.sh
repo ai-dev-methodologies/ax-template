@@ -143,6 +143,9 @@ def check_full_trio(domain, root):
 
     # Validate routes
     for route in ui_contract.get("routes", []):
+        # Redirect-only routes legitimately have no backend_operation_id
+        if route.get("redirect_to"):
+            continue
         op_id = route.get("backend_operation_id")
         if op_id is None:
             errs.append(f"NULL_OPERATION_ID: route {route.get('path')} has null backend_operation_id in full_trio mode")
