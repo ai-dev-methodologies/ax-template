@@ -75,7 +75,9 @@
       "id": "US-005",
       "title": "P1.25 — PCI-DSS SAQ scope declaration in manifest",
       "priority": 5,
-      "passes": false,
+      "passes": true,
+      "completed_commit": "0b97ce1",
+      "note": "Covered as US-004 부산물 by the Spec Trio agent: pci_dss.saq_tier=SAQ-A; pan_storage=NONE; 3-item trace; PAYMENT-SEC-* items have pci_ref field (grep -c pci_ref payment-l0.yaml = 3).",
       "acceptanceCriteria": [
         "blueprints/payment-manifest.yaml#pci_dss.saq_tier = 'SAQ-A'",
         "blueprints/payment-manifest.yaml#pci_dss.pan_storage = 'NONE'",
