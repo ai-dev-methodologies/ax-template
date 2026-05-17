@@ -1,0 +1,122 @@
+# specs/crud-frontend-l0.yaml
+# Page Compliance Spec — crud domain, full_trio mode.
+#
+# Every item's backend_operation_id resolves to contracts/crud-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in specs/crud-security.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+
+domain: crud
+domain_mode: full_trio
+backend_spec_ref: specs/crud-security.yaml
+frontend_required: true
+
+items:
+  - id: CRUD-FE-001
+    requirement: "Items list page renders DataTable with server-paginated data and calls the listItems endpoint"
+    backend_operation_id: listItems
+    backend_spec_ref: CRUD-AUTH-1
+    static_source_ref: []
+    test_method: "crud/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/crud-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: CRUD-FE-002
+    requirement: "Items list page renders FilterBar and SearchInput allowing users to filter the list"
+    backend_operation_id: listItems
+    backend_spec_ref: CRUD-PAG-1
+    static_source_ref: []
+    test_method: "crud/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/crud-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: CRUD-FE-003
+    requirement: "Items list page renders Pagination controls reflecting totalPages from the listItems response"
+    backend_operation_id: listItems
+    backend_spec_ref: CRUD-PAG-1
+    static_source_ref: []
+    test_method: "crud/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/crud-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: CRUD-FE-004
+    requirement: "Items list page renders EmptyState when the listItems response has zero items"
+    backend_operation_id: listItems
+    backend_spec_ref: CRUD-AUTH-2
+    static_source_ref: []
+    test_method: "crud/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/crud-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: CRUD-FE-005
+    requirement: "Items list page renders BulkActionsBar when rows are selected in the DataTable"
+    backend_operation_id: listItems
+    backend_spec_ref: CRUD-AUTH-2
+    static_source_ref: []
+    test_method: "crud/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/crud-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: CRUD-FE-006
+    requirement: "Create page renders CrudCreateForm with title and description fields and calls createItem on submit"
+    backend_operation_id: createItem
+    backend_spec_ref: CRUD-VAL-1
+    static_source_ref: []
+    test_method: "crud/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/crud-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: CRUD-FE-007
+    requirement: "Create page redirects to the detail page of the newly created item on successful createItem response"
+    backend_operation_id: createItem
+    backend_spec_ref: CRUD-VAL-1
+    static_source_ref: []
+    test_method: "crud/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/crud-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: CRUD-FE-008
+    requirement: "Detail page shows item title, description, and audit fields (createdAt, createdBy) by calling getItem"
+    backend_operation_id: getItem
+    backend_spec_ref: CRUD-AUD-1
+    static_source_ref: []
+    test_method: "crud/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/crud-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: CRUD-FE-009
+    requirement: "Edit page renders CrudEditForm pre-populated with the item's current values from getItem and calls updateItem on submit"
+    backend_operation_id: updateItem
+    backend_spec_ref: CRUD-AUD-1
+    static_source_ref: []
+    test_method: "crud/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/crud-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: CRUD-FE-010
+    requirement: "Edit page danger zone renders CrudDeleteConfirm dialog that calls deleteItem and redirects to the list on confirmation"
+    backend_operation_id: deleteItem
+    backend_spec_ref: CRUD-DEL-1
+    static_source_ref: []
+    test_method: "crud/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/crud-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false

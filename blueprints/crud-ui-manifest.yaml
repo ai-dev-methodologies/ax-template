@@ -1,0 +1,75 @@
+# blueprints/crud-ui-manifest.yaml
+# UI Policy Manifest — crud domain, full_trio mode.
+#
+# trio_integrity_guard.sh validates:
+#   a11y.contrast_min >= 4.5  (WCAG 2.2 SC 1.4.3)
+#   cwv.lcp_ms <= 2500
+#   cwv.inp_ms <= 200
+#   cwv.cls <= 0.1
+#   motion.respect_prefers_reduced_motion == true
+
+domain: crud
+
+tokens_override:
+  color:
+    color_primary: "oklch(52% 0.22 246)"
+    color_primary_hover: "oklch(47% 0.22 246)"
+    color_surface: "oklch(99% 0 0)"
+    color_surface_subtle: "oklch(97% 0.005 246)"
+    color_text: "oklch(18% 0 0)"
+    color_muted: "oklch(55% 0 0)"
+    color_error: "oklch(55% 0.21 25)"
+    color_border: "oklch(88% 0.005 246)"
+  typography:
+    font_sans: "'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif"
+    text_base: "clamp(1rem, 0.92rem + 0.4vw, 1.125rem)"
+    text_heading: "clamp(1.5rem, 1.2rem + 1.5vw, 2rem)"
+    text_table: "clamp(0.875rem, 0.82rem + 0.28vw, 0.9375rem)"
+  spacing:
+    space_form_gap: "clamp(1rem, 0.8rem + 1vw, 1.5rem)"
+    space_section: "clamp(2rem, 1.5rem + 2.5vw, 4rem)"
+    space_table_row: "clamp(0.625rem, 0.55rem + 0.375vw, 0.75rem)"
+  motion:
+    duration_fast: "150ms"
+    duration_normal: "300ms"
+    ease_out: "cubic-bezier(0.16, 1, 0.3, 1)"
+
+a11y:
+  wcag_level: "2.2-AA"
+  axe_rules:
+    - color-contrast
+    - label
+    - button-name
+    - form-field-multiple-labels
+    - aria-required-attr
+    - aria-valid-attr-value
+    - table-duplicate-name
+    - scope-attr-valid
+  contrast_min: 4.5
+
+cwv:
+  lcp_ms: 2500
+  inp_ms: 200
+  cls: 0.1
+  fcp_ms: 1500
+  tbt_ms: 200
+
+motion:
+  respect_prefers_reduced_motion: true
+  default_duration_ms: 300
+
+bundle_budgets:
+  landing_page_js_kb: 150
+  app_page_js_kb: 300
+  landing_page_css_kb: 30
+  app_page_css_kb: 50
+
+pagination:
+  max_page_size: 50
+  default_page_size: 20
+
+table:
+  default_visible_columns: [title, createdAt, createdBy]
+  sortable_columns: [title, createdAt]
+  selectable: true
+  bulk_actions: [delete]

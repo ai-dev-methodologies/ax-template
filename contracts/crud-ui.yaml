@@ -1,0 +1,102 @@
+# contracts/crud-ui.yaml
+# UI Contract — crud domain, full_trio mode.
+#
+# All 5 backend operationIds from contracts/crud-openapi.yaml are covered.
+# Every route's backend_operation_id resolves against the backend_contract_ref.
+# static_source_ref is [] for all routes (full_trio: FORBIDDEN to be non-empty).
+
+domain: crud
+backend_contract_ref: contracts/crud-openapi.yaml
+routes:
+  - path: /items
+    method: GET
+    backend_operation_id: listItems
+    static_source_ref: []
+    params: {}
+    query:
+      page:
+        type: integer
+        description: "Zero-based page index"
+      size:
+        type: integer
+        description: "Items per page (max 50)"
+      search:
+        type: string
+        description: "Client-side filter search string (applied before API call)"
+    states:
+      loading: LoadingBoundary
+      error: ErrorBanner
+      empty: EmptyState
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: null
+
+  - path: /items/new
+    method: GET
+    backend_operation_id: createItem
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingBoundary
+      error: FormErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: /items/{id}
+
+  - path: /items/{id}
+    method: GET
+    backend_operation_id: getItem
+    static_source_ref: []
+    params:
+      id:
+        type: string
+        format: uuid
+    query: {}
+    states:
+      loading: LoadingBoundary
+      error: NotFoundBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: null
+
+  - path: /items/{id}/edit
+    method: GET
+    backend_operation_id: updateItem
+    static_source_ref: []
+    params:
+      id:
+        type: string
+        format: uuid
+    query: {}
+    states:
+      loading: LoadingBoundary
+      error: FormErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: /items/{id}
+
+  - path: /items/{id}/delete
+    method: DELETE
+    backend_operation_id: deleteItem
+    static_source_ref: []
+    params:
+      id:
+        type: string
+        format: uuid
+    query: {}
+    states:
+      loading: LoadingBoundary
+      error: DeleteErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: /items
