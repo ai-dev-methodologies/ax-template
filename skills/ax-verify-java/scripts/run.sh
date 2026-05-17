@@ -13,7 +13,7 @@ echo ""
 
 # Step 1: spec_ref_guard scoped to practices/rules/**
 echo "[1] spec_ref_guard (practices/rules/)"
-if bash "$REPO_ROOT/practices/evals/spec_ref_guard.sh" "$REPO_ROOT/practices/rules"; then
+if bash "$REPO_ROOT/practices/evals/spec_ref_guard.sh"; then
     echo "  PASS [spec_ref_guard]"
 else
     echo "  FAIL [spec_ref_guard]" >&2
