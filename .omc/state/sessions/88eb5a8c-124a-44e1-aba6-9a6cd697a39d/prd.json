@@ -88,7 +88,7 @@
       "title": "P1.3 — Sealed L4 prompt+rubric commit anchored",
       "priority": 6,
       "passes": true,
-      "completed_commit": "TBD-US-006",
+      "completed_commit": "eefd521",
       "acceptanceCriteria": [
         "git log shows the US-001 sealing commit hash is recorded in BOTH docs/blueprints/payment/acceptance/l4-sealed-prompt.md AND l4-sealed-rubric.md (sealed_at_commit: <hash>)",
         "A subsequent commit (or amended) updates these files with the actual hash from US-001 commit",
@@ -99,7 +99,8 @@
       "id": "US-007",
       "title": "P1.5 — Generalization Audit per proposed Payment rule",
       "priority": 7,
-      "passes": false,
+      "passes": true,
+      "completed_commit": "TBD",
       "acceptanceCriteria": [
         "docs/blueprints/payment/decisions.md contains a 'Generalization Audit' section with a table of proposed Payment rules",
         "Each proposed rule classified as: new_generic / extend_existing / payment_specific / reject_duplicate, with one-line rationale",
