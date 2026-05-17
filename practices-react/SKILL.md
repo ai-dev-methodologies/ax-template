@@ -145,6 +145,7 @@ cd practices-react/eslint-plugin-ax && npm test
 - Methodology: `METHODOLOGY.md` (Spec Trio + portable tests + binary verification)
 - Pilot report: `practices-react/pilot/pilot-report.md` (full audit trail for the first 6 rules; pattern carries to all subsequent rules)
 - External validation: `practices-react/pilot/external-validation.md` (Next.js 16 Todo app proves plug-and-play downstream consumption)
+- Round 3 empirical validation: `practices-react/pilot/round-3-empirical-validation.md` (`react-async-parallel` on 19 real-world Next.js repos: 550 hits, ~70% TP, Vercel references silent, two FP clusters fixed)
 
 ## Resources
 
