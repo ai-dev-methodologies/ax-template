@@ -100,7 +100,7 @@
       "title": "P1.5 — Generalization Audit per proposed Payment rule",
       "priority": 7,
       "passes": true,
-      "completed_commit": "TBD",
+      "completed_commit": "f4c14ee",
       "acceptanceCriteria": [
         "docs/blueprints/payment/decisions.md contains a 'Generalization Audit' section with a table of proposed Payment rules",
         "Each proposed rule classified as: new_generic / extend_existing / payment_specific / reject_duplicate, with one-line rationale",
@@ -114,6 +114,7 @@
       "title": "P2 — RED tests (testPayment registered + 30-40 failing @Tag tests)",
       "priority": 8,
       "passes": false,
+      "progress": "Agent A (AUTHZ+IDEMP+MONEY) complete; awaiting B (STATE+REFUND+PROVIDER) and C (SEC+OBS+RECON)",
       "acceptanceCriteria": [
         "backend/build.gradle.kts has tasks.register<Test>(\"testPayment\") with includeTags(\"PAYMENT\")",
         "cd backend && ./gradlew tasks --all | grep testPayment confirms registration",

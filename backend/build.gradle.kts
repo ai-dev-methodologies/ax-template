@@ -70,6 +70,15 @@ tasks.register<Test>("testRateLimit") {
     }
 }
 
+tasks.register<Test>("testPayment") {
+    useJUnitPlatform {
+        includeTags("PAYMENT")
+    }
+    description = "Run Payment blueprint compliance tests (29 items / 9 families)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Test>("testPortability") {
     useJUnitPlatform {
         includeTags("PORTABILITY")
