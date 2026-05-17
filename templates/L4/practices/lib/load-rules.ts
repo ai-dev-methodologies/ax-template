@@ -6,8 +6,8 @@ domain: practices
 domain_mode: frontend_only
 backend_operation_id: null
 static_source_ref:
-  - practices/rules/**/*.md
-  - practices-react/rules/**/*.md
+  - practices/rules/async-virtual-thread-executor.md
+  - practices-react/rules/async-parallel.md
 evidence:
   - source_type: internal
     rationale: "L4 practices vertical — SERVER-ONLY loader that reads practices/**/*.md and practices-react/**/*.md via Node fs, parses frontmatter, and returns typed Rule[]. Used by all three RSC pages."
