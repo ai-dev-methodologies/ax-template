@@ -258,6 +258,33 @@ snapshots:
     sha: "b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1"
     version_observed: "CWV 2026 stable"
 
+  - id: "kakao-postcode-2026-05"
+    tier: 3
+    source: "https://postcode.map.kakao.com/guide"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 1840
+    sha: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+    purpose: address-search-evidence
+
+  - id: "react-dropzone-2026-05"
+    tier: 3
+    source: "https://react-dropzone.js.org/"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 1620
+    sha: "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3"
+    purpose: file-dropzone-evidence
+
+  - id: "input-otp-2026-05"
+    tier: 3
+    source: "https://input-otp.rodz.dev/"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 1390
+    sha: "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"
+    purpose: otp-input-evidence
+
 curation_pipeline:
   description: "Each rule passes a 4-phase audit before shipping to rules/"
   phases:

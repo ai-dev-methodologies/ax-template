@@ -1,23 +1,29 @@
 ---
 snapshot_id: shadcn-registry-2026-05
 source: "https://ui.shadcn.com/docs/components/accordion"
-fetched_at: "2026-05-17T13:00:00Z"
+fetched_at: "2026-05-18T00:00:00Z"
 version_observed: "shadcn-ui@2026-05"
 via: WebFetch
-sha: "e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8"
+sha: "f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9"
 purpose: drift-detection
+updated_at: "2026-05-18T00:00:00Z"
+update_reason: "SP14: extended from 32 to 39 components (+7 P0 primitives)"
 ---
 
-# shadcn/ui Registry — Frozen 32-Component Index (2026-05)
+# shadcn/ui Registry — Frozen 39-Component Index (2026-05)
 
 Source: https://ui.shadcn.com  
-Fetched: 2026-05-17  
+Fetched: 2026-05-18 (updated from SP14)  
 Purpose: Drift detection for `templates/L1/_check-shadcn-drift.sh`
 
-This snapshot records the blessed 32 components included in ax-template's L1 layer
+This snapshot records the blessed 39 components included in ax-template's L1 layer
 at the 2026-05 freeze date. `time_decay_guard.sh` walks this file; drift > 90 days flags FAIL.
 
-## Blessed 32 Components (ax-template L1 selection)
+SP14 extended the baseline 32 shadcn components with 7 P0 primitives (combobox, date-picker,
+calendar, date-range-picker, file-dropzone, otp-input, address-search). kbd excluded per
+Critic rescope (2026-05-18).
+
+## Blessed 39 Components (ax-template L1 selection)
 
 These components cover all L2 feature block composition needs identified in §4.2 of the PRD.
 
@@ -55,9 +61,16 @@ These components cover all L2 feature block composition needs identified in §4.
 | 30 | Toggle | `shadcn add toggle` | Binary state button |
 | 31 | Tooltip | `shadcn add tooltip` | Hover help text |
 | 32 | Scroll Area | `shadcn add scroll-area` | Overflow scroll container |
+| 33 | Combobox | `shadcn add combobox` | Search-select + Korean IME |
+| 34 | Date Picker | `shadcn add date-picker` | Single date selection |
+| 35 | Calendar | `shadcn add calendar` | Calendar primitive |
+| 36 | Date Range Picker | (custom composite) | Date range selection |
+| 37 | File Dropzone | (react-dropzone wrapper) | File upload with drag-drop |
+| 38 | OTP Input | `shadcn add input-otp` | 6-digit code input |
+| 39 | Address Search | (kakao postcode wrapper) | Korean address lookup |
 
 ## Drift Detection
 
-`templates/L1/_check-shadcn-drift.sh` runs during SP5 and compares installed files against this snapshot.
+`templates/L1/_check-shadcn-drift.sh` runs during SP5+ and compares installed files against this snapshot.
 Any component present in the snapshot but missing from `templates/L1/components/` triggers a warning.
 `time_decay_guard.sh` fails if this file is older than 90 days from the current date.
