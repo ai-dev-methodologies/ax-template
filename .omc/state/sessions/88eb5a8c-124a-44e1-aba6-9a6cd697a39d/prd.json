@@ -289,7 +289,7 @@
       "title": "P8 — L3 fork simulation",
       "priority": 19,
       "passes": true,
-      "completed_commit": "PENDING_COMMIT",
+      "completed_commit": "cc5978b",
       "verdict": "PASS",
       "note": "PASS — fresh clone at /tmp/ax-payment-test-l3 from commit 2663cf8. All 5 gates exit 0: Gradle full test (234 tests, 0 failures, 18 skipped, 81s) + practices/evals/run.sh (68 rules, spec_ref 68/68) + 4 Java hard gates (spec_ref/substance/time_decay/evidence) + practices-react/evals/run.sh (3/3 gates) + ESLint plugin tests (7/7 RuleTester suites, npm install 1s in 86 pkgs 0 vuln). No fork-bring-up regressions. Submodule SKIP for portability fixtures is documented graceful degradation (advisory axis). Wall-clock ~191s end-to-end. Cleanup completed.",
       "acceptanceCriteria": [
