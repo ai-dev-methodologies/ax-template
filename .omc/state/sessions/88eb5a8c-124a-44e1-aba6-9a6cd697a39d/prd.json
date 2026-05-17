@@ -123,7 +123,7 @@
         "cd backend && ./gradlew testPayment exits NON-ZERO (RED state — implementation missing). All test failures are 'NoClassDefFoundError', 'cannot find symbol', or 'assertion failed' — not 'test framework error' or 'compile error in test code'",
         "git commit with message starting 'test: payment reproducer (RED)' on active branch"
       ],
-      "completed_commit": "TBD-WAVE3C",
+      "completed_commit": "7d07632",
       "final_test_count": 47
     },
     {
