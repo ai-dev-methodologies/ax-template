@@ -29,13 +29,18 @@ fi
 
 # Domain → Gradle task mapping.
 # Some domains use a different Gradle task name than the simple "test<Domain>" convention.
+# Hyphenated domain names (e.g., audit-log, file-storage) are camel-cased: testAuditLog.
 case "$DOMAIN_LOWER" in
-    auth)     GRADLE_TASK="testAsvs" ;;       # auth ASVS tests
-    crud)     GRADLE_TASK="testCrud" ;;
-    payment)  GRADLE_TASK="testPayment" ;;
-    ratelimit) GRADLE_TASK="testRatelimit" ;;
+    auth)         GRADLE_TASK="testAsvs" ;;       # auth ASVS tests
+    crud)         GRADLE_TASK="testCrud" ;;
+    payment)      GRADLE_TASK="testPayment" ;;
+    ratelimit)    GRADLE_TASK="testRatelimit" ;;
+    audit-log)    GRADLE_TASK="testAuditLog" ;;
+    file-storage) GRADLE_TASK="testFileStorage" ;;
+    notification) GRADLE_TASK="testNotification" ;;
     *)
-        DOMAIN_PASCAL="$(echo "$DOMAIN_LOWER" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+        # Generic: capitalise first letter of each hyphen-separated segment and join
+        DOMAIN_PASCAL="$(echo "$DOMAIN_LOWER" | awk -F'-' '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2); OFS=""; print}')"
         GRADLE_TASK="test${DOMAIN_PASCAL}"
         ;;
 esac

@@ -86,6 +86,15 @@ tasks.register<Test>("testPayment") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testNotification") {
+    useJUnitPlatform {
+        includeTags("NOTIFICATION")
+    }
+    description = "Run Notification domain compliance tests (11 items / 5 families)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Test>("testPortability") {
     useJUnitPlatform {
         includeTags("PORTABILITY")

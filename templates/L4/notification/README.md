@@ -31,7 +31,7 @@ mapped to the backend Spec Trio (`specs/notification-l0.yaml` + `contracts/notif
 ### 1. Copy the directory into your project
 
 ```bash
-# From repo root
+# From repo root — copy the app/ directory and next.config.ts
 cp -r templates/L4/notification/app <your-nextjs-project>/app
 cp templates/L4/notification/next.config.ts <your-nextjs-project>/next.config.ts
 ```

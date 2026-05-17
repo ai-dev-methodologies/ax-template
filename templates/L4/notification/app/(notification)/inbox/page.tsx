@@ -20,7 +20,7 @@ imports_forbidden: [L4/auth, L4/crud, L4/payment, L4/practices]
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
-// NotificationList internally composes VirtualizedTable (SP15) for DOM-efficient rendering
+// NotificationList internally composes virtualized-table (SP15) for DOM-efficient large-list rendering
 import NotificationList from 'templates/L2/blocks/notification-list'
 
 /**
