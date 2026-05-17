@@ -1,5 +1,49 @@
 # ax-template — `/ax-transform` Skill Package Source
 
+## ⭐ Project Vision (READ FIRST — 절대 잊지 말 것)
+
+**ax-template은 React (front) + Spring Boot (backend) full-stack 개발의
+composition kit이다.** 각 component (Spec Trio · practices · practices-react ·
+reference workloads · ESLint plugin · testPractices · AGENTS.md · 4 hard gates ·
+/ax-transform skill) 를 **조합**해서 새 프로젝트를 시작하는 **fork-base
+template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순환 시스템**.
+
+```
+fork ax-template
+    ↓ (auth + CRUD + rate-limit blueprint ready, 64 Java rules, 68 React rules, 7 ESLint rules, AGENTS.md sentinel)
+새 도메인 추가 — METHODOLOGY.md의 5-step 따라
+    ↓
+AI agent가 Spring + React 코드 작성
+    ↓
+ESLint plugin + ./gradlew test{Domain} + Spec Trio + AGENTS.md + 4 hard gates 가 자동 enforce
+    ↓
+규칙 밖 AI output BLOCKED (commit / push / CI)
+    ↓
+catalog로 새 도메인 rule 추가 — 다음 fork 더 강력
+    ↓
+loop
+```
+
+**핵심 원칙 (이 framing을 흔들지 말 것):**
+
+1. **Java/Spring 측과 React/Next.js 측은 둘 다 active equal partner**. 어느
+   한 쪽을 archive로 강등하거나 frozen으로 표시하지 않는다.
+2. **새 도메인 / 새 규칙 추가는 정상 활동**. catalog 확장은 시스템 가치 증가.
+   "stop adding rules" 류 권고는 이 vision과 충돌 — 받아들이지 않는다.
+3. **README hero는 "composition kit + 선 순환 시스템"**. 단일 npm 패키지나
+   단일 ESLint plugin product로 좁히지 않는다. adoption probability 같은 single
+   product 메트릭으로 평가하지 않는다.
+4. **`/react-best-practices` 스타일 코드 템플릿 + 강력한 규칙 + 명확한 개발
+   방향** = 어떤 개발이든 이 템플릿과 규칙 내에서만 동작하는 코드 생성.
+
+→ 한 줄: **Korean enterprise standard stack (React + Spring Boot) 위에 AI agent가
+규칙 안에서만 동작하는 코드를 짤 수 있게 하는 composition kit + 자체 강화
+catalog 시스템.**
+
+상세 내용은 README.md (composition-kit framing 정식 문서) 참조.
+
+---
+
 ## Project Identity
 
 **ax = AI transformation.** 이 repo는 Claude Code skill **`/ax-transform`** 의 source. AI agent가 새 프로젝트를 부트스트랩하거나 기존 프로젝트를 AI 친화적으로 전환할 때 활성화하는 skill 전체 패키지.
