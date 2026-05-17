@@ -225,6 +225,52 @@ test("react-async-parallel — RuleTester suite", () => {
           }
         `,
       },
+      // H2: flow-control on the second await — router.push after action.
+      // Mirrors documenso forgot-password.tsx FP.
+      {
+        code: `
+          async function forgotPasswordFlow(email) {
+            await forgotPassword({ email });
+            await router.push('/check-email');
+          }
+        `,
+      },
+      // H2: redirect after server action (Next.js).
+      {
+        code: `
+          async function serverAction(formData) {
+            await saveData(formData);
+            await redirect('/done');
+          }
+        `,
+      },
+      // H2: signOut chain.
+      {
+        code: `
+          async function logoutFlow() {
+            await trackLogoutEvent();
+            await signOut();
+          }
+        `,
+      },
+      // H2: bare navigate identifier.
+      {
+        code: `
+          async function bareNav() {
+            await persistDraft();
+            await navigate('/published');
+          }
+        `,
+      },
+      // H2: router.refresh after a write — RSC reload pattern.
+      {
+        code: `
+          async function refreshAfterEdit(updates) {
+            await applyEdits(updates);
+            await router.refresh();
+          }
+        `,
+      },
     ],
     invalid: [
       // Classic 3-call waterfall from Vercel's "Incorrect" example.
@@ -297,6 +343,57 @@ test("react-async-parallel — RuleTester suite", () => {
             const a = await fetchA();
             const b = await fetchB();
             return [a, b];
+          }
+        `,
+        errors: [{ messageId: "independentAwaits" }],
+      },
+      // Two awaits share a name that is a function PARAMETER (not from a
+      // prior await). Pure static value, the two calls are genuinely
+      // parallelizable. Must flag.
+      {
+        code: `
+          async function staticParam(userId) {
+            await trackA(userId);
+            await trackB(userId);
+          }
+        `,
+        errors: [{ messageId: "independentAwaits" }],
+      },
+      // Three independent awaits in sequence — two pairs, two reports. The
+      // bound name `config` is not referenced by the consecutive pair.
+      {
+        code: `
+          async function unrelatedPrior() {
+            const config = await loadConfig();
+            await fetchA();
+            await fetchB();
+            return config;
+          }
+        `,
+        errors: [
+          { messageId: "independentAwaits" },
+          { messageId: "independentAwaits" },
+        ],
+      },
+      // Prior await binds `parent`; one of the next pair references it, the
+      // other doesn't. The (linkA→sideEffect) pair is independent.
+      {
+        code: `
+          async function asymmetric() {
+            const parent = await create();
+            await linkA(parent.id);
+            await sideEffect();
+          }
+        `,
+        errors: [{ messageId: "independentAwaits" }],
+      },
+      // H2 regression guard: callee 'navigateTo' (not in allowlist) should
+      // still flag. Tests that allowlist is exact-match, not prefix.
+      {
+        code: `
+          async function nonAllowlist() {
+            await stepOne();
+            await navigateTo('/x');
           }
         `,
         errors: [{ messageId: "independentAwaits" }],

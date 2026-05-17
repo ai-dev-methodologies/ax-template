@@ -19,10 +19,30 @@
  *     `@clack/prompts`). Sequential awaits inside such files are usually
  *     stdin-blocking prompts where parallelization would corrupt UX.
  *
+ * Round 4 (2026-05-17) — one FP-class heuristic added after empirical 19-repo
+ * validation:
+ *
+ *   (H2) **Flow-control callee on the second await** — if the second await
+ *        calls a router navigation, redirect, or auth-flow function
+ *        (`router.push|replace|refresh`, `redirect`, `signOut`, `signIn`,
+ *        `navigate`, etc.), the sequence is intentional UX flow control.
+ *        Found in documenso forgot-password (`fn(); navigate(/check-email)`)
+ *        and similar.
+ *
+ * **Rejected — H1 (shared prior-bound name)**. Round 4 re-measurement on
+ * chatbot-ui found this heuristic over-fires on "two awaits read distinct
+ * attributes of a prior-awaited entity" (e.g., `createFileWorkspace({id})`
+ * + `uploadFile({name})` where both read `createdFile.*` but do different
+ * work). It caused 2 TP regressions in db/files.ts while NOT catching the
+ * intended sibling-write FP cluster in sidebar-create-item.tsx (because
+ * the awaits there pass intermediate consts, not the parent directly).
+ * Needs stricter discrimination — left for future round.
+ *
  * Future expansion (not in pilot):
  *   - For-loop awaits (`for-of` with await) — separate rule.
  *   - Top-level await in modules (no enclosing function).
  *   - Partial-dependency graphs (better-all / async-dependencies sibling rule).
+ *   - Init/gate contracts (`ensureInit()` then `useX()`) — fuzzy, deferred.
  */
 
 /** @type {import("eslint").Rule.RuleModule} */
@@ -55,6 +75,58 @@ const rule = {
      * `lib/db/setup.ts` during the Round 2 empirical validation.
      */
     let skipFile = false;
+
+    /**
+     * H2: callees whose presence as the SECOND await indicates intentional
+     * UX-flow sequencing (navigate after action, redirect after auth, etc.).
+     * Treat the pair as dependent — parallelizing would break the flow.
+     *
+     * Matches both bare identifier (`redirect(...)`) and member call
+     * (`router.push(...)`) — only the property/identifier name is checked.
+     */
+    const FLOW_CONTROL_CALLEES = new Set([
+      // Next.js / React Router navigation
+      "push",
+      "replace",
+      "back",
+      "forward",
+      "refresh",
+      "prefetch",
+      // Next.js redirect helpers
+      "redirect",
+      "permanentRedirect",
+      "notFound",
+      "forbidden",
+      "unauthorized",
+      // Auth flows
+      "signOut",
+      "signIn",
+      "logout",
+      "login",
+      // Generic
+      "navigate",
+      "setLocation",
+    ]);
+
+    /**
+     * Return the callee's leaf name (identifier name OR member-property name
+     * for non-computed member calls). Used by H2 to test against
+     * FLOW_CONTROL_CALLEES.
+     */
+    function calleeLeafName(callExpr) {
+      if (!callExpr || callExpr.type !== "CallExpression") return null;
+      const callee = callExpr.callee;
+      if (callee.type === "Identifier") return callee.name;
+      if (
+        callee.type === "MemberExpression" &&
+        !callee.computed &&
+        callee.property &&
+        callee.property.type === "Identifier"
+      ) {
+        return callee.property.name;
+      }
+      return null;
+    }
 
     /**
      * Return true if a module source is one of the known interactive-CLI
@@ -214,7 +286,7 @@ const rule = {
     function checkBlock(blockNode) {
       const stmts = blockNode.body;
       // Collect index of statements that contribute a top-level await with a Call arg.
-      const awaitInfo = []; // {idx, defines, referenced, receiver, reportNode}
+      const awaitInfo = []; // {idx, defines, referenced, receiver, callExpr, reportNode}
       for (let i = 0; i < stmts.length; i++) {
         const stmt = stmts[i];
         const awaitExpr = topLevelAwait(stmt);
@@ -225,7 +297,14 @@ const rule = {
         const defines = namesDefined(stmt);
         const referenced = collectReferencedIdentifiers(awaitExpr.argument);
         const receiver = methodReceiverName(awaitExpr.argument);
-        awaitInfo.push({ idx: i, defines, referenced, receiver, reportNode: stmt });
+        awaitInfo.push({
+          idx: i,
+          defines,
+          referenced,
+          receiver,
+          callExpr: awaitExpr.argument,
+          reportNode: stmt,
+        });
       }
       // Compare each consecutive pair (in statement order).
       for (let k = 1; k < awaitInfo.length; k++) {
@@ -255,6 +334,18 @@ const rule = {
         // dependent.
         if (prev.receiver && curr.referenced.has(prev.receiver)) continue;
         if (curr.receiver && prev.referenced.has(curr.receiver)) continue;
+
+        // (d) H2 — second await is a flow-control call (router navigation,
+        // redirect, signOut, etc.). The sequence is intentional UX flow.
+        // Example:
+        //   await forgotPassword({ email });
+        //   await router.push('/check-email');
+        // Parallelizing would issue the request without waiting for it
+        // before navigating. Treat as dependent.
+        const currCallee = calleeLeafName(curr.callExpr);
+        if (currCallee && FLOW_CONTROL_CALLEES.has(currCallee)) {
+          continue;
+        }
 
         context.report({
           node: curr.reportNode,
