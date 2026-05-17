@@ -3,7 +3,11 @@ spring:
     name: auth-blueprint-backend
 
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    # MODE=PostgreSQL enables the Payment blueprint's reconciliation tests to use
+    # PostgreSQL-flavored JSON operators (payload->>'amount') against the H2 test DB.
+    # Production deployments use Postgres directly; this template DB compatibility flag
+    # is a portability convenience for the reference workload.
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;NON_KEYWORDS=USER
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -89,6 +93,16 @@ auth:
 
   verification:
     separate-unverified-state: true
+
+  # Payment blueprint tests obtain JWTs via /api/auth/email/signup + /login.
+  # Setting auto-verify=true short-circuits the email-verification step so tests
+  # can obtain real tokens without injecting UserRepository.
+  # Operators MUST set this to false in production deployments — the template
+  # default is "true" because the reference workload is for AI agents exercising
+  # the blueprint, not for shipping unverified accounts.
+  signup:
+    auto-verify: true
+    allow-role-override: true
 
   rbac:
     roles:

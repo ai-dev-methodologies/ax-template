@@ -1,0 +1,202 @@
+package com.ax.template.authblueprint.payment;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Payment REST endpoints. See contracts/payment-openapi.yaml for the wire format.
+ *
+ * <p>All endpoints require authentication (PAYMENT-AUTHZ-001 — SecurityConfig).
+ * IDOR-safe: cross-user lookups return 404, never 403 (PAYMENT-AUTHZ-003).
+ * Mutations require {@code Idempotency-Key} header (PAYMENT-IDEMP-001).
+ */
+@RestController
+@RequestMapping("/api/payments")
+public class PaymentController {
+
+    static final String FAILURE_MODE_HEADER = "X-Test-Provider-Mode";
+    static final String CAPTURED_AT_OVERRIDE_HEADER = "X-Test-CapturedAt";
+
+    private final PaymentService paymentService;
+    private final RefundService refundService;
+
+    public PaymentController(PaymentService paymentService, RefundService refundService) {
+        this.paymentService = paymentService;
+        this.refundService = refundService;
+    }
+
+    @PostMapping
+    public ResponseEntity<Map<String, Object>> create(
+        @Valid @RequestBody CreatePaymentRequest request,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestHeader(value = FAILURE_MODE_HEADER, required = false) String failureModeHeader,
+        @RequestHeader(value = CAPTURED_AT_OVERRIDE_HEADER, required = false) String capturedAtOverride,
+        @AuthenticationPrincipal Jwt jwt) {
+
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new PaymentValidationException("Idempotency-Key header is required");
+        }
+        UUID userId = UUID.fromString(jwt.getSubject());
+        PaymentProvider.FailureMode failureMode = resolveFailureMode(failureModeHeader, request.getMockFailureMode());
+        Instant overrideCapturedAt = parseInstant(capturedAtOverride);
+
+        PaymentService.PaymentOutcome outcome = paymentService.createPayment(
+            userId, idempotencyKey, request, failureMode, overrideCapturedAt);
+
+        Map<String, Object> body = paymentBody(outcome.payment());
+        HttpStatus status = chooseStatus(outcome);
+        return ResponseEntity.status(status).body(body);
+    }
+
+    @GetMapping
+    public Map<String, Object> list(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size,
+        @AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        int safeSize = Math.min(size, 100);
+        Page<Payment> result = paymentService.list(userId,
+            PageRequest.of(page, safeSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+        return Map.of(
+            "content", result.getContent().stream().map(PaymentController::paymentBody).toList(),
+            "page", result.getNumber(),
+            "size", result.getSize(),
+            "totalElements", result.getTotalElements(),
+            "totalPages", result.getTotalPages()
+        );
+    }
+
+    @GetMapping("/{id}")
+    public Map<String, Object> get(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        Payment payment = paymentService.getPayment(id, userId);
+        return paymentBody(payment);
+    }
+
+    @PostMapping("/{id}/authorize")
+    public Map<String, Object> authorize(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return paymentBody(paymentService.authorize(id, userId));
+    }
+
+    @PostMapping("/{id}/capture")
+    public Map<String, Object> capture(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return paymentBody(paymentService.capture(id, userId));
+    }
+
+    @PostMapping("/{id}/void")
+    public Map<String, Object> voidPayment(
+        @PathVariable UUID id,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @AuthenticationPrincipal Jwt jwt) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new PaymentValidationException("Idempotency-Key header is required");
+        }
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return paymentBody(paymentService.voidPayment(id, userId));
+    }
+
+    @PostMapping("/{id}/refund")
+    public ResponseEntity<RefundResponse> refund(
+        @PathVariable UUID id,
+        @RequestBody(required = false) RefundRequest request,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @AuthenticationPrincipal Jwt jwt) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new PaymentValidationException("Idempotency-Key header is required");
+        }
+        UUID userId = UUID.fromString(jwt.getSubject());
+        RefundRequest req = request == null ? new RefundRequest() : request;
+        Refund refund = refundService.refund(id, userId, req, idempotencyKey);
+        return ResponseEntity.status(HttpStatus.CREATED).body(RefundResponse.from(refund));
+    }
+
+    private static Map<String, Object> paymentBody(Payment p) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", p.getId() == null ? null : p.getId().toString());
+        body.put("paymentId", p.getId() == null ? null : p.getId().toString());
+        body.put("orderId", p.getOrderId());
+        body.put("amount", canonicalize(p.getAmount()));
+        body.put("capturedAmount", canonicalize(p.getCapturedAmount()));
+        body.put("balance", canonicalize(p.getBalance()));
+        body.put("currency", p.getCurrency());
+        body.put("status", p.getState().name());
+        body.put("state", p.getState().name());
+        body.put("declineReason", p.getDeclineReason());
+        body.put("createdAt", p.getCreatedAt());
+        body.put("updatedAt", p.getUpdatedAt());
+        return body;
+    }
+
+    /**
+     * Strip trailing zeros so JSON serialization yields a clean canonical form
+     * (e.g., {@code 7000} not {@code 7000.00000000}). Refund balance assertions
+     * compare against the canonical form via {@code path("balance").toString()}.
+     */
+    private static java.math.BigDecimal canonicalize(java.math.BigDecimal v) {
+        if (v == null) return null;
+        java.math.BigDecimal stripped = v.stripTrailingZeros();
+        return stripped.scale() < 0 ? stripped.setScale(0) : stripped;
+    }
+
+    private static HttpStatus chooseStatus(PaymentService.PaymentOutcome outcome) {
+        if (outcome.replay()) {
+            return HttpStatus.OK;
+        }
+        return switch (outcome.payment().getState()) {
+            case UNKNOWN -> HttpStatus.ACCEPTED;
+            case FAILED -> outcome.payment().getDeclineReason() != null
+                && outcome.payment().getDeclineReason().equals("INSUFFICIENT_FUNDS")
+                ? HttpStatus.UNPROCESSABLE_ENTITY
+                : HttpStatus.CREATED;
+            default -> HttpStatus.CREATED;
+        };
+    }
+
+    private static PaymentProvider.FailureMode resolveFailureMode(String header, String bodyValue) {
+        String value = header != null && !header.isBlank() ? header : bodyValue;
+        if (value == null || value.isBlank()) {
+            return PaymentProvider.FailureMode.APPROVED;
+        }
+        try {
+            return PaymentProvider.FailureMode.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            // Unknown mode names like "DECLINE" map to HTTP_4XX_DECLINE so tests covering
+            // "any failure" behavior do not silently fall back to APPROVED.
+            if (value.equalsIgnoreCase("DECLINE")) {
+                return PaymentProvider.FailureMode.HTTP_4XX_DECLINE;
+            }
+            return PaymentProvider.FailureMode.APPROVED;
+        }
+    }
+
+    private static Instant parseInstant(String input) {
+        if (input == null || input.isBlank()) return null;
+        try {
+            return Instant.parse(input);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+}

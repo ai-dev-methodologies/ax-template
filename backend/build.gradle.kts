@@ -32,7 +32,14 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-cache")
     implementation("com.github.ben-manes.caffeine:caffeine")
 
-    runtimeOnly("com.h2database:h2")
+    // H2 is on the implementation classpath (not runtimeOnly) so the Payment blueprint
+    // can register an H2 Java-trigger that enforces append-only semantics on
+    // payment_events (PAYMENT-RECON-001). Production Postgres replaces this with a
+    // CREATE TRIGGER ... EXECUTE FUNCTION raise_immutable migration.
+    //
+    // Pinned to 2.3.232+ for PostgreSQL-compatible JSON operator support (->>).
+    // Required by PaymentReconciliationTest's payload->>'amount' query.
+    implementation("com.h2database:h2:2.3.232")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")

@@ -130,7 +130,9 @@
       "id": "US-009",
       "title": "P3.0 — GREEN baseline implementation",
       "priority": 9,
-      "passes": false,
+      "passes": true,
+      "green_count": "47/47",
+      "completed_commit": "26146e4",
       "acceptanceCriteria": [
         "backend/src/main/java/com/ax/template/authblueprint/payment/ has: Payment entity (BigDecimal amount, audit fields), Refund entity, Order ref, PaymentEvent entity (append-only ledger), PaymentRepository, RefundRepository, PaymentEventRepository, IdempotencyKeyStore (Caffeine), MoneyDeserializer (Jackson, rejects float), PaymentStateMachine, PaymentService, RefundService, PaymentController (5 endpoints), MockProvider implementing PaymentProvider interface",
         "cd backend && ./gradlew testPayment exits 0 (all 30-40 tests GREEN)",

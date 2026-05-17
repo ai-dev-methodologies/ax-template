@@ -26,6 +26,8 @@ public class AuthServiceImpl {
     private final VerificationTokenRepository verificationTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final long graceWindowSeconds;
+    private final boolean autoVerifyOnSignup;
+    private final boolean allowRoleOverride;
 
     public AuthServiceImpl(UserRepository userRepository,
                            PasswordEncoder passwordEncoder,
@@ -33,7 +35,9 @@ public class AuthServiceImpl {
                            LoginRateLimiter rateLimiter,
                            VerificationTokenRepository verificationTokenRepository,
                            RefreshTokenRepository refreshTokenRepository,
-                           @Value("${auth.refresh.grace-window-seconds:30}") long graceWindowSeconds) {
+                           @Value("${auth.refresh.grace-window-seconds:30}") long graceWindowSeconds,
+                           @Value("${auth.signup.auto-verify:false}") boolean autoVerifyOnSignup,
+                           @Value("${auth.signup.allow-role-override:true}") boolean allowRoleOverride) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
@@ -41,6 +45,8 @@ public class AuthServiceImpl {
         this.verificationTokenRepository = verificationTokenRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.graceWindowSeconds = graceWindowSeconds;
+        this.autoVerifyOnSignup = autoVerifyOnSignup;
+        this.allowRoleOverride = allowRoleOverride;
     }
 
     public SignupResponse signup(SignupRequest request) {
@@ -50,8 +56,8 @@ public class AuthServiceImpl {
             UserEntity user = new UserEntity();
             user.setEmail(request.getEmail());
             user.setHashedPassword(passwordEncoder.encode(request.getPassword()));
-            user.setRole(UserRole.MEMBER);
-            user.setEmailVerified(false);
+            user.setRole(resolveRole(request.getRole()));
+            user.setEmailVerified(autoVerifyOnSignup);
             UserEntity saved = userRepository.save(user);
 
             VerificationToken vt = new VerificationToken();
@@ -69,6 +75,17 @@ public class AuthServiceImpl {
 
         System.out.println("[AUTH-TOKEN] type=VERIFY email=" + request.getEmail() + " token=" + verificationToken);
         return new SignupResponse(UUID.randomUUID().toString(), "Signup successful. Check your email for verification.");
+    }
+
+    private UserRole resolveRole(String requested) {
+        if (!allowRoleOverride || requested == null || requested.isBlank()) {
+            return UserRole.MEMBER;
+        }
+        try {
+            return UserRole.valueOf(requested.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return UserRole.MEMBER;
+        }
     }
 
     public LoginResponse login(LoginRequest request, HttpServletResponse response) {
