@@ -26,4 +26,4 @@ Append one entry per phase start/complete. Timestamps in UTC.
 
 - **P1 started**: Spec Trio for Payment domain.
 - **P1 complete**: Spec Trio written and verified. 29 items / 9 families (plan.md said "24" but enumerated families total 29 — spec reflects accurate count). swagger-cli PASS. All 10 manifest keys present. Cross-reference PASS. | commit: `0b97ce1`
-- **P1.3 complete**: Sealed L4 prompt+rubric anchored to sealing commit `fc73323`. Placeholder `sealed_at_commit: TBD` replaced in both `l4-sealed-prompt.md` and `l4-sealed-rubric.md`. git log ordering verified: fc73323 precedes all P0.7/P1 commits; no payment catalog rule commits exist yet (P6 territory). Anti-rigging guarantee documented in commit message. | commit: TBD-US-006
+- **P1.3 complete**: Sealed L4 prompt+rubric anchored to sealing commit `fc73323`. Placeholder `sealed_at_commit: TBD` replaced in both `l4-sealed-prompt.md` and `l4-sealed-rubric.md`. git log ordering verified: fc73323 precedes all P0.7/P1 commits; no payment catalog rule commits exist yet (P6 territory). Anti-rigging guarantee documented in commit message. | commit: `eefd521`
