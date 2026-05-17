@@ -1,2 +1,6 @@
-// Minimal app entry placeholder
-export default function Page() { return <div>App Entry</div>; }
+import { redirect } from 'next/navigation';
+
+// Root route → redirect to /login
+export default function RootPage() {
+  redirect('/login');
+}
