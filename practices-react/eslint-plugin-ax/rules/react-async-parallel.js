@@ -14,6 +14,10 @@
  *   - Only flags when the awaited expression is a CallExpression (i.e. work).
  *   - Only flags when the second await references zero identifiers bound by
  *     the first.
+ *   - Skips entire file when it imports an interactive-CLI prompt library
+ *     (`readline`, `inquirer`, `prompts`, `enquirer`, `@inquirer/*`,
+ *     `@clack/prompts`). Sequential awaits inside such files are usually
+ *     stdin-blocking prompts where parallelization would corrupt UX.
  *
  * Future expansion (not in pilot):
  *   - For-loop awaits (`for-of` with await) — separate rule.
@@ -39,6 +43,42 @@ const rule = {
   },
 
   create(context) {
+    /**
+     * File-level skip flag. Set by the Program visitor when an interactive-CLI
+     * prompt library is imported (readline / inquirer / prompts / enquirer /
+     * @inquirer/* / @clack/prompts). Such files have sequential awaits by
+     * design — each `await rl.question(...)` blocks on stdin and must run in
+     * order. Parallelizing would corrupt UX (prompts overlap) or write to
+     * stdout in nondeterministic order.
+     *
+     * Discovered as a false-positive cluster in nextjs/saas-starter's
+     * `lib/db/setup.ts` during the Round 2 empirical validation.
+     */
+    let skipFile = false;
+
+    /**
+     * Return true if a module source is one of the known interactive-CLI
+     * prompt libraries. Conservative list — only modules whose primary use
+     * case is stdin-blocking prompts. CLI argument parsers (yargs, commander)
+     * are deliberately NOT on this list because they don't cause sequential
+     * await patterns.
+     */
+    function isInteractiveCliImport(source) {
+      if (typeof source !== "string") return false;
+      return (
+        source === "readline" ||
+        source === "node:readline" ||
+        source === "readline/promises" ||
+        source === "node:readline/promises" ||
+        source === "inquirer" ||
+        source === "@inquirer/prompts" ||
+        source === "@inquirer/core" ||
+        source === "prompts" ||
+        source === "enquirer" ||
+        source === "@clack/prompts"
+      );
+    }
+
     /**
      * Extract identifier names defined by a VariableDeclaration's declarators.
      * Handles plain `const x = ...` and `const { a, b } = ...` / `const [a, b] = ...`.
@@ -224,12 +264,24 @@ const rule = {
     }
 
     function visitFunction(node) {
+      if (skipFile) return;
       if (!node.async) return;
       if (!node.body || node.body.type !== "BlockStatement") return;
       checkBlock(node.body);
     }
 
     return {
+      Program(node) {
+        for (const stmt of node.body) {
+          if (
+            stmt.type === "ImportDeclaration" &&
+            isInteractiveCliImport(stmt.source.value)
+          ) {
+            skipFile = true;
+            return;
+          }
+        }
+      },
       FunctionDeclaration: visitFunction,
       FunctionExpression: visitFunction,
       ArrowFunctionExpression: visitFunction,

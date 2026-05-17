@@ -170,6 +170,61 @@ test("react-async-parallel — RuleTester suite", () => {
           }
         `,
       },
+      // File imports node:readline → interactive CLI script. Sequential awaits
+      // are stdin-blocking prompts; parallelizing would corrupt UX.
+      // Mirrors the false-positive cluster found in nextjs/saas-starter
+      // lib/db/setup.ts during Round 2 empirical validation.
+      {
+        code: `
+          import readline from 'node:readline';
+          async function setup() {
+            const url = await getPostgresURL();
+            const key = await getStripeSecretKey();
+            const webhook = await createStripeWebhook();
+            return { url, key, webhook };
+          }
+        `,
+      },
+      // File imports inquirer — same skip class.
+      {
+        code: `
+          import inquirer from 'inquirer';
+          async function configure() {
+            const answer1 = await inquirer.prompt({ type: 'input', name: 'a' });
+            const answer2 = await inquirer.prompt({ type: 'input', name: 'b' });
+          }
+        `,
+      },
+      // File imports @inquirer/prompts — same skip class.
+      {
+        code: `
+          import { confirm } from '@inquirer/prompts';
+          async function run() {
+            await stepA();
+            await stepB();
+          }
+        `,
+      },
+      // File imports @clack/prompts — same skip class.
+      {
+        code: `
+          import { intro, outro } from '@clack/prompts';
+          async function wizard() {
+            await ask1();
+            await ask2();
+          }
+        `,
+      },
+      // File imports the bare 'readline' module (Node legacy form).
+      {
+        code: `
+          import readline from 'readline';
+          async function bare() {
+            await q1();
+            await q2();
+          }
+        `,
+      },
     ],
     invalid: [
       // Classic 3-call waterfall from Vercel's "Incorrect" example.
@@ -214,6 +269,34 @@ test("react-async-parallel — RuleTester suite", () => {
             const posts = await fetchPostsForUser(user.id);
             const config = await fetchAppConfig();
             return { user, posts, config };
+          }
+        `,
+        errors: [{ messageId: "independentAwaits" }],
+      },
+      // Regression guard: importing a module whose name CONTAINS "readline"
+      // as a substring but is not actually a CLI prompt library — must still
+      // flag (the skip matches the source string exactly, not a substring).
+      {
+        code: `
+          import x from './my-readline-helper';
+          async function loadDashboard() {
+            const user = await fetchUser();
+            const posts = await fetchPosts();
+            return { user, posts };
+          }
+        `,
+        errors: [{ messageId: "independentAwaits" }],
+      },
+      // Regression guard: yargs / commander are NOT on the skip list (they
+      // parse args, they don't issue stdin prompts). Waterfalls in such files
+      // should still flag.
+      {
+        code: `
+          import yargs from 'yargs';
+          async function cli() {
+            const a = await fetchA();
+            const b = await fetchB();
+            return [a, b];
           }
         `,
         errors: [{ messageId: "independentAwaits" }],
