@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "017c96a0a9731b862c3859951f498eb9b9b8bfe18d0fff10db6c606d2e47f953"
-  rule_count: 68
+  source_concat_sha256: "d0a7bffcaf1a0d212fca986c3ceb411f4eef26385a85b019cfbb17af7031ff15"
+  rule_count: 70
   generated_by: "practices-react/generate_agents.sh"
 ---
 
@@ -3926,6 +3926,250 @@ Below those targets: use the spread fallback.
 
 Sources:
 - [Vercel: js-tosorted-immutable](https://github.com/vercel-labs/agent-skills/blob/main/skills/react-best-practices/rules/js-tosorted-immutable.md)
+
+
+<!-- @source rules/l2-prefer-data-prop-over-direct-fetch.md -->
+
+---
+title: "L2 data blocks — receive data as prop; never call fetch() or useQuery() inline"
+impact: HIGH
+impactDescription: "Calling fetch() or useQuery() inside an L2 data block binds it to a specific endpoint URL or query key, breaking layer-decoupling and making the block untestable without a running backend."
+tags:
+  - l2-layer
+  - data-fetching
+  - decoupling
+  - data-blocks
+  - tanstack-query
+applicable_to:
+  - nextjs
+  - react
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-L2-002"
+verification:
+  type: review
+  status: manual
+  notes: "For each L2 data block, verify: (a) no fetch() or useQuery() calls inside the component, (b) data is accepted as a typed prop (data: Row[]), (c) loading/error state is accepted as props not derived from a query hook."
+provenance:
+  pilot: true
+  pipeline_version: "2026-05-18"
+  pipeline_steps: [implementation_observed, phaseB_audit_4check, phaseC_codex_consensus]
+audit:
+  accuracy:
+    status: verified
+    last_verified: "2026-05-18"
+  freshness:
+    status: current
+    last_verified: "2026-05-18"
+    next_review_by: "2026-08-16"
+  completeness:
+    status: complete
+    amendments:
+      - "Observed during SP7 implementation: DataTable, FilterBar, Pagination, SearchInput all required this discipline"
+  gap_check:
+    status: complete
+evidence:
+  - upstream_id: tanstack-query-v5
+    section: "Overview — separation of fetching and UI"
+    quote: "React Query makes fetching, caching, synchronizing and updating server state in your React applications a breeze."
+sibling_rules:
+  - l2-prefer-onsubmit-prop
+  - async-api-routes
+  - client-swr-dedup
+---
+
+## L2 data blocks — receive data as prop; never call `fetch()` or `useQuery()` inline
+
+**Impact: HIGH — Inlining a fetch or query hook inside an L2 block binds it to a URL and query key, destroying reusability and testability.**
+
+### The violation (do NOT do this in L2)
+
+```typescript
+// ❌ WRONG — L2 block fetching its own data
+import { useQuery } from '@tanstack/react-query'
+
+export default function DataTable() {
+  // Hardcoded endpoint = domain coupling
+  const { data, isLoading } = useQuery({
+    queryKey: ['products'],
+    queryFn: () => fetch('/api/products').then(r => r.json()),
+  })
+  return <table>...</table>
+}
+```
+
+### Correct — data received as props
+
+```typescript
+// ✅ CORRECT — L2 block renders whatever data the caller provides
+export interface DataTableProps<Row> {
+  data: Row[]                            // caller fetches, block renders
+  isLoading?: boolean                    // caller's loading state
+  onSort?: (state: SortState) => void    // caller handles server-sort
+  getRowKey: (row: Row) => string
+  columns: ColumnDef<Row>[]
+}
+
+export default function DataTable<Row>({ data, isLoading, ...}: DataTableProps<Row>) {
+  return <table aria-busy={isLoading}>...</table>
+}
+```
+
+### L4 owns the fetch + query
+
+```typescript
+// app/(app)/products/page.tsx — L4 fetches and passes data down
+import { useQuery } from '@tanstack/react-query'
+import DataTable from 'templates/L2/blocks/data-table'
+
+export default function ProductsPage() {
+  const [sort, setSort] = useState<SortState>()
+  const { data, isLoading } = useQuery({
+    queryKey: ['products', sort],
+    queryFn: () => fetchProducts(sort),
+  })
+  return (
+    <DataTable
+      data={data ?? []}
+      isLoading={isLoading}
+      sort={sort}
+      onSort={setSort}
+      columns={PRODUCT_COLUMNS}
+      getRowKey={p => p.id}
+    />
+  )
+}
+```
+
+### Why this rule exists
+
+During SP7 block implementation, DataTable, FilterBar, Pagination, and SearchInput were natural candidates for inline TanStack Query usage. Keeping data as a prop:
+
+1. **Tests without a backend** — pass `data={mockRows}` directly in unit tests.
+2. **Works with any server-state library** — TanStack Query, SWR, RSC, manual fetch — caller decides.
+3. **Supports any endpoint** — same DataTable renders products, orders, or users.
+4. **Decouples pagination strategy** — cursor vs. offset pagination stays in L4.
+
+### Layer enforcement
+
+L2 data blocks must not contain:
+- `import { useQuery } from '@tanstack/react-query'`
+- `import useSWR from 'swr'`
+- `fetch(...)` calls
+- `import ... from 'app/...''` (any backend URL binding)
+
+
+<!-- @source rules/l2-prefer-onsubmit-prop.md -->
+
+---
+title: "L2 form blocks — accept onSubmit prop; never import server actions directly"
+impact: HIGH
+impactDescription: "Importing a server action or fetch inside an L2 block couples the block to a domain, breaking the layer contract and preventing reuse across domains."
+tags:
+  - l2-layer
+  - server-actions
+  - decoupling
+  - form-blocks
+  - nextjs
+applicable_to:
+  - nextjs
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-L2-001"
+verification:
+  type: review
+  status: manual
+  notes: "For each L2 form block, verify: (a) no `import ... from 'app/actions/...'` or `import ... from 'lib/...'` in the block file, (b) the form accepts an `onSubmit` callback prop, (c) the callback prop is typed in the exported interface. See check-imports.sh for the static enforcement in ax-verify-L2."
+provenance:
+  pilot: true
+  pipeline_version: "2026-05-18"
+  pipeline_steps: [implementation_observed, phaseB_audit_4check, phaseC_codex_consensus]
+audit:
+  accuracy:
+    status: verified
+    last_verified: "2026-05-18"
+  freshness:
+    status: current
+    last_verified: "2026-05-18"
+    next_review_by: "2026-08-16"
+  completeness:
+    status: complete
+    amendments:
+      - "Observed during SP7 implementation: LoginForm, SignupForm, CrudCreateForm, CrudEditForm, PaymentCheckoutForm all required this discipline"
+  gap_check:
+    status: complete
+evidence:
+  - upstream_id: nextjs-server-actions-16
+    section: "Server Actions — calling server actions"
+    quote: "Server Actions can be called using the action attribute in a <form> element or in event handlers."
+sibling_rules:
+  - l2-prefer-data-prop-over-direct-fetch
+  - async-api-routes
+---
+
+## L2 form blocks — accept `onSubmit` prop; never import server actions directly
+
+**Impact: HIGH — Importing a server action inside an L2 block couples the block to a specific domain and breaks the layer contract.**
+
+### The violation (do NOT do this in L2)
+
+```typescript
+// ❌ WRONG — L2 block importing a server action directly
+import { loginAction } from 'app/actions/auth'
+import { createProductAction } from 'app/actions/products'
+
+export default function LoginForm() {
+  async function handleSubmit(formData: FormData) {
+    await loginAction(formData)  // domain import — block is no longer reusable
+  }
+  return <form action={handleSubmit}>...</form>
+}
+```
+
+### Correct — props-only callback
+
+```typescript
+// ✅ CORRECT — L2 block accepts onSubmit from caller (L4 injects the action)
+export interface LoginFormProps {
+  onSubmit: (values: { email: string; password: string }) => void
+  isLoading?: boolean
+  errorMessage?: string
+}
+
+export default function LoginForm({ onSubmit, isLoading, errorMessage }: LoginFormProps) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    onSubmit({ email, password })
+  }
+  return <form onSubmit={handleSubmit}>...</form>
+}
+```
+
+### L4 wires the action to the prop
+
+```typescript
+// app/(auth)/login/page.tsx — L4 provides the domain glue
+import LoginForm from 'templates/L2/blocks/login-form'
+import { loginAction } from './actions'
+
+export default function LoginPage() {
+  return (
+    <LoginForm
+      onSubmit={async (values) => {
+        await loginAction(values)
+      }}
+    />
+  )
+}
+```
+
+### Why this rule exists
+
+During SP7 block implementation, every auth, CRUD, and payment form block was a candidate for inlining a server action call. Keeping `onSubmit` as a prop kept each block:
+
+1. **Domain-agnostic** — LoginForm works for any auth domain without modification.
+2. **Testable** — tests pass a spy function; no server action mocking needed.
+3. **Layer-clean** — ax-verify-L2 `check-imports.sh` enforces the import boundary statically.
+
+### Layer enforcement
+
+`bash skills/ax-verify-L2/scripts/check-imports.sh` fails with `ILLEGAL_IMPORT` if any L2 file contains an import referencing `templates/L3/`, `templates/L4/`, or `app/`.
 
 
 <!-- @source rules/next-async-params-parallel.md -->

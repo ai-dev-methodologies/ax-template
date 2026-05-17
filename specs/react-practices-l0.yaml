@@ -614,3 +614,21 @@ items:
     applicable: true
     applicable_to: [react, nextjs, vite]
     notes: "Rule body: practices-react/rules/client-localstorage-schema.md."
+
+  - id: "REACT-PRACTICES-L2-001"
+    chapter: "L2 Layer / Form Blocks"
+    requirement: "L2 form blocks must accept an onSubmit callback prop; they must not import server actions, app/ routes, or any domain-specific lib/ module directly. Domain wiring (server action binding, error handling) is the caller's responsibility."
+    test_method: "react_practices_L2_001_onSubmitPropNotServerAction"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [nextjs]
+    notes: "Observed violation pattern during SP7 L2 block implementation. Rule body: practices-react/rules/l2-prefer-onsubmit-prop.md. Enforced statically by ax-verify-L2/scripts/check-imports.sh."
+
+  - id: "REACT-PRACTICES-L2-002"
+    chapter: "L2 Layer / Data Blocks"
+    requirement: "L2 data blocks must receive data as typed props; they must not call fetch(), useQuery(), useSWR(), or any data-fetching primitive internally. Loading and error state is also passed as props."
+    test_method: "react_practices_L2_002_dataAsPropNotDirectFetch"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "Observed violation pattern during SP7 L2 block implementation (DataTable, FilterBar, Pagination). Rule body: practices-react/rules/l2-prefer-data-prop-over-direct-fetch.md."
