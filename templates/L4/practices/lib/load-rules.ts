@@ -10,7 +10,7 @@ static_source_ref:
   - practices-react/rules/async-parallel.md
 evidence:
   - source_type: internal
-    rationale: "L4 practices vertical — SERVER-ONLY loader that reads practices/**/*.md and practices-react/**/*.md via Node fs, parses frontmatter, and returns typed Rule[]. Used by all three RSC pages."
+    rationale: "L4 practices vertical — SERVER-ONLY loader that reads practices/rules/*.md and practices-react/rules/*.md via Node fs, parses frontmatter, and returns typed Rule[]. Used by all three RSC pages."
   - source_type: external
     citation: "Next.js 15 App Router — Server Components can use Node.js fs API"
     url: "https://nextjs.org/docs/app/building-your-application/rendering/server-components"
@@ -140,6 +140,6 @@ export const loadRuleById = cache(
  * Used by the category index to render navigation links.
  */
 export const loadAllPrefixes = cache((): string[] => {
-  const prefixes = new Set(loadAllRules().map((r) => r.prefix))
-  return Array.from(prefixes).sort()
+  const prefixes = new Set<string>(loadAllRules().map((r: ParsedRule) => r.prefix))
+  return Array.from(prefixes).sort() as string[]
 })
