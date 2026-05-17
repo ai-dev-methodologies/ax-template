@@ -66,6 +66,13 @@ public interface PaymentProvider {
         HTTP_4XX_DECLINE,
         MALFORMED_RESPONSE,
         NETWORK_RESET,
-        IDEMPOTENCY_REPLAY
+        IDEMPOTENCY_REPLAY,
+        /**
+         * PAYMENT-PROVIDER-007: simulated slow-but-successful response. MockProvider
+         * sleeps for a short interval before returning APPROVED. Tests lower the
+         * {@code payment.provider.slow-threshold-ms} property so the decorator
+         * observes the call as slow and emits a WARN + counter increment.
+         */
+        SLOW_RESPONSE
     }
 }

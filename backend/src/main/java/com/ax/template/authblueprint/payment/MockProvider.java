@@ -36,6 +36,9 @@ public class MockProvider implements PaymentProvider {
         this.maxRetries = maxRetries;
     }
 
+    /** Sleep used by {@link FailureMode#SLOW_RESPONSE} to trip the slow-call decorator. */
+    private static final long SLOW_RESPONSE_SLEEP_MS = 100L;
+
     @Override
     public ProviderResponse authorizeAndCapture(AuthorizationRequest request) {
         FailureMode mode = request.failureMode() == null ? FailureMode.APPROVED : request.failureMode();
@@ -49,7 +52,17 @@ public class MockProvider implements PaymentProvider {
             case MALFORMED_RESPONSE -> new ProviderResponse(
                 Outcome.MALFORMED, null, "SERIALIZATION_ERROR", 1);
             case IDEMPOTENCY_REPLAY -> idempotencyReplay(request);
+            case SLOW_RESPONSE -> slowApproved();
         };
+    }
+
+    private ProviderResponse slowApproved() {
+        try {
+            Thread.sleep(SLOW_RESPONSE_SLEEP_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return approved();
     }
 
     private ProviderResponse approved() {

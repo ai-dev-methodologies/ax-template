@@ -315,6 +315,28 @@ items:
       response is treated as canonical and stored in our store.
     policy_ref: "blueprints/payment-manifest.yaml#provider"
 
+  - id: "PAYMENT-PROVIDER-007"
+    chapter: "PROVIDER"
+    requirement: "When a provider call's wall-clock latency exceeds the slow_threshold_ms policy value, the system emits a WARN-level log and increments the payment_provider_slow_total counter; this is an observability concern only and does not change the payment state."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: MockProvider configured with FailureMode.SLOW_RESPONSE (sleeps slightly above the configured threshold).
+      The threshold is lowered to a small test value (e.g. 10ms) via @TestPropertySource so the test runs fast.
+      Call POST /api/payments → 201 (state remains CREATED — slow is not a failure outcome).
+      Assertions: (1) payment_provider_slow_total Micrometer counter incremented by 1, (2) at least one WARN log line
+      emitted from the slow-provider decorator with the payment_id MDC key populated, (3) the WARN log message contains
+      the substring "slow provider" or "provider_slow" so operators can grep for it.
+      Implementation: A thin Spring @Primary decorator (SlowProviderLatencyDecorator) wraps PaymentProvider.authorizeAndCapture,
+      measures elapsed time with System.nanoTime(), and on (elapsedMs > slow_threshold_ms) emits log.warn(...) plus
+      meterRegistry.counter("payment_provider_slow_total").increment(). The threshold is read from
+      blueprints/payment-manifest.yaml#provider.slow_threshold_ms via @ConfigurationProperties (default 3000ms = 3s per
+      spec text). Business logic (PaymentService, MockProvider) is unchanged — slow detection is an aspect-style cross-cut.
+      Both Stripe v2 and Toss v2 adapters (iteration B/C) will compose with this decorator without modification because
+      the decorator targets the PaymentProvider interface, not any concrete implementation.
+    policy_ref: "blueprints/payment-manifest.yaml#provider"
+
   # ─── SEC family (3 items) ─────────────────────────────────────────────────
   - id: "PAYMENT-SEC-001"
     chapter: "SEC"

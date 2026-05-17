@@ -27,6 +27,12 @@ pci_dss:
 provider:
   type: mock
   timeout_ms: 5000
+  # PAYMENT-PROVIDER-007: any provider call whose wall-clock latency exceeds this
+  # threshold triggers a WARN log + payment_provider_slow_total counter increment.
+  # The payment state is NOT changed — slow is observability, not an outcome.
+  # Tests override this to a small value (e.g. 10ms) via @TestPropertySource so the
+  # assertion runs fast; the production default is 3000ms as stated in the spec text.
+  slow_threshold_ms: 3000
   retry:
     max: 3
     backoff: exponential
@@ -39,6 +45,7 @@ provider:
     - malformed_response    # PAYMENT-PROVIDER-004: no retry → FAILED with serializationError
     - network_reset         # PAYMENT-PROVIDER-005: payment state → UNKNOWN (indeterminate)
     - idempotency_replay    # PAYMENT-PROVIDER-006: return cached original response
+    - slow_response         # PAYMENT-PROVIDER-007: WARN + payment_provider_slow_total++; state unchanged
 
 # ─── Idempotency ─────────────────────────────────────────────────────────────
 # Caffeine (in-process) for iteration A. Iteration B: replace with Postgres-backed
@@ -137,6 +144,7 @@ observability:
     - payment_failed_total
     - refund_processed_total
     - recon_drift_detected_total
+    - payment_provider_slow_total   # PAYMENT-PROVIDER-007: incremented when provider latency > slow_threshold_ms
   mdc:
     - payment_id
     - idempotency_key
