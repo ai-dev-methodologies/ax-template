@@ -418,3 +418,107 @@ code review time.
 - `blueprints/<domain>-ui-manifest.yaml` must carry `a11y.contrast_min: 4.5` (≥).
 - `cwv.lcp_ms` ≤ 2500, `cwv.inp_ms` ≤ 200, `cwv.cls` ≤ 0.1.
 - SP5 ships the concrete token manifest; `trio_integrity_guard.sh` validates thresholds.
+
+---
+
+## TD-2026-05-17-011 — `domain_mode` allowlist as the single truth for guard routing
+
+```yaml
+---
+adr_id: TD-2026-05-17-011
+title: "domain_mode allowlist as the single truth for guard routing (full_trio / backend_only / frontend_only)"
+provenance_class: locked_constraint
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-17-frontend-templatization-prd.iter4.md
+  rationale: |
+    §4.8.4 (iter4) defines the three-mode enum and mandates that
+    practices/evals/trio_integrity_allowlist.yaml is the single source of truth
+    for domain classification. The guard reads this file and branches on the mode.
+    No other mechanism exists for declaring a domain's stack coverage class.
+spec_ref: N/A
+status: ACCEPTED
+date: 2026-05-17
+---
+```
+
+### Decision
+
+`practices/evals/trio_integrity_allowlist.yaml` is the single source of truth for
+classifying each domain's coverage class:
+
+- `full_trio` — backend Spec Trio AND frontend Spec Trio both required.
+- `backend_only` — backend Spec Trio only; frontend Spec Trio check skipped entirely.
+- `frontend_only` — frontend Spec Trio only; all routes/items must have
+  `backend_operation_id: null` + non-empty `static_source_ref` resolving to real files.
+
+The `trio_integrity_guard.sh` reads this allowlist and routes each domain to the correct
+check function. No domain may declare its own mode inline; the allowlist is the authority.
+
+### Rationale
+
+A single file prevents mode-drift between the guard logic and per-domain declarations.
+Adding a new domain requires exactly one edit: one entry in the allowlist. The guard's
+binary pass/fail is therefore deterministic from the allowlist state alone.
+
+### Consequences
+
+- Any new domain MUST have an entry in `trio_integrity_allowlist.yaml` before the guard
+  is run; a missing entry means the domain is not checked (not an implicit `backend_only`).
+- `domain_mode` in `specs/<domain>-frontend-l0.yaml` is informational only; the allowlist
+  is authoritative for guard routing.
+- Referenced by METHODOLOGY.md §A.3.5 and Appendix B checklist.
+
+---
+
+## TD-2026-05-17-012 — `/ax-verify domain <name>` as the user-facing verification primitive
+
+```yaml
+---
+adr_id: TD-2026-05-17-012
+title: "/ax-verify domain <name> as the user-facing verification primitive (not raw Gradle/npm)"
+provenance_class: locked_constraint
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-17-frontend-templatization-prd.iter4.md
+  rationale: |
+    §SP2 prep brief Section 2 (Appendix B Step 4 extension) specifies that the
+    user-facing verification primitive is /ax-verify domain <name>, which chains
+    ./gradlew test<Domain> + npm run test:<domain> + playwright test.
+    Raw Gradle/npm invocations are not the user surface; the skill wraps them.
+    ADR cited in METHODOLOGY.md §A.3 Step 4 and Appendix B Step 4 extension.
+spec_ref: N/A
+status: ACCEPTED
+date: 2026-05-17
+---
+```
+
+### Decision
+
+The user-facing command for verifying a domain's full-stack compliance is:
+
+```
+/ax-verify domain <name>
+```
+
+This skill-orchestrated command chains:
+1. `cd backend && ./gradlew test<Domain>` — Spring Boot backend gate
+2. `cd frontend && npm run test:<domain>` — Vitest frontend unit/component gate
+3. `playwright test` — Playwright E2E gate (against real Next.js dev server)
+
+All three gates must exit 0 for the domain to be GREEN. Partial passes are not accepted.
+
+### Rationale
+
+Exposing raw `./gradlew` and `npm run` commands as the user surface creates friction
+and divergence between stacks. The skill wrapper enforces the correct chain and reports
+results in a unified format. This matches the pattern established by `/ax-transform` and
+other Tier-1 skill commands in the 3-tier topology (ADR: TD-2026-05-17-008).
+
+### Consequences
+
+- METHODOLOGY.md Appendix B Step 4 uses `/ax-verify domain <name>` as the canonical command.
+- Forks that have not installed the `/ax-verify` skill may run the three commands manually;
+  the skill is a convenience wrapper, not a blocking dependency.
+- SP2 acceptance gate uses `bash practices/evals/trio_integrity_guard.sh --domain auth`
+  directly (guard-level, not skill-level) because the skill is delivered in SP4+.
