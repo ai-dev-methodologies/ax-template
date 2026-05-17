@@ -1,206 +1,141 @@
 # ax-template
 
-> **ESLint rules that catch what AI agents usually miss in React 19 / Next.js 16.**
+> **`/ax-transform` skill source.** Starter / transformation infrastructure for AI-agent-friendly Java/Spring projects.
 
-The headline rule — `react-async-parallel` — finds independent `await` waterfalls
-in Server Components and Server Actions, the dominant async-perf mistake AI
-agents generate when they pattern-match pre-RSC tutorials.
+## What this is
 
-Empirically validated on **19 real-world Next.js codebases** (Round 3,
-2026-05-17): ~70% true-positive rate, 12/19 repos with meaningful hits, zero
-FP explosion at monorepo scale. Vercel-authored references (`vercel/platforms`,
-`vercel/commerce`, `vercel/ai-chatbot`, `shadcn-ui/taxonomy`,
-`t3-oss/create-t3-app`) all returned 0 hits — the rule targets community-quality
-code, not canonical examples. Full data:
-[`practices-react/pilot/round-3-empirical-validation.md`](./practices-react/pilot/round-3-empirical-validation.md).
+ax = **AI transformation**. This repo is the source of the Claude Code plugin **`ax-transform`** — a skill that bootstraps (or transforms) a project into a codebase where AI agents can write code safely:
 
-## Install
+- **Spec Trio** (`specs/` + `contracts/` + `blueprints/`) — contract-first; AI reads spec before code
+- **practices/ catalog** — 64 evidence-anchored Java/Spring rules across 21 categories
+- **Single-command verification** — `./gradlew test{Domain}` returns binary pass/fail
+- **AGENTS.md sentinel** — sha256-anchored AI agent context, auto-regenerated on rule change
+- **4 hard gates** — `spec_ref`, `substance`, `time_decay`, `evidence` block AI output that can't anchor to external sources
+
+The `archive/backend-reference/` (Spring Boot) and `frontend/` (React) directories are **reference workloads** — the skill applied to itself. Active development is concentrated in `practices-react/eslint-plugin-ax/`; the Spring side was reframed as a frozen reference snapshot on 2026-05-17 (see `archive/README.md` and `practices/STATUS.md`).
+
+## What this skill does NOT impose
+
+Catalog quality is enforced. Human-collaboration policy is the fork-받은 팀의 자율:
+
+- Git workflow (branch protection, PR policy, merge strategy, force-push rules)
+- Deployment / release / staging policy
+- Team code-review or sign-off requirements
+- Any CI gate beyond the catalog quality probes
+
+## Installation as a Claude Code plugin
+
+Once published to a Claude Code plugin marketplace:
+
+```
+/plugin install ax-transform@<marketplace-name>
+```
+
+Local install (during development):
+
+```
+/plugin marketplace add /path/to/ax-template
+/plugin install ax-transform@<your-marketplace>
+```
+
+Plugin manifest: [`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json). Skill entry point: [`skills/ax-transform/SKILL.md`](./skills/ax-transform/SKILL.md).
+
+## Use the repo as a project starter
+
+Clone, then run the verification suite:
 
 ```bash
-npm install --save-dev @ax/eslint-plugin-ax @typescript-eslint/parser
+git clone https://github.com/ai-dev-methodologies/ax-template my-project
+cd my-project
+git submodule update --init  # fetches portability fixtures (petclinic, realworld, modulith)
+
+cd archive/backend-reference && ./gradlew test   # full regression: testAsvs + testCrud + testPractices (frozen reference workload)
 ```
-
-> **Status (2026-05-17).** Package is publish-ready (`v0.1.0`) but not yet on
-> npm. Install locally from this repo during development:
-> `npm install --save-dev file:/path/to/ax-template/practices-react/eslint-plugin-ax`.
-
-Add to `eslint.config.mjs` (Next.js 16's flat config):
-
-```js
-import ax from '@ax/eslint-plugin-ax'
-import tsParser from '@typescript-eslint/parser'
-
-export default [
-  {
-    files: ['**/*.{ts,tsx,js,jsx}'],
-    languageOptions: {
-      parser: tsParser,
-      parserOptions: { ecmaFeatures: { jsx: true } },
-    },
-    plugins: { ax },
-    rules: {
-      'ax/react-async-parallel': 'warn',
-      'ax/prefer-functional-setstate': 'warn',
-    },
-  },
-]
-```
-
-## What it catches
-
-Verbatim from the Round 3 19-repo validation:
-
-```ts
-// dub.co — apps/web/.../route.ts
-await getProgramOrThrow(...)
-await prisma.payout.findUnique(...)   // ax/react-async-parallel
-// → independent at the data level; Promise.all saves one round-trip
-```
-
-```ts
-// trigger.dev — apps/webapp/.../LimitsPresenter.server.ts
-await _replica.X.count({ where: ... })  // 4 consecutive Prisma counts —
-await _replica.Y.count({ where: ... })  // ax/react-async-parallel (×3)
-await _replica.Z.count({ where: ... })  // all independent, all parallelizable
-await _replica.W.count({ where: ... })
-```
-
-```ts
-// cal.com — apps/web/.../page.tsx
-await headers()    // Next.js docs explicitly recommend
-await cookies()    // Promise.all([headers(), cookies()])
-// ax/react-async-parallel
-```
-
-```ts
-// nextjs/saas-starter — app/(dashboard)/.../layout.tsx
-<button onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-//                                       ^^^^^^^^^^^^^^^
-// ax/prefer-functional-setstate — risks stale closure
-// → setIsSidebarOpen(curr => !curr)
-```
-
-## What it does NOT catch
-
-Round 3 identified three FP clusters; two are fixed in the rule, one is
-deferred:
-
-| Pattern | Status |
-|---------|--------|
-| Interactive-CLI scripts (`import readline / inquirer / prompts / enquirer / @clack/prompts`) | **fixed** — file-level skip when these imports are detected |
-| Client navigation chain (`await action(); await router.push(...) / navigate(...) / redirect(...) / signOut(...)`) | **fixed** — callee-leaf allowlist H2 |
-| Supabase write-then-link via intermediate consts (semantic dependency hidden by `.map()`) | deferred — needs write-vs-read intent analysis |
-| Init/gate contracts (`ensureCryptoInit() → wasm.use()`, `rateLimitCheck() → db.x()`) | deferred — too fuzzy for AST-only heuristic; use `// eslint-disable-next-line` |
-
-Full catalog: [`practices-react/pilot/round-3-empirical-validation.md#fp-clusters-identified`](./practices-react/pilot/round-3-empirical-validation.md#fp-clusters-identified).
-
-## All rules
-
-| Rule | Default | Catches |
-|------|---------|---------|
-| `react-async-parallel` | warn (recommended) | Independent awaits in async functions / RSC / Server Actions |
-| `prefer-functional-setstate` | warn (recommended) | `setX(x...)` directly referencing state — risks stale closure |
-| `no-broad-barrel-imports` | warn (opt-in) | `import { ... } from 'lodash'` etc. — barrel-import perf |
-| `no-falsy-numeric-render` | error (opt-in) | `count && <UI>` renders literal `0` |
-| `no-array-includes-in-loop` | warn (opt-in) | `arr.includes(x)` inside `.filter`/`.map` — should be Set |
-| `no-array-mutate-on-state` | error (opt-in) | `.sort` / `.reverse` / `.splice` on React state or props |
-| `no-inline-component-definition` | error (opt-in) | Capitalized JSX-returning function defined inside another component |
-
-`react-async-parallel` and `prefer-functional-setstate` ship in the
-`recommended` config because both have empirical TP examples on real repos.
-The remaining five are opt-in until each accumulates ≥3 unrelated real-repo
-TP examples.
-
-## How rules are authored
-
-This repo is also the source of a 68-rule evidence-anchored catalog
-(`practices-react/rules/`) and a Claude Code skill (`/ax-transform`). Every
-rule:
-
-- Anchors to a `spec_ref` in [`specs/react-practices-l0.yaml`](./specs/react-practices-l0.yaml)
-- Cites upstream documentation snapshots in `practices-react/upstream/`
-- Survives a 4-phase curation pipeline (multi-source diversification → audit → codex consensus → continuous time-decay refresh)
-- Passes 3 binary hard gates (`spec_ref` / `time_decay` / `evidence`) — `bash practices-react/evals/run.sh`
-
-Methodology details: [`METHODOLOGY.md`](./METHODOLOGY.md).
-Curation pipeline trail: [`practices-react/pilot/pilot-report.md`](./practices-react/pilot/pilot-report.md).
-
-## Why this exists
-
-AI coding assistants pattern-match pre-RSC tutorials and confidently generate
-sequential awaits where parallelism is trivially correct. Documentation
-can't catch this — AI ignores docs. Linting can — CI fails. One sharp rule
-that catches the dominant async-perf mistake beats a 50-rule "AI best
-practices" bundle every time.
 
 ## Repo layout
 
 ```
 ax-template/
-├── practices-react/                # ACTIVE — React 19 / Next.js 16 catalog
-│   ├── eslint-plugin-ax/           # @ax/eslint-plugin-ax — 7 ESLint rules
-│   ├── rules/                      # 68 evidence-anchored rule .md files
-│   ├── upstream/                   # Canonical doc snapshots (90d decay)
-│   ├── evals/                      # spec_ref / time_decay / evidence guards
-│   ├── pilot/                      # Curation pipeline + empirical validations
-│   ├── AGENTS.md                   # AI agent entry point (sha sentinel)
-│   └── SKILL.md                    # Subsystem skill
-│
-├── specs/                          # Compliance specs per domain
-├── contracts/                      # OpenAPI contracts
-├── blueprints/                     # Policy manifests
-│
-├── practices/                      # FROZEN v1.0 Java/Spring catalog (64 rules)
-│   └── STATUS.md                   # Frozen status + re-thaw criteria
+├── .claude-plugin/plugin.json    # Claude Code plugin manifest
+├── skills/
+│   └── ax-transform/
+│       └── SKILL.md              # /ax-transform skill entry point (frontmatter)
+├── CLAUDE.md                     # Project identity + methodology (top-level AI guidance)
+├── METHODOLOGY.md                # 5-step blueprint playbook for new domains
+├── specs/                        # Compliance specs (auth-asvs-l1, crud-l0, spring-practices-l0)
+├── contracts/                    # OpenAPI contracts
+├── blueprints/                   # Policy manifests (JWT / session / rate limit / CORS)
+├── practices/                    # FROZEN v1.0 Java/Spring catalog (64 rules / 22 categories)
+│   ├── STATUS.md                 # Frozen status + re-thaw criteria
+│   ├── rules/                    # The 64 rule.md files (snapshot)
+│   ├── upstream/                 # Fetched external snapshots
+│   ├── evals/                    # spec_ref / substance / time_decay / evidence guards + advisory probes
+│   ├── AGENTS.md                 # AI agent entry point (sha sentinel, auto-regen)
+│   ├── SKILL.md                  # practices subsystem skill (frozen)
+│   ├── MAINTAINER.md             # Catalog maintainer guide
+│   └── DECISIONS.md              # Rule provenance trail
+├── practices-react/              # ACTIVE React 19 / Next.js 16 catalog + ESLint plugin
+│   ├── rules/                    # 68 rule.md files
+│   ├── upstream/                 # Fetched canonical snapshots (90d decay gate)
+│   ├── evals/                    # spec_ref / time_decay / evidence guards
+│   ├── eslint-plugin-ax/         # @ax/eslint-plugin-ax — 7 custom ESLint rules
+│   ├── AGENTS.md                 # AI agent entry point (sha sentinel, auto-regen)
+│   └── SKILL.md                  # practices-react subsystem skill
 ├── archive/
-│   └── backend-reference/          # FROZEN Spring Boot reference workload
-│
-├── skills/ax-transform/SKILL.md    # Claude Code skill entry point
-├── .claude-plugin/plugin.json      # Claude Code plugin manifest
-│
-├── CLAUDE.md                       # Project identity (AI-agent context)
-├── METHODOLOGY.md                  # 5-step blueprint playbook
-├── frontend/                       # React reference workload (plugin self-testing)
-└── verify/                         # Optional verification scripts
+│   └── backend-reference/        # FROZEN Spring Boot reference workload (moved from backend/ on 2026-05-17)
+├── frontend/                     # React reference workload (active for ESLint plugin self-testing)
+├── verify/                       # Optional verification scripts
+└── docs/archive/                 # Historical governance documents
 ```
 
-## Verification
+## Verification commands
 
 ### React catalog (active)
 
 ```bash
-bash practices-react/evals/run.sh                  # 3 hard gates
-cd practices-react/eslint-plugin-ax && npm test    # 28 valid + 6 invalid (7 RuleTester suites)
+bash practices-react/evals/run.sh               # spec_ref + time_decay + evidence guards
+cd practices-react/eslint-plugin-ax && npm test # 7 ESLint rules (RuleTester)
 ```
 
-### Frozen Java reference workload (regression sanity)
+### Frozen Java reference workload (regression sanity check only)
 
 ```bash
 cd archive/backend-reference
-./gradlew testAsvs        # OWASP ASVS L1 (26 items, auth)
-./gradlew testCrud        # CRUD spec (7 security tests)
-./gradlew testPractices   # 64 frozen Java practices rules
-./gradlew testPortability # advisory: rules applied to petclinic / realworld / modulith
+./gradlew testAsvs                # OWASP ASVS L1 (26 items, auth domain)
+./gradlew testCrud                # CRUD reference domain (7 security tests)
+./gradlew testPractices           # 64 practices rules (binary pass/fail per rule)
+./gradlew testPortability         # advisory: rules applied to spring-petclinic / realworld / modulith
 ```
 
-### Optional pre-commit / pre-push hooks
+### Catalog hard gates
 
 ```bash
-bash practices/scripts/install-hooks.sh
+# React (active, 90d decay gate)
+bash practices-react/evals/run.sh
+
+# Java (frozen, 365d advisory threshold — see practices/STATUS.md)
+bash practices/evals/spec_ref_guard.sh
+bash practices/evals/substance_guard.sh
+TIME_DECAY_THRESHOLD_DAYS=365 bash practices/evals/time_decay_guard.sh
+bash practices/evals/evidence_guard.sh
 ```
 
-Wires `.githooks/pre-commit` (catalog hard gates + AGENTS.md auto-regen + testPractices on backend-reference touch) and `.githooks/pre-push` (full regression). Hooks protect catalog quality only; they do not impose any git-workflow policy.
+## Optional: install local catalog-quality hooks
+
+```bash
+bash practices/scripts/install-hooks.sh       # opt-in per clone
+```
+
+Wires `.githooks/pre-commit` (4 hard gates + AGENTS.md auto-regen + testPractices when backend touched) and `.githooks/pre-push` (full regression). The hooks only protect catalog quality; they do not impose any git-workflow policy.
 
 ## License
 
-MIT — see [`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json).
+MIT — see plugin.json.
 
-## Related
+## Related documents
 
-- [`practices-react/SKILL.md`](./practices-react/SKILL.md) — subsystem skill
-- [`practices-react/pilot/round-3-empirical-validation.md`](./practices-react/pilot/round-3-empirical-validation.md) — 19-repo measurement
-- [`practices-react/pilot/external-validation.md`](./practices-react/pilot/external-validation.md) — Next.js 16 Todo app downstream consumption
-- [`METHODOLOGY.md`](./METHODOLOGY.md) — 5-step blueprint
-- [`CLAUDE.md`](./CLAUDE.md) — project identity
-- [`practices/STATUS.md`](./practices/STATUS.md) — Java catalog frozen status
-- [`archive/README.md`](./archive/README.md) — Spring Boot reference workload (frozen)
+- [`CLAUDE.md`](./CLAUDE.md) — top-level project identity for AI agents
+- [`METHODOLOGY.md`](./METHODOLOGY.md) — 5-step blueprint for adding new domains
+- [`skills/ax-transform/SKILL.md`](./skills/ax-transform/SKILL.md) — skill entry point
+- [`practices/MAINTAINER.md`](./practices/MAINTAINER.md) — catalog maintainer guide
+- [`practices/DECISIONS.md`](./practices/DECISIONS.md) — rule provenance trail
