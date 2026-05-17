@@ -24,6 +24,7 @@ servers:
 paths:
   /payments:
     post:
+      operationId: createPayment
       summary: Create a payment
       description: |
         Initiates a payment for the given order. Requires `Idempotency-Key` header. Duplicate
@@ -83,6 +84,7 @@ paths:
                 $ref: '#/components/schemas/ProblemDetail'
 
     get:
+      operationId: listPayments
       summary: List payments for the authenticated user
       description: |
         Returns a paginated list of payments owned by the authenticated caller. Payments belonging
@@ -132,6 +134,7 @@ paths:
 
   /payments/{id}:
     get:
+      operationId: getPayment
       summary: Get payment status
       description: |
         Returns the current state of a payment. If the payment exists but belongs to a different user,
@@ -168,6 +171,7 @@ paths:
 
   /payments/{id}/refund:
     post:
+      operationId: refundPayment
       summary: Refund a payment (full or partial)
       description: |
         Initiates a refund for the specified payment. Only the user who owns the order may
@@ -246,6 +250,7 @@ paths:
 
   /payments/{id}/void:
     post:
+      operationId: voidPayment
       summary: Void an authorized payment
       description: |
         Voids an AUTHORIZED payment before it is captured. Only the payment owner may void.
