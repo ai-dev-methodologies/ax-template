@@ -113,8 +113,8 @@
       "id": "US-008",
       "title": "P2 — RED tests (testPayment registered + 30-40 failing @Tag tests)",
       "priority": 8,
-      "passes": false,
-      "progress": "Agents A + B complete (AUTHZ+IDEMP+MONEY+STATE+REFUND+PROVIDER); awaiting C (SEC+OBS+RECON)",
+      "passes": true,
+      "progress": "All 3 agents (A+B+C) complete; US-008 GREEN-blocker hardened — all RED. 47 tests, 42 failing.",
       "acceptanceCriteria": [
         "backend/build.gradle.kts has tasks.register<Test>(\"testPayment\") with includeTags(\"PAYMENT\")",
         "cd backend && ./gradlew tasks --all | grep testPayment confirms registration",
@@ -122,7 +122,9 @@
         "Each test method has @Tag(\"PAYMENT\") + @Tag(\"PAYMENT-<FAMILY>-<NNN>\") for the specific spec item",
         "cd backend && ./gradlew testPayment exits NON-ZERO (RED state — implementation missing). All test failures are 'NoClassDefFoundError', 'cannot find symbol', or 'assertion failed' — not 'test framework error' or 'compile error in test code'",
         "git commit with message starting 'test: payment reproducer (RED)' on active branch"
-      ]
+      ],
+      "completed_commit": "TBD-WAVE3C",
+      "final_test_count": 47
     },
     {
       "id": "US-009",

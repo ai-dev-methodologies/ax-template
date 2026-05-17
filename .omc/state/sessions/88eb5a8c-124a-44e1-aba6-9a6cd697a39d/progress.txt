@@ -19,3 +19,4 @@ Patterns observed:
 US-007 COMPLETE
 [2026-05-17] US-008 Wave 3-A COMPLETE — commit d0f7ddc. testPayment task registered. AUTHZ(4) + IDEMP(3) + MONEY(3) = 10 items / 14 test methods. RED confirmed: 13/14 FAILED (1 AUTHZ-001 passes because SecurityConfig already rejects unauthenticated /api/** before reaching missing controller — net BUILD FAILED).
 [2026-05-17] US-008 Wave 3-B COMPLETE — commit 3ff0c4a. STATE(3) + REFUND(3) + PROVIDER(6) = 12 items / 16 test methods. ALL RED confirmed: 31/35 FAILED (BUILD FAILED).
+[2026-05-17] US-008 Wave 3-C COMPLETE — commit TBD-WAVE3C. SEC(3) + OBS(2) + RECON(2) = 7 items / 17 test methods. Cumulative 47 tests across 9 families; 42/47 RED confirmed. US-008 PASSES TRUE.
