@@ -52,11 +52,11 @@ else
     echo "  SKIP [Vitest-L2] frontend/tests/L2/ not yet present"
 fi
 
-# Step 4: cross_trio_guard (conditional — only if L4 exists)
+# Step 4: cross_trio_guard (conditional — only if L4 has actual .tsx domain files)
 echo ""
 echo "[4] cross_trio_guard (conditional)"
 L4_DIR="$REPO_ROOT/templates/L4"
-if [ -d "$L4_DIR" ] && [ "$(ls -A "$L4_DIR" 2>/dev/null)" ]; then
+if [ -d "$L4_DIR" ] && find "$L4_DIR" -name "*.tsx" -type f | grep -q .; then
     if bash "$REPO_ROOT/practices/evals/cross_trio_guard.sh"; then
         echo "  PASS [cross_trio_guard]"
     else
