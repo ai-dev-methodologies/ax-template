@@ -26,7 +26,7 @@ export default [
       'playwright-report',
       'test-results',
       'coverage',
-      '.vite',
+      '.next',
     ],
   },
   {
@@ -41,7 +41,7 @@ export default [
     rules: sharedRules,
   },
   {
-    files: ['src/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'middleware.ts', 'tests/**/*.{ts,tsx}'],
     languageOptions: {
       parser: tsParser,
       ecmaVersion: 2024,
