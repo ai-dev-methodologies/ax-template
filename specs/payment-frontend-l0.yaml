@@ -1,0 +1,133 @@
+# specs/payment-frontend-l0.yaml
+# Page Compliance Spec — payment domain, full_trio mode.
+#
+# Every item's backend_operation_id resolves to contracts/payment-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in specs/payment-l0.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+
+domain: payment
+domain_mode: full_trio
+backend_spec_ref: specs/payment-l0.yaml
+frontend_required: true
+
+items:
+  - id: PAYMENT-FE-001
+    requirement: "Checkout page renders PaymentMethodPicker allowing the user to select a payment method before submitting"
+    backend_operation_id: createPayment
+    backend_spec_ref: PAYMENT-AUTHZ-001
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: PAYMENT-FE-002
+    requirement: "Checkout page renders PaymentCheckoutForm with amount display, card fields, and pay button; onSubmit prop is wired to a server action"
+    backend_operation_id: createPayment
+    backend_spec_ref: PAYMENT-IDEMP-001
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: PAYMENT-FE-003
+    requirement: "Checkout page wraps PaymentCheckoutForm with IdempotencyKeyHandler; the current idempotency key is passed to the server action via Idempotency-Key header"
+    backend_operation_id: createPayment
+    backend_spec_ref: PAYMENT-IDEMP-001
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#payment_policies"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: PAYMENT-FE-004
+    requirement: "Checkout page renders SlowProviderWarning after 3 000 ms of payment request in-flight (PAYMENT-PROVIDER-007)"
+    backend_operation_id: createPayment
+    backend_spec_ref: PAYMENT-AUTHZ-001
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#payment_policies"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: PAYMENT-FE-005
+    requirement: "Success page renders a receipt view for a completed payment identified by orderId; page is idempotent (re-render same state for same orderId)"
+    backend_operation_id: getPayment
+    backend_spec_ref: PAYMENT-AUTHZ-003
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: PAYMENT-FE-006
+    requirement: "Failure page renders an error state for a failed payment identified by orderId; provides a retry link back to checkout"
+    backend_operation_id: getPayment
+    backend_spec_ref: PAYMENT-AUTHZ-003
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: PAYMENT-FE-007
+    requirement: "Methods list page renders DataTable showing payment history with their payment method types; calls listPayments endpoint"
+    backend_operation_id: listPayments
+    backend_spec_ref: PAYMENT-AUTHZ-001
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: PAYMENT-FE-008
+    requirement: "Methods new page renders PaymentMethodPicker allowing the user to select a payment method type and initiate a new payment"
+    backend_operation_id: createPayment
+    backend_spec_ref: PAYMENT-IDEMP-001
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: PAYMENT-FE-009
+    requirement: "Methods detail page renders a payment detail view for a given payment id; calls getPayment endpoint"
+    backend_operation_id: getPayment
+    backend_spec_ref: PAYMENT-AUTHZ-003
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: PAYMENT-FE-010
+    requirement: "Refund page renders a refund request form for a given orderId; calls refundPayment endpoint; only accessible to the payment owner"
+    backend_operation_id: refundPayment
+    backend_spec_ref: PAYMENT-AUTHZ-002
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#payment_policies"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: PAYMENT-FE-011
+    requirement: "Checkout page shows 'already processed' state via IdempotencyKeyHandler when the server returns replayed: true for a duplicate idempotency key"
+    backend_operation_id: createPayment
+    backend_spec_ref: PAYMENT-IDEMP-002
+    static_source_ref: []
+    test_method: "payment/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/payment-ui-manifest.yaml#payment_policies"
+    coverage_threshold: 1.0
+    backend_only_marker: false

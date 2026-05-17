@@ -1,0 +1,123 @@
+# blueprints/payment-ui-manifest.yaml
+# UI Policy Manifest — payment domain, full_trio mode.
+#
+# trio_integrity_guard.sh validates:
+#   a11y.contrast_min >= 4.5  (WCAG 2.2 SC 1.4.3)
+#   cwv.lcp_ms <= 2500
+#   cwv.inp_ms <= 200
+#   cwv.cls <= 0.1
+#   motion.respect_prefers_reduced_motion == true
+#
+# Payment-specific policies:
+#   - PCI DSS SAQ-A: card input never stored raw client-side; tokenised before sending to provider
+#   - Idempotency: Idempotency-Key header required for all createPayment mutations
+#   - Slow provider: SlowProviderWarning shown after 3 000 ms (PAYMENT-PROVIDER-007)
+#   - IDOR: success/failure pages return 404 (not 403) for cross-user access (PAYMENT-AUTHZ-003)
+#   - Amount encoding: integer minor units only; float rejected with 400
+
+domain: payment
+
+tokens_override:
+  color:
+    color_primary: "oklch(48% 0.20 148)"        # Payment green — trustworthy, financial
+    color_primary_hover: "oklch(43% 0.20 148)"
+    color_surface: "oklch(99% 0 0)"
+    color_surface_subtle: "oklch(97% 0.005 148)"
+    color_text: "oklch(18% 0 0)"
+    color_muted: "oklch(55% 0 0)"
+    color_error: "oklch(55% 0.21 25)"
+    color_border: "oklch(88% 0.005 148)"
+    color_warning_bg: "oklch(97% 0.04 90)"      # SlowProviderWarning background
+    color_warning_border: "oklch(85% 0.08 90)"
+    color_warning_text: "oklch(40% 0.10 90)"
+    color_success_bg: "oklch(96% 0.05 148)"     # Success receipt background
+    color_success_border: "oklch(80% 0.10 148)"
+  typography:
+    font_sans: "'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif"
+    font_mono: "'JetBrains Mono', 'Fira Code', ui-monospace, monospace"  # Card number fields
+    text_base: "clamp(1rem, 0.92rem + 0.4vw, 1.125rem)"
+    text_heading: "clamp(1.5rem, 1.2rem + 1.5vw, 2rem)"
+    text_amount: "clamp(1.5rem, 1.2rem + 1vw, 2.25rem)"  # Large amount display
+    text_receipt: "clamp(0.875rem, 0.82rem + 0.28vw, 0.9375rem)"
+  spacing:
+    space_form_gap: "clamp(1rem, 0.8rem + 1vw, 1.5rem)"
+    space_section: "clamp(2rem, 1.5rem + 2.5vw, 4rem)"
+    space_checkout_card: "clamp(1.5rem, 1.2rem + 1.5vw, 2.5rem)"
+  motion:
+    duration_fast: "150ms"
+    duration_normal: "300ms"
+    ease_out: "cubic-bezier(0.16, 1, 0.3, 1)"
+
+a11y:
+  wcag_level: "2.2-AA"
+  axe_rules:
+    - color-contrast
+    - label
+    - button-name
+    - form-field-multiple-labels
+    - aria-required-attr
+    - aria-valid-attr-value
+    - aria-live-region
+    - input-autocomplete-valid
+  contrast_min: 4.5
+  # Payment-specific: SlowProviderWarning uses aria-live="polite" to announce delays
+  live_regions:
+    slow_provider_warning: polite
+    idempotency_replayed: polite
+    payment_status: assertive
+
+cwv:
+  lcp_ms: 2500
+  inp_ms: 200
+  cls: 0.1
+  fcp_ms: 1500
+  tbt_ms: 200
+
+motion:
+  respect_prefers_reduced_motion: true
+  default_duration_ms: 300
+
+bundle_budgets:
+  landing_page_js_kb: 150
+  app_page_js_kb: 300
+  landing_page_css_kb: 30
+  app_page_css_kb: 50
+
+pagination:
+  max_page_size: 50
+  default_page_size: 20
+
+# Payment-specific policies
+payment_policies:
+  # PCI DSS SAQ-A: raw card data never leaves the client without tokenisation
+  pci_dss:
+    card_data_storage: forbidden_client_side
+    tokenisation_required: true
+    amount_encoding: integer_minor_units
+    float_json_rejected: true
+
+  # PAYMENT-IDEMP-001 / PAYMENT-IDEMP-002
+  idempotency:
+    header: "Idempotency-Key"
+    key_format: "uuid-v4"
+    scope_window_hours: 24
+    replayed_response_indicator: "replayed: true"
+    key_lifecycle: "regenerate_after_success"
+
+  # PAYMENT-PROVIDER-007
+  slow_provider:
+    threshold_ms: 3000
+    component: "SlowProviderWarning"
+    aria_live: "polite"
+
+  # PAYMENT-AUTHZ-002 / PAYMENT-AUTHZ-003
+  authorization:
+    refund_owner_only: true
+    idor_response_code: 404  # Not 403 — prevents enumeration
+
+pci_dss:
+  level: "SAQ-A"
+  card_fields:
+    autocomplete: true    # cc-name, cc-number, cc-exp, cc-csc
+    raw_storage: forbidden
+    tokenization: required_before_submit
