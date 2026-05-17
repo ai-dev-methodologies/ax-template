@@ -1,3 +1,5 @@
+// CLIENT-SIDE ONLY. Do not import from Server Components or Route Handlers.
+// Module-level singleton — safe in browsers (per-tab), unsafe server-side (per-request).
 let refreshPromise: Promise<boolean> | null = null;
 
 export const refreshMutex = {
