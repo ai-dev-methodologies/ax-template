@@ -1,0 +1,15 @@
+Ralph PRD: Payment blueprint (4th domain). Active PRD: 22 stories US-001..US-022 corresponding to plan phases P0.5..P11. Critic: Codex.
+
+[2026-05-17] Ralph session started. P0 (plan + memory + docs dir) is complete via commit d364209.
+[2026-05-17] PRD scaffold written with task-specific acceptance criteria for all 22 stories.
+[2026-05-17] US-001 starts: P0.5 seal L4 acceptance prompt + rubric.
+[2026-05-17] US-001 COMPLETE — commit fc73323. Files: l4-sealed-prompt.md (7095B), l4-sealed-rubric.md (7904B). 11 MUST_PASS + 6 SHOULD_PASS criteria in rubric. Delta-feature for L4: PAYMENT-PROVIDER-007 (slow-call observability). AI2-3 paper exercise included.
+[2026-05-17] US-002 starts: P0.7 verify/blueprint-completeness.sh script (generic, accepts blueprint name arg).
+[2026-05-17] US-002 COMPLETE — commit 1228b8f. verify/blueprint-completeness.sh (generic, 190 lines) + docs/blueprints/payment/blueprint-manifest.txt (14 artifacts). Smoke tests: nonexistent/empty/no-arg all exit 2; payment FILE checks fire correctly.
+
+Patterns observed:
+- ax-template's hard gates run on commits that touch practices/ or specs/spring-practices-l0.yaml — payment-related commits won't trigger Java hard gates until P6 (catalog growth). practices-react gates fire on any practices-react/ touch (currently none planned in this blueprint).
+- Pre-commit hook auto-stages AGENTS.md when rules change (P6).
+- For sealing in P0.5: file content sealed by commit; no chicken-and-egg with hash because sealed_at_commit is populated in P1.3 (US-006) which is a separate commit.
+- L4 sealed prompt should choose a delta-feature that is SMALL (one sitting) but exercises the methodology: spec edit + new test + small impl + verification cycle. Candidate: add PAYMENT-PROVIDER-007 'response latency > 3s logged as warning' — exercises spec / test / impl / observability assertion / verification.
+[2026-05-17] US-003 COMPLETE — commit: TBD-US-003

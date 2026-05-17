@@ -1,0 +1,78 @@
+# Payment blueprint — completeness manifest.
+# Consumed by verify/blueprint-completeness.sh payment
+#
+# Each line is one of:
+#   FILE <path>              — file must exist AND be non-empty
+#   FILE_OPTIONAL <path>     — file must exist (may be empty)
+#   DIR <path>               — directory must exist AND be non-empty
+#   CMD <shell command>      — command must exit 0 (run in repo root)
+#   COUNT <path> <min>       — wc -l of path must be ≥ min
+#
+# Listed in the order they appear in docs/blueprints/payment/plan.md
+# "14-artifact completion checklist". When a phase produces an artifact,
+# the corresponding line below becomes a passing entry.
+
+# === Artifact 1: Compliance spec ===
+FILE specs/payment-l0.yaml
+CMD python3 -c "import yaml,sys; d=yaml.safe_load(open('specs/payment-l0.yaml')); sys.exit(0 if isinstance(d, dict) or isinstance(d, list) else 1)"
+
+# === Artifact 2: API contract ===
+FILE contracts/payment-openapi.yaml
+CMD npx --yes @apidevtools/swagger-cli validate contracts/payment-openapi.yaml
+
+# === Artifact 3: Policy manifest ===
+FILE blueprints/payment-manifest.yaml
+CMD python3 -c "import yaml; d=yaml.safe_load(open('blueprints/payment-manifest.yaml')); assert all(k in d for k in ['pci_dss','provider','idempotency','currency','amounts','refund','state_machine','observability','ledger','reconciliation']), 'missing required keys'"
+
+# === Artifact 4: @Tag tests (testPayment passes) ===
+CMD cd backend && ./gradlew testPayment -q
+
+# === Artifact 5: Spring Boot impl (DIR non-empty) ===
+DIR backend/src/main/java/com/ax/template/authblueprint/payment
+
+# === Artifact 6: Gradle task registered ===
+CMD cd backend && ./gradlew tasks --all -q 2>&1 | grep -q '^testPayment'
+
+# === Artifact 7: Payment-derived rules (3-5 rules; min 3) ===
+CMD bash -c 'count=$(find practices/rules -maxdepth 1 -name "payment-*.md" 2>/dev/null | wc -l | tr -d " "); [ "$count" -ge 3 ]'
+
+# === Artifact 8: Upstream snapshots (PCI / Stripe / ISO 4217 / RFC 7807) ===
+FILE practices/upstream/pci-dss-saq-a.snapshot.md
+FILE practices/upstream/iso-4217.snapshot.md
+FILE practices/upstream/rfc-7807.snapshot.md
+
+# === Artifact 9: AGENTS.md sentinel regen (sha matches) ===
+CMD bash practices/generate_agents.sh > /dev/null && git diff --quiet practices/AGENTS.md
+
+# === Artifact 10: Blueprint docs ===
+FILE docs/blueprints/payment/plan.md
+FILE docs/blueprints/payment/progress.md
+FILE docs/blueprints/payment/decisions.md
+FILE docs/blueprints/payment/security-review.md
+FILE docs/blueprints/payment/verification-log.md
+DIR docs/blueprints/payment/acceptance
+
+# === Artifact 11: Methodology Appendix C ===
+CMD grep -q "Appendix C" METHODOLOGY.md
+
+# === Artifact 12: verify/blueprint-completeness.sh script (this script itself) ===
+FILE verify/blueprint-completeness.sh
+
+# === Artifact 13: Sealed L4 prompt + rubric ===
+FILE docs/blueprints/payment/acceptance/l4-sealed-prompt.md
+FILE docs/blueprints/payment/acceptance/l4-sealed-rubric.md
+CMD grep -q "^## SEALED" docs/blueprints/payment/acceptance/l4-sealed-prompt.md
+CMD grep -q "^## SEALED" docs/blueprints/payment/acceptance/l4-sealed-rubric.md
+
+# === Artifact 14: verify/cold-start-test.sh script ===
+FILE verify/cold-start-test.sh
+
+# === All catalog hard gates green (regression + payment) ===
+CMD bash practices/evals/spec_ref_guard.sh
+CMD bash practices/evals/substance_guard.sh
+CMD bash practices/evals/time_decay_guard.sh
+CMD bash practices/evals/evidence_guard.sh
+CMD bash practices-react/evals/run.sh
+
+# === Regression: existing domains still pass ===
+CMD cd backend && ./gradlew testAsvs testCrud testRateLimit testPractices -q

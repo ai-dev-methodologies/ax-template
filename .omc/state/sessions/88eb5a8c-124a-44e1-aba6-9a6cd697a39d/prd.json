@@ -1,0 +1,308 @@
+{
+  "task": "Execute Payment blueprint (4th domain) per docs/blueprints/payment/plan.md — Option A2 with all 23 phases (P0.5 through P11). Plan was approved via ralplan consensus 2026-05-17 (Architect + Codex Critic APPROVE). User invoked /ralph --critic codex with instruction 'P0.5부터 진행해' — P0 is complete; start at P0.5.",
+  "preconditions": [
+    "P0 complete: docs/blueprints/payment/plan.md exists (commit d364209)",
+    "docs/blueprints/payment/progress.md exists",
+    "memory ~/.claude/projects/<slug>/memory/payment_blueprint_status.md exists",
+    "Active branch: main",
+    "backend/ + practices/ + practices-react/ all functional (verified end-to-end after Round 3 reverts)",
+    "Methodology stack: /tdd-workflow + /verification-loop + 4 hard gates + java-reviewer Skill + security-reviewer Skill + L3 fork sim + L4 sealed sub-agent test + cold-start test",
+    "Critic for completion: Codex (per --critic codex flag)"
+  ],
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "P0.5 — Seal L4 acceptance prompt + rubric (committed before any catalog growth)",
+      "priority": 1,
+      "passes": true,
+      "completed_commit": "fc73323",
+      "acceptanceCriteria": [
+        "File docs/blueprints/payment/acceptance/l4-sealed-prompt.md exists with concrete sub-agent task description (delta-feature scope: small, specific, completable in one sitting)",
+        "File docs/blueprints/payment/acceptance/l4-sealed-rubric.md exists with PASS/FAIL criteria covering: (a) sub-agent reads CLAUDE.md + practices/AGENTS.md + specs/payment-l0.yaml FIRST and demonstrates quote/cite; (b) sub-agent follows 5-step methodology (spec → contract → manifest → tests → impl); (c) AI2-3 paper exercise — paper-evaluate whether PaymentProvider interface survives adding Stripe PaymentIntent + Toss V2 mappings without breaking changes; (d) testPayment passes after sub-agent's work; (e) 4 hard gates remain green",
+        "Both files contain '## SEALED' header marker stating purpose + sealing-commit reference",
+        "Both files committed to git with commit message containing 'sealed: L4 prompt + rubric' verbatim",
+        "git log --oneline shows the sealing commit is BEFORE any commit touching practices/rules/payment-*.md or practices/upstream/ payment-related additions (verifiable in P6/P9)"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "P0.7 — verify/blueprint-completeness.sh script",
+      "priority": 2,
+      "passes": true,
+      "completed_commit": "1228b8f",
+      "acceptanceCriteria": [
+        "File verify/blueprint-completeness.sh exists, executable (chmod +x)",
+        "Script takes one positional argument: blueprint name (e.g., 'payment'). Validates non-empty.",
+        "For blueprint='payment': verifies all 14 artifacts from docs/blueprints/payment/plan.md exist by filesystem check + runs the per-artifact verification command listed in the plan (e.g., swagger-cli validate, YAML parse, gradle task lookup)",
+        "Returns exit 0 only if all 14 artifacts present AND all verification commands pass; otherwise prints which artifacts/commands failed and exits non-zero",
+        "Script is generic — accepts blueprint name arg, looks up artifacts from a per-blueprint manifest or convention; not hardcoded to 'payment'",
+        "Smoke test: 'bash verify/blueprint-completeness.sh payment' run NOW (before payment impl) MUST exit non-zero with clear messaging about missing artifacts (because P1..P11 not done yet)",
+        "Smoke test: 'bash verify/blueprint-completeness.sh nonexistent' returns non-zero with 'blueprint nonexistent not registered' or similar"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "P0.9 — verify/cold-start-test.sh script",
+      "priority": 3,
+      "passes": true,
+      "completed_commit": "TBD-US-003",
+      "acceptanceCriteria": [
+        "File verify/cold-start-test.sh exists, executable",
+        "Script takes one positional argument: blueprint name. Validates non-empty.",
+        "For blueprint='payment': simulates a context-0 agent by listing the minimum file set the agent receives — docs/blueprints/payment/plan.md, docs/blueprints/payment/progress.md, specs/payment-l0.yaml, contracts/payment-openapi.yaml, blueprints/payment-manifest.yaml, practices/AGENTS.md, CLAUDE.md, README.md — and verifies they are all readable + nonzero size",
+        "Script asserts the agent could derive the next un-checkpointed phase by parsing progress.md (no completed P[next], so it's the next step)",
+        "Returns exit 0 only if all input files exist AND progress.md has a parseable 'next phase' anchor; otherwise non-zero with clear failure reason",
+        "Smoke test: 'bash verify/cold-start-test.sh payment' run NOW MUST exit non-zero (because specs/payment-l0.yaml etc. do not exist yet); failure message must list which files are missing"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "P1 — Spec Trio (specs/payment-l0.yaml + contracts/payment-openapi.yaml + blueprints/payment-manifest.yaml)",
+      "priority": 4,
+      "passes": false,
+      "acceptanceCriteria": [
+        "specs/payment-l0.yaml exists, parses as YAML, contains 24 items across 9 families (AUTHZ-4 / IDEMP-3 / MONEY-3 / STATE-3 / REFUND-3 / PROVIDER-6 / SEC-3 / OBS-2 / RECON-2)",
+        "Each spec item has fields: id, chapter, requirement, test_method, verification_type, applicable, notes (parity with specs/auth-asvs-l1.yaml schema)",
+        "contracts/payment-openapi.yaml exists, validates with 'npx @apidevtools/swagger-cli validate contracts/payment-openapi.yaml' exit 0",
+        "OpenAPI defines 5 endpoints: POST /api/payments, GET /api/payments/{id}, POST /api/payments/{id}/refund, GET /api/payments, POST /api/payments/{id}/void",
+        "OpenAPI amount schema: integer minor units OR explicit decimal string; rejects type=number (float) — documented in schema description",
+        "blueprints/payment-manifest.yaml exists, parses as YAML, has required keys: pci_dss, provider, idempotency, currency, amounts, refund, state_machine, observability, ledger, reconciliation",
+        "bash practices/evals/spec_ref_guard.sh exits 0 (spec_ref guard works against new payment-l0.yaml — but no rules reference it yet, so this is a structural-only check at this phase)"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "P1.25 — PCI-DSS SAQ scope declaration in manifest",
+      "priority": 5,
+      "passes": false,
+      "acceptanceCriteria": [
+        "blueprints/payment-manifest.yaml#pci_dss.saq_tier = 'SAQ-A'",
+        "blueprints/payment-manifest.yaml#pci_dss.pan_storage = 'NONE'",
+        "blueprints/payment-manifest.yaml#pci_dss.trace contains explicit mapping: PAYMENT-SEC-001 → PCI-DSS-3.4; PAYMENT-SEC-002 → PCI-DSS-6.5; PAYMENT-SEC-003 → PCI-DSS-4.1",
+        "specs/payment-l0.yaml PAYMENT-SEC-* items have a 'pci_ref' field pointing to PCI-DSS requirement ID"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "P1.3 — Sealed L4 prompt+rubric commit anchored",
+      "priority": 6,
+      "passes": false,
+      "acceptanceCriteria": [
+        "git log shows the US-001 sealing commit hash is recorded in BOTH docs/blueprints/payment/acceptance/l4-sealed-prompt.md AND l4-sealed-rubric.md (sealed_at_commit: <hash>)",
+        "A subsequent commit (or amended) updates these files with the actual hash from US-001 commit",
+        "git log --oneline | head -20 shows the sealing commit precedes any commit touching practices/rules/payment-*.md or practices/upstream/ payment additions"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "P1.5 — Generalization Audit per proposed Payment rule",
+      "priority": 7,
+      "passes": false,
+      "acceptanceCriteria": [
+        "docs/blueprints/payment/decisions.md contains a 'Generalization Audit' section with a table of proposed Payment rules",
+        "Each proposed rule classified as: new_generic / extend_existing / payment_specific / reject_duplicate, with one-line rationale",
+        "Rules considered (at minimum): no-pan-in-logs, idempotency-key-required, bigdecimal-amount, iso-4217-currency, state-machine-atomic",
+        "Cross-reference against existing practices/rules/observability-* (especially observability-no-pii-in-logs), transaction-*, validation-*, testing-restassured-* — any extension classified explicitly",
+        "Final rule list for P6 derived from audit: between 3 and 5 rules (NOT a fixed quota of 5)"
+      ]
+    },
+    {
+      "id": "US-008",
+      "title": "P2 — RED tests (testPayment registered + 30-40 failing @Tag tests)",
+      "priority": 8,
+      "passes": false,
+      "acceptanceCriteria": [
+        "backend/build.gradle.kts has tasks.register<Test>(\"testPayment\") with includeTags(\"PAYMENT\")",
+        "cd backend && ./gradlew tasks --all | grep testPayment confirms registration",
+        "backend/src/test/java/com/ax/template/authblueprint/payment/ contains at least 30 @Tag(\"PAYMENT\") test methods covering all 24 spec items (AUTHZ/IDEMP/MONEY/STATE/REFUND/PROVIDER/SEC/OBS/RECON)",
+        "Each test method has @Tag(\"PAYMENT\") + @Tag(\"PAYMENT-<FAMILY>-<NNN>\") for the specific spec item",
+        "cd backend && ./gradlew testPayment exits NON-ZERO (RED state — implementation missing). All test failures are 'NoClassDefFoundError', 'cannot find symbol', or 'assertion failed' — not 'test framework error' or 'compile error in test code'",
+        "git commit with message starting 'test: payment reproducer (RED)' on active branch"
+      ]
+    },
+    {
+      "id": "US-009",
+      "title": "P3.0 — GREEN baseline implementation",
+      "priority": 9,
+      "passes": false,
+      "acceptanceCriteria": [
+        "backend/src/main/java/com/ax/template/authblueprint/payment/ has: Payment entity (BigDecimal amount, audit fields), Refund entity, Order ref, PaymentEvent entity (append-only ledger), PaymentRepository, RefundRepository, PaymentEventRepository, IdempotencyKeyStore (Caffeine), MoneyDeserializer (Jackson, rejects float), PaymentStateMachine, PaymentService, RefundService, PaymentController (5 endpoints), MockProvider implementing PaymentProvider interface",
+        "cd backend && ./gradlew testPayment exits 0 (all 30-40 tests GREEN)",
+        "cd backend && ./gradlew testAsvs testCrud testRateLimit testPractices exits 0 (no regression)",
+        "git commit with message starting 'feat(payment): baseline impl (GREEN)' on active branch"
+      ]
+    },
+    {
+      "id": "US-010",
+      "title": "P3.3 — Provider failure matrix tests (6 modes)",
+      "priority": 10,
+      "passes": false,
+      "acceptanceCriteria": [
+        "6 dedicated test methods exist under backend/src/test/.../payment/provider/: ProviderTimeoutTest, Provider5xxTest, Provider4xxDeclineTest, ProviderMalformedTest, ProviderNetworkResetTest, ProviderIdempotencyReplayTest",
+        "MockProvider supports an injectable failure mode (e.g., setNextResponse(FailureMode.TIMEOUT)) so each test sets up its specific scenario",
+        "All 6 tests pass: ./gradlew testPayment --tests '*Provider*' exits 0",
+        "PAYMENT-PROVIDER-001..006 spec items all have at least one passing test (verified by test output naming)",
+        "git commit 'feat(payment): provider failure matrix (6 modes)'"
+      ]
+    },
+    {
+      "id": "US-011",
+      "title": "P3.6 — Concurrency tests (idempotency + refund race)",
+      "priority": 11,
+      "passes": false,
+      "acceptanceCriteria": [
+        "IdempotencyConcurrencyTest exists with @RepeatedTest(20) using CountDownLatch — 5 parallel threads issue same Idempotency-Key, asserts exactly 1 charge created",
+        "RefundConcurrencyTest exists with @RepeatedTest(20) — 2 parallel partial-refund requests, asserts sum(refunds) ≤ payment.amount invariant holds",
+        "Payment entity has @Version (JPA optimistic lock)",
+        "IdempotencyKeyStore uses atomic putIfAbsent (Caffeine native)",
+        "./gradlew testPayment --tests '*Concurrency*' exits 0",
+        "git commit 'feat(payment): concurrency safety (idempotency + refund races)'"
+      ]
+    },
+    {
+      "id": "US-012",
+      "title": "P3.9 — Reconciliation invariant test",
+      "priority": 12,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Flyway migration creates payment_events table with schema: event_id PK, payment_id FK, type ENUM, occurred_at, payload_hash CHAR(64), prev_hash CHAR(64), payload TEXT (or JSONB)",
+        "PaymentEventLedger service appends events on every state transition; each event's prev_hash = sha256(previous event's serialized form)",
+        "ReconciliationInvariantTest verifies: sum(CAPTURED.amount from ledger) - sum(REFUNDED.amount from ledger) == stored Payment.balance for each Payment in the test fixture",
+        "Test produces RED when implementation forgets to write a ledger entry (e.g., manual tampering by removing one .save call)",
+        "./gradlew testPayment --tests '*ReconciliationInvariant*' exits 0",
+        "git commit 'feat(payment): reconciliation ledger + invariant'"
+      ]
+    },
+    {
+      "id": "US-013",
+      "title": "P4 — REFACTOR + java-reviewer",
+      "priority": 13,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Code refactored: no @Transactional self-invocation, constructor injection only, no exposed entities in controllers (DTO records), records for Request/Response payloads (Request/Response suffix), no Optional fields, @SpringBootTest only where needed (slice tests preferred)",
+        "cd backend && ./gradlew testPractices exits 0 (existing 64 Java rules pass against payment package)",
+        "Test coverage on payment package ≥ 80% (verified via jacoco or equivalent)",
+        "everything-claude-code:java-reviewer Skill invoked with payment package as input; output saved to docs/blueprints/payment/decisions.md",
+        "decisions.md contains the reviewer's findings + the maintainer's resolution per finding (accepted/rejected with rationale)",
+        "git commit 'refactor(payment): clean up after GREEN + java-reviewer findings'"
+      ]
+    },
+    {
+      "id": "US-014",
+      "title": "P5 — security-reviewer (primary security authority)",
+      "priority": 14,
+      "passes": false,
+      "acceptanceCriteria": [
+        "everything-claude-code:security-reviewer Skill invoked with payment package + manifest + spec as input",
+        "Skill output saved to docs/blueprints/payment/security-review.md",
+        "PCI-DSS checklist trace verified: PAYMENT-SEC-001 → PCI-DSS 3.4 PAN protection (test: PanRedactionTest GREEN); PAYMENT-SEC-002 → PCI-DSS 6.5 secure coding (no hardcoded secrets, no SQL string concat); PAYMENT-SEC-003 → PCI-DSS 4.1 TLS-only (configured at Spring SecurityConfig)",
+        "Supplemental grep: grep -rn 'creditCard\\|panNumber\\|cardNumber' backend/src/main/java/ | grep -v test | wc -l returns 0",
+        "All security-reviewer findings classified critical/high addressed; medium/low documented with rationale",
+        "git commit 'fix(payment): security-review findings + PCI trace verified'"
+      ]
+    },
+    {
+      "id": "US-015",
+      "title": "P6 — Payment-derived catalog rules (post-audit, 3-5 rules)",
+      "priority": 15,
+      "passes": false,
+      "acceptanceCriteria": [
+        "3-5 new rules added to practices/rules/ (or extensions to existing rules) per the P1.5 generalization audit (US-007). NOT a fixed quota of 5",
+        "Each new rule .md file has all required frontmatter: spec_ref, evidence (with URL + quote + upstream_id), substance (Incorrect/Correct examples), verification.tag, verification.gradle_task",
+        "practices/upstream/ has new snapshots: pci-dss-saq-a.snapshot.md, stripe-api.snapshot.md (or equivalent), iso-4217.snapshot.md, rfc-7807.snapshot.md (problem-detail) — with content + correct sha in _MANIFEST.yaml",
+        "bash practices/evals/spec_ref_guard.sh AND substance_guard.sh AND time_decay_guard.sh AND evidence_guard.sh all exit 0",
+        "bash practices/generate_agents.sh produces a clean AGENTS.md regen (sha256 sentinel match)",
+        "git commit 'feat(practices): payment-derived rules + upstream snapshots'"
+      ]
+    },
+    {
+      "id": "US-016",
+      "title": "P7 — /verification-loop full sweep",
+      "priority": 16,
+      "passes": false,
+      "acceptanceCriteria": [
+        "/verification-loop Skill invoked; produces a verification report",
+        "Report's 6 phases: Build / Types / Lint / Tests / Security / Diff — all PASS (or WARN documented with rationale)",
+        "All gates in plan.md Command Matrix execute with expected exit code 0: ./gradlew testPayment testAsvs testCrud testRateLimit testPractices; npx swagger-cli validate; 4 Java hard gates; 3 React hard gates; security grep (supplemental); etc.",
+        "Report saved to docs/blueprints/payment/verification-log.md",
+        "git commit 'docs(payment): /verification-loop sweep results'"
+      ]
+    },
+    {
+      "id": "US-017",
+      "title": "P7.5 — Execute verify/blueprint-completeness.sh payment",
+      "priority": 17,
+      "passes": false,
+      "acceptanceCriteria": [
+        "bash verify/blueprint-completeness.sh payment exits 0",
+        "Output enumerates all 14 artifacts as present + verified",
+        "Output appended to docs/blueprints/payment/verification-log.md"
+      ]
+    },
+    {
+      "id": "US-018",
+      "title": "P7.7 — Execute verify/cold-start-test.sh payment",
+      "priority": 18,
+      "passes": false,
+      "acceptanceCriteria": [
+        "bash verify/cold-start-test.sh payment exits 0",
+        "Output confirms all input files (plan/progress/specs/contract/manifest/AGENTS/CLAUDE/README) readable + nonzero size",
+        "Output confirms progress.md has a parseable 'next phase' anchor (or 'COMPLETE' marker)",
+        "Output appended to docs/blueprints/payment/verification-log.md"
+      ]
+    },
+    {
+      "id": "US-019",
+      "title": "P8 — L3 fork simulation",
+      "priority": 19,
+      "passes": false,
+      "acceptanceCriteria": [
+        "git clone of the repo to /tmp/ax-payment-test created (--depth 1, current branch)",
+        "From /tmp/ax-payment-test: cd backend && ./gradlew test exits 0 (testAsvs + testCrud + testRateLimit + testPayment + testPractices all green)",
+        "From /tmp/ax-payment-test: bash practices/evals/run.sh exits 0",
+        "From /tmp/ax-payment-test: bash practices-react/evals/run.sh exits 0",
+        "Result documented in docs/blueprints/payment/acceptance/l3-fork-simulation.md",
+        "Cleanup: rm -rf /tmp/ax-payment-test after verification"
+      ]
+    },
+    {
+      "id": "US-020",
+      "title": "P9 — L4 sealed sub-agent acceptance test",
+      "priority": 20,
+      "passes": false,
+      "acceptanceCriteria": [
+        "A general-purpose sub-agent invoked via Agent tool with the EXACT prompt from l4-sealed-prompt.md (no edits)",
+        "Sub-agent's transcript / output recorded in docs/blueprints/payment/acceptance/l4-subagent-test.md",
+        "Sub-agent's work evaluated against EVERY criterion in l4-sealed-rubric.md (no edits to rubric post-hoc) — each criterion marked PASS/FAIL with one-line evidence",
+        "Overall verdict: PASS if all critical rubric items PASS; otherwise FAIL with documented catalog discoverability gap (which gets fixed in a follow-up)",
+        "AI2-3 paper exercise (Stripe PaymentIntent + Toss V2 mapping) included in the sub-agent's deliverables and evaluated"
+      ]
+    },
+    {
+      "id": "US-021",
+      "title": "P10 — METHODOLOGY.md Appendix C: standard procedure for adding a domain",
+      "priority": 21,
+      "passes": false,
+      "acceptanceCriteria": [
+        "METHODOLOGY.md has a new section 'Appendix C: Standard Procedure for Adding a New Domain'",
+        "Appendix C documents the 12-step procedure derived from Payment work (auth/CRUD/ratelimit + Payment empirically validated)",
+        "Verification primitive defined abstractly as <framework-native test runner with domain filter>, with BOTH Gradle (Spring Boot) AND npm/vitest (React/Next.js) concrete examples",
+        "Each step cross-references the relevant plan.md phase (P0..P11) and the relevant artifact",
+        "Future domains (Notification, File upload, Audit log) explicitly listed as candidates",
+        "git commit 'docs(methodology): Appendix C — standard procedure for adding domain'"
+      ]
+    },
+    {
+      "id": "US-022",
+      "title": "P11 — Push + memory + /save-session checkpoint",
+      "priority": 22,
+      "passes": false,
+      "acceptanceCriteria": [
+        "git push origin main succeeds (all Payment-related commits + Round 4 work)",
+        "~/.claude/projects/<slug>/memory/payment_blueprint_status.md updated: status = 'COMPLETE — <date>'; next-phase anchor removed",
+        "MEMORY.md index updated accordingly",
+        "All 22 stories in this PRD have passes: true"
+      ]
+    }
+  ]
+}
