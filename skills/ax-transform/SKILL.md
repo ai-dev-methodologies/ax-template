@@ -21,7 +21,7 @@ A starter / transformation skill for projects that want AI agents (Claude Code e
 | **`./gradlew test{Domain}`** | Single binary command per domain (testAsvs, testCrud, testPractices, testPortability). AI self-verifies in one shot. |
 | **`AGENTS.md`** (auto-regenerated, sha256-sentinel) | AI agent's primary context file. Stays sync'd to `practices/rules/*.md` automatically. |
 | **4 hard gates** (spec_ref / substance / time_decay / evidence) | Binary checks that block AI output if it diverges from external facts. |
-| **Reference workloads** (`archive/backend-reference/` Spring Boot auth + CRUD + rate-limit + practices fixtures — FROZEN v1.0; `frontend/` React) | Worked examples — the skill applies itself to itself. Java side became frozen on 2026-05-17 after Round 3 review (see `archive/README.md`); active growth = `practices-react/eslint-plugin-ax`. |
+| **Reference workloads** (`backend/` Spring Boot auth + CRUD + practices fixtures, `frontend/` React) | Worked examples — the skill applies itself to itself. |
 
 **This skill does NOT impose:**
 - Git workflow (branch protection, PR policy, merge strategy) — fork받은 팀이 정함
@@ -39,7 +39,7 @@ git clone https://github.com/ai-dev-methodologies/ax-template my-project
 cd my-project
 
 # 2. Run the full verification suite
-cd archive/backend-reference && ./gradlew test   # testAsvs + testCrud + testPractices (frozen reference workload)
+cd backend && ./gradlew test          # testAsvs + testCrud + testPractices
 
 # 3. Check practices catalog hard gates
 bash practices/evals/spec_ref_guard.sh

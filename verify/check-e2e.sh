@@ -6,7 +6,7 @@ echo "  Requires: backend (8080) + frontend (5173) running"
 # Check servers
 if ! curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
   echo "  ✗ Backend not running on :8080"
-  echo "  Start: cd archive/backend-reference && ./gradlew bootRun"
+  echo "  Start: cd backend && ./gradlew bootRun"
   exit 1
 fi
 if ! curl -s http://localhost:5173 > /dev/null 2>&1; then

@@ -4,7 +4,7 @@ echo "  KPI Report"
 echo "========================================="
 echo ""
 echo "[1] Verification Pass Rate:"
-cd archive/backend-reference && RESULT=$(./gradlew testAsvs 2>&1 | tail -1) && cd ../..
+cd backend && RESULT=$(./gradlew testAsvs 2>&1 | tail -1) && cd ..
 echo "  testAsvs: $RESULT"
 echo ""
 echo "[2] Rework Rate:"

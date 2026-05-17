@@ -1,11 +1,11 @@
 checks:
 - description: Backend builds successfully
   id: build
-  script: cd archive/backend-reference && ./gradlew build -q
+  script: cd backend && ./gradlew build -q
   type: automated
 - description: All ASVS spec items have @Tag tests and pass
   id: asvs-compliance
-  script: cd archive/backend-reference && ./gradlew testAsvs -q
+  script: cd backend && ./gradlew testAsvs -q
   type: automated
 - description: OpenAPI contract paths match controller endpoints
   id: contract-match

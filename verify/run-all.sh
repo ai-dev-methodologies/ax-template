@@ -5,10 +5,10 @@ echo "  ax-template Full Verification Suite"
 echo "========================================="
 echo ""
 echo "[1/5] Backend Build..."
-(cd archive/backend-reference && ./gradlew build -q)
+(cd backend && ./gradlew build -q)
 echo "  ✓ Build passed"
 echo "[2/5] ASVS Compliance..."
-(cd archive/backend-reference && ./gradlew testAsvs -q)
+(cd backend && ./gradlew testAsvs -q)
 echo "  ✓ ASVS tests passed"
 echo "[3/5] Contract Check..."
 ./verify/check-contract.sh

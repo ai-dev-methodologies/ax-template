@@ -12,7 +12,7 @@ ax = **AI transformation**. This repo is the source of the Claude Code plugin **
 - **AGENTS.md sentinel** — sha256-anchored AI agent context, auto-regenerated on rule change
 - **4 hard gates** — `spec_ref`, `substance`, `time_decay`, `evidence` block AI output that can't anchor to external sources
 
-The `archive/backend-reference/` (Spring Boot) and `frontend/` (React) directories are **reference workloads** — the skill applied to itself. Active development is concentrated in `practices-react/eslint-plugin-ax/`; the Spring side was reframed as a frozen reference snapshot on 2026-05-17 (see `archive/README.md` and `practices/STATUS.md`).
+The `backend/` (Spring Boot) and `frontend/` (React) directories are **reference workloads** — the skill applied to itself.
 
 ## What this skill does NOT impose
 
@@ -49,7 +49,7 @@ git clone https://github.com/ai-dev-methodologies/ax-template my-project
 cd my-project
 git submodule update --init  # fetches portability fixtures (petclinic, realworld, modulith)
 
-cd archive/backend-reference && ./gradlew test   # full regression: testAsvs + testCrud + testPractices (frozen reference workload)
+cd backend && ./gradlew test          # full regression: testAsvs + testCrud + testPractices
 ```
 
 ## Repo layout
@@ -65,59 +65,36 @@ ax-template/
 ├── specs/                        # Compliance specs (auth-asvs-l1, crud-l0, spring-practices-l0)
 ├── contracts/                    # OpenAPI contracts
 ├── blueprints/                   # Policy manifests (JWT / session / rate limit / CORS)
-├── practices/                    # FROZEN v1.0 Java/Spring catalog (64 rules / 22 categories)
-│   ├── STATUS.md                 # Frozen status + re-thaw criteria
-│   ├── rules/                    # The 64 rule.md files (snapshot)
-│   ├── upstream/                 # Fetched external snapshots
+├── practices/                    # Catalog: 64 rules / 21 categories / 4 hard gates / evidence trail
+│   ├── rules/                    # The 64 rule.md files
+│   ├── upstream/                 # Fetched external snapshots (gitignored, regen via fetch.sh)
 │   ├── evals/                    # spec_ref / substance / time_decay / evidence guards + advisory probes
-│   ├── AGENTS.md                 # AI agent entry point (sha sentinel, auto-regen)
-│   ├── SKILL.md                  # practices subsystem skill (frozen)
+│   ├── AGENTS.md                 # AI agent entry point (sha sentinel)
+│   ├── SKILL.md                  # practices subsystem skill
 │   ├── MAINTAINER.md             # Catalog maintainer guide
 │   └── DECISIONS.md              # Rule provenance trail
-├── practices-react/              # ACTIVE React 19 / Next.js 16 catalog + ESLint plugin
-│   ├── rules/                    # 68 rule.md files
-│   ├── upstream/                 # Fetched canonical snapshots (90d decay gate)
-│   ├── evals/                    # spec_ref / time_decay / evidence guards
-│   ├── eslint-plugin-ax/         # @ax/eslint-plugin-ax — 7 custom ESLint rules
-│   ├── AGENTS.md                 # AI agent entry point (sha sentinel, auto-regen)
-│   └── SKILL.md                  # practices-react subsystem skill
-├── archive/
-│   └── backend-reference/        # FROZEN Spring Boot reference workload (moved from backend/ on 2026-05-17)
-├── frontend/                     # React reference workload (active for ESLint plugin self-testing)
-├── verify/                       # Optional verification scripts
+├── backend/                      # Spring Boot reference workload
+├── frontend/                     # React reference workload
+├── verify/                       # Optional verification scripts (fork-받은 팀 자율)
 └── docs/archive/                 # Historical governance documents
 ```
 
 ## Verification commands
 
-### React catalog (active)
-
 ```bash
-bash practices-react/evals/run.sh               # spec_ref + time_decay + evidence guards
-cd practices-react/eslint-plugin-ax && npm test # 7 ESLint rules (RuleTester)
-```
-
-### Frozen Java reference workload (regression sanity check only)
-
-```bash
-cd archive/backend-reference
+cd backend
 ./gradlew testAsvs                # OWASP ASVS L1 (26 items, auth domain)
 ./gradlew testCrud                # CRUD reference domain (7 security tests)
 ./gradlew testPractices           # 64 practices rules (binary pass/fail per rule)
 ./gradlew testPortability         # advisory: rules applied to spring-petclinic / realworld / modulith
 ```
 
-### Catalog hard gates
-
 ```bash
-# React (active, 90d decay gate)
-bash practices-react/evals/run.sh
-
-# Java (frozen, 365d advisory threshold — see practices/STATUS.md)
-bash practices/evals/spec_ref_guard.sh
-bash practices/evals/substance_guard.sh
-TIME_DECAY_THRESHOLD_DAYS=365 bash practices/evals/time_decay_guard.sh
-bash practices/evals/evidence_guard.sh
+# Catalog hard gates (run independently of Gradle)
+bash practices/evals/spec_ref_guard.sh        # every rule must declare spec_ref
+bash practices/evals/substance_guard.sh       # rule body has Incorrect/Correct ≥2 lines, Reference URL
+bash practices/evals/time_decay_guard.sh      # cited snapshots ≤ 90 days old
+bash practices/evals/evidence_guard.sh        # evidence block points to a real snapshot or external citation
 ```
 
 ## Optional: install local catalog-quality hooks

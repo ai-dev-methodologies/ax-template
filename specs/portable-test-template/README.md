@@ -1,7 +1,7 @@
 # Portable ASVS Test Template
 
 This directory contains RestAssured-based test templates that can be copied into any Spring Boot project.
-Unlike the implementation tests in `archive/backend-reference/src/test/`, these use black-box HTTP testing and are not coupled to any specific package structure.
+Unlike the implementation tests in `backend/src/test/`, these use black-box HTTP testing and are not coupled to any specific package structure.
 
 ## Usage
 1. Copy the test files to your project's `src/test/java/` directory

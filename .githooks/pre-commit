@@ -14,7 +14,7 @@ cd "$ROOT"
 
 TOUCHES_PRACTICES=0
 TOUCHES_PRACTICES_REACT=0
-if git diff --cached --name-only | grep -qE '^(practices/|specs/spring-practices-l0\.yaml|archive/backend-reference/src/.*/practices/)'; then
+if git diff --cached --name-only | grep -qE '^(practices/|specs/spring-practices-l0\.yaml|backend/src/.*/practices/)'; then
     TOUCHES_PRACTICES=1
 fi
 if git diff --cached --name-only | grep -qE '^(practices-react/|specs/react-practices-l0\.yaml)'; then
@@ -89,10 +89,9 @@ fi
 
 # Stage 2: when backend java sources under practices/ change, run testPractices.
 # Pure rule.md commits skip this stage (no java change = no test impact).
-# Backend lives in archive/backend-reference/ since 2026-05-17 (frozen reference workload).
-if git diff --cached --name-only | grep -qE '^archive/backend-reference/src/(main|test)/java/com/ax/template/authblueprint/practices/'; then
-    echo "[practices] backend-reference changes detected — running ./gradlew testPractices"
-    if ! (cd archive/backend-reference && ./gradlew -q testPractices); then
+if git diff --cached --name-only | grep -qE '^backend/src/(main|test)/java/com/ax/template/authblueprint/practices/'; then
+    echo "[practices] backend changes detected — running ./gradlew testPractices"
+    if ! (cd backend && ./gradlew -q testPractices); then
         echo "[practices] ✗ testPractices FAILED — commit BLOCKED"
         echo "[practices] Fix the failing test(s) above and run \`git commit\` again."
         exit 1

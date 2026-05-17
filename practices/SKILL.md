@@ -38,15 +38,6 @@ retrieval:
 
 # ax-template Spring Boot Practices
 
-> **STATUS: FROZEN v1.0 (2026-05-17).** This Java/Spring catalog is a **frozen
-> reference snapshot**, not an actively curated catalog. Empirical validation
-> (Round 3, 2026-05-17) confirmed that the active growth lane is
-> `practices-react/` + `eslint-plugin-ax`. Java catalog remains as the
-> methodology's worked example — first proof that Spec Trio + binary
-> verification + evidence-anchored rules carry. New Spring rules are NOT
-> added here; new domains are NOT added here. See `practices/STATUS.md` for
-> details.
-
 Advisory catalog for maintainers adding rules to `practices/rules/`. This directory is the **view layer of Spec Trio, NOT a 4th tier** — every rule `.md` must anchor to a `spec_ref` in `specs/`. Hard merge gate is the binary outcome of `./gradlew test{Domain}`.
 
 ## Position in the Spec Trio

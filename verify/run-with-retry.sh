@@ -15,7 +15,7 @@ for i in $(seq 1 $MAX_RETRIES); do
   echo ""
   echo "✗ FAILED attempt $i — attempting auto-fix..."
   # Basic auto-fix: rebuild
-  (cd archive/backend-reference && ./gradlew build -q 2>/dev/null)
+  (cd backend && ./gradlew build -q 2>/dev/null)
   (cd frontend && npm run build -s 2>/dev/null)
 done
 
