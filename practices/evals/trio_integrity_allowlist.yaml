@@ -17,5 +17,5 @@ domains:
   payment: full_trio
   practices: frontend_only      # static viewer reading practices/AGENTS.md + rules/
   ratelimit: backend_only
-  security: backend_only
-  user: backend_only
+  # security: backend_only  # no specs/security-*.yaml yet — add when backend domain is scaffolded
+  # user: backend_only      # no specs/user-*.yaml yet — add when backend domain is scaffolded

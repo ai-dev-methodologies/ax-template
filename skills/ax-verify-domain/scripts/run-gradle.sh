@@ -27,9 +27,18 @@ if [ "$DOMAIN_LOWER" = "practices" ]; then
     exit 0
 fi
 
-# Convert to PascalCase for Gradle task name
-DOMAIN_PASCAL="$(echo "$DOMAIN_LOWER" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
-GRADLE_TASK="test${DOMAIN_PASCAL}"
+# Domain → Gradle task mapping.
+# Some domains use a different Gradle task name than the simple "test<Domain>" convention.
+case "$DOMAIN_LOWER" in
+    auth)     GRADLE_TASK="testAsvs" ;;       # auth ASVS tests
+    crud)     GRADLE_TASK="testCrud" ;;
+    payment)  GRADLE_TASK="testPayment" ;;
+    ratelimit) GRADLE_TASK="testRatelimit" ;;
+    *)
+        DOMAIN_PASCAL="$(echo "$DOMAIN_LOWER" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+        GRADLE_TASK="test${DOMAIN_PASCAL}"
+        ;;
+esac
 
 if [ ! -d "$REPO_ROOT/backend" ]; then
     echo "  SKIP [gradle] backend/ not present"

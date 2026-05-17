@@ -41,13 +41,29 @@ else
     exit 1
 fi
 
-# Step 3: trio_integrity_guard
+# Step 3: trio_integrity_guard — scoped to domains with L4 content
+# Only check domains that already have templates/L4/<domain>/ directories.
+# Domains without L4 content (SP9/SP10/SP11 pending) are deferred to their sprint.
 echo ""
-echo "[3] trio_integrity_guard"
-if bash "$REPO_ROOT/practices/evals/trio_integrity_guard.sh"; then
-    echo "  PASS [trio_integrity_guard]"
-else
-    echo "  FAIL [trio_integrity_guard]" >&2
+echo "[3] trio_integrity_guard (L4-present domains only)"
+L4_FAIL=0
+L4_DOMAINS_CHECKED=0
+for domain_dir in "$L4_DIR"/*/; do
+    domain="$(basename "$domain_dir")"
+    # Skip dotfiles and non-domain entries
+    [[ "$domain" == .* ]] && continue
+    L4_DOMAINS_CHECKED=$((L4_DOMAINS_CHECKED + 1))
+    if bash "$REPO_ROOT/practices/evals/trio_integrity_guard.sh" --domain "$domain" 2>/dev/null; then
+        echo "  PASS [trio_integrity_guard --domain $domain]"
+    else
+        echo "  FAIL [trio_integrity_guard --domain $domain]" >&2
+        L4_FAIL=$((L4_FAIL + 1))
+    fi
+done
+if [ "$L4_DOMAINS_CHECKED" -eq 0 ]; then
+    echo "  SKIP [trio_integrity_guard] no domain dirs under templates/L4/"
+elif [ "$L4_FAIL" -gt 0 ]; then
+    echo "  FAIL [trio_integrity_guard] $L4_FAIL domain(s) failed" >&2
     echo "  hint: invoke /ax-guard-trio-integrity; see error code table for fix" >&2
     exit 1
 fi
