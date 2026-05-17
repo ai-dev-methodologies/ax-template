@@ -9,9 +9,14 @@ export default defineConfig({
   },
   test: {
     include: ['tests/**/*.vitest.{ts,tsx}', 'tests/**/*.spec.{ts,tsx}'],
-    // L4 tests use @playwright/test and must run under `npx playwright test tests/L4/`
-    // not under vitest. Excluding prevents the "test.describe() not expected here" error.
-    exclude: ['tests/L4/**'],
+    // Playwright tests use @playwright/test and must run under `npx playwright test`.
+    // Excluding them from vitest prevents the "test.describe() not expected here" error.
+    exclude: [
+      'tests/L4/**',
+      'tests/e2e-*.spec.ts',
+      'tests/key-flow.spec.ts',
+      'tests/auth/**',
+    ],
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
   },

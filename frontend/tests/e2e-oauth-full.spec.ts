@@ -3,6 +3,10 @@ import { test, expect } from '@playwright/test';
 test.describe('OAuth Full Flow — 실제 로그인 검증', () => {
 
   test('Google OAuth: 로그인 → 콜백 → JWT', async ({ page }) => {
+    // Skip when real Google test credentials are not configured (requires GOOGLE_TEST_EMAIL + GOOGLE_TEST_PASSWORD)
+    if (!process.env.GOOGLE_TEST_EMAIL || !process.env.GOOGLE_TEST_PASSWORD) {
+      test.skip(true, 'GOOGLE_TEST_EMAIL/GOOGLE_TEST_PASSWORD not set — skipping live Google OAuth flow');
+    }
     await page.goto('/login');
     
     // Google 버튼 클릭

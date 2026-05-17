@@ -1,9 +1,9 @@
 ---
 sentinel:
-  source_concat_sha256: "b809ca8b2e28b297e012db65371edab0a54427f0c58a4efec406ae5f7758e341"
-  source_file_count: 1
+  source_concat_sha256: "93f41a7c7c85fcb18bde2bd4cb1977144e9b2bfbe8e652790f8289bdbee6067d"
+  source_file_count: 14
   generated_by: "templates/generate_agents.sh"
-  generated_at: "2026-05-17T13:12:46Z"
+  generated_at: "2026-05-17T16:20:34Z"
 ---
 
 # templates/ — AGENTS.md (auto-generated)
@@ -42,6 +42,19 @@ All files under `templates/**` are walked by:
 
 See `templates/DECISIONS.md` for the full ADR trail (TD-2026-05-17-001..010).
 
-## Sha256 source files (1 total)
+## Sha256 source files (14 total)
 
 - DECISIONS.md
+- L1/PEER_DEPS.md
+- L3/pages/README.md
+- L3/pages/auth-callback-page/README.md
+- L3/pages/create-page/README.md
+- L3/pages/dashboard-page/README.md
+- L3/pages/detail-page/README.md
+- L3/pages/edit-page/README.md
+- L3/pages/error-page/README.md
+- L3/pages/list-page/README.md
+- L4/auth/README.md
+- L4/crud/README.md
+- L4/payment/README.md
+- L4/practices/README.md

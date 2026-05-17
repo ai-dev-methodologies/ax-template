@@ -2,7 +2,14 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['**/*.spec.ts'],
+  // L1/L2/L3 *.spec.ts files import from 'vitest' and run under Vitest, not Playwright.
+  // Only match: L4 composition specs, top-level e2e-*.spec.ts, and auth/login-flow.spec.ts.
+  testMatch: [
+    'L4/**/*.spec.ts',
+    'e2e-*.spec.ts',
+    'key-flow.spec.ts',
+    'auth/**/*.spec.ts',
+  ],
   fullyParallel: false,
   retries: 0,
   timeout: 30000,
