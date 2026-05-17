@@ -14,17 +14,19 @@
 set -uo pipefail
 
 CATALOG="${CATALOG:-practices}"
+CATALOG_DIR_OVERRIDE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --catalog) CATALOG="$2"; shift 2 ;;
         --catalog=*) CATALOG="${1#--catalog=}"; shift ;;
+        /*) CATALOG_DIR_OVERRIDE="$1"; shift ;;
         *) echo "evidence_guard: unknown arg: $1" >&2; exit 2 ;;
     esac
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CATALOG_DIR="$REPO_ROOT/$CATALOG"
+CATALOG_DIR="${CATALOG_DIR_OVERRIDE:-$REPO_ROOT/$CATALOG}"
 
 if [ ! -d "$CATALOG_DIR" ]; then
     echo "evidence_guard: catalog '$CATALOG' not found at $CATALOG_DIR — nothing to check"
