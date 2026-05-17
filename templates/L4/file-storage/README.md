@@ -21,7 +21,7 @@ Spec Trio anchors: `specs/file-storage-l0.yaml` (12 backend items) ·
 
 ## How to fork this template
 
-1. **Copy** `templates/L4/file-storage/` into your project as `app/`:
+1. **copy** `templates/L4/file-storage/` into your project as `app/`:
    ```bash
    cp -r templates/L4/file-storage/app ./app
    cp templates/L4/file-storage/next.config.ts ./next.config.ts
