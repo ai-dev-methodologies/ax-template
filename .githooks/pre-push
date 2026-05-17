@@ -5,7 +5,9 @@
 # (branch protection, PR policy, merge strategy) is NOT enforced by this template —
 # fork-받은 팀이 결정. This hook only protects catalog quality: it runs the binary
 # verification suite (testPractices + testAsvs + testCrud) before any push that
-# touches backend/, practices/, or the seed spec, so failed regressions cannot ship.
+# touches archive/backend-reference/, practices/, or the seed spec, so failed
+# regressions cannot ship. (Backend reference workload moved from `backend/` to
+# `archive/backend-reference/` on 2026-05-17 — frozen reference.)
 #
 # Activated by practices/scripts/install-hooks.sh together with pre-commit. The hook
 # is opt-in per clone; not installing it skips the regression locally but sentinel CI
@@ -38,16 +40,16 @@ RANGE="$(read_range)"
 
 # Skip when the push touches nothing under the regression scope.
 if [[ -n "$RANGE" ]]; then
-    if ! git diff --name-only "$RANGE" 2>/dev/null | grep -qE '^(backend/|practices/|specs/spring-practices-l0\.yaml)'; then
+    if ! git diff --name-only "$RANGE" 2>/dev/null | grep -qE '^(archive/backend-reference/|practices/|specs/spring-practices-l0\.yaml)'; then
         exit 0
     fi
 fi
 
 echo "[practices] push detected — running full regression (testPractices + testAsvs + testCrud)"
-if ! (cd backend && ./gradlew -q testPractices testAsvs testCrud); then
+if ! (cd archive/backend-reference && ./gradlew -q testPractices testAsvs testCrud); then
     echo "[practices] ✗ full regression FAILED — push BLOCKED"
     echo "[practices] Inspect the failing tests above. Re-run locally:"
-    echo "[practices]   cd backend && ./gradlew testPractices testAsvs testCrud"
+    echo "[practices]   cd archive/backend-reference && ./gradlew testPractices testAsvs testCrud"
     exit 1
 fi
 echo "[practices] ✓ full regression PASS — push proceeds"

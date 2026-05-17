@@ -97,18 +97,26 @@ skill은 **catalog quality probe만 제공**. fork받은 팀이 자신의 정책
 ## Build & Test
 
 ```bash
-# Backend
-cd backend && ./gradlew build         # 빌드
-cd backend && ./gradlew test          # 전체 테스트
-cd backend && ./gradlew testAsvs      # auth ASVS 검증
-cd backend && ./gradlew testCrud      # CRUD spec 검증
-cd backend && ./gradlew testPractices # practices/ 64룰 검증
-cd backend && ./gradlew testPortability  # advisory: 외부 fixture에 룰 적용
+# Active surface — React catalog + ESLint plugin
+bash practices-react/evals/run.sh                          # 3 hard gates
+cd practices-react/eslint-plugin-ax && npm test            # 7 ESLint rules (RuleTester)
+
+# Frozen Java reference workload (regression sanity)
+cd archive/backend-reference && ./gradlew build            # 빌드
+cd archive/backend-reference && ./gradlew test             # 전체 테스트
+cd archive/backend-reference && ./gradlew testAsvs         # auth ASVS 검증
+cd archive/backend-reference && ./gradlew testCrud         # CRUD spec 검증
+cd archive/backend-reference && ./gradlew testPractices    # practices/ 64룰 검증 (frozen)
+cd archive/backend-reference && ./gradlew testPortability  # advisory: 외부 fixture에 룰 적용
 
 # Frontend
 cd frontend && npm run build
 cd frontend && npm run test
 ```
+
+→ Round 3 (2026-05-17) 이후 active growth = `practices-react/`. Java
+`backend/`은 `archive/backend-reference/`로 이동, 프로즌. 자세히는
+`archive/README.md`, `practices/STATUS.md`.
 
 ## Architecture
 
@@ -130,29 +138,48 @@ ax-template/
 │   └── auth-openapi.yaml
 ├── blueprints/                # 정책 매니페스트 (핵심)
 │   └── auth-manifest.yaml
-├── practices/                 # AI-targeted catalog (skill 핵심 자산)
-│   ├── rules/                 # 64룰, 21 categories
-│   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + advisory probes
-│   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
-│   ├── SKILL.md               # practices 서브시스템 skill
+├── practices/                 # FROZEN v1.0 Java catalog (64룰, 22 categories) — STATUS.md 참조
+│   ├── STATUS.md              # FROZEN 상태 + re-thaw criteria
+│   ├── rules/                 # 64룰 (snapshot)
+│   ├── upstream/              # 외부 사실 snapshot (365d threshold, advisory)
+│   ├── evals/                 # 4 hard gates (frozen에도 advisory로 가동)
+│   ├── AGENTS.md              # AI agent 진입점 (sha sentinel, regen)
+│   ├── SKILL.md               # practices 서브시스템 skill (FROZEN notice)
 │   ├── MAINTAINER.md
 │   └── DECISIONS.md           # rule provenance trail
-├── backend/                   # Spring Boot reference workload (skill의 self-application)
-├── frontend/                  # React reference workload
-├── verify/                    # 검증 스크립트 (선택적 — fork받은 팀이 채택 여부 결정)
+├── practices-react/           # ACTIVE — React 19 / Next.js 16 catalog + ESLint plugin
+│   ├── rules/                 # 68룰
+│   ├── eslint-plugin-ax/      # @ax/eslint-plugin-ax (7 rules)
+│   ├── upstream/              # canonical snapshots (90d decay gate)
+│   ├── evals/                 # 3 hard gates (spec_ref / time_decay / evidence)
+│   ├── AGENTS.md              # sha sentinel
+│   ├── SKILL.md
+│   └── pilot/                 # pilot-report + external-validation
+├── archive/
+│   └── backend-reference/     # FROZEN Spring Boot reference workload (formerly backend/)
+├── frontend/                  # React reference workload (ESLint plugin self-testing)
+├── verify/                    # 검증 스크립트 (선택적 — fork받은 팀 자율)
 └── docs/archive/              # 과거 거버넌스 문서 (참고용)
 ```
 
-## Domains (reference workloads)
+## Domains
+
+### Active (`practices-react/`)
+
+| 도메인 | Spec | Artifact | 항목 |
+|---|---|---|---|
+| React/Next.js practices | `specs/react-practices-l0.yaml` | `practices-react/eslint-plugin-ax/` (npm), 68 rule .md | 68 rules / 8 families / 7 ESLint rules |
+
+### Frozen reference (`archive/backend-reference/`, formerly `backend/`)
 
 | 도메인 | Spec | 엔드포인트 | 항목 |
 |---|---|---|---|
 | Auth | `specs/auth-asvs-l1.yaml` | 14 (signup, login, OAuth Google/Naver/Kakao 등) | 26 ASVS items |
 | CRUD | `specs/crud-l0.yaml` | 5 (CRUD-001~005) | 7 security tests |
-| Practices | `specs/spring-practices-l0.yaml` | — | 64 rules / 21 categories |
+| Rate limit | `specs/ratelimit-l0.yaml` | 1 (`/api/ratelimit/ping`) | 4 items |
+| Practices | `specs/spring-practices-l0.yaml` | — | 64 rules / 22 categories (FROZEN v1.0) |
 
-각 도메인은 동일한 패턴: spec YAML → `@Tag` test → `./gradlew test{Domain}` binary verification.
+각 도메인은 동일한 패턴: spec YAML → `@Tag` test → `cd archive/backend-reference && ./gradlew test{Domain}` binary verification.
 
 ## Methodology
 

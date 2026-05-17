@@ -20,16 +20,16 @@ else
 fi
 
 # SpotBugs via gradle (only if plugin present)
-if grep -q "spotbugs" backend/build.gradle.kts 2>/dev/null; then
+if grep -q "spotbugs" archive/backend-reference/build.gradle.kts 2>/dev/null; then
     echo "| SpotBugs | (plugin present — run \`./gradlew spotbugsMain\`) |"
 else
     echo "| SpotBugs | N/A (no plugin) |"
 fi
 
 # testPractices wall-clock
-if [[ -x backend/gradlew ]]; then
+if [[ -x archive/backend-reference/gradlew ]]; then
     start="$(python3 -c 'import time; print(time.time())')"
-    (cd backend && ./gradlew testPractices --quiet >/dev/null 2>&1) || true
+    (cd archive/backend-reference && ./gradlew testPractices --quiet >/dev/null 2>&1) || true
     end="$(python3 -c 'import time; print(time.time())')"
     elapsed="$(python3 -c "print(f'{${end}-${start}:.2f}')")"
     echo "| testPractices wall-clock (s) | ${elapsed} |"

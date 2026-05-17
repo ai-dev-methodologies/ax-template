@@ -37,7 +37,7 @@ jobs:
       - name: Run testPortability
         id: tests
         continue-on-error: true
-        working-directory: backend
+        working-directory: archive/backend-reference
         run: ./gradlew testPortability
 
       - name: Upload test report
@@ -45,7 +45,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: portability-report
-          path: backend/build/reports/tests/testPortability/
+          path: archive/backend-reference/build/reports/tests/testPortability/
           if-no-files-found: ignore
 
       - name: Summary

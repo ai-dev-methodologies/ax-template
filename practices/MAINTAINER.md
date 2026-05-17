@@ -253,11 +253,11 @@ ax-template is a `/ax-transform` skill package. The skill enforces **catalog qua
 
 | Surface | Trigger | File |
 |---------|---------|------|
-| 1. Claude Code PreToolUse | Write/Edit/MultiEdit on `practices/rules/*.md`, the seed spec, or `backend/src/.../practices/*` | `.claude/settings.local.json` |
+| 1. Claude Code PreToolUse | Write/Edit/MultiEdit on `practices/rules/*.md`, the seed spec, or `archive/backend-reference/src/.../practices/*` | `.claude/settings.local.json` |
 | 2a. Git pre-commit, stage 0 | commit touches `practices/rules/*.md` or `_template.md` | `.githooks/pre-commit` regenerates AGENTS.md + auto-stages it |
 | 2b. Git pre-commit, stage 1 | every commit touching practices/ or the seed spec | 4 binary guards in `.githooks/pre-commit` |
-| 2c. Git pre-commit, stage 2 | commit touches `backend/src/{main,test}/java/.../practices/` | `./gradlew testPractices` runs inside `.githooks/pre-commit` |
-| 3. Git pre-push | local commits ahead of remote touch backend/, practices/, or seed spec | full regression `./gradlew testPractices testAsvs testCrud` in `.githooks/pre-push` |
+| 2c. Git pre-commit, stage 2 | commit touches `archive/backend-reference/src/{main,test}/java/.../practices/` | `./gradlew testPractices` (from `archive/backend-reference/`) runs inside `.githooks/pre-commit` |
+| 3. Git pre-push | local commits ahead of remote touch `archive/backend-reference/`, `practices/`, or seed spec | full regression `./gradlew testPractices testAsvs testCrud` (from `archive/backend-reference/`) in `.githooks/pre-push` |
 | 4. GitHub Actions (PR + main push) | `.github/workflows/practices-sentinel.yml` runs the same gates | advisory probe at the source repo; fork-받은 팀이 본인 CI에 채택할지 결정 |
 
 ### Not in this table (removed 2026-05-16)

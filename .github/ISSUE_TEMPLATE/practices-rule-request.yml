@@ -90,7 +90,7 @@ body:
     id: test_plan
     attributes:
       label: How will the rule be tested?
-      description: "What `@Tag(PRACTICES-<CAT>-<NNN>)` test will live under `backend/src/test/java/.../practices/`?"
+      description: "What `@Tag(PRACTICES-<CAT>-<NNN>)` test will live under `archive/backend-reference/src/test/java/.../practices/`?"
       placeholder: "e.g. a @SpringBootTest that calls the demo endpoint and asserts ..."
     validations:
       required: true

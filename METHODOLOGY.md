@@ -299,7 +299,7 @@ auth 템플릿은 이 방법론을 최초로 적용한 사례다.
 | 2. API Contract | 14개 엔드포인트 (email + OAuth) | `contracts/auth-openapi.yaml` |
 | 3. Policy Manifest | JWT, 세션, CORS, provider 정책 | `blueprints/auth-manifest.yaml` |
 | 4. Portable Tests | 26개 @Tag 테스트 (RestAssured) | `specs/portable-test-template/` |
-| 5. Build Verification | `./gradlew testAsvs` | `backend/build.gradle.kts` |
+| 5. Build Verification | `./gradlew testAsvs` (from `archive/backend-reference/`) | `archive/backend-reference/build.gradle.kts` |
 
 **검증 결과**: 26/26 ASVS 항목 COVERED. VIOLATION 탐지 증명됨.
 **자가검증**: 별도 프로젝트에서 spec만 복사 → 구현 → 피드백 루프 동작 확인 (`docs/GAP-REPORT.md` 참조)
@@ -313,8 +313,8 @@ methodology가 auth-style 도메인을 넘어 protective cross-cutting concern�
 | 1. Compliance Spec | RFC 6585 §4 + IETF draft → 4개 항목 (rejection / headers / isolation / window reset) | `specs/ratelimit-l0.yaml` |
 | 2. API Contract | 1 reference endpoint `/api/ratelimit/ping` + 429 with Retry-After 헤더 schema | `contracts/ratelimit-openapi.yaml` |
 | 3. Policy Manifest | window_millis, max_per_window, key_strategy, on_missing_key | `blueprints/ratelimit-manifest.yaml` |
-| 4. Portable Tests | 4개 @Tag 테스트 (RestAssured, RANDOM_PORT, properties 주입) | `backend/src/test/.../ratelimit/RateLimitComplianceTest.java` |
-| 5. Build Verification | `./gradlew testRateLimit` | `backend/build.gradle.kts` |
+| 4. Portable Tests | 4개 @Tag 테스트 (RestAssured, RANDOM_PORT, properties 주입) | `archive/backend-reference/src/test/.../ratelimit/RateLimitComplianceTest.java` |
+| 5. Build Verification | `./gradlew testRateLimit` (from `archive/backend-reference/`) | `archive/backend-reference/build.gradle.kts` |
 
 **검증 결과**: 4/4 RATELIMIT 항목 PASS. VIOLATION 탐지 증명됨 (`max_per_window: 5 → 9999` 변조 시 4/4 FAILED).
 **일반화 신호**:

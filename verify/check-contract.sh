@@ -2,7 +2,7 @@
 set -e
 echo "=== Contract Compliance Check ==="
 CONTRACT_PATHS=$(python3 -c "import yaml; d=yaml.safe_load(open('contracts/auth-openapi.yaml')); [print(p) for p in sorted(d['paths'].keys())]")
-CONTROLLERS=$(grep -rn "@GetMapping\|@PostMapping\|@DeleteMapping\|@PutMapping" backend/src/main/java/ --include="*.java" | grep -v test | grep -v Test)
+CONTROLLERS=$(grep -rn "@GetMapping\|@PostMapping\|@DeleteMapping\|@PutMapping" archive/backend-reference/src/main/java/ --include="*.java" | grep -v test | grep -v Test)
 MISSING=0
 while IFS= read -r path; do
   CLEAN=$(echo "$path" | sed 's/{[^}]*}/.*/g')
