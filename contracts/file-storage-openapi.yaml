@@ -1,0 +1,390 @@
+openapi: 3.0.3
+info:
+  title: ax-template File Storage API
+  description: |
+    File storage domain contract for ax-template. Covers upload, list, metadata, download, and delete.
+    5th domain blueprint after auth / CRUD / rate-limit / payment, following the same 5-step METHODOLOGY playbook.
+
+    **Upload flow**:
+    POST /api/files accepts multipart/form-data. The file is stored with status PENDING until virus scan completes.
+    Once the scan clears, status transitions to READY. Clients should poll GET /api/files/{id} or wait for
+    Retry-After header on download attempts.
+
+    **Download**:
+    GET /api/files/{id}/download returns a 302 redirect to a time-limited presigned URL (TTL: 300s).
+    The internal storage key is never exposed.
+
+    **IDOR policy**: GET /api/files/{id} for a file not owned by the caller returns 404 (not 403)
+    to prevent enumeration of existing file IDs. See FILE-AUTHZ-002.
+
+    **Quota**: Uploads that would exceed the per-user quota (default 1 GB) return 413 with
+    type=https://ax-template.example/problems/quota-exceeded.
+
+    **Error format**: All non-2xx responses use RFC 7807 ProblemDetail with a stable `type` URI.
+  version: "0.1.0"
+servers:
+  - url: /api
+
+paths:
+  /files:
+    post:
+      operationId: uploadFile
+      summary: Upload a file
+      description: |
+        Uploads a file via multipart/form-data. The file is scanned asynchronously for malware
+        before being made available (status PENDING → READY or QUARANTINED).
+
+        **Constraints** (from blueprints/file-storage-manifest.yaml):
+        - Max file size: 100 MB
+        - Allowed MIME types: see manifest#upload.allowed_mime_types
+        - Filenames are sanitized; path traversal sequences are stripped (FILE-UPLOAD-003)
+
+        **Quota**: Upload fails with 413 if the user's total stored bytes + new file size
+        exceeds max_quota_mb (FILE-QUOTA-001).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload (max 100 MB).
+                description:
+                  type: string
+                  maxLength: 500
+                  description: Optional human-readable description of the file.
+                tags:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 50
+                  maxItems: 10
+                  description: Optional tags for grouping/filtering files.
+      responses:
+        '201':
+          description: File uploaded successfully. Status is PENDING until virus scan completes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoredFileResponse'
+        '400':
+          description: Validation error — missing file, invalid filename, or malformed request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '413':
+          description: |
+            File too large (exceeds max_file_size_mb) or storage quota exceeded.
+            Distinguish via ProblemDetail.type:
+            - quota-exceeded: https://ax-template.example/problems/quota-exceeded
+            - payload-too-large: https://ax-template.example/problems/payload-too-large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '415':
+          description: Unsupported media type — MIME type not in allowlist (FILE-UPLOAD-001).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+    get:
+      operationId: listFiles
+      summary: List user's files
+      description: |
+        Returns a paginated list of files owned by the authenticated user.
+        Files in QUARANTINED or DELETED status are excluded by default.
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            $ref: '#/components/schemas/FileStatus'
+          description: Filter by file status. Default returns READY and PENDING files.
+        - in: query
+          name: contentType
+          required: false
+          schema:
+            type: string
+          description: Filter by MIME type prefix (e.g., "image/").
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: query
+          name: size
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: sort
+          required: false
+          schema:
+            type: string
+            default: "uploadedAt,desc"
+          description: "Sort expression: field,direction (e.g., name,asc; uploadedAt,desc)."
+      responses:
+        '200':
+          description: Paginated list of files.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoredFilePageResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /files/{fileId}:
+    get:
+      operationId: getFile
+      summary: Get file metadata
+      description: |
+        Returns metadata for a specific file. Does NOT return file content.
+        Use GET /api/files/{fileId}/download to retrieve file content.
+
+        **IDOR**: Returns 404 for files not owned by the caller (FILE-AUTHZ-002).
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      responses:
+        '200':
+          description: File metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoredFileResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: File not found (or belongs to another user — IDOR protection).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+    delete:
+      operationId: deleteFile
+      summary: Delete a file
+      description: |
+        Soft-deletes the file record and schedules storage object deletion.
+        Only the file owner may delete their files (FILE-AUTHZ-003).
+
+        **IDOR**: Returns 404 for files not owned by the caller.
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      responses:
+        '204':
+          description: File deleted successfully.
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '403':
+          description: Caller is not the file owner (FILE-AUTHZ-003).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /files/{fileId}/download:
+    get:
+      operationId: downloadFile
+      summary: Download a file
+      description: |
+        Returns a 302 redirect to a time-limited presigned URL for the file content.
+        The presigned URL TTL is 300 seconds (configurable in manifest#presigned_url_ttl_seconds).
+
+        **Status rules**:
+        - PENDING: 202 Accepted with Retry-After: 5 header (FILE-SCAN-002)
+        - QUARANTINED: 422 Unprocessable Entity (FILE-SCAN-001)
+        - READY: 302 redirect to presigned URL (FILE-SEC-001)
+        - DELETED: 404
+
+        **IDOR**: Returns 404 for files not owned by the caller.
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      responses:
+        '302':
+          description: Redirect to presigned download URL (file is READY).
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Time-limited presigned URL for the file content.
+        '202':
+          description: |
+            File scan still in progress (status PENDING). Retry after the indicated delay.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds to wait before retrying.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: File is quarantined — virus scan flagged this file (FILE-SCAN-001).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+components:
+  parameters:
+    FileIdPath:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID of the stored file.
+
+  schemas:
+    FileStatus:
+      type: string
+      enum: [PENDING, READY, QUARANTINED, DELETED]
+      description: |
+        Lifecycle status of an uploaded file:
+        - PENDING: uploaded, virus scan in progress
+        - READY: scan passed, available for download
+        - QUARANTINED: virus scan flagged the file; download blocked
+        - DELETED: soft-deleted; excluded from list results by default
+
+    StoredFileResponse:
+      type: object
+      required: [id, name, contentType, sizeBytes, status, uploadedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the file.
+        name:
+          type: string
+          description: Sanitized display name of the file (original filename, path-traversal-stripped).
+        contentType:
+          type: string
+          description: MIME type of the file (e.g., "image/jpeg", "application/pdf").
+        sizeBytes:
+          type: integer
+          format: int64
+          description: File size in bytes.
+        status:
+          $ref: '#/components/schemas/FileStatus'
+        description:
+          type: string
+          nullable: true
+          description: Optional human-readable description provided at upload time.
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags for grouping/filtering.
+        uploadedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the file was uploaded.
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: If set, the file will be automatically deleted after this timestamp (retention policy).
+        downloadUrl:
+          type: string
+          nullable: true
+          description: |
+            Pre-generated presigned URL valid for a short TTL (only included when status=READY).
+            Null for non-READY files. Storage key is NEVER exposed — only this opaque URL.
+
+    StoredFilePageResponse:
+      type: object
+      required: [content, totalElements, totalPages, page, size]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/StoredFileResponse'
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    ProblemDetail:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: "Stable problem type URI (e.g., https://ax-template.example/problems/quota-exceeded)"
+        title:
+          type: string
+          description: Short, human-readable summary.
+        status:
+          type: integer
+          description: HTTP status code.
+        detail:
+          type: string
+          description: Human-readable explanation of this specific occurrence.
+        instance:
+          type: string
+          description: URI identifying this specific occurrence.
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []

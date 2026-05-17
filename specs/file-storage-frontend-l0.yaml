@@ -1,0 +1,146 @@
+version: "1.0.0"
+scope: "file-storage-frontend"
+stack: "Next.js 15 App Router + React 19 + TanStack Query v5 + react-dropzone v14"
+standard: "WCAG 2.2 + RFC 7807 + ax-template frontend Spec Trio schema v2"
+backend_contract_ref: "contracts/file-storage-openapi.yaml"
+trio_mode: full_trio
+items:
+  # ─── RENDER family (4 items) ──────────────────────────────────────────────
+  - id: "FILE-FE-RENDER-001"
+    chapter: "RENDER"
+    requirement: "The file list page renders a DataTable of the user's files with columns: name, type, size, status, uploaded date, and actions (download, delete)."
+    test_method: "composition.spec.ts static analysis"
+    verification_type: "positive"
+    backend_operation_id: "listFiles"
+    applicable: true
+    notes: >
+      The list page (app/(file-storage)/page.tsx) must import data-table from L2 blocks.
+      Columns must include at minimum: name, contentType, sizeBytes (human-readable), status badge,
+      uploadedAt (formatted), and action buttons for download and delete.
+      Empty state uses empty-state L2 block when no files exist.
+
+  - id: "FILE-FE-RENDER-002"
+    chapter: "RENDER"
+    requirement: "The upload page renders a FileDropzone (L1) with accepted MIME types and size limit passed as props; a progress indicator is shown during upload."
+    test_method: "composition.spec.ts static analysis"
+    verification_type: "positive"
+    backend_operation_id: "uploadFile"
+    applicable: true
+    notes: >
+      The upload page (app/(file-storage)/upload/page.tsx) must import file-dropzone from L1.
+      Props: accept (from manifest allowlist), maxSize (100MB), multiple (true).
+      During upload, a loading-boundary or inline progress indicator shows upload progress.
+      On success: toast notification (toast-queue L2) + redirect to list page.
+      On error: inline error state using error-boundary L2 block.
+
+  - id: "FILE-FE-RENDER-003"
+    chapter: "RENDER"
+    requirement: "The file detail page renders file metadata (name, type, size, status, timestamps) and a Download button; for PENDING files the button shows a 'Scan in progress' state."
+    test_method: "composition.spec.ts static analysis"
+    verification_type: "positive"
+    backend_operation_id: "getFile"
+    applicable: true
+    notes: >
+      The detail page (app/(file-storage)/[id]/page.tsx) shows all StoredFileResponse fields.
+      Download button behavior: READY → triggers downloadFile operation (302 redirect follow),
+      PENDING → button disabled with 'Scan in progress...' label + spinner, QUARANTINED → error
+      state with message about virus detection. Status shown as a badge with semantic color.
+
+  - id: "FILE-FE-RENDER-004"
+    chapter: "RENDER"
+    requirement: "File size is rendered as a human-readable string (e.g., '1.5 MB', '320 KB'); raw byte counts are never displayed to the user."
+    test_method: "composition.spec.ts static analysis"
+    verification_type: "positive"
+    backend_operation_id: null
+    applicable: true
+    notes: >
+      The formatBytes utility (already in L1/file-dropzone) must be imported or re-implemented
+      in a shared utility module. Raw sizeBytes from API is transformed before rendering.
+      This requirement applies to the list page, detail page, and upload file preview.
+
+  # ─── A11Y family (3 items) ────────────────────────────────────────────────
+  - id: "FILE-FE-A11Y-001"
+    chapter: "A11Y"
+    requirement: "The FileDropzone (L1) is keyboard accessible: Tab focuses the drop zone, Space/Enter opens the file picker, and the accepted files list supports keyboard removal."
+    test_method: "composition.spec.ts static analysis + WCAG 2.2 audit"
+    verification_type: "positive"
+    backend_operation_id: null
+    applicable: true
+    notes: >
+      Verified by FileDropzone L1 component implementation (SP14 baseline).
+      The upload page must NOT disable keyboard interaction.
+      Remove buttons in the file preview list must be reachable via Tab and activated via Space/Enter.
+      Reference: WCAG 2.2 SC 2.1.1 (Keyboard), SC 4.1.2 (Name, Role, Value).
+
+  - id: "FILE-FE-A11Y-002"
+    chapter: "A11Y"
+    requirement: "Status badges (PENDING, READY, QUARANTINED) use semantic color AND a text label; the status is never conveyed by color alone (WCAG 1.4.1)."
+    test_method: "composition.spec.ts static analysis"
+    verification_type: "positive"
+    backend_operation_id: null
+    applicable: true
+    notes: >
+      The status badge component must include a visible text label in addition to color coding.
+      PENDING: yellow/amber badge with 'Scanning' text.
+      READY: green badge with 'Ready' text.
+      QUARANTINED: red badge with 'Quarantined' text.
+      DELETED: gray badge with 'Deleted' text.
+      Reference: WCAG 2.2 SC 1.4.1 (Use of Color).
+
+  - id: "FILE-FE-A11Y-003"
+    chapter: "A11Y"
+    requirement: "Upload errors and quota exceeded messages are announced via an ARIA live region so screen reader users are notified without a page reload."
+    test_method: "composition.spec.ts static analysis"
+    verification_type: "positive"
+    backend_operation_id: null
+    applicable: true
+    notes: >
+      Error messages shown after a failed upload (413, 415, network error) must be placed in or
+      trigger an aria-live="polite" region. The error-boundary L2 block and toast-queue L2 block
+      both meet this requirement when used correctly.
+      Reference: WCAG 2.2 SC 4.1.3 (Status Messages).
+
+  # ─── ERROR family (2 items) ───────────────────────────────────────────────
+  - id: "FILE-FE-ERROR-001"
+    chapter: "ERROR"
+    requirement: "Upload failures show specific user-facing messages mapped from backend error types: quota-exceeded, unsupported-type, file-too-large, and network-error."
+    test_method: "composition.spec.ts static analysis"
+    verification_type: "positive"
+    backend_operation_id: "uploadFile"
+    applicable: true
+    notes: >
+      Error type → message mapping:
+        - quota-exceeded (413): "Storage quota exceeded. Delete some files to free up space."
+        - payload-too-large (413): "File exceeds the 100 MB limit."
+        - 415: "File type not supported. Allowed types: PDF, images, documents."
+        - network/unknown: "Upload failed. Please try again."
+      Messages are shown inline near the FileDropzone (not just as a toast).
+      The backend RFC 7807 ProblemDetail.type URI is used to distinguish 413 variants.
+
+  - id: "FILE-FE-ERROR-002"
+    chapter: "ERROR"
+    requirement: "If a download attempt returns 202 (scan pending), the UI shows a non-blocking message and automatically polls getFile every 3 seconds until the file becomes READY or QUARANTINED."
+    test_method: "composition.spec.ts static analysis"
+    verification_type: "positive"
+    backend_operation_id: "downloadFile"
+    applicable: true
+    notes: >
+      The detail page implements a refetchInterval-based polling pattern using TanStack Query.
+      While status=PENDING: refetchInterval: 3000, show 'Scan in progress...' + spinner.
+      Once status=READY: trigger download. Once status=QUARANTINED: show quarantine error state.
+      The polling is paused when the browser tab is hidden (refetchIntervalInBackground: false).
+      Reference: TanStack Query v5 — refetchInterval option.
+
+  # ─── PERF family (1 item) ─────────────────────────────────────────────────
+  - id: "FILE-FE-PERF-001"
+    chapter: "PERF"
+    requirement: "The file list page uses virtualized rendering for lists exceeding 50 items; DOM nodes for off-screen rows are not rendered."
+    test_method: "composition.spec.ts static analysis"
+    verification_type: "positive"
+    backend_operation_id: "listFiles"
+    applicable: true
+    notes: >
+      For large file lists, the list page may use the virtualized-table L2 block (SP15) or
+      rely on server-side pagination (page size ≤ 20) to avoid DOM bloat. If server-side
+      pagination is used, the spec is satisfied. If client-side rendering is used,
+      virtualized-table must be imported. Server-side pagination is the recommended approach.

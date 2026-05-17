@@ -1,0 +1,62 @@
+template_id: file-storage-ui-manifest
+family: scaffold
+status: draft
+domain: file-storage
+trio_mode: full_trio
+
+# ─── Upload configuration ─────────────────────────────────────────────────
+upload:
+  # Mirrors backend manifest; kept in sync manually or via /ax-verify-domain
+  max_file_size_bytes: 104857600      # 100 MB
+  # Subset of backend allowlist suitable for the FileDropzone accept prop
+  accept_prop:
+    'application/pdf': ['.pdf']
+    'application/msword': ['.doc']
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
+    'application/vnd.ms-excel': ['.xls']
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
+    'text/plain': ['.txt']
+    'text/csv': ['.csv']
+    'image/jpeg': ['.jpg', '.jpeg']
+    'image/png': ['.png']
+    'image/gif': ['.gif']
+    'image/webp': ['.webp']
+    'application/zip': ['.zip']
+  hint_text: "PDF, 이미지, 문서 · 최대 100 MB"
+  multiple: true
+  max_files: 10
+
+# ─── Query configuration ──────────────────────────────────────────────────
+query:
+  stale_time_ms: 60000               # 1 minute (files change less often than payments)
+  retry: 2
+  # List page default page size
+  list_page_size: 20
+  # Detail page polling (for PENDING status)
+  pending_poll_interval_ms: 3000
+  pending_poll_background: false
+
+# ─── Download ─────────────────────────────────────────────────────────────
+download:
+  # Open in new tab (target="_blank") for most file types
+  open_in_new_tab: true
+  # Content types that should be forced-downloaded (not opened in browser)
+  force_download_types:
+    - application/zip
+    - application/gzip
+    - text/csv
+
+# ─── Observability ────────────────────────────────────────────────────────
+# Frontend-side tracking (analytics/logging, not Micrometer)
+analytics:
+  track_events:
+    - file_upload_started
+    - file_upload_success
+    - file_upload_error
+    - file_download_clicked
+    - file_delete_confirmed
+
+# ─── Quota display ────────────────────────────────────────────────────────
+quota:
+  max_quota_mb: 1024                 # Mirrors backend; used for quota progress bar in UI
+  show_quota_bar: true               # Show storage usage progress bar in file list header

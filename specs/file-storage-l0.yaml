@@ -1,0 +1,176 @@
+version: "1.0.0"
+scope: "file-storage-domain"
+stack: "Spring Boot 3.2.x + JPA + S3-compatible storage + ClamAV (virus scan hook)"
+standard: "OWASP ASVS V4 + RFC 7807 + CWE-434 (Unrestricted Upload) + CWE-22 (Path Traversal)"
+items:
+  # ─── AUTHZ family (3 items) ────────────────────────────────────────────────
+  - id: "FILE-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All file-storage endpoints require a valid authenticated session; unauthenticated requests are rejected with HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: call each of the 5 file endpoints without a JWT → 401. Ensures no endpoint is accidentally left open.
+      Implementation: SecurityConfig maps /api/files/** to requiresAuthentication().
+      The test must exercise all paths (POST /api/files, GET /api/files, GET /api/files/{id},
+      GET /api/files/{id}/download, DELETE /api/files/{id}).
+    policy_ref: "blueprints/file-storage-manifest.yaml#authz"
+
+  - id: "FILE-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Cross-user IDOR is denied: a request for another user's file resource returns HTTP 404 to avoid information leakage about file existence."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA uploads a file. UserB calls GET /api/files/{userA_file_id} → 404 (not 403).
+      Returning 404 instead of 403 prevents an attacker from enumerating existing file IDs.
+      Implementation: Service layer filters by ownerUserId = callerUserId before returning;
+      if no match exists for the caller, throws EntityNotFoundException → 404.
+      Reference: OWASP ASVS V4.2.1.
+    policy_ref: "blueprints/file-storage-manifest.yaml#authz"
+
+  - id: "FILE-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "File deletion is restricted to the file owner; deletion by a different authenticated user is denied with HTTP 403."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA uploads a file. UserB (different JWT) sends DELETE /api/files/{id} → 403.
+      Implementation: @PreAuthorize("@fileStorageSecurity.isOwner(#fileId, authentication)") on the delete endpoint.
+      Ownership check is performed in the service layer; throws AccessDeniedException → 403.
+    policy_ref: "blueprints/file-storage-manifest.yaml#authz"
+
+  # ─── UPLOAD family (3 items) ───────────────────────────────────────────────
+  - id: "FILE-UPLOAD-001"
+    chapter: "UPLOAD"
+    requirement: "File upload validates content type against an allowlist; uploads with disallowed MIME types are rejected with HTTP 415 Unsupported Media Type."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/files with content-type application/x-executable → 415.
+      Allowed types defined in blueprints/file-storage-manifest.yaml#upload.allowed_mime_types.
+      Implementation: MultipartFile.getContentType() validated against allowlist in FileValidationService.
+      Content-type sniffing (magic bytes) is performed in addition to declared MIME type to prevent
+      polyglot file attacks (CWE-434). Reference: OWASP ASVS V12.1.1.
+    policy_ref: "blueprints/file-storage-manifest.yaml#upload"
+
+  - id: "FILE-UPLOAD-002"
+    chapter: "UPLOAD"
+    requirement: "File upload enforces a maximum file size; uploads exceeding the limit are rejected with HTTP 413 Payload Too Large."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/files with a file exceeding max_file_size_mb → 413 with RFC 7807 ProblemDetail.
+      Max size is defined in blueprints/file-storage-manifest.yaml#upload.max_file_size_mb.
+      Implementation: Spring multipart config spring.servlet.multipart.max-file-size and
+      spring.servlet.multipart.max-request-size enforce the limit at the Tomcat layer.
+      MultipartException is mapped to 413 in GlobalExceptionHandler.
+    policy_ref: "blueprints/file-storage-manifest.yaml#upload"
+
+  - id: "FILE-UPLOAD-003"
+    chapter: "UPLOAD"
+    requirement: "Original filename is sanitized before storage; path traversal sequences (e.g., ../, ..\\ ) are stripped and the filename is normalized to prevent CWE-22."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/files with filename='../../etc/passwd' → 201, stored filename contains no traversal sequences.
+      Implementation: FilenameSanitizer.sanitize() strips path separators and control characters,
+      truncates to 255 chars, and falls back to a UUID if the sanitized name is empty.
+      The storage key is always an internal UUID; the original sanitized name is stored for display only.
+      Reference: CWE-22, OWASP ASVS V12.1.3.
+    policy_ref: "blueprints/file-storage-manifest.yaml#upload"
+
+  # ─── SCAN family (2 items) ─────────────────────────────────────────────────
+  - id: "FILE-SCAN-001"
+    chapter: "SCAN"
+    requirement: "Files are scanned for malware before being made available for download; files with positive virus scan results are quarantined with status QUARANTINED."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): Upload a benign file → final status is READY. GET /api/files/{id} returns file metadata.
+      Test (negative): Upload a file flagged by the mock scanner → status becomes QUARANTINED.
+        GET /api/files/{id}/download for a QUARANTINED file → 422 Unprocessable Entity.
+      Implementation: VirusScanService is called asynchronously post-upload; file status transitions
+      PENDING → READY (clean) or PENDING → QUARANTINED (infected).
+      The mock provider always returns CLEAN for test fixtures unless the filename contains 'EICAR'.
+      Reference: OWASP ASVS V12.2.1.
+    policy_ref: "blueprints/file-storage-manifest.yaml#virus_scan"
+
+  - id: "FILE-SCAN-002"
+    chapter: "SCAN"
+    requirement: "Download of a file that is still in PENDING scan status is rejected with HTTP 202 Accepted with a Retry-After header indicating when to retry."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: Upload a file. Immediately attempt GET /api/files/{id}/download before scan completes → 202
+      with Retry-After: 5 (seconds). After scan completes → 200 or presigned redirect.
+      Implementation: FileStorageService.download() checks status field; if PENDING, returns
+      ResponseEntity.accepted() with Retry-After header value from manifest scan.retry_after_seconds.
+    policy_ref: "blueprints/file-storage-manifest.yaml#virus_scan"
+
+  # ─── QUOTA family (1 item) ─────────────────────────────────────────────────
+  - id: "FILE-QUOTA-001"
+    chapter: "QUOTA"
+    requirement: "Per-user storage quota is enforced; upload attempts that would exceed the quota are rejected with HTTP 413 and a quota-exceeded ProblemDetail."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: Create a user whose total stored bytes + new file size would exceed max_quota_mb.
+      POST /api/files → 413 with type=https://ax-template.example/problems/quota-exceeded.
+      Implementation: FileStorageService.validateQuota() sums StoredFile.sizeBytes for the user
+      (JPA query), then checks against manifest max_quota_mb. Throws StorageQuotaExceededException → 413.
+      The quota is per-user, not per-tenant, in this reference implementation.
+    policy_ref: "blueprints/file-storage-manifest.yaml#quota"
+
+  # ─── SEC family (2 items) ──────────────────────────────────────────────────
+  - id: "FILE-SEC-001"
+    chapter: "SEC"
+    requirement: "File download uses an indirect URL (presigned or token-protected); the storage backend path (S3 key, filesystem path) is never exposed in API responses."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: Upload a file. Call GET /api/files/{id} → response JSON must NOT contain storageKey or
+      any S3 bucket name or filesystem path. GET /api/files/{id}/download → 302 redirect to presigned
+      URL or 200 with Content-Disposition header; the actual storage URI is opaque.
+      Implementation: StoredFileDto omits storageKey. PresignedUrlService generates a time-limited
+      (TTL: manifest#presigned_url_ttl_seconds) token for download.
+    policy_ref: "blueprints/file-storage-manifest.yaml#security"
+
+  - id: "FILE-SEC-002"
+    chapter: "SEC"
+    requirement: "File metadata response never includes the internal storage key or storage provider URL; only the public-facing download token/URL is exposed."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: GET /api/files/{id} response body must not match pattern /(s3|gs|azure|minio):\/\//
+      and must not contain the value of storageKey from the database.
+      Implementation: StoredFileDto is constructed by FileStorageMapper, which deliberately omits
+      storageKey and storageBucket fields from the entity. Jackson @JsonIgnore on entity fields.
+    policy_ref: "blueprints/file-storage-manifest.yaml#security"
+
+  # ─── OBS family (1 item) ───────────────────────────────────────────────────
+  - id: "FILE-OBS-001"
+    chapter: "OBS"
+    requirement: "Upload and download operations emit MDC-tagged structured log entries and increment Micrometer counters for observability."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: Upload a file. Assert MDC context contains file_id, user_id, and correlation_id
+      (inspected via log capture in test). Assert Micrometer counters files_uploaded_total
+      and upload_bytes_total are incremented.
+      Implementation: FileStorageMdcFilter sets MDC keys. FileStorageService calls
+      meterRegistry.counter("files.uploaded.total").increment() and
+      meterRegistry.counter("upload.bytes.total").increment(sizeBytes).
+    policy_ref: "blueprints/file-storage-manifest.yaml#observability"

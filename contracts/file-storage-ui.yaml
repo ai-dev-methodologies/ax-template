@@ -1,0 +1,72 @@
+schema_version: 1
+domain: file-storage
+trio_mode: full_trio
+backend_contract_ref: contracts/file-storage-openapi.yaml
+
+# UI routes and their backend operation bindings
+routes:
+  - path: "/(file-storage)"
+    redirect_to: "/(file-storage)/upload"
+    backend_operation_id: null
+
+  - path: "/(file-storage)/upload"
+    label: "Upload"
+    description: "Drag-and-drop file upload using L1 FileDropzone"
+    backend_operation_id: uploadFile
+    l1_components:
+      - file-dropzone
+    l2_blocks:
+      - loading-boundary
+      - error-boundary
+      - toast-queue
+
+  - path: "/(file-storage)/files"
+    label: "My Files"
+    description: "Paginated file list with download and delete actions"
+    backend_operation_id: listFiles
+    l2_blocks:
+      - data-table
+      - empty-state
+      - confirm-dialog
+
+  - path: "/(file-storage)/files/[id]"
+    label: "File Detail"
+    description: "File metadata + download button; polling for PENDING status"
+    backend_operation_id: getFile
+    secondary_operations:
+      - downloadFile
+      - deleteFile
+
+# UI state model
+states:
+  file_status_colors:
+    PENDING: "amber"
+    READY: "green"
+    QUARANTINED: "red"
+    DELETED: "gray"
+  upload_phases:
+    - idle
+    - uploading
+    - success
+    - error
+
+# Error message map (frontend-side, keyed by backend ProblemDetail.type)
+error_messages:
+  "https://ax-template.example/problems/quota-exceeded":
+    message: "Storage quota exceeded. Delete some files to free up space."
+    severity: "error"
+  "https://ax-template.example/problems/payload-too-large":
+    message: "File exceeds the 100 MB limit."
+    severity: "error"
+  "UNSUPPORTED_MEDIA_TYPE":
+    message: "File type not supported. Allowed types: PDF, images, documents."
+    severity: "error"
+  "NETWORK_ERROR":
+    message: "Upload failed. Please try again."
+    severity: "error"
+
+# Download polling
+download_polling:
+  refetch_interval_ms: 3000
+  refetch_in_background: false
+  terminal_statuses: [READY, QUARANTINED, DELETED]

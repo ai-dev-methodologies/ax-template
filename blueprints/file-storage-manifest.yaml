@@ -1,0 +1,127 @@
+template_id: file-storage-blueprint
+family: scaffold
+status: draft
+confidence: high
+stack:
+  backend: spring-boot
+  contract: openapi
+  repo_shape: single-repo
+
+# ─── Authorization ───────────────────────────────────────────────────────────
+# All file endpoints require authentication (FILE-AUTHZ-001).
+# Cross-user IDOR returns 404 (FILE-AUTHZ-002).
+# Only the file owner may delete their file (FILE-AUTHZ-003).
+authz:
+  authentication_required: true
+  idor_response: 404                # return 404 instead of 403 to prevent enumeration
+  owner_delete_only: true
+  trace:
+    FILE-AUTHZ-001: OWASP-ASVS-V1.4.1  # authentication required
+    FILE-AUTHZ-002: OWASP-ASVS-V4.2.1  # IDOR protection via 404
+    FILE-AUTHZ-003: OWASP-ASVS-V4.1.1  # ownership enforcement
+
+# ─── Upload limits ────────────────────────────────────────────────────────────
+upload:
+  max_file_size_mb: 100
+  # Enforce at both Spring multipart layer and FileValidationService
+  spring_multipart_config:
+    max-file-size: "100MB"
+    max-request-size: "105MB"          # slightly above to allow metadata overhead
+
+  # Allowlisted MIME types (CWE-434 — Unrestricted File Upload defense)
+  # Magic-byte content sniffing is performed in addition to declared MIME (FILE-UPLOAD-001)
+  allowed_mime_types:
+    # Documents
+    - application/pdf
+    - application/msword
+    - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    - application/vnd.ms-excel
+    - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    - application/vnd.ms-powerpoint
+    - application/vnd.openxmlformats-officedocument.presentationml.presentation
+    - text/plain
+    - text/csv
+    # Images
+    - image/jpeg
+    - image/png
+    - image/gif
+    - image/webp
+    - image/svg+xml
+    # Archives (scanning required)
+    - application/zip
+    - application/gzip
+  filename_sanitization:
+    strip_path_separators: true        # CWE-22 — Path Traversal (FILE-UPLOAD-003)
+    strip_control_chars: true
+    max_length: 255
+    fallback_to_uuid_on_empty: true
+  trace:
+    FILE-UPLOAD-001: CWE-434           # MIME type allowlist
+    FILE-UPLOAD-002: OWASP-ASVS-V12.1.1  # file size limit
+    FILE-UPLOAD-003: CWE-22            # path traversal
+
+# ─── Virus scanning ──────────────────────────────────────────────────────────
+# Type=mock for this blueprint iteration. Production: replace with ClamAV or VirusTotal.
+virus_scan:
+  provider: mock                       # mock | clamav | virustotal
+  async: true                          # scan runs after upload; status PENDING → READY|QUARANTINED
+  timeout_ms: 30000
+  fail_open: false                     # on scan timeout: mark QUARANTINED (fail closed)
+  retry_after_seconds: 5              # Retry-After header value for PENDING downloads (FILE-SCAN-002)
+  # Mock provider rules (test fixtures):
+  mock_rules:
+    - pattern: "EICAR"                 # filename contains EICAR → QUARANTINED
+      result: QUARANTINED
+    - pattern: "*"                     # all other files → READY
+      result: READY
+  trace:
+    FILE-SCAN-001: OWASP-ASVS-V12.2.1  # malware scanning
+    FILE-SCAN-002: OWASP-ASVS-V12.2.1  # scan-pending download handling
+
+# ─── Storage ─────────────────────────────────────────────────────────────────
+storage:
+  type: local                          # local | s3 | gcs | azure-blob
+  # Local: files stored in ${STORAGE_BASE_DIR}/files/{userId}/{uuid}.{ext}
+  # S3:    key = {bucket}/{env}/{userId}/{uuid}
+  encryption_at_rest: false            # enable in production S3 (SSE-S3 or SSE-KMS)
+  # Storage key is NEVER exposed in API responses (FILE-SEC-001, FILE-SEC-002)
+  expose_storage_key: false
+
+# ─── Presigned URLs ──────────────────────────────────────────────────────────
+presigned_url:
+  enabled: true
+  ttl_seconds: 300                     # 5 minutes — presigned URL validity window
+  # For local storage: generate a signed download token (HMAC-SHA256, not a true S3 presigned URL)
+  local_token_secret_env: "FILE_STORAGE_SIGNING_KEY"
+  trace:
+    FILE-SEC-001: OWASP-ASVS-V12.3.1  # no internal path exposure
+
+# ─── Quota ───────────────────────────────────────────────────────────────────
+quota:
+  max_quota_mb: 1024                   # 1 GB per user
+  count_statuses: [PENDING, READY]     # QUARANTINED and DELETED don't count against quota
+  error_type: "https://ax-template.example/problems/quota-exceeded"
+  trace:
+    FILE-QUOTA-001: OWASP-ASVS-V11.1.1  # resource limits
+
+# ─── Retention ───────────────────────────────────────────────────────────────
+retention:
+  default_ttl_days: 90                 # files auto-expire after 90 days (null = never)
+  # Soft-delete first (status → DELETED); hard-delete (storage object removal) after retention_grace_days
+  retention_grace_days: 7
+  cleanup_cron: "0 2 * * *"           # daily at 02:00 UTC
+
+# ─── Observability ───────────────────────────────────────────────────────────
+observability:
+  mdc_keys:
+    - file_id
+    - user_id
+    - correlation_id
+  micrometer_counters:
+    - files_uploaded_total
+    - upload_bytes_total
+    - files_downloaded_total
+    - virus_scan_duration_seconds    # Timer
+    - storage_quota_exceeded_total
+  trace:
+    FILE-OBS-001: OWASP-ASVS-V7.1.1  # structured logging
