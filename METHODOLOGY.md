@@ -324,6 +324,189 @@ methodology가 auth-style 도메인을 넘어 protective cross-cutting concern�
 
 ---
 
+### A.3 Frontend Spec Trio (full-stack first instance)
+
+The Frontend Spec Trio applies the backend "spec-before-code" discipline to UI surface
+areas. Each frontend domain produces three schema artifacts that mirror the backend Spec
+Trio one-for-one. The auth domain is the first concrete instance (produced in SP2).
+(ADR: TD-2026-05-17-007)
+
+| # | Artifact | File path | Role |
+|---|----------|-----------|------|
+| 1 | Page Compliance Spec | `specs/<domain>-frontend-l0.yaml` | UI verification items; each item links back to a backend spec item or a static file anchor |
+| 2 | UI Contract | `contracts/<domain>-ui.yaml` | Route-level UI contract; each route binds to a backend `operationId` or a static source reference |
+| 3 | UI Policy Manifest | `blueprints/<domain>-ui-manifest.yaml` | a11y rules, CWV thresholds, motion policy |
+
+Implementation code is the **reference implementation** of this Frontend Spec Trio.
+The specs, not the code, are the source of truth.
+
+#### A.3.1 Page Compliance Spec — `specs/<domain>-frontend-l0.yaml`
+
+```yaml
+# specs/<domain>-frontend-l0.yaml
+domain: <string>                          # e.g., "auth"
+backend_spec_ref: <string|null>           # e.g., "specs/auth-asvs-l1.yaml"; null when frontend_only
+frontend_required: true                   # marker; if false, no UI section is generated
+items:
+  - id: <DOMAIN-FE-NNN>                   # required, unique
+    requirement: <string>                 # required, >= 20 chars
+    backend_operation_id: <string|null>   # nullable. null ONLY when the page is
+                                          # non-API-bound (frontend_only domain mode).
+                                          # When null, the item MUST declare a non-empty
+                                          # static_source_ref list.
+    backend_spec_ref: <DOMAIN-NNN|null>   # required key; links to backend item; null when frontend_only
+    static_source_ref: array<string>      # required when backend_operation_id is null.
+                                          # Each entry MUST resolve to >= 1 existing
+                                          # file in the repo (literal path OR glob
+                                          # using shell-style "*"/"**" expansion).
+                                          # Forbidden; guard MUST fail with exit code
+                                          # non-zero and a distinct message when
+                                          # backend_operation_id is non-null. This is
+                                          # BINARY -- there is no soft mode.
+    test_method: <playwright_test_name>   # required
+    verification_type: <e2e_test|unit_test|a11y_test|cwv_test>  # required, enum-constrained
+    policy_ref: <blueprints/...-ui-manifest.yaml#item>  # required
+    coverage_threshold: <decimal>         # required, 0.0-1.0 -- used in trio_integrity_guard.sh
+    backend_only_marker: false            # required boolean; if true, item is exempt from cross-trio
+```
+
+**Key rules:**
+- `id` format: `<DOMAIN>-FE-<NNN>` — Playwright test name must match `test_method`.
+- `backend_operation_id: null` is only legal when `static_source_ref` is non-empty.
+  Both null simultaneously is BLOCKED by `trio_integrity_guard.sh`.
+- Policy values (CWV thresholds, a11y contrast) are declared in the UI manifest and
+  referenced via `policy_ref`, not hardcoded here.
+
+#### A.3.2 UI Contract — `contracts/<domain>-ui.yaml`
+
+```yaml
+# contracts/<domain>-ui.yaml
+domain: <string>
+backend_contract_ref: <string|null>       # e.g., "contracts/auth-openapi.yaml";
+                                          # null ONLY when the entire domain is
+                                          # frontend_only (no backend OpenAPI binding).
+routes:
+  - path: <string>                        # e.g., "/login" or "/practices/<ruleId>"
+    method: <GET|POST|PUT|DELETE>
+    backend_operation_id: <string|null>   # nullable. null ONLY when accompanied by
+                                          # a non-empty static_source_ref list
+                                          # (frontend_only domain mode). Non-null
+                                          # values MUST match an operationId in
+                                          # backend_contract_ref.
+    static_source_ref: array<string>      # required when backend_operation_id is null.
+                                          # Each entry MUST resolve to >= 1 existing
+                                          # file (literal path OR shell glob).
+                                          # Forbidden; guard MUST fail with exit code
+                                          # non-zero and a distinct message when
+                                          # backend_operation_id is non-null. This is
+                                          # BINARY -- there is no soft mode.
+    params: { ... }
+    query: { ... }
+    states:
+      loading: <slot_ref>
+      error: <slot_ref>
+      empty: <slot_ref|null>
+    redirects:
+      on_auth_required: <route_path>
+      on_success: <route_path|null>
+```
+
+**Key rules:**
+- `backend_contract_ref` is the source of truth for operationId resolution.
+- A route with non-null `backend_operation_id` MUST NOT carry any `static_source_ref`
+  entry; presence of both is BLOCKED (distinct guard error message).
+- Schema-level mutual exclusion: both null and empty `static_source_ref` FAILS the guard.
+
+#### A.3.3 UI Policy Manifest — `blueprints/<domain>-ui-manifest.yaml`
+
+```yaml
+# blueprints/<domain>-ui-manifest.yaml
+domain: <string>
+tokens_override: { ... }                  # design-token overrides
+a11y:
+  axe_rules: [<rule_id>, ...]             # required, >= 1 entry
+  contrast_min: <decimal>                 # required, >= 4.5
+cwv:
+  lcp_ms: <int>                           # required, <= 2500
+  inp_ms: <int>                           # required, <= 200
+  cls: <decimal>                          # required, <= 0.1
+motion:
+  respect_prefers_reduced_motion: true    # required, must be true
+  default_duration_ms: <int>
+```
+
+**Key rules:**
+- `contrast_min: 4.5` is the WCAG 2.2 SC 1.4.3 minimum; values below 4.5 FAIL the guard.
+- `cwv.*` thresholds are validated by `trio_integrity_guard.sh` at merge time.
+- `respect_prefers_reduced_motion: true` is required; false or absent FAILS.
+
+#### A.3.4 Cross-Trio integrity rule (backend <-> frontend mapping)
+
+`trio_integrity_guard.sh` enforces that the Frontend Spec Trio is internally consistent
+AND correctly anchored to the backend Spec Trio (in `full_trio` mode).
+
+The guard is binary: `bash practices/evals/trio_integrity_guard.sh` exits 0 (PASS) or
+non-zero (FAIL with a distinct machine-readable error message). No soft mode exists.
+
+#### A.3.5 `domain_mode` enum — three classes (ADR: TD-2026-05-17-011)
+
+```yaml
+# practices/evals/trio_integrity_allowlist.yaml
+schema_version: 2
+domains:
+  auth: full_trio       # backend + frontend Spec Trio both required
+  crud: full_trio
+  payment: full_trio
+  practices: frontend_only    # static viewer; no backend OpenAPI binding
+  ratelimit: backend_only     # no UI surface; frontend check skipped
+  security: backend_only
+  user: backend_only
+```
+
+| `domain_mode`    | Backend Spec Trio | Frontend Spec Trio | `backend_operation_id` | `static_source_ref` |
+|------------------|-------------------|---------------------|------------------------|----------------------|
+| `full_trio`      | REQUIRED          | REQUIRED            | non-null, must resolve | FORBIDDEN (guard fails if present) |
+| `backend_only`   | REQUIRED          | SKIPPED entirely    | N/A                    | N/A                  |
+| `frontend_only`  | NOT required      | REQUIRED            | MUST be null           | REQUIRED, non-empty, all entries resolve to >= 1 file |
+
+**Semantics:**
+- `full_trio` — applies to domains with both server invariants and user-facing UI.
+  Every UI route must bind to a backend `operationId`. Coverage ratio must be 100%.
+- `backend_only` — applies to backend-heavy domains with no user-facing UI.
+  The frontend Spec Trio check is skipped entirely; no penalty for absent frontend files.
+- `frontend_only` — applies to pure static viewers with no backend API to bind to.
+  Every route and every page-compliance item must set `backend_operation_id: null`
+  and supply a non-empty `static_source_ref` pointing to real files in the repo.
+  Both null simultaneously is BLOCKED.
+
+#### A.3.6 Worked example — `full_trio` (auth domain)
+(ADR: TD-2026-05-17-001, TD-2026-05-17-006)
+
+| Step | Auth frontend application | File |
+|------|---------------------------|------|
+| 1. Page Compliance Spec | 14 items; each `backend_spec_ref` resolves to an ASVS item | `specs/auth-frontend-l0.yaml` |
+| 2. UI Contract | 14 routes; each `backend_operation_id` resolves in `contracts/auth-openapi.yaml` | `contracts/auth-ui.yaml` |
+| 3. UI Policy Manifest | `contrast_min: 4.5`, `lcp_ms: 2500`, `inp_ms: 200`, `cls: 0.1`, `respect_prefers_reduced_motion: true` | `blueprints/auth-ui-manifest.yaml` |
+| 4. Cross-Trio guard | `bash practices/evals/trio_integrity_guard.sh --domain auth` exits 0 | SP2 acceptance gate |
+
+**Verification**: `bash practices/evals/trio_integrity_guard.sh --domain auth` exits 0 on auth.
+TDD anchor: `frontend/tests/_fixtures/spec-trio-coverage-fail/` (deliberately-broken
+fixture) causes the guard to exit 1 with `NULL_OPERATION_ID`.
+
+#### A.3.7 Worked example — `frontend_only` (practices domain)
+
+The `practices` domain is a static viewer that renders `practices/AGENTS.md` and
+`practices/rules/**/*.md`. It has no backend API contract to bind to.
+
+| Step | Practices frontend application | File |
+|------|-------------------------------|------|
+| 1. Page Compliance Spec | Items with `backend_operation_id: null` + `static_source_ref: ["practices/AGENTS.md", "practices/rules/**/*.md"]` | `specs/practices-frontend-l0.yaml` |
+| 2. UI Contract | Routes with `backend_operation_id: null` + `static_source_ref` entries pointing to real files | `contracts/practices-ui.yaml` |
+| 3. UI Policy Manifest | Same a11y + CWV + motion fields as `full_trio`; `backend_contract_ref: null` | `blueprints/practices-ui-manifest.yaml` |
+| 4. Cross-Trio guard | `trio_integrity_guard.sh` validates `frontend_only` mode; zero-scan guard active | SP confirmed by trio guard exit 0 |
+
+---
+
 ## Appendix B: New Template Dry-Run Checklist
 
 새 도메인에 이 방법론을 적용할 때:
@@ -339,6 +522,25 @@ methodology가 auth-style 도메인을 넘어 protective cross-cutting concern�
 - [ ] `./gradlew test{Domain}` 한 줄로 전체 검증 가능한가?
 - [ ] VIOLATION 테스트로 피드백 루프를 증명했는가?
 - [ ] 자동 검증만 사용하는가? (승격 절차, 검증-위한-검증 문서 없이)
+
+### Frontend Spec Trio additions (domain에 UI surface가 있을 때)
+
+- [ ] `domain_mode` — `practices/evals/trio_integrity_allowlist.yaml`에 선언했는가?
+      (`full_trio` / `backend_only` / `frontend_only` 중 하나)
+- [ ] `specs/<domain>-frontend-l0.yaml` — page compliance spec 생성했는가?
+      - 각 item: `id`(DOMAIN-FE-NNN), `requirement`(>=20자), `test_method`,
+        `verification_type`, `policy_ref`, `coverage_threshold` 있는가?
+      - `full_trio`: `backend_operation_id` + `backend_spec_ref` 채워져 있는가?
+      - `frontend_only`: `backend_operation_id: null` + 비어있지 않은 `static_source_ref` 있는가?
+- [ ] `contracts/<domain>-ui.yaml` — UI contract 생성했는가?
+      - 모든 route가 `backend_operation_id`(full_trio) 또는 `static_source_ref`(frontend_only) 선언했는가?
+- [ ] `blueprints/<domain>-ui-manifest.yaml` — UI policy manifest 생성했는가?
+      - `a11y.contrast_min >= 4.5`, `cwv.lcp_ms <= 2500`, `cwv.inp_ms <= 200`,
+        `cwv.cls <= 0.1`, `motion.respect_prefers_reduced_motion: true` 선언했는가?
+- [ ] `bash practices/evals/trio_integrity_guard.sh --domain <domain>` exits 0인가?
+- [ ] TDD anchor(의도적 깨진 fixture)가 guard를 exit 1으로 만드는가?
+- [ ] schema mutual exclusion 검증: non-null `backend_operation_id`에 `static_source_ref` 없는가?
+      both-null 이면 guard가 BLOCK하는가?
 
 ---
 
@@ -445,9 +647,9 @@ The 5th domain adds `test<NewDomain>` following the same pattern.
 #### Recipe B — React / Next.js (Node / npm / vitest)
 
 Tests use vitest `describe` blocks named with the domain prefix; npm scripts expose a
-filtered runner. (Note: as of 2026-05-17, the React side has one practices-react ESLint
-rule blueprint and the frontend reference workload uses vitest for unit tests + Playwright
-for E2E. The recipe below is the forward-compatible shape for a React/Next.js blueprint.)
+filtered runner. The auth domain (`templates/L4/auth/`) is the canonical first instance of this recipe,
+validated by SP2's `trio_integrity_guard.sh` acceptance gate. Every subsequent full-stack
+domain blueprint (crud, payment, practices) follows this recipe.
 
 ```ts
 // frontend/tests/<domain>/<domain>.compliance.test.ts
@@ -493,6 +695,25 @@ For ESLint-rule blueprints in `practices-react/eslint-plugin-ax/`, the equivalen
 
 The convention is **stack-agnostic**: one command, binary outcome, tag-based filter, spec ID
 matches test annotation 1:1.
+
+#### Canonical domain instances (L4 reference workloads)
+
+| Domain | Stack | Spec Trio mode | Verified by |
+|--------|-------|----------------|-------------|
+| auth | full_trio | backend + frontend | SP2: `bash practices/evals/trio_integrity_guard.sh --domain auth` exit 0 |
+| crud | full_trio | backend + frontend | SP9 acceptance gate |
+| payment | full_trio | backend + frontend | SP10 acceptance gate |
+| practices | frontend_only | frontend only | SP11 acceptance gate |
+
+L4 domain workloads live under `templates/L4/<domain>/`. The frontend side
+(`templates/L4/<domain>/app/`) follows Next.js 16 App Router conventions.
+L1/L2/L3 template primitives referenced from L4 are documented in SP5–SP8.
+
+Domain-selection guidance (which stack, when, and why) and the 12-step procedure
+for wiring a new domain into the full composition kit are in **Appendix C Step-by-step
+gates** and the **Composition kit hooks** table. Recipe B (this section) provides the
+single-command primitive; Appendix C provides the integration playbook.
+(ADR: TD-2026-05-17-009)
 
 ---
 
