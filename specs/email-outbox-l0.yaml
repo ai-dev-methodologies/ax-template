@@ -1,0 +1,115 @@
+version: "1.0.0"
+scope: "email-outbox-domain"
+stack: "Spring Boot 3.2.x + JPA + SMTP / SES adapter"
+standard: "RFC 5321 (SMTP) + OWASP ASVS V4 + RFC 7807"
+items:
+  # ─── QUEUE family (2 items) ────────────────────────────────────────────────
+  - id: "EMAIL-QUEUE-001"
+    chapter: "QUEUE"
+    requirement: "EmailOutboxService.enqueue() persists a new outbox record with status PENDING; the record includes recipient, rendered subject, body, and zero retryCount."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: call enqueue(recipient, templateCode, vars) → assert saved EmailOutbox has
+      status=PENDING, retryCount=0, nextAttemptAt=null.
+      Implementation: render template first via EmailTemplateService.render(), then
+      create EmailOutbox.create(recipient, subject, body) and persist via repository.
+      The enqueue step must NOT attempt actual sending (outbox pattern).
+    policy_ref: "blueprints/email-outbox-manifest.yaml#queue"
+
+  - id: "EMAIL-QUEUE-002"
+    chapter: "QUEUE"
+    requirement: "EmailOutboxService.previewTemplate() renders a template to a string without persisting any outbox record and without sending any email."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: call previewTemplate(templateCode, vars) → returns rendered HTML/text string.
+      Assert EmailOutboxRepository.save() was never called.
+      Assert EmailSenderService.send() was never called.
+      Implementation: delegates directly to EmailTemplateService.render() and returns body.
+    policy_ref: "blueprints/email-outbox-manifest.yaml#queue"
+
+  # ─── SEND family (2 items) ─────────────────────────────────────────────────
+  - id: "EMAIL-SEND-001"
+    chapter: "SEND"
+    requirement: "processQueue() sends each PENDING / RETRY-eligible outbox entry via EmailSenderService; on success the entry status is updated to SENT."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: seed one EmailOutbox with status=PENDING. Call processQueue().
+      Assert EmailSenderService.send() called once. Assert saved entity has status=SENT.
+      Implementation: EmailOutboxRepository.findAllPendingAndRetry(Instant.now()) returns
+      eligible entries. Service calls trySend(entry) per entry.
+    policy_ref: "blueprints/email-outbox-manifest.yaml#send"
+
+  - id: "EMAIL-SEND-002"
+    chapter: "SEND"
+    requirement: "On send failure, retryCount is incremented and nextAttemptAt is set using exponential backoff (2^retryCount × 30 s); the status transitions to RETRY."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: EmailSenderService.send() throws RuntimeException.
+      After processQueue(), assert status=RETRY, retryCount=1,
+      nextAttemptAt >= now + 60 seconds (2^1 × 30).
+      Subsequent failure with retryCount=1 → retryCount=2, nextAttemptAt >= now + 120s (2^2 × 30).
+      Implementation: exponential backoff formula: backoffSeconds = 2^retryCount × 30L.
+    policy_ref: "blueprints/email-outbox-manifest.yaml#retry"
+
+  # ─── RETRY/DLQ family (2 items) ────────────────────────────────────────────
+  - id: "EMAIL-RETRY-001"
+    chapter: "RETRY"
+    requirement: "After MAX_RETRIES (3) consecutive send failures, the outbox entry is moved to DLQ status; no further send attempts are made."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: seed EmailOutbox with retryCount=2, status=RETRY, nextAttemptAt in the past.
+      EmailSenderService.send() throws. Call processQueue().
+      Assert status=DLQ. Assert no further call to send() after DLQ assignment.
+      Implementation: in trySend(), if retryCount+1 >= MAX_RETRIES, call entry.markDlq(msg).
+    policy_ref: "blueprints/email-outbox-manifest.yaml#retry"
+
+  - id: "EMAIL-RETRY-002"
+    chapter: "RETRY"
+    requirement: "RETRY entries are only re-attempted when nextAttemptAt <= now; entries with a future nextAttemptAt are skipped in the current processQueue() cycle."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: seed one EmailOutbox with status=RETRY, nextAttemptAt=now+5min.
+      Call processQueue(). Assert EmailSenderService.send() never called.
+      Implementation: EmailOutboxRepository.findAllPendingAndRetry(Instant now) query
+      filters: status IN ('PENDING','RETRY') AND (nextAttemptAt IS NULL OR nextAttemptAt <= :now).
+    policy_ref: "blueprints/email-outbox-manifest.yaml#retry"
+
+  # ─── TEMPLATE family (1 item) ───────────────────────────────────────────────
+  - id: "EMAIL-TEMPLATE-001"
+    chapter: "TEMPLATE"
+    requirement: "EmailTemplateService.render() substitutes variables into the stored template; missing variable keys produce empty strings, not exceptions."
+    test_method: "JUnit 5 unit test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): template 'Hello, {{name}}!' with vars {name='Alice'} → 'Hello, Alice!'.
+      Test (negative): template 'Hello, {{name}}!' with empty vars → 'Hello, !' (no exception).
+      Implementation: simple {{key}} substitution; missing key resolves to empty string.
+      No server-side code execution (e.g., no Velocity OGNL scripting) to avoid SSTI.
+    policy_ref: "blueprints/email-outbox-manifest.yaml#template"
+
+  # ─── ADMIN API family (1 item) ─────────────────────────────────────────────
+  - id: "EMAIL-ADMIN-001"
+    chapter: "ADMIN"
+    requirement: "All admin API endpoints (GET /api/admin/email-outbox, POST /api/admin/email-outbox/{id}/retry, DELETE /api/admin/email-outbox/{id}) require ADMIN role; non-admin callers receive HTTP 403."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: call each admin endpoint with a non-admin JWT → 403.
+      Call without JWT → 401.
+      Implementation: @PreAuthorize("hasAuthority('ROLE_ADMIN')") on controller methods.
+      SecurityConfig maps /api/admin/** to authenticated() + admin role check.
+    policy_ref: "blueprints/email-outbox-manifest.yaml#admin"

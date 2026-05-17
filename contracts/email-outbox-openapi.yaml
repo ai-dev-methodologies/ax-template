@@ -1,0 +1,266 @@
+openapi: 3.0.3
+info:
+  title: ax-template Email Outbox Admin API
+  description: |
+    Email outbox domain REST contract — admin surface only.
+    End-user path: email delivery is internal/asynchronous; no end-user REST endpoints.
+    All endpoints require ADMIN role (ROLE_ADMIN) in addition to valid JWT Bearer token.
+  version: 0.1.0
+servers:
+  - url: /api/admin
+
+paths:
+  /email-outbox:
+    get:
+      operationId: listEmailOutbox
+      summary: List outbox entries (admin)
+      tags: [email-outbox-admin]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, SENT, RETRY, DLQ, ALL]
+            default: ALL
+          description: Filter by outbox status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated outbox entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailOutboxPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /email-outbox/{id}:
+    get:
+      operationId: getEmailOutboxEntry
+      summary: Get a single outbox entry (admin)
+      tags: [email-outbox-admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Outbox entry detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailOutboxEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: cancelEmailOutboxEntry
+      summary: Cancel a PENDING or RETRY outbox entry (admin)
+      tags: [email-outbox-admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Entry cancelled (status set to DLQ with cancel reason)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Cannot cancel — entry is already SENT
+
+  /email-outbox/{id}/retry:
+    post:
+      operationId: retryEmailOutboxEntry
+      summary: Manually retry a DLQ entry (admin)
+      tags: [email-outbox-admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Entry reset to PENDING for next processQueue() cycle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailOutboxEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Cannot retry — entry is not in DLQ status
+
+  /email-outbox/preview:
+    post:
+      operationId: previewEmailTemplate
+      summary: Preview a rendered email template without sending (admin)
+      tags: [email-outbox-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreviewTemplateRequest'
+      responses:
+        '200':
+          description: Rendered template body (HTML or plain text)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewTemplateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  schemas:
+    EmailOutboxEntry:
+      type: object
+      required: [id, recipient, subject, status, retryCount, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        recipient:
+          type: string
+          format: email
+        subject:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, SENT, RETRY, DLQ]
+        retryCount:
+          type: integer
+          minimum: 0
+        nextAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        dlqReason:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    EmailOutboxPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmailOutboxEntry'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    PreviewTemplateRequest:
+      type: object
+      required: [templateCode]
+      properties:
+        templateCode:
+          type: string
+          description: Template identifier (e.g., "forgot-password", "welcome")
+        templateVars:
+          type: object
+          additionalProperties: true
+          description: Key-value pairs substituted into the template
+
+    PreviewTemplateResponse:
+      type: object
+      properties:
+        subject:
+          type: string
+        body:
+          type: string
+          description: Rendered HTML or plain text body
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: Caller lacks ADMIN role
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    ProblemDetail:
+      description: RFC 7807 problem detail
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+              title:
+                type: string
+              status:
+                type: integer
+              detail:
+                type: string

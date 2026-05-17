@@ -1,0 +1,91 @@
+template_id: email-outbox-blueprint
+family: scaffold
+status: draft
+confidence: high
+domain_mode: backend_only   # no frontend UI in scope for SP19; admin UI optional in future SP
+stack:
+  backend: spring-boot
+  contract: openapi
+  repo_shape: single-repo
+
+when_to_use:
+  - transactional email delivery (forgot-password, welcome, OTP) with guaranteed at-least-once delivery
+  - any domain requiring asynchronous email with retry/DLQ guarantees
+  - audit trail of all outbound email attempts
+
+not_for:
+  - bulk marketing campaigns (use dedicated ESP platform)
+  - real-time chat notifications
+  - push notifications
+
+# ─── authz ────────────────────────────────────────────────────────────────────
+authz:
+  all_admin_endpoints_require_admin_role: true
+  unauthenticated_response: 401
+  non_admin_response: 403
+  trace:
+    EMAIL-ADMIN-001: admin role required for all /api/admin/email-outbox/* endpoints
+
+# ─── queue ────────────────────────────────────────────────────────────────────
+queue:
+  pattern: outbox   # write to DB first, send asynchronously via processQueue()
+  status_lifecycle: "PENDING → SENT | PENDING → RETRY → DLQ"
+  enqueue_does_not_send: true   # enqueue() only persists; no SMTP call on enqueue
+  template_preview_does_not_send: true
+  trace:
+    EMAIL-QUEUE-001: enqueue persists PENDING, retryCount=0
+    EMAIL-QUEUE-002: preview renders without persisting or sending
+
+# ─── send ─────────────────────────────────────────────────────────────────────
+send:
+  trigger: scheduled processQueue() loop
+  schedule: "every 60 seconds (configurable)"
+  query_window: "status IN (PENDING, RETRY) AND (nextAttemptAt IS NULL OR nextAttemptAt <= now)"
+  send_interface: EmailSenderService
+  adapters:
+    - SmtpEmailGateway     # production: JavaMailSender / SES
+    - MockEmailGateway     # test: captures sent messages in-memory
+  trace:
+    EMAIL-SEND-001: send updates status to SENT
+    EMAIL-SEND-002: failure increments retryCount, sets nextAttemptAt via exponential backoff
+
+# ─── retry ────────────────────────────────────────────────────────────────────
+retry:
+  max_retries: 3
+  backoff_formula: "backoffSeconds = 2^retryCount × 30"
+  backoff_examples:
+    retry_1: "60 seconds"
+    retry_2: "120 seconds"
+    retry_3: "→ DLQ (no further retry)"
+  dlq_reason_stored: true   # store exception message in dlqReason column
+  manual_retry_from_dlq: true   # admin can reset DLQ → PENDING via POST /retry
+  trace:
+    EMAIL-RETRY-001: max retries → DLQ
+    EMAIL-RETRY-002: future nextAttemptAt → skip in current processQueue() cycle
+
+# ─── template ─────────────────────────────────────────────────────────────────
+template:
+  engine: "simple {{key}} substitution"
+  ssti_safe: true   # no server-side scripting; keys replaced by string substitution only
+  missing_key_behavior: "empty string (no exception)"
+  storage: "database table: email_templates (code, subject_tpl, body_tpl)"
+  trace:
+    EMAIL-TEMPLATE-001: missing var → empty string, no exception
+
+# ─── admin api ────────────────────────────────────────────────────────────────
+admin_api:
+  base_path: /api/admin/email-outbox
+  endpoints:
+    - GET /               # list with status filter
+    - GET /{id}           # single entry detail
+    - DELETE /{id}        # cancel PENDING/RETRY entry
+    - POST /{id}/retry    # reset DLQ → PENDING
+    - POST /preview       # render template without sending
+  access_control: ROLE_ADMIN
+
+# ─── observability ────────────────────────────────────────────────────────────
+observability:
+  log_send_success: "INFO"
+  log_send_failure: "WARN with recipient (masked), retryCount, exception message"
+  log_dlq_transition: "ERROR with entry id and reason"
+  metrics_hint: "Counter: email.outbox.sent, email.outbox.retry, email.outbox.dlq"
