@@ -597,6 +597,15 @@ items:
     applicable_to: [react, nextjs]
     notes: "Rule body: practices-react/rules/async-suspense-boundaries.md."
 
+  - id: "REACT-PRACTICES-ASYNC-006"
+    chapter: "Async / Next.js params"
+    requirement: "In Next.js 16 App Router, route params and searchParams are Promise<T>. Param-independent server work must be initiated alongside (or aggregated with) the params promise, not after a sequential `await params`. Param-dependent work must wait for params to resolve; param-independent work that depends on the param result is parallelized via Promise.all."
+    test_method: "react_practices_ASYNC_006_nextAsyncParamsParallel"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [nextjs]
+    notes: "Specialization of ASYNC-001 for Next.js 16 async params. Rule body: practices-react/rules/next-async-params-parallel.md."
+
   - id: "REACT-PRACTICES-CLIENT-004"
     chapter: "Client / Storage"
     requirement: "All localStorage access must be (a) keyed with a version suffix, (b) wrapped in try-catch (Safari private mode and quota overflow throw), (c) store the minimal field set the UI needs (no tokens, PII, full server objects), (d) guarded by typeof window check if the access can run during SSR. Migration code documented when version bumps."

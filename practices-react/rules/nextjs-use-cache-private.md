@@ -101,6 +101,46 @@ Before reaching for `'use cache: private'`, try in order:
 - **Lost on page reload** — not durable.
 - **Server still re-executes the function on every render** — the cache only helps client-side navigation, not server work.
 
+### First try the simpler form — `cookies()` outside any cached scope
+
+Most cookie reads need NO caching directive at all. Read in the Server
+Component / Server Action / Route Handler and use the value directly:
+
+```tsx
+// app/page.tsx — read cookie in an UNCACHED Server Component, pass value
+// to other layers as a primitive argument.
+import { cookies } from 'next/headers'
+
+export default async function Page() {
+  const theme = (await cookies()).get('theme')?.value ?? 'light'
+  return <Hero theme={theme} />
+}
+```
+
+```tsx
+// app/actions.ts — read cookie inside a Server Action, the simplest
+// "cookie-scoped data" pattern. No caching involved.
+'use server'
+import { cookies } from 'next/headers'
+import { saveFor } from '@/lib/store'
+
+export async function save(formData: FormData) {
+  const owner = (await cookies()).get('owner')?.value
+  if (!owner) return
+  saveFor(owner, formData.get('value') as string)
+}
+```
+
+If you only need to consume the cookie value (no caching required), these are
+the right forms. `'use cache: private'` enters the picture only when ALL of
+the following hold: (a) the function genuinely benefits from caching, (b)
+refactoring the runtime read out (per the parent `'use cache'` rule) is
+impractical, and (c) you accept the experimental status documented above.
+
+External-validation evidence: the ax-validation-todo app (a Server-Action
+based Todo) issues and reads a cookie on every action call without ever
+reaching for `'use cache: private'` — the simpler form was sufficient.
+
 ### Correct usage (when justified)
 
 ```tsx
