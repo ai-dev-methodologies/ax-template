@@ -94,6 +94,12 @@ const BLOCKS: BlockEntry[] = [
   { file: 'confirm-dialog.tsx', family: 'common', description: 'generic confirm/cancel dialog' },
   { file: 'toast.tsx', family: 'common', description: 'sonner toast wrapper' },
   { file: 'loading-boundary.tsx', family: 'common', description: 'Suspense + fallback boundary' },
+
+  // Cross-cutting (4) — SP15
+  { file: 'toast-queue.tsx', family: 'cross-cutting', description: 'app-wide toast queue manager (sonner-based)' },
+  { file: 'error-boundary.tsx', family: 'cross-cutting', description: 'React 19 error boundary with reset key + fallback slot' },
+  { file: 'offline-banner.tsx', family: 'cross-cutting', description: 'navigator.onLine network status banner' },
+  { file: 'virtualized-table.tsx', family: 'cross-cutting', description: '@tanstack/react-virtual row-virtualized table' },
 ]
 
 // ─── suite ───────────────────────────────────────────────────────────────────
