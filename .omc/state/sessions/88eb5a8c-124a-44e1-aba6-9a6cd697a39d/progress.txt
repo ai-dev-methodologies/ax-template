@@ -13,3 +13,4 @@ Patterns observed:
 - For sealing in P0.5: file content sealed by commit; no chicken-and-egg with hash because sealed_at_commit is populated in P1.3 (US-006) which is a separate commit.
 - L4 sealed prompt should choose a delta-feature that is SMALL (one sitting) but exercises the methodology: spec edit + new test + small impl + verification cycle. Candidate: add PAYMENT-PROVIDER-007 'response latency > 3s logged as warning' — exercises spec / test / impl / observability assertion / verification.
 [2026-05-17] US-003 COMPLETE — commit: bbfbbca
+[2026-05-17] US-004 COMPLETE — P1 Spec Trio written and verified. specs/payment-l0.yaml (29 items / 9 families), contracts/payment-openapi.yaml (5 endpoints, swagger-cli PASS), blueprints/payment-manifest.yaml (10 required keys). commit: PENDING

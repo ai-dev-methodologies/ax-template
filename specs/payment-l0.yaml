@@ -1,0 +1,429 @@
+version: "1.0.0"
+scope: "payment-domain"
+stack: "Spring Boot 3.2.x + Caffeine + JPA + MockProvider"
+standard: "PCI-DSS SAQ-A + ISO 4217 + RFC 7807 + OWASP ASVS V4"
+items:
+  # ─── AUTHZ family (4 items) ───────────────────────────────────────────────
+  - id: "PAYMENT-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All payment endpoints require a valid authenticated session; unauthenticated requests are rejected with HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: call each of the 5 payment endpoints without a JWT → 401. Ensures no endpoint is accidentally left open.
+      Implementation: SecurityConfig maps /api/payments/** to requiresAuthentication(). The test must exercise all 5
+      paths (POST /api/payments, GET /api/payments, GET /api/payments/{id}, POST /api/payments/{id}/refund,
+      POST /api/payments/{id}/void).
+    policy_ref: "blueprints/payment-manifest.yaml#pci_dss"
+
+  - id: "PAYMENT-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Refund authority is restricted to the authenticated user who owns the order; refund by a different user is denied with HTTP 403."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates a payment for their order. UserB (different JWT) sends POST /api/payments/{id}/refund → 403.
+      Implementation: @PreAuthorize("@paymentSecurity.canRefund(#paymentId, authentication)") on the refund endpoint;
+      PaymentSecurityBean queries the payment owner against the caller's user ID. This prevents privilege escalation
+      where any authenticated user could trigger arbitrary refunds.
+    policy_ref: "blueprints/payment-manifest.yaml#pci_dss"
+
+  - id: "PAYMENT-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "Cross-user IDOR is denied: a request for another user's payment resource returns HTTP 404 (not 403) to avoid information leakage about resource existence."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates a payment. UserB calls GET /api/payments/{userA_payment_id} → 404 (not 403).
+      Returning 404 instead of 403 prevents an attacker from enumerating existing payment IDs. The service layer
+      filters by ownerId = callerUserId before returning; if no match exists for the caller, it throws
+      EntityNotFoundException → 404. Reference: OWASP ASVS V4.2.1.
+    policy_ref: "blueprints/payment-manifest.yaml#pci_dss"
+
+  - id: "PAYMENT-AUTHZ-004"
+    chapter: "AUTHZ"
+    requirement: "Admin override actions (e.g., force-void, admin refund bypass) are audited via a ledger entry that records the admin user ID, timestamp, and justification."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): Admin user invokes a privileged action → payment_events ledger row exists with type=ADMIN_OVERRIDE,
+      actorId=adminUserId. Test (negative): Regular user cannot invoke admin endpoint → 403.
+      Implementation: ADMIN role bypasses ownership check but MUST still trigger PaymentEventLedger.append(ADMIN_OVERRIDE, ...).
+      Provides non-repudiation for disputed admin actions in PCI-DSS audit scope.
+    policy_ref: "blueprints/payment-manifest.yaml#pci_dss"
+
+  # ─── IDEMP family (3 items) ───────────────────────────────────────────────
+  - id: "PAYMENT-IDEMP-001"
+    chapter: "IDEMP"
+    requirement: "POST /api/payments requires an Idempotency-Key request header; requests without it are rejected with HTTP 400."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/payments without Idempotency-Key header → 400 with RFC 7807 ProblemDetail detail field explaining
+      the missing header. Implementation: @RequestHeader(value = "Idempotency-Key", required = true) or a filter that
+      validates presence before the handler is invoked. The POST /api/payments/{id}/refund and POST /api/payments/{id}/void
+      endpoints also require this header for their mutation semantics.
+    policy_ref: "blueprints/payment-manifest.yaml#idempotency"
+
+  - id: "PAYMENT-IDEMP-002"
+    chapter: "IDEMP"
+    requirement: "A duplicate POST /api/payments with the same Idempotency-Key within the 24-hour window returns the original stored response (HTTP 200 or 201) without creating a second charge."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): POST /api/payments with key K → 201, paymentId=X. Repeat identical request with same key K → 200,
+      paymentId=X (same ID). Assert only one Payment row exists in the database.
+      Test (negative): POST /api/payments with a NEW key → 201, paymentId=Y (different from X, new charge created).
+      Implementation: IdempotencyKeyStore (Caffeine TTL=24h) caches the serialized response keyed by (userId, idempotencyKey).
+      On hit, deserialize and return immediately. On miss, proceed and store result after successful processing.
+    policy_ref: "blueprints/payment-manifest.yaml#idempotency"
+
+  - id: "PAYMENT-IDEMP-003"
+    chapter: "IDEMP"
+    requirement: "Concurrent duplicate requests with the same Idempotency-Key result in exactly one charge; concurrent-duplicate behavior is correct under a 5-thread race."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: @RepeatedTest(20) — spin 5 threads simultaneously posting with the same Idempotency-Key using CountDownLatch;
+      after all threads complete, assert exactly 1 Payment row in database. This is the double-charge prevention test
+      from pre-mortem scenario 1.
+      Implementation: IdempotencyKeyStore.putIfAbsent is atomic (Caffeine's native ConcurrentHashMap semantics); the first
+      thread to acquire processes the charge, all subsequent threads wait for the result. No separate DB-level lock required
+      when Caffeine store is the primary guard and TTL covers the 24h window.
+    policy_ref: "blueprints/payment-manifest.yaml#idempotency"
+
+  # ─── MONEY family (3 items) ───────────────────────────────────────────────
+  - id: "PAYMENT-MONEY-001"
+    chapter: "MONEY"
+    requirement: "All monetary amounts in the Java domain model are represented as java.math.BigDecimal with scale equal to the currency's ISO 4217 minor-unit count; float and double are forbidden for monetary fields."
+    test_method: "Static analysis"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Verification: grep -rn 'float\|double' backend/src/main/java/.../payment/ produces 0 hits on monetary fields.
+      The Payment entity's amount field is BigDecimal with explicit scale set at construction. BigDecimal.setScale() is called
+      with the currency-specific minor unit count from the manifest (KRW=0, USD=2) to prevent implicit precision drift.
+      Reference: IEEE 754 binary floating point cannot represent most decimal fractions exactly; for KRW 10원 stored as
+      double, round-trip through arithmetic can produce 9.9999... or 10.0001.... BigDecimal is mandatory.
+    policy_ref: "blueprints/payment-manifest.yaml#amounts"
+
+  - id: "PAYMENT-MONEY-002"
+    chapter: "MONEY"
+    requirement: "JSON amount fields accept integer minor units (e.g., 1000 for KRW 1000원, 1099 for USD $10.99) or explicit decimal strings (e.g., '10.99'); JSON number with decimal point (float) is rejected with HTTP 400 and RFC 7807 detail."
+    test_method: "Unit test (JUnit)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): {"amount": 1000, "currency": "KRW"} → deserialized as BigDecimal(1000). {"amount": "10.99", "currency": "USD"} → BigDecimal("10.99").
+      Test (negative): {"amount": 10.99, "currency": "USD"} (JSON float token) → 400 + RFC 7807 with detail "float JSON number not supported; use integer minor units or decimal string".
+      Implementation: Custom Jackson StdDeserializer for MoneyAmount that checks JsonToken. If token == VALUE_NUMBER_FLOAT → throw InvalidFormatException. If token == VALUE_NUMBER_INT → return BigDecimal(longValue). If token == VALUE_STRING → return new BigDecimal(text). This aligns with Codex Critic mandate C9 from plan.md.
+    policy_ref: "blueprints/payment-manifest.yaml#amounts"
+
+  - id: "PAYMENT-MONEY-003"
+    chapter: "MONEY"
+    requirement: "Currency is validated as an ISO 4217 alpha-3 code; only currencies listed in the manifest's allowed list are accepted; the currency's scale is enforced on the amount."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): {"currency": "KRW", "amount": 1000} (integer, scale 0) → 201. {"currency": "USD", "amount": 1099} → 201.
+      Test (negative): {"currency": "XYZ"} → 400. {"currency": "USD", "amount": "10.999"} (3 decimal places when max=2) → 400.
+      Implementation: CurrencyValidator checks Currency.getInstance(code) and validates scale against manifest scales map.
+      Scale mismatch is a 400 error, not a silent rounding. This prevents Korean 원 amounts from being mistakenly stored
+      as fractional values. Reference: ISO 4217 — KRW minor unit = 0, USD = 2.
+    policy_ref: "blueprints/payment-manifest.yaml#currency"
+
+  # ─── STATE family (3 items) ───────────────────────────────────────────────
+  - id: "PAYMENT-STATE-001"
+    chapter: "STATE"
+    requirement: "The payment state machine enforces the transition graph CREATED → AUTHORIZED → CAPTURED | VOIDED → REFUNDED | PARTIAL_REFUNDED | UNKNOWN; UNKNOWN is a terminal holding state for provider timeout limbo."
+    test_method: "Unit test (JUnit)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): All legal transitions succeed without exception. Test (negative): Illegal transitions
+      (e.g., CAPTURED → AUTHORIZED, REFUNDED → CAPTURED, VOIDED → REFUNDED) throw IllegalStateTransitionException.
+      Implementation: PaymentStateMachine is a pure function (no DB side effects) that takes (currentState, event) and returns
+      the next state or throws. The service layer calls the state machine before persisting. UNKNOWN state is entered when a
+      provider timeout occurs and is resolved by the reconciliation job. State must be stored as a VARCHAR enum in the DB, not
+      an integer ordinal, so it is human-readable in ledger queries.
+    policy_ref: "blueprints/payment-manifest.yaml#state_machine"
+
+  - id: "PAYMENT-STATE-002"
+    chapter: "STATE"
+    requirement: "State transitions are atomic with JPA optimistic locking (@Version) so that concurrent transitions on the same payment produce exactly one winner and the loser receives an HTTP 409."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test: Two concurrent threads attempt to capture the same AUTHORIZED payment. One succeeds (200), the other
+      receives 409 Conflict. Implementation: Payment entity has @Version Long version field. PaymentService.capture()
+      loads the entity, calls state machine, saves — if another transaction incremented the version first,
+      JPA throws OptimisticLockException which the exception handler maps to 409.
+      This is the second concurrency gate from the pre-mortem (RefundConcurrencyTest scenario 2).
+    policy_ref: "blueprints/payment-manifest.yaml#state_machine"
+
+  - id: "PAYMENT-STATE-003"
+    chapter: "STATE"
+    requirement: "Illegal state transitions return HTTP 409 with an RFC 7807 ProblemDetail that includes the currentState and the attempted transition event as extensions."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: Attempt to refund a VOIDED payment → 409 with body {"type": "urn:ax:payment:illegal-state-transition",
+      "title": "Illegal state transition", "status": 409, "detail": "Cannot transition from VOIDED via REFUND",
+      "currentState": "VOIDED", "attemptedEvent": "REFUND"}.
+      Implementation: GlobalExceptionHandler maps IllegalStateTransitionException → ResponseEntity<ProblemDetail> with
+      extension properties. The stable problem-type URI enables API consumers to handle state conflicts programmatically.
+      RFC 7807 reference: blueprints/payment-manifest.yaml#state_machine.
+    policy_ref: "blueprints/payment-manifest.yaml#state_machine"
+
+  # ─── REFUND family (3 items) ──────────────────────────────────────────────
+  - id: "PAYMENT-REFUND-001"
+    chapter: "REFUND"
+    requirement: "Refund requests are accepted only within the window_hours configured in the manifest (default 720h = 30 days); requests outside the window are rejected with HTTP 409."
+    test_method: "Unit test (JUnit)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): Refund request where payment.capturedAt = now - 29 days → 201 created.
+      Test (negative): payment.capturedAt = now - 31 days → 409 with detail "refund window expired".
+      Implementation: RefundService reads window_hours from @ConfigurationProperties bound to the manifest's
+      refund.window_hours value. The time comparison uses Instant to avoid timezone ambiguity.
+      The manifest-configurable approach allows operators to adjust the window without code changes.
+    policy_ref: "blueprints/payment-manifest.yaml#refund"
+
+  - id: "PAYMENT-REFUND-002"
+    chapter: "REFUND"
+    requirement: "Partial refunds are supported; the invariant sum(refunds.amount) ≤ payment.capturedAmount is enforced atomically with optimistic locking; violation returns HTTP 400."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): payment.capturedAmount=10000, refund 3000 → 201. Refund 4000 → 201. refund 3000 → 201 (total=10000, exact).
+      Test (negative): refund 3001 (over) → 400. Concurrent refund race test: two partial refunds totalling >capturedAmount
+      submitted simultaneously → exactly one succeeds, the other gets 409 (optimistic lock) or 400 (invariant).
+      Implementation: RefundService loads Payment with @Version, sums existing refunds, validates sum+requested ≤ capturedAmount,
+      then saves. Concurrent thread loses the @Version race → 409. This is pre-mortem scenario 2.
+    policy_ref: "blueprints/payment-manifest.yaml#refund"
+
+  - id: "PAYMENT-REFUND-003"
+    chapter: "REFUND"
+    requirement: "A refund-of-refund (requesting a refund of an already-refunded transaction) is denied with HTTP 409."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: Create payment → capture → full refund (state becomes REFUNDED) → attempt another refund → 409 with
+      ProblemDetail type "urn:ax:payment:refund-of-refund".
+      Implementation: PaymentStateMachine rejects transition from REFUNDED or PARTIAL_REFUNDED via REFUND when
+      sum(refunds) == capturedAmount (fully refunded). The state machine is the single authority: no special-case
+      logic in the service layer. Manifest key refund.refund_of_refund: forbidden documents the policy.
+    policy_ref: "blueprints/payment-manifest.yaml#refund"
+
+  # ─── PROVIDER family (6 items) ────────────────────────────────────────────
+  - id: "PAYMENT-PROVIDER-001"
+    chapter: "PROVIDER"
+    requirement: "When the payment provider call times out (no response within timeout_ms), the payment state transitions to UNKNOWN (not FAILED); the response to the caller is HTTP 202 Accepted with a pending status."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: MockProvider configured with FailureMode.TIMEOUT (Thread.sleep > timeout_ms). Call POST /api/payments → 202,
+      body.status=UNKNOWN. Assert Payment entity in DB has state=UNKNOWN. This is pre-mortem scenario 5.
+      Implementation: PaymentProviderClient wraps the provider call with a timeout (CompletableFuture or @Async with
+      timeout); on TimeoutException → PaymentStateMachine.transition(AUTHORIZED, PROVIDER_TIMEOUT) → UNKNOWN.
+      Rationale: UNKNOWN vs FAILED prevents incorrect refusal when the charge may have succeeded on the provider side.
+      The reconciliation job later resolves UNKNOWN by querying the provider or aging out.
+    policy_ref: "blueprints/payment-manifest.yaml#provider"
+
+  - id: "PAYMENT-PROVIDER-002"
+    chapter: "PROVIDER"
+    requirement: "When the provider returns HTTP 5xx, the system retries with exponential backoff up to max retries; if all retries fail, the payment state transitions to FAILED with a serverError reason."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: MockProvider configured with FailureMode.HTTP_5XX. Call POST /api/payments → payment eventually reaches
+      FAILED state; response body contains declineReason=SERVER_ERROR. Assert retry count == manifest.provider.retry.max.
+      Implementation: PaymentProviderClient uses Spring Retry @Retryable(value={ProviderServerException.class}, maxAttempts=3,
+      backoff=@Backoff(delay=1000, multiplier=2)). After exhausting retries, transition to FAILED. The test uses a
+      fast clock or short delay to avoid 7+ second waits: MockProvider can track attempt count and fail on a configured basis.
+    policy_ref: "blueprints/payment-manifest.yaml#provider"
+
+  - id: "PAYMENT-PROVIDER-003"
+    chapter: "PROVIDER"
+    requirement: "When the provider returns HTTP 4xx with a decline code, the payment state transitions to FAILED and the decline reason is stored and returned in the response; no retry is attempted."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: MockProvider configured with FailureMode.HTTP_4XX_DECLINE (e.g., 402 with declineCode=INSUFFICIENT_FUNDS).
+      Call POST /api/payments → 422 (or 200 with status=FAILED); body.status=FAILED, body.declineReason=INSUFFICIENT_FUNDS.
+      No retry (assert MockProvider.callCount == 1). Implementation: 4xx decline is a user-correctable error, not a server
+      error, so retrying would waste calls. declineReason must not contain PAN or card metadata — only a decline code enum
+      value is safe to surface in the response.
+    policy_ref: "blueprints/payment-manifest.yaml#provider"
+
+  - id: "PAYMENT-PROVIDER-004"
+    chapter: "PROVIDER"
+    requirement: "When the provider returns a malformed/unparseable response, the payment state transitions to FAILED with a serializationError reason; the raw response is not propagated to the caller."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: MockProvider configured with FailureMode.MALFORMED_RESPONSE (returns HTML or truncated JSON). Call POST /api/payments
+      → payment state=FAILED, declineReason=SERIALIZATION_ERROR in DB. Response to caller is 500 or 422 with a safe generic
+      message (NOT the raw malformed bytes). Assert the malformed raw response does not appear in the API response body.
+      Implementation: PaymentProviderClient wraps deserialization in try/catch JsonProcessingException → ProviderSerializationException
+      → FAILED state. Prevents garbage bytes leaking into the API response or logs (which could contain card data).
+    policy_ref: "blueprints/payment-manifest.yaml#provider"
+
+  - id: "PAYMENT-PROVIDER-005"
+    chapter: "PROVIDER"
+    requirement: "When the provider connection is reset (network reset / connection refused), the payment state transitions to UNKNOWN; the system does not mark the payment as FAILED prematurely."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: MockProvider configured with FailureMode.NETWORK_RESET (throws IOException / ConnectionResetException). Call
+      POST /api/payments → 202, body.status=UNKNOWN. Assert DB state=UNKNOWN.
+      Rationale: A network reset is indeterminate — the charge packet may have reached the provider before the connection
+      was torn down. Marking FAILED could trigger a double-charge on retry. UNKNOWN forces human/automated reconciliation
+      before any re-authorization. Distinct from PROVIDER-001 (timeout vs. network-level reset).
+    policy_ref: "blueprints/payment-manifest.yaml#provider"
+
+  - id: "PAYMENT-PROVIDER-006"
+    chapter: "PROVIDER"
+    requirement: "When the provider returns an idempotency replay response (same key resubmitted to provider), the system returns the cached original response to the caller without creating a new charge."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: MockProvider configured with FailureMode.IDEMPOTENCY_REPLAY (the mock returns a pre-stored response for a
+      previously-seen key). Assert the caller receives the original response and the DB still has exactly 1 Payment row.
+      This tests that our layer's idempotency store and the provider's idempotency replay interact correctly without
+      double-write. Implementation: IdempotencyKeyStore hit → return before calling provider. Provider-level replay is only
+      observable when the store TTL expires but the provider still has the key — in that edge case the provider replay
+      response is treated as canonical and stored in our store.
+    policy_ref: "blueprints/payment-manifest.yaml#provider"
+
+  # ─── SEC family (3 items) ─────────────────────────────────────────────────
+  - id: "PAYMENT-SEC-001"
+    chapter: "SEC"
+    requirement: "No Primary Account Number (PAN) or raw card data appears in application logs, database columns, or error responses; @JsonIgnore and toString() override are verified via LogCaptor assertion."
+    test_method: "Unit test (JUnit)"
+    verification_type: "negative"
+    applicable: true
+    pci_ref: "PCI-DSS-3.4"
+    notes: >
+      Test (PanRedactionTest): Inject a payment request with a panFixture value in the paymentMethodToken field.
+      Trigger an exception path (e.g., provider failure). Use LogCaptor to capture all log output. Assert
+      logCaptor.getAllLogs().stream().noneMatch(line -> line.contains(panFixture)). Also assert that the API error
+      response body does not contain panFixture. Implementation: PaymentMethodToken type has @JsonIgnore on its raw value
+      and an overridden toString() → "[REDACTED]". PaymentExceptionHandler never serializes the exception's cause chain
+      directly. Reference: PCI-DSS 3.4 — PAN must be rendered unreadable wherever stored.
+    policy_ref: "blueprints/payment-manifest.yaml#pci_dss"
+
+  - id: "PAYMENT-SEC-002"
+    chapter: "SEC"
+    requirement: "No hardcoded card data, payment secrets, or API keys appear in source code; a grep scan of the payment package for known card-field names exits with 0 matches."
+    test_method: "Static analysis"
+    verification_type: "negative"
+    applicable: true
+    pci_ref: "PCI-DSS-6.5"
+    notes: >
+      Verification: grep -rn 'creditCard\|panNumber\|cardNumber\|cvv\|cvvCode\|cardCvv' backend/src/main/java/ | grep -v test returns 0 hits.
+      This is a supplemental automated check; the primary authority is the security-reviewer Skill (P5). The grep excludes test
+      directory to avoid false positives on test fixtures using known-bad names. Additionally, no provider API keys appear in
+      source code — all provider credentials are loaded from environment variables or Spring @ConfigurationProperties. Reference:
+      PCI-DSS 6.5 — secure coding practices; 6.5.3 — broken/insecure cryptographic storage.
+    policy_ref: "blueprints/payment-manifest.yaml#pci_dss"
+
+  - id: "PAYMENT-SEC-003"
+    chapter: "SEC"
+    requirement: "All payment API traffic is restricted to HTTPS; the SecurityConfig enforces a secure-channel requirement and rejects plain HTTP connections."
+    test_method: "Manual review"
+    verification_type: "positive"
+    applicable: true
+    pci_ref: "PCI-DSS-4.1"
+    notes: >
+      Verification: Code review of SecurityConfig confirms requiresSecureChannel().anyRequest().requiresSecure() or equivalent
+      Spring Security DSL configuration is present. In test mode, this may be relaxed via TestRestTemplate https mode.
+      In production, TLS termination may occur at a load balancer — the manifest key pci_dss.trace.PAYMENT-SEC-003=PCI-DSS-4.1
+      documents that TLS is enforced at the network boundary. The SecurityConfig assertion covers the Spring layer; the
+      infrastructure layer TLS check is deferred to deployment review. Reference: PCI-DSS 4.1 — strong cryptography for
+      transmission of cardholder data over open, public networks.
+    policy_ref: "blueprints/payment-manifest.yaml#pci_dss"
+
+  # ─── OBS family (2 items) ─────────────────────────────────────────────────
+  - id: "PAYMENT-OBS-001"
+    chapter: "OBS"
+    requirement: "Micrometer counters are emitted for key payment events: payment_attempted_total, payment_succeeded_total, payment_failed_total, refund_processed_total, recon_drift_detected_total."
+    test_method: "Unit test (JUnit)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: After performing a payment create, capture, refund, and a forced reconciliation drift, assert
+      SimpleMeterRegistry counter values match the expected counts for each metric name. Implementation:
+      PaymentService injects MeterRegistry and increments the appropriate counter at each transition:
+      payment_attempted_total on every POST /api/payments; payment_succeeded_total on CAPTURED; payment_failed_total on
+      FAILED; refund_processed_total on REFUNDED or PARTIAL_REFUNDED; recon_drift_detected_total when the reconciliation
+      invariant test detects a divergence. Metrics are aligned with the manifest's observability.metrics list.
+    policy_ref: "blueprints/payment-manifest.yaml#observability"
+
+  - id: "PAYMENT-OBS-002"
+    chapter: "OBS"
+    requirement: "MDC context propagates payment_id, idempotency_key, and correlation_id on every log statement within the payment package throughout the request lifecycle."
+    test_method: "Unit test (JUnit)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: Use LogCaptor in structured-log mode; after calling PaymentService.createPayment(), assert that ALL captured
+      log lines for that request have MDC keys payment_id, idempotency_key, and correlation_id populated (non-null, non-empty).
+      Implementation: PaymentMdcFilter (OncePerRequestFilter) sets MDC.put("payment_id", ...) et al. at the start of each
+      request and clears MDC in finally. For async code paths (CompletableFuture for provider calls), the MDC context must
+      be explicitly copied via MDC.getCopyOfContextMap() and restored on the async thread.
+      Reference: manifest.observability.mdc = [payment_id, idempotency_key, correlation_id].
+    policy_ref: "blueprints/payment-manifest.yaml#observability"
+
+  # ─── RECON family (2 items) ───────────────────────────────────────────────
+  - id: "PAYMENT-RECON-001"
+    chapter: "RECON"
+    requirement: "All payment state transitions are recorded as immutable events in the payment_events ledger table; each event contains a sha256 hash of its payload and the previous event's hash, forming a hash chain."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: Create → authorize → capture → partial refund → assert 4 rows in payment_events for that payment.
+      Assert event[n].prev_hash == sha256(event[n-1].payload). Assert no UPDATE or DELETE is issued on the table
+      (PaymentEventRepository extends repository with no delete/update methods).
+      Implementation: PaymentEventLedger.append(PaymentEvent) hashes the serialized payload (JSON bytes) and links to the
+      previous event's hash. The first event in a chain has prev_hash = null or a well-known genesis value.
+      Reference: manifest.ledger schema: (event_id PK, payment_id FK, type ENUM, occurred_at, payload_hash CHAR(64),
+      prev_hash CHAR(64), payload JSONB).
+    policy_ref: "blueprints/payment-manifest.yaml#ledger"
+
+  - id: "PAYMENT-RECON-002"
+    chapter: "RECON"
+    requirement: "The reconciliation invariant holds: sum(CAPTURED events.amount from ledger) - sum(REFUNDED events.amount from ledger) = stored Payment.balance for every payment in the system."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test (ReconciliationInvariantTest): After a sequence of captures and partial refunds, query the ledger with
+      JdbcTemplate to compute sum(captured)-sum(refunded) per payment_id. Compare against Payment.balance in the
+      entity table. Assert they match for all payments. Additionally, test that the invariant FAILS when a transition
+      is made without writing a ledger entry (e.g., by removing one .save() call from PaymentService) — proving the
+      test is sensitive to implementation errors.
+      Implementation: Ledger is the source of truth. Payment.balance is a denormalized cache that MUST be updated
+      atomically with each ledger append. ReconciliationJob (periodic) queries the invariant and emits
+      recon_drift_detected_total if divergence is found. Reference: manifest.reconciliation.invariant.
+    policy_ref: "blueprints/payment-manifest.yaml#reconciliation"

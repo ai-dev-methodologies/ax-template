@@ -1,0 +1,167 @@
+template_id: payment-blueprint
+family: scaffold
+status: draft
+confidence: high
+stack:
+  backend: spring-boot
+  contract: openapi
+  repo_shape: single-repo
+
+# ─── PCI-DSS scope ──────────────────────────────────────────────────────────
+# SAQ-A applies because the implementation uses tokenization exclusively;
+# no PAN is stored, processed, or transmitted by this application. The
+# provider handles all raw card data via its own PCI-certified iframe/SDK.
+pci_dss:
+  saq_tier: SAQ-A
+  pan_storage: NONE
+  rationale: "Tokenization only. Raw PAN never touches application layer."
+  trace:
+    PAYMENT-SEC-001: PCI-DSS-3.4   # PAN protection — no PAN in logs/db/error-responses
+    PAYMENT-SEC-002: PCI-DSS-6.5   # Secure coding — no hardcoded card fields
+    PAYMENT-SEC-003: PCI-DSS-4.1   # Transmission encryption — TLS-only enforcement
+
+# ─── Payment provider ────────────────────────────────────────────────────────
+# Type=mock for this blueprint iteration. Iteration B adds a Stripe adapter;
+# Iteration C adds Toss V2. The PaymentProvider interface is designed to survive
+# both additions without breaking changes (L4 AI2-3 paper exercise).
+provider:
+  type: mock
+  timeout_ms: 5000
+  retry:
+    max: 3
+    backoff: exponential
+    initial_delay_ms: 1000
+    multiplier: 2.0
+  failure_modes:
+    - timeout               # PAYMENT-PROVIDER-001: payment state → UNKNOWN
+    - http_5xx              # PAYMENT-PROVIDER-002: retry then → FAILED
+    - http_4xx_decline      # PAYMENT-PROVIDER-003: no retry → FAILED with declineReason
+    - malformed_response    # PAYMENT-PROVIDER-004: no retry → FAILED with serializationError
+    - network_reset         # PAYMENT-PROVIDER-005: payment state → UNKNOWN (indeterminate)
+    - idempotency_replay    # PAYMENT-PROVIDER-006: return cached original response
+
+# ─── Idempotency ─────────────────────────────────────────────────────────────
+# Caffeine (in-process) for iteration A. Iteration B: replace with Postgres-backed
+# store for distributed idempotency across pod restarts.
+idempotency:
+  window_hours: 24
+  store: caffeine
+  key_scope: "userId + Idempotency-Key header value"
+  on_duplicate: return_original_response
+
+# ─── Currency ────────────────────────────────────────────────────────────────
+# ISO 4217 scale (minor units):
+#   KRW = 0 (1원 = 1 minor unit, no fractional 원)
+#   USD = 2 (1 cent = 1 minor unit, 100 cents = $1.00)
+currency:
+  default: KRW
+  allowed:
+    - KRW
+    - USD
+  scales:
+    KRW: 0
+    USD: 2
+
+# ─── Amounts ─────────────────────────────────────────────────────────────────
+# BigDecimal is mandatory for all monetary values in the Java domain model.
+# JSON encoding: integer minor units OR decimal string. Float JSON numbers
+# (VALUE_NUMBER_FLOAT Jackson token) are REJECTED immediately with 400 + RFC 7807.
+# This is the Codex Critic C9 requirement.
+amounts:
+  type: BigDecimal
+  json_format: minor_units_or_decimal_string
+  float_json_rejection: true
+  max: 100000000  # 1억원 / $1,000,000.00 — hard upper limit per payment
+
+# ─── Refund policy ───────────────────────────────────────────────────────────
+# window_hours: 720 = 30 days. Manifest-configurable so operators can adjust
+# without code changes (read via @ConfigurationProperties in RefundService).
+refund:
+  window_hours: 720   # 30 days from capturedAt
+  partial_supported: true
+  invariant: "sum(refunds.amount) <= payment.capturedAmount"
+  refund_of_refund: forbidden  # PAYMENT-REFUND-003
+
+# ─── State machine ───────────────────────────────────────────────────────────
+# Transition events: AUTHORIZE, CAPTURE, VOID, REFUND, PARTIAL_REFUND, PROVIDER_TIMEOUT,
+# NETWORK_RESET, PROVIDER_REPLAY.
+# UNKNOWN is a terminal holding state. ReconciliationJob resolves UNKNOWN by querying
+# the provider or aging out after a configurable TTL.
+state_machine:
+  states:
+    - CREATED
+    - AUTHORIZED
+    - CAPTURED
+    - VOIDED
+    - REFUNDED
+    - PARTIAL_REFUNDED
+    - UNKNOWN
+  legal_transitions:
+    CREATED:
+      - event: AUTHORIZE
+        next_state: AUTHORIZED
+    AUTHORIZED:
+      - event: CAPTURE
+        next_state: CAPTURED
+      - event: VOID
+        next_state: VOIDED
+      - event: PROVIDER_TIMEOUT
+        next_state: UNKNOWN
+      - event: NETWORK_RESET
+        next_state: UNKNOWN
+    CAPTURED:
+      - event: REFUND
+        next_state: REFUNDED
+      - event: PARTIAL_REFUND
+        next_state: PARTIAL_REFUNDED
+    PARTIAL_REFUNDED:
+      - event: REFUND
+        next_state: REFUNDED
+      - event: PARTIAL_REFUND
+        next_state: PARTIAL_REFUNDED   # additional partial refunds until sum == capturedAmount
+  terminal_states:
+    - VOIDED
+    - REFUNDED
+    - UNKNOWN   # terminal pending resolution
+  illegal_transitions_response: 409   # RFC 7807 urn:ax:payment:illegal-state-transition
+
+# ─── Observability ───────────────────────────────────────────────────────────
+# pan_redaction: required — verified by PAYMENT-SEC-001 (LogCaptor test).
+# metrics: emitted via Micrometer; tested by PAYMENT-OBS-001.
+# mdc: propagated by PaymentMdcFilter; tested by PAYMENT-OBS-002.
+observability:
+  pan_redaction: required
+  metrics:
+    - payment_attempted_total
+    - payment_succeeded_total
+    - payment_failed_total
+    - refund_processed_total
+    - recon_drift_detected_total
+  mdc:
+    - payment_id
+    - idempotency_key
+    - correlation_id
+  mdc_propagation: "PaymentMdcFilter (OncePerRequestFilter) sets MDC at request start; clears in finally; copies context map for async CompletableFuture threads"
+
+# ─── Ledger ───────────────────────────────────────────────────────────────────
+# Append-only event table. No UPDATE or DELETE operations are issued on this table.
+# Hash chain provides tamper-evidence: each event records sha256 of its payload and
+# the previous event's hash. Tested by PAYMENT-RECON-001.
+ledger:
+  table: payment_events
+  schema: "(event_id UUID PK, payment_id UUID FK, type VARCHAR ENUM, occurred_at TIMESTAMP, payload_hash CHAR(64), prev_hash CHAR(64) NULLABLE, payload JSONB)"
+  append_only: true
+  hash_chain: true
+  hash_algorithm: SHA-256
+  genesis_prev_hash: null   # first event in a chain has prev_hash = null
+
+# ─── Reconciliation ──────────────────────────────────────────────────────────
+# Ledger is the source of truth. Payment.balance (stored) MUST equal ledger-derived value.
+# ReconciliationInvariantTest detects divergence. ReconciliationJob (periodic, async)
+# resolves UNKNOWN states and emits recon_drift_detected_total on drift.
+reconciliation:
+  invariant: "sum(captured.amount from ledger WHERE type=CAPTURED) - sum(refunded.amount from ledger WHERE type IN (REFUNDED, PARTIAL_REFUNDED)) = Payment.balance (stored)"
+  derivation: "ledger is source of truth; stored Payment.balance is a denormalized cache that MUST be updated atomically with each ledger append"
+  job_enabled: true
+  job_schedule: "every 5 minutes"
+  on_drift: "emit recon_drift_detected_total counter + log WARN with payment_id"

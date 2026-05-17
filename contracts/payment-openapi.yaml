@@ -1,0 +1,492 @@
+openapi: 3.0.3
+info:
+  title: ax-template Payment API
+  description: |
+    Payment domain contract for ax-template. Covers create, status, refund, list, and void.
+    4th domain blueprint after auth / CRUD / rate-limit, following the same 5-step METHODOLOGY playbook.
+
+    **Amount encoding rule (Codex Critic mandate C9)**:
+    `amount` fields accept integer minor units (e.g., 1000 for KRW 1000원; 1099 for USD $10.99)
+    or decimal strings (e.g., "10.99"). JSON `number` with a decimal point (float) is REJECTED with
+    HTTP 400 + RFC 7807 ProblemDetail because BigDecimal precision cannot survive an IEEE 754 round-trip.
+
+    **IDOR policy**: GET /api/payments/{id} for a payment not owned by the caller returns 404 (not 403)
+    to prevent enumeration of existing payment IDs. See PAYMENT-AUTHZ-003.
+
+    **Idempotency**: POST mutations require an `Idempotency-Key` header. Duplicate requests within the
+    24-hour window return the original stored response without creating a second charge.
+
+    **Error format**: All non-2xx responses use RFC 7807 ProblemDetail with a stable `type` URI.
+  version: "0.1.0"
+servers:
+  - url: /api
+
+paths:
+  /payments:
+    post:
+      summary: Create a payment
+      description: |
+        Initiates a payment for the given order. Requires `Idempotency-Key` header. Duplicate
+        requests with the same key within 24 hours return the original stored response without
+        creating a second charge (PAYMENT-IDEMP-001, PAYMENT-IDEMP-002).
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          description: "Client-generated unique key to ensure exactly-once semantics. UUID v4 recommended."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Payment created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '202':
+          description: |
+            Payment accepted but result is pending (provider timed out or network reset).
+            Payment status is UNKNOWN; reconciliation job will resolve asynchronously.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          description: |
+            Validation error. Common causes: missing Idempotency-Key header, invalid amount
+            (float JSON number), unsupported currency, amount scale mismatch, missing required field.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: |
+            Idempotency conflict — the same Idempotency-Key was used with different request body parameters.
+            This should not occur in well-behaved clients; documented for completeness.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+    get:
+      summary: List payments for the authenticated user
+      description: |
+        Returns a paginated list of payments owned by the authenticated caller. Payments belonging
+        to other users are never included (PAYMENT-AUTHZ-003).
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Zero-based page number.
+        - in: query
+          name: size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of items per page.
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [createdAt, updatedAt, amount]
+            default: createdAt
+          description: Field to sort by, descending.
+      responses:
+        '200':
+          description: Paginated list of caller-owned payments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedPaymentResponse'
+        '400':
+          description: Invalid query parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /payments/{id}:
+    get:
+      summary: Get payment status
+      description: |
+        Returns the current state of a payment. If the payment exists but belongs to a different user,
+        returns 404 (not 403) to prevent IDOR enumeration (PAYMENT-AUTHZ-003).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Payment ID.
+      responses:
+        '200':
+          description: Payment found and owned by caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: |
+            Payment not found, or found but does not belong to the authenticated caller
+            (IDOR denial — returns 404 to avoid information leakage about resource existence).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /payments/{id}/refund:
+    post:
+      summary: Refund a payment (full or partial)
+      description: |
+        Initiates a refund for the specified payment. Only the user who owns the order may
+        request a refund (PAYMENT-AUTHZ-002). Supports partial refund by specifying `amount`;
+        omitting `amount` triggers a full refund. Requires `Idempotency-Key` header.
+
+        Constraints:
+        - Refund must be within the 30-day window (PAYMENT-REFUND-001).
+        - sum(all refunds) must not exceed payment.capturedAmount (PAYMENT-REFUND-002).
+        - Refund of a fully-refunded payment is denied with 409 (PAYMENT-REFUND-003).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Payment ID.
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          description: Client-generated unique key for exactly-once refund semantics.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      responses:
+        '201':
+          description: Refund created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '400':
+          description: |
+            Validation error. Causes: refund amount exceeds remaining capturable amount,
+            invalid amount encoding (float JSON), scale mismatch for currency.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '403':
+          description: Caller does not own the order for this payment (PAYMENT-AUTHZ-002).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Payment not found or not owned by caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: |
+            Conflict. Causes:
+            - Refund-of-refund: payment is already fully refunded (type: urn:ax:payment:refund-of-refund).
+            - Outside refund window: 30-day window expired (type: urn:ax:payment:refund-window-expired).
+            - Optimistic lock conflict: concurrent refund race; caller should retry (type: urn:ax:payment:concurrent-modification).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /payments/{id}/void:
+    post:
+      summary: Void an authorized payment
+      description: |
+        Voids an AUTHORIZED payment before it is captured. Only the payment owner may void.
+        Requires `Idempotency-Key` header. An already-captured payment cannot be voided (use refund instead).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Payment ID.
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          description: Client-generated unique key for exactly-once void semantics.
+      responses:
+        '200':
+          description: Payment voided successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Payment not found or not owned by caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: |
+            Payment is already captured or in a terminal state and cannot be voided
+            (type: urn:ax:payment:illegal-state-transition). currentState extension field indicates the actual state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+components:
+  schemas:
+    MoneyAmount:
+      description: |
+        Monetary amount. Accepts EITHER:
+        - Integer minor units: `1000` means KRW 1000원; `1099` means USD $10.99 (cents).
+        - Decimal string: `"10.99"` for USD $10.99.
+
+        JSON `number` with a decimal point (float, e.g. `10.99`) is REJECTED with HTTP 400 +
+        RFC 7807 ProblemDetail because BigDecimal precision cannot survive an IEEE 754 round-trip.
+        Example: `0.1 + 0.2 = 0.30000000000000004` in IEEE 754 — unacceptable for financial values.
+
+        Server-side: deserialized via custom Jackson StdDeserializer that checks JsonToken type.
+        VALUE_NUMBER_FLOAT → 400 immediately. VALUE_NUMBER_INT → BigDecimal(longValue).
+        VALUE_STRING → new BigDecimal(text) (rejected if not a valid decimal).
+      oneOf:
+        - type: integer
+          minimum: 0
+          description: "Integer minor units (e.g., 1000 = KRW 1000원, 1099 = USD $10.99)."
+        - type: string
+          pattern: '^[0-9]+(\.[0-9]{1,8})?$'
+          description: "Decimal string (e.g., '10.99' = USD $10.99). No scientific notation."
+      x-validation: "float JSON numbers (VALUE_NUMBER_FLOAT token) rejected with 400 + RFC 7807; BigDecimal precision survives only integer-minor-units or decimal-string encoding"
+
+    Currency:
+      type: string
+      enum: [KRW, USD]
+      description: "ISO 4217 alpha-3 currency code. Allowed values defined in blueprints/payment-manifest.yaml#currency.allowed. KRW minor-unit scale=0; USD scale=2."
+
+    PaymentState:
+      type: string
+      enum: [CREATED, AUTHORIZED, CAPTURED, VOIDED, REFUNDED, PARTIAL_REFUNDED, UNKNOWN]
+      description: |
+        Payment state machine states. UNKNOWN is a terminal holding state entered when the provider
+        times out or connection is reset — reconciliation job resolves UNKNOWN asynchronously.
+        Legal transitions: CREATED→AUTHORIZED→CAPTURED|VOIDED→REFUNDED|PARTIAL_REFUNDED; UNKNOWN is
+        entered from AUTHORIZED on provider timeout/network reset.
+
+    CreatePaymentRequest:
+      type: object
+      required: [orderId, amount, currency, paymentMethodToken]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          description: "Order ID for which this payment is being created. Must be owned by the authenticated user."
+        amount:
+          $ref: '#/components/schemas/MoneyAmount'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        paymentMethodToken:
+          type: string
+          minLength: 1
+          maxLength: 512
+          description: "Tokenized payment method reference (e.g., provider token). Raw PAN is never accepted; tokenization is handled out-of-scope by the PCI SAQ-A compliant provider iframe."
+
+    PaymentResponse:
+      type: object
+      required: [paymentId, orderId, status, amount, currency, createdAt, updatedAt]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/PaymentState'
+        amount:
+          $ref: '#/components/schemas/MoneyAmount'
+        capturedAmount:
+          $ref: '#/components/schemas/MoneyAmount'
+          description: "Amount captured by the provider. Populated after CAPTURED state. Null if not yet captured."
+        balance:
+          $ref: '#/components/schemas/MoneyAmount'
+          description: "Remaining refundable balance (capturedAmount - sum of refunds). Populated after CAPTURED."
+        currency:
+          $ref: '#/components/schemas/Currency'
+        declineReason:
+          type: string
+          nullable: true
+          description: "Provider decline reason code (e.g., INSUFFICIENT_FUNDS, SERVER_ERROR). Populated only on FAILED status."
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RefundRequest:
+      type: object
+      required: [reason]
+      properties:
+        amount:
+          $ref: '#/components/schemas/MoneyAmount'
+          description: "Amount to refund. If omitted, full refund is requested. Must not cause sum(all refunds) > capturedAmount."
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: "Human-readable refund reason (stored in ledger, not exposed in error messages)."
+
+    RefundResponse:
+      type: object
+      required: [refundId, paymentId, amount, currency, status, createdAt]
+      properties:
+        refundId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/MoneyAmount'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        status:
+          type: string
+          enum: [PROCESSING, COMPLETED, FAILED]
+        createdAt:
+          type: string
+          format: date-time
+
+    PagedPaymentResponse:
+      type: object
+      required: [content, page, size, totalElements, totalPages]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentResponse'
+        page:
+          type: integer
+          minimum: 0
+          description: "Current zero-based page number."
+        size:
+          type: integer
+          minimum: 1
+          description: "Items per page."
+        totalElements:
+          type: integer
+          format: int64
+          description: "Total number of payments owned by the caller."
+        totalPages:
+          type: integer
+          minimum: 0
+          description: "Total number of pages."
+
+    ProblemDetail:
+      type: object
+      required: [type, title, status, detail, instance]
+      description: |
+        RFC 7807 Problem Details for HTTP APIs. All non-2xx responses use this schema.
+        Stable `type` URI values enable programmatic handling by API consumers.
+
+        Registered type URIs for this API:
+        - urn:ax:payment:validation-error — 400 validation failures
+        - urn:ax:payment:illegal-state-transition — 409 state machine violation
+        - urn:ax:payment:refund-of-refund — 409 attempt to refund a fully-refunded payment
+        - urn:ax:payment:refund-window-expired — 409 refund requested after 30-day window
+        - urn:ax:payment:concurrent-modification — 409 optimistic lock conflict
+        - urn:ax:payment:idempotency-conflict — 409 same key with different request body
+      properties:
+        type:
+          type: string
+          description: "Stable URI identifying the problem type."
+          example: "urn:ax:payment:illegal-state-transition"
+        title:
+          type: string
+          description: "Short human-readable summary of the problem type."
+          example: "Illegal state transition"
+        status:
+          type: integer
+          description: "HTTP status code."
+          example: 409
+        detail:
+          type: string
+          description: "Human-readable explanation specific to this occurrence."
+          example: "Cannot transition from VOIDED via REFUND"
+        instance:
+          type: string
+          description: "URI reference that identifies the specific occurrence of the problem."
+          example: "/api/payments/a1b2c3d4-e5f6-7890-abcd-ef1234567890/refund"
+        paymentId:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Payment ID relevant to this error (extension field). Present when a specific payment is involved."
+        currentState:
+          type: string
+          nullable: true
+          description: "Current payment state at time of error (extension field). Present for state-transition errors."
+        attemptedEvent:
+          type: string
+          nullable: true
+          description: "The transition event that was attempted and rejected (extension field). Present for state-transition errors."

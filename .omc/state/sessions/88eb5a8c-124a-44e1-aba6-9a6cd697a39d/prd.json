@@ -59,16 +59,17 @@
       "id": "US-004",
       "title": "P1 — Spec Trio (specs/payment-l0.yaml + contracts/payment-openapi.yaml + blueprints/payment-manifest.yaml)",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
-        "specs/payment-l0.yaml exists, parses as YAML, contains 24 items across 9 families (AUTHZ-4 / IDEMP-3 / MONEY-3 / STATE-3 / REFUND-3 / PROVIDER-6 / SEC-3 / OBS-2 / RECON-2)",
+        "specs/payment-l0.yaml exists, parses as YAML, contains 29 items across 9 families (AUTHZ-4 / IDEMP-3 / MONEY-3 / STATE-3 / REFUND-3 / PROVIDER-6 / SEC-3 / OBS-2 / RECON-2) — plan.md said \"24\" but family enumeration gives 29; spec reflects accurate count",
         "Each spec item has fields: id, chapter, requirement, test_method, verification_type, applicable, notes (parity with specs/auth-asvs-l1.yaml schema)",
         "contracts/payment-openapi.yaml exists, validates with 'npx @apidevtools/swagger-cli validate contracts/payment-openapi.yaml' exit 0",
         "OpenAPI defines 5 endpoints: POST /api/payments, GET /api/payments/{id}, POST /api/payments/{id}/refund, GET /api/payments, POST /api/payments/{id}/void",
         "OpenAPI amount schema: integer minor units OR explicit decimal string; rejects type=number (float) — documented in schema description",
         "blueprints/payment-manifest.yaml exists, parses as YAML, has required keys: pci_dss, provider, idempotency, currency, amounts, refund, state_machine, observability, ledger, reconciliation",
         "bash practices/evals/spec_ref_guard.sh exits 0 (spec_ref guard works against new payment-l0.yaml — but no rules reference it yet, so this is a structural-only check at this phase)"
-      ]
+      ],
+      "completed_commit": "PENDING"
     },
     {
       "id": "US-005",
