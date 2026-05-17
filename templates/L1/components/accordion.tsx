@@ -1,0 +1,81 @@
+/*
+---
+template_id: L1/components/accordion
+layer: L1
+provenance_class: external_canonical
+evidence:
+  - source_type: upstream_id
+    upstream_id: shadcn-ui-2026-05
+    section: accordion
+    quote: "A vertically stacked set of interactive headings that each reveal a section of content."
+  - source_type: upstream_id
+    upstream_id: wcag-2-2
+    section: 4.1.2-name-role-value
+    quote: "For all user interface components, the name and role can be programmatically determined."
+a11y_criteria:
+  - "WCAG 2.2 SC 4.1.2 — aria-expanded, aria-controls via Radix"
+  - "WCAG 2.2 SC 2.4.7 Focus Visible — do not hide focus rings"
+  - "Heading level inside AccordionTrigger must match document outline"
+dependencies: ["@radix-ui/react-accordion"]
+drift_snapshot_ref: "practices-react/upstream/shadcn-registry-2026-05.snapshot.md#accordion"
+---
+*/
+import * as React from 'react'
+import * as AccordionPrimitive from '@radix-ui/react-accordion'
+import { cn } from '../lib/utils'
+
+const Accordion = AccordionPrimitive.Root
+
+const AccordionItem = React.forwardRef<
+  React.ElementRef<typeof AccordionPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Item>
+>(({ className, ...props }, ref) => (
+  <AccordionPrimitive.Item
+    ref={ref}
+    className={cn('border-b border-[--color-border]', className)}
+    {...props}
+  />
+))
+AccordionItem.displayName = 'AccordionItem'
+
+const AccordionTrigger = React.forwardRef<
+  React.ElementRef<typeof AccordionPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Trigger>
+>(({ className, children, ...props }, ref) => (
+  <AccordionPrimitive.Header className="flex">
+    <AccordionPrimitive.Trigger
+      ref={ref}
+      className={cn(
+        'flex flex-1 items-center justify-between py-[--space-4]',
+        'text-[length:--text-base] font-[number:--weight-medium]',
+        'transition-all duration-[--duration-fast]',
+        'hover:underline',
+        'focus-visible:outline-none focus-visible:ring-2',
+        'focus-visible:ring-[--color-focus-ring]',
+        '[&[data-state=open]>svg]:rotate-180',
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-[--color-text-muted] transition-transform duration-[--duration-fast]" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </AccordionPrimitive.Trigger>
+  </AccordionPrimitive.Header>
+))
+AccordionTrigger.displayName = AccordionPrimitive.Trigger.displayName
+
+const AccordionContent = React.forwardRef<
+  React.ElementRef<typeof AccordionPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <AccordionPrimitive.Content
+    ref={ref}
+    className="overflow-hidden text-[length:--text-sm] data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
+    {...props}
+  >
+    <div className={cn('pb-[--space-4] pt-0', className)}>{children}</div>
+  </AccordionPrimitive.Content>
+))
+AccordionContent.displayName = AccordionPrimitive.Content.displayName
+
+export { Accordion, AccordionItem, AccordionTrigger, AccordionContent }
