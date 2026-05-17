@@ -1,0 +1,42 @@
+domain: auth
+backend_contract_ref: contracts/auth-openapi.yaml
+routes:
+  - path: /register
+    method: POST
+    backend_operation_id: registerUser
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: loading-spinner
+      error: error-banner
+      empty: null
+    redirects:
+      on_auth_required: /login
+      on_success: /dashboard
+  - path: /login
+    method: POST
+    backend_operation_id: loginUser
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: loading-spinner
+      error: error-banner
+      empty: null
+    redirects:
+      on_auth_required: null
+      on_success: /dashboard
+  - path: /reset
+    method: POST
+    backend_operation_id: requestPasswordReset
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: loading-spinner
+      error: error-banner
+      empty: null
+    redirects:
+      on_auth_required: null
+      on_success: /login

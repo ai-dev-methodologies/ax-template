@@ -1,0 +1,17 @@
+domain: practices
+backend_contract_ref: null
+routes:
+  - path: /practices
+    method: GET
+    backend_operation_id: null
+    static_source_ref:
+      - "practices/rules/does-not-exist-*.md"
+    params: {}
+    query: {}
+    states:
+      loading: loading-spinner
+      error: error-banner
+      empty: null
+    redirects:
+      on_auth_required: null
+      on_success: null

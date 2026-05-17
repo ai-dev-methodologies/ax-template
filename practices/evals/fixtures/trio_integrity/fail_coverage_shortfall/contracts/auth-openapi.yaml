@@ -1,0 +1,23 @@
+openapi: "3.0.3"
+info:
+  title: Auth API
+  version: "1.0.0"
+paths:
+  /api/auth/register:
+    post:
+      operationId: registerUser
+      responses:
+        "201":
+          description: User created
+  /api/auth/login:
+    post:
+      operationId: loginUser
+      responses:
+        "200":
+          description: OK
+  /api/auth/reset:
+    post:
+      operationId: requestPasswordReset
+      responses:
+        "200":
+          description: OK

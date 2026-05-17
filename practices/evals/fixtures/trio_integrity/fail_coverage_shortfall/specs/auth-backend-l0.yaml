@@ -1,0 +1,18 @@
+domain: auth
+frontend_required: true
+items:
+  - id: AUTH-BE-001
+    requirement: "User can register with email and password"
+    frontend_required: true
+  - id: AUTH-BE-002
+    requirement: "User can log in with valid credentials"
+    frontend_required: true
+  - id: AUTH-BE-003
+    requirement: "User can reset password via email link"
+    frontend_required: true
+  - id: AUTH-BE-004
+    requirement: "User can update their profile information"
+    frontend_required: true
+  - id: AUTH-BE-005
+    requirement: "User can log out and invalidate session"
+    frontend_required: true

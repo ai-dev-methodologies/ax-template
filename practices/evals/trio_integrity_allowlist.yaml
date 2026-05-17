@@ -1,0 +1,21 @@
+schema_version: 2
+# Domain mode assignments for trio_integrity_guard.sh.
+# Each domain must declare one of: full_trio | backend_only | frontend_only
+#
+# full_trio:      backend Spec Trio AND frontend Spec Trio both required.
+#                 Every UI route must carry a non-null backend_operation_id resolving
+#                 against backend_contract_ref.
+#
+# backend_only:   backend Spec Trio only (no UI in scope). Frontend check skipped.
+#
+# frontend_only:  frontend Spec Trio only; no backend OpenAPI to bind to.
+#                 Every route and item must have backend_operation_id: null AND
+#                 non-empty static_source_ref pointing to existing files.
+domains:
+  auth: full_trio
+  crud: full_trio
+  payment: full_trio
+  practices: frontend_only      # static viewer reading practices/AGENTS.md + rules/
+  ratelimit: backend_only
+  security: backend_only
+  user: backend_only

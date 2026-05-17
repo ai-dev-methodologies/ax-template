@@ -1,0 +1,14 @@
+domain: practices
+tokens_override: {}
+a11y:
+  axe_rules:
+    - color-contrast
+    - label
+  contrast_min: 4.5
+cwv:
+  lcp_ms: 2000
+  inp_ms: 150
+  cls: 0.05
+motion:
+  respect_prefers_reduced_motion: true
+  default_duration_ms: 200

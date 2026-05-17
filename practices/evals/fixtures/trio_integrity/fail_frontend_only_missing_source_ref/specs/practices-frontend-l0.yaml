@@ -1,0 +1,15 @@
+domain: practices
+backend_spec_ref: null
+frontend_required: true
+items:
+  - id: PRAC-FE-001
+    requirement: "Practices viewer displays list of rules from catalog markdown files"
+    backend_operation_id: null
+    backend_spec_ref: null
+    static_source_ref:
+      - "practices/AGENTS.md"
+    test_method: "practices/rules-list.spec.ts"
+    verification_type: unit_test
+    policy_ref: "blueprints/practices-ui-manifest.yaml#PRAC-FE-001"
+    coverage_threshold: 1.0
+    backend_only_marker: false

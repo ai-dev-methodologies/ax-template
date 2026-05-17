@@ -1,0 +1,16 @@
+domain: auth
+backend_contract_ref: contracts/auth-openapi.yaml
+routes:
+  - path: /register
+    method: POST
+    backend_operation_id: bogusOp
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: loading-spinner
+      error: error-banner
+      empty: null
+    redirects:
+      on_auth_required: /login
+      on_success: /dashboard
