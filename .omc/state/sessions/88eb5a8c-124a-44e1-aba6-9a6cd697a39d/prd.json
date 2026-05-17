@@ -69,7 +69,7 @@
         "blueprints/payment-manifest.yaml exists, parses as YAML, has required keys: pci_dss, provider, idempotency, currency, amounts, refund, state_machine, observability, ledger, reconciliation",
         "bash practices/evals/spec_ref_guard.sh exits 0 (spec_ref guard works against new payment-l0.yaml — but no rules reference it yet, so this is a structural-only check at this phase)"
       ],
-      "completed_commit": "PENDING"
+      "completed_commit": "0b97ce1"
     },
     {
       "id": "US-005",
@@ -87,7 +87,8 @@
       "id": "US-006",
       "title": "P1.3 — Sealed L4 prompt+rubric commit anchored",
       "priority": 6,
-      "passes": false,
+      "passes": true,
+      "completed_commit": "TBD-US-006",
       "acceptanceCriteria": [
         "git log shows the US-001 sealing commit hash is recorded in BOTH docs/blueprints/payment/acceptance/l4-sealed-prompt.md AND l4-sealed-rubric.md (sealed_at_commit: <hash>)",
         "A subsequent commit (or amended) updates these files with the actual hash from US-001 commit",

@@ -5,7 +5,7 @@ rules were added (P6), BEFORE the Payment implementation was written (P3.0–
 P3.9), and BEFORE the sub-agent was prompted (P9). It MUST NOT be edited to
 match whatever the sub-agent ultimately produced.
 
-**Sealed at commit**: `<populated in P1.3 / US-006 — sealed_at_commit: TBD>`
+**Sealed at commit**: `sealed_at_commit: fc73323`
 **Pass/fail philosophy**: the rubric tests whether the **catalog discovers
 itself** to a fresh agent — not whether the sub-agent's code is identical to
 what the maintainer would have written.

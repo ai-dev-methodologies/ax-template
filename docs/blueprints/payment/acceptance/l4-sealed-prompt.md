@@ -7,7 +7,7 @@ work look better after the fact. If the catalog doesn't guide the sub-agent
 to satisfy this prompt's constraints from a cold start, the catalog has a
 gap.
 
-**Sealed at commit**: `<populated in P1.3 / US-006 — sealed_at_commit: TBD>`
+**Sealed at commit**: `sealed_at_commit: fc73323`
 **Source of pass/fail**: `l4-sealed-rubric.md` (sibling file, also sealed)
 
 ---
