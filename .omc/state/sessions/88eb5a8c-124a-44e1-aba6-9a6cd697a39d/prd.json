@@ -305,14 +305,16 @@
       "id": "US-020",
       "title": "P9 — L4 sealed sub-agent acceptance test",
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "A general-purpose sub-agent invoked via Agent tool with the EXACT prompt from l4-sealed-prompt.md (no edits)",
         "Sub-agent's transcript / output recorded in docs/blueprints/payment/acceptance/l4-subagent-test.md",
         "Sub-agent's work evaluated against EVERY criterion in l4-sealed-rubric.md (no edits to rubric post-hoc) — each criterion marked PASS/FAIL with one-line evidence",
         "Overall verdict: PASS if all critical rubric items PASS; otherwise FAIL with documented catalog discoverability gap (which gets fixed in a follow-up)",
         "AI2-3 paper exercise (Stripe PaymentIntent + Toss V2 mapping) included in the sub-agent's deliverables and evaluated"
-      ]
+      ],
+      "completedAt": "2026-05-17",
+      "evidence": "L4 sealed sub-agent acceptance PASS 11/11 MUST + 6/6 SHOULD. Result file: docs/blueprints/payment/acceptance/l4-subagent-test.md (committed at 3bd3888). Sealed prompt/rubric anchor: fc73323. New spec item PAYMENT-PROVIDER-007 + test + impl at a2d3fac. Empirical validation of composition kit vision: context-0 Opus sub-agent successfully read catalog + TDD discipline + correct generalization audit + AI2-3 paper exercise."
     },
     {
       "id": "US-021",
@@ -334,13 +336,17 @@
       "id": "US-022",
       "title": "P11 — Push + memory + /save-session checkpoint",
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "git push origin main succeeds (all Payment-related commits + Round 4 work)",
         "~/.claude/projects/<slug>/memory/payment_blueprint_status.md updated: status = 'COMPLETE — <date>'; next-phase anchor removed",
         "MEMORY.md index updated accordingly",
         "All 22 stories in this PRD have passes: true"
-      ]
+      ],
+      "completedAt": "2026-05-17",
+      "evidence": "git push origin main: f168359..c5a8ae9 (31 commits pushed). pre-push regression hook: testPractices + testPayment 48/48 + testAsvs + testCrud + testRateLimit + 4 Java hard gates + 3 React gates all PASS. Memory finalized out-of-repo: ~/.claude/projects/<slug>/memory/payment_blueprint_status.md (89 lines, COMPLETE). MEMORY.md index updated."
     }
-  ]
+  ],
+  "completedAt": "2026-05-17",
+  "finalStatus": "22/22 stories complete"
 }
