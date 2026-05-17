@@ -1,0 +1,139 @@
+template_id: notification-blueprint
+family: scaffold
+status: draft
+confidence: medium
+stack:
+  frontend: react
+  backend: spring-boot
+  contract: openapi
+  repo_shape: single-repo
+
+when_to_use:
+  - new project needing in-app + email notification support
+  - React + Spring Boot adding notification inbox
+  - adding per-user notification preferences
+
+not_for:
+  - push notifications (native mobile)
+  - real-time chat systems
+  - bulk broadcast email platform
+
+# ─── authz ────────────────────────────────────────────────────────────────────
+authz:
+  all_endpoints_require_auth: true
+  idor_response: 404   # return 404 not 403 to avoid resource enumeration
+  send_endpoint_role: ADMIN   # POST /api/notifications restricted to ADMIN role
+  trace:
+    NOTIF-AUTHZ-001: all endpoints require JWT
+    NOTIF-AUTHZ-002: cross-user IDOR → 404
+    NOTIF-AUTHZ-003: preferences isolated by JWT principal
+
+# ─── delivery channels ────────────────────────────────────────────────────────
+channels:
+  in_app:
+    enabled: true
+    storage: database
+    table: notifications
+    real_time_hint: SSE or WebSocket (optional; polling fallback)
+  email:
+    enabled: true
+    provider: configurable   # swap with SMTP / SES adapter
+    respect_preferences: true   # emailEnabled=false skips email delivery
+  delivery_failure_behavior: non_blocking   # log WARN, don't fail HTTP request
+
+# ─── send policy ──────────────────────────────────────────────────────────────
+send:
+  endpoint: POST /api/notifications
+  role_required: ADMIN
+  dispatch_channels: [in_app, email]
+  trace:
+    NOTIF-SEND-001: persist notification, dispatch channels
+    NOTIF-SEND-002: channel failure is non-blocking
+
+# ─── list policy ──────────────────────────────────────────────────────────────
+list:
+  endpoint: GET /api/notifications
+  default_page_size: 20
+  max_page_size: 100
+  default_sort: createdAt,desc
+  status_filter: true    # supports ?status=UNREAD|READ|ALL
+  unread_count_header: X-Unread-Count
+  trace:
+    NOTIF-LIST-001: paginated list, max page size enforced
+    NOTIF-LIST-002: status filter + X-Unread-Count header
+
+# ─── read/dismiss policy ──────────────────────────────────────────────────────
+read:
+  endpoint: PATCH /api/notifications/{id}/read
+  idempotent: true   # marking READ twice → 200 (not 409)
+  trace:
+    NOTIF-READ-001: idempotent mark-read
+
+dismiss:
+  endpoint: DELETE /api/notifications/{id}
+  strategy: soft_delete   # uses BaseEntity.deleted flag
+  trace:
+    NOTIF-DISMISS-001: soft-delete via BaseRepository.softDelete
+
+# ─── preferences policy ────────────────────────────────────────────────────────
+preferences:
+  endpoint_get: GET /api/notifications/preferences
+  endpoint_patch: PATCH /api/notifications/preferences
+  defaults:
+    inAppEnabled: true
+    emailEnabled: true
+  lazy_init: true   # row created on first PATCH, not on first GET
+  partial_update: true   # PATCH only updates supplied fields
+  isolation: jwt_principal   # no userId in URL path; derived from token
+  trace:
+    NOTIF-PREF-001: defaults returned if no row exists
+    NOTIF-PREF-002: partial PATCH (field-level update)
+
+# ─── retention policy ──────────────────────────────────────────────────────────
+retention:
+  soft_deleted_ttl_days: 30   # soft-deleted notifications purged after 30 days
+  max_per_user: 1000          # oldest soft-deleted rows purged when limit reached
+  advisory: true              # retention job is advisory; not enforced in tests
+
+# ─── rate limiting ────────────────────────────────────────────────────────────
+rate_limit:
+  send_endpoint:
+    per_user_per_minute: 60
+    note: "Uses ratelimit-manifest.yaml bucket; override if needed"
+  list_endpoint:
+    per_user_per_minute: 300
+
+# ─── observability ────────────────────────────────────────────────────────────
+observability:
+  metrics:
+    - notification_sent_total
+    - notification_read_total
+    - notification_dismissed_total
+    - notification_delivery_failure_total
+  mdc:
+    - notification_id
+    - recipient_user_id
+    - notification_type
+
+# ─── schema reference ────────────────────────────────────────────────────────
+schema:
+  notifications:
+    columns:
+      - id: UUID PK
+      - recipient_user_id: UUID FK → users.id
+      - type: ENUM(SYSTEM,ALERT,REMINDER,PROMOTION,ACCOUNT)
+      - title: VARCHAR(255) NOT NULL
+      - body: TEXT NOT NULL
+      - status: ENUM(UNREAD,READ) DEFAULT UNREAD
+      - action_url: VARCHAR(2048) NULL
+      - deleted: BOOLEAN DEFAULT false
+      - created_at: TIMESTAMP NOT NULL
+      - updated_at: TIMESTAMP NULL
+
+  notification_preferences:
+    columns:
+      - id: UUID PK
+      - user_id: UUID UNIQUE FK → users.id
+      - in_app_enabled: BOOLEAN DEFAULT true
+      - email_enabled: BOOLEAN DEFAULT true
+      - updated_at: TIMESTAMP NULL

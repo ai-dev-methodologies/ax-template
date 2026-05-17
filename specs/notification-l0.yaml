@@ -1,0 +1,154 @@
+version: "1.0.0"
+scope: "notification-domain"
+stack: "Spring Boot 3.2.x + JPA + WebSocket (optional) + SSE"
+standard: "RFC 7807 + OWASP ASVS V4 + W3C Server-Sent Events"
+items:
+  # ─── AUTHZ family (3 items) ────────────────────────────────────────────────
+  - id: "NOTIF-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All notification endpoints require a valid authenticated session; unauthenticated requests are rejected with HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: call each of the notification endpoints without a JWT → 401. Ensures no endpoint is accidentally left open.
+      Implementation: SecurityConfig maps /api/notifications/** to requiresAuthentication().
+      The test must exercise all paths (GET /api/notifications, POST /api/notifications,
+      PATCH /api/notifications/{id}/read, DELETE /api/notifications/{id},
+      GET /api/notifications/preferences, PATCH /api/notifications/preferences).
+    policy_ref: "blueprints/notification-manifest.yaml#authz"
+
+  - id: "NOTIF-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Cross-user IDOR is denied: a request for another user's notification resource returns HTTP 404 to avoid information leakage about resource existence."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates a notification (or has one seeded). UserB calls GET /api/notifications/{userA_notif_id} → 404.
+      Implementation: Service layer filters by recipientUserId = callerUserId before returning;
+      if no match exists for the caller, throws EntityNotFoundException → 404.
+      Reference: OWASP ASVS V4.2.1.
+    policy_ref: "blueprints/notification-manifest.yaml#authz"
+
+  - id: "NOTIF-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "Notification preferences are per-user; a user can only read and update their own preferences; cross-user preference access returns HTTP 404."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA sets preferences. UserB attempts to read UserA's preferences via any endpoint → 404 or returns UserB's preferences (never UserA's).
+      Implementation: Preferences are keyed by userId derived from JWT principal, never from a URL path parameter.
+      No user ID appears in the preferences URL — all isolation is implicit from the auth context.
+    policy_ref: "blueprints/notification-manifest.yaml#authz"
+
+  # ─── SEND family (2 items) ─────────────────────────────────────────────────
+  - id: "NOTIF-SEND-001"
+    chapter: "SEND"
+    requirement: "POST /api/notifications sends a notification to a target user; the notification is persisted with status UNREAD and the correct recipientUserId, type, title, and body fields."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST /api/notifications with {recipientUserId, type, title, body} → 201 + persisted row in notifications table with status=UNREAD.
+      The endpoint is for internal/admin use; non-admin callers receive 403.
+      Implementation: NotificationController.send() is restricted to ADMIN role or internal service token.
+      NotificationService.send() creates a Notification entity, persists it, then triggers delivery via configured channels (in-app, email).
+    policy_ref: "blueprints/notification-manifest.yaml#send"
+
+  - id: "NOTIF-SEND-002"
+    chapter: "SEND"
+    requirement: "Notification delivery is attempted via all configured channels (in-app + email when enabled in preferences); channel delivery failure is logged but does not fail the HTTP request."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: Seed a user with email delivery enabled. POST /api/notifications → 201.
+      Assert notification row persisted. Assert email delivery was attempted (mock EmailSender.send() called once).
+      If email sender throws, POST still returns 201 (delivery failure is non-blocking).
+      Implementation: NotificationDispatcher calls each channel adapter in a try/catch; failures are logged at WARN level
+      and the original notification remains persisted regardless.
+    policy_ref: "blueprints/notification-manifest.yaml#send"
+
+  # ─── LIST family (2 items) ─────────────────────────────────────────────────
+  - id: "NOTIF-LIST-001"
+    chapter: "LIST"
+    requirement: "GET /api/notifications returns a paginated list of the caller's notifications ordered by createdAt DESC; default page size is 20; maximum page size is 100."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: Seed 25 notifications for UserA. GET /api/notifications → 200, content.size=20, totalElements=25.
+      GET /api/notifications?page=1&size=5 → content.size=5 (page 2 of 5).
+      GET /api/notifications?size=200 → 400 (exceeds max page size).
+      Implementation: NotificationController uses Pageable with @PageableDefault(size=20, sort="createdAt,desc").
+      A custom Pageable validator rejects size>100.
+    policy_ref: "blueprints/notification-manifest.yaml#list"
+
+  - id: "NOTIF-LIST-002"
+    chapter: "LIST"
+    requirement: "GET /api/notifications supports filter by status (UNREAD | READ | ALL); unread count is returned as a response header X-Unread-Count."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: Seed 5 UNREAD + 3 READ. GET /api/notifications?status=UNREAD → content.size=5, header X-Unread-Count=5.
+      GET /api/notifications?status=READ → content.size=3.
+      GET /api/notifications (no filter) → all 8, X-Unread-Count=5.
+      Implementation: NotificationRepository provides findByRecipientUserIdAndStatus(userId, status, pageable).
+      X-Unread-Count is appended by NotificationController.list() via HttpServletResponse.setHeader().
+    policy_ref: "blueprints/notification-manifest.yaml#list"
+
+  # ─── READ/DISMISS family (2 items) ─────────────────────────────────────────
+  - id: "NOTIF-READ-001"
+    chapter: "READ"
+    requirement: "PATCH /api/notifications/{id}/read marks a notification as READ; the response reflects the updated status; marking an already-READ notification is idempotent (200)."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): Create UNREAD notification → PATCH /api/notifications/{id}/read → 200, status=READ.
+      Test (idempotent): PATCH again → 200, status=READ (not 409).
+      Implementation: NotificationService.markRead(id, userId) finds the notification, sets status=READ, updatedAt=now().
+      If already READ, returns the existing entity without error.
+    policy_ref: "blueprints/notification-manifest.yaml#read"
+
+  - id: "NOTIF-DISMISS-001"
+    chapter: "DISMISS"
+    requirement: "DELETE /api/notifications/{id} soft-deletes a notification (marks deleted=true); the notification is excluded from subsequent list/read responses."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): Create notification → DELETE /api/notifications/{id} → 204.
+      Subsequent GET /api/notifications/{id} → 404. GET /api/notifications list does not include the deleted item.
+      Test (negative): DELETE /api/notifications/{id} by a different user → 404.
+      Implementation: BaseRepository.softDelete(id) used; all list/get queries filter deleted=false.
+    policy_ref: "blueprints/notification-manifest.yaml#dismiss"
+
+  # ─── PREFERENCES family (2 items) ──────────────────────────────────────────
+  - id: "NOTIF-PREF-001"
+    chapter: "PREF"
+    requirement: "GET /api/notifications/preferences returns the caller's notification preferences; if no preferences record exists, defaults are returned (all channels enabled)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: New user (no preferences seeded) → GET /api/notifications/preferences → 200, inAppEnabled=true, emailEnabled=true.
+      Test: User with saved preferences → GET returns those values.
+      Implementation: NotificationPreferences entity keyed by userId. If absent, defaults are returned without creating a row (lazy init on PATCH).
+    policy_ref: "blueprints/notification-manifest.yaml#preferences"
+
+  - id: "NOTIF-PREF-002"
+    chapter: "PREF"
+    requirement: "PATCH /api/notifications/preferences updates the caller's notification preferences; partial updates are supported (only supplied fields are changed)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: PATCH with {emailEnabled: false} → 200, emailEnabled=false, inAppEnabled stays true.
+      PATCH with {inAppEnabled: false, emailEnabled: true} → 200, both fields updated.
+      Implementation: PATCH semantics: only fields in the request body are applied.
+      NotificationPreferences row is upserted (findOrCreate + field merge).
+    policy_ref: "blueprints/notification-manifest.yaml#preferences"

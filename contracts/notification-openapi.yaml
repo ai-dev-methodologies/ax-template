@@ -1,0 +1,341 @@
+openapi: 3.0.3
+info:
+  title: ax-template Notification API
+  description: |
+    Notification domain REST contract. Covers in-app notification delivery,
+    read/dismiss lifecycle, and per-user channel preferences.
+    All endpoints require a valid JWT Bearer token.
+  version: 0.1.0
+servers:
+  - url: /api
+
+paths:
+  /notifications:
+    get:
+      operationId: listNotifications
+      summary: List caller's notifications (paginated)
+      tags: [notifications]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [UNREAD, READ, ALL]
+            default: ALL
+          description: Filter by notification status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated notification list
+          headers:
+            X-Unread-Count:
+              schema:
+                type: integer
+              description: Total unread notifications for the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    post:
+      operationId: sendNotification
+      summary: Send a notification (admin/internal use)
+      tags: [notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendNotificationRequest'
+      responses:
+        '201':
+          description: Notification created and dispatched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /notifications/{id}:
+    get:
+      operationId: getNotification
+      summary: Get a single notification by ID
+      tags: [notifications]
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '200':
+          description: Notification detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: dismissNotification
+      summary: Soft-delete (dismiss) a notification
+      tags: [notifications]
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '204':
+          description: Notification dismissed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      summary: Mark a notification as read
+      tags: [notifications]
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '200':
+          description: Notification marked as read (idempotent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /notifications/preferences:
+    get:
+      operationId: getNotificationPreferences
+      summary: Get caller's notification channel preferences
+      tags: [notifications]
+      responses:
+        '200':
+          description: Current preferences (defaults returned if never set)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      operationId: updateNotificationPreferences
+      summary: Partially update caller's notification preferences
+      tags: [notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferencesRequest'
+      responses:
+        '200':
+          description: Updated preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  parameters:
+    NotificationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    NotificationType:
+      type: string
+      enum:
+        - SYSTEM
+        - ALERT
+        - REMINDER
+        - PROMOTION
+        - ACCOUNT
+
+    NotificationStatus:
+      type: string
+      enum:
+        - UNREAD
+        - READ
+
+    NotificationResponse:
+      type: object
+      required: [id, recipientUserId, type, title, body, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        recipientUserId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        title:
+          type: string
+          maxLength: 255
+        body:
+          type: string
+          maxLength: 2000
+        status:
+          $ref: '#/components/schemas/NotificationStatus'
+        actionUrl:
+          type: string
+          format: uri
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    NotificationPage:
+      type: object
+      required: [content, totalElements, totalPages, page, size]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationResponse'
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    SendNotificationRequest:
+      type: object
+      required: [recipientUserId, type, title, body]
+      properties:
+        recipientUserId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        title:
+          type: string
+          maxLength: 255
+        body:
+          type: string
+          maxLength: 2000
+        actionUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    NotificationPreferences:
+      type: object
+      required: [userId, inAppEnabled, emailEnabled]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        inAppEnabled:
+          type: boolean
+          default: true
+        emailEnabled:
+          type: boolean
+          default: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    UpdatePreferencesRequest:
+      type: object
+      description: Partial update — only supplied fields are changed
+      properties:
+        inAppEnabled:
+          type: boolean
+          nullable: true
+        emailEnabled:
+          type: boolean
+          nullable: true
+
+    ProblemDetail:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: Insufficient role (ADMIN required)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: Resource not found or belongs to another user
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []
