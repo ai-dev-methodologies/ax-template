@@ -4,6 +4,30 @@
 **Status:** CONFIRM — rule shipped, FP heuristics iterated, methodology validated.
 **Scope:** `practices-react/eslint-plugin-ax/rules/react-async-parallel.js` only.
 
+> **Clarification (post-session, 2026-05-17 evening).** This document records
+> the *technical* findings of the 19-repo empirical run — TP rate, FP clusters,
+> heuristic decisions, sample classifications. Those findings remain valid.
+>
+> The *strategic* implications originally drawn from this data (archive the
+> Spring Boot reference workload, freeze the Java practices catalog as v1.0,
+> reposition ax-template as a "single ESLint plugin product") were **reversed
+> in the same session** after the maintainer reaffirmed the project's actual
+> intent:
+>
+> > "ax-template은 React (front) + Spring Boot (backend) 둘 다 개발 가능한
+> > **composition kit**. 각 component (Spec Trio / practices / reference
+> > workloads / ESLint plugin / testPractices / AGENTS.md / 4 hard gates)를
+> > 조합해서 새 프로젝트를 시작하는 fork-base template. 규칙을 강제하는
+> > 선 순환 시스템."
+>
+> The Round 3 codex review optimized for "adoption probability of a single npm
+> package" — a metric ax-template was never trying to maximize. Both the
+> Spring/Java side and the React/Next.js side are active components of the
+> composition kit. The empirical signal below — that `react-async-parallel`
+> finds real waterfalls in real code — stands as evidence that the React-side
+> enforcement layer works. It does not imply that Java-side enforcement
+> should be deprecated.
+
 This document is a frozen artifact of the Round 3 strategic review. It exists
 because the measurement data — 19 real-world Next.js repos × ~550 ESLint
 violations × per-violation TP/FP/STY classifications — would otherwise live

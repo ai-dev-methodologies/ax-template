@@ -1,118 +1,215 @@
 # ax-template
 
-> **`/ax-transform` skill source.** Starter / transformation infrastructure for AI-agent-friendly Java/Spring projects.
+> **Full-stack React 19 / Next.js 16 + Spring Boot 3 fork-base template that mechanically enforces development rules so AI agents can't drift off the rails.**
 
-## What this is
+ax = **AI transformation**. This repo is the source of the Claude Code skill
+**`/ax-transform`** and a composition kit you fork (or `npx`) to start a new
+project. Every layer of the stack ships with rule-enforcement wired in:
 
-ax = **AI transformation**. This repo is the source of the Claude Code plugin **`ax-transform`** — a skill that bootstraps (or transforms) a project into a codebase where AI agents can write code safely:
+- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint + 68-rule
+  evidence-anchored catalog (`practices-react/rules/`).
+- **Spring Boot side** — `@Tag`-based JUnit + RestAssured tests
+  (`./gradlew test{Domain}`) + 64-rule Java/Spring catalog
+  (`practices/rules/`).
+- **Spec-first contract** — every domain has a Spec Trio
+  (`specs/X.yaml` + `contracts/X-openapi.yaml` + `blueprints/X-manifest.yaml`).
+  AI reads the spec before writing the implementation; no spec, no merge.
+- **AI agent context** — `AGENTS.md` sentinel files in `practices/` and
+  `practices-react/`, auto-regenerated from rule sources with sha256-anchored
+  staleness detection.
+- **4 hard gates** — `spec_ref` / `substance` / `time_decay` / `evidence`
+  binary checks that BLOCK rules that don't anchor to external sources
+  (canonical docs, RFCs, JEPs).
 
-- **Spec Trio** (`specs/` + `contracts/` + `blueprints/`) — contract-first; AI reads spec before code
-- **practices/ catalog** — 64 evidence-anchored Java/Spring rules across 21 categories
-- **Single-command verification** — `./gradlew test{Domain}` returns binary pass/fail
-- **AGENTS.md sentinel** — sha256-anchored AI agent context, auto-regenerated on rule change
-- **4 hard gates** — `spec_ref`, `substance`, `time_decay`, `evidence` block AI output that can't anchor to external sources
+## The development scenario
 
-The `backend/` (Spring Boot) and `frontend/` (React) directories are **reference workloads** — the skill applied to itself.
+You're starting a new project: React frontend + Spring Boot backend
+(the standard Korean enterprise stack). You want:
 
-## What this skill does NOT impose
+1. AI agents (Claude Code, Cursor, etc.) to do most of the typing.
+2. AI hallucinations / stale-tutorial patterns / framework-version drift to
+   be caught **mechanically**, not by code review.
+3. New domains (Payment, Notification, File upload, Audit log, …) to be
+   addable by following one playbook — not invented per-project.
 
-Catalog quality is enforced. Human-collaboration policy is the fork-받은 팀의 자율:
+ax-template is the codebase that gives you 1-3 from commit 0.
+
+## The virtuous cycle
+
+```
+fork ax-template
+       ↓
+auth + CRUD + rate-limit blueprints ready · 64 Java rules · 68 React rules · 7 ESLint rules · AGENTS.md sentinel
+       ↓
+add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
+       ↓
+AI agent writes Spring + React code for the new domain
+       ↓
+ESLint plugin + ./gradlew test{Domain} + Spec Trio + AGENTS.md + 4 hard gates auto-enforce
+       ↓
+non-conforming AI output BLOCKED at commit / push / CI
+       ↓
+codebase quality stays inside the template's design envelope
+       ↓
+new domain's rules feed back into practices/* — catalog grows
+       ↓
+next fork inherits a stronger catalog
+       ↓
+loop.
+```
+
+## What ships in the composition kit
+
+| Layer | Asset | Mechanism |
+|-------|-------|-----------|
+| Backend reference workload | `backend/` — Spring Boot 3 + Java 21, 14 auth endpoints (signup/login/OAuth Google·Naver·Kakao/password reset/RBAC ADMIN·MANAGER·MEMBER), 5 CRUD endpoints, 1 rate-limit endpoint | TDD-built; `./gradlew test{Domain}` is binary pass/fail |
+| Frontend reference workload | `frontend/` — React 19 + Next.js 16, OAuth UI, login pages, e2e Playwright tests | self-tests the ESLint plugin |
+| Java/Spring rule catalog | `practices/` — 64 rules / 22 categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
+| React/Next.js rule catalog | `practices-react/` — 68 rules / 8 families, all citing canonical React 19 / Next.js 16 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
+| ESLint plugin (React enforcement) | `practices-react/eslint-plugin-ax/` — 7 custom rules; `react-async-parallel` + `prefer-functional-setstate` recommended; 5 others opt-in | RuleTester suites; install in any downstream project |
+| Spec Trio (per domain) | `specs/<domain>.yaml` + `contracts/<domain>-openapi.yaml` + `blueprints/<domain>-manifest.yaml` | enforced by `spec_ref_guard.sh` — every rule must point to a spec item |
+| 4 hard gates | `practices/evals/{spec_ref,substance,time_decay,evidence}_guard.sh` (Java) + `practices-react/evals/run.sh` (React) | block commits / pushes via `.githooks/{pre-commit,pre-push}` when catalog quality degrades |
+| AGENTS.md sentinel | `practices/AGENTS.md` + `practices-react/AGENTS.md` (sha256-anchored, auto-regenerated) | AI agents read this first; never read stale catalog |
+| `/ax-transform` Claude Code skill | `skills/ax-transform/SKILL.md` + `.claude-plugin/plugin.json` | activates the methodology when an AI agent starts work in a fork |
+
+## Use as a project starter
+
+```bash
+git clone https://github.com/ai-dev-methodologies/ax-template my-project
+cd my-project
+git submodule update --init   # fetches portability fixtures (petclinic / realworld / modulith)
+
+# Backend
+cd backend && ./gradlew test          # full regression — testAsvs + testCrud + testPractices
+cd ..
+
+# Frontend
+cd frontend && npm install && npm run build
+
+# Catalog hard gates (both stacks)
+bash practices/evals/spec_ref_guard.sh
+bash practices/evals/substance_guard.sh
+bash practices/evals/time_decay_guard.sh
+bash practices/evals/evidence_guard.sh
+bash practices-react/evals/run.sh
+
+# Install local pre-commit / pre-push hooks (opt-in, enforces catalog quality on every commit)
+bash practices/scripts/install-hooks.sh
+```
+
+## Adding a new domain (the 5-step playbook)
+
+See [`METHODOLOGY.md`](./METHODOLOGY.md). Short version:
+
+1. **Compliance Spec** — `specs/<domain>-l<level>.yaml` (the items to satisfy)
+2. **API Contract** — `contracts/<domain>-openapi.yaml` (the endpoints)
+3. **Policy Manifest** — `blueprints/<domain>-manifest.yaml` (the policy values)
+4. **Portable Tests** — `@Tag("<DOMAIN>")` JUnit + RestAssured tests
+5. **Build Verification** — register `./gradlew test<Domain>` task
+
+Auth, CRUD, and rate-limit are three worked examples of this playbook.
+
+## Rules currently enforced
+
+### Spring/Java (testPractices — 64 rules / 22 categories)
+
+`lang-`, `core-`, `config-`, `web-`, `http-`, `persistence-`, `transaction-`,
+`migration-`, `security-`, `validation-`, `error-`, `api-`, `async-`,
+`messaging-`, `cache-`, `observability-`, `actuator-`, `testing-`, `build-`,
+`native-`, `arch-`, `quality-`. Every rule cites at least one external
+source (Spring Docs, OWASP ASVS, RFC, JEP). Full catalog:
+[`practices/AGENTS.md`](./practices/AGENTS.md).
+
+### React/Next.js (`@ax/eslint-plugin-ax` + 68-rule catalog)
+
+| Rule | Default | Catches |
+|------|---------|---------|
+| `react-async-parallel` | warn (recommended) | Independent awaits in async functions / RSC / Server Actions |
+| `prefer-functional-setstate` | warn (recommended) | `setX(x...)` referencing state — risks stale closure |
+| `no-broad-barrel-imports` | warn (opt-in) | barrel imports from `lodash` etc. |
+| `no-falsy-numeric-render` | error (opt-in) | `count && <UI>` renders literal `0` |
+| `no-array-includes-in-loop` | warn (opt-in) | `arr.includes(x)` inside `.filter`/`.map` — should be Set |
+| `no-array-mutate-on-state` | error (opt-in) | `.sort`/`.reverse`/`.splice` on React state or props |
+| `no-inline-component-definition` | error (opt-in) | Capitalized JSX-returning function defined inside another component |
+
+`react-async-parallel` was empirically validated on 19 real-world Next.js
+codebases — see
+[`practices-react/pilot/round-3-empirical-validation.md`](./practices-react/pilot/round-3-empirical-validation.md)
+(~70% TP rate; Vercel-authored references all 0 hits).
+
+## Repo layout
+
+```
+ax-template/
+├── .claude-plugin/plugin.json      # Claude Code plugin manifest
+├── skills/ax-transform/SKILL.md    # /ax-transform skill entry point
+│
+├── CLAUDE.md                       # Project identity (AI-agent context, top-level)
+├── METHODOLOGY.md                  # 5-step blueprint for adding new domains
+│
+├── specs/                          # Compliance specs per domain
+│   ├── auth-asvs-l1.yaml
+│   ├── crud-l0.yaml
+│   ├── ratelimit-l0.yaml
+│   ├── spring-practices-l0.yaml
+│   ├── react-practices-l0.yaml
+│   └── portable-test-template/
+├── contracts/                      # OpenAPI contracts
+│   ├── auth-openapi.yaml
+│   ├── crud-openapi.yaml
+│   └── ratelimit-openapi.yaml
+├── blueprints/                     # Policy manifests
+│   ├── auth-manifest.yaml
+│   ├── crud-manifest.yaml
+│   └── ratelimit-manifest.yaml
+│
+├── practices/                      # Java/Spring catalog
+│   ├── rules/                      # 64 rule.md files
+│   ├── upstream/                   # External doc snapshots
+│   ├── evals/                      # 4 hard gates + advisory probes
+│   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)
+│   ├── SKILL.md                    # subsystem skill
+│   ├── MAINTAINER.md               # catalog maintainer guide
+│   └── DECISIONS.md                # rule provenance trail
+│
+├── practices-react/                # React/Next.js catalog
+│   ├── rules/                      # 68 rule.md files
+│   ├── upstream/                   # External doc snapshots
+│   ├── eslint-plugin-ax/           # @ax/eslint-plugin-ax — 7 ESLint rules
+│   ├── evals/                      # 3 hard gates
+│   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)
+│   ├── SKILL.md                    # subsystem skill
+│   └── pilot/                      # curation pipeline + empirical validations
+│
+├── backend/                        # Spring Boot reference workload (auth + CRUD + rate-limit)
+├── frontend/                       # React reference workload (OAuth UI + e2e)
+├── verify/                         # Optional verification scripts
+└── docs/archive/                   # Historical governance documents
+```
+
+## What the template does NOT impose
+
+Catalog quality is mechanically enforced. Human-collaboration policy is the
+fork-받은 팀의 자율:
 
 - Git workflow (branch protection, PR policy, merge strategy, force-push rules)
 - Deployment / release / staging policy
 - Team code-review or sign-off requirements
 - Any CI gate beyond the catalog quality probes
 
-## Installation as a Claude Code plugin
-
-Once published to a Claude Code plugin marketplace:
-
-```
-/plugin install ax-transform@<marketplace-name>
-```
-
-Local install (during development):
-
-```
-/plugin marketplace add /path/to/ax-template
-/plugin install ax-transform@<your-marketplace>
-```
-
-Plugin manifest: [`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json). Skill entry point: [`skills/ax-transform/SKILL.md`](./skills/ax-transform/SKILL.md).
-
-## Use the repo as a project starter
-
-Clone, then run the verification suite:
-
-```bash
-git clone https://github.com/ai-dev-methodologies/ax-template my-project
-cd my-project
-git submodule update --init  # fetches portability fixtures (petclinic, realworld, modulith)
-
-cd backend && ./gradlew test          # full regression: testAsvs + testCrud + testPractices
-```
-
-## Repo layout
-
-```
-ax-template/
-├── .claude-plugin/plugin.json    # Claude Code plugin manifest
-├── skills/
-│   └── ax-transform/
-│       └── SKILL.md              # /ax-transform skill entry point (frontmatter)
-├── CLAUDE.md                     # Project identity + methodology (top-level AI guidance)
-├── METHODOLOGY.md                # 5-step blueprint playbook for new domains
-├── specs/                        # Compliance specs (auth-asvs-l1, crud-l0, spring-practices-l0)
-├── contracts/                    # OpenAPI contracts
-├── blueprints/                   # Policy manifests (JWT / session / rate limit / CORS)
-├── practices/                    # Catalog: 64 rules / 21 categories / 4 hard gates / evidence trail
-│   ├── rules/                    # The 64 rule.md files
-│   ├── upstream/                 # Fetched external snapshots (gitignored, regen via fetch.sh)
-│   ├── evals/                    # spec_ref / substance / time_decay / evidence guards + advisory probes
-│   ├── AGENTS.md                 # AI agent entry point (sha sentinel)
-│   ├── SKILL.md                  # practices subsystem skill
-│   ├── MAINTAINER.md             # Catalog maintainer guide
-│   └── DECISIONS.md              # Rule provenance trail
-├── backend/                      # Spring Boot reference workload
-├── frontend/                     # React reference workload
-├── verify/                       # Optional verification scripts (fork-받은 팀 자율)
-└── docs/archive/                 # Historical governance documents
-```
-
-## Verification commands
-
-```bash
-cd backend
-./gradlew testAsvs                # OWASP ASVS L1 (26 items, auth domain)
-./gradlew testCrud                # CRUD reference domain (7 security tests)
-./gradlew testPractices           # 64 practices rules (binary pass/fail per rule)
-./gradlew testPortability         # advisory: rules applied to spring-petclinic / realworld / modulith
-```
-
-```bash
-# Catalog hard gates (run independently of Gradle)
-bash practices/evals/spec_ref_guard.sh        # every rule must declare spec_ref
-bash practices/evals/substance_guard.sh       # rule body has Incorrect/Correct ≥2 lines, Reference URL
-bash practices/evals/time_decay_guard.sh      # cited snapshots ≤ 90 days old
-bash practices/evals/evidence_guard.sh        # evidence block points to a real snapshot or external citation
-```
-
-## Optional: install local catalog-quality hooks
-
-```bash
-bash practices/scripts/install-hooks.sh       # opt-in per clone
-```
-
-Wires `.githooks/pre-commit` (4 hard gates + AGENTS.md auto-regen + testPractices when backend touched) and `.githooks/pre-push` (full regression). The hooks only protect catalog quality; they do not impose any git-workflow policy.
+The hard gates protect the rules from rotting; they don't impose how your
+team works together.
 
 ## License
 
-MIT — see plugin.json.
+MIT — see [`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json).
 
-## Related documents
+## Related
 
 - [`CLAUDE.md`](./CLAUDE.md) — top-level project identity for AI agents
 - [`METHODOLOGY.md`](./METHODOLOGY.md) — 5-step blueprint for adding new domains
 - [`skills/ax-transform/SKILL.md`](./skills/ax-transform/SKILL.md) — skill entry point
-- [`practices/MAINTAINER.md`](./practices/MAINTAINER.md) — catalog maintainer guide
-- [`practices/DECISIONS.md`](./practices/DECISIONS.md) — rule provenance trail
+- [`practices/MAINTAINER.md`](./practices/MAINTAINER.md) — Java catalog maintainer guide
+- [`practices/DECISIONS.md`](./practices/DECISIONS.md) — Java rule provenance trail
+- [`practices-react/SKILL.md`](./practices-react/SKILL.md) — React subsystem skill
+- [`practices-react/pilot/round-3-empirical-validation.md`](./practices-react/pilot/round-3-empirical-validation.md) — `react-async-parallel` 19-repo measurement
