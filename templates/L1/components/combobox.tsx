@@ -1,0 +1,189 @@
+/*
+---
+template_id: L1/components/combobox
+layer: L1
+provenance_class: external_canonical
+evidence:
+  - source_type: upstream_id
+    upstream_id: shadcn-ui-2026-05
+    section: combobox
+    quote: "Autocomplete input and command palette with Radix UI and cmdk."
+  - source_type: upstream_id
+    upstream_id: wcag-2-2
+    section: 4.1.2-name-role-value
+    quote: "For all user interface components, the name and role can be programmatically determined."
+a11y_criteria:
+  - "WCAG 2.2 SC 4.1.2 — role='combobox' aria-expanded aria-controls via cmdk"
+  - "WCAG 2.2 SC 2.1.1 — keyboard navigable: ArrowDown/Up to navigate, Enter to select, Escape to close"
+  - "Korean IME: onChange MUST NOT fire during compositionstart→compositionupdate; fires once after compositionend"
+ime_compliance:
+  - "onCompositionStart sets isComposing=true; suppresses filter updates during composition"
+  - "onCompositionEnd sets isComposing=false; triggers filter with composed value"
+  - "DO NOT debounce onChange during active composition"
+dependencies: ["cmdk", "@radix-ui/react-popover"]
+drift_snapshot_ref: "practices-react/upstream/shadcn-registry-2026-05.snapshot.md#combobox"
+---
+*/
+import * as React from 'react'
+import { Check, ChevronsUpDown } from 'lucide-react'
+import { cn } from '../lib/utils'
+import { Button } from './button'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from './command'
+import { Popover, PopoverContent, PopoverTrigger } from './popover'
+
+export interface ComboboxOption {
+  value: string
+  label: string
+}
+
+export interface ComboboxProps {
+  /** Options to display in the dropdown */
+  options: ComboboxOption[]
+  /** Currently selected value */
+  value?: string
+  /** Called when the selection changes */
+  onValueChange?: (value: string) => void
+  /** Placeholder text shown when no value selected */
+  placeholder?: string
+  /** Placeholder text inside the search input */
+  searchPlaceholder?: string
+  /** Text shown when no options match the search */
+  emptyText?: string
+  /** Disables the combobox */
+  disabled?: boolean
+  /** Additional className for the trigger button */
+  className?: string
+  /** data-testid forwarded to the internal input (for IME testing) */
+  inputTestId?: string
+}
+
+/**
+ * Combobox — searchable select with Korean IME composition support.
+ *
+ * IME compliance rule:
+ *   During Korean (or any CJK) composition, the cmdk Command component's
+ *   built-in search is suppressed until compositionEnd. This prevents
+ *   partial jamo characters from triggering premature filter updates.
+ *
+ * SP21 rule anchor: combobox-respects-hangul-ime-composition
+ */
+export function Combobox({
+  options,
+  value,
+  onValueChange,
+  placeholder = '선택하세요…',
+  searchPlaceholder = '검색…',
+  emptyText = '결과 없음',
+  disabled = false,
+  className,
+  inputTestId,
+}: ComboboxProps) {
+  const [open, setOpen] = React.useState(false)
+  const [inputValue, setInputValue] = React.useState('')
+  const isComposingRef = React.useRef(false)
+
+  const selectedOption = options.find((opt) => opt.value === value)
+
+  // Filter options — skip filtering during active IME composition
+  // to avoid partial jamo triggering premature search results.
+  const filteredOptions = React.useMemo(() => {
+    if (!inputValue || isComposingRef.current) return options
+    const lower = inputValue.toLowerCase()
+    return options.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(lower) ||
+        opt.value.toLowerCase().includes(lower)
+    )
+  }, [options, inputValue])
+
+  const handleInputChange = React.useCallback(
+    (search: string) => {
+      // During IME composition, update the displayed text but do not
+      // trigger parent onChange — the composed value isn't final yet.
+      setInputValue(search)
+    },
+    []
+  )
+
+  const handleCompositionStart = React.useCallback(() => {
+    isComposingRef.current = true
+  }, [])
+
+  const handleCompositionEnd = React.useCallback(
+    (e: React.CompositionEvent<HTMLInputElement>) => {
+      isComposingRef.current = false
+      // After composition ends, re-trigger filtering with the composed value
+      setInputValue(e.currentTarget.value)
+    },
+    []
+  )
+
+  const handleSelect = React.useCallback(
+    (selectedValue: string) => {
+      onValueChange?.(selectedValue === value ? '' : selectedValue)
+      setOpen(false)
+      setInputValue('')
+    },
+    [value, onValueChange]
+  )
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          disabled={disabled}
+          className={cn('w-full justify-between font-normal', className)}
+        >
+          <span className={cn(!selectedOption && 'text-[--color-text-placeholder]')}>
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-[--space-2] h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder={searchPlaceholder}
+            value={inputValue}
+            onValueChange={handleInputChange}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
+            data-testid={inputTestId}
+          />
+          <CommandList>
+            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandGroup>
+              {filteredOptions.map((option) => (
+                <CommandItem
+                  key={option.value}
+                  value={option.value}
+                  onSelect={handleSelect}
+                >
+                  <Check
+                    className={cn(
+                      'mr-[--space-2] h-4 w-4',
+                      value === option.value ? 'opacity-100' : 'opacity-0'
+                    )}
+                    aria-hidden="true"
+                  />
+                  {option.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
