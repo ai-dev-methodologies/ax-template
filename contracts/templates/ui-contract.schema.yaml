@@ -1,0 +1,128 @@
+# contracts/templates/ui-contract.schema.yaml
+# JSON Schema 2020-12 (YAML encoding) for contracts/<domain>-ui.yaml.
+# Generated: SP2 | ADR: TD-2026-05-17-007
+#
+# domain_mode behaviour (per trio_integrity_allowlist.yaml):
+#   full_trio:     backend_contract_ref required; every route's backend_operation_id non-null
+#                  and MUST resolve against the backend OpenAPI.
+#   frontend_only: backend_contract_ref null; every route's backend_operation_id MUST be null,
+#                  static_source_ref required non-empty, all entries resolve to >= 1 file.
+#
+# Mutual-exclusion rule (BINARY — trio_integrity_guard.sh enforces):
+#   backend_operation_id non-null AND static_source_ref non-empty → VIOLATION.
+#   backend_operation_id null AND static_source_ref empty           → VIOLATION.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://ax-template/schemas/ui-contract/v1"
+title: "UI Contract"
+description: >
+  Route-level UI contract (contracts/<domain>-ui.yaml).
+  Each route binds to a backend operationId (full_trio) or to static file
+  anchors (frontend_only). Page routes use method GET; server actions may use
+  POST/PUT/DELETE where they map to backend operations.
+type: object
+required:
+  - domain
+  - routes
+properties:
+  domain:
+    type: string
+    description: "Domain identifier matching the page compliance spec."
+    minLength: 1
+
+  backend_contract_ref:
+    type: [string, "null"]
+    description: >
+      Path to the backend OpenAPI contract (e.g., 'contracts/auth-openapi.yaml').
+      Null ONLY when the entire domain is frontend_only.
+
+  routes:
+    type: array
+    minItems: 1
+    items:
+      $ref: "#/$defs/UIRoute"
+
+$defs:
+  UIRoute:
+    type: object
+    required:
+      - path
+      - method
+      - states
+    properties:
+      path:
+        type: string
+        description: "URL path (e.g., '/login', '/practices/{ruleId}')."
+        minLength: 1
+
+      method:
+        type: string
+        enum: [GET, POST, PUT, DELETE, PATCH]
+        description: >
+          HTTP method. Page routes use GET. Server actions that call backend
+          endpoints use the method that matches the backend operationId.
+
+      backend_operation_id:
+        type: [string, "null"]
+        description: >
+          operationId from the backend OpenAPI contract (backend_contract_ref).
+          Non-null in full_trio; MUST be null in frontend_only.
+          When null, static_source_ref MUST be non-empty (binary guard).
+
+      static_source_ref:
+        type: array
+        items:
+          type: string
+        description: >
+          Array of file paths or shell globs resolving to >= 1 existing file.
+          Required non-empty when backend_operation_id is null (frontend_only).
+          FORBIDDEN (guard fails) when backend_operation_id is non-null.
+
+      params:
+        type: object
+        description: "Path parameters (key: name, value: type/description)."
+        additionalProperties: true
+
+      query:
+        type: object
+        description: "Query parameters (key: name, value: type/description)."
+        additionalProperties: true
+
+      states:
+        $ref: "#/$defs/RouteStates"
+
+      redirects:
+        $ref: "#/$defs/RouteRedirects"
+
+  RouteStates:
+    type: object
+    required:
+      - loading
+      - error
+    properties:
+      loading:
+        type: [string, "null"]
+        description: "Slot reference for loading state UI component."
+
+      error:
+        type: [string, "null"]
+        description: "Slot reference for error state UI component."
+
+      empty:
+        type: [string, "null"]
+        description: "Slot reference for empty/no-data state UI component."
+
+      success:
+        type: [string, "null"]
+        description: "Slot reference for success state UI component."
+
+  RouteRedirects:
+    type: object
+    properties:
+      on_auth_required:
+        type: [string, "null"]
+        description: "Path to redirect to when authentication is required."
+
+      on_success:
+        type: [string, "null"]
+        description: "Path to redirect to after successful action."

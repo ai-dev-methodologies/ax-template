@@ -1,0 +1,126 @@
+# specs/templates/page-compliance-spec.schema.yaml
+# JSON Schema 2020-12 (YAML encoding) for specs/<domain>-frontend-l0.yaml.
+# Generated: SP2 | ADR: TD-2026-05-17-007
+#
+# domain_mode behaviour (per trio_integrity_allowlist.yaml):
+#   full_trio:     backend_operation_id non-null, static_source_ref FORBIDDEN.
+#   frontend_only: backend_operation_id MUST be null, static_source_ref required non-empty.
+#   backend_only:  frontend spec not required (guard skips).
+#
+# Mutual-exclusion rule (BINARY — trio_integrity_guard.sh enforces):
+#   backend_operation_id non-null AND static_source_ref non-empty → VIOLATION.
+#   backend_operation_id null AND static_source_ref empty           → VIOLATION.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://ax-template/schemas/page-compliance-spec/v1"
+title: "Page Compliance Spec"
+description: >
+  Frontend page compliance spec (specs/<domain>-frontend-l0.yaml).
+  Each item declares a UI verification requirement tied to either a backend
+  operationId (full_trio) or a static file anchor (frontend_only).
+type: object
+required:
+  - domain
+  - domain_mode
+  - items
+properties:
+  domain:
+    type: string
+    description: "Domain identifier (e.g., 'auth', 'crud', 'practices')."
+    minLength: 1
+
+  domain_mode:
+    type: string
+    enum: [full_trio, backend_only, frontend_only]
+    description: "Must match the domain's entry in trio_integrity_allowlist.yaml."
+
+  backend_spec_ref:
+    type: [string, "null"]
+    description: >
+      Path to the backend compliance spec (e.g., 'specs/auth-asvs-l1.yaml').
+      Null is allowed ONLY when domain_mode is 'frontend_only'.
+
+  frontend_required:
+    type: boolean
+    description: "Marker. Must be true for full_trio and frontend_only domains."
+
+  items:
+    type: array
+    minItems: 1
+    items:
+      $ref: "#/$defs/ComplianceItem"
+
+$defs:
+  ComplianceItem:
+    type: object
+    required:
+      - id
+      - requirement
+      - test_method
+      - verification_type
+      - policy_ref
+      - coverage_threshold
+      - backend_only_marker
+    properties:
+      id:
+        type: string
+        pattern: "^[A-Z][A-Z0-9_]*-FE-[0-9]{3}$"
+        description: "Format: <DOMAIN>-FE-<NNN>. Playwright test name must match test_method."
+
+      requirement:
+        type: string
+        minLength: 20
+        description: "Human-readable requirement. Must be at least 20 characters."
+
+      backend_operation_id:
+        type: [string, "null"]
+        description: >
+          operationId from the backend OpenAPI contract.
+          Non-null in full_trio mode; MUST be null in frontend_only mode.
+          When null, static_source_ref MUST be non-empty (binary guard).
+
+      backend_spec_ref:
+        type: [string, "null"]
+        description: >
+          ID of a backend compliance spec item (e.g., 'ASVS-V2.1.1').
+          Required in full_trio; null allowed in frontend_only.
+
+      static_source_ref:
+        type: array
+        items:
+          type: string
+        description: >
+          Array of file paths or shell globs resolving to >= 1 existing file.
+          Required non-empty when backend_operation_id is null (frontend_only).
+          FORBIDDEN (guard fails) when backend_operation_id is non-null.
+
+      test_method:
+        type: string
+        minLength: 1
+        description: >
+          Name or path of the Playwright / Vitest test that exercises this item.
+          Must correspond to an actual test file in frontend/tests/.
+
+      verification_type:
+        type: string
+        enum: [e2e_test, unit_test, a11y_test, cwv_test]
+        description: "Test classification used by the verification loop."
+
+      policy_ref:
+        type: string
+        minLength: 1
+        description: >
+          Pointer into the UI Policy Manifest.
+          Format: 'blueprints/<domain>-ui-manifest.yaml#<section>'.
+
+      coverage_threshold:
+        type: number
+        minimum: 0.0
+        maximum: 1.0
+        description: "Required coverage ratio (0.0–1.0) evaluated by trio_integrity_guard.sh."
+
+      backend_only_marker:
+        type: boolean
+        description: >
+          When true, item is exempt from cross-trio coverage checks.
+          Use sparingly; must be justified in requirement text.

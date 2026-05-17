@@ -1,0 +1,176 @@
+# blueprints/templates/ui-manifest.schema.yaml
+# JSON Schema 2020-12 (YAML encoding) for blueprints/<domain>-ui-manifest.yaml.
+# Generated: SP2 | ADR: TD-2026-05-17-010
+#
+# All threshold values are validated by trio_integrity_guard.sh at merge time.
+# Thresholds below the minimums cause a VIOLATION (binary, no soft mode):
+#   a11y.contrast_min  < 4.5   → VIOLATION (WCAG 2.2 SC 1.4.3 minimum)
+#   cwv.lcp_ms         > 2500  → VIOLATION
+#   cwv.inp_ms         > 200   → VIOLATION
+#   cwv.cls            > 0.1   → VIOLATION
+#   motion.respect_prefers_reduced_motion != true → VIOLATION
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://ax-template/schemas/ui-manifest/v1"
+title: "UI Policy Manifest"
+description: >
+  UI policy manifest (blueprints/<domain>-ui-manifest.yaml).
+  Declares design tokens, accessibility thresholds, Core Web Vitals budgets,
+  motion policy, and bundle size budgets.
+type: object
+required:
+  - domain
+  - a11y
+  - cwv
+  - motion
+properties:
+  domain:
+    type: string
+    description: "Domain identifier matching the page compliance spec."
+    minLength: 1
+
+  tokens_override:
+    type: object
+    description: >
+      Optional design-token overrides for this domain. Keys follow the CSS
+      custom-property naming convention (e.g., color_primary, spacing_section).
+      Full token definitions live in the global design system (L1/L2).
+    properties:
+      color:
+        type: object
+        description: "Color token overrides (key: token-name, value: CSS value)."
+        additionalProperties:
+          type: string
+      typography:
+        type: object
+        description: "Typography token overrides."
+        additionalProperties:
+          type: string
+      spacing:
+        type: object
+        description: "Spacing token overrides."
+        additionalProperties:
+          type: string
+      motion:
+        type: object
+        description: "Motion token overrides (duration, easing)."
+        additionalProperties:
+          type: string
+      radius:
+        type: object
+        description: "Border-radius token overrides."
+        additionalProperties:
+          type: string
+      shadow:
+        type: object
+        description: "Shadow token overrides."
+        additionalProperties:
+          type: string
+      z_index:
+        type: object
+        description: "Z-index token overrides."
+        additionalProperties:
+          type: [string, integer]
+    additionalProperties: false
+
+  a11y:
+    type: object
+    required:
+      - axe_rules
+      - contrast_min
+    description: >
+      Accessibility thresholds. WCAG 2.2 AA (contrast_min: 4.5) is the default.
+      Values below the minimum fail the guard.
+    properties:
+      wcag_level:
+        type: string
+        enum: [2.1-A, 2.1-AA, 2.1-AAA, 2.2-A, 2.2-AA, 2.2-AAA]
+        default: "2.2-AA"
+        description: "Target WCAG conformance level. Default: WCAG 2.2 AA."
+
+      axe_rules:
+        type: array
+        minItems: 1
+        items:
+          type: string
+        description: "axe-core rule IDs to enforce (e.g., 'color-contrast', 'label')."
+
+      contrast_min:
+        type: number
+        minimum: 4.5
+        description: >
+          Minimum contrast ratio (WCAG 2.2 SC 1.4.3). Values below 4.5 fail the guard.
+          Use 7.0 for AAA compliance.
+
+  cwv:
+    type: object
+    required:
+      - lcp_ms
+      - inp_ms
+      - cls
+    description: >
+      Core Web Vitals budgets. Values exceeding the maximums fail the guard.
+    properties:
+      lcp_ms:
+        type: integer
+        maximum: 2500
+        description: >
+          Largest Contentful Paint budget in milliseconds. Must be <= 2500ms (Google 'good').
+
+      inp_ms:
+        type: integer
+        maximum: 200
+        description: >
+          Interaction to Next Paint budget in milliseconds. Must be <= 200ms (Google 'good').
+
+      cls:
+        type: number
+        maximum: 0.1
+        description: >
+          Cumulative Layout Shift budget. Must be <= 0.1 (Google 'good').
+
+      fcp_ms:
+        type: integer
+        description: "First Contentful Paint budget in milliseconds (advisory, not hard gate)."
+
+      tbt_ms:
+        type: integer
+        description: "Total Blocking Time budget in milliseconds (advisory, not hard gate)."
+
+  motion:
+    type: object
+    required:
+      - respect_prefers_reduced_motion
+    description: "Motion policy. respect_prefers_reduced_motion: true is required."
+    properties:
+      respect_prefers_reduced_motion:
+        type: boolean
+        const: true
+        description: >
+          MUST be true. The UI MUST honour prefers-reduced-motion via CSS media query
+          or JS detection. false or absent fails the guard.
+
+      default_duration_ms:
+        type: integer
+        minimum: 0
+        description: "Default animation duration in milliseconds for non-reduced-motion context."
+
+  bundle_budgets:
+    type: object
+    description: >
+      Optional bundle size budgets (gzipped). Keys are page-type identifiers.
+      Advisory only — not enforced by trio_integrity_guard.sh unless guard is extended.
+    properties:
+      landing_page_js_kb:
+        type: integer
+        description: "Max gzipped JS for landing pages (kb). Recommended <= 150."
+      app_page_js_kb:
+        type: integer
+        description: "Max gzipped JS for app pages (kb). Recommended <= 300."
+      landing_page_css_kb:
+        type: integer
+        description: "Max gzipped CSS for landing pages (kb). Recommended <= 30."
+      app_page_css_kb:
+        type: integer
+        description: "Max gzipped CSS for app pages (kb). Recommended <= 50."
+    additionalProperties: false
