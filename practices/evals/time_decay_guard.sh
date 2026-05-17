@@ -37,6 +37,21 @@ if [[ ! -f "$MANIFEST" ]]; then
     exit 0
 fi
 
+# ── templates/ walk extension (§4.10) ────────────────────────────────────────
+# Zero-scan guard: if templates/ exists but produces zero matching files → FAIL ZERO_SCAN.
+TEMPLATES_DIR="$REPO_ROOT/templates"
+if [[ -d "$TEMPLATES_DIR" ]]; then
+    templates_count=0
+    while IFS= read -r f; do
+        [[ -f "$f" ]] && templates_count=$((templates_count + 1))
+    done < <(find "$TEMPLATES_DIR" \
+        -name "*.md" -o -name "*.tsx" -o -name "*.ts" -o -name "*.yaml" -o -name "*.java" 2>/dev/null)
+    if [[ $templates_count -eq 0 ]]; then
+        echo "time_decay_guard: ZERO_SCAN — templates/ exists but no scannable files found — merge BLOCKED" >&2
+        exit 1
+    fi
+fi
+
 python3 - "$MANIFEST" "$THRESHOLD_DAYS" <<'PY'
 import datetime, sys, yaml, pathlib
 

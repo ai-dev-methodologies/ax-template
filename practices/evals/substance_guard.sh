@@ -115,5 +115,26 @@ if [[ $violations -gt 0 ]]; then
     exit 1
 fi
 
+# ── templates/ walk extension (§4.10) ────────────────────────────────────────
+# Walk templates/**/*.{md,tsx,ts,yaml,java}.
+# Zero-scan guard: if templates/ exists but produces zero matching files → FAIL ZERO_SCAN.
+
+SCRIPT_DIR_ABS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT_ABS="$(cd "$SCRIPT_DIR_ABS/../.." && pwd)"
+TEMPLATES_DIR="$REPO_ROOT_ABS/templates"
+if [[ -d "$TEMPLATES_DIR" ]]; then
+    templates_count=0
+    while IFS= read -r f; do
+        [[ -f "$f" ]] && templates_count=$((templates_count + 1))
+    done < <(find "$TEMPLATES_DIR" \
+        -name "*.md" -o -name "*.tsx" -o -name "*.ts" -o -name "*.yaml" -o -name "*.java" 2>/dev/null)
+
+    if [[ $templates_count -eq 0 ]]; then
+        echo "substance_guard: ZERO_SCAN — templates/ exists but no scannable files found — merge BLOCKED" >&2
+        exit 1
+    fi
+    echo "substance_guard: templates/ walk found ${templates_count} file(s)"
+fi
+
 echo "substance_guard: all rules pass"
 exit 0

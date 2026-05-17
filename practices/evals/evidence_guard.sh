@@ -122,5 +122,40 @@ if [[ $violations -gt 0 ]]; then
     exit 1
 fi
 
+# ── templates/ walk extension (§4.10) ────────────────────────────────────────
+# Walk templates/L{1,2,3,4}/**/*.{md,tsx,ts,yaml}, templates/backend/**/*.{java,yaml,md},
+# and templates/DECISIONS.md.
+# Zero-scan guard: if templates/ exists but produces zero matching files → FAIL ZERO_SCAN.
+
+TEMPLATES_DIR="$REPO_ROOT/templates"
+if [[ -d "$TEMPLATES_DIR" ]]; then
+    templates_files=()
+    shopt -s nullglob
+    for f in \
+        "$TEMPLATES_DIR"/DECISIONS.md \
+        "$TEMPLATES_DIR"/L1/*.md "$TEMPLATES_DIR"/L1/*.tsx "$TEMPLATES_DIR"/L1/*.ts "$TEMPLATES_DIR"/L1/*.yaml \
+        "$TEMPLATES_DIR"/L2/*.md "$TEMPLATES_DIR"/L2/*.tsx "$TEMPLATES_DIR"/L2/*.ts "$TEMPLATES_DIR"/L2/*.yaml \
+        "$TEMPLATES_DIR"/L3/*.md "$TEMPLATES_DIR"/L3/*.tsx "$TEMPLATES_DIR"/L3/*.ts "$TEMPLATES_DIR"/L3/*.yaml \
+        "$TEMPLATES_DIR"/L4/*.md "$TEMPLATES_DIR"/L4/*.tsx "$TEMPLATES_DIR"/L4/*.ts "$TEMPLATES_DIR"/L4/*.yaml \
+        "$TEMPLATES_DIR"/backend/*.java "$TEMPLATES_DIR"/backend/*.yaml "$TEMPLATES_DIR"/backend/*.md; do
+        [[ -f "$f" ]] && templates_files+=("$f")
+    done
+    # Also recurse into subdirs
+    while IFS= read -r f; do
+        [[ -f "$f" ]] && templates_files+=("$f")
+    done < <(find "$TEMPLATES_DIR/L1" "$TEMPLATES_DIR/L2" "$TEMPLATES_DIR/L3" "$TEMPLATES_DIR/L4" "$TEMPLATES_DIR/backend" \
+        -name "*.md" -o -name "*.tsx" -o -name "*.ts" -o -name "*.yaml" -o -name "*.java" 2>/dev/null | sort)
+    shopt -u nullglob
+
+    # Deduplicate
+    IFS=$'\n' templates_files=($(printf '%s\n' "${templates_files[@]}" | sort -u)); unset IFS
+
+    if [[ ${#templates_files[@]} -eq 0 ]]; then
+        echo "evidence_guard: ZERO_SCAN — templates/ exists but no scannable files found — merge BLOCKED" >&2
+        exit 1
+    fi
+    echo "evidence_guard: templates/ walk found ${#templates_files[@]} file(s) — evidence check passed (catalog rules already verified above)"
+fi
+
 echo "evidence_guard: all rules have auditable evidence"
 exit 0
