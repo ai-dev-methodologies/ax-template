@@ -1,0 +1,287 @@
+openapi: 3.0.3
+info:
+  title: ax-template Scheduled Task Admin API
+  description: |
+    Scheduled-task domain REST contract — admin surface only.
+    All endpoints require ADMIN role (ROLE_ADMIN) in addition to valid JWT Bearer token.
+    Task scheduling and execution is managed internally; admin endpoints allow observation
+    and manual intervention only.
+  version: 0.1.0
+servers:
+  - url: /api/admin
+
+paths:
+  /scheduled-tasks:
+    get:
+      operationId: listScheduledTasks
+      summary: List all registered scheduled tasks (admin)
+      tags: [scheduled-tasks-admin]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [REGISTERED, ACTIVE, PAUSED, ALL]
+            default: ALL
+          description: Filter by task status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated list of scheduled tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /scheduled-tasks/{id}:
+    get:
+      operationId: getScheduledTask
+      summary: Get a scheduled task by ID (admin)
+      tags: [scheduled-tasks-admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Scheduled task detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /scheduled-tasks/{id}/trigger:
+    post:
+      operationId: triggerScheduledTask
+      summary: Manually trigger a task run (admin)
+      tags: [scheduled-tasks-admin]
+      description: |
+        Runs the task immediately (subject to distributed lock).
+        If the task is already locked, the trigger is a no-op and returns 200.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Trigger accepted (may be no-op if lock held)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /scheduled-tasks/{id}/history:
+    get:
+      operationId: getTaskHistory
+      summary: Get execution history for a task (admin)
+      tags: [scheduled-tasks-admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated job history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobHistoryPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  schemas:
+    ScheduledTaskSummary:
+      type: object
+      required: [id, name, cronExpression, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        cronExpression:
+          type: string
+        status:
+          type: string
+          enum: [REGISTERED, ACTIVE, PAUSED]
+        lastRunAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    ScheduledTaskDetail:
+      allOf:
+        - $ref: '#/components/schemas/ScheduledTaskSummary'
+        - type: object
+          properties:
+            lockHolder:
+              type: string
+              nullable: true
+              description: Node ID currently holding the lock (null if unlocked)
+            lockedAt:
+              type: string
+              format: date-time
+              nullable: true
+            updatedAt:
+              type: string
+              format: date-time
+
+    ScheduledTaskPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduledTaskSummary'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    TriggerResponse:
+      type: object
+      properties:
+        taskId:
+          type: string
+          format: uuid
+        triggered:
+          type: boolean
+          description: true if lock acquired and task started; false if lock was held
+        message:
+          type: string
+
+    JobHistorySummary:
+      type: object
+      required: [id, taskId, status, startedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+        taskName:
+          type: string
+        status:
+          type: string
+          enum: [RUNNING, SUCCESS, FAILED]
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+
+    JobHistoryPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobHistorySummary'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: Caller lacks ADMIN role
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    ProblemDetail:
+      description: RFC 7807 problem detail
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+              title:
+                type: string
+              status:
+                type: integer
+              detail:
+                type: string

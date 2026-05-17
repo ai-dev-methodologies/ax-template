@@ -1,0 +1,89 @@
+template_id: scheduled-task-blueprint
+family: scaffold
+status: draft
+confidence: high
+domain_mode: backend_only   # no frontend UI in scope for SP19; admin UI optional in future SP
+stack:
+  backend: spring-boot
+  contract: openapi
+  repo_shape: single-repo
+
+when_to_use:
+  - time-based background jobs (cleanup, digest, report generation, data sync)
+  - any domain requiring distributed cron jobs that must not run concurrently across nodes
+  - systems requiring full execution history and admin observability of job runs
+
+not_for:
+  - event-driven workflows (use message queue)
+  - real-time streaming (use WebSocket or SSE)
+  - one-off async tasks (use @Async or CompletableFuture)
+
+# ─── authz ────────────────────────────────────────────────────────────────────
+authz:
+  all_admin_endpoints_require_admin_role: true
+  unauthenticated_response: 401
+  non_admin_response: 403
+  no_end_user_endpoints: true
+  trace:
+    SCHED-ADMIN: admin role required for all /api/admin/scheduled-tasks/* endpoints
+
+# ─── register ─────────────────────────────────────────────────────────────────
+register:
+  method: ScheduledTaskService.register(name, cronExpression)
+  stored_fields: [name, cronExpression, status=REGISTERED, createdAt, updatedAt]
+  cron_validation: advisory   # log WARN on invalid cron; do not block registration
+  trace:
+    SCHED-REGISTER-001: persist task with status=REGISTERED
+
+# ─── distributed lock ─────────────────────────────────────────────────────────
+lock:
+  strategy: db-row-lock   # pessimistic SELECT FOR UPDATE SKIP LOCKED on task_locks table
+  lock_ttl_seconds: 300   # stale locks (crashed node) expire after 5 minutes
+  lock_ttl_config: "${ax.scheduler.lock-ttl-seconds:300}"
+  behavior_on_held: skip   # do not queue or retry; next cron cycle will attempt
+  lock_holder_id: "${spring.application.instance-id:${random.uuid}}"
+  trace:
+    SCHED-LOCK-001: tryAcquire false → skip execution
+    SCHED-LOCK-002: stale lock (TTL expired) → allow re-acquisition
+
+# ─── execute ──────────────────────────────────────────────────────────────────
+execute:
+  scheduler_loop: "@Scheduled(fixedDelay=60_000)"   # poll every 60s for due tasks
+  max_concurrent_jobs: 1   # per task name; enforced by distributed lock
+  executor_interface: TaskExecutor
+  default_impl: DefaultTaskExecutor   # dispatch table of Runnable/Consumer by task name
+  history_retention_days: 90   # prune JobHistory older than 90 days (cron job)
+  trace:
+    SCHED-EXECUTE-001: every run recorded in JobHistory (SUCCESS or FAILED)
+
+# ─── idempotency ──────────────────────────────────────────────────────────────
+idempotency:
+  manual_trigger_safe: true   # triggerManual() uses same lock → concurrent calls idempotent
+  lock_guards_duplicates: true
+  trace:
+    SCHED-IDEMPOTENT-001: concurrent triggerManual → exactly one execution
+
+# ─── admin api ────────────────────────────────────────────────────────────────
+admin_api:
+  base_path: /api/admin/scheduled-tasks
+  endpoints:
+    - GET /                # list all tasks
+    - GET /{id}            # single task detail
+    - POST /{id}/trigger   # manual trigger (no-op if locked)
+    - GET /{id}/history    # paginated execution history
+  access_control: ROLE_ADMIN
+
+# ─── observability ────────────────────────────────────────────────────────────
+observability:
+  log_execution_start: "INFO with taskId, taskName"
+  log_execution_success: "INFO with taskId, durationMs"
+  log_execution_failure: "ERROR with taskId, exception message"
+  log_lock_skip: "DEBUG with taskId (lock already held)"
+  log_stale_lock_reclaim: "WARN with taskId, previous holder"
+  metrics_hint: "Counter: scheduler.task.success, scheduler.task.failure; Gauge: scheduler.lock.active"
+  history_table: job_history   # full audit trail per run
+
+# ─── retention ────────────────────────────────────────────────────────────────
+retention:
+  job_history_days: 90
+  prune_via: "scheduled cleanup task (meta: self-use of this domain)"

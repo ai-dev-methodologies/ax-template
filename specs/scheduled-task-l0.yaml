@@ -1,0 +1,75 @@
+version: "1.0.0"
+scope: "scheduled-task-domain"
+stack: "Spring Boot 3.2.x + JPA + @Scheduled + DB-row distributed lock"
+standard: "RFC 7807 + OWASP ASVS V4 + 12-Factor App (Factor XI: Logs)"
+items:
+  # ─── REGISTER family (1 item) ──────────────────────────────────────────────
+  - id: "SCHED-REGISTER-001"
+    chapter: "REGISTER"
+    requirement: "ScheduledTaskService.register() persists a new ScheduledTask with a name, cron expression, and status REGISTERED; the task is returned with a generated UUID."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: call register("cleanup-expired-tokens", "0 0 2 * * ?") →
+      assert saved ScheduledTask has status=REGISTERED, id != null.
+      Implementation: ScheduledTask.create(name, cronExpression) factory + repository.save().
+      The cron expression is stored as-is; validation is advisory (log WARN on parse failure).
+    policy_ref: "blueprints/scheduled-task-manifest.yaml#register"
+
+  # ─── LOCK family (2 items) ─────────────────────────────────────────────────
+  - id: "SCHED-LOCK-001"
+    chapter: "LOCK"
+    requirement: "executeWithLock() acquires a distributed lock before running a task; if the lock is already held by another node, the execution is skipped for this cycle."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): LockingPolicy.tryAcquire() returns true → taskExecutor.execute() called once.
+      Test (negative): LockingPolicy.tryAcquire() returns false → taskExecutor.execute() never called.
+      Implementation: LockingPolicy.tryAcquire(taskId, lockHolder) uses a DB row with SELECT FOR UPDATE SKIP LOCKED
+      (or equivalent); returns false if lock is held. Lock is released in finally block.
+      This prevents duplicate execution in multi-node deployments (SCHED-LOCK-001).
+    policy_ref: "blueprints/scheduled-task-manifest.yaml#lock"
+
+  - id: "SCHED-LOCK-002"
+    chapter: "LOCK"
+    requirement: "The distributed lock has a TTL; stale locks (held by crashed nodes) are expired after lock_ttl_seconds and re-acquirable by healthy nodes."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: seed a lock row with lockedAt > lock_ttl_seconds ago. Call LockingPolicy.tryAcquire() → returns true.
+      Assert the stale lock row is updated with the new holder.
+      Implementation: LockingPolicy checks lockedAt + TTL < now() → stale lock → allow acquisition.
+      Default TTL: 300 seconds (configurable via ${ax.scheduler.lock-ttl-seconds:300}).
+    policy_ref: "blueprints/scheduled-task-manifest.yaml#lock"
+
+  # ─── EXECUTE family (1 item) ───────────────────────────────────────────────
+  - id: "SCHED-EXECUTE-001"
+    chapter: "EXECUTE"
+    requirement: "Every task execution (success or failure) is recorded in JobHistory with start time, end time, status (SUCCESS or FAILED), and any exception message."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (success): taskExecutor.execute() succeeds → JobHistory with status=SUCCESS, endTime != null.
+      Test (failure): taskExecutor.execute() throws → JobHistory with status=FAILED, errorMessage = exception message.
+      Implementation: JobHistory.start(taskId, name) before executor call.
+      history.markSuccess() or history.markFailure(msg) in finally block regardless of outcome.
+      lastRun on ScheduledTask is updated after successful execution only.
+    policy_ref: "blueprints/scheduled-task-manifest.yaml#execute"
+
+  # ─── IDEMPOTENCY family (1 item) ───────────────────────────────────────────
+  - id: "SCHED-IDEMPOTENT-001"
+    chapter: "IDEMPOTENCY"
+    requirement: "Manual admin trigger (triggerManual) is safe to call multiple times; the distributed lock prevents concurrent execution even when triggered simultaneously from multiple admin sessions."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: two concurrent triggerManual() calls for the same taskId.
+      Assert taskExecutor.execute() called exactly once (one acquires lock, other is skipped).
+      Implementation: triggerManual() calls executeWithLock() which uses LockingPolicy.tryAcquire().
+      The atomic DB operation guarantees only one caller succeeds per lock TTL window.
+    policy_ref: "blueprints/scheduled-task-manifest.yaml#idempotency"
