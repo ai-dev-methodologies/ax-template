@@ -45,7 +45,7 @@
       "title": "P0.9 — verify/cold-start-test.sh script",
       "priority": 3,
       "passes": true,
-      "completed_commit": "TBD-US-003",
+      "completed_commit": "bbfbbca",
       "acceptanceCriteria": [
         "File verify/cold-start-test.sh exists, executable",
         "Script takes one positional argument: blueprint name. Validates non-empty.",

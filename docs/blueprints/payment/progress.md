@@ -22,4 +22,4 @@ Append one entry per phase start/complete. Timestamps in UTC.
 - **P0.7 started**: `verify/blueprint-completeness.sh` script.
 - **P0.7 complete**: `verify/blueprint-completeness.sh` (generic blueprint checker) + `docs/blueprints/payment/blueprint-manifest.txt` (14 payment artifacts + CMD gates). Smoke tests: nonexistent→exit 2 ✓, empty→exit 2 ✓, no-arg→exit 2 ✓, payment FILE checks fire ✓. | commit: `1228b8f`
 
-- **P0.9 complete**: `verify/cold-start-test.sh` (cold-start readiness checker — 8-file minimum set for payment, next-phase anchor parsing). Smoke tests: no-arg→exit 2 ✓, empty→exit 2 ✓, nonexistent→exit 1 ✓, payment-today→exit 1 (3/8 missing, as expected pre-P1) ✓. | commit: TBD-US-003
+- **P0.9 complete**: `verify/cold-start-test.sh` (cold-start readiness checker — 8-file minimum set for payment, next-phase anchor parsing). Smoke tests: no-arg→exit 2 ✓, empty→exit 2 ✓, nonexistent→exit 1 ✓, payment-today→exit 1 (3/8 missing, as expected pre-P1) ✓. | commit: `bbfbbca`
