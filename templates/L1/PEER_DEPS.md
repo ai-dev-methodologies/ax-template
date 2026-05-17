@@ -1,6 +1,9 @@
 # L1 Peer Dependencies
 
-When you fork ax-template and copy `templates/L1/` into your project, install these pinned Radix UI packages plus supporting libraries.
+When you fork ax-template and copy `templates/L1/` into your project, install these packages.
+
+Updated SP14: +5 packages for 7 P0 primitives (combobox, date-picker, calendar,
+date-range-picker, file-dropzone, otp-input, address-search).
 
 ## Install Command
 
@@ -30,11 +33,27 @@ npm install \
   class-variance-authority@^0.7.0 \
   clsx@^2.1.0 \
   cmdk@^1.0.0 \
+  date-fns@^3.0.0 \
+  input-otp@^1.2.0 \
+  lucide-react@^0.400.0 \
+  react-day-picker@^9.0.0 \
+  react-dropzone@^14.0.0 \
   react-hook-form@^7.53.0 \
   react-resizable-panels@^2.1.0 \
   sonner@^1.7.0 \
   tailwind-merge@^2.3.0
 ```
+
+## For `_stories/` (Playwright test templates)
+
+If you copy `_stories/` to your project's test directory, also install:
+
+```bash
+npm install --save-dev @playwright/test
+```
+
+`_stories/` contains template Playwright specs that are excluded from the component
+library's TypeScript compilation. They require a running dev server on `localhost:3000`.
 
 ## Package Table
 
@@ -64,6 +83,11 @@ npm install \
 | `class-variance-authority` | `^0.7.0` | Button, Badge, Alert, Sheet |
 | `clsx` | `^2.1.0` | cn() utility |
 | `cmdk` | `^1.0.0` | Command |
+| `date-fns` | `^3.0.0` | DatePicker, DateRangePicker |
+| `input-otp` | `^1.2.0` | OtpInput |
+| `lucide-react` | `^0.400.0` | All SP14 components (icons) |
+| `react-day-picker` | `^9.0.0` | Calendar, DatePicker, DateRangePicker |
+| `react-dropzone` | `^14.0.0` | FileDropzone |
 | `react-hook-form` | `^7.53.0` | Form |
 | `react-resizable-panels` | `^2.1.0` | Resizable |
 | `sonner` | `^1.7.0` | Toaster |

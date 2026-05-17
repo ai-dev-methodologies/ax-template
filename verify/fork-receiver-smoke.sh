@@ -101,8 +101,13 @@ cat > "$SMOKE_DIR/package.json" << 'PKGJSON'
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "cmdk": "^1.0.0",
+    "date-fns": "^3.0.0",
+    "input-otp": "^1.2.0",
+    "lucide-react": "^0.400.0",
     "react": "^19.0.0",
+    "react-day-picker": "^9.0.0",
     "react-dom": "^19.0.0",
+    "react-dropzone": "^14.0.0",
     "react-hook-form": "^7.53.0",
     "react-resizable-panels": "^2.1.0",
     "sonner": "^1.7.0",
@@ -134,7 +139,8 @@ cat > "$SMOKE_DIR/tsconfig.json" << 'TSCJSON'
     "isolatedModules": true,
     "jsx": "react-jsx"
   },
-  "include": ["L1/**/*.ts", "L1/**/*.tsx"]
+  "include": ["L1/**/*.ts", "L1/**/*.tsx"],
+  "exclude": ["L1/_stories/**"]
 }
 TSCJSON
 

@@ -1,4 +1,4 @@
-// L1 component barrel — 32 shadcn/ui frozen wrappers
+// L1 component barrel — 39 components (32 shadcn/ui + 7 SP14 P0 primitives)
 // Fork receivers: copy this directory and run `npm install` with PEER_DEPS.md
 
 // Form primitives (10)
@@ -42,6 +42,15 @@ export * from './components/sonner'
 export * from './components/alert'
 export * from './components/command'
 export * from './components/dropdown-menu'
+
+// SP14 P0 Primitives (7) — combobox, date cluster, file/otp/address
+export * from './components/combobox'
+export * from './components/calendar'
+export * from './components/date-picker'
+export * from './components/date-range-picker'
+export * from './components/file-dropzone'
+export * from './components/otp-input'
+export * from './components/address-search'
 
 // Utilities
 export { cn } from './lib/utils'
