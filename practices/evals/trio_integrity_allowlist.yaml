@@ -20,5 +20,7 @@ domains:
   audit-log: full_trio      # SP17: append-only log entries, async export, VirtualizedTable for >10k rows
   notification: full_trio    # SP16: inbox/settings/detail vertical + bell + list + item L2 blocks
   file-storage: full_trio    # SP18: upload/list/download/delete + presigned URL + L4 vertical
+  email-outbox: backend_only      # SP19: transactional outbox, retry/DLQ, admin API; no frontend UI
+  scheduled-task: backend_only    # SP19: distributed-lock cron jobs, job history; no frontend UI
   # security: backend_only  # no specs/security-*.yaml yet — add when backend domain is scaffolded
   # user: backend_only      # no specs/user-*.yaml yet — add when backend domain is scaffolded
