@@ -4,10 +4,13 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Currency;
 import java.util.LinkedHashMap;
@@ -73,7 +76,7 @@ public class PaymentService {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new PaymentValidationException("Idempotency-Key header is required");
         }
-        validateAmountAndCurrency(request.getAmount(), request.getCurrency());
+        validateAmountAndCurrency(request.amount(), request.currency());
 
         UUID existingId = idempotencyStore.get(userId, idempotencyKey);
         if (existingId != null) {
@@ -94,13 +97,13 @@ public class PaymentService {
 
     private UUID performCreate(UUID userId, String idempotencyKey, CreatePaymentRequest request,
                                PaymentProvider.FailureMode failureMode, Instant overrideCapturedAt) {
-        BigDecimal scaledAmount = scale(request.getAmount(), request.getCurrency());
+        BigDecimal scaledAmount = scale(request.amount(), request.currency());
         Payment payment = new Payment();
         payment.setUserId(userId);
-        payment.setOrderId(request.getOrderId() == null ? "order-" + UUID.randomUUID() : request.getOrderId());
+        payment.setOrderId(request.orderId() == null ? "order-" + UUID.randomUUID() : request.orderId());
         payment.setAmount(scaledAmount);
-        payment.setCurrency(request.getCurrency());
-        payment.setPaymentMethodToken(request.getPaymentMethodToken());
+        payment.setCurrency(request.currency());
+        payment.setPaymentMethodToken(request.paymentMethodToken());
         payment.setIdempotencyKey(idempotencyKey);
         payment.setState(PaymentState.CREATED);
         payment.setUpdatedAt(Instant.now());
@@ -111,12 +114,12 @@ public class PaymentService {
             Map.of("orderId", saved.getOrderId(), "userId", userId.toString()));
 
         log.info("payment created paymentId={} orderId={} amount={} currency={}",
-            saved.getId(), saved.getOrderId(), scaledAmount, request.getCurrency());
+            saved.getId(), saved.getOrderId(), scaledAmount, request.currency());
 
         PaymentProvider.ProviderResponse response = provider.authorizeAndCapture(
             new PaymentProvider.AuthorizationRequest(
-                saved.getId(), userId, scaledAmount, request.getCurrency(),
-                request.getPaymentMethodToken(), idempotencyKey, failureMode));
+                saved.getId(), userId, scaledAmount, request.currency(),
+                request.paymentMethodToken(), idempotencyKey, failureMode));
 
         applyProviderOutcome(saved, response, scaledAmount, overrideCapturedAt);
         paymentRepository.save(saved);
@@ -238,7 +241,7 @@ public class PaymentService {
     }
 
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<Payment> list(UUID userId, org.springframework.data.domain.Pageable pageable) {
+    public Page<Payment> list(UUID userId, Pageable pageable) {
         return paymentRepository.findByUserId(userId, pageable);
     }
 
@@ -298,7 +301,7 @@ public class PaymentService {
         if (s == null) {
             return raw;
         }
-        return raw.setScale(s, java.math.RoundingMode.UNNECESSARY);
+        return raw.setScale(s, RoundingMode.UNNECESSARY);
     }
 
     /** Outcome of {@link #createPayment} — distinguishes 201 (created) from 200 (replay). */

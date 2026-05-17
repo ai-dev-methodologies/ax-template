@@ -81,7 +81,7 @@ public class RefundService {
 
         // 3. Sum invariant (PAYMENT-REFUND-002).
         BigDecimal capturedAmount = payment.getCapturedAmount() == null ? payment.getAmount() : payment.getCapturedAmount();
-        BigDecimal requested = request.getAmount() == null ? capturedAmount : request.getAmount();
+        BigDecimal requested = request.amount() == null ? capturedAmount : request.amount();
         BigDecimal existingSum = refundRepository.sumByPaymentId(paymentId);
         if (existingSum == null) existingSum = BigDecimal.ZERO;
         BigDecimal newSum = existingSum.add(requested);
@@ -105,7 +105,7 @@ public class RefundService {
         refund.setPaymentId(paymentId);
         refund.setAmount(requested);
         refund.setCurrency(payment.getCurrency());
-        refund.setReason(request.getReason());
+        refund.setReason(request.reason());
         refund.setIdempotencyKey(idempotencyKey);
         refund.setState(RefundState.COMPLETED);
         Refund saved = refundRepository.save(refund);

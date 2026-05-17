@@ -14,37 +14,18 @@ import java.math.BigDecimal;
  * {@link PaymentService}; we deliberately keep this DTO minimal so that scale
  * violations surface as 400 RFC 7807 ProblemDetails rather than bean-validation
  * messages (which leak field paths).
+ *
+ * <p>{@code paymentMethodToken} is an opaque tokenized payment method reference;
+ * raw PAN is never accepted (SAQ-A scope).
+ *
+ * <p>{@code mockFailureMode} allows tests to pre-set a mock failure mode in the
+ * request body (alternative to the X-Test-Provider-Mode header).
  */
-public class CreatePaymentRequest {
-
-    @NotNull
-    @JsonDeserialize(using = MoneyDeserializer.class)
-    private BigDecimal amount;
-
-    @NotBlank
-    private String currency;
-
-    @NotBlank
-    private String orderId;
-
-    /** Tokenized payment method reference; raw PAN is never accepted (SAQ-A scope). */
-    private String paymentMethodToken;
-
-    /** Allows tests to pre-set a mock failure mode in the request body (alternative to header). */
-    private String mockFailureMode;
-
-    public BigDecimal getAmount() { return amount; }
-    public void setAmount(BigDecimal amount) { this.amount = amount; }
-
-    public String getCurrency() { return currency; }
-    public void setCurrency(String currency) { this.currency = currency; }
-
-    public String getOrderId() { return orderId; }
-    public void setOrderId(String orderId) { this.orderId = orderId; }
-
-    public String getPaymentMethodToken() { return paymentMethodToken; }
-    public void setPaymentMethodToken(String paymentMethodToken) { this.paymentMethodToken = paymentMethodToken; }
-
-    public String getMockFailureMode() { return mockFailureMode; }
-    public void setMockFailureMode(String mockFailureMode) { this.mockFailureMode = mockFailureMode; }
+public record CreatePaymentRequest(
+    @NotNull @JsonDeserialize(using = MoneyDeserializer.class) BigDecimal amount,
+    @NotBlank String currency,
+    @NotBlank String orderId,
+    String paymentMethodToken,
+    String mockFailureMode
+) {
 }

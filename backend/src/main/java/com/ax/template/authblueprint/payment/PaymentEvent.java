@@ -9,6 +9,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -69,7 +70,7 @@ public class PaymentEvent {
      * Mirrors the {@code payload->>'amount'} extraction without requiring JSONB.
      */
     @Column(name = "amount_numeric", precision = 19, scale = 8, updatable = false)
-    private java.math.BigDecimal amountNumeric;
+    private BigDecimal amountNumeric;
 
     public UUID getEventId() { return eventId; }
     public void setEventId(UUID eventId) { this.eventId = eventId; }
@@ -92,6 +93,6 @@ public class PaymentEvent {
     public String getPayload() { return payload; }
     public void setPayload(String payload) { this.payload = payload; }
 
-    public java.math.BigDecimal getAmountNumeric() { return amountNumeric; }
-    public void setAmountNumeric(java.math.BigDecimal amountNumeric) { this.amountNumeric = amountNumeric; }
+    public BigDecimal getAmountNumeric() { return amountNumeric; }
+    public void setAmountNumeric(BigDecimal amountNumeric) { this.amountNumeric = amountNumeric; }
 }

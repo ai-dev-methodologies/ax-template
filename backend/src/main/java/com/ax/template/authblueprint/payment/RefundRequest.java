@@ -4,16 +4,18 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 
 import java.math.BigDecimal;
 
-public class RefundRequest {
-
-    @JsonDeserialize(using = MoneyDeserializer.class)
-    private BigDecimal amount;
-
-    private String reason;
-
-    public BigDecimal getAmount() { return amount; }
-    public void setAmount(BigDecimal amount) { this.amount = amount; }
-
-    public String getReason() { return reason; }
-    public void setReason(String reason) { this.reason = reason; }
+/**
+ * Request body for POST /api/payments/{id}/refund.
+ *
+ * <p>{@code amount} is optional — when null the full captured amount is refunded.
+ * The {@link MoneyDeserializer} rejects JSON floats (PAYMENT-MONEY-002).
+ */
+public record RefundRequest(
+    @JsonDeserialize(using = MoneyDeserializer.class) BigDecimal amount,
+    String reason
+) {
+    /** Empty refund request — refund full captured amount, no reason. */
+    public RefundRequest() {
+        this(null, null);
+    }
 }

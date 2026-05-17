@@ -1,6 +1,5 @@
 package com.ax.template.authblueprint.payment;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -57,7 +57,7 @@ public class PaymentController {
             throw new PaymentValidationException("Idempotency-Key header is required");
         }
         UUID userId = UUID.fromString(jwt.getSubject());
-        PaymentProvider.FailureMode failureMode = resolveFailureMode(failureModeHeader, request.getMockFailureMode());
+        PaymentProvider.FailureMode failureMode = resolveFailureMode(failureModeHeader, request.mockFailureMode());
         Instant overrideCapturedAt = parseInstant(capturedAtOverride);
 
         PaymentService.PaymentOutcome outcome = paymentService.createPayment(
@@ -128,6 +128,8 @@ public class PaymentController {
         }
         UUID userId = UUID.fromString(jwt.getSubject());
         RefundRequest req = request == null ? new RefundRequest() : request;
+        // RefundRequest is a record with an explicit no-arg constructor that yields
+        // (amount=null, reason=null) — semantics: "refund full captured amount".
         Refund refund = refundService.refund(id, userId, req, idempotencyKey);
         return ResponseEntity.status(HttpStatus.CREATED).body(RefundResponse.from(refund));
     }
@@ -154,9 +156,9 @@ public class PaymentController {
      * (e.g., {@code 7000} not {@code 7000.00000000}). Refund balance assertions
      * compare against the canonical form via {@code path("balance").toString()}.
      */
-    private static java.math.BigDecimal canonicalize(java.math.BigDecimal v) {
+    private static BigDecimal canonicalize(BigDecimal v) {
         if (v == null) return null;
-        java.math.BigDecimal stripped = v.stripTrailingZeros();
+        BigDecimal stripped = v.stripTrailingZeros();
         return stripped.scale() < 0 ? stripped.setScale(0) : stripped;
     }
 
