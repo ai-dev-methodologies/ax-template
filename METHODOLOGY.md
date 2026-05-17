@@ -339,3 +339,280 @@ methodology가 auth-style 도메인을 넘어 protective cross-cutting concern�
 - [ ] `./gradlew test{Domain}` 한 줄로 전체 검증 가능한가?
 - [ ] VIOLATION 테스트로 피드백 루프를 증명했는가?
 - [ ] 자동 검증만 사용하는가? (승격 절차, 검증-위한-검증 문서 없이)
+
+---
+
+## Appendix C: Standard Procedure for Adding a New Domain
+
+> The canonical 12-step playbook for adding a new domain blueprint to ax-template,
+> distilled from the Payment blueprint's empirical 23-phase execution
+> (`docs/blueprints/payment/plan.md`, P0..P11) and validated by the L4 sealed
+> sub-agent acceptance test at commit `a2d3fac`
+> (`docs/blueprints/payment/acceptance/l4-subagent-test.md` — 11/11 MUST_PASS + 6/6 SHOULD_PASS).
+
+### When to use Appendix C
+
+Use this procedure when adding a new domain blueprint (Notification, File upload, Audit log,
+Multi-tenancy, Search, Subscription, etc.) AFTER the Spec Trio methodology (Appendix A) and
+the catalog growth protocol (`practices/MAINTAINER.md`) are already in place. Appendix C is
+the **integration playbook** that wires a new domain into all existing infrastructure: spec
+trio, catalog, hard gates, verification scripts, blueprint docs, and the AGENTS.md sentinel.
+
+### Pre-requisites (must already exist before starting S1)
+
+| Pre-requisite | Verification |
+|---------------|--------------|
+| Spec Trio convention adopted (`specs/`, `contracts/`, `blueprints/`) | `ls specs/ contracts/ blueprints/` |
+| `practices/` catalog with `_template.md` + `MAINTAINER.md` + 4 hard gates | `bash practices/evals/{spec_ref,substance,time_decay,evidence}_guard.sh` exits 0 |
+| Test infrastructure (framework-native runner with tag/filter support) | At least one existing `./gradlew test{Domain}` task or `npm run test:{domain}` script |
+| `verify/blueprint-completeness.sh` and `verify/cold-start-test.sh` scripts | `ls verify/` |
+| `AGENTS.md` sentinel auto-regen | `practices/generate_agents.sh` exits 0 |
+
+---
+
+### The 12-step standard procedure
+
+Each step maps to one or more Payment phases (P0..P11) and produces a discrete artifact
+verifiable by a single command. Time estimates assume one engineer + AI assistance.
+
+| # | Step | Maps to | Artifact | Verification | Time |
+|---|------|---------|----------|--------------|------|
+| **S1** | Plan + memory entry | P0 | `docs/blueprints/<domain>/{plan,progress}.md` + `memory/<domain>_blueprint_status.md` | `test -s docs/blueprints/<domain>/plan.md` | 0.5 d |
+| **S2** | Seal L4 acceptance prompt + rubric | P0.5 + P1.3 | `docs/blueprints/<domain>/acceptance/{l4-sealed-prompt,l4-sealed-rubric}.md` | `grep -q "^## SEALED" docs/blueprints/<domain>/acceptance/l4-sealed-prompt.md` | 0.25 d |
+| **S3** | Blueprint completeness manifest | P0.7 | `docs/blueprints/<domain>/blueprint-manifest.txt` (registers every artifact + CMD gate) | `bash verify/blueprint-completeness.sh <domain>` runs (will fail until later) | 0.25 d |
+| **S4** | Cold-start file set declaration | P0.9 | Cold-start input list in `verify/cold-start-test.sh` for the new domain | `bash verify/cold-start-test.sh <domain>` runs (will fail until later) | 0.1 d |
+| **S5** | Spec Trio | P1 | `specs/<domain>-l0.yaml` + `contracts/<domain>-openapi.yaml` + `blueprints/<domain>-manifest.yaml` | `npx @apidevtools/swagger-cli validate contracts/<domain>-openapi.yaml` + YAML parse | 1 d |
+| **S6** | Domain-specific compliance scope (if any) | P1.25 | Compliance-framework mapping declared in manifest (e.g., `pci_dss`, `gdpr_scope`, `rbac_policy`) + `*_ref` field on relevant spec items | `grep -c "<framework>_ref" specs/<domain>-l0.yaml` | 0.25 d |
+| **S7** | Generalization audit | P1.5 | `docs/blueprints/<domain>/decisions.md` — proposed-rule classification (`new_generic` / `extend_existing` / `<domain>_specific` / `reject_duplicate`) | manual review + table present | 0.25 d |
+| **S8** | TDD RED | P2 | `backend/src/test/.../authblueprint/<domain>/*.java` with `@Tag("<DOMAIN>")` + `@Tag("<DOMAIN>-<FAMILY>-<NNN>")` | `cd backend && ./gradlew test<Domain>` exits NON-ZERO | 1 d |
+| **S9** | TDD GREEN — baseline | P3.0 | `backend/src/main/.../authblueprint/<domain>/*.java` minimal impl | `cd backend && ./gradlew test<Domain>` exits 0 | 1–2 d |
+| **S10** | Hardening — failure matrix + concurrency + invariants | P3.3 + P3.6 + P3.9 | Provider failure matrix tests, `@RepeatedTest` concurrency tests, domain invariant tests | `./gradlew test<Domain> --tests "*Matrix*" "*Concurrency*" "*Invariant*"` exit 0 | 1 d |
+| **S11** | REFACTOR + java-reviewer + security-reviewer | P4 + P5 | Findings recorded in `decisions.md` + `security-review.md`; CRITICAL/HIGH fixed | `./gradlew testPractices` exit 0 + supplemental grep clean | 1 d |
+| **S12** | Catalog growth + verification trifecta + L3 fork + L4 sealed + push | P6 + P7..P11 | New rules (per S7 audit) + upstream snapshots + AGENTS.md regen + `blueprint-completeness.sh <domain>` exit 0 + L3 fork sim PASS + L4 sealed sub-agent PASS | full gate suite exit 0 | 1.5–2 d |
+
+**Total**: 7.5–10 engineering days per domain (Payment empirical baseline).
+
+---
+
+### Verification primitive — framework-native test runner with domain filter
+
+The methodology requires a **single command** that returns binary pass/fail for the entire
+domain's compliance. The abstract primitive is:
+
+```
+<framework-native test runner> --filter "<DOMAIN>"  →  exit 0 = compliant, non-zero = violation
+```
+
+Two concrete recipes for the two stacks ax-template currently supports.
+
+#### Recipe A — Spring Boot (Java / Gradle)
+
+Tests carry JUnit 5 `@Tag` annotations. Gradle registers a task that filters by tag.
+
+```kotlin
+// backend/build.gradle.kts
+tasks.register<Test>("test<Domain>") {
+    useJUnitPlatform { includeTags("<DOMAIN>") }
+    description = "Run <Domain> blueprint compliance tests"
+    group = "verification"
+    shouldRunAfter("test")
+}
+```
+
+```java
+// backend/src/test/java/com/ax/template/authblueprint/<domain>/<Domain>ComplianceTest.java
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+class <Domain>ComplianceTest {
+    @LocalServerPort int port;
+    @BeforeEach void setup() { RestAssured.port = port; }
+
+    @Test
+    @Tag("<DOMAIN>")
+    @Tag("<DOMAIN>-<FAMILY>-<NNN>")
+    void <domain>_<familyLower>_<descriptor>() {
+        given().contentType(ContentType.JSON).body(...)
+        .when().post("/api/<domain>/<action>")
+        .then().statusCode(<expected>);
+    }
+}
+```
+
+**Verification**: `cd backend && ./gradlew test<Domain>` → exit 0 = GREEN.
+
+ax-template has 4 such tasks today: `testAsvs`, `testCrud`, `testRateLimit`, `testPayment`.
+The 5th domain adds `test<NewDomain>` following the same pattern.
+
+#### Recipe B — React / Next.js (Node / npm / vitest)
+
+Tests use vitest `describe` blocks named with the domain prefix; npm scripts expose a
+filtered runner. (Note: as of 2026-05-17, the React side has one practices-react ESLint
+rule blueprint and the frontend reference workload uses vitest for unit tests + Playwright
+for E2E. The recipe below is the forward-compatible shape for a React/Next.js blueprint.)
+
+```ts
+// frontend/tests/<domain>/<domain>.compliance.test.ts
+import { describe, test, expect } from 'vitest';
+
+describe('<domain>: compliance', () => {
+  test('<DOMAIN>-<FAMILY>-<NNN> <descriptor>', async () => {
+    const res = await fetch('/api/<domain>/<action>', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ... }),
+    });
+    expect(res.status).toBe(<expected>);
+  });
+});
+```
+
+```json
+// frontend/package.json
+{
+  "scripts": {
+    "test": "vitest run",
+    "test:<domain>": "vitest run --reporter=verbose -t '<domain>:'"
+  }
+}
+```
+
+**Verification**: `cd frontend && npm run test:<domain>` → exit 0 = GREEN.
+
+For ESLint-rule blueprints in `practices-react/eslint-plugin-ax/`, the equivalent primitive is
+`node --test tests/<domain>/*.test.js` filtered by file pattern instead of vitest `-t`.
+
+#### Equivalence table
+
+| Concern | Spring Boot | React/Next.js |
+|---------|-------------|---------------|
+| Test runner | JUnit 5 via Gradle | vitest via npm |
+| Domain filter | `@Tag("<DOMAIN>")` + `useJUnitPlatform { includeTags(...) }` | `describe('<domain>: ...')` + `vitest -t '<domain>:'` |
+| Single-command gate | `./gradlew test<Domain>` | `npm run test:<domain>` |
+| Pass condition | exit 0 | exit 0 |
+| Black-box HTTP | RestAssured + `RANDOM_PORT` | `fetch` against Next.js dev server or MSW |
+| Spec ID convention | `<DOMAIN>-<FAMILY>-<NNN>` | identical |
+
+The convention is **stack-agnostic**: one command, binary outcome, tag-based filter, spec ID
+matches test annotation 1:1.
+
+---
+
+### Step-by-step gates
+
+Each step has a single binary command. A new domain is "complete at step N" when the step's
+command exits 0. Steps build on each other; a failing gate blocks the next step.
+
+| Step | Single-command gate | Pass = |
+|------|---------------------|--------|
+| S1 | `test -s docs/blueprints/<domain>/plan.md && test -s docs/blueprints/<domain>/progress.md` | plan + progress non-empty |
+| S2 | `grep -q "^## SEALED" docs/blueprints/<domain>/acceptance/l4-sealed-prompt.md` | sealed marker present |
+| S3 | `test -s docs/blueprints/<domain>/blueprint-manifest.txt` | manifest registers artifacts |
+| S4 | `bash verify/cold-start-test.sh <domain>` (runs; will fail until S5) | script accepts the domain arg |
+| S5 | `npx @apidevtools/swagger-cli validate contracts/<domain>-openapi.yaml` + YAML parse on the other two | Spec Trio valid |
+| S6 | `python3 -c "import yaml; d=yaml.safe_load(open('blueprints/<domain>-manifest.yaml')); assert '<framework>_ref' in d or '<scope_key>' in d"` | compliance scope declared (skip if N/A) |
+| S7 | manual: `decisions.md` table covers every proposed rule with explicit classification | audit complete |
+| S8 | `cd backend && ./gradlew test<Domain>` exits NON-ZERO with failures (not compile errors) | RED state |
+| S9 | `cd backend && ./gradlew test<Domain>` exits 0 | GREEN state |
+| S10 | `./gradlew test<Domain> --tests "*Matrix*" "*Concurrency*" "*Invariant*"` exits 0 | hardening GREEN |
+| S11 | `./gradlew testPractices` exits 0 + `grep -rn "<forbidden-pattern>" backend/src/main/java/ \| wc -l` = 0 | no regression, no forbidden patterns |
+| S12 | `bash verify/blueprint-completeness.sh <domain>` exits 0 + L4 rubric PASS | blueprint complete + sub-agent validated |
+
+---
+
+### Composition kit hooks — where a new domain plugs in
+
+A new domain interacts with the existing catalog at these well-defined integration points.
+Do not invent new locations; reuse the established convention.
+
+| Concern | Location | Convention |
+|---------|----------|------------|
+| Compliance spec | `specs/<domain>-l0.yaml` | YAML list of items with `id` = `<DOMAIN>-<FAMILY>-<NNN>` |
+| API contract | `contracts/<domain>-openapi.yaml` | OpenAPI 3.0; validated by `swagger-cli` |
+| Policy manifest | `blueprints/<domain>-manifest.yaml` | YAML; declares thresholds, allowed values, compliance scope |
+| Tests (Spring) | `backend/src/test/java/com/ax/template/authblueprint/<domain>/` | `@Tag("<DOMAIN>")` + `@Tag("<DOMAIN>-<FAMILY>-<NNN>")` |
+| Impl (Spring) | `backend/src/main/java/com/ax/template/authblueprint/<domain>/` | Service + Controller + Repository + Entity per Java patterns |
+| Tests (React) | `frontend/tests/<domain>/` or `practices-react/eslint-plugin-ax/tests/<domain>/` | `describe('<domain>: ...')` |
+| Gradle task | `backend/build.gradle.kts` — `tasks.register<Test>("test<Domain>") { useJUnitPlatform { includeTags("<DOMAIN>") } }` | one task per domain |
+| npm script | `frontend/package.json` — `"test:<domain>": "vitest run -t '<domain>:'"` | one script per domain |
+| Rules (after S7 audit) | mostly extensions to existing generic rules; **avoid `practices/rules/<domain>-*.md` proliferation** | Only file under `<domain>-*` when audit classifies as `<domain>_specific` |
+| Upstream snapshots | `practices/upstream/<authority>.snapshot.md` + entry in `practices/upstream/_MANIFEST.yaml` | tier 1–3 per MAINTAINER.md |
+| Blueprint manifest | `docs/blueprints/<domain>/blueprint-manifest.txt` | consumed by `verify/blueprint-completeness.sh` |
+| Blueprint docs | `docs/blueprints/<domain>/{plan,progress,decisions,security-review,verification-log}.md` + `acceptance/` | five files + acceptance subdir |
+| Memory | `~/.claude/projects/<slug>/memory/<domain>_blueprint_status.md` | status anchor for cold-start recovery |
+| AGENTS.md | auto-regenerated by `practices/generate_agents.sh` after S12 catalog growth | sha256 sentinel must match |
+
+**Anti-pattern**: do NOT create a `<domain>-*` subdirectory under `practices/rules/`. The
+catalog is flat by category, not by domain. Payment empirically produced 4 net new rules,
+of which 3 went under existing generic namespaces (`api-*`, `lang-*`, `persistence-*`) and
+only 1 under `payment-*` (the genuinely currency-specific rule). See
+`docs/blueprints/payment/decisions.md` § Generalization Audit for the worked example.
+
+---
+
+### Domain-selection guidance — which stack, when, and why
+
+ax-template currently supports two reference stacks: Spring Boot (backend/) with 4 domain
+blueprints, and React/Next.js (frontend/ + practices-react/) with one ESLint-rule blueprint.
+A new domain typically lives on one stack but cross-cuts both when it has UI surface area.
+
+| Domain stack | When to use | Examples |
+|--------------|-------------|----------|
+| **Spring Boot only** | Backend-heavy, no user-facing UI surface, server-driven invariants dominate | Audit log, Reconciliation, Background jobs, Multi-tenancy |
+| **React/Next.js only** | UI/UX-heavy, no new server-side concerns, design-system pressure | Component library, Form patterns, Accessibility blueprint |
+| **Both stacks** | Domain has both server invariants AND user-facing UI; React must call new endpoints | Payment v2 with UI, Notification preferences UI, File upload with drag-drop |
+
+#### Candidate future domains
+
+| Domain | Stack | Rationale | Methodology stress test |
+|--------|-------|-----------|------------------------|
+| **Notification** (email/SMS/push) | Spring (primary), React (preferences UI optional) | Backend-heavy; idempotency reuse (`api-idempotency-key-required` from Payment), provider abstraction reuse (mock + adapter pattern) | **High** — weak external standards (no PCI-DSS-equivalent); stress-tests evidence-anchored system harder than Payment. Architect Iter 1 steelman flagged this as the canonical hard case. |
+| **File upload** (S3/local) | Spring (primary), React (drag-drop UI) | Backend + minimal frontend; security-sensitive (path traversal, virus scan, signed URLs); state machine for uploads (PENDING→UPLOADING→PROCESSING→COMPLETE→FAILED) reuses `persistence-state-machine-atomic` | **Medium** — strong external standards (OWASP file upload cheat sheet, CSP). Validates state-machine rule generalization. |
+| **Audit log** | Spring only | Cross-cuts ALL previous domains (auth/CRUD/ratelimit/payment); useful as 5th domain that consumes what previous 4 produced | **High** — exercises cross-domain composition; rules from 4 prior domains must compose without conflict. |
+| **Multi-tenancy** | Spring (primary) | Cross-cuts persistence and security; high complexity (row-level security, tenant header propagation, isolation tests) | **Very high** — touches every existing entity/repository; will surface latent assumptions across the catalog. |
+| **Search** (Elasticsearch / OpenSearch) | Spring (primary), React (UI) | Integration-heavy; demonstrates manifest provider abstraction at scale (multiple search backends); query DSL injection concerns | **Medium** — established external standards; mostly validates provider abstraction. |
+| **Subscription / billing** | Spring (primary) | Extends Payment with recurring concerns; tests whether Payment blueprint's abstractions (PaymentProvider interface, idempotency, state machine) survive recurrence | **Very high** — direct stress test of Payment's generalization. If PaymentProvider survives Subscription, AI2-3 paper exercise becomes a binary test. |
+
+**Recommended next iteration**: **Notification**. Architect Iter 1 specifically called this out as
+the case that stress-tests the evidence-anchored system harder than Payment did, because
+notification has no PCI-DSS-equivalent external standard to anchor against — the system must
+fall back to RFC 5321 (SMTP), RFC 8030 (Web Push), and vendor docs (Twilio, FCM) for evidence.
+
+---
+
+### What Appendix C does NOT do — explicit non-goals
+
+| Non-goal | Rationale |
+|----------|-----------|
+| Replace planning skills (`/ralplan`, `/plan`, planner agent) | Appendix C is the *execution* playbook; planning still belongs upstream. For non-trivial domains, run `/ralplan` for consensus approval before S1. |
+| Mandate L4 sealed sub-agent test for EVERY domain | L4 is expensive (1 day + sealed prompt design). The first 2–3 domains added after Payment should run L4 to validate catalog discoverability; later domains may skip if the catalog has stabilized. Decision is the maintainer's. |
+| Specify model tier (Opus / Sonnet / Haiku) | Model selection is per-task complexity and budget. Payment used Opus throughout for safety; routine domains may use Sonnet/Haiku for the S8–S10 implementation loop. |
+| Enforce a fixed rule count after catalog growth | The S7 generalization audit determines rule count empirically (Payment yielded 4, not a quota). Do not pad the catalog to hit a number. |
+| Define team workflow (PR review, branch policy, merge gates) | Per `CLAUDE.md`, ax-template does NOT enforce team policies on forks. Catalog quality is the skill's responsibility; human-collaboration policy is the fork's. |
+| Cover non-Java / non-React stacks (Go, Rust, Python) | Out of scope for v1. The verification-primitive abstraction (`<framework-native test runner with domain filter>`) generalizes — when a fork ports the catalog to a new stack, the same shape applies (`go test -run` / `cargo test --` / `pytest -k`). |
+
+---
+
+### Evidence linked to Payment — the canonical first instance
+
+Appendix C is not theoretical — every step in the 12-step procedure was executed end-to-end
+during Payment, captured in the following artifacts (`docs/blueprints/payment/`):
+
+- **`plan.md`** — the ralplan-approved 23-phase Payment plan that this procedure distills.
+  Codex Critic Iteration 2 verdict: APPROVE (7/7 PASS A–G).
+- **`decisions.md`** — the P1.5 generalization audit (S7 worked example): 5 proposed rules
+  classified into 1 extension + 3 new generic + 1 `<domain>_specific` + 0 rejected. Also
+  the P4 java-reviewer findings (S11 worked example): 17 findings triaged into 6 fixed /
+  3 deferred / 8 documented.
+- **`security-review.md`** — the P5 security-reviewer worked example (S11): 8 findings
+  triaged with PCI-DSS 3.4 / 6.5 / 4.1 trace verified.
+- **`verification-log.md`** — the P7..P7.7 verification trifecta output (S12): `/verification-loop`
+  6-phase report + `blueprint-completeness.sh payment` 14/15 → 15/15 + `cold-start-test.sh payment` 8/8.
+- **`acceptance/l3-fork-simulation.md`** — fresh clone of the repo, 5 gates all exit 0 in 191s.
+  Proves the blueprint is portable to a fork-receiver with no hidden environmental dependencies.
+- **`acceptance/l4-subagent-test.md`** — the L4 sealed sub-agent PASS at maximum verdict
+  (11/11 MUST_PASS + 6/6 SHOULD_PASS), sub-agent commit `a2d3fac`. The empirical validation
+  that the catalog is self-discoverable to a context-0 AI agent. **This is the evidence
+  that Appendix C describes a procedure that actually works**, not an aspirational design.
+
+A new domain following Appendix C should produce the same 5 documents in
+`docs/blueprints/<domain>/`. If any document cannot be produced, the corresponding step did
+not complete and the gate has not been crossed.

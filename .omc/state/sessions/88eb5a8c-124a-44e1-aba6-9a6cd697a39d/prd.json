@@ -318,7 +318,9 @@
       "id": "US-021",
       "title": "P10 — METHODOLOGY.md Appendix C: standard procedure for adding a domain",
       "priority": 21,
-      "passes": false,
+      "passes": true,
+      "completed_commit": "PENDING_COMMIT",
+      "note": "12-step standard procedure documented with Gradle + npm/vitest variants. blueprint-completeness.sh payment now exits 0.",
       "acceptanceCriteria": [
         "METHODOLOGY.md has a new section 'Appendix C: Standard Procedure for Adding a New Domain'",
         "Appendix C documents the 12-step procedure derived from Payment work (auth/CRUD/ratelimit + Payment empirically validated)",
