@@ -75,10 +75,12 @@ Asserts each of 32 blessed shadcn components renders with `--color-*`, `--text-*
 Run: `cd frontend && npx vitest run tests/L1/token-contract.spec.ts`.
 
 ### Step 4: fork-receiver smoke
-Script: `verify/fork-receiver-smoke.sh`.
-Creates a temp dir, copies only `templates/L1/` + minimal `package.json`, runs
-`pnpm install && pnpm tsc --noEmit`. Exit 0 = L1 is self-contained.
+Script: `verify/fork-receiver-smoke.sh` (invoked via `skills/ax-verify-L1/scripts/fork-smoke.sh`).
+Creates a temp dir, copies only `templates/L1/`, runs a static path-leak scan, then
+`npm install --legacy-peer-deps && tsc --noEmit` using deps from `PEER_DEPS.md`.
+Exit 0 = L1 is self-contained and portable.
 Exit 1 with `PATH_LEAK: <path>` if any L1 file imports outside `templates/L1/`.
+Budget: 300s. Typical runtime: < 30s (npm cache warm).
 
 ### Step 5: export completeness
 Script: `skills/ax-verify-L1/scripts/check-exports.sh`.
@@ -87,6 +89,7 @@ Reads `templates/L1/index.ts` (or equivalent); asserts 32 named exports present.
 ## Bundled scripts
 - `skills/ax-verify-L1/scripts/run.sh` — orchestrates steps 1–5; exit 0 iff all pass
 - `skills/ax-verify-L1/scripts/check-exports.sh` — counts L1 exports; exit 0 if count == 32
+- `skills/ax-verify-L1/scripts/fork-smoke.sh` — pass-through to `verify/fork-receiver-smoke.sh`
 
 ## Feedback loop
 When drift check fails: inspect the diff output, update the snapshot or revert the
