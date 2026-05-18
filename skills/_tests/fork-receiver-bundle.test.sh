@@ -182,7 +182,7 @@ for ep in "${EXCLUDED_PATHS[@]}"; do
     else
         assert_fail "absent/$ep" "found in tarball but should be excluded"
     fi
-fi
+done
 
 # Also assert no large Spring fixture dirs (they're excluded to keep tarball <100MB)
 for spring_fixture in "practices/evals/fixtures/spring-realworld" "practices/evals/fixtures/spring-petclinic" "practices/evals/fixtures/spring-modulith-example"; do
