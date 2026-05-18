@@ -112,5 +112,6 @@ applied_recipe: saas-subscription
 applied_recipes:
   - b2b-admin
   - booking
+  - lms
   - marketplace
   - saas-subscription

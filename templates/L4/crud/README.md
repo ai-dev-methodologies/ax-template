@@ -119,7 +119,9 @@ applied_recipe_secondary: crm
 applied_recipes:
   - b2b-admin
   - booking
+  - cms
   - community
   - crm
   - e-commerce
+  - lms
   - marketplace

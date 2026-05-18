@@ -168,8 +168,10 @@ applied_recipe_secondary: e-commerce
 applied_recipe_tertiary: crm
 applied_recipes:
   - booking
+  - cms
   - community
   - crm
   - e-commerce
+  - lms
   - marketplace
   - saas-subscription

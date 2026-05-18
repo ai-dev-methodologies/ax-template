@@ -1827,3 +1827,296 @@ used for the other 10 L4 domains (billing R5, file-storage R3, payment R5, etc.)
 - When the first consumer recipe lands, the backend skeleton expands to
   include JobHistory + LockingPolicy + Service + Controller per the existing
   Spec Trio definitions.
+
+## TD-2026-05-21-022 — SP43: lms recipe shipped (composition kit; recipe count 7 → 8)
+
+```yaml
+---
+adr_id: TD-2026-05-21-022
+title: "LMS recipe ships via composition of crud + audit-log + notification + scheduled-task + auth (+ optional feature-flags)"
+provenance_class: external
+evidence:
+  source_type: external
+  source_refs:
+    - url: "https://www.coursera.org/"
+      quote: "Learn from 350+ leading universities and companies"
+      fetched_at: "2026-05-21"
+    - url: "https://docs.moodle.org/dev/Web_services_API"
+      quote: "Once you have done this, your plugin's functions will be accessible to other systems through Web services using one of a number of protocols, like XML-RPC, REST or SOAP."
+      fetched_at: "2026-05-21"
+    - url: "https://www.classting.com/"
+      quote: "개인화 교육을 실현하는 교육 AI 에이전트"
+      fetched_at: "2026-05-21"
+  snapshot_ref: "practices/upstream/r8-sp43-evidence-snapshot.md"
+  rationale: |
+    R6 named scheduler as the lms-deferral gate; R7 SP41 cleared the gate by
+    landing templates/L4/scheduled-task/. R8 SP43 consumes the primitive by
+    shipping the lms recipe with 5 disk-resolved invariants — all anchored to
+    existing spec items + existing rules (idempotency-key-on-mutations.md +
+    scheduled-task-l0.yaml + audit-log-l0.yaml + notification-l0.yaml +
+    auth-asvs-l1.yaml). INV-005 deliberately binds existing-rule pair, NOT
+    co-shipped-rule (R7 community catalog-novel escape hatch reserved for
+    invariants without an existing anchor).
+spec_refs:
+  - specs/audit-log-l0.yaml#AUDIT-RECORD-001
+  - specs/scheduled-task-l0.yaml#SCHED-LOCK-001
+  - specs/scheduled-task-l0.yaml#SCHED-IDEMPOTENT-001
+  - specs/notification-l0.yaml#NOTIF-PREF-001
+  - specs/auth-asvs-l1.yaml#ASVS-V4.1.1
+status: ACCEPTED
+date: 2026-05-21
+---
+```
+
+### Decision
+
+Move `recipes/lms` from `deferred_recipes` to `active` in
+`recipes/_MANIFEST.yaml`. Ship the full Spec Trio quartet
+(`recipes/lms/{RECIPE.md, L4-composition.md, L2-block-recipe.md,
+spec-trio-template.yaml}`) plus `specs/recipes/lms-recipe-l0.yaml` plus
+`skills/_tests/sealed-verdict/lms-verdict.md` (PENDING — SP44 executes) plus
+`frontend/tests/recipes/lms-compose.spec.ts` (structural integrity). Append
+`lms` alphabetically to 4 pre-existing L4 README `applied_recipes:` plural
+lists (`audit-log`, `auth`, `crud`, `notification`). `scheduled-task` L4
+README acquires its first `applied_recipes:` key born `[cms, lms]` in the
+same atomic SP43 commit (TD-024 convention).
+
+Active recipe count: 7 → 8.
+
+### Drivers
+
+1. **R6 deferral trigger cleared** — `recipes/_MANIFEST.yaml#deferred_recipes`
+   named "Scheduler L4 landed" as the reintroduction trigger; R7 SP41 satisfied
+   the trigger by landing `templates/L4/scheduled-task/`.
+2. **Evidence chain verbatim-cleared with Korean anchor** — 2 English verbatim
+   (Moodle + Coursera) + 1 Korean verbatim (classting). First non-zero-Korean-
+   verbatim LMS cycle since R6 channel.io.
+3. **5 invariants disk-resolved** — all spec_ref + rule_ref entries verified
+   present on disk at PRD signature; `recipe_spec_referential_integrity_guard.sh`
+   PASS at 9/9 active specs.
+
+### Alternatives considered
+
+- **Defer past R8** — rejected; trigger discipline arbitrary; evidence chain
+  ready.
+- **Ship lms-only SP (no cms)** — rejected; cms gate is identical (R7
+  scheduler clear-up applies symmetrically), and both share the
+  `scheduled-task` first-consumer-arrival mutation.
+- **SP43 + SP43b split (lms + cms separate atomic)** — rejected; R7's split
+  was justified by L4-introduction + harness novelty (SP41 introduced
+  scheduler L4, SP41b introduced co-shipped-rule path-c). Neither applies
+  to R8 — recipes only.
+
+### Why chosen
+
+Honors deferral-trigger discipline (binary trigger system from R6/R7); R6
+SP39 atomic-multi-recipe precedent; evidence chain verbatim-cleared with
+Korean anchor; co-shipped-rule disambiguation explicit (existing-rule
+preferred path).
+
+### Consequences
+
+- Active recipes = 8 (or 9 if SP44 cms verdict also passes).
+- 4 L4 READMEs gain `lms` (audit-log, auth, crud, notification) + 1 optional-
+  bind plural list also gains `lms` (feature-flags).
+- `scheduled-task` L4 README acquires `applied_recipes: [cms, lms]` key in the
+  same SP43 atomic commit (TD-024 first-consumer-arrival convention).
+- `practices/AGENTS.md` sentinel sha is **unchanged** (sha generator reads
+  `practices/rules/*.md` only, not `recipes/` or `templates/L4/`).
+
+### Follow-ups
+
+- R9 evidence refresh re-attempts edX OpenedX REST root + 인프런 dev API +
+  tech.kakao education-tagged posts.
+- SP44 executes sealed sub-agent verdict; partial-tag policy applied if
+  verdict <10/12 MUST or <5/8 SHOULD (PRD §6 table).
+
+---
+
+## TD-2026-05-21-023 — SP43: cms recipe shipped (composition kit; recipe count 8 → 9)
+
+```yaml
+---
+adr_id: TD-2026-05-21-023
+title: "CMS recipe ships via composition of crud + audit-log + scheduled-task + notification (+ optional auth + search)"
+provenance_class: external
+evidence:
+  source_type: external
+  source_refs:
+    - url: "https://www.sanity.io/docs"
+      quote: "Real-time database for structured content"
+      fetched_at: "2026-05-21"
+    - url: "https://www.contentful.com/developers/docs/references/content-management-api/"
+      quote: "Contentful's Content Management API (CMA) helps you manage content in your spaces."
+      fetched_at: "2026-05-21"
+    - url: "https://docs.strapi.io/dev-docs/api/rest"
+      quote: "The REST API allows accessing the content-types through API endpoints."
+      fetched_at: "2026-05-21"
+    - url: "https://www.sanity.io/docs/scheduled-publishing"
+      quote: "Scheduled publishing has been deprecated as of October 2025."
+      fetched_at: "2026-05-21"
+    - url: "https://brunch.co.kr/"
+      quote: "글이 작품이 되는 공간, 브런치"
+      fetched_at: "2026-05-21"
+  snapshot_ref: "practices/upstream/r8-sp43-evidence-snapshot.md"
+  rationale: |
+    R6 named scheduler as the cms-deferral gate; R7 SP41 cleared the gate.
+    R8 SP43 consumes the primitive by shipping the cms recipe with 5
+    disk-resolved invariants — all anchored to existing spec items + existing
+    rules. INV-005 (slug uniqueness) deliberately binds existing
+    crud-security.yaml#CRUD-VAL-1 + idempotency-key-on-mutations.md pair,
+    NOT co-shipped-rule. Topic-relevant Sanity scheduled-publishing
+    deprecation notice secured as the M1 closure verbatim.
+spec_refs:
+  - specs/audit-log-l0.yaml#AUDIT-RECORD-001
+  - specs/scheduled-task-l0.yaml#SCHED-LOCK-001
+  - specs/scheduled-task-l0.yaml#SCHED-IDEMPOTENT-001
+  - specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001
+  - specs/notification-l0.yaml#NOTIF-PREF-001
+  - specs/crud-security.yaml#CRUD-VAL-1
+status: ACCEPTED
+date: 2026-05-21
+---
+```
+
+### Decision
+
+Move `recipes/cms` from `deferred_recipes` to `active` in
+`recipes/_MANIFEST.yaml`. Ship the full Spec Trio quartet
+(`recipes/cms/{RECIPE.md, L4-composition.md, L2-block-recipe.md,
+spec-trio-template.yaml}`) plus `specs/recipes/cms-recipe-l0.yaml` plus
+`skills/_tests/sealed-verdict/cms-verdict.md` (PENDING — SP44 executes) plus
+`frontend/tests/recipes/cms-compose.spec.ts` (structural integrity). Append
+`cms` alphabetically to 3 pre-existing L4 README `applied_recipes:` plural
+lists (`audit-log`, `crud`, `notification`) + 2 optional-bind L4 READMEs
+(`auth`, `search`). `scheduled-task` L4 README acquires its first
+`applied_recipes:` key born `[cms, lms]` in the same SP43 atomic commit
+(TD-024 convention).
+
+Active recipe count: 8 → 9 (assuming TD-022 lms ships in the same SP).
+
+### Drivers
+
+1. **R6 deferral trigger cleared** — same as TD-022; R7 SP41 satisfied the
+   trigger for both lms and cms.
+2. **Strongest evidence chain shipped any single recipe this cycle** —
+   3 English verbatim (Sanity-base + Contentful + Strapi) + 1 topic-relevant
+   English verbatim (Sanity scheduled-publishing deprecation notice attesting
+   scheduled-publishing was a real CMS capability — orthogonal to internal
+   primitive) + 1 Korean verbatim (brunch).
+3. **5 invariants disk-resolved** — all spec_ref + rule_ref entries verified
+   present on disk at PRD signature.
+
+### Alternatives considered
+
+- **Defer past R8** — rejected; evidence chain even stronger than lms.
+- **Merge cms into crud + scheduled-task without separate recipe** — rejected;
+  content-lifecycle is genuinely distinct (scheduled-publish + slug-uniqueness
+  + editorial-workflow notifications are recipe-level concerns, not L4-level).
+- **SP43/SP43b split** — rejected; same reasoning as TD-022.
+
+### Why chosen
+
+Honors deferral-trigger discipline; strongest evidence chain in catalog this
+cycle; content-lifecycle is a coherent recipe-level distinct pattern;
+co-shipped-rule disambiguation explicit (existing-rule preferred path).
+
+### Consequences
+
+- Active recipes = 9.
+- 3 L4 READMEs gain `cms` mandatory (audit-log, crud, notification) + 2
+  optional-bind L4 READMEs also gain `cms` (auth, search).
+- `scheduled-task` L4 README acquires `applied_recipes: [cms, lms]` key (TD-024).
+- `practices/AGENTS.md` sentinel sha is **unchanged**.
+
+### Follow-ups
+
+- R9 evidence refresh re-attempts Naver hosts (developers + terms) if either
+  removes the block; if both remain blocked, consider retiring Naver from
+  standard Korean URL pool.
+- SP44 executes sealed sub-agent verdict; partial-tag policy applied if
+  verdict <10/12 MUST or <5/8 SHOULD (PRD §6 table).
+
+---
+
+## TD-2026-05-21-024 — Scheduler L4 first-consumer-arrival convention: `applied_recipes:` key born `[cms, lms]`
+
+```yaml
+---
+adr_id: TD-2026-05-21-024
+title: "Scheduler L4 applied_recipes: key born with full alphabetical plural list at first-consumer arrival"
+provenance_class: internal_design
+evidence:
+  source_type: internal_design
+  rationale: |
+    R7 TD-2026-05-20-020 Follow-ups text explicitly promised this shape:
+    "the same R8 atomic commit that lists scheduled-task in their
+    enabled_l4_domains: will add the applied_recipes: key + plural list
+    [cms, lms] to this README." This ADR codifies the convention as a
+    repeatable rule for future first-consumer-arrival scenarios on any
+    catalog-only L4 (currently file-storage and practices).
+spec_refs:
+  - templates/L4/scheduled-task/README.md
+status: ACCEPTED
+date: 2026-05-21
+---
+```
+
+### Decision
+
+When the first downstream recipe (or recipes — simultaneous arrivals) consumes
+a catalog-only L4 domain (one that previously carried no `applied_recipes:`
+key), the L4 README acquires the `applied_recipes:` key in the same atomic SP
+commit that lists that L4 in the consuming recipe's `enabled_l4_domains:`.
+The key is born with the **full alphabetical plural list** of all
+simultaneously arriving consumers — NOT born singular and then appended.
+
+For R8 SP43: `templates/L4/scheduled-task/README.md` acquires
+`applied_recipes: [cms, lms]` (alphabetical) in a single atomic mutation.
+
+### Drivers
+
+1. **R7 TD-2026-05-20-020 Follow-ups text literally promised this shape** —
+   R8 honors verbatim.
+2. **R6 SP39 dual-form regex already accepts plural list** — `recipe_governance_guard.sh#check_applied_recipe_declared` matches either the
+   legacy singular `applied_recipe:` or the R6+ plural `applied_recipes:`
+   header followed by at least one list entry. No guard fixture change needed.
+3. **Atomic-commit principle (PRD §1 Principle 5)** — within a single SP,
+   all related mutations land together OR rollback; born-empty-then-appended
+   is two mutations and contradicts atomicity.
+
+### Alternatives considered
+
+- **Add key `[lms]` in SP43, then append `cms` in SP43b** — rejected; 2
+  mutations vs 1; SP43 is explicitly atomic-2.
+- **Leave key absent until SP44** — rejected; recipe directories LAND in
+  SP43; the L4 README's `applied_recipes:` key reflects directory presence
+  (binding declared via `enabled_l4_domains:` in recipe spec), NOT sealed-
+  verdict pass-state. Verdict pass is downstream catalog-quality data.
+
+### Why chosen
+
+Honors R7 TD-020 literally; matches R6 atomic precedent; consistent with
+guard non-empty-list semantics; partial-tag policy (PRD §6 table) preserves
+the `[cms, lms]` key in all 4 verdict outcomes (2/2 PASS, lms-only, cms-only,
+0/2 FAIL) — recipe directory existence is the bind, not verdict-pass state.
+
+### Consequences
+
+- `templates/L4/scheduled-task/README.md` carries `applied_recipes: [cms, lms]`
+  from R8 SP43 onward.
+- R9+ scheduler-consumer additions extend the list alphabetically (R6 dual-
+  form append-only rule).
+- `templates/L4/file-storage/README.md` + `templates/L4/practices/README.md`
+  remain `applied_recipes:`-key-less until *their* first consumers arrive —
+  same precedent the scheduler README itself relied on pre-R8.
+- Partial-tag policy: scheduler README key stays `[cms, lms]` regardless of
+  SP44 verdict outcome (PRD §6 table; recipe directory existence is the
+  bind).
+
+### Follow-ups
+
+- R9+ planners reference this ADR for any other first-consumer-arrival
+  scenario (e.g. if a recipe consumes `file-storage` for the first time,
+  the same convention applies).
+- No guard changes — R6 dual-form regex already accepts the plural list shape.

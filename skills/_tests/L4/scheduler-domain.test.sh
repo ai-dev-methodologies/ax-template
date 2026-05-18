@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# skills/_tests/L4/scheduler-domain.test.sh — R7 SP41 TDD anchor.
+# skills/_tests/L4/scheduler-domain.test.sh — R7 SP41 (R8 SP43 updated) TDD anchor.
 #
 # Sealed catalog-discoverability test for the scheduled-task L4 row.
 # Asserts that a context-0 sub-agent with only templates/L4/scheduled-task/README.md
 # + practices/AGENTS.md could discover:
 #   1. The L4 README exists at the documented path.
-#   2. The README does NOT carry an `applied_recipes:` key (matches file-storage +
-#      practices precedent — Architect H2 / Critic M4 closure).
+#   2. The README carries an `applied_recipes:` key born `[cms, lms]` (R8 SP43
+#      first-consumer-arrival convention per TD-2026-05-21-024).
 #   3. The README references all 3 Spec Trio paths (spec + contract + manifest).
 #   4. The README names ≥3 of the REGISTER / LOCK / EXECUTE / IDEMPOTENCY families.
 #   5. The README cites the documented external verbatim (Spring or Quartz).
@@ -56,13 +56,16 @@ else
     assert_fail "readme-exists" "$README not found"
 fi
 
-# ── 2. README has NO applied_recipes: key (Architect H2 / Critic M4 closure) ─
+# ── 2. README carries applied_recipes: key born [cms, lms] (R8 SP43 TD-024) ─
 if [ -f "$README" ]; then
-    if grep -qE '^applied_recipes:' "$README"; then
-        assert_fail "no-applied-recipes-key" \
-            "README must NOT carry applied_recipes: key at introduction (file-storage + practices precedent)"
+    if ! grep -qE '^applied_recipes:' "$README"; then
+        assert_fail "applied-recipes-key-born" \
+            "README must carry applied_recipes: key at R8 SP43 first-consumer arrival (TD-2026-05-21-024)"
+    elif ! awk '/^applied_recipes:/{f=1;next} f&&/^[[:space:]]+-[[:space:]]+cms$/{c=1} f&&/^[[:space:]]+-[[:space:]]+lms$/{l=1} f&&/^[^[:space:]]/{exit} END{exit !(c&&l)}' "$README"; then
+        assert_fail "applied-recipes-key-born" \
+            "README applied_recipes: list must contain both 'cms' and 'lms' alphabetical (R8 SP43 first-consumer arrival)"
     else
-        assert_pass "no-applied-recipes-key"
+        assert_pass "applied-recipes-key-born"
     fi
 fi
 

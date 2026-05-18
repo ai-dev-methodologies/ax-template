@@ -1,0 +1,137 @@
+# specs/recipes/cms-recipe-l0.yaml — R8 SP43 recipe-level spec
+schema_version: 1
+pattern: cms
+display_name: "CMS (Content Authoring + Scheduled Publish + Editorial Workflow + Expiry)"
+compatible_with_catalog_version: "v1.6.0-lms-cms"
+last_verified_at: "2026-05-21"
+
+enabled_l4_domains:
+  - audit-log
+  - crud
+  - notification
+  - scheduled-task
+
+l2_blocks_used:
+  # L1 primitives (rich-text-editor, markdown-renderer, relative-time) are
+  # excluded — they live at templates/L1/components/ not templates/L2/blocks/
+  # (mirrors booking-recipe-l0.yaml + community-recipe-l0.yaml precedent).
+  # `tag-input` removed — does NOT exist on disk under either tier; tagging UX
+  # deferred to fork-receiver L1 extension or combobox reuse (PRD §4.2 L closure).
+  - confirm-dialog
+  - crud-create-form
+  - crud-edit-form
+  - crud-list-adapter
+  - data-table
+  - filter-bar
+  - kpi-card
+  - notification-list
+  - search-input
+
+l3_pages_used:
+  - create-page
+  - dashboard-page
+  - detail-page
+  - edit-page
+  - list-page
+
+business_invariants:
+  - id: CMS-INV-001
+    statement: "Content publish-state transitions (draft → scheduled → published → archived) emit audit-log"
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+
+  - id: CMS-INV-002
+    statement: "Scheduled-publish uses scheduled-task lock + idempotency primitive (no double-publish)"
+    spec_ref: "specs/scheduled-task-l0.yaml#SCHED-LOCK-001"
+
+  - id: CMS-INV-003
+    statement: "Content expiry (scheduled archive) runs via scheduled-task with JobHistory"
+    spec_ref: "specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001"
+
+  - id: CMS-INV-004
+    statement: "Editorial workflow notifications (review-requested, approved, rejected) respect editor preferences"
+    spec_ref: "specs/notification-l0.yaml#NOTIF-PREF-001"
+
+  - id: CMS-INV-005
+    statement: "Content slug uniqueness enforced server-side per locale + content-type combination"
+    spec_ref: "specs/crud-security.yaml#CRUD-VAL-1"
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    notes: |
+      Deliberate framing: binds to existing rule + existing spec item pair (NOT
+      co-shipped-rule). R7 community-INV-005 used co-shipped-rule because no
+      practices/rules/*.md covered server-side XSS HTML sanitize — catalog-novel.
+      R8 cms-INV-005 is fully covered by the existing CRUD-VAL-1 server-side
+      validation spec item + the existing idempotency rule; co-shipped-rule is
+      reserved for genuinely catalog-novel invariants (escape hatch, not
+      preferred path).
+
+business_observability_advisory:
+  - metric: "recipe.cms.content_scheduled_publish_total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: "recipe.cms.content_archived_total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: "recipe.cms.editorial_notification_total"
+    type: counter
+    note: "advisory; labeled by review kind (requested/approved/rejected); no emitter test enforced this PRD"
+
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # enabled_l4_domains:
+  #   skip: ["auth"]
+  #   rationale: "Single-author personal CMS; no multi-role gating needed."
+  #   citation: "<internal ticket / PR url>"
+
+evidence:
+  - provenance_class: external
+    source: "Sanity Docs landing"
+    url: "https://www.sanity.io/docs"
+    citation: "Real-time database for structured content"
+    quoted_at: "2026-05-21"
+    fidelity_note: "Sanity is the canonical headless CMS; docs landing tagline."
+
+  - provenance_class: external
+    source: "Contentful Content Management API"
+    url: "https://www.contentful.com/developers/docs/references/content-management-api/"
+    citation: "Contentful's Content Management API (CMA) helps you manage content in your spaces."
+    quoted_at: "2026-05-21"
+    fidelity_note: "Contentful CMA is the canonical headless-CMS management REST surface."
+
+  - provenance_class: external
+    source: "Strapi REST API docs"
+    url: "https://docs.strapi.io/dev-docs/api/rest"
+    citation: "The REST API allows accessing the content-types through API endpoints."
+    quoted_at: "2026-05-21"
+    fidelity_note: "Strapi is the canonical open-source headless CMS."
+
+  - provenance_class: external
+    source: "Sanity scheduled-publishing deprecation notice"
+    url: "https://www.sanity.io/docs/scheduled-publishing"
+    citation: "Scheduled publishing has been deprecated as of October 2025."
+    quoted_at: "2026-05-21"
+    fidelity_note: "Topic-relevant verbatim — deprecation attests Sanity historically shipped scheduled-publishing; CMS-INV-002 binds to internal scheduled-task L4 primitive (orthogonal to Sanity's hosted offering)."
+
+  - provenance_class: external
+    source: "Brunch (Korean publication CMS)"
+    url: "https://brunch.co.kr/"
+    citation: "글이 작품이 되는 공간, 브런치"
+    quoted_at: "2026-05-21"
+    fidelity_note: "Korean publishing/CMS verbatim (PRD §4.4 H1 closure)."
+
+  - provenance_class: internal_design
+    source: "Naver developers blog API docs"
+    url: "https://developers.naver.com/docs/blog/"
+    rationale: "Host-level fetcher block on 2026-05-21; consistent with R6/R7 Naver-host block pattern."
+
+  - provenance_class: internal_design
+    source: "Naver terms (alternate subdomain attempt)"
+    url: "https://terms.naver.com/"
+    rationale: "Host-level fetcher block on 2026-05-21; pattern is host-wide. R9 may consider retiring Naver from standard Korean URL pool."
+
+  - provenance_class: internal_design
+    derives_from:
+      - "SP15 crud"
+      - "SP17 audit-log"
+      - "SP26 notification"
+      - "SP41 scheduled-task"
+    rationale: "Composition derives from existing L4 specs; no new L4 introduced by cms recipe."

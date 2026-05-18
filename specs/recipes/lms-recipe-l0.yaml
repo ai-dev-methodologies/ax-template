@@ -1,0 +1,128 @@
+# specs/recipes/lms-recipe-l0.yaml — R8 SP43 recipe-level spec
+schema_version: 1
+pattern: lms
+display_name: "LMS (Course + Enrollment + Lesson + Due-date Reminders)"
+compatible_with_catalog_version: "v1.6.0-lms-cms"
+last_verified_at: "2026-05-21"
+
+enabled_l4_domains:
+  - audit-log
+  - auth
+  - crud
+  - notification
+  - scheduled-task
+
+l2_blocks_used:
+  # L1 primitives (calendar, date-range-picker, relative-time, progress) are
+  # excluded — they live at templates/L1/components/ not templates/L2/blocks/
+  # (mirrors booking-recipe-l0.yaml + community-recipe-l0.yaml precedent).
+  - confirm-dialog
+  - crud-create-form
+  - crud-edit-form
+  - crud-list-adapter
+  - data-table
+  - filter-bar
+  - kpi-card
+  - notification-bell
+  - notification-list
+
+l3_pages_used:
+  - create-page
+  - dashboard-page
+  - detail-page
+  - edit-page
+  - list-page
+
+business_invariants:
+  - id: LMS-INV-001
+    statement: "Course content mutations emit audit-log row with operator + before/after"
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+
+  - id: LMS-INV-002
+    statement: "Due-date reminder emission uses scheduled-task lock primitive (no double-send on multi-node)"
+    spec_ref: "specs/scheduled-task-l0.yaml#SCHED-LOCK-001"
+
+  - id: LMS-INV-003
+    statement: "Reminder notifications respect learner preferences + opt-out"
+    spec_ref: "specs/notification-l0.yaml#NOTIF-PREF-001"
+
+  - id: LMS-INV-004
+    statement: "Course visibility (draft/published/archived) gated by author OR admin role"
+    spec_ref: "specs/auth-asvs-l1.yaml#ASVS-V4.1.1"
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+
+  - id: LMS-INV-005
+    statement: "Bulk enrollment idempotent — re-submission of same idempotency-key does NOT duplicate"
+    spec_ref: "specs/scheduled-task-l0.yaml#SCHED-IDEMPOTENT-001"
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    notes: |
+      Deliberate framing: binds to existing rule + existing spec item pair (NOT
+      co-shipped-rule). R7 community-INV-005 used co-shipped-rule because no
+      practices/rules/*.md covered server-side XSS HTML sanitize — catalog-novel.
+      R8 lms-INV-005 is fully covered by the existing idempotency rule + the
+      existing SCHED-IDEMPOTENT-001 spec item; co-shipped-rule is reserved for
+      genuinely catalog-novel invariants (escape hatch, not preferred path).
+
+business_observability_advisory:
+  - metric: "recipe.lms.course_active_total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: "recipe.lms.reminder_scheduled_total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: "recipe.lms.enrollment_idempotent_dedupe_total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # enabled_l4_domains:
+  #   skip: ["feature-flags"]
+  #   rationale: "Open-courseware fork — no toggle gating needed."
+  #   citation: "<internal ticket / PR url>"
+
+evidence:
+  - provenance_class: external
+    source: "Coursera homepage"
+    url: "https://www.coursera.org/"
+    citation: "Learn from 350+ leading universities and companies"
+    quoted_at: "2026-05-21"
+    fidelity_note: "Coursera anchors the large-scale cross-institutional MOOC pattern."
+
+  - provenance_class: external
+    source: "Moodle Web Services API"
+    url: "https://docs.moodle.org/dev/Web_services_API"
+    citation: "Once you have done this, your plugin's functions will be accessible to other systems through Web services using one of a number of protocols, like XML-RPC, REST or SOAP."
+    quoted_at: "2026-05-21"
+    fidelity_note: "Moodle is the canonical open-source LMS; its REST surface mirrors the LMS recipe CRUD layer."
+
+  - provenance_class: external
+    source: "Classting (Korean K-12 LMS)"
+    url: "https://www.classting.com/"
+    citation: "개인화 교육을 실현하는 교육 AI 에이전트"
+    quoted_at: "2026-05-21"
+    fidelity_note: "Korean K-12 LMS verbatim (PRD §4.4 H1 closure — first non-zero-Korean-verbatim LMS cycle since R6)."
+
+  - provenance_class: internal_design
+    source: "edX OpenedX REST API docs"
+    url: "https://docs.openedx.org/projects/edx-platform/en/latest/concepts/rest_api.html"
+    rationale: "HTTP 404 on 2026-05-21 fetch; documented URL moved upstream. Moodle + Coursera + classting clear 1-floor with buffer."
+
+  - provenance_class: internal_design
+    source: "인프런 (Inflearn)"
+    url: "https://www.inflearn.com"
+    rationale: "200 OK on 2026-05-21 but no public developer API documentation extractable; closed-API consistent with R6/R7 Korean closed-platform pattern."
+
+  - provenance_class: internal_design
+    source: "tech.kakao.com (Korean tech blog)"
+    url: "https://tech.kakao.com/"
+    rationale: "200 OK on 2026-05-21 but page is dev-tool-centric; no learning-focused verbatim sentence extractable."
+
+  - provenance_class: internal_design
+    derives_from:
+      - "SP15 crud"
+      - "SP17 audit-log"
+      - "SP26 notification"
+      - "SP41 scheduled-task"
+      - "auth ASVS L1"
+    rationale: "Composition derives from existing L4 specs; no new L4 introduced by lms recipe."

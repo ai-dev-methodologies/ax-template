@@ -86,8 +86,10 @@ applied_recipe_tertiary: crm
 applied_recipes:
   - b2b-admin
   - booking
+  - cms
   - community
   - crm
   - e-commerce
+  - lms
   - marketplace
   - saas-subscription
