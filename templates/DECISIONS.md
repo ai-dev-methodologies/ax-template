@@ -587,3 +587,72 @@ JWTs without injecting the UserRepository. Tests must be aware of this default.
 - `fork-receiver-full-tree-smoke.sh` added to verify/ — covers full L1+L2+L3+L4 tree
   portability (static path resolution + structure completeness, 3s / 300s budget).
 - New test files (`vitest.config.ts`, `playwright.config.ts`) updated in place.
+
+---
+
+## TD-2026-05-17-014 — `/ax-fork-receiver` skill adopted as Tier-1 fork-handoff primitive
+
+```yaml
+---
+adr_id: TD-2026-05-17-014
+title: "/ax-fork-receiver: Tier-1 skill for catalog tarball bundling and fork-receiver validation"
+provenance_class: skill_adoption
+evidence:
+  source_type: internal
+  source_ref: skills/ax-fork-receiver/SKILL.md
+  rationale: |
+    iter4 portability steelman required: "composition kit must be consumable by
+    external projects without manual path surgery." The /ax-fork-receiver skill
+    closes this steelman by providing a binary-verified, single-command workflow:
+    bundle → ship → smoke. The skill is the 18th in the catalog (4th Tier-1)
+    and is integrated into skills/ax-verify/scripts/run-all.sh as step 5
+    (--bundle-only mode) so every full-suite pass confirms the catalog tarball
+    builds cleanly. The smoke.sh step at target runs fork-receiver-smoke.sh (L1
+    tsc + path-leak), fork-receiver-full-tree-smoke.sh (L1+L2+L3+L4 static),
+    and run-all-guards.sh --include-fixtures (19/19 guards) — all binary.
+spec_ref: N/A
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+Adopted `/ax-fork-receiver` as a Tier-1 Tier-1 skill (`axis: fork-handoff`) with the following design:
+
+1. **`bundle.sh`**: Creates a catalog tarball from the source repo. Explicit allowlist
+   (templates/, skills/, practices/, practices-react/, specs/, contracts/, blueprints/,
+   verify/, config files only for frontend/ and backend/). Excludes: `.git/`, `.omc/`,
+   `frontend/src/`, `backend/src/`, `backend/build/`, large Spring portability fixtures
+   (spring-realworld/petclinic/modulith-example — each 60-70MB, not needed for guards).
+   Output: `dist/ax-template-catalog-<sha>.tar.gz`, ~2MB compressed.
+
+2. **`ship-to.sh`**: Extracts tarball to target dir. Guards against non-empty target
+   (requires `--force` to overwrite). Prints receiver setup instructions.
+
+3. **`smoke.sh`**: Runs 3 checks at target: (a) fork-receiver-smoke.sh (L1 tsc),
+   (b) fork-receiver-full-tree-smoke.sh (static path resolution), (c) run-all-guards.sh
+   --include-fixtures (19/19 catalog guards). All three must exit 0.
+
+4. **`run.sh`**: Orchestrator. `--bundle-only` skips source GREEN check (for CI);
+   `--target=<path>` triggers full workflow (source GREEN → bundle → ship → smoke).
+
+### Rationale
+
+The portability steelman is only closed when an external project can adopt the catalog
+without touching the source repo. A tarball-based distribution is the simplest primitive
+that works across macOS and Linux without package registry dependencies. The smoke.sh
+verification at target ensures the tarball is self-contained before the fork receiver
+commits to using it.
+
+Excluding large Spring portability fixtures keeps the tarball below 100MB. Fork receivers
+who need portability fixture testing against their own Spring app download those separately
+via the portability guide in METHODOLOGY.md.
+
+### Consequences
+
+- Skill count: 17 → 18. Tier-1 count: 3 → 4 (ax-transform, ax-verify, ax-scaffold, ax-fork-receiver).
+- `tier1-topology.test.sh` updated: expected count 3 → 4.
+- `run-all.sh` updated: step 5 added (`/ax-fork-receiver --bundle-only`).
+- TDD anchor: `skills/_tests/fork-receiver-bundle.test.sh` — 31/31 assertions pass.
+- Acceptance gates 1, 2, 4, 5 GREEN (gate 3 requires full ax-verify + E2E suite).
