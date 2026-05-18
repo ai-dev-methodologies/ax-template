@@ -1,0 +1,11 @@
+# Policy-check eval fixture
+# Migration tag does not return observability rules
+description: "Migration tag does not return observability rules"
+query:
+  domain: migration
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-OBS-001
+    - PRACTICES-OBS-002
+    - PRACTICES-PERS-005

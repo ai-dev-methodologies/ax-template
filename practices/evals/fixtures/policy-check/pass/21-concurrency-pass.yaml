@@ -1,0 +1,11 @@
+# Policy-check eval fixture
+# Query concurrency tag matches optimistic locking rules
+description: "Query concurrency tag matches optimistic locking rules"
+query:
+  domain: concurrency
+expect:
+  contains:
+    - PRACTICES-PERS-004
+  not_contains:
+    - PRACTICES-ERR-001
+    - PRACTICES-CACHE-001

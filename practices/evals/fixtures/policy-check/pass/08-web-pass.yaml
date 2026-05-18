@@ -1,0 +1,12 @@
+# Policy-check eval fixture
+# Query web tag matches web endpoint rules
+description: "Query web tag matches web endpoint rules"
+query:
+  domain: web
+expect:
+  contains:
+    - PRACTICES-WEB-001
+    - PRACTICES-WEB-002
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-PERS-005

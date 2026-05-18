@@ -1,0 +1,11 @@
+# Policy-check eval fixture
+# Query testing tag matches testing rules
+description: "Query testing tag matches testing rules"
+query:
+  domain: testing
+expect:
+  contains:
+    - PRACTICES-TEST-001
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-CACHE-001

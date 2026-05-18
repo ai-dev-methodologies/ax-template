@@ -1,0 +1,13 @@
+# Policy-check eval fixture
+# Query http tag matches HTTP client rules
+description: "Query http tag matches HTTP client rules"
+query:
+  domain: http
+expect:
+  contains:
+    - PRACTICES-HTTP-001
+    - PRACTICES-HTTP-002
+    - PRACTICES-HTTP-003
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-TX-001

@@ -1,0 +1,13 @@
+# Policy-check eval fixture
+# Query error tag matches error handling rules
+description: "Query error tag matches error handling rules"
+query:
+  domain: error
+expect:
+  contains:
+    - PRACTICES-ERR-001
+    - PRACTICES-ERR-002
+    - PRACTICES-ERR-003
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-TX-001

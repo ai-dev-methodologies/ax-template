@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Async tag does not return cache rules
+description: "Async tag does not return cache rules"
+query:
+  domain: async
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-CACHE-001
+    - PRACTICES-PERS-005

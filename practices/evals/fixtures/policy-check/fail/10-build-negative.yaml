@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Build tag does not return error-handling rules
+description: "Build tag does not return error-handling rules"
+query:
+  domain: build
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-ERR-001
+    - PRACTICES-ERR-002

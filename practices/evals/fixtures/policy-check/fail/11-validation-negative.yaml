@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Validation tag does not return soft-delete rules
+description: "Validation tag does not return soft-delete rules"
+query:
+  domain: validation
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-TX-001

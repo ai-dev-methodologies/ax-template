@@ -1,0 +1,12 @@
+# Policy-check eval fixture
+# Query persistence tag matches JPA entity rules
+description: "Query persistence tag matches JPA entity rules"
+query:
+  domain: persistence
+expect:
+  contains:
+    - PRACTICES-PERS-001
+    - PRACTICES-PERS-005
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-ERR-001

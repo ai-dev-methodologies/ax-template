@@ -1,0 +1,12 @@
+# Policy-check eval fixture
+# Query async tag matches async rules
+description: "Query async tag matches async rules"
+query:
+  domain: async
+expect:
+  contains:
+    - PRACTICES-ASYNC-001
+    - PRACTICES-ASYNC-002
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-ERR-001

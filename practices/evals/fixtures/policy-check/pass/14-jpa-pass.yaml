@@ -1,0 +1,13 @@
+# Policy-check eval fixture
+# Query jpa tag matches JPA-specific rules
+description: "Query jpa tag matches JPA-specific rules"
+query:
+  domain: jpa
+expect:
+  contains:
+    - PRACTICES-PERS-001
+    - PRACTICES-PERS-002
+    - PRACTICES-PERS-003
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-ERR-001

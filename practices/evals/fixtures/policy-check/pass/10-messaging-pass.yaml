@@ -1,0 +1,12 @@
+# Policy-check eval fixture
+# Query messaging tag matches messaging rules
+description: "Query messaging tag matches messaging rules"
+query:
+  domain: messaging
+expect:
+  contains:
+    - PRACTICES-MESSAGING-001
+    - PRACTICES-MESSAGING-002
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-ERR-001

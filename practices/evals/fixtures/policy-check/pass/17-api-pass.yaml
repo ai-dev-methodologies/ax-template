@@ -1,0 +1,13 @@
+# Policy-check eval fixture
+# Query api tag matches API design rules
+description: "Query api tag matches API design rules"
+query:
+  domain: api
+expect:
+  contains:
+    - PRACTICES-API-001
+    - PRACTICES-API-002
+    - PRACTICES-API-003
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-PERS-005

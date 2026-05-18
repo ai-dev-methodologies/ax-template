@@ -1,0 +1,12 @@
+# Policy-check eval fixture
+# Query config tag matches configuration rules
+description: "Query config tag matches configuration rules"
+query:
+  domain: config
+expect:
+  contains:
+    - PRACTICES-CONFIG-001
+    - PRACTICES-CONFIG-002
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-TX-001
