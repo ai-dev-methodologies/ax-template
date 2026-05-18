@@ -26,11 +26,13 @@
 package com.example.app.billing;
 
 import com.example.app.common.BaseEntity;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.List;
@@ -92,6 +94,7 @@ public class Plan extends BaseEntity {
 
     /** Feature bullet points shown in PricingTable. */
     @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "billing_plan_features", joinColumns = @JoinColumn(name = "plan_id"))
     @Column(name = "feature")
     private List<String> features = new ArrayList<>();
 
