@@ -6,7 +6,7 @@ agent_context: "context-0 — given only recipes/booking/RECIPE.md + practices/A
 result:
   must_score: 11
   must_total: 12
-  should_score: 6
+  should_score: 7
   should_total: 8
   verdict: PASS
   threshold: "≥10/12 MUST + ≥5/8 SHOULD"

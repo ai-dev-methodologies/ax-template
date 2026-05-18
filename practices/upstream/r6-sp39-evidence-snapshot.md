@@ -51,5 +51,8 @@ summary:
   booking_external_anchor_note: "Stripe Connect cross-recipe anchor (payment lifecycle / deposit management)"
   marketplace_external_anchors: 2
   b2b_admin_external_anchors: 1
-  total_internal_design_downgrades: 4
-  downgrade_rationale: "Naver (fetcher blocked), Booking.com (ECONNREFUSED), 당근마켓 (no public API), 번개장터 (no public API), 토스ID (no public API), Jira (3x fetch failure)"
+  total_internal_design_entries: 6
+  fetch_attempt_downgrades: 3
+  fetch_attempt_downgrade_rationale: "Naver (fetcher blocked), Booking.com (ECONNREFUSED), Jira (3x fetch failure)"
+  no_public_api_internal_design: 3
+  no_public_api_rationale: "당근마켓 (no public API), 번개장터 (no public API), 토스ID (no public API)"
