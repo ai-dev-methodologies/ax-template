@@ -1,9 +1,9 @@
 {
   "/_not-found/page": "/_not-found",
   "/page": "/",
-  "/(auth)/signup/page": "/signup",
   "/(auth)/login/page": "/login",
-  "/(authenticated)/dashboard/page": "/dashboard",
   "/(auth)/oauth/callback/page": "/oauth/callback",
+  "/(auth)/signup/page": "/signup",
+  "/(authenticated)/dashboard/page": "/dashboard",
   "/(auth)/verify/page": "/verify"
 }
