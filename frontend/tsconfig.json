@@ -34,7 +34,6 @@
     "esModuleInterop": true
   },
   "include": [
-    "middleware.ts",
     "next.config.ts",
     "src",
     ".next/types/**/*.ts"
