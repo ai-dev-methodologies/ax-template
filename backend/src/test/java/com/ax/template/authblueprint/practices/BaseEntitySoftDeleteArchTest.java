@@ -12,6 +12,10 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.Where;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
 
 /**
  * ArchUnit structural check for PRACTICES-PERS-005: soft-delete via @SQLDelete + @Where.
@@ -40,6 +44,34 @@ class BaseEntitySoftDeleteArchTest {
                 .should().beAnnotatedWith(Where.class)
                 .allowEmptyShould(true);
         rule.check(CLASSES);
+    }
+
+    @Test
+    void practices_PERS_005_baseEntityFixtureMustHaveAllFourAuditAnnotations() {
+        // BaseEntity contract: all 4 Spring Data audit annotations must be present.
+        // @CreatedDate + @LastModifiedDate (timestamps) + @CreatedBy + @LastModifiedBy (principals).
+        // SoftDeletedRecord is the inline BaseEntity replica used in this test module.
+        var softDeletedRecordClass = CLASSES.stream()
+                .filter(c -> c.getSimpleName().equals("SoftDeletedRecord"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("SoftDeletedRecord not found in scanned classes"));
+
+        List<String> requiredAuditAnnotationNames = List.of(
+                CreatedDate.class.getName(),
+                LastModifiedDate.class.getName(),
+                CreatedBy.class.getName(),
+                LastModifiedBy.class.getName()
+        );
+
+        for (String annotationName : requiredAuditAnnotationNames) {
+            boolean found = softDeletedRecordClass.getFields().stream()
+                    .anyMatch(f -> f.isAnnotatedWith(annotationName));
+            String simpleName = annotationName.substring(annotationName.lastIndexOf('.') + 1);
+            assertThat(found)
+                    .as("SoftDeletedRecord must have a field annotated with @%s (BaseEntity 4-field audit contract)",
+                            simpleName)
+                    .isTrue();
+        }
     }
 
     @Test

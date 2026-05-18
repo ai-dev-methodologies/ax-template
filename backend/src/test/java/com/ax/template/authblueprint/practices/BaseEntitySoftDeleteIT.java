@@ -8,12 +8,16 @@ import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.annotation.DirtiesContext;
 
 /**
@@ -120,6 +124,32 @@ class BaseEntitySoftDeleteIT {
                 .toList();
         assertThat(labels).containsExactlyInAnyOrder("keep-1", "keep-2");
         assertThat(labels).doesNotContain("delete-me");
+    }
+
+    @Test
+    void practices_PERS_005_createdByIsPopulatedWhenPrincipalIsSet() {
+        // Arrange: set an authenticated principal in the SecurityContext so that
+        // AuditorAware<String> can populate @CreatedBy on persist.
+        var auth = new UsernamePasswordAuthenticationToken(
+                "test-user", null,
+                List.of(new SimpleGrantedAuthority("ROLE_MEMBER")));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        try {
+            // Act: save a record while the SecurityContext has a principal
+            var record = new SoftDeletedRecord();
+            record.setLabel("audit-check");
+            var saved = repository.save(record);
+            // Reload from DB to confirm the persisted value
+            var reloaded = repository.findById(saved.getId()).orElseThrow();
+
+            // Assert: @CreatedBy was populated from the SecurityContext principal
+            assertThat(reloaded.getCreatedBy())
+                    .as("@CreatedBy must be set to the authenticated principal name after persist")
+                    .isEqualTo("test-user");
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     private String createRecord(String label) {
