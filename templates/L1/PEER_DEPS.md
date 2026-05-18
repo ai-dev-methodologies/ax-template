@@ -90,6 +90,12 @@ library's TypeScript compilation. They require a running dev server on `localhos
 | `react-dropzone` | `^14.0.0` | FileDropzone |
 | `react-hook-form` | `^7.53.0` | Form |
 | `react-resizable-panels` | `^2.1.0` | Resizable |
+| `react-markdown` | `^9.0.0` | MarkdownRenderer |
+| `remark-gfm` | `^4.0.0` | MarkdownRenderer (GFM: tables, strikethrough, task lists) |
+| `@tiptap/react` | `^2.0.0` | RichTextEditor |
+| `@tiptap/core` | `^2.0.0` | RichTextEditor |
+| `@tiptap/starter-kit` | `^2.0.0` | RichTextEditor |
+| `next-intl` | `^3.0.0` | LocaleSwitcher, RelativeTime (SP31 Korean specials) |
 | `sonner` | `^1.7.0` | Toaster |
 | `tailwind-merge` | `^2.3.0` | cn() utility |
 

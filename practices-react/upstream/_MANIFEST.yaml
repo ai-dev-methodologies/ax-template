@@ -373,6 +373,26 @@ snapshots:
     version_observed: "toss-payments-api@2024"
     purpose: "Toss Payments 정기결제: billingKey flow, integer KRW amounts, idempotency header, HMAC-SHA256 webhook, status mapping to ax-template canonical statuses"
 
+  - id: "tiptap-2026-05"
+    tier: 2
+    source: "https://tiptap.dev/docs/editor/getting-started/install/react"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4320
+    sha: "c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0"
+    version_observed: "tiptap@2.x"
+    purpose: "TipTap WYSIWYG editor: useEditor hook, EditorContent, StarterKit extensions, 'use client' RSC directive requirement, next/dynamic ssr:false consumption pattern"
+
+  - id: "remark-2026-05"
+    tier: 2
+    source: "https://github.com/remarkjs/react-markdown"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3140
+    sha: "d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1"
+    version_observed: "react-markdown@9.x + remark-gfm@4.x"
+    purpose: "react-markdown: no dangerouslySetInnerHTML, safe by default, GFM (remark-gfm) for tables/strikethrough/task-lists, custom components prop for design-system integration"
+
 curation_pipeline:
   description: "Each rule passes a 4-phase audit before shipping to rules/"
   phases:

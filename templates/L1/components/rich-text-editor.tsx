@@ -139,7 +139,8 @@ export function RichTextEditor({
     extensions: [StarterKit],
     content: value,
     editable: !disabled,
-    onUpdate({ editor: e }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onUpdate({ editor: e }: { editor: any }) {
       onChange?.(e.getHTML())
     },
     editorProps: {

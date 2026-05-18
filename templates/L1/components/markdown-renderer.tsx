@@ -74,13 +74,8 @@ export function MarkdownRenderer({
   // react-markdown is loaded as a peer dependency.
   // For extremely large documents, fork receivers may switch to a
   // next/dynamic import; for typical content the module is small (~15 kB gz).
-  const [ReactMarkdown, setReactMarkdown] =
-    React.useState<React.ComponentType<{
-      children: string
-      remarkPlugins?: unknown[]
-      rehypePlugins?: unknown[]
-      components?: Record<string, React.ComponentType<React.HTMLAttributes<HTMLElement>>>
-    }> | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [ReactMarkdown, setReactMarkdown] = React.useState<React.ComponentType<any> | null>(null)
 
   const [remarkGfm, setRemarkGfm] = React.useState<unknown>(null)
 
@@ -89,7 +84,8 @@ export function MarkdownRenderer({
       import('react-markdown'),
       import('remark-gfm'),
     ]).then(([rmMod, gfmMod]) => {
-      setReactMarkdown(() => rmMod.default)
+      // Wrap in arrow to prevent React treating the component as a state-updater function
+      setReactMarkdown(() => rmMod.default as React.ComponentType<any>)
       setRemarkGfm(() => gfmMod.default)
     })
   }, [])

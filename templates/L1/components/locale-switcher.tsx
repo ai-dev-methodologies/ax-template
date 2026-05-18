@@ -62,8 +62,9 @@ export function LocaleSwitcher({
 
   function handleChange(next: SupportedLocale) {
     startTransition(() => {
-      // next-intl router.replace preserves the current pathname but changes locale
-      router.replace(pathname, { locale: next })
+      // next-intl router.replace preserves the current pathname but changes locale.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.replace(pathname, { locale: next } as any)
     })
   }
 

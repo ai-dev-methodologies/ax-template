@@ -109,9 +109,16 @@ cat > "$SMOKE_DIR/package.json" << 'PKGJSON'
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.0.0",
     "react-hook-form": "^7.53.0",
+    "react-markdown": "^9.0.0",
     "react-resizable-panels": "^2.1.0",
+    "remark-gfm": "^4.0.0",
     "sonner": "^1.7.0",
-    "tailwind-merge": "^2.3.0"
+    "tailwind-merge": "^2.3.0",
+    "@tiptap/react": "^2.0.0",
+    "@tiptap/core": "^2.0.0",
+    "@tiptap/starter-kit": "^2.0.0",
+    "next": "^15.0.0",
+    "next-intl": "^3.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
