@@ -1,0 +1,78 @@
+schema_version: 1
+compatible_with_catalog_version: "v1.2.0-p1-absorbed"
+generated_at: "2026-05-18"
+
+recipes:
+  - pattern: saas-subscription
+    status: active
+    display_name: "Multi-tenant SaaS Subscription"
+    spec: specs/recipes/saas-subscription-recipe-l0.yaml
+    recipe_dir: recipes/saas-subscription
+    sealed_verdict: skills/_tests/sealed-verdict/saas-subscription-verdict.md
+    enabled_l4_domains:
+      - billing
+      - auth
+      - feature-flags
+      - notification
+      - audit-log
+
+  - pattern: e-commerce
+    status: active
+    display_name: "E-commerce (Product + Cart + Checkout + Orders)"
+    spec: specs/recipes/e-commerce-recipe-l0.yaml
+    recipe_dir: recipes/e-commerce
+    sealed_verdict: skills/_tests/sealed-verdict/e-commerce-verdict.md
+    enabled_l4_domains:
+      - crud
+      - payment
+      - notification
+      - audit-log
+      - search
+
+  - pattern: crm
+    status: active
+    display_name: "CRM (Lead → Contact → Deal → Activity)"
+    spec: specs/recipes/crm-recipe-l0.yaml
+    recipe_dir: recipes/crm
+    sealed_verdict: skills/_tests/sealed-verdict/crm-verdict.md
+    enabled_l4_domains:
+      - crud
+      - audit-log
+      - notification
+      - search
+
+deferred_recipes:
+  - pattern: booking
+    status: deferred-pending-fork-receiver-demand
+    reason: "Korean URL evidence for 야놀자/캐치테이블 thin; needs Connectivity API access for citation"
+    reintroduction_trigger: "Fork-receiver demand OR public Booking.com Connectivity case study URL"
+
+  - pattern: community
+    status: deferred-pending-fork-receiver-demand
+    reason: "Discourse + Reddit citations OK; Korean refs (디시인사이드, 클리앙) lack structured API URLs"
+    reintroduction_trigger: "Fork-receiver demand with Korean community platform requirement"
+
+  - pattern: marketplace
+    status: deferred-pending-fork-receiver-demand
+    reason: "Etsy URL OK; 당근마켓 has no public API docs URL → would need internal_design fallback"
+    reintroduction_trigger: "Fork-receiver demand"
+
+  - pattern: lms
+    status: deferred-pending-fork-receiver-demand
+    reason: "Moodle URL OK; 인프런 has no public API docs URL → would need internal_design fallback"
+    reintroduction_trigger: "Fork-receiver demand"
+
+  - pattern: b2b-admin
+    status: deferred-pending-fork-receiver-demand
+    reason: "토스 비즈니스 lacks structured URL for external citation"
+    reintroduction_trigger: "Fork-receiver demand"
+
+  - pattern: cms
+    status: deferred-pending-fork-receiver-demand
+    reason: "Sanity + Contentful URLs OK; rich-text already shipped in SP32"
+    reintroduction_trigger: "Fork-receiver demand or batch with community"
+
+  - pattern: internal-it
+    status: deferred-pending-fork-receiver-demand
+    reason: "Jira + ServiceNow URLs OK; Korean refs to 잔디/카카오워크 lack structured URLs"
+    reintroduction_trigger: "Fork-receiver demand"
