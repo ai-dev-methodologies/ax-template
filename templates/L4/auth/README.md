@@ -120,6 +120,7 @@ Both must exit 0 before shipping.
 
 applied_recipe: saas-subscription
 applied_recipes:
+  - api-gateway-relay
   - b2b-admin
   - cms
   - community

@@ -84,6 +84,7 @@ applied_recipe: saas-subscription
 applied_recipe_secondary: e-commerce
 applied_recipe_tertiary: crm
 applied_recipes:
+  - api-gateway-relay
   - b2b-admin
   - booking
   - cms

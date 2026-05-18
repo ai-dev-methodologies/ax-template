@@ -2222,3 +2222,56 @@ the `[cms, lms]` key in all 4 verdict outcomes (2/2 PASS, lms-only, cms-only,
   - **Follow-ups:**
     - First R10+ application of TD-027 (next time someone proposes an L4 split) generates a precedent log entry under this ADR — captures whether all three conditions were satisfied and which deferred candidate served as the second consumer signal.
     - If `api-gateway-relay` is never proposed by R12, the forward-pointer is replaced with whichever other R10+ deferred candidate consumes webhook (no obligation to ship api-gateway-relay specifically).
+
+---
+
+## R10 ADR Bullets
+
+> *R10 format note.* Bullets below follow the compact bullet entry shape
+> codified at TD-2026-05-22-025 (`## Format convention` block above, lines
+> 2126–2150). R10 ADRs land alongside R9 entries — no new file split.
+
+- **TD-2026-05-23-028** — `api-gateway-relay` recipe shipped via composition of existing 12 L4 (R10 SP47 atomic; no new L4 — TD-027 discipline honored).
+  - **Decision:** `recipes/api-gateway-relay/` born `active` in R10 SP47. Active recipe count 10 → 11. Composition: `webhook + auth + audit-log + crud + scheduled-task` (5 mandatory) + `notification + feature-flags` (2 optional, opt-in via `override_allowed: add:`) + `specs/ratelimit-l0.yaml` (cross-cutting, NO new L4 directory; spec-only binding via `recipe_spec_referential_integrity_guard.sh` file/ID-only resolution path).
+  - **Pre-commit disambiguation sentence (M3 — verbatim in `recipes/api-gateway-relay/RECIPE.md`):** "api-gateway-relay is a GATEWAY-PATTERN COMPOSER that registers and routes inbound traffic to multiple backend services via webhook L4's outbound-emit primitive; NOT itself a primitive."
+  - **Drivers:**
+    - R9 TD-2026-05-22-027 (c) named `api-gateway-relay` as the **plausible R10+ deferred candidate** (forward-pointer); R10 acts on the forward-pointer by shipping `api-gateway-relay` as a SHIPPED active recipe. webhook L4 thus acquires its 2nd shipped consumer (R9 internal-it = 1st; R10 api-gateway-relay = 2nd) and the 2-consumer-signal gate is RETROACTIVELY VALIDATED.
+    - Evidence rigor: **5 English verbatim PASS** (Kong + AWS + Cloudflare API Shield + Tyk + Apigee — strongest English chain alongside R8 cms) + **2 Korean verbatim PASS** (Toss Payments adjacent fallback per R9 Toss-as-adjacent precedent + NAVER Cloud Platform service catalog fresh-vendor adjacent per Architect H1 iter-2 add). 5 + 2 = 7 verbatim rows clearing 1-floor with 5x EN + 2x KO buffer.
+    - 5 INVs each with ≥1 anchor; ALL anchors disk-resolvable at PRD signature: INV-001 (WEBHOOK-SIGN-001 + AUDIT-RECORD-001) + INV-002 (ASVS-V4.1.1 + AUDIT-RECORD-002) + INV-003 (RATELIMIT-1 + RATELIMIT-2 — cross-cutting binding) + INV-004 (WEBHOOK-CIRCUIT-001 + SCHED-LOCK-001) + INV-005 (CRUD-VAL-1 + AUDIT-RECORD-002 + `idempotency-key-on-mutations.md`).
+    - INV-005 disambiguation (deliberate framing — disambiguated from R7 community / R9 internal-it `co-shipped-rule + invariant_test` escape hatch): all anchors EXIST in the catalog today, so the recipe uses the preferred `(spec_ref + rule_ref)` path. NO `co-shipped-rule` invocation needed this cycle (same path as R8 LMS-INV-005 / CMS-INV-005). The choice is determined by catalog state at SP execution, not policy preference.
+  - **Cross-cutting `specs/ratelimit-l0.yaml` binding (R10-novel framing):** `ratelimit-l0.yaml` exists on disk as a 4-item spec (`RATELIMIT-1..4`) WITHOUT a `templates/L4/ratelimit/` directory. R10 treats rate-limiting as a CROSS-CUTTING CONCERN enforced INSIDE existing L4 boundaries (auth + webhook + crud filters), bound via `spec_ref:` ONLY. `recipe_spec_referential_integrity_guard.sh` resolves `spec_ref:` against file existence + ID presence only (NOT L4 directory presence) — guard-compatible without materializing a new L4 directory. This is deliberately DIFFERENT from spinning rate-limit as a new L4 (Codex iter 1 guard audit confirmed at PRD signature; see TD-2026-05-23-029).
+  - **Alternatives considered:**
+    - Option 2 (new L4 `api-gateway` + recipe same SP) — REJECTED: self-fulfills TD-2026-05-22-027 (c) two-consumer-signal gate verbatim; planner would propose BOTH the L4 AND its qualifying recipe in same cycle, exactly what the H1 tightening was designed to prevent.
+    - Option 3 (`rate-limit-as-L4` standalone, no new recipe) — REJECTED: ZERO shipped consumers today; fails TD-2026-05-22-027 (c.1) shipped-active-recipe half AND fails (c.2) plausible-R10+-deferred half; also fails the "L4 ships ≥3 EN + ≥1 KO" rule.
+    - Option 4 (defer past R10; wait for fork-receiver demand) — REJECTED: TD-2026-05-22-027 forward-pointer becomes dead-letter at R12 horizon; user invoked R10 with explicit forward-pointer framing.
+  - **Why chosen:** Composition-kit reuse at maximum expression; validates R9 TD-2026-05-22-027 retroactively; recipe-only / no-new-L4 discipline (TD-2026-05-23-029).
+  - **Consequences:**
+    - 7 L4 READMEs touched: 5 mandatory alphabetical-inserts (`audit-log`, `auth`, `crud`, `scheduled-task`, plus webhook's first 2-element plural-list insertion `[internal-it]` → `[api-gateway-relay, internal-it]`) + 2 optional alphabetical-inserts (`notification`, `feature-flags`) for the `override_allowed: add:` opt-in surfaces.
+    - webhook L4's `applied_recipes:` plural list transitions from R9 SP45b's 1-element `[internal-it]` (first-consumer-arrival key birth per TD-2026-05-21-024) to R10 SP47's 2-element `[api-gateway-relay, internal-it]` (alphabetical insertion BEFORE `internal-it`). R6 dual-form regex + alphabetical-append proven across R6/R7/R8/R9 — no new fixture.
+    - `_MANIFEST.yaml#deferred_recipes: []` UNCHANGED under ALL outcomes (Codex L Option (a) chosen — voluntary recipe failure does NOT create new deferred-queue entry; clean revert preserves R9 closure invariant).
+    - `recipes/README.md` updated: 10 → 11 active recipes (PASS path) OR unchanged (FAIL path; SP47 reverted CLEAN).
+    - `file-storage` + `practices` L4 READMEs remain `applied_recipes:`-key-less (no api-gateway-relay consumer arrives there).
+  - **Follow-ups:**
+    - **Korean adjacent fallback rotation precedent (M2 closure):** R10 iter 2 establishes that fresh-vendor Korean adjacent verbatim from a DIFFERENT vendor than the previous cycle's anchor is the rotation precedent (R9 Toss → R10 NAVER Cloud Platform fresh-vendor + Toss preserved). If R11 + R12 both fall back to Toss again, R12 planner MUST escalate to dedicated Korean-vendor-diversity guard OR accept Toss-as-permanent-adjacent precedent via explicit ADR.
+    - R11+ refresh re-attempts Korean cloud-native API gateway deep-doc hosts (KakaoCloud + NHN Cloud + Naver Cloud) if any platform unblocks; honest-evidence downgrades preserved per PRD §10.
+    - Rate-limit L4 promotion deferred to R11+ if a 2nd recipe consumer arrives organically AND the TD-2026-05-22-027 (c) two-consumer-signal gate is satisfied independently of R10.
+    - `api-gateway-relay` sealed verdict re-execution annually per R5-R9 catalog-quality cadence.
+
+- **TD-2026-05-23-029** — TD-2026-05-22-027 2-consumer-signal gate HONORED in R10 by deliberate no-new-L4 decision; clean-revert fail-state policy unified (Codex L Option (a)).
+  - **Decision:** R10 ships RECIPE ONLY (`api-gateway-relay`). NO new L4. Validates R9 TD-2026-05-22-027 (c) by supplying the 2nd consumer signal for webhook L4 — internal-it (R9, 1st shipped) + api-gateway-relay (R10, 2nd shipped). Fail-state policy unified to CLEAN REVERT under all axes (no deferred-queue addition on voluntary failure).
+  - **Drivers:**
+    - R9 Architect H1 tightened TD-2026-05-22-027 (c) to TWO consumer signals — R10 is the FIRST operational test of that tightening. Shipping a new L4 alongside the qualifying recipe in same cycle would self-fulfill the gate (planner proposes both the L4 + the qualifying recipe in same cycle). R10 ships RECIPE ONLY so the discipline holds.
+    - Codex L Option (a) chosen — voluntary recipe failure does NOT create new deferred-queue entries. PASS keeps `deferred_recipes: []`; FAIL also keeps `[]` via SP47 clean revert. R9 closure invariant preserved under all outcomes.
+  - **Alternatives considered:**
+    - Same-SP L4 + recipe (new `api-gateway` L4 alongside api-gateway-relay) — REJECTED: self-fulfills TD-2026-05-22-027 (c) gate; planner proposes both in one cycle.
+    - Pre-emptive primitive split (`rate-limit-as-L4`) — REJECTED: zero shipped consumers today; fails (c.1) AND (c.2) halves.
+    - Codex L Option (b) (FAIL adds to deferred_recipes with reintroduction_trigger) — REJECTED: voluntary-failure resurrection would re-open R9-closed queue without explicit user trigger.
+  - **Why chosen:** First operational test of TD-2026-05-22-027 (c) tightening; R10 is the "discipline holds" demonstration. Codex L Option (a) preserves R9's hard-won `deferred_recipes: []` closure invariant under all R10 outcomes.
+  - **Consequences:**
+    - R10 ships at L4 = 12 (UNCHANGED). Recipes 10 → 11 (PASS) or 10 → 10 (FAIL via clean revert).
+    - Future R11+ L4-introduction proposals MUST satisfy ALL THREE TD-2026-05-22-027 conditions independently (NOT recyclable via R10 retroactive validation precedent).
+    - **`deferred_recipes: []` invariant strengthened:** voluntary recipe failure no longer creates new deferred-queue entries (Codex L Option (a) precedent). R11+ reintroduction requires fresh evidence chain + explicit user/forward-pointer trigger (NOT auto-resurrection from a R10 FAIL row).
+    - Cross-cutting `specs/ratelimit-l0.yaml#RATELIMIT-1/2` binding precedent established: spec-only `spec_ref:` resolution is GUARD-COMPATIBLE without materializing an L4 directory (Codex iter 1 guard audit confirmed). Future cross-cutting concerns (api-key registry, observability config, etc.) MAY follow this binding precedent without spinning new L4.
+  - **Follow-ups:**
+    - First R11+ application of TD-2026-05-22-027 (post-R10) generates a precedent log entry capturing whether all three conditions were satisfied independently of R10 retroactive validation.
+    - Voluntary-recipe-failure precedent established (CLEAN REVERT, no deferred resurrection); first R11+ voluntary-recipe-failure (if any) cites this ADR for the rollback shape.
