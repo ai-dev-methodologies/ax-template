@@ -1,0 +1,33 @@
+version: "0.1.0"
+pattern: saas-subscription
+enabled_l4_domains:
+  - billing
+  - auth
+  - feature-flags
+  - notification
+  - audit-log
+
+# PASSING FIXTURE — rule: recipe-invariants-must-resolve
+# All business_invariants reference existing artifacts.
+# recipe_governance_guard.sh must exit 0.
+
+business_invariants:
+  - id: SAAS-INV-001
+    description: "subscription must have at least one active plan"
+    # CORRECT: specs/billing-l0.yaml EXISTS on disk
+    spec_ref: "specs/billing-l0.yaml#BILLING-AUTHZ-002"
+
+  - id: SAAS-INV-002
+    description: "usage metering resets on billing cycle boundary"
+    # CORRECT: practices/rules/billing-event-idempotent.md EXISTS on disk
+    rule_ref: "practices/rules/billing-event-idempotent.md"
+
+  - id: SAAS-INV-003
+    description: "feature-gate enforcement matches plan tier"
+    # CORRECT: specs/feature-flags-l0.yaml EXISTS on disk
+    spec_ref: "specs/feature-flags-l0.yaml"
+
+  - id: SAAS-INV-004
+    description: "tenant downgrade preserves historical usage logs"
+    # CORRECT: specs/audit-log-l0.yaml EXISTS on disk
+    spec_ref: "specs/audit-log-l0.yaml"

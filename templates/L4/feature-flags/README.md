@@ -105,3 +105,7 @@ Use `FeatureFlagToggle` in admin UI:
 | FF-FE-003 | Admin detail with description editor | template |
 | FF-FE-004 | FeatureGate client-side with loading/error handling | template |
 | FF-FE-005 | middleware server-side redirect when inactive | template |
+
+## Recipe Composition
+
+applied_recipe: saas-subscription

@@ -161,3 +161,7 @@ bash skills/ax-verify-domain/scripts/run.sh payment
 # Verify L4 layer (auth + crud + payment all green)
 bash skills/ax-verify-L4/scripts/run.sh
 ```
+
+## Recipe Composition
+
+applied_recipe: e-commerce

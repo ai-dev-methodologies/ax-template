@@ -77,3 +77,9 @@ This vertical must **not** import from other L4 domains:
 imports_forbidden: [L4/auth, L4/crud, L4/practices, L4/payment]
 ```
 L1 (shadcn primitives) + L2 (feature blocks) + L3 (page skeletons) are all permitted.
+
+## Recipe Composition
+
+applied_recipe: saas-subscription
+applied_recipe_secondary: e-commerce
+applied_recipe_tertiary: crm

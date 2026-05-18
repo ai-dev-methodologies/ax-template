@@ -80,3 +80,7 @@ templates/backend/billing/
 
 - Backend: `backend/src/test/java/ax/template/billing/BillingFlowIT.java`
 - Frontend: `templates/_tests/billing-prereq.spec.ts`
+
+## Recipe Composition
+
+applied_recipe: saas-subscription

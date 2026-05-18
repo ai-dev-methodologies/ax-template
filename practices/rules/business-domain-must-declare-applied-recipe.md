@@ -47,7 +47,7 @@ The ax-template composition kit tracks which recipe governs each L4 domain via t
 
 When the field is absent, the guard treats the domain as ungoverned — any composition drift goes undetected until a manual audit.
 
-### Failing — L4 billing README without applied_recipe: in a saas-subscription context
+**Incorrect — L4 billing README without applied_recipe: in a saas-subscription context:**
 
 ```markdown
 # L4 / billing — Full Trio Domain
@@ -63,7 +63,7 @@ Billing domain vertical: subscription lifecycle, plan management, invoice listin
      enabled_l4_domains but README declares no applied_recipe -->
 ```
 
-### Correct — L4 billing README with applied_recipe: declared
+**Correct — L4 billing README with applied_recipe: declared:**
 
 ```markdown
 # L4 / billing — Full Trio Domain
@@ -104,3 +104,5 @@ applied_recipe_secondary: e-commerce
 See: `practices/evals/fixtures/business-domain-must-declare-applied-recipe/fail_no_applied_recipe/README.md` — billing domain README without `applied_recipe:` field.
 
 See: `practices/evals/fixtures/business-domain-must-declare-applied-recipe/pass/README.md` — billing domain README with `applied_recipe: saas-subscription`.
+
+Reference: https://docs.spring.io/spring-modulith/reference/fundamentals.html

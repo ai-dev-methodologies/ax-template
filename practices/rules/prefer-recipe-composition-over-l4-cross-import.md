@@ -43,7 +43,7 @@ decided_at: "2026-05-18"
 
 The ax-template composition kit ships Business Pattern Recipes that define *how* multiple L4 domains compose into a coherent business feature. When a Spring service ad-hoc imports from billing, notification, and feature-flags all at once — without `applied_recipe:` in the domain README — it implements a recipe-equivalent pattern off-catalog. This defeats the guard chain and breaks the composition audit trail.
 
-### The violation — multi-L4 composition without recipe declaration
+**Incorrect — multi-L4 composition without recipe declaration:**
 
 ```java
 // VIOLATION: SaasSubscriptionOrchestrator wires billing + feature-flags + notification
@@ -87,7 +87,7 @@ class SaasSubscriptionOrchestrator {
 }
 ```
 
-### Correct — domain README declares applied_recipe; composition follows the contract
+**Correct — domain README declares applied_recipe; composition follows the contract:**
 
 ```java
 // CORRECT: The L4 domain README declares:
@@ -127,3 +127,5 @@ ArchUnit: `noClasses().that().resideInAPackage("..saas..")` imports 2+ distinct 
 See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/fail_ad_hoc_cross_import/SaasOrchestrator.java` — three L4 cross-imports without recipe declaration. Guard must flag.
 
 See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/pass/SaasOrchestrator.java` — same imports with `applied_recipe: saas-subscription` in companion README.md.
+
+Reference: https://martinfowler.com/eaaCatalog/

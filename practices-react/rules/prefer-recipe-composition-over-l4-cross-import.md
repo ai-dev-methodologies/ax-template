@@ -42,7 +42,7 @@ decided_at: "2026-05-18"
 
 **Impact: HIGH — Next.js L4 route segments are independent modules. A page that imports hooks and stores from 2+ sibling L4 domains to replicate a Recipe composition couples those segments and prevents per-route tree-shaking. The composition must be declared via `applied_recipe:` on the domain README.**
 
-### The violation — SaaS page wires multiple L4 hooks without recipe declaration
+**Incorrect — SaaS page wires multiple L4 hooks without recipe declaration:**
 
 ```typescript
 // VIOLATION: templates/L4/saas/app/(saas)/dashboard/page.tsx
@@ -71,7 +71,7 @@ export default function SaasDashboardPage() {
 }
 ```
 
-### Correct — domain README declares applied_recipe; wiring matches recipe contract
+**Correct — domain README declares applied_recipe; wiring matches recipe contract:**
 
 ```typescript
 // CORRECT: templates/L4/saas/README.md declares:
@@ -107,3 +107,5 @@ export default function SaasDashboardPage() {
 See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/fail_ad_hoc_cross_import/SaasPage.tsx` — three L4 cross-imports without recipe declaration.
 
 See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/pass/SaasPage.tsx` — same imports with companion README declaring `applied_recipe: saas-subscription`.
+
+Reference: https://nextjs.org/docs/app/building-your-application/routing/colocation

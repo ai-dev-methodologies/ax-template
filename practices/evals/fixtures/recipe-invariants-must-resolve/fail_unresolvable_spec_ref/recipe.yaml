@@ -1,0 +1,27 @@
+version: "0.1.0"
+pattern: saas-subscription
+enabled_l4_domains:
+  - billing
+  - auth
+  - feature-flags
+  - notification
+  - audit-log
+
+# FAILING FIXTURE — rule: recipe-invariants-must-resolve
+# Violation: business_invariants entries reference non-existent artifacts.
+# recipe_governance_guard.sh must exit 1 for each unresolvable reference.
+
+business_invariants:
+  - id: SAAS-INV-001
+    description: "subscription must have at least one active plan"
+    # VIOLATION: specs/nonexistent-l0.yaml does not exist on disk
+    spec_ref: "specs/nonexistent-l0.yaml#NONEXISTENT-001"
+
+  - id: SAAS-INV-002
+    description: "usage metering resets on billing cycle boundary"
+    # VIOLATION: practices/rules/billing-cycle-reset-ghost.md does not exist
+    rule_ref: "practices/rules/billing-cycle-reset-ghost.md"
+
+  - id: SAAS-INV-003
+    description: "feature-gate enforcement matches plan tier"
+    # VIOLATION: neither spec_ref nor rule_ref present — unenforceable

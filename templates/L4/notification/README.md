@@ -160,3 +160,9 @@ bash skills/ax-verify-L2/scripts/run.sh
 ```
 
 All three must exit 0 before shipping.
+
+## Recipe Composition
+
+applied_recipe: saas-subscription
+applied_recipe_secondary: e-commerce
+applied_recipe_tertiary: crm
