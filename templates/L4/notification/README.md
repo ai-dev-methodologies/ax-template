@@ -166,3 +166,9 @@ All three must exit 0 before shipping.
 applied_recipe: saas-subscription
 applied_recipe_secondary: e-commerce
 applied_recipe_tertiary: crm
+applied_recipes:
+  - booking
+  - crm
+  - e-commerce
+  - marketplace
+  - saas-subscription

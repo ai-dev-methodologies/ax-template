@@ -83,3 +83,10 @@ L1 (shadcn primitives) + L2 (feature blocks) + L3 (page skeletons) are all permi
 applied_recipe: saas-subscription
 applied_recipe_secondary: e-commerce
 applied_recipe_tertiary: crm
+applied_recipes:
+  - b2b-admin
+  - booking
+  - crm
+  - e-commerce
+  - marketplace
+  - saas-subscription

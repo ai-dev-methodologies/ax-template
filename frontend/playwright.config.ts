@@ -9,6 +9,7 @@ export default defineConfig({
     'e2e-*.spec.ts',
     'key-flow.spec.ts',
     'auth/**/*.spec.ts',
+    'recipes/**/*.spec.ts',
   ],
   fullyParallel: false,
   retries: 0,

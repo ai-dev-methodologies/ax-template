@@ -114,4 +114,10 @@ Both must exit 0 before shipping.
 
 ## Recipe Composition
 
-applied_recipe: ["e-commerce", "crm"]
+applied_recipe: e-commerce
+applied_recipe_secondary: crm
+applied_recipes:
+  - b2b-admin
+  - crm
+  - e-commerce
+  - marketplace

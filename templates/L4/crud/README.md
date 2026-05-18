@@ -116,3 +116,9 @@ bash skills/ax-verify-L4/scripts/run.sh
 
 applied_recipe: e-commerce
 applied_recipe_secondary: crm
+applied_recipes:
+  - b2b-admin
+  - booking
+  - crm
+  - e-commerce
+  - marketplace

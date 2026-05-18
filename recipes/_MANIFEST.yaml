@@ -41,38 +41,62 @@ recipes:
       - notification
       - search
 
-deferred_recipes:
   - pattern: booking
-    status: deferred-pending-fork-receiver-demand
-    reason: "Korean URL evidence for 야놀자/캐치테이블 thin; needs Connectivity API access for citation"
-    reintroduction_trigger: "Fork-receiver demand OR public Booking.com Connectivity case study URL"
-
-  - pattern: community
-    status: deferred-pending-fork-receiver-demand
-    reason: "Discourse + Reddit citations OK; Korean refs (디시인사이드, 클리앙) lack structured API URLs"
-    reintroduction_trigger: "Fork-receiver demand with Korean community platform requirement"
+    status: active
+    display_name: "Booking (Calendar + Availability + Reservation + Cancellation)"
+    spec: specs/recipes/booking-recipe-l0.yaml
+    recipe_dir: recipes/booking
+    sealed_verdict: skills/_tests/sealed-verdict/booking-verdict.md
+    enabled_l4_domains:
+      - audit-log
+      - crud
+      - feature-flags
+      - notification
+      - payment
 
   - pattern: marketplace
+    status: active
+    display_name: "Marketplace (Listings + Bids + Escrow + Ratings)"
+    spec: specs/recipes/marketplace-recipe-l0.yaml
+    recipe_dir: recipes/marketplace
+    sealed_verdict: skills/_tests/sealed-verdict/marketplace-verdict.md
+    enabled_l4_domains:
+      - audit-log
+      - crud
+      - notification
+      - payment
+      - search
+
+  - pattern: b2b-admin
+    status: active
+    display_name: "B2B Admin (Multi-tenant Ops + Analytics + Audit + Impersonation)"
+    spec: specs/recipes/b2b-admin-recipe-l0.yaml
+    recipe_dir: recipes/b2b-admin
+    sealed_verdict: skills/_tests/sealed-verdict/b2b-admin-verdict.md
+    enabled_l4_domains:
+      - audit-log
+      - auth
+      - crud
+      - feature-flags
+      - search
+
+deferred_recipes:
+  - pattern: community
     status: deferred-pending-fork-receiver-demand
-    reason: "Etsy URL OK; 당근마켓 has no public API docs URL → would need internal_design fallback"
-    reintroduction_trigger: "Fork-receiver demand"
+    reason: "Discourse + Reddit citations OK; Korean refs (디시인사이드, 클리앙) lack structured API URLs; pattern overlaps with crm for Korean B2C use cases"
+    reintroduction_trigger: "Fork-receiver demand with Korean community platform OR public Discourse-style API integration request; verify in next ralplan cycle."
 
   - pattern: lms
     status: deferred-pending-fork-receiver-demand
-    reason: "Moodle URL OK; 인프런 has no public API docs URL → would need internal_design fallback"
-    reintroduction_trigger: "Fork-receiver demand"
-
-  - pattern: b2b-admin
-    status: deferred-pending-fork-receiver-demand
-    reason: "토스 비즈니스 lacks structured URL for external citation"
-    reintroduction_trigger: "Fork-receiver demand"
+    reason: "scheduled-task L4 absent; LMS due-date-reminder requires job-scheduler integration; 인프런 closed API"
+    reintroduction_trigger: "Fork-receiver demand + confirmed job-scheduler L4 or notification scheduling primitive; OR Coursera/Moodle case-study URL with verbatim integration text."
 
   - pattern: cms
     status: deferred-pending-fork-receiver-demand
-    reason: "Sanity + Contentful URLs OK; rich-text already shipped in SP32"
-    reintroduction_trigger: "Fork-receiver demand or batch with community"
+    reason: "Scheduled publish needs same scheduler primitive as LMS; 네이버 블로그 closed API"
+    reintroduction_trigger: "Fork-receiver demand + scheduler primitive (shared with LMS) + Sanity/Contentful verbatim citation."
 
   - pattern: internal-it
     status: deferred-pending-fork-receiver-demand
-    reason: "Jira + ServiceNow URLs OK; Korean refs to 잔디/카카오워크 lack structured URLs"
-    reintroduction_trigger: "Fork-receiver demand"
+    reason: "Jira API not verbatim-fetched (3 fetch failures); webhook integration patterns too vendor-specific for catalog-stable recipe"
+    reintroduction_trigger: "Fork-receiver demand + verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4."

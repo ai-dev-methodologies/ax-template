@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "01168f168b204efdeea0281f4fc4a2af1a8329b2aebd2160c4485b01aa39fa87"
+  source_concat_sha256: "15c54ebbb876a78f3f17fb04d4cf9fba1573b827a7a70041d4e50785b9e14016"
   rule_count: 84
   generated_by: "practices/generate_agents.sh"
 ---
@@ -980,12 +980,20 @@ applied_recipe: <pattern-name>
 
 Where `<pattern-name>` is the directory name under `recipes/` (e.g., `saas-subscription`, `e-commerce`, `crm`).
 
-If a domain participates in multiple recipes (rare but allowed), declare multiple:
+If a domain participates in multiple recipes, use the R6+ canonical plural form (with ≥1 list entry required — an empty `applied_recipes:` block is a violation) OR the R5 legacy multi-line form; both satisfy this rule:
 
 ```
+# R6+ canonical (preferred for ≥2 recipes, alphabetically sorted):
+applied_recipes:
+  - e-commerce
+  - saas-subscription
+
+# R5 legacy (still valid, preserved for backward-compat):
 applied_recipe: saas-subscription
 applied_recipe_secondary: e-commerce
 ```
+
+**Note (TD-2026-05-18-019):** Both `applied_recipe:` (R5 singular legacy) and `applied_recipes:` (R6+ plural canonical) satisfy this rule. `recipe_governance_guard.sh` accepts both forms via dual-form regex alternation. `applied_recipes:` MUST have ≥1 list item; an empty list is an explicit violation.
 
 ## Failing fixture
 

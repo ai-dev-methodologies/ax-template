@@ -1,0 +1,80 @@
+# spec-trio-template.yaml — booking
+#
+# Pre-filled Spec Trio fragments to copy into your project's specs/ directory
+# when implementing the booking recipe.
+#
+# Instructions:
+#   1. Copy this file to your project as specs/booking-l0.yaml
+#   2. Replace all <PLACEHOLDER> values with project-specific values
+#   3. Extend the items array with domain-specific requirements
+#   4. Ensure business_invariants from RECIPE.md are reflected as spec items
+#
+# This fragment composes the following L4 Spec Trios (reference, do not copy):
+#   - specs/crud-security.yaml
+#   - specs/payment-l0.yaml
+#   - specs/notification-l0.yaml
+#   - specs/audit-log-l0.yaml
+#   - specs/feature-flags-l0.yaml
+
+schema_version: 1
+scope: "<YOUR_PROJECT>-booking"
+stack: "Spring Boot 3.2.x + React + Toss Payments Widget"
+standard: "OWASP Top 10 + PCI-DSS SAQ-A + RFC 7807"
+applied_recipes:
+  - booking
+compatible_with_catalog_version: "v1.3.0-business-patterns"
+
+items:
+  # ─── BOOKING-INV-001: no double-booking ────────────────────────────────────
+  - id: "BOOKING-INV-001"
+    chapter: "RESERVATION"
+    requirement: >
+      A resource must not be booked for overlapping time windows.
+      POST /api/reservations with a conflicting time range is rejected with HTTP 409.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    notes: >
+      Test: create reservation A [t1,t2]; POST reservation B [t1+1h, t2+1h] → 409.
+      Implementation: database range exclusion constraint (PostgreSQL tsrange EXCLUDE);
+      service layer also checks before insert.
+
+  # ─── BOOKING-INV-002: free-window cancellation has no deposit charge ───────
+  - id: "BOOKING-INV-002"
+    chapter: "PAYMENT"
+    requirement: >
+      Cancellation within the free-cancellation window (determined by
+      booking.cancellation_policy.variant feature-flag) must not charge the deposit.
+      payment.refund_amount == payment.deposit_amount in this case.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/payment-l0.yaml#PAYMENT-STATE-002"
+    notes: >
+      Test: create reservation, cancel within free window → assert refund full amount.
+      Test: cancel after free window → assert partial or zero refund per policy.
+      Implementation: CancellationService checks policy variant from feature-flag;
+      calls PaymentService.refund() with calculated amount.
+
+  # ─── BOOKING-INV-003: no-show triggers audit-log ──────────────────────────
+  - id: "BOOKING-INV-003"
+    chapter: "AUDIT"
+    requirement: >
+      Every no-show trigger must produce an audit-log record containing
+      operator_id, reservation_id, and triggered_at timestamp.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+    notes: >
+      Test: POST /api/reservations/{id}/noshow → assert audit_logs has entry
+      with action=reservation.noshow.triggered + operator_id present.
+      Implementation: @Audited(action = "reservation.noshow.triggered") on
+      NoShowService.trigger().
+
+  # ─── Add your project-specific items below ────────────────────────────────
+  # - id: "<YOUR_PROJECT>-BOOKING-001"
+  #   chapter: "<CHAPTER>"
+  #   requirement: "<REQUIREMENT>"
+  #   ...

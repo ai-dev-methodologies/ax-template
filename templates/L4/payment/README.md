@@ -165,3 +165,7 @@ bash skills/ax-verify-L4/scripts/run.sh
 ## Recipe Composition
 
 applied_recipe: e-commerce
+applied_recipes:
+  - booking
+  - e-commerce
+  - marketplace
