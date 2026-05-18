@@ -41,6 +41,9 @@ dependencies {
     // Required by PaymentReconciliationTest's payload->>'amount' query.
     implementation("com.h2database:h2:2.3.232")
 
+    // CSV import — PRACTICES-INTEG-002 (chunked-import-required-when-rowcount-gt-1000)
+    implementation("com.opencsv:opencsv:5.9")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.testcontainers:junit-jupiter")
@@ -102,6 +105,15 @@ tasks.register<Test>("testPortability") {
     // Fixtures must be built first: practices/evals/portability/run.sh --full
     // If a fixture's classes dir is missing, the test is skipped via JUnit Assumptions
     // (not failed) — see PortabilityFixtures.importFixture().
+}
+
+tasks.register<Test>("testIntegration") {
+    useJUnitPlatform {
+        includeTags("INTEGRATION")
+    }
+    description = "Run SP24 integration tests (WebhookReceiverIT, CsvImportChunkedIT)"
+    group = "verification"
+    shouldRunAfter("test")
 }
 
 tasks.register<Exec>("specRefGuard") {

@@ -6,6 +6,7 @@ import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
@@ -30,7 +31,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * backend test application.
  */
 @Entity
-@SQLDelete(sql = "UPDATE soft_deleted_records SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+@Table(name = "soft_deleted_records")
+@SQLDelete(sql = "UPDATE soft_deleted_records SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND version = ?")
 @Where(clause = "deleted_at IS NULL")
 @EntityListeners(AuditingEntityListener.class)
 public class SoftDeletedRecord {

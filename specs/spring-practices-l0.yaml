@@ -9,6 +9,13 @@ items:
     verification_type: "integration_test"
     applicable: true
     notes: "Integration test asserts Hibernate Statistics.getQueryExecutionCount() == 1 (or a small constant) when iterating a parent collection. The naive lazy-iterate path is shown in the corresponding rule .md as the Incorrect example."
+  - id: "PRACTICES-PERS-005"
+    chapter: "Persistence / Soft Delete"
+    requirement: "Soft-delete must be implemented via @SQLDelete (UPDATE … SET deleted_at = CURRENT_TIMESTAMP) and @Where(clause = 'deleted_at IS NULL'), not via a boolean deleted flag. Every @Entity that uses @SQLDelete must also carry @Where to auto-filter deleted rows from all JPQL queries."
+    test_method: "practices_PERS_005_softDeletedRecordDisappearsFromList"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "RestAssured IT creates a record, soft-deletes via DELETE endpoint, then asserts it no longer appears in GET list (filtered by @Where). ArchUnit rule (BaseEntitySoftDeleteArchTest) asserts: (1) @SQLDelete → @Where co-presence; (2) no boolean 'deleted' field on @Entity classes."
   - id: "PRACTICES-TX-001"
     chapter: "Transaction Management"
     requirement: "Self-invocation of @Transactional methods through this.method() bypasses the proxy and does not start a transaction. Call across a separate bean to honor @Transactional."
