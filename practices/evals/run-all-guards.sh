@@ -155,10 +155,18 @@ fi
 
 # ── 7. recipe_governance_guard (live repo) ───────────────────────────────────
 echo "[7] recipe_governance_guard.sh (live repo)"
-# Exits 0 when recipes/ does not exist (SP35 pending). Validates all recipe
-# governance rules once recipes/ lands.
+# Exits 0 when recipes/ does not exist. Validates applied_recipe: annotations
+# and recipe invariant resolution once recipes/ lands (SP35+).
 run_guard "recipe_governance/live" 0 \
     bash "$SCRIPT_DIR/recipe_governance_guard.sh"
+
+# ── 8. recipe_spec_referential_integrity_guard (SP35) ────────────────────────
+echo "[8] recipe_spec_referential_integrity_guard.sh (live repo)"
+# Validates enabled_l4_domains, l2_blocks_used, l3_pages_used, and
+# business_invariants referential integrity across all specs/recipes/*.yaml.
+# Enforces the recipe-invariants-must-resolve rule (SP37).
+run_guard "recipe_spec_referential_integrity/live" 0 \
+    bash "$SCRIPT_DIR/recipe_spec_referential_integrity_guard.sh"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
