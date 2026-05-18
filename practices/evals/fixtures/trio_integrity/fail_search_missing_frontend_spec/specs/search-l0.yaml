@@ -1,0 +1,10 @@
+version: "1.0.0"
+scope: "search-domain"
+stack: "Spring Boot 3.2.x + PostgreSQL FTS"
+items:
+  - id: "SEARCH-001"
+    chapter: "QUERY"
+    requirement: "POST /api/v1/search returns paginated results for a given query string."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true

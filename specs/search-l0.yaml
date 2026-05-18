@@ -1,0 +1,104 @@
+version: "1.0.0"
+scope: "search-domain"
+stack: "Spring Boot 3.2.x + PostgreSQL FTS (default) / Meilisearch (opt-in)"
+standard: "RFC 7807 + OWASP ASVS V4 + PostgreSQL FTS"
+items:
+  # ─── AUTHZ family (2 items) ────────────────────────────────────────────────
+  - id: "SEARCH-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All search endpoints require a valid authenticated session; unauthenticated requests are rejected with HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: call POST /api/v1/search without a JWT → 401.
+      Implementation: SecurityConfig maps /api/v1/search/** to requiresAuthentication().
+    policy_ref: "blueprints/search-manifest.yaml#authz"
+
+  - id: "SEARCH-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Search results are scoped to resources the caller is authorized to view; cross-tenant data leakage is prevented."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: index documents for tenant A; authenticate as tenant B; search → 0 results.
+      Implementation: SearchIndexService always appends caller's tenantId filter to the query.
+    policy_ref: "blueprints/search-manifest.yaml#authz"
+
+  # ─── QUERY family (3 items) ────────────────────────────────────────────────
+  - id: "SEARCH-QUERY-001"
+    chapter: "QUERY"
+    requirement: "POST /api/v1/search accepts {query, domain?, page, size} and returns a paginated SearchResultPage with hits, totalHits, page, size, and processingTimeMs."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: index 3 documents; POST /api/v1/search {query: "hello"} → 200, hits.size >= 1, totalHits >= 1.
+      Implementation: SearchController.search() delegates to SearchIndexService which calls the configured SearchBackend.
+      Response is mapped via SearchDto.SearchResultPage.
+      PageRequestNormalizer.normalize() enforces max page size = 100.
+    policy_ref: "blueprints/search-manifest.yaml#query"
+
+  - id: "SEARCH-QUERY-002"
+    chapter: "QUERY"
+    requirement: "POST /api/v1/search with Korean query (e.g. '강남 결제') returns results; the backend handles Korean tokenization gracefully."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: index a document containing '강남역 결제 완료'; POST /api/v1/search {query: "강남 결제"} → 200, hits not empty.
+      Implementation: PostgresFtsAdapter uses 'simple' dictionary (no Korean tokenizer required for basic matching);
+      'pg_bigm' or 'mecab-ko' are documented as opt-in upgrades.
+    policy_ref: "blueprints/search-manifest.yaml#query"
+
+  - id: "SEARCH-QUERY-003"
+    chapter: "QUERY"
+    requirement: "POST /api/v1/search with empty or blank query returns HTTP 400 with RFC 7807 problem detail."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/v1/search {query: ""} → 400, type contains "validation-error".
+      POST /api/v1/search {query: "   "} → 400.
+      Implementation: SearchDto.SearchRequest validates @NotBlank on the query field.
+      GlobalExceptionHandler maps MethodArgumentNotValidException → 400 RFC 7807.
+    policy_ref: "blueprints/search-manifest.yaml#query"
+
+  # ─── INDEX family (2 items) ─────────────────────────────────────────────────
+  - id: "SEARCH-INDEX-001"
+    chapter: "INDEX"
+    requirement: "POST /api/v1/search/index indexes a document; the document is subsequently findable by content search."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST /api/v1/search/index {id, domain, content, metadata} → 201.
+      Then POST /api/v1/search {query: "<word from content>"} → hits include the indexed document.
+      Implementation: SearchIndexService.index() calls SearchBackend.index(), then returns the document id.
+    policy_ref: "blueprints/search-manifest.yaml#index"
+
+  - id: "SEARCH-INDEX-002"
+    chapter: "INDEX"
+    requirement: "DELETE /api/v1/search/index/{id} removes a document from the search index; subsequent search does not return it."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): index doc, DELETE /api/v1/search/index/{id} → 204.
+      Test (negative): search for the document content → hits do not include deleted document id.
+      Implementation: SearchIndexService.delete() calls SearchBackend.delete(id).
+    policy_ref: "blueprints/search-manifest.yaml#index"
+
+  # ─── BACKEND family (1 item) ────────────────────────────────────────────────
+  - id: "SEARCH-BACKEND-001"
+    chapter: "BACKEND"
+    requirement: "Default search backend is postgres-fts; Meilisearch is opt-in via ax.search.backend=meilisearch configuration."
+    test_method: "ArchUnit test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: assert blueprints/search-manifest.yaml declares default_backend: postgres-fts.
+      Implementation: SearchBackend interface resolved by SearchBackendConfig @ConditionalOnProperty(ax.search.backend).
+      Default (when property absent): PostgresFtsAdapter is activated.
+    policy_ref: "blueprints/search-manifest.yaml#backend"

@@ -116,6 +116,15 @@ tasks.register<Test>("testIntegration") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testSearch") {
+    useJUnitPlatform {
+        includeTags("search")
+    }
+    description = "Run SP26 search domain compliance tests (SEARCH-AUTHZ, SEARCH-QUERY, SEARCH-INDEX, SEARCH-BACKEND)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

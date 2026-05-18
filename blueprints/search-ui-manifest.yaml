@@ -1,0 +1,43 @@
+template_id: search-ui-blueprint
+family: scaffold
+status: draft
+confidence: medium
+stack:
+  frontend: react
+  contract: openapi
+  repo_shape: single-repo
+
+# ─── palette ──────────────────────────────────────────────────────────────────
+palette:
+  shortcut: "Cmd+K"
+  component: templates/L2/blocks/search-palette-extended.tsx
+  ime_guard: true
+  debounce_ms: 300
+  trace:
+    SEARCH-FE-001: palette triggers search; Korean IME no corruption
+
+# ─── typeahead ────────────────────────────────────────────────────────────────
+typeahead:
+  component: templates/L2/blocks/typeahead-search.tsx
+  ime_guard: true
+  debounce_ms: 300
+  suppress_during_composition: true   # compositionstart suspends debounce
+  trace:
+    SEARCH-FE-002: IME composition suppresses API calls
+
+# ─── results ──────────────────────────────────────────────────────────────────
+results:
+  component: templates/L2/blocks/result-highlighter.tsx
+  highlight_tag: mark
+  safe_html: true     # DOMPurify or allowlist before dangerouslySetInnerHTML
+  trace:
+    SEARCH-FE-003: <mark>-tagged snippets rendered safely
+
+# ─── recent ───────────────────────────────────────────────────────────────────
+recent:
+  component: templates/L2/blocks/recent-searches.tsx
+  storage: localStorage
+  key: ax-recent-searches
+  max_items: 10
+  trace:
+    SEARCH-FE-004: last 10 queries persisted; click re-triggers search

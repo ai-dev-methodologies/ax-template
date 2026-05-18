@@ -1,0 +1,46 @@
+# contracts/search-ui.yaml
+# Frontend UI contract for the search domain.
+# Defines routes, component bindings, and API operation mappings.
+# ADR: TD-2026-05-18-026
+
+domain: search
+domain_mode: full_trio
+backend_contract_ref: contracts/search-openapi.yaml
+
+routes:
+  - path: /search
+    component: templates/L4/search/app/(search)/page.tsx
+    title: "Search"
+    backend_operation_id: search
+    auth_required: true
+
+  - path: /search/results
+    component: templates/L4/search/app/(search)/results/page.tsx
+    title: "Search Results"
+    backend_operation_id: search
+    auth_required: true
+
+ui_components:
+  - id: search-palette-extended
+    template: templates/L2/blocks/search-palette-extended.tsx
+    backend_operation_id: search
+    spec_ref: SEARCH-FE-001
+    notes: "Global Cmd+K search palette. Korean IME aware."
+
+  - id: typeahead-search
+    template: templates/L2/blocks/typeahead-search.tsx
+    backend_operation_id: search
+    spec_ref: SEARCH-FE-002
+    notes: "Debounced typeahead. Suppresses API calls during IME composition."
+
+  - id: result-highlighter
+    template: templates/L2/blocks/result-highlighter.tsx
+    backend_operation_id: search
+    spec_ref: SEARCH-FE-003
+    notes: "Renders ts_headline <mark>-tagged snippets safely."
+
+  - id: recent-searches
+    template: templates/L2/blocks/recent-searches.tsx
+    backend_operation_id: search
+    spec_ref: SEARCH-FE-004
+    notes: "Persists last 10 queries in localStorage."

@@ -22,5 +22,6 @@ domains:
   file-storage: full_trio    # SP18: upload/list/download/delete + presigned URL + L4 vertical
   email-outbox: backend_only      # SP19: transactional outbox, retry/DLQ, admin API; no frontend UI
   scheduled-task: backend_only    # SP19: distributed-lock cron jobs, job history; no frontend UI
+  search: full_trio             # SP26: full-text search + typeahead + Cmd+K palette + charts L2
   # security: backend_only  # no specs/security-*.yaml yet — add when backend domain is scaffolded
   # user: backend_only      # no specs/user-*.yaml yet — add when backend domain is scaffolded

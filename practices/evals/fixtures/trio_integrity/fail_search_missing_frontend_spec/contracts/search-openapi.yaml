@@ -1,0 +1,13 @@
+openapi: 3.0.3
+info:
+  title: ax-template Search API (fixture stub)
+  version: 0.1.0
+paths:
+  /search:
+    post:
+      operationId: search
+      summary: Full-text search
+      tags: [search]
+      responses:
+        '200':
+          description: Search results
