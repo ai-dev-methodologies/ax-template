@@ -1,0 +1,88 @@
+template_id: realtime-policy-manifest
+family: scaffold
+status: stable
+confidence: high
+stack:
+  frontend: react
+  backend: spring-boot
+  contract: openapi
+
+# ─── transport policy ─────────────────────────────────────────────────────────
+#
+# IMPORTANT: default_transport is POLLING (TanStack Query interval fetch).
+# SSE and WebSocket are OPT-IN via feature flags in application.yaml.
+# See ADR TD-2026-05-18-027 and templates/backend/realtime/ for opt-in setup.
+#
+realtime:
+  default_transport: polling   # L4 notification / audit-log / payment default — safe for serverless
+  polling_interval_ms: 5000    # default fork-receiver polling interval
+
+  opt_in_transports:
+    - name: sse
+      enabled_via: ax.realtime.sse.enabled=true
+      serverless_safe: false   # Vercel/Lambda timeout kills long-lived SSE connections — see README
+      notes: >
+        SSE (Server-Sent Events) delivers push events from server to client.
+        Not safe for serverless platforms (Vercel, AWS Lambda) where function
+        timeouts (10–60s) kill long-lived HTTP connections causing reconnect loops.
+        Use only on persistent runtimes (EC2, ECS, GKE, bare metal).
+    - name: websocket
+      enabled_via: ax.realtime.websocket.enabled=true
+      serverless_safe: false   # Same serverless constraint as SSE
+      notes: >
+        WebSocket (STOMP over WS) is a bidirectional fallback for environments
+        where SSE is blocked by reverse proxies. Also not serverless-safe.
+
+# ─── polling configuration ────────────────────────────────────────────────────
+polling:
+  default_stale_time_ms: 0         # always consider data stale (fetch on mount)
+  default_refetch_interval_ms: 5000  # poll every 5s
+  default_refetch_on_window_focus: true
+  max_retry_count: 3
+  retry_delay_ms: 1000
+
+# ─── SSE configuration (opt-in) ───────────────────────────────────────────────
+sse:
+  endpoint: /api/v1/events
+  topics: [notification, audit, payment, system]
+  heartbeat_interval_ms: 30000     # keep-alive to prevent proxy timeout
+  timeout_ms: 300000               # 5 min connection limit before client reconnects
+  max_connections_per_user: 3      # guard against tab proliferation
+
+# ─── WebSocket configuration (opt-in) ────────────────────────────────────────
+websocket:
+  endpoint: /ws
+  stomp_endpoint: /ws/stomp
+  topic_prefix: /topic
+  user_prefix: /user
+  heartbeat_incoming_ms: 25000
+  heartbeat_outgoing_ms: 25000
+
+# ─── observability ───────────────────────────────────────────────────────────
+observability:
+  metrics:
+    - sse.active_connections         # gauge — current open SSE connections (opt-in path only)
+    - sse.event_delivery_latency_ms  # histogram — p50/p95/p99
+    - polling.request_total          # counter — total polling fetches
+    - realtime.event_bus_relay_total # counter — events relayed through outbox → SSE bridge
+  mdc:
+    - sse.topic
+    - sse.user_id
+
+# ─── guard thresholds ─────────────────────────────────────────────────────────
+guard:
+  realtime_default_not_polling: >
+    Exit 1 with REALTIME_DEFAULT_NOT_POLLING if L4 wires SseEmitterConfig as
+    default transport without going through the opt-in flag.
+  serverless_warning_missing: >
+    Exit 1 with SERVERLESS_WARNING_MISSING if L4 imports templates/backend/realtime/**
+    AND ax.realtime.sse.enabled=true but README lacks ## Serverless Deployment section.
+
+# ─── adr reference ────────────────────────────────────────────────────────────
+adr:
+  id: TD-2026-05-18-027
+  decision: polling-is-default; SSE/WebSocket opt-in via this manifest
+  rationale: >
+    Serverless-safe default. L4 notification/audit/payment all use TanStack Query
+    polling (5s interval). SSE delivers lower latency when opted in on persistent
+    runtimes. WebSocket is STOMP fallback for proxies that block SSE.
