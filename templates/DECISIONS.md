@@ -2120,3 +2120,57 @@ the `[cms, lms]` key in all 4 verdict outcomes (2/2 PASS, lms-only, cms-only,
   scenario (e.g. if a recipe consumes `file-storage` for the first time,
   the same convention applies).
 - No guard changes — R6 dual-form regex already accepts the plural list shape.
+
+---
+
+## Format convention (added 2026-05-22, R9 SP45 — H2 closure)
+
+> *Format convention.* Entries above (TD-2026-05-17-001 through TD-2026-05-21-024)
+> use the `## <RULE_ID>` header + YAML frontmatter + structured Decision /
+> Drivers / Alternatives / Consequences sections — preserved as-is (no
+> backfill of TD-2026-05-21-023 / -024 to keep the inline-reference pattern
+> already deployed elsewhere in the catalog).
+>
+> Starting at TD-2026-05-22-025 (R9 SP45 webhook L4), new architectural
+> decision records land in this file as **compact bullet entries** of the form:
+>
+> ```
+> - **TD-YYYY-MM-DD-NNN** — title.
+>   - Decision: …
+>   - Drivers: …
+>   - Alternatives considered: …
+>   - Why chosen: …
+>   - Consequences: …
+>   - Follow-ups: …
+> ```
+>
+> Pre-R7 `practices/rules/*.md` rules (those tracked in `practices/DECISIONS.md`)
+> retain the `## <RULE_ID>` provenance format that file already uses. This
+> opening note resolves the H2 iter-2 PRD finding (format drift between the two
+> files) by codifying the convention without retrofit.
+
+---
+
+## R9 ADR Bullets
+
+- **TD-2026-05-22-025** — Webhook L4 primitive introduced (NET-NEW Spec Trio; 12th L4 domain).
+  - **Decision:** Add `webhook` as the 12th L4 domain (L4 count 11 → 12). All four Spec Trio artifacts authored net-new in SP45: `specs/webhook-l0.yaml` (10 items across EMIT / SIGN / RETRY / DEAD-LETTER / CIRCUIT-BREAKER / IDEMPOTENCY families), `contracts/webhook-openapi.yaml`, `blueprints/webhook-manifest.yaml`, `templates/L4/webhook/README.md` + `backend/` skeleton stubs (no `applied_recipes:` key at introduction — first-consumer-arrival convention TD-2026-05-21-024 applies; SP45b births the key `[internal-it]`).
+  - **Drivers:**
+    - R8 §10 trigger named "clarified webhook-emit primitive in notification L4 OR notification L4 gains explicit webhook-emit spec items"; R9 picks the OR-branch with TD-2026-05-22-027 rationale.
+    - Webhook semantics (per-endpoint signing secret · HMAC-SHA256 over `<timestamp>.<body>` · idempotent retry · dead-letter · circuit breaker) are not a subset of notification-send (channel routing · template rendering · recipient preferences).
+    - Evidence chain: 4 English verbatim (GitHub Webhooks + Stripe Webhooks for SP45; Jira webhooks + PagerDuty webhooks for SP45b internal-it consumer) + 2 Korean verbatim (Toss Payments webhook guide + Naver Works Bot API) — strongest L4-introduction evidence chain in catalog history.
+  - **HMAC cryptographic anchor (Codex Critic INFORMATIONAL — explicit reuse statement):** `WEBHOOK-SIGN-001` and `WEBHOOK-SIGN-002` outbound signing **deliberately reuses the same RFC 2104 + OWASP ASVS V13.2.6 cryptographic anchor** already cited by `practices/rules/webhook-hmac-required.md` and `specs/spring-practices-l0.yaml#PRACTICES-INTEG-001` for inbound receiver verification. Sender (outbound) and receiver (inbound) are distinct catalog axes — different responsibility (sender computes the MAC over `timestamp + "." + body`; receiver verifies the same MAC using `MessageDigest.isEqual` for constant-time comparison) but share the identical RFC 2104 HMAC-SHA256 construction. `practices/upstream/r9-sp45-webhook-evidence.md` pins RFC 2104 in the upstream evidence snapshot. Receiver verification stays scoped to `PRACTICES-INTEG-001`; sender signing is scoped to `specs/webhook-l0.yaml#WEBHOOK-SIGN-001/002`. No new cryptographic primitive introduced.
+  - **Alternatives considered:**
+    - Extend notification L4 with webhook-emit items (rejected — pollutes notification's 4-anchor evidence chain about user channels; conflates user-channel routing with system-to-system signed-callback semantics).
+    - Tier-2 skill (rejected — Tier-1/Tier-2 caps FROZEN at 4 + 8).
+    - SP45/SP45b atomic-2 single-SP shape (rejected — R7 Synthesis-B Option 3 protects internal-it from webhook-harness risk via SP-gating).
+  - **Why chosen:** Composition-kit self-extensibility along the catalog's NEW system-to-system axis. Webhook IS that axis for internal-it (R9) and future api-gateway-relay (R10+ plausible candidate). The 4-anchor external evidence chain plus 2 Korean verbatim is the strongest justification of any L4 introduction since R5 billing.
+  - **Consequences:**
+    - L4 domain count: 11 → 12.
+    - `practices/AGENTS.md` sentinel sha is **unchanged** — `practices/generate_agents.sh` reads only `practices/rules/*.md` and does NOT walk `templates/L4/` topology (PRD §11 hedge resolution: NO path; same shape as TD-2026-05-20-020 scheduler precedent).
+    - Webhook README ships **without** an `applied_recipes:` key at SP45 (file-storage + practices + R7-scheduler-pre-R8 precedent); SP45b births the key `[internal-it]` with the M6 inline desync annotation `# verdict pending until SP46 — see _MANIFEST.yaml for active status` so the 3-9 day partial-tag desync window is self-documenting.
+    - `trio_integrity_allowlist.yaml` adds `webhook: backend_only`.
+    - R10+ recipes (api-gateway-relay, webhook-relay, etc.) are now unblocked at the catalog level.
+  - **Follow-ups:**
+    - `webhook-secret-encryption` co-shipped recipe-level invariant (R9 SP45b `internal-it INTERNAL-IT-INV-005`) — **promotion to a standalone `practices/rules/security-secret-encryption-at-rest.md` rule is deferred indefinitely; remains a recipe-level invariant unless cross-domain need emerges.** No R10+ deferred-recipe entry exists today that would consume it; promotion is reactive to demonstrated demand, not speculative (M5 framing).
+    - Full backend (HmacSigner, RetryPolicy, CircuitBreakerPolicy, Service, Controller) is deferred to a future webhook backend-expansion cycle — triggered by fork-receiver demand or recipe need, not by ralplan cycle cadence.

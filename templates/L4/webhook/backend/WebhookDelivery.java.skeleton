@@ -1,0 +1,127 @@
+/*
+ * WebhookDelivery.java.skeleton — R9 SP45 webhook L4 backend stub (sender axis).
+ *
+ * Rename to WebhookDelivery.java in your fork.
+ * Set the package to match your domain root (e.g. com.<org>.webhook).
+ *
+ * This stub anchors several spec items in specs/webhook-l0.yaml:
+ *   - WEBHOOK-RETRY-002: id (UUID) is the X-Webhook-Delivery-Id and stays
+ *     STABLE across every retry attempt for the same logical event.
+ *   - WEBHOOK-RETRY-001: nextAttemptAt is driven by RetryPolicy
+ *     (30s × 2 backoff, max 5 attempts).
+ *   - WEBHOOK-DEAD-LETTER-001: terminal FAILED_PERMANENT status retains
+ *     lastResponseCode + lastAttemptAt for admin inspection.
+ *   - WEBHOOK-DEAD-LETTER-002: replay creates a fresh row with a new id;
+ *     this row is retained.
+ *
+ * Full domain implementation (HmacSigner, RetryPolicy, CircuitBreakerPolicy,
+ * Service, Controller, WebhookDispatcher) lands when the first downstream
+ * recipe consumes webhook — R9 SP45b internal-it.
+ */
+
+// package com.<org>.webhook;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(name = "webhook_delivery")
+public class WebhookDelivery {
+
+    public enum Status { PENDING, PENDING_RETRY, SUCCESS, FAILED_PERMANENT }
+
+    @Id
+    @Column(name = "id", nullable = false, updatable = false, length = 36)
+    private String id;
+
+    @Column(name = "endpoint_id", nullable = false, length = 36)
+    private String endpointId;
+
+    @Column(name = "event_type", nullable = false, length = 200)
+    private String eventType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private Status status;
+
+    @Column(name = "attempt_count", nullable = false)
+    private int attemptCount;
+
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
+
+    @Column(name = "last_response_code")
+    private Integer lastResponseCode;
+
+    @Column(name = "last_attempt_at")
+    private Instant lastAttemptAt;
+
+    /** First 256 bytes of the serialised JSON body — full body not retained (manifest:dead-letter#body_preview_bytes). */
+    @Column(name = "body_preview", length = 256)
+    private String bodyPreview;
+
+    @Column(name = "last_error", length = 1024)
+    private String lastError;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    protected WebhookDelivery() { /* JPA */ }
+
+    /** Enqueue a fresh delivery; the id is allocated ONCE and reused across all retry attempts (WEBHOOK-RETRY-002). */
+    public static WebhookDelivery enqueue(String endpointId, String eventType, String bodyPreview) {
+        WebhookDelivery d = new WebhookDelivery();
+        d.id = UUID.randomUUID().toString();
+        d.endpointId = endpointId;
+        d.eventType = eventType;
+        d.status = Status.PENDING;
+        d.attemptCount = 0;
+        d.bodyPreview = bodyPreview;
+        d.createdAt = Instant.now();
+        return d;
+    }
+
+    /** Record a successful delivery attempt. */
+    public void markSuccess(int responseCode) {
+        this.attemptCount += 1;
+        this.status = Status.SUCCESS;
+        this.lastResponseCode = responseCode;
+        this.lastAttemptAt = Instant.now();
+        this.nextAttemptAt = null;
+        this.lastError = null;
+    }
+
+    /** WEBHOOK-RETRY-001: record a failed attempt and schedule retry, OR transition to dead-letter. */
+    public void markFailedAttempt(int responseCode, String error, Instant nextAttempt, boolean exhausted) {
+        this.attemptCount += 1;
+        this.lastResponseCode = responseCode;
+        this.lastAttemptAt = Instant.now();
+        this.lastError = error;
+        if (exhausted) {
+            this.status = Status.FAILED_PERMANENT;
+            this.nextAttemptAt = null;
+        } else {
+            this.status = Status.PENDING_RETRY;
+            this.nextAttemptAt = nextAttempt;
+        }
+    }
+
+    public String getId() { return id; }
+    public String getEndpointId() { return endpointId; }
+    public String getEventType() { return eventType; }
+    public Status getStatus() { return status; }
+    public int getAttemptCount() { return attemptCount; }
+    public Instant getNextAttemptAt() { return nextAttemptAt; }
+    public Integer getLastResponseCode() { return lastResponseCode; }
+    public Instant getLastAttemptAt() { return lastAttemptAt; }
+    public String getBodyPreview() { return bodyPreview; }
+    public String getLastError() { return lastError; }
+    public Instant getCreatedAt() { return createdAt; }
+}

@@ -1,0 +1,150 @@
+template_id: webhook-blueprint
+family: scaffold
+status: draft
+confidence: high
+domain_mode: backend_only   # SP45 R9: outbound webhook emit + sign + retry + dead-letter + circuit-breaker; no frontend UI in scope.
+stack:
+  backend: spring-boot
+  contract: openapi
+  repo_shape: single-repo
+
+when_to_use:
+  - system-to-system event notifications (B2B integrations: ITSM webhooks, payment-state callbacks downstream, audit-stream relay)
+  - any domain that needs HMAC-SHA256 signed outbound HTTP POSTs with retry + dead-letter
+  - composition kit recipes whose business invariants require "emit on state change with proof of authenticity"
+
+not_for:
+  - user-facing notifications (use notification L4 — channel routing + template rendering + recipient preferences)
+  - intra-process events (use Spring ApplicationEventPublisher / Kafka / RabbitMQ)
+  - inbound webhook receivers (those are scoped to practices/rules/webhook-hmac-required.md + specs/spring-practices-l0.yaml#PRACTICES-INTEG-001; this manifest is sender-side only)
+
+# ─── authz ────────────────────────────────────────────────────────────────────
+authz:
+  all_admin_endpoints_require_admin_role: true
+  unauthenticated_response: 401
+  non_admin_response: 403
+  no_end_user_endpoints: true
+  trace:
+    WEBHOOK-ADMIN: admin role required for all /api/admin/webhook-* endpoints
+
+# ─── emit ─────────────────────────────────────────────────────────────────────
+emit:
+  registration_method: WebhookEndpointService.register(url, eventFilter)
+  registration_idempotent_on: url   # same URL = upsert (rotate secret), not duplicate row
+  stored_fields: [id, url, active, signing_secret, event_filter, created_at, updated_at]
+  signing_secret_generation: "256-bit random (SecureRandom) at register time"
+  dispatch_method: WebhookDispatcher.emit(eventType, body)
+  dispatch_semantics: "fan-out to ALL active endpoints whose event_filter matches eventType"
+  content_type: application/json
+  trace:
+    WEBHOOK-EMIT-001: idempotent upsert by url
+    WEBHOOK-EMIT-002: POST JSON to matching active endpoints
+
+# ─── sign ─────────────────────────────────────────────────────────────────────
+sign:
+  algorithm: HMAC-SHA256
+  cryptographic_anchor: "RFC 2104 (HMAC) + OWASP ASVS V13.2.6 (webhook payload authenticity)"
+  anchor_reuse_note: |
+    The same RFC 2104 + OWASP ASVS V13.2.6 anchor is reused on the RECEIVER axis
+    by practices/rules/webhook-hmac-required.md and specs/spring-practices-l0.yaml
+    #PRACTICES-INTEG-001. Sender (this manifest) and receiver (the rule) are
+    distinct catalog axes sharing the identical HMAC-SHA256 construction. See
+    templates/DECISIONS.md TD-2026-05-22-025 "HMAC cryptographic anchor" bullet.
+  signature_header: "X-Webhook-Signature"
+  signature_format: "sha256=<lowercase-hex>"
+  timestamp_header: "X-Webhook-Timestamp"
+  timestamp_unit: "unix seconds since epoch"
+  signed_input: "<X-Webhook-Timestamp>.<raw_body_bytes>"   # Stripe-style; covers timestamp to mitigate replay
+  raw_byte_capture: "signature computed over the exact bytes emitted on the wire (do not re-serialise)"
+  secret_storage: "encrypted-at-rest (KMS-managed key); never logged in plaintext"
+  trace:
+    WEBHOOK-SIGN-001: outbound X-Webhook-Signature header (HMAC-SHA256(secret, timestamp + '.' + body))
+    WEBHOOK-SIGN-002: outbound X-Webhook-Timestamp header + signature covers timestamp + body
+
+# ─── retry ────────────────────────────────────────────────────────────────────
+retry:
+  strategy: exponential-backoff
+  initial_delay_seconds: 30
+  multiplier: 2.0
+  max_attempts: 5             # first attempt counts as attempt 1
+  jitter_seconds: 0            # advisory: add ±5s in production for thundering-herd avoidance
+  retry_classification:
+    retriable: [408, 429, 500, 502, 503, 504, "network-timeout", "connection-refused"]
+    permanent: [400, 401, 403, 404, 410, 422]   # never retried — likely caller-side fix needed
+  delivery_id_header: "X-Webhook-Delivery-Id"
+  delivery_id_stability: "stable across all retry attempts for the same logical event"
+  trace:
+    WEBHOOK-RETRY-001: 30s base × 2 backoff up to 5 attempts
+    WEBHOOK-RETRY-002: delivery_id stable across retries
+
+# ─── dead-letter ──────────────────────────────────────────────────────────────
+dead-letter:
+  terminal_status: FAILED_PERMANENT
+  records_kept_fields: [id, endpoint_id, event_type, attempt_count, last_response_code, last_attempt_at, body_preview, last_error]
+  body_preview_bytes: 256       # full body not retained — storage cost vs forensic value tradeoff
+  retention_days: 30
+  admin_replay_endpoint: "POST /api/admin/webhook-deliveries/{id}/replay"
+  admin_replay_semantic: "fresh delivery_id, attempt_count reset to 1; original FAILED_PERMANENT row retained for trail"
+  trace:
+    WEBHOOK-DEAD-LETTER-001: terminal transition on retry exhaustion
+    WEBHOOK-DEAD-LETTER-002: admin replay creates new delivery, preserves original
+
+# ─── circuit-breaker ──────────────────────────────────────────────────────────
+circuit-breaker:
+  evaluation_trigger: "after every delivery terminal transition for the endpoint"
+  rolling_window_attempts: 50
+  failure_rate_threshold: 0.90   # ≥ 90% failures over the window → open
+  open_action: "set WebhookEndpoint.active=false AND emit audit-log row (action=webhook.endpoint.circuit_opened)"
+  manual_reset: "admin POST /api/admin/webhook-endpoints/{id} with active=true (audited)"
+  trace:
+    WEBHOOK-CIRCUIT-001: 90% rolling failure rate over 50 attempts → auto-deactivate + audit-log
+
+# ─── idempotency (sender contract documentation) ──────────────────────────────
+idempotency:
+  sender_obligation: "Reuse delivery_id across retries (WEBHOOK-RETRY-002) so receivers can de-dupe."
+  receiver_obligation: "Treat repeated X-Webhook-Delivery-Id values as the same event; respond identically."
+  documentation_target: "templates/L4/webhook/README.md"
+  trace:
+    WEBHOOK-IDEMPOTENT-001: receiver-side contract documented in README
+
+# ─── admin api ────────────────────────────────────────────────────────────────
+admin_api:
+  base_path: /api/admin
+  endpoints:
+    - GET    /webhook-endpoints
+    - POST   /webhook-endpoints
+    - GET    /webhook-endpoints/{id}
+    - DELETE /webhook-endpoints/{id}
+    - GET    /webhook-deliveries
+    - GET    /webhook-deliveries/{id}
+    - POST   /webhook-deliveries/{id}/replay
+  access_control: ROLE_ADMIN
+
+# ─── observability ────────────────────────────────────────────────────────────
+observability:
+  log_emit: "INFO with endpointId, eventType, deliveryId"
+  log_success: "INFO with deliveryId, durationMs, responseCode"
+  log_retry: "WARN with deliveryId, attemptCount, nextAttemptAt, responseCode"
+  log_dead_letter: "ERROR with deliveryId, endpointId, lastResponseCode"
+  log_circuit_open: "ERROR with endpointId, failureRate, windowSize"
+  metrics_hint: |
+    Counter: webhook.delivery_emit_total, webhook.delivery_retry_total,
+            webhook.delivery_success_total, webhook.delivery_failed_permanent_total,
+            webhook.endpoint_circuit_opened_total
+    Gauge:   webhook.dead_letter_size, webhook.endpoint_active_total
+
+# ─── retention ────────────────────────────────────────────────────────────────
+retention:
+  webhook_delivery_days: 30           # successful + permanent-failed rows pruned at 30 days
+  webhook_endpoint_days: indefinite   # endpoint rows retained for audit; deactivation is soft
+
+# ─── secrets ──────────────────────────────────────────────────────────────────
+secrets:
+  storage: "encrypted-at-rest via KMS-managed key (AES-256 envelope encryption)"
+  rotation: "endpoint re-register POST rotates secret atomically"
+  logging_policy: "MUST NOT be logged in plaintext — log only signing_secret_id reference"
+  recipe_invariant_anchor: |
+    The webhook-secret-encryption invariant is co-shipped at the recipe level
+    (e.g. recipes/internal-it INTERNAL-IT-INV-005) rather than promoted to a
+    standalone practices/rules/*.md file. Promotion is deferred indefinitely;
+    see templates/DECISIONS.md TD-2026-05-22-025 Follow-ups (M5 framing).
