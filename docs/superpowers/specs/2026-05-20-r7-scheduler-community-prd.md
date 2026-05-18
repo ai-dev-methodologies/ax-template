@@ -1,9 +1,10 @@
-# R7 — Scheduler L4 Primitive + Community Recipe PRD — 2026-05-20 (Round 7, ralplan iter 2)
+# R7 — Scheduler L4 Primitive + Community Recipe PRD — 2026-05-20 (Round 7, ralplan iter 3 APPROVED)
 
-> **Status:** ITER 2 (Planner — post-Architect ITERATE, post-Codex-Critic ITERATE).
+> **Status:** APPROVED (3-iter ralplan consensus; Codex Critic iter 3 final APPROVE).
 > **Date:** 2026-05-20. **Repo:** ax-template. **Format:** RALPLAN-DR.
-> **Iter 1:** `2026-05-20-r7-scheduler-community-prd.draft.md` (467 lines).
-> **Reviews answered:** `2026-05-20-r7-architect-review.md` (2 HIGH + 4 MEDIUM + Synthesis-B) and `2026-05-20-r7-critic-codex-iter1.md` (1 BLOCKING + 5 hard blockers + 5 soft).
+> **Iter 1:** `2026-05-20-r7-scheduler-community-prd.draft.md` (467 lines, Architect ITERATE 2 HIGH + 4 MEDIUM + Synthesis-B + Codex Critic ITERATE 1 BLOCKING + 5 hard + 5 soft).
+> **Iter 2:** `2026-05-20-r7-scheduler-community-prd.iter2.md` (433 lines, Architect APPROVE + 1 INFORMATIONAL; Codex Critic ITERATE narrow: `applied_recipes: []` literal × 5 + §4 heading drift).
+> **Iter 3:** mechanical text-only fix (literal removed, heading "3 SPs"); `2026-05-20-r7-critic-codex-iter3.md` → APPROVE.
 > **Branch (when execution starts):** `feat/r7-scheduler-community-sp41-sp42`.
 > **Targeted tag:** `v1.5.0-scheduler-community` IFF 2/2 sealed verdicts pass; else partial `v1.5.0-scheduler` per Synthesis-B partial-tag policy.
 > **Predecessors:** `2026-05-19-r6-recipes-prd.md` (CLOSED, `v1.4.0-recipes-complete` on `main@ab44cce`).

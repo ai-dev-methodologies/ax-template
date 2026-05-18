@@ -108,8 +108,11 @@ except ImportError:
             elif current is not None and stripped.startswith("invariant_test:"):
                 current["invariant_test"] = stripped[len("invariant_test:"):].strip().strip("\"'")
             elif stripped and not stripped.startswith("#") and not stripped.startswith("-"):
-                # end of invariants list
-                if not stripped.startswith(" ") and not stripped.startswith("\t"):
+                # Check ORIGINAL line indentation (stripped has whitespace removed).
+                # Inside the invariants list, lines like `statement:`, `description:`,
+                # `binding:` are indented under each `- id:` item — leave in_invariants True.
+                # A top-level (un-indented) key like `business_observability:` ends the block.
+                if not line[:1].isspace():
                     in_invariants = False
     if current is not None:
         invariants.append(current)
