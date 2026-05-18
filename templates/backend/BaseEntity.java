@@ -38,7 +38,9 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.Where;
+import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -100,6 +102,16 @@ public abstract class BaseEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** Principal that created this entity. Populated by {@code AuditorAware<String>} bean. */
+    @CreatedBy
+    @Column(name = "created_by", updatable = false, length = 64)
+    private String createdBy;
+
+    /** Principal of the last modification. Populated by {@code AuditorAware<String>} bean. */
+    @LastModifiedBy
+    @Column(name = "last_modified_by", length = 64)
+    private String lastModifiedBy;
+
     /**
      * Optimistic locking counter. Hibernate increments on every UPDATE and
      * checks for staleness before flushing. Concurrent writes with the same
@@ -127,11 +139,13 @@ public abstract class BaseEntity {
 
     // ─── accessors ─────────────────────────────────────────────────────────────
 
-    public UUID getId()            { return id; }
-    public Instant getCreatedAt()  { return createdAt; }
-    public Instant getUpdatedAt()  { return updatedAt; }
-    public Long getVersion()       { return version; }
-    public Instant getDeletedAt()  { return deletedAt; }
+    public UUID getId()                    { return id; }
+    public Instant getCreatedAt()          { return createdAt; }
+    public Instant getUpdatedAt()          { return updatedAt; }
+    public String getCreatedBy()           { return createdBy; }
+    public String getLastModifiedBy()      { return lastModifiedBy; }
+    public Long getVersion()               { return version; }
+    public Instant getDeletedAt()          { return deletedAt; }
 
     /**
      * Returns {@code true} if this entity has been soft-deleted.

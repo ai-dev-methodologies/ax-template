@@ -12,7 +12,9 @@ import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.Where;
+import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -53,6 +55,14 @@ public class SoftDeletedRecord {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    @CreatedBy
+    @Column(name = "created_by", updatable = false, length = 64)
+    private String createdBy;
+
+    @LastModifiedBy
+    @Column(name = "last_modified_by", length = 64)
+    private String lastModifiedBy;
+
     @Version
     @Column(nullable = false)
     private Long version;
@@ -61,13 +71,15 @@ public class SoftDeletedRecord {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
-    public UUID getId()           { return id; }
-    public String getLabel()      { return label; }
-    public Instant getCreatedAt() { return createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
-    public Long getVersion()      { return version; }
-    public Instant getDeletedAt() { return deletedAt; }
-    public boolean isDeleted()    { return deletedAt != null; }
+    public UUID getId()                { return id; }
+    public String getLabel()           { return label; }
+    public Instant getCreatedAt()      { return createdAt; }
+    public Instant getUpdatedAt()      { return updatedAt; }
+    public String getCreatedBy()       { return createdBy; }
+    public String getLastModifiedBy()  { return lastModifiedBy; }
+    public Long getVersion()           { return version; }
+    public Instant getDeletedAt()      { return deletedAt; }
+    public boolean isDeleted()         { return deletedAt != null; }
 
     public void setLabel(String label) { this.label = label; }
 }
