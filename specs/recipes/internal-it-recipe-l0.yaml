@@ -73,9 +73,11 @@ business_invariants:
       valid anchor pair when the catalog has no existing rule.
       Implementation must: (a) generate the per-endpoint signing_secret via
       SecureRandom (256-bit) at WebhookEndpoint.create(); (b) wrap secret
-      column in @Convert AttributeConverter that encrypts via KMS-managed key
-      before persistence; (c) NEVER include the plaintext secret in log lines
-      — log only the signing_secret_id or last-4 fingerprint.
+      column in @Convert AttributeConverter that performs envelope encryption
+      (KMS-managed AES-256) before persistence — the database row stores only
+      the encrypted ciphertext, never the plaintext secret; (c) NEVER include
+      the plaintext secret in log lines — log only the signing_secret_id or
+      last-4 fingerprint.
       Promotion to a standalone practices/rules/security-secret-encryption-at-rest.md
       rule is **deferred indefinitely** per TD-2026-05-22-025 Follow-ups (M5
       framing) — remains recipe-level unless cross-domain need emerges.

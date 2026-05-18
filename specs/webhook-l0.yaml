@@ -37,13 +37,16 @@ items:
   # ─── SIGN family (2 items — RFC 2104 + ASVS V13.2.6 anchor reuse, TD-025) ──
   - id: "WEBHOOK-SIGN-001"
     chapter: "SIGN"
-    requirement: "Every outbound webhook request carries an X-Webhook-Signature header in the form sha256=<hex(HMAC-SHA256(secret, body))>; the secret is the per-endpoint signing_secret and the MAC is computed over the exact raw bytes that will be sent on the wire."
+    requirement: "Every outbound webhook request carries an X-Webhook-Signature header in the form sha256=<hex(HMAC-SHA256(secret, signed_input))>; the secret is the per-endpoint signing_secret and signed_input is the canonical replay-resistant string defined by WEBHOOK-SIGN-002 (timestamp + '.' + body). The MAC is computed over the exact bytes that will be sent on the wire."
     test_method: "RestAssured integration test"
     verification_type: "positive"
     applicable: true
     notes: >
       Test: emit() outbound request captured (Mockito or WireMock) → assert
-      X-Webhook-Signature header == "sha256=" + hex(HMAC-SHA256(secret, rawBody)).
+      X-Webhook-Signature header == "sha256=" + hex(HMAC-SHA256(secret, signed_input))
+      where signed_input is the timestamp-prefixed canonical string per
+      WEBHOOK-SIGN-002 (Stripe-style "<timestamp>.<body>"); body-only MAC is
+      not accepted to ensure replay protection from the header value alone.
       Implementation: HmacSigner.sign(secret, body) uses Mac.getInstance("HmacSHA256").
       This is the SENDER axis. The RECEIVER axis (verifying inbound HMAC) is scoped to
       practices/rules/webhook-hmac-required.md and specs/spring-practices-l0.yaml#PRACTICES-INTEG-001

@@ -2222,4 +2222,3 @@ the `[cms, lms]` key in all 4 verdict outcomes (2/2 PASS, lms-only, cms-only,
   - **Follow-ups:**
     - First R10+ application of TD-027 (next time someone proposes an L4 split) generates a precedent log entry under this ADR — captures whether all three conditions were satisfied and which deferred candidate served as the second consumer signal.
     - If `api-gateway-relay` is never proposed by R12, the forward-pointer is replaced with whichever other R10+ deferred candidate consumes webhook (no obligation to ship api-gateway-relay specifically).
-
