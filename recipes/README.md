@@ -2,7 +2,7 @@
 
 > **What this is:** Composition manifests that declare WHICH existing L4 domains to assemble for a given business pattern. Recipes do NOT ship code or define new L4 domains.
 
-## Shipped Recipes (v1.7.0-webhook-internal-it — 10 active)
+## Shipped Recipes (v1.8.0-api-gateway-relay — 11 active)
 
 | Pattern | Description | Enabled L4 domains | Verdict |
 |---|---|---|---|
@@ -16,22 +16,30 @@
 | [`lms`](lms/RECIPE.md) | Course catalog + enrollment + lesson + due-date reminders + role-gated visibility | audit-log, auth, crud, notification, scheduled-task | [11/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/lms-verdict.md) |
 | [`cms`](cms/RECIPE.md) | Content authoring + scheduled publish + editorial workflow + scheduled expiry | audit-log, crud, notification, scheduled-task | [11/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/cms-verdict.md) |
 | [`internal-it`](internal-it/RECIPE.md) | Ticketing + SLA breach reminders + audit + outbound signed (HMAC-SHA256) ITSM webhook relay | audit-log, auth, crud, notification, scheduled-task, webhook | [12/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/internal-it-verdict.md) |
+| [`api-gateway-relay`](api-gateway-relay/RECIPE.md) | Endpoint registry + signed outbound relay + route authz + rate-limit + circuit breaker (Kong / AWS / Cloudflare API Shield / Tyk / Apigee composition) | audit-log, auth, crud, scheduled-task, webhook | [12/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/api-gateway-relay-verdict.md) |
 
-All 10 recipes carry sealed sub-agent verdicts (≥10/12 MUST + ≥5/8 SHOULD). See `skills/_tests/sealed-verdict/`.
+All 11 recipes carry sealed sub-agent verdicts (≥10/12 MUST + ≥5/8 SHOULD). See `skills/_tests/sealed-verdict/`.
 
-## Deferred Recipes (none — queue CLOSED)
+## Deferred Recipes (none — queue CLOSED — preserved under all R10 outcomes)
 
-**R9 closes the R6 Synthesis-A deferred-recipe queue.** All four R6-deferred
-recipes have shipped across three cycles: community (R7 SP41b →
+**R9 closed the R6 Synthesis-A deferred-recipe queue; R10 PRESERVES the
+closure under all outcomes via Codex L Option (a) clean-revert.** All four
+R6-deferred recipes shipped across three cycles: community (R7 SP41b →
 `v1.5.0-scheduler-community`), lms + cms (R8 SP43 → `v1.6.0-lms-cms`),
-internal-it (R9 SP45b → `v1.7.0-webhook-internal-it`). The deferred queue is
-now empty; `recipes/_MANIFEST.yaml#deferred_recipes: []`.
+internal-it (R9 SP45b → `v1.7.0-webhook-internal-it`). R10
+(`v1.8.0-api-gateway-relay`) is a VOLUNTARY recipe addition (NOT a deferred-
+queue promotion); the queue stays `[]` whether the SP48 sealed verdict passes
+or fails — voluntary failure triggers SP47 CLEAN REVERT, not a deferred-queue
+entry. `recipes/_MANIFEST.yaml#deferred_recipes: []`.
 
-See `templates/DECISIONS.md` TD-2026-05-22-026 for the queue-closure ADR.
+See `templates/DECISIONS.md` TD-2026-05-22-026 (R9 closure) +
+TD-2026-05-23-028 (R10 voluntary addition) + TD-2026-05-23-029 (no-L4-split
+discipline + clean-revert policy).
 
-Future R10+ recipes will land in `_MANIFEST.yaml#deferred_recipes:` when
-proposed by ralplan — the queue starts empty from this point; no proactive
-deferral pipeline opens (per R9 PRD §10).
+Future R11+ recipes will land in `_MANIFEST.yaml#deferred_recipes:` only when
+proposed by ralplan with FRESH evidence chain + explicit trigger — the queue
+starts empty from this point; no proactive deferral pipeline opens (per R9
+PRD §10 + R10 PRD §10).
 
 ## Using a Recipe
 
