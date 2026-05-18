@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "5bc0b178e8e6c0b258ce76c660f4f15f703a1fe54715339cec84a68ba192a3b5"
-  rule_count: 70
+  source_concat_sha256: "9976439bb631d51b53b501e8fd47386a49a66784980270a651371a020cd530a5"
+  rule_count: 72
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -1739,6 +1739,121 @@ Verification: `./gradlew testPractices --tests "*SharedClientSingleton*"` is a `
 Reference: [Spring Framework — RestClient](https://docs.spring.io/spring-framework/reference/integration/rest-clients.html#rest-restclient)
 
 
+<!-- @source rules/idempotency-key-on-mutations.md -->
+
+---
+title: "Payment, notification, and email-outbox POST mutations must enforce Idempotency-Key via @RequireIdempotencyKey"
+rule_id: idempotency-key-on-mutations
+impact: CRITICAL
+impactDescription: "A network retry on a POST mutation without idempotency protection creates duplicate charges, duplicate notifications, or duplicate emails"
+tags:
+  - idempotency
+  - payment
+  - notification
+  - email-outbox
+  - retry-safety
+provenance_class: internal_design
+protects_template_id: templates/backend/payment/PaymentController.java
+failing_fixture_path: practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-VAL-001"
+verification:
+  type: review
+  notes: "All @PostMapping handlers in payment, notification, and email-outbox controllers must carry @RequireIdempotencyKey. The annotation triggers the IdempotencyFilter which caches responses by key."
+evidence:
+  - source_type: external
+    citation: "IETF draft-ietf-httpapi-idempotency-key-header — The Idempotency-Key HTTP Header Field (deduplicated retry semantics)"
+    url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Stripe API Reference — Idempotent requests: all POST requests accept an Idempotency-Key header to guarantee exactly-once delivery"
+    url: "https://docs.stripe.com/api/idempotent_requests"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "AWS API Gateway — Idempotency tokens for preventing duplicate requests in stateful operations"
+    url: "https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-routes.html"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## Payment, notification, and email-outbox POST mutations must enforce Idempotency-Key via `@RequireIdempotencyKey`
+
+**Impact: CRITICAL — Network retries without idempotency guards cause duplicate charges, duplicate SMS/push notifications, and duplicate email sends that are indistinguishable from the first request.**
+
+The `api-idempotency-key-required.md` rule defines the general pattern (Idempotency-Key header + 400 on missing). This rule strengthens the enforcement for the three **high-risk mutation domains** — payment, notification, and email-outbox — by requiring the `@RequireIdempotencyKey` annotation, which wires the handler to the `IdempotencyFilter` cache at the framework level rather than relying on ad-hoc header checks in each handler.
+
+The annotation semantics:
+1. Filter reads `Idempotency-Key` header from the request.
+2. On first call: processes normally, stores `(key → serialised ResponseEntity)` in the idempotency store (Redis/DB).
+3. On retry with the same key: returns the cached response immediately, skipping handler execution.
+4. Missing key: 400 `application/problem+json` with `type=urn:ax:idempotency:key-missing`.
+
+**Incorrect — POST mutation handlers without @RequireIdempotencyKey:**
+
+```java
+@RestController
+@RequestMapping("/api/payments")
+public class PaymentController {
+
+    // VIOLATION: a retried POST will create a second charge
+    @PostMapping
+    public ResponseEntity<PaymentResponse> createPayment(
+            @RequestBody CreatePaymentRequest request) {
+        return ResponseEntity.ok(paymentService.charge(request));
+    }
+
+    // VIOLATION: notification send also missing
+    @PostMapping("/notify")
+    public ResponseEntity<Void> sendNotification(@RequestBody NotifyRequest req) {
+        notificationService.send(req);
+        return ResponseEntity.accepted().build();
+    }
+}
+```
+
+**Correct — @RequireIdempotencyKey on all side-effecting POST handlers:**
+
+```java
+@RestController
+@RequestMapping("/api/payments")
+public class PaymentController {
+
+    // CORRECT: IdempotencyFilter intercepts and deduplicates retries
+    @RequireIdempotencyKey
+    @PostMapping
+    public ResponseEntity<PaymentResponse> createPayment(
+            @RequestBody CreatePaymentRequest request) {
+        return ResponseEntity.ok(paymentService.charge(request));
+    }
+
+    @RequireIdempotencyKey
+    @PostMapping("/notify")
+    public ResponseEntity<Void> sendNotification(@RequestBody NotifyRequest req) {
+        notificationService.send(req);
+        return ResponseEntity.accepted().build();
+    }
+}
+```
+
+## Why this matters
+
+The payment, notification, and email-outbox templates are the three domains where retried mutations have user-visible, financially and operationally significant consequences:
+- **Payment**: double-charge is a regulatory incident and a customer refund obligation.
+- **Notification**: duplicate push/SMS sends degrade user trust.
+- **Email-outbox**: duplicate transactional emails (password reset, OTP) may violate ESP rate limits and confuse users.
+
+Unlike read endpoints or idempotent writes (PUT/PATCH), POST mutations in these domains have no natural key to deduplicate on — the `Idempotency-Key` header is the caller-supplied deduplication token.
+
+The `@RequireIdempotencyKey` annotation is defined in `templates/backend/idempotency/` and is wired to `IdempotencyFilter` via AOP. Its use is checked at code-review time for all three domains.
+
+## Failing fixture
+
+See: `practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/PaymentController.java` — two `@PostMapping` handlers in the payment controller without `@RequireIdempotencyKey`. A network retry creates a second charge and a second notification.
+
+Reference: [IETF draft — The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
+
+Reference: [Stripe API Reference — Idempotent requests](https://docs.stripe.com/api/idempotent_requests)
+
+
 <!-- @source rules/lang-bigdecimal-for-money.md -->
 
 ---
@@ -3069,6 +3184,118 @@ Verification: `./gradlew testPayment --tests "*StateMachine*"` exercises the leg
 Reference: [Spring Data JPA — Locking](https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html)
 
 Reference: [Hibernate User Guide — Optimistic Locking](https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#locking-optimistic)
+
+
+<!-- @source rules/presigned-url-signature-required.md -->
+
+---
+title: "File-storage presigned URLs must include an HMAC server signature before returning to callers"
+rule_id: presigned-url-signature-required
+impact: HIGH
+impactDescription: "An unsigned presigned URL can be constructed by anyone who knows the storage key, bypassing all authorization checks in the application layer"
+tags:
+  - file-storage
+  - security
+  - presigned-url
+  - hmac
+  - authorization
+provenance_class: internal_design
+protects_template_id: templates/backend/file-storage/PresignedUrlService.java
+failing_fixture_path: practices/evals/fixtures/presigned-url-signature-required/fail_no_signature/
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-CORE-001"
+verification:
+  type: review
+  notes: "Every PresignedUrlService.generateDownloadUrl / generateUploadUrl must compute HMAC over (objectKey + expiry) and append sig + exp query parameters."
+evidence:
+  - source_type: external
+    citation: "AWS S3 Developer Guide — Presigned URLs: if a request is made by using the temporary security credentials of an IAM role, the presigned URL expires when the credentials used to sign the URL expire"
+    url: "https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "OWASP Cheat Sheet — Insecure Direct Object References (IDOR): all resource access must verify authorization at the application layer, not just at the storage layer"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "NIST SP 800-186 §3.1 — HMAC-based URL authentication as integrity and authenticity check for temporary access tokens"
+    url: "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-186.pdf"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## File-storage presigned URLs must include an HMAC server signature before returning to callers
+
+**Impact: HIGH — A presigned URL without an HMAC envelope can be constructed by any caller who observes or guesses the storage key. The S3 presigned URL alone only proves the caller knew the AWS credentials at signing time — it does not prove the application authorised the specific user.**
+
+S3 presigned URLs embed AWS credentials and expire after a configured duration. However, they bypass the application's own authorization layer: a caller who obtains the `objectKey` can construct a functionally equivalent presigned URL themselves by re-signing with the same AWS credentials (if they are leaked) or by extending the expiry. Adding an HMAC signature over `(objectKey + expiry)` with an application-controlled secret provides a server-side authenticity check that the download endpoint can verify before proxying or redirecting.
+
+**Incorrect — presigned URL returned directly without HMAC:**
+
+```java
+@Service
+public class PresignedUrlService {
+
+    public String generateDownloadUrl(String objectKey) {
+        GetObjectRequest get = GetObjectRequest.builder()
+                .bucket(BUCKET).key(objectKey).build();
+        GetObjectPresignRequest req = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(15))
+                .getObjectRequest(get).build();
+        // VIOLATION: raw S3 URL returned — no HMAC envelope
+        return presigner.presignGetObject(req).url().toString();
+    }
+}
+```
+
+**Correct — HMAC signature appended as query parameters:**
+
+```java
+@Service
+public class PresignedUrlService {
+
+    private final byte[] hmacSecret;
+
+    public String generateDownloadUrl(String objectKey) throws Exception {
+        long expires = Instant.now().plusSeconds(900).getEpochSecond();
+        String payload = objectKey + ":" + expires;
+        String sig = hmacSign(payload);                    // HmacSHA256(key, payload)
+
+        GetObjectRequest get = GetObjectRequest.builder()
+                .bucket(BUCKET).key(objectKey).build();
+        GetObjectPresignRequest req = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofSeconds(900))
+                .getObjectRequest(get).build();
+        String s3Url = presigner.presignGetObject(req).url().toString();
+
+        // CORRECT: ?sig=<hmac>&exp=<epoch> allows server-side verification
+        return s3Url + "&sig=" + sig + "&exp=" + expires;
+    }
+
+    private String hmacSign(String data) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(hmacSecret, "HmacSHA256"));
+        return Base64.getUrlEncoder().encodeToString(
+                mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
+    }
+}
+```
+
+## Why this matters
+
+Without the HMAC envelope, the download flow has no application-layer authorization gate: the S3 presigned URL is sufficient to retrieve the object. If the `objectKey` is guessable (sequential IDs, predictable patterns), an attacker can download arbitrary files. With HMAC:
+
+1. The download endpoint verifies `sig = HMAC(objectKey + exp)` before proxying.
+2. If the signature is invalid or expired, the request is rejected with 403 before touching S3.
+3. The HMAC secret is application-controlled — rotating it invalidates all outstanding URLs.
+
+This pattern applies to both download (GET presigned) and upload (PUT presigned) URLs.
+
+## Failing fixture
+
+See: `practices/evals/fixtures/presigned-url-signature-required/fail_no_signature/PresignedUrlService.java` — `generateDownloadUrl` returns the raw S3 presigned URL without HMAC. No `sig` or `exp` parameters in the returned URL.
+
+Reference: [AWS S3 Developer Guide — Using presigned URLs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html)
+
+Reference: [OWASP — Insecure Direct Object Reference Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html)
 
 
 <!-- @source rules/quality-no-system-streams.md -->
