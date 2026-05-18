@@ -1,0 +1,96 @@
+# spec-trio-template.yaml — crm
+#
+# Pre-filled Spec Trio fragments to copy into your project's specs/ directory
+# when implementing the crm recipe.
+#
+# Instructions:
+#   1. Copy this file to your project as specs/crm-l0.yaml
+#   2. Replace all <PLACEHOLDER> values with project-specific values
+#   3. Extend the items array with domain-specific requirements
+#   4. Ensure business_invariants from RECIPE.md are reflected as spec items
+#
+# This fragment composes the following L4 Spec Trios (reference, do not copy):
+#   - specs/crud-security.yaml
+#   - specs/audit-log-l0.yaml
+#   - specs/notification-l0.yaml
+#   - specs/search-l0.yaml
+
+schema_version: 1
+scope: "<YOUR_PROJECT>-crm"
+stack: "Spring Boot 3.2.x + React"
+standard: "OWASP Top 10 + ISO 27001 A.12.4 + RFC 7807"
+applied_recipe: crm
+compatible_with_catalog_version: "v1.2.0-p1-absorbed"
+
+items:
+  # ─── CRM-INV-001: deal.amount currency precision ──────────────────────────
+  - id: "CRM-INV-001"
+    chapter: "DEAL"
+    requirement: >
+      deal.amount must be stored and returned with currency precision (scale=2, ISO 4217).
+      Amount values with more than 2 decimal places are rejected with HTTP 422.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    spec_ref: "specs/crud-security.yaml"
+    notes: >
+      Test: POST /api/deals with amount=100.999 → 422.
+      Implementation: Deal.amount is BigDecimal; validated with @Digits(integer=12, fraction=2).
+
+  # ─── CRM-INV-002: lead conversion preserves source_attribution ────────────
+  - id: "CRM-INV-002"
+    chapter: "LEAD"
+    requirement: >
+      When a Lead is converted to a Contact, the source_attribution field must be
+      copied to the resulting Contact record, and the conversion event must be
+      recorded in the audit log with the original source_attribution value.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/audit-log-l0.yaml"
+    notes: >
+      Test: POST /api/leads/{id}/convert → assert Contact.source_attribution == Lead.source_attribution.
+      Test: assert audit_logs contains entry with action=lead.converted and payload including source_attribution.
+      Implementation: LeadService.convert() copies source_attribution; @Audited includes it in metadata payload.
+
+  # ─── CRM-INV-003: activity.timestamp ordering ─────────────────────────────
+  - id: "CRM-INV-003"
+    chapter: "ACTIVITY"
+    requirement: >
+      activity.timestamp (the time the activity occurred) must be ≥ activity.created_at
+      (the time the record was created in the system). Activities with
+      timestamp < created_at are rejected with HTTP 422.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    spec_ref: "specs/crud-security.yaml"
+    notes: >
+      Test: POST /api/activities with timestamp = now() - 1 hour; created_at = now() → 422.
+      (Note: for historical data entry the rule is relaxed if a backfill flag is set.)
+      Implementation: ActivityService.create() validates timestamp >= now() unless
+      backfill mode is explicitly authorized.
+
+  # ─── CRM-INV-004: deal stage transitions follow state machine ─────────────
+  - id: "CRM-INV-004"
+    chapter: "DEAL"
+    requirement: >
+      Deal stage transitions must follow the declared state machine:
+      PROSPECT → QUALIFIED → PROPOSAL → NEGOTIATION → WON / LOST.
+      Invalid transitions (e.g., PROSPECT → WON directly) are rejected with HTTP 422.
+      Every valid transition produces an audit log entry.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    spec_ref: "specs/audit-log-l0.yaml"
+    notes: >
+      Test: attempt PROSPECT → WON directly → 422.
+      Test: PROSPECT → QUALIFIED → assert audit_logs entry with action=deal.stage.changed.
+      Implementation: DealService.transitionStage() validates via DealStateMachine.
+      @Audited records every transition.
+
+  # ─── Add your project-specific items below ────────────────────────────────
+  # - id: "<YOUR_PROJECT>-CRM-001"
+  #   chapter: "<CHAPTER>"
+  #   requirement: "<REQUIREMENT>"
+  #   ...

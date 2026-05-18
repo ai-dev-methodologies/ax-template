@@ -115,3 +115,7 @@ bash skills/ax-verify-L4/scripts/run.sh
 ```
 
 Both must exit 0 before shipping.
+
+## Recipe Composition
+
+applied_recipe: saas-subscription

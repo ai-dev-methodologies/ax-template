@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# practices/evals/run-all-guards.sh — SP3 acceptance gate.
+# practices/evals/run-all-guards.sh — SP37 acceptance gate.
 #
-# Runs all 6 guards (4 extended + 2 new) against both the live repo and, when
-# --include-fixtures is passed, against every fixture directory.
+# Runs all guards (6 core + recipe_governance) against both the live repo
+# and, when --include-fixtures is passed, against every fixture directory.
 #
 # Exit 0 if all expected exits match.
 # Exit 1 with summary if any mismatch.
@@ -145,7 +145,28 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     echo "[cross_trio] fail_zero_scan/"
     run_guard "cross_trio/fail_zero_scan" 1 \
         bash "$SCRIPT_DIR/cross_trio_guard.sh" --root "$FIXTURES_CROSS/fail_zero_scan"
+
+    # ── 7. recipe_governance_guard (SP37) ────────────────────────────────────
+    echo ""
+    echo "[7] recipe_governance_guard.sh (fixtures)"
+    run_guard "recipe_governance/fixtures" 0 \
+        bash "$SCRIPT_DIR/recipe_governance_guard.sh" --fixtures
 fi
+
+# ── 7. recipe_governance_guard (live repo) ───────────────────────────────────
+echo "[7] recipe_governance_guard.sh (live repo)"
+# Exits 0 when recipes/ does not exist. Validates applied_recipe: annotations
+# and recipe invariant resolution once recipes/ lands (SP35+).
+run_guard "recipe_governance/live" 0 \
+    bash "$SCRIPT_DIR/recipe_governance_guard.sh"
+
+# ── 8. recipe_spec_referential_integrity_guard (SP35) ────────────────────────
+echo "[8] recipe_spec_referential_integrity_guard.sh (live repo)"
+# Validates enabled_l4_domains, l2_blocks_used, l3_pages_used, and
+# business_invariants referential integrity across all specs/recipes/*.yaml.
+# Enforces the recipe-invariants-must-resolve rule (SP37).
+run_guard "recipe_spec_referential_integrity/live" 0 \
+    bash "$SCRIPT_DIR/recipe_spec_referential_integrity_guard.sh"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""

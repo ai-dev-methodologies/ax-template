@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "fc6872f27413de2c66d39683d2f342e5332c90580ddf376ed4af5273b9df8dd3"
-  rule_count: 81
+  source_concat_sha256: "01168f168b204efdeea0281f4fc4a2af1a8329b2aebd2160c4485b01aa39fa87"
+  rule_count: 84
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -882,6 +882,118 @@ dependencies {
 Verification: `./gradlew testPractices --tests "*SpringBootBom*"` reads `backend/build.gradle.kts` and asserts both plugin ids are applied.
 
 Reference: [Spring dependency-management Plugin](https://docs.spring.io/dependency-management-plugin/docs/current/reference/html/)
+
+
+<!-- @source rules/business-domain-must-declare-applied-recipe.md -->
+
+---
+title: "Every L4 domain README that participates in a Business Pattern Recipe composition must declare applied_recipe: <pattern-name> in its frontmatter metadata block"
+rule_id: business-domain-must-declare-applied-recipe
+impact: HIGH
+impactDescription: "Missing applied_recipe: declaration makes the recipe composition invisible to recipe_governance_guard.sh, breaks the audit trail linking business domains to their governing recipe, and allows ad-hoc composition to drift undetected from the recipe contract"
+tags:
+  - architecture
+  - recipe-composition
+  - metadata
+  - audit-trail
+  - l4-layer
+provenance_class: internal_design
+protects_template_id: templates/L4/<domain>/README.md
+failing_fixture_path: practices/evals/fixtures/business-domain-must-declare-applied-recipe/fail_no_applied_recipe/
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-ARCH-002"
+verification:
+  type: review
+  notes: |
+    recipe_governance_guard.sh scans every recipes/*/RECIPE.md enabled_l4_domains list.
+    For each domain listed, it reads templates/L4/<domain>/README.md and asserts
+    the applied_recipe: field is present and matches the recipe pattern name.
+    Missing field or wrong value → VIOLATION.
+evidence:
+  - source_type: external
+    citation: "arc42 — Architecture Decision Records: every architectural decision must be traceable; undeclared composition cannot be verified or evolved without breaking hidden assumptions"
+    url: "https://arc42.org/overview/"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Spring Modulith reference — @ApplicationModule annotation makes module membership explicit and machine-verifiable; undeclared module boundaries are enforced to fail loudly"
+    url: "https://docs.spring.io/spring-modulith/reference/fundamentals.html"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "카카오페이 기술 블로그 — 도메인 레이어 설계: 도메인 간 의존 관계를 명시적으로 선언하고 리뷰 시 추적 가능하게 유지합니다"
+    url: "https://tech.kakaopay.com/post/kakaopay-msa-platform/"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## business-domain-must-declare-applied-recipe
+
+**Impact: HIGH — When an L4 domain participates in a Business Pattern Recipe, its README must carry `applied_recipe: <pattern-name>`. Without this field, `recipe_governance_guard.sh` cannot confirm the domain's wiring matches the recipe contract, and the composition drifts silently.**
+
+The ax-template composition kit tracks which recipe governs each L4 domain via the `applied_recipe:` metadata field. This field is the single source of truth linking:
+- the domain's README (human-readable entry point)
+- the recipe's `enabled_l4_domains:` list (machine-readable contract)
+- the guard script's validation loop
+
+When the field is absent, the guard treats the domain as ungoverned — any composition drift goes undetected until a manual audit.
+
+**Incorrect — L4 billing README without applied_recipe: in a saas-subscription context:**
+
+```markdown
+# L4 / billing — Full Trio Domain
+
+Billing domain vertical: subscription lifecycle, plan management, invoice listing.
+
+## Domain Mode
+
+`full_trio` — backend Spec Trio + frontend Spec Trio both present.
+
+<!-- VIOLATION: no applied_recipe: field -->
+<!-- recipe_governance_guard.sh: FAIL — billing is listed in saas-subscription RECIPE.md
+     enabled_l4_domains but README declares no applied_recipe -->
+```
+
+**Correct — L4 billing README with applied_recipe: declared:**
+
+```markdown
+# L4 / billing — Full Trio Domain
+
+Billing domain vertical: subscription lifecycle, plan management, invoice listing.
+
+## Domain Mode
+
+`full_trio` — backend Spec Trio + frontend Spec Trio both present.
+
+## Recipe Composition
+
+applied_recipe: saas-subscription
+
+<!-- recipe_governance_guard.sh: PASS — billing declares applied_recipe matching
+     the recipe that lists it in enabled_l4_domains -->
+```
+
+### Where to declare
+
+The `applied_recipe:` field belongs in the L4 domain README under a `## Recipe Composition` section. Format:
+
+```
+applied_recipe: <pattern-name>
+```
+
+Where `<pattern-name>` is the directory name under `recipes/` (e.g., `saas-subscription`, `e-commerce`, `crm`).
+
+If a domain participates in multiple recipes (rare but allowed), declare multiple:
+
+```
+applied_recipe: saas-subscription
+applied_recipe_secondary: e-commerce
+```
+
+## Failing fixture
+
+See: `practices/evals/fixtures/business-domain-must-declare-applied-recipe/fail_no_applied_recipe/README.md` — billing domain README without `applied_recipe:` field.
+
+See: `practices/evals/fixtures/business-domain-must-declare-applied-recipe/pass/README.md` — billing domain README with `applied_recipe: saas-subscription`.
+
+Reference: https://docs.spring.io/spring-modulith/reference/fundamentals.html
 
 
 <!-- @source rules/cache-caffeine-expiration.md -->
@@ -3923,6 +4035,141 @@ Reference: [Spring Data JPA — Locking](https://docs.spring.io/spring-data/jpa/
 Reference: [Hibernate User Guide — Optimistic Locking](https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#locking-optimistic)
 
 
+<!-- @source rules/prefer-recipe-composition-over-l4-cross-import.md -->
+
+---
+title: "When a business domain matches a Business Pattern Recipe, cross-L4 wiring must follow the Recipe composition contract; ad-hoc multi-L4 cross-imports without applied_recipe declaration are prohibited"
+rule_id: prefer-recipe-composition-over-l4-cross-import
+impact: HIGH
+impactDescription: "Ad-hoc cross-L4 imports that duplicate a Recipe's composition contract create undeclared coupling between domains, make the recipe audit trail invisible to tooling, and produce two incompatible wiring paths for the same business pattern"
+tags:
+  - architecture
+  - recipe-composition
+  - l4-layer
+  - domain-isolation
+  - composition-kit
+provenance_class: internal_design
+protects_template_id: recipes/*/RECIPE.md
+failing_fixture_path: practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/fail_ad_hoc_cross_import/
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-ARCH-001"
+verification:
+  type: review
+  notes: |
+    ArchUnit: detect Spring services that import from 2+ L4 domain packages
+    (ax.template.billing + ax.template.notification + ax.template.featureflags, etc.)
+    when the owning L4 domain README lacks applied_recipe: field.
+    Acceptable: single-hop cross-L4 for shared utilities.
+    Violation: multi-domain composition without recipe declaration.
+evidence:
+  - source_type: external
+    citation: "Martin Fowler — Patterns of Enterprise Application Architecture: composition patterns prevent ad-hoc coupling by making dependencies explicit through a shared composition contract"
+    url: "https://martinfowler.com/eaaCatalog/"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Spring Modulith reference — modules communicate via published events or explicit API types; direct package imports between modules create structural coupling that Spring Modulith enforces at test time"
+    url: "https://docs.spring.io/spring-modulith/reference/fundamentals.html"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "토스 기술 블로그 — 도메인 모듈 설계: 도메인 간 직접 의존 대신 이벤트 또는 명시적 조합 계약을 통해 결합도를 낮춥니다"
+    url: "https://toss.tech/article/slash21-backend"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## prefer-recipe-composition-over-l4-cross-import (Java)
+
+**Impact: HIGH — When a business domain matches a shipped Recipe Pattern (saas-subscription, e-commerce, crm), the cross-L4 wiring must declare its recipe via `applied_recipe:`. Ad-hoc multi-L4 imports without this declaration create invisible coupling and duplicate the recipe composition out-of-band.**
+
+The ax-template composition kit ships Business Pattern Recipes that define *how* multiple L4 domains compose into a coherent business feature. When a Spring service ad-hoc imports from billing, notification, and feature-flags all at once — without `applied_recipe:` in the domain README — it implements a recipe-equivalent pattern off-catalog. This defeats the guard chain and breaks the composition audit trail.
+
+**Incorrect — multi-L4 composition without recipe declaration:**
+
+```java
+// VIOLATION: SaasSubscriptionOrchestrator wires billing + feature-flags + notification
+// without applied_recipe: in the L4 domain README → ad-hoc recipe duplicate
+package ax.template.saas;
+
+import ax.template.billing.SubscriptionService;        // ← L4/billing cross-import
+import ax.template.featureflags.FeatureFlagEvaluator;  // ← L4/feature-flags cross-import
+import ax.template.notification.NotificationService;   // ← L4/notification cross-import
+
+import org.springframework.stereotype.Service;
+
+/**
+ * WRONG: Manually implements saas-subscription composition without
+ * declaring applied_recipe: saas-subscription in the domain README.
+ * ArchUnit flags: 3 L4-package cross-imports without recipe metadata.
+ */
+@Service
+class SaasSubscriptionOrchestrator {
+
+    private final SubscriptionService subscriptions;
+    private final FeatureFlagEvaluator flags;
+    private final NotificationService notifications;
+
+    SaasSubscriptionOrchestrator(
+            SubscriptionService subscriptions,
+            FeatureFlagEvaluator flags,
+            NotificationService notifications) {
+        this.subscriptions = subscriptions;
+        this.flags = flags;
+        this.notifications = notifications;
+    }
+
+    void onPlanUpgrade(String tenantId, String newPlan) {
+        // ad-hoc wiring of billing → feature-flags → notification
+        // duplicates saas-subscription RECIPE.md composition contract
+        subscriptions.changePlan(tenantId, newPlan);
+        flags.enableForTenant(tenantId, "premium_features");
+        notifications.sendUpgradeConfirmation(tenantId, newPlan);
+    }
+}
+```
+
+**Correct — domain README declares applied_recipe; composition follows the contract:**
+
+```java
+// CORRECT: The L4 domain README declares:
+//   applied_recipe: saas-subscription
+// The orchestrator still wires billing + feature-flags + notification but
+// the recipe metadata makes the composition explicit and guard-visible.
+
+package ax.template.saas;
+
+import ax.template.billing.SubscriptionService;
+import ax.template.featureflags.FeatureFlagEvaluator;
+import ax.template.notification.NotificationService;
+
+import org.springframework.stereotype.Service;
+
+/**
+ * CORRECT: domain README carries applied_recipe: saas-subscription.
+ * recipe_governance_guard.sh validates this wiring matches RECIPE.md.
+ */
+@Service
+class SaasSubscriptionOrchestrator {
+    // same wiring — the declaration makes it compliant
+    void onPlanUpgrade(String tenantId, String newPlan) {
+        subscriptions.changePlan(tenantId, newPlan);
+        flags.enableForTenant(tenantId, "premium_features");
+        notifications.sendUpgradeConfirmation(tenantId, newPlan);
+    }
+}
+```
+
+### Detection
+
+ArchUnit: `noClasses().that().resideInAPackage("..saas..")` imports 2+ distinct L4 packages AND corresponding README lacks `applied_recipe:` field.
+
+## Failing fixture
+
+See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/fail_ad_hoc_cross_import/SaasOrchestrator.java` — three L4 cross-imports without recipe declaration. Guard must flag.
+
+See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/pass/SaasOrchestrator.java` — same imports with `applied_recipe: saas-subscription` in companion README.md.
+
+Reference: https://martinfowler.com/eaaCatalog/
+
+
 <!-- @source rules/presigned-url-signature-required.md -->
 
 ---
@@ -4213,6 +4460,123 @@ public final class PiiRedactor {
 Verification: `./gradlew testPractices --tests "*UtilityClassShape*"` reflects on `PiiRedactor` and asserts the class is final, has exactly one declared constructor, that constructor takes no arguments, and is private.
 
 Reference: Effective Java Item 4 · [JLS §8.8.10](https://docs.oracle.com/javase/specs/jls/se21/html/jls-8.html)
+
+
+<!-- @source rules/recipe-invariants-must-resolve.md -->
+
+---
+title: "Every business_invariants entry in a recipe spec YAML must carry spec_ref: or rule_ref: pointing to an existing artifact; unresolvable references are prohibited"
+rule_id: recipe-invariants-must-resolve
+impact: CRITICAL
+impactDescription: "A business invariant with an unresolvable spec_ref or rule_ref cannot be enforced — it is a claim with no evidence chain. Unresolvable references silently degrade the recipe from an enforceable contract to advisory prose, defeating the composition kit's binary-verification guarantee"
+tags:
+  - recipe-composition
+  - invariants
+  - referential-integrity
+  - evidence-chain
+  - spec-trio
+provenance_class: internal_design
+protects_template_id: specs/recipes/*.yaml
+failing_fixture_path: practices/evals/fixtures/recipe-invariants-must-resolve/fail_unresolvable_spec_ref/
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-ARCH-003"
+verification:
+  type: script
+  notes: |
+    recipe_governance_guard.sh (SP37) and recipe_spec_referential_integrity_guard.sh (SP35)
+    both walk specs/recipes/*.yaml business_invariants list.
+    For each entry:
+      - spec_ref: → resolve specs/<file>.yaml existence + optional #anchor check
+      - rule_ref: → resolve practices/rules/<file>.md existence
+    Missing field OR non-existent artifact → VIOLATION, exit 1.
+    Zero-invariants is a WARN not a FAIL (recipe may be L2-only).
+evidence:
+  - source_type: external
+    citation: "OWASP ASVS — every security requirement must reference a testable control; untestable requirements provide false assurance and cannot be verified in a security audit"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "arc42 — Architecture Decisions: requirements must be traceable to their sources; orphaned requirements cannot be prioritized, evolved, or removed safely"
+    url: "https://arc42.org/overview/"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "토스 기술 블로그 — 요구사항 추적성: 비즈니스 불변식은 반드시 검증 가능한 스펙이나 룰에 연결되어야 합니다. 연결되지 않은 불변식은 사문화됩니다"
+    url: "https://toss.tech/article/requirements-traceability"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## recipe-invariants-must-resolve
+
+**Impact: CRITICAL — Every `business_invariants` entry in a recipe spec YAML must resolve to a real artifact. An invariant with a dangling `spec_ref:` or `rule_ref:` cannot be enforced by any guard, making the recipe's contract unverifiable.**
+
+The composition kit's binary-verification guarantee requires that every business invariant in a recipe traces to either:
+- **`spec_ref:`** — an item in an existing `specs/*.yaml` file (e.g., `specs/billing-l0.yaml#BILLING-IDEMP-001`)
+- **`rule_ref:`** — an existing rule file in `practices/rules/*.md` (e.g., `practices/rules/billing-event-idempotent.md`)
+
+If the referenced file does not exist, `recipe_governance_guard.sh` exits 1 and blocks merge.
+
+**Incorrect — recipe YAML with unresolvable spec_ref:**
+
+```yaml
+# VIOLATION: specs/recipes/saas-subscription-recipe-l0.yaml
+business_invariants:
+  - id: SAAS-INV-001
+    description: "subscription must have ≥1 active plan"
+    # VIOLATION: specs/nonexistent-l0.yaml does not exist
+    spec_ref: "specs/nonexistent-l0.yaml#NONEXISTENT-001"
+
+  - id: SAAS-INV-002
+    description: "usage metering resets on billing cycle boundary"
+    # VIOLATION: rule_ref points to non-existent rule file
+    rule_ref: "practices/rules/billing-cycle-reset-nonexistent.md"
+```
+
+### Failing — business_invariant with neither spec_ref nor rule_ref
+
+```yaml
+business_invariants:
+  - id: SAAS-INV-003
+    description: "feature-gate enforcement matches plan tier"
+    # VIOLATION: no spec_ref and no rule_ref — unenforceable invariant
+    rationale: "Manually verified during code review"
+```
+
+**Correct — all business_invariants resolve to existing artifacts:**
+
+```yaml
+# CORRECT: specs/recipes/saas-subscription-recipe-l0.yaml
+business_invariants:
+  - id: SAAS-INV-001
+    description: "subscription must have ≥1 active plan"
+    # EXISTS: specs/billing-l0.yaml is a real file on disk
+    spec_ref: "specs/billing-l0.yaml#BILLING-AUTHZ-002"
+
+  - id: SAAS-INV-002
+    description: "usage metering resets on billing cycle boundary"
+    # EXISTS: practices/rules/billing-event-idempotent.md is a real file on disk
+    rule_ref: "practices/rules/billing-event-idempotent.md"
+
+  - id: SAAS-INV-003
+    description: "feature-gate enforcement matches plan tier"
+    # EXISTS: specs/feature-flags-l0.yaml is a real file on disk
+    spec_ref: "specs/feature-flags-l0.yaml"
+```
+
+### Resolution rules
+
+| Field | Required format | Guard check |
+|---|---|---|
+| `spec_ref:` | `specs/<file>.yaml` or `specs/<file>.yaml#ANCHOR` | File must exist; anchor is informational |
+| `rule_ref:` | `practices/rules/<file>.md` | File must exist |
+| Neither | — | VIOLATION — at least one must be present |
+
+## Failing fixture
+
+See: `practices/evals/fixtures/recipe-invariants-must-resolve/fail_unresolvable_spec_ref/recipe.yaml` — `business_invariants` entries reference `specs/nonexistent-l0.yaml` which does not exist.
+
+See: `practices/evals/fixtures/recipe-invariants-must-resolve/pass/recipe.yaml` — all `business_invariants` reference `specs/billing-l0.yaml` which exists.
+
+Reference: https://owasp.org/www-project-application-security-verification-standard/
 
 
 <!-- @source rules/security-csrf-scoped-disable.md -->

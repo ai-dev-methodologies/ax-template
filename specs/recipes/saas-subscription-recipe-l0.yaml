@@ -1,0 +1,74 @@
+# specs/recipes/saas-subscription-recipe-l0.yaml — Recipe-level spec (SP35)
+schema_version: 1
+pattern: saas-subscription
+display_name: "Multi-tenant SaaS Subscription"
+compatible_with_catalog_version: "v1.2.0-p1-absorbed"
+last_verified_at: "2026-05-18"
+enabled_l4_domains:
+  - billing
+  - auth
+  - feature-flags
+  - notification
+  - audit-log
+l2_blocks_used:
+  - pricing-table
+  - plan-comparison
+  - usage-meter
+  - invoice-list
+  - billing-history
+  - feature-flag-toggle
+  - feature-gate
+  - kpi-card
+l3_pages_used:
+  - pricing-page
+  - settings-overview
+  - admin-overview-page
+business_invariants:
+  - id: SAAS-INV-001
+    statement: "subscription must have ≥1 active plan"
+    spec_ref: "specs/billing-l0.yaml#BILLING-AUTHZ-002"
+    rule_ref: "practices/rules/billing-event-idempotent.md"
+  - id: SAAS-INV-002
+    statement: "usage metering resets on billing cycle boundary"
+    rule_ref: "practices/rules/billing-event-idempotent.md"
+  - id: SAAS-INV-003
+    statement: "feature-gate enforcement matches plan tier"
+    spec_ref: "specs/feature-flags-l0.yaml"
+  - id: SAAS-INV-004
+    statement: "tenant downgrade preserves historical usage logs"
+    spec_ref: "specs/audit-log-l0.yaml"
+business_observability_advisory:
+  - metric: saas.mrr.calculated_daily_count
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: saas.tenant.active_subscription_count
+    type: gauge
+  - metric: saas.usage_metering.cycle_reset_total
+    type: counter
+  - metric: "saas.plan.upgrade_total{from,to}"
+    type: counter
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # Format: <field-path>: <rationale + url-or-citation>
+  # Example (uncomment in fork-receiver's project if needed):
+  # enabled_l4_domains:
+  #   skip: ["audit-log"]
+  #   rationale: "Project uses external SIEM via webhook; audit-log L4 redundant."
+  #   citation: "<internal ticket / PR url>"
+evidence:
+  - provenance_class: external
+    source: "Stripe Billing — Subscriptions overview"
+    url: "https://stripe.com/docs/billing/subscriptions/overview"
+    citation: "Subscriptions allow you to charge a customer on a recurring basis."
+    quoted_at: 2026-05-18
+  - provenance_class: external
+    source: "Toss Payments — 자동결제 (Recurring) Guide"
+    url: "https://docs.tosspayments.com/guides/v2/billing"
+    citation: "자동결제는 정기 배송, 음악 스트리밍과 같은 구독형 서비스에서 사용할 수 있어요."
+    quoted_at: "2026-05-18"
+    fidelity_note: "iter 3 — URL corrected from /billing/overview (404) to /billing; verbatim snippet re-fetched from current page body."
+  - provenance_class: internal_design
+    derives_from:
+      - "SP30 billing"
+      - "SP28 feature-flags"
+    rationale: "Composition selected from existing L4 baseline; no novel logic."

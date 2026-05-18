@@ -111,3 +111,8 @@ bash skills/ax-verify-domain/scripts/run.sh crud
 # Verify L4 layer
 bash skills/ax-verify-L4/scripts/run.sh
 ```
+
+## Recipe Composition
+
+applied_recipe: e-commerce
+applied_recipe_secondary: crm

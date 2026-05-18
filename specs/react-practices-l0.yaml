@@ -632,3 +632,12 @@ items:
     applicable: true
     applicable_to: [react, nextjs]
     notes: "Observed violation pattern during SP7 L2 block implementation (DataTable, FilterBar, Pagination). Rule body: practices-react/rules/l2-prefer-data-prop-over-direct-fetch.md."
+
+  - id: "REACT-PRACTICES-L4-001"
+    chapter: "L4 Layer / Recipe Composition"
+    requirement: "When a Next.js page in an L4 domain implements a multi-domain composition pattern covered by a Business Pattern Recipe (saas-subscription, e-commerce, crm), it MUST follow the Recipe's L2 block and domain wiring contract. Directly importing hooks, stores, or components from sibling L4 domains without an applied_recipe: declaration on the L4 domain README is prohibited. Rule body: practices-react/rules/prefer-recipe-composition-over-l4-cross-import.md."
+    test_method: "react_practices_L4_001_recipeCompositionOverAdHocL4CrossImport"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [nextjs]
+    notes: "ESLint no-restricted-imports or import/no-restricted-paths detects cross-L4 domain imports in pages that lack applied_recipe: on their L4 README. Failing fixture: practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/fail_ad_hoc_cross_import/SaasPage.tsx."

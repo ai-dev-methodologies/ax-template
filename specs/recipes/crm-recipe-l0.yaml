@@ -1,0 +1,88 @@
+# specs/recipes/crm-recipe-l0.yaml — Recipe-level spec (SP35)
+schema_version: 1
+pattern: crm
+display_name: "CRM (Lead → Contact → Deal → Activity)"
+compatible_with_catalog_version: "v1.2.0-p1-absorbed"
+last_verified_at: "2026-05-18"
+
+enabled_l4_domains:
+  - crud
+  - audit-log
+  - notification
+  - search
+
+l2_blocks_used:
+  - data-table
+  - activity-feed
+  - filter-bar
+  - saved-view
+  - kpi-card
+  - event-stream
+
+l3_pages_used:
+  - list-page
+  - detail-page
+  - create-page
+  - dashboard-page
+
+business_invariants:
+  - id: CRM-INV-001
+    statement: "deal.amount must be currency-precision compliant"
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    spec_ref: "specs/crud-security.yaml"
+  - id: CRM-INV-002
+    statement: "lead → contact conversion preserves source_attribution"
+    spec_ref: "specs/audit-log-l0.yaml"
+  - id: CRM-INV-003
+    statement: "activity.timestamp ≥ activity.created_at"
+    spec_ref: "specs/crud-security.yaml"
+  - id: CRM-INV-004
+    statement: "deal.stage transitions follow declared state machine; transitions logged"
+    spec_ref: "specs/audit-log-l0.yaml"
+
+business_observability_advisory:
+  - metric: "crm.lead.captured_total{source}"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: "crm.deal.stage_transitioned_total{from,to}"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: crm.deal.win_rate
+    type: gauge
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: "crm.activity.completed_total{type}"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # Format: <field-path>: <rationale + url-or-citation>
+  # Example (uncomment in fork-receiver's project if needed):
+  # enabled_l4_domains:
+  #   skip: ["search"]
+  #   rationale: "CRM data is small; full-text search not needed."
+  #   citation: "<internal ticket / PR url>"
+
+evidence:
+  - provenance_class: external
+    source: "Salesforce Object Reference — Opportunity (Deal) data model"
+    url: "https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_opportunity.htm"
+    citation: "Represents an opportunity, which is a sale or pending deal."
+    quoted_at: "2026-05-18"
+  - provenance_class: external
+    source: "HubSpot CRM API — Deals overview"
+    url: "https://developers.hubspot.com/docs/api/crm/deals"
+    citation: "Deals represent ongoing transactions that sales teams are pursuing."
+    quoted_at: "2026-05-18"
+  - provenance_class: external
+    source: "Channel Talk — 비즈니스 메신저 (landing tagline)"
+    url: "https://channel.io/ko"
+    citation: "고객 상담의 미래는 AI입니다"
+    quoted_at: "2026-05-18"
+    fidelity_note: "iter 3 — verbatim landing-page tagline replaces iter-2 paraphrase about 고객 데이터/영업 단계/활동 이력 (paraphrase not found verbatim on landing page). Reference retained as inspirational anchor (Korean CRM vendor) plus this short page tagline."
+  - provenance_class: internal_design
+    derives_from:
+      - "SP15 crud"
+      - "SP26 search"
+      - "SP17 audit-log"
+    rationale: "Composition selected from existing L4 baseline; pipeline state machine ships as code-of-customer, not as catalog primitive."
