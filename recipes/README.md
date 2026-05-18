@@ -2,27 +2,27 @@
 
 > **What this is:** Composition manifests that declare WHICH existing L4 domains to assemble for a given business pattern. Recipes do NOT ship code or define new L4 domains.
 
-## Shipped Recipes (v1.3.0-business-patterns)
+## Shipped Recipes (v1.4.0-recipes-complete — 6 active)
 
-| Pattern | Description | Enabled L4 domains |
-|---|---|---|
-| [`saas-subscription`](saas-subscription/RECIPE.md) | Multi-tenant SaaS with plan tiers, recurring billing, feature gating | billing, auth, feature-flags, notification, audit-log |
-| [`e-commerce`](e-commerce/RECIPE.md) | Product catalog + cart + checkout + order management | crud, payment, notification, audit-log, search |
-| [`crm`](crm/RECIPE.md) | Sales pipeline: lead → contact → deal → activity | crud, audit-log, notification, search |
+| Pattern | Description | Enabled L4 domains | Verdict |
+|---|---|---|---|
+| [`saas-subscription`](saas-subscription/RECIPE.md) | Multi-tenant SaaS with plan tiers, recurring billing, feature gating | billing, auth, feature-flags, notification, audit-log | [12/12 MUST, 8/8 SHOULD](../skills/_tests/sealed-verdict/saas-subscription-verdict.md) |
+| [`e-commerce`](e-commerce/RECIPE.md) | Product catalog + cart + checkout + order management | crud, payment, notification, audit-log, search | [12/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/e-commerce-verdict.md) |
+| [`crm`](crm/RECIPE.md) | Sales pipeline: lead → contact → deal → activity | crud, audit-log, notification, search | [PASS](../skills/_tests/sealed-verdict/crm-verdict.md) |
+| [`booking`](booking/RECIPE.md) | Calendar + availability + reservation + cancellation | audit-log, crud, feature-flags, notification, payment | [11/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/booking-verdict.md) |
+| [`marketplace`](marketplace/RECIPE.md) | Listings + bids + escrow + ratings | audit-log, crud, notification, payment, search | [12/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/marketplace-verdict.md) |
+| [`b2b-admin`](b2b-admin/RECIPE.md) | Multi-tenant ops + analytics + audit + impersonation | audit-log, auth, crud, feature-flags, search | [11/12 MUST, 6/8 SHOULD](../skills/_tests/sealed-verdict/b2b-admin-verdict.md) |
 
-All 3 recipes carry sealed sub-agent verdicts (≥10/12 MUST + ≥5/8 SHOULD). See `skills/_tests/sealed-verdict/`.
+All 6 recipes carry sealed sub-agent verdicts (≥10/12 MUST + ≥5/8 SHOULD). See `skills/_tests/sealed-verdict/`.
 
-## Deferred Recipes (pending fork-receiver demand)
+## Deferred Recipes (4 remaining — pending fork-receiver demand)
 
 | Pattern | Why deferred | Re-introduction trigger |
 |---|---|---|
-| `booking` | Korean URL evidence for 야놀자/캐치테이블 thin; needs Connectivity API access for citation | Fork-receiver demand OR public Booking.com Connectivity case study URL |
-| `community` | Discourse + Reddit citations OK; Korean refs (디시인사이드, 클리앙) lack structured API URLs | Fork-receiver demand with Korean community platform requirement |
-| `marketplace` | Etsy URL OK; 당근마켓 has no public API docs URL → would need `internal_design` fallback | Fork-receiver demand |
-| `lms` | Moodle URL OK; 인프런 has no public API docs URL → would need `internal_design` fallback | Fork-receiver demand |
-| `b2b-admin` | 토스 비즈니스 lacks structured URL for external citation | Fork-receiver demand |
-| `cms` | Sanity + Contentful URLs OK; rich-text already shipped in SP32 | Fork-receiver demand or batch with `community` |
-| `internal-it` | Jira + ServiceNow URLs OK; Korean refs to 잔디/카카오워크 lack structured URLs | Fork-receiver demand |
+| `community` | Korean refs (디시인사이드, 클리앙) lack structured API URLs; pattern overlaps with crm for B2C | Fork-receiver demand with Korean community platform OR Discourse-style API integration request |
+| `lms` | scheduled-task L4 absent; LMS due-date-reminder requires job-scheduler; 인프런 closed API | Fork-receiver demand + job-scheduler L4 + Coursera/Moodle verbatim citation |
+| `cms` | Scheduled publish requires same scheduler as LMS; 네이버 블로그 closed API | Fork-receiver demand + scheduler primitive + Sanity/Contentful verbatim citation |
+| `internal-it` | Jira API not verbatim-fetched (3 failures); webhook patterns too vendor-specific | Fork-receiver demand + verbatim Jira/ServiceNow quote + webhook primitive in notification L4 |
 
 All deferred patterns carry `status: deferred-pending-fork-receiver-demand` in `_MANIFEST.yaml`.
 
