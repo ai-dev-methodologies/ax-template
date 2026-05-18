@@ -1,0 +1,95 @@
+# spec-trio-template.yaml — e-commerce
+#
+# Pre-filled Spec Trio fragments to copy into your project's specs/ directory
+# when implementing the e-commerce recipe.
+#
+# Instructions:
+#   1. Copy this file to your project as specs/e-commerce-l0.yaml
+#   2. Replace all <PLACEHOLDER> values with project-specific values
+#   3. Extend the items array with domain-specific requirements
+#   4. Ensure business_invariants from RECIPE.md are reflected as spec items
+#
+# This fragment composes the following L4 Spec Trios (reference, do not copy):
+#   - specs/crud-security.yaml
+#   - specs/payment-l0.yaml
+#   - specs/notification-l0.yaml
+#   - specs/audit-log-l0.yaml
+#   - specs/search-l0.yaml
+
+schema_version: 1
+scope: "<YOUR_PROJECT>-e-commerce"
+stack: "Spring Boot 3.2.x + React + Toss Payments Widget"
+standard: "OWASP Top 10 + PCI-DSS SAQ-A + RFC 7807"
+applied_recipe: e-commerce
+compatible_with_catalog_version: "v1.2.0-p1-absorbed"
+
+items:
+  # ─── ECOM-INV-001: order total integrity ──────────────────────────────────
+  - id: "ECOM-INV-001"
+    chapter: "ORDER"
+    requirement: >
+      order.total_amount must equal sum(items.unit_price × items.quantity).
+      Any discrepancy at order creation is rejected with HTTP 422.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    spec_ref: "specs/payment-l0.yaml"
+    notes: >
+      Test: POST /api/orders with mismatched total_amount → 422.
+      Implementation: OrderService.create() recalculates total from line items;
+      rejects if submitted total differs.
+
+  # ─── ECOM-INV-002: payment capture and order confirmation are atomic ───────
+  - id: "ECOM-INV-002"
+    chapter: "PAYMENT"
+    requirement: >
+      When payment is captured, order status must transition to CONFIRMED in
+      the same transaction. Partial state (payment captured but order still PENDING)
+      must never persist.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/payment-l0.yaml"
+    rule_ref: "practices/rules/api-idempotency-key-required.md"
+    notes: >
+      Test: mock payment capture success; assert order.status == CONFIRMED in same response.
+      Implementation: PaymentService.capture() and OrderService.confirm() wrapped in
+      TransactionTemplate; both succeed or both roll back.
+
+  # ─── ECOM-INV-003: idempotency key on all mutating endpoints ─────────────
+  - id: "ECOM-INV-003"
+    chapter: "IDEMPOTENCY"
+    requirement: >
+      All POST endpoints with non-idempotent side effects (order creation, payment capture,
+      refund) must require an Idempotency-Key header. Requests without the header are
+      rejected with HTTP 422.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    rule_ref: "practices/rules/api-idempotency-key-required.md"
+    notes: >
+      Test: POST /api/orders without Idempotency-Key → 422.
+      Test: POST /api/payments without Idempotency-Key → 422.
+      Implementation: @RequireIdempotencyKey on OrderController.create() and PaymentController.capture().
+
+  # ─── ECOM-INV-004: cancellation/refund actions logged immutably ──────────
+  - id: "ECOM-INV-004"
+    chapter: "AUDIT"
+    requirement: >
+      Every order cancellation and payment refund must produce an immutable audit log
+      entry with actor, action, and outcome.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/audit-log-l0.yaml"
+    notes: >
+      Test: cancel an order; assert audit_logs contains entry with action=order.cancelled.
+      Test: refund a payment; assert audit_logs contains entry with action=payment.refunded.
+      Implementation: @Audited on OrderService.cancel() and PaymentService.refund().
+
+  # ─── Add your project-specific items below ────────────────────────────────
+  # - id: "<YOUR_PROJECT>-ECOM-001"
+  #   chapter: "<CHAPTER>"
+  #   requirement: "<REQUIREMENT>"
+  #   ...

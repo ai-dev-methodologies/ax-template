@@ -1,0 +1,92 @@
+# spec-trio-template.yaml — saas-subscription
+#
+# Pre-filled Spec Trio fragments to copy into your project's specs/ directory
+# when implementing the saas-subscription recipe.
+#
+# Instructions:
+#   1. Copy this file to your project as specs/saas-subscription-l0.yaml
+#   2. Replace all <PLACEHOLDER> values with project-specific values
+#   3. Extend the items array with domain-specific requirements
+#   4. Ensure business_invariants from RECIPE.md are reflected as spec items
+#
+# This fragment composes the following L4 Spec Trios (reference, do not copy):
+#   - specs/billing-l0.yaml
+#   - specs/auth-asvs-l1.yaml
+#   - specs/feature-flags-l0.yaml
+#   - specs/notification-l0.yaml
+#   - specs/audit-log-l0.yaml
+
+schema_version: 1
+scope: "<YOUR_PROJECT>-saas-subscription"
+stack: "Spring Boot 3.2.x + React + Toss Payments Billing"
+standard: "OWASP ASVS V4 + PCI-DSS SAQ-A + ISO 27001 A.12.4"
+applied_recipe: saas-subscription
+compatible_with_catalog_version: "v1.2.0-p1-absorbed"
+
+items:
+  # ─── SAAS-INV-001: subscription must have ≥1 active plan ──────────────────
+  - id: "SAAS-INV-001"
+    chapter: "SUBSCRIPTION"
+    requirement: >
+      A tenant's subscription must always have ≥1 active plan.
+      Subscription creation without a valid plan ID is rejected with HTTP 422.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    spec_ref: "specs/billing-l0.yaml#BILLING-AUTHZ-002"
+    rule_ref: "practices/rules/billing-event-idempotent.md"
+    notes: >
+      Test: POST /api/billing/subscriptions without planId → 422.
+      Test: POST with invalid planId → 422.
+      Implementation: SubscriptionService.create() validates plan existence before persisting.
+
+  # ─── SAAS-INV-002: usage metering resets on billing cycle boundary ─────────
+  - id: "SAAS-INV-002"
+    chapter: "METERING"
+    requirement: >
+      Usage counter for each tenant resets to zero on the billing cycle boundary
+      (e.g., monthly renewal date). No usage from the previous cycle carries over.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    rule_ref: "practices/rules/billing-event-idempotent.md"
+    notes: >
+      Test: advance billing cycle via test clock; assert usage count resets.
+      Implementation: BillingCycleRenewalJob emits CYCLE_RESET event; UsageMeteringService
+      handles event and zeroes the counter via idempotent update.
+
+  # ─── SAAS-INV-003: feature-gate enforcement matches plan tier ─────────────
+  - id: "SAAS-INV-003"
+    chapter: "FEATURE_GATING"
+    requirement: >
+      Feature-flag evaluation for a user must be scoped to their tenant's current plan tier.
+      A user on FREE tier must not access PRO-gated features.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    spec_ref: "specs/feature-flags-l0.yaml"
+    notes: >
+      Test: authenticate as FREE-plan user; call PRO-gated endpoint → 403.
+      Implementation: FeatureFlagService.isEnabled() reads planTier from billing subscription;
+      SecurityConfig enforces via @PreAuthorize with feature-flag SpEL.
+
+  # ─── SAAS-INV-004: tenant downgrade preserves historical usage logs ────────
+  - id: "SAAS-INV-004"
+    chapter: "AUDIT"
+    requirement: >
+      When a tenant downgrades their plan, all historical usage metering data and
+      billing audit log entries must be retained (no cascading delete).
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/audit-log-l0.yaml"
+    notes: >
+      Test: downgrade tenant plan; query audit_logs for tenant → prior entries still present.
+      Implementation: plan downgrade does NOT trigger cascade delete.
+      AuditLog rows are immutable (no UPDATE/DELETE) per audit-log L4.
+
+  # ─── Add your project-specific items below ────────────────────────────────
+  # - id: "<YOUR_PROJECT>-SAAS-001"
+  #   chapter: "<CHAPTER>"
+  #   requirement: "<REQUIREMENT>"
+  #   ...

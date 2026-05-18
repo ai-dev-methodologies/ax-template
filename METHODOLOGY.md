@@ -837,3 +837,52 @@ during Payment, captured in the following artifacts (`docs/blueprints/payment/`)
 A new domain following Appendix C should produce the same 5 documents in
 `docs/blueprints/<domain>/`. If any document cannot be produced, the corresponding step did
 not complete and the gate has not been crossed.
+
+---
+
+### Recipe D — Business pattern composition flow (via `/ax-scaffold business`)
+
+When implementing a cross-domain business pattern (multi-tenant SaaS subscription,
+e-commerce, CRM, etc.), use `/ax-scaffold business` instead of the per-domain
+12-step procedure above. This subcommand composes **existing** L4 domains; it does
+NOT create a new Spec Trio or a new L4 domain.
+
+**When to use Recipe D instead of the 12-step procedure**
+
+| Signal | Use |
+|--------|-----|
+| Business requires ≥2 existing L4 domains working together | Recipe D |
+| Business introduces genuinely new backend/frontend surface not in any L4 | 12-step procedure (adds new domain) |
+| Fork-receiver wants to enable a named pattern quickly | Recipe D |
+
+**Composition flow (5 steps)**
+
+| # | Step | Command | Artifact |
+|---|------|---------|----------|
+| **C1** | Pick pattern | Check `recipes/` for available patterns | — |
+| **C2** | Dry-run | `bash skills/ax-scaffold/scripts/new-business-recipe.sh <pattern> <project> --dry-run` | Printed file plan |
+| **C3** | Review scope | Confirm enabled L4 domains match project needs; add inline `override_allowed:` in `recipes/<pattern>/RECIPE.md` if adjusting | Optional: modified `override_allowed:` block |
+| **C4** | Apply | `bash skills/ax-scaffold/scripts/new-business-recipe.sh <pattern> <project>` | `<project>/business-composition.yaml` + `/ax-verify-domain` exit 0 for each L4 |
+| **C5** | Annotate + implement | Add `applied_recipe: <pattern>` to each enabled L4 domain README; implement business logic using L4 catalog + L2 blocks | Updated READMEs |
+
+**Verification primitive**
+
+```bash
+bash skills/ax-scaffold/scripts/new-business-recipe.sh <pattern> <project> --dry-run
+# Expected: exit 0, enabled L4 domains all ✓, L2 blocks listed
+```
+
+**Available patterns** (see `recipes/` for full recipe definitions):
+
+| Pattern | Enabled L4 domains |
+|---------|-------------------|
+| `saas-subscription` | billing, auth, feature-flags, notification, audit-log |
+| `e-commerce` | payment, auth, notification, audit-log, search |
+| `crm` | auth, notification, audit-log, search, file-storage |
+
+**Non-goals for Recipe D**
+
+- Recipe D does NOT create new L4 Spec Trios.
+- Recipe D does NOT register patterns in `trio_integrity_allowlist.yaml`.
+- Recipe D does NOT ship business logic — only composition contracts.
+- Patterns are explicitly named; there is no free-text inference (`--analyze` is not supported).

@@ -114,3 +114,27 @@ items:
     verification_type: "unit_test"
     applicable: true
     notes: "Fixture-based unit test asserts: pass fixture declares CHUNK_SIZE constant and @Transactional on persistChunk; fail fixture using readAll() without chunking is detected. CsvImportChunkedIT (10k rows, no OOM) is the integration anchor."
+
+  - id: "PRACTICES-ARCH-001"
+    chapter: "Architecture / Recipe Composition"
+    requirement: "When a business domain implements a pattern covered by a Business Pattern Recipe (saas-subscription, e-commerce, crm), the cross-L4 wiring MUST follow the Recipe's composition contract. Ad-hoc cross-importing L4 domain classes without an applied_recipe: declaration is prohibited. Rule body: practices/rules/prefer-recipe-composition-over-l4-cross-import.md."
+    test_method: "practices_ARCH_001_recipeCompositionOverAdHocCrossImport"
+    verification_type: "review"
+    applicable: true
+    notes: "Detected statically: if a Spring service in L4 domain A imports from L4 domain B AND C (multi-domain composition) without applied_recipe: in the domain README, ArchUnit flags the dependency pattern. Failing fixture in practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/."
+
+  - id: "PRACTICES-ARCH-002"
+    chapter: "Architecture / Recipe Metadata"
+    requirement: "Every L4 domain README that participates in a Business Pattern Recipe composition must declare applied_recipe: <pattern-name> in its frontmatter. Missing declaration breaks the recipe audit trail and prevents recipe_governance_guard.sh from verifying composition correctness. Rule body: practices/rules/business-domain-must-declare-applied-recipe.md."
+    test_method: "practices_ARCH_002_l4DomainDeclaresAppliedRecipe"
+    verification_type: "review"
+    applicable: true
+    notes: "Guard script scans templates/L4/*/README.md for applied_recipe: field when the domain is listed in any recipes/*/RECIPE.md enabled_l4_domains. Failing fixture in practices/evals/fixtures/business-domain-must-declare-applied-recipe/."
+
+  - id: "PRACTICES-ARCH-003"
+    chapter: "Architecture / Recipe Invariants"
+    requirement: "Every business_invariants entry in a recipe spec YAML must carry either spec_ref: or rule_ref: pointing to an existing artifact (a specs/*.yaml file or a practices/rules/*.md file). Unresolvable references make invariants unenforceable and break the recipe's evidence chain. Rule body: practices/rules/recipe-invariants-must-resolve.md."
+    test_method: "practices_ARCH_003_recipeInvariantsResolveToExistingArtifacts"
+    verification_type: "review"
+    applicable: true
+    notes: "recipe_spec_referential_integrity_guard.sh (SP35) and recipe_governance_guard.sh (SP37) both walk business_invariants and resolve each spec_ref/rule_ref. Failing fixture in practices/evals/fixtures/recipe-invariants-must-resolve/."
