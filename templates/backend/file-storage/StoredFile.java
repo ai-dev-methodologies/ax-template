@@ -4,6 +4,8 @@
 package com.ax.template.authblueprint.filestorage;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -24,6 +26,8 @@ import java.util.UUID;
  * </ul>
  */
 @Entity
+@SQLDelete(sql = "UPDATE stored_files SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+@Where(clause = "deleted_at IS NULL")
 @Table(name = "stored_files", indexes = {
     @Index(name = "idx_stored_files_owner", columnList = "ownerUserId"),
     @Index(name = "idx_stored_files_status", columnList = "status"),
@@ -130,4 +134,11 @@ public class StoredFile {
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
 
     public Long getVersion() { return version; }
+
+    /** Soft-delete timestamp. NULL = active. Set by @SQLDelete — do not set directly. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    public Instant getDeletedAt() { return deletedAt; }
+    public boolean isDeleted()    { return deletedAt != null; }
 }

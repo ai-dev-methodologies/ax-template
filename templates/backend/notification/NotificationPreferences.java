@@ -26,6 +26,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.SQLDelete;
 
 /**
  * Per-user notification channel preferences.
@@ -39,6 +40,7 @@ import java.util.UUID;
  * <p>Extends {@code BaseEntity} for: id (UUID), createdAt, updatedAt, deleted.
  */
 @Entity
+@SQLDelete(sql = "UPDATE notification_preferences SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
 @Table(name = "notification_preferences")
 public class NotificationPreferences extends BaseEntity {
 

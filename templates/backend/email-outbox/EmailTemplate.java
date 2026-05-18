@@ -25,6 +25,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import org.hibernate.annotations.SQLDelete;
 
 /**
  * Email template entity — stores subject and body templates identified by a code.
@@ -43,6 +44,7 @@ import jakarta.persistence.UniqueConstraint;
  * <p>Extends {@code BaseEntity} (SP13) for: id, createdAt, updatedAt, deleted.
  */
 @Entity
+@SQLDelete(sql = "UPDATE email_templates SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
 @Table(
     name = "email_templates",
     uniqueConstraints = {
