@@ -995,3 +995,141 @@ tier promotion.
 - `run-all.sh` unchanged (subcommands are additive, not replacing steps).
 - 50-fixture eval set in `practices/evals/fixtures/policy-check/` — FP rate <5% confirmed.
 - TDD: `skills/_tests/ax-verify-subcommands/*.test.sh` — 3/3 GREEN.
+
+---
+
+## TD-2026-05-18-029 — SP31: 사업자등록번호 checksum from public DART data only
+
+```yaml
+---
+adr_id: TD-2026-05-18-029
+title: "SP31: 사업자등록번호 checksum from public DART data only"
+provenance_class: external_constraint
+evidence:
+  source_type: external
+  upstream_id: nts-business-reg-2026-05
+  section: "Public Domain BRN Data Sources"
+  citation: |
+    "금융감독원 DART (https://dart.fss.or.kr) — 공시 공개 데이터, 공공저작물 자유이용허락"
+    5 verified BRNs: Samsung(124-81-00998), Kakao(120-81-47521), NAVER(220-81-62517),
+    LG(107-86-14075), Hyundai(120-81-20653). All checksums manually verified.
+spec_ref: "practices-react/rules/business-registration-checksum-required.md"
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+All 5 fixture BRNs in `practices/evals/fixtures/business-registration-checksum/pass/samples.json`
+are sourced exclusively from 금융감독원 DART (공공저작물 자유이용허락). No mock or invented BRNs
+used. Each entry includes `algorithmCheck` with step-by-step NTS weight computation.
+
+### Rationale
+
+Critic Blocker 5 in PRD §5.3: "사업자등록번호 checksum from PUBLIC fixture data (국세청 +
+open-data.go.kr, NOT mocks)." Using real public-domain BRNs ensures the checksum algorithm
+is validated against actual NTS-issued numbers, not synthetic data that may not exercise
+all edge cases of the 9th-digit two-part contribution.
+
+### Consequences
+
+- `fail_invalid_checksum/` fixtures are derived from pass BRNs with last digit +1 — guaranteed
+  to fail the NTS checksum without ambiguity.
+- `fail_format_violation/` fixtures document the boundary: "123-456-7890" strips to 10 digits
+  and runs the algorithm (returns false, not FormatViolationError) — this boundary is tested.
+- `templates/_tests/business-reg-checksum.spec.ts` loads fixtures from JSON via readFileSync,
+  ensuring test data and rule documentation stay in sync.
+
+---
+
+## TD-2026-05-18-030 — SP31: identity-verification backend_only — no frontend UI
+
+```yaml
+---
+adr_id: TD-2026-05-18-030
+title: "SP31: identity-verification domain is backend_only — Spec Trio without L1/L2 UI"
+provenance_class: pattern_adoption
+evidence:
+  source_type: internal
+  source_ref: specs/email-outbox-l0.yaml
+  rationale: |
+    email-outbox and scheduled-task are backend_only precedents: Spec Trio exists
+    (spec YAML + OpenAPI + manifest) but no L1/L2/L3 templates — system operates
+    entirely via webhook callbacks from external identity providers (PASS, KCB).
+    Frontend phone-verification-panel.tsx is an L2 block that INITIATES verification
+    (redirects to provider), but the identity data arrives at the backend via callback.
+spec_ref: "specs/identity-verification-l0.yaml"
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+`identity-verification` domain follows the `backend_only` pattern:
+- Spec Trio: `specs/identity-verification-l0.yaml`, `contracts/identity-verification-openapi.yaml`,
+  `blueprints/identity-verification-manifest.yaml`
+- Backend templates: `templates/backend/identity-verification/` (8 Java files)
+- L2 UI block: `templates/L2/blocks/phone-verification-panel.tsx` — initiates verification
+  session (redirects user to PASS/KCB app), does NOT receive CI/DI directly
+- `practices/evals/trio_integrity_allowlist.yaml`: `identity-verification: backend_only`
+
+### Rationale
+
+Identity callbacks come from PASS/KCB servers via HMAC-signed webhooks — not from the
+browser. The frontend panel triggers the flow but never receives or stores CI/DI. This
+mirrors the email-outbox pattern where delivery is external-system-driven.
+
+### Consequences
+
+- `testIdentityVerification` Gradle task added to `backend/build.gradle.kts`
+- `IdentityVerificationFlowIT.java` verifies IDV-CALLBACK-001/002/003 + IDV-PROVIDER-001
+- No CI/DI data ever touches the browser; no RRN at any layer (개인정보보호법 §24)
+
+---
+
+## TD-2026-05-18-031 — SP31: CI/DI replaces RRN — @LegalBasis annotation pattern
+
+```yaml
+---
+adr_id: TD-2026-05-18-031
+title: "SP31: CI/DI replaces RRN — @LegalBasis annotation required for statutory exceptions"
+provenance_class: external_constraint
+evidence:
+  source_type: external
+  upstream_id: pipa-article-24-2026-05
+  section: "§24-1 주민등록번호 처리의 제한"
+  citation: |
+    "개인정보처리자는 다음 각 호의 어느 하나에 해당하는 경우를 제외하고는 주민등록번호를 처리할 수 없다."
+    — 개인정보보호법 제24조의2제1항 (시행 2024.03.15.)
+spec_ref: "practices/rules/no-rrn-collection-without-legal-basis.md"
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+Two rules added to catalog:
+1. `practices/rules/no-rrn-collection-without-legal-basis.md` (Java) — guard matches
+   `String.*rrn|String.*주민` in Java files without `@LegalBasis` annotation
+2. `practices-react/rules/no-rrn-collection-without-legal-basis.md` (React) — guard matches
+   `rrn|주민번호|residentRegistration` field names in TS/TSX files; excludes `ci|di|verifiedIdentityNumber`
+
+`@LegalBasis` annotation pattern from pipa-article-24-2026-05.snapshot.md documents
+required fields: `statute`, `purpose`, `approvedBy`. Absent this annotation, any RRN-like
+field name is a PIPA §24-1 CRITICAL violation.
+
+### Rationale
+
+개인정보보호법 §24-1 prohibits RRN processing without explicit statutory authorization.
+User consent alone is insufficient — unlike most personal data, RRN is doubly restricted.
+KISA CI/DI tokens are the lawful substitute for all identity-linking use cases.
+
+### Consequences
+
+- Failing fixture: `practices/evals/fixtures/no-rrn-collection-without-legal-basis/fail_rrn_no_legal_basis/RegistrationDto.java`
+- Pass fixture: `practices/evals/fixtures/no-rrn-collection-without-legal-basis/pass_ci_di_verified/RegistrationDto.java`
+- Rule exclusion list: `ci, di, verifiedIdentityNumber, connectingInfo, duplicateInfo, externalId`
+- practices/AGENTS.md sentinel must be regenerated after this rule addition

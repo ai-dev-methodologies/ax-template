@@ -1,9 +1,9 @@
 ---
 sentinel:
-  source_concat_sha256: "271e5f858360d14fb1bd21b50f97470be155431d4376a3b0675dbcd032580dd4"
-  source_file_count: 26
+  source_concat_sha256: "4f6d702d64bc65a70f930077131b95867582c75160197949159d9b4a4a91852a"
+  source_file_count: 30
   generated_by: "templates/generate_agents.sh"
-  generated_at: "2026-05-18T04:52:05Z"
+  generated_at: "2026-05-18T06:40:24Z"
 ---
 
 # templates/ — AGENTS.md (auto-generated)
@@ -42,12 +42,14 @@ All files under `templates/**` are walked by:
 
 See `templates/DECISIONS.md` for the full ADR trail (TD-2026-05-17-001..010).
 
-## Sha256 source files (26 total)
+## Sha256 source files (30 total)
 
 - DECISIONS.md
 - L1/PEER_DEPS.md
 - L3/pages/README.md
 - L3/pages/account-locked/README.md
+- L3/pages/admin-overview-page/README.md
+- L3/pages/audit-log-page/README.md
 - L3/pages/auth-callback-page/README.md
 - L3/pages/create-page/README.md
 - L3/pages/dashboard-page/README.md
@@ -59,11 +61,13 @@ See `templates/DECISIONS.md` for the full ADR trail (TD-2026-05-17-001..010).
 - L3/pages/import-csv/README.md
 - L3/pages/list-page/README.md
 - L3/pages/mfa-setup/README.md
+- L3/pages/pricing-page/README.md
 - L3/pages/reset-password/README.md
 - L3/pages/settings-overview/README.md
 - L3/pages/wizard/README.md
 - L4/audit-log/README.md
 - L4/auth/README.md
+- L4/billing/README.md
 - L4/crud/README.md
 - L4/feature-flags/README.md
 - L4/file-storage/README.md
