@@ -1,0 +1,75 @@
+/*
+ * ScheduledTask.java.skeleton — R7 SP41 scheduled-task L4 backend stub.
+ *
+ * Rename to ScheduledTask.java in your fork.
+ * Set the package to match your domain root (e.g. com.<org>.scheduling).
+ *
+ * This stub satisfies SCHED-REGISTER-001 (specs/scheduled-task-l0.yaml):
+ *   "ScheduledTaskService.register() persists a new ScheduledTask with a name,
+ *    cron expression, and status REGISTERED; the task is returned with a generated UUID."
+ *
+ * Full domain implementation (JobHistory, LockingPolicy, Service, Controller)
+ * lands when the first downstream recipe consumes scheduler — R8 LMS or CMS.
+ */
+
+// package com.<org>.scheduling;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(name = "scheduled_task")
+public class ScheduledTask {
+
+    public enum Status { REGISTERED, RUNNING, PAUSED, DISABLED }
+
+    @Id
+    @Column(name = "id", nullable = false, updatable = false, length = 36)
+    private String id;
+
+    @Column(name = "name", nullable = false, unique = true, length = 200)
+    private String name;
+
+    @Column(name = "cron_expression", nullable = false, length = 100)
+    private String cronExpression;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private Status status;
+
+    @Column(name = "last_run")
+    private Instant lastRun;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    protected ScheduledTask() { /* JPA */ }
+
+    /** SCHED-REGISTER-001: factory that yields a REGISTERED task with a generated UUID. */
+    public static ScheduledTask create(String name, String cronExpression) {
+        ScheduledTask t = new ScheduledTask();
+        t.id = UUID.randomUUID().toString();
+        t.name = name;
+        t.cronExpression = cronExpression;
+        t.status = Status.REGISTERED;
+        t.createdAt = Instant.now();
+        return t;
+    }
+
+    public String getId() { return id; }
+    public String getName() { return name; }
+    public String getCronExpression() { return cronExpression; }
+    public Status getStatus() { return status; }
+    public Instant getLastRun() { return lastRun; }
+    public Instant getCreatedAt() { return createdAt; }
+
+    /** SCHED-EXECUTE-001: lastRun mutates only on successful execution. */
+    public void markRanAt(Instant ts) { this.lastRun = ts; }
+}

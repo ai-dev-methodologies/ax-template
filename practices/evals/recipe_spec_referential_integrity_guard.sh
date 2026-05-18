@@ -135,11 +135,29 @@ def check_spec(spec_path: pathlib.Path) -> int:
 
             has_spec_ref = bool(re.search(r'spec_ref:', block))
             has_rule_ref = bool(re.search(r'rule_ref:', block))
+            # R7 SP41b — co-shipped-rule: anchors a recipe-level invariant whose
+            # rule body lives inline in the recipe spec (no new practices/rules/*.md
+            # file, per PRD §1.8 + §10). Honored as a valid anchor when accompanied
+            # by an invariant_test: pointing to a co-shipped test file.
+            has_co_shipped_rule = bool(re.search(r'co-shipped-rule:', block))
+            has_invariant_test = bool(re.search(r'invariant_test:', block))
 
-            if not has_spec_ref and not has_rule_ref:
-                print(f"VIOLATION [{spec_path.name}]: invariant {inv_id_str} has neither spec_ref nor rule_ref")
+            if not has_spec_ref and not has_rule_ref and not (has_co_shipped_rule and has_invariant_test):
+                print(f"VIOLATION [{spec_path.name}]: invariant {inv_id_str} has none of spec_ref / rule_ref / (co-shipped-rule + invariant_test)")
                 local_violations += 1
                 continue
+
+            # Validate co-shipped-rule resolution (R7 SP41b path-c)
+            if has_co_shipped_rule and has_invariant_test:
+                test_m = re.search(r'invariant_test:\s*"?([^"\n]+)"?', block)
+                if test_m:
+                    test_rel = test_m.group(1).strip()
+                    test_abs = repo_root / test_rel
+                    if not test_abs.is_file():
+                        print(f"VIOLATION [{spec_path.name}]: invariant {inv_id_str} co-shipped-rule invariant_test '{test_rel}' NOT FOUND on disk")
+                        local_violations += 1
+                    else:
+                        vprint(f"  OK  invariant {inv_id_str} co-shipped-rule + invariant_test '{test_rel}' ✓")
 
             # Validate spec_ref resolution
             if has_spec_ref:

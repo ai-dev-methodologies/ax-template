@@ -1,0 +1,142 @@
+# L4 / scheduled-task — Distributed-Lock Cron Scheduling Domain
+
+**ax-template R7 SP41** — Scheduled Task domain reference workload (catalog-only L4
+primitive completion; spec + contract + manifest authored R3, README + scaffold
+landed R7).
+
+## Domain Mode
+
+`backend_only` — distributed-lock cron jobs + job history + manual admin trigger;
+no frontend UI in scope. R7 introduces the L4 README + scaffold. R8 LMS/CMS recipes
+will be the first downstream consumers of this primitive.
+
+## Overview
+
+A backend-only scheduling domain: register cron tasks, acquire a per-task distributed
+lock (DB-row `SELECT FOR UPDATE SKIP LOCKED`), execute on the holding node, record
+every run in `JobHistory`, and expire stale locks after a configurable TTL so crashed
+nodes self-heal.
+
+Spec Trio anchors:
+- `specs/scheduled-task-l0.yaml` (10 backend items: REGISTER + LOCK + EXECUTE + IDEMPOTENCY families)
+- `contracts/scheduled-task-openapi.yaml`
+- `blueprints/scheduled-task-manifest.yaml`
+
+## Spec Trio (backend_only)
+
+| File | Purpose |
+|------|---------|
+| `specs/scheduled-task-l0.yaml` | 10 compliance items across REGISTER / LOCK / EXECUTE / IDEMPOTENCY families |
+| `contracts/scheduled-task-openapi.yaml` | OpenAPI 3.0 contract for the management endpoints (register, list, triggerManual, history) |
+| `blueprints/scheduled-task-manifest.yaml` | Policy manifest (register · lock · execute · idempotency sections) |
+
+## Compliance items (spec_ref summary)
+
+| Spec ID | Chapter | Requirement (excerpt) |
+|---|---|---|
+| `SCHED-REGISTER-001` | REGISTER | `register()` persists a new task with cron expression and status `REGISTERED` |
+| `SCHED-LOCK-001` | LOCK | `executeWithLock()` acquires a distributed lock before running; skips if held |
+| `SCHED-LOCK-002` | LOCK | Stale locks expire after `lock_ttl_seconds` and are re-acquirable |
+| `SCHED-EXECUTE-001` | EXECUTE | Every run records JobHistory with start/end time, status, and error message |
+| `SCHED-IDEMPOTENT-001` | IDEMPOTENCY | Manual admin trigger is safe under concurrent calls (lock guarantees single-fire) |
+
+(5 additional items in `specs/scheduled-task-l0.yaml`; see file for full list.)
+
+## How to fork this template
+
+1. **Copy the backend skeleton** (or roll your own ScheduledTask entity):
+   ```bash
+   cp -r templates/L4/scheduled-task/backend/* backend/src/main/java/com/<org>/scheduling/
+   ```
+   The shipped `ScheduledTask.java.skeleton` is a minimal JPA entity stub — rename
+   to `.java`, set the package, and wire it into your Spring Boot module.
+
+2. **Enable Spring scheduling** in your `@Configuration`:
+   ```java
+   @EnableScheduling
+   @EnableAsync
+   public class SchedulingConfig {
+       // TaskScheduler bean with ThreadPoolTaskScheduler — see Spring Reference §Scheduling
+   }
+   ```
+
+3. **Pick a locking strategy** (either is spec-compliant):
+   - **DB row + `SELECT FOR UPDATE SKIP LOCKED`** — simplest; recommended for ≤ 5 nodes.
+     Schema: `scheduled_task_lock(task_id PK, locked_at, lock_holder)`.
+   - **ShedLock + JDBC backend** — battle-tested library wrapping the same pattern.
+     See `blueprints/scheduled-task-manifest.yaml#lock` for advisory provider list.
+
+4. **Wire JobHistory** — append a `JobHistory` row in a `try`/`finally` around every
+   execution. `markSuccess()` or `markFailure(msg)` regardless of outcome. `lastRun`
+   on the parent `ScheduledTask` updates only on success per `SCHED-EXECUTE-001`.
+
+5. **Configuration knobs**:
+   ```properties
+   ax.scheduler.lock-ttl-seconds=300    # default; tune per workload
+   ax.scheduler.pool-size=4
+   ax.scheduler.history-retention-days=30
+   ```
+
+## Domain-specific spec requirements
+
+| Spec ID | Requirement | Implementation hint |
+|---|---|---|
+| SCHED-REGISTER-001 | UUID + cron + REGISTERED status | `ScheduledTaskService.register()` factory + JPA save |
+| SCHED-LOCK-001 | Acquire-or-skip distributed lock | `LockingPolicy.tryAcquire(taskId, holder)` + `SELECT FOR UPDATE SKIP LOCKED` |
+| SCHED-LOCK-002 | TTL stale-lock recovery | `lockedAt + lock_ttl_seconds < now()` → reacquire allowed |
+| SCHED-EXECUTE-001 | JobHistory append on every run | `JobHistory.start(...)` + `markSuccess()` / `markFailure(msg)` in `finally` |
+| SCHED-IDEMPOTENT-001 | Concurrent manual trigger safe | `triggerManual()` routes through `executeWithLock()` |
+
+## Composition
+
+scheduled-task stands alone in R7 — no R7 recipe consumes it. R8 LMS (due-date
+reminders) and CMS (scheduled publish) are the first planned consumers per
+`practices/DECISIONS.md` TD-2026-05-20-020 and `recipes/_MANIFEST.yaml#deferred_recipes`.
+
+When R8 lms / cms ships, this README will gain an `applied_recipes:` plural list
+in the same atomic commit that lists `scheduled-task` in their `enabled_l4_domains:`.
+Until then the key is intentionally absent — matching the `file-storage` and `practices`
+L4 README pattern (unused-by-recipe L4 domains carry no `applied_recipes:` key; the
+existing `recipe_governance_guard.sh#check_applied_recipe_declared` only fires for
+L4 domains named by an active recipe's `enabled_l4_domains:`).
+
+## External evidence (verbatim, fetched 2026-05-20)
+
+Two verbatim external quotes anchor this L4 domain — see
+`practices/upstream/r7-sp41-scheduler-evidence.md` for the full snapshot:
+
+- **Spring Framework Reference §Scheduling** (`https://docs.spring.io/spring-framework/reference/integration/scheduling.html`):
+  > "In addition to the TaskExecutor abstraction, Spring has a TaskScheduler SPI with
+  > a variety of methods for scheduling tasks to run at some point in the future."
+
+- **Quartz Scheduler 2.3.0 Tutorial — Lesson 1** (`https://www.quartz-scheduler.org/documentation/quartz-2.3.0/tutorials/tutorial-lesson-01.html`):
+  > "Triggers do not fire (jobs do not execute) until the scheduler has been started"
+
+Both quotes resolve the Critic L "binary verification" requirement at the catalog
+level — scheduler is a real, externally-documented primitive whose semantics this
+L4 catalog row faithfully reflects.
+
+## Verification
+
+```bash
+# L4 catalog-discoverability gate (sealed sub-agent test)
+bash skills/_tests/L4/scheduler-domain.test.sh
+
+# Full guard suite (22+ guards, including recipe_governance + trio_integrity)
+bash practices/evals/run-all-guards.sh
+
+# Domain-specific trio integrity (when backend lands)
+bash practices/evals/trio_integrity_guard.sh --domain scheduled-task
+```
+
+## Backend templates (skeleton)
+
+`templates/L4/scheduled-task/backend/` currently ships only one stub:
+
+- `ScheduledTask.java.skeleton` — minimal JPA entity stub (rename to `.java`,
+  fill in `@Entity` package, repository, service)
+
+A fuller skeleton (JobHistory entity, LockingPolicy interface, controller, service)
+lands when the first downstream recipe (R8 LMS or CMS) consumes this domain. The R3
+Spec Trio is fully authored and unblocking; SP41 only completes the catalog row
+(README + ADR + sealed-verdict scaffold).

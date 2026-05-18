@@ -1,0 +1,133 @@
+# specs/recipes/community-recipe-l0.yaml — R7 SP41b recipe-level spec
+schema_version: 1
+pattern: community
+display_name: "Community (Posts + Comments + Moderation + Notifications + Search)"
+compatible_with_catalog_version: "v1.5.0-scheduler-community"
+last_verified_at: "2026-05-20"
+
+enabled_l4_domains:
+  - audit-log
+  - auth
+  - crud
+  - notification
+  - search
+
+l2_blocks_used:
+  # L1 primitives (rich-text-editor, markdown-renderer, relative-time) are
+  # excluded — they live at templates/L1/components/ not templates/L2/blocks/
+  # (mirrors booking-recipe-l0.yaml exclusion of calendar / date-range-picker /
+  # relative-time).
+  - confirm-dialog
+  - crud-create-form
+  - crud-edit-form
+  - crud-list-adapter
+  - data-table
+  - filter-bar
+  - kpi-card
+  - notification-bell
+  - notification-list
+  - search-input
+
+l3_pages_used:
+  - create-page
+  - dashboard-page
+  - detail-page
+  - edit-page
+  - list-page
+
+business_invariants:
+  - id: COMMUNITY-INV-001
+    statement: "Post + comment moderation status changes emit audit-log row with operator + before/after"
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+
+  - id: COMMUNITY-INV-002
+    statement: "Soft-deleted threads excluded from search (defense-in-depth: index-time + query-time filter)"
+    spec_ref: "specs/search-l0.yaml#SEARCH-AUTHZ-001"
+
+  - id: COMMUNITY-INV-003
+    statement: "Reply notifications respect recipient preferences + opt-out"
+    spec_ref: "specs/notification-l0.yaml#NOTIF-PREF-001"
+
+  - id: COMMUNITY-INV-004
+    statement: "Authenticated post creation rate-limited per user per minute (anti-automation)"
+    spec_ref: "specs/auth-asvs-l1.yaml#ASVS-V2.2.1"
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+
+  - id: COMMUNITY-INV-005
+    statement: "User-generated HTML sanitized server-side before storage (XSS prevention)"
+    co-shipped-rule: "community-html-sanitization"
+    invariant_test: "frontend/tests/recipes/community-sanitize.spec.ts"
+    notes: |
+      Recipe-level invariant authored inline here per PRD §1.8 Principle 8 + §10
+      out-of-scope (NO new practices/rules/*.md file). The
+      recipe_spec_referential_integrity_guard.sh R7 SP41b path-c additive branch
+      accepts (co-shipped-rule + invariant_test) as a valid anchor pair.
+      Implementation must sanitize server-side (jsoup or OWASP Java HTML
+      Sanitizer); disallow <script>, <iframe>, <object>, <embed>, <form>,
+      on* event handlers, javascript: URIs.
+
+business_observability_advisory:
+  - metric: "recipe.community.thread_active_total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: "recipe.community.sanitize_violation_total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: "community.moderation.action_total"
+    type: counter
+    note: "advisory; labeled by moderation type (hide/restore/lock); no emitter test enforced this PRD"
+
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # enabled_l4_domains:
+  #   skip: ["auth"]
+  #   rationale: "Fully-public read-only mirror of upstream community for archival."
+  #   citation: "<internal ticket / PR url>"
+
+evidence:
+  - provenance_class: external
+    source: "Discourse meta — Discourse API documentation"
+    url: "https://meta.discourse.org/t/discourse-api-documentation/22706"
+    citation: "Discourse is backed by a complete JSON api. Anything you can do on the site you can also do using the JSON api."
+    quoted_at: "2026-05-20"
+    fidelity_note: "Discourse is the canonical open-source community forum platform."
+
+  - provenance_class: external
+    source: "Reddit GitHub archive — API documentation wiki"
+    url: "https://github.com/reddit-archive/reddit/wiki/API"
+    citation: "Clients must authenticate with OAuth2 — Clients connecting via OAuth2 may make up to 60 requests per minute."
+    quoted_at: "2026-05-20"
+    fidelity_note: "Reddit OAuth2 + per-user rate-limit pattern anchors COMMUNITY-INV-004 (M2 closure per PRD §4.4)."
+
+  - provenance_class: internal_design
+    source: "PRAW (Reddit Python API Wrapper) docs"
+    url: "https://praw.readthedocs.io/en/stable/"
+    rationale: "200 OK but page is navigation + headings only; no extractable descriptive verbatim. Retained as inspirational context for client-side rate-limit handling."
+
+  - provenance_class: internal_design
+    source: "Reddit Developer Platform (Devvit)"
+    url: "https://developers.reddit.com/docs/quickstart"
+    rationale: "Fetcher-blocked at 2026-05-20 fetch attempt; superseded by Reddit GitHub archive verbatim above."
+
+  - provenance_class: internal_design
+    source: "디시인사이드 (DCinside) — Korean community"
+    url: "https://www.dcinside.com/"
+    rationale: "200 OK but no public REST/OAuth dev API documentation; no extractable verbatim."
+
+  - provenance_class: internal_design
+    source: "클리앙 (Clien) — Korean community"
+    url: "https://www.clien.net/service/"
+    rationale: "200 OK but no public REST/OAuth dev API documentation; no extractable verbatim."
+
+  - provenance_class: internal_design
+    source: "Korean tech blog cycle (PRD §4.4 M1 closure)"
+    rationale: "Zero-Korean-verbatim cycle for R7 — 5 host attempts logged in PRD §4.4 (toss.tech, d2.naver.com, tech.kakao.com, techblog.woowahan.com × 2, engineering.linecorp.com/ko); no scheduler/community-related Korean verbatim extractable without fabrication. Project vision Korean enterprise stack framing remains honored at catalog level."
+
+  - provenance_class: internal_design
+    derives_from:
+      - "SP15 crud"
+      - "SP17 audit-log"
+      - "SP26 notification"
+      - "SP26 search"
+      - "auth ASVS L1"
+    rationale: "Composition derives from existing L4 specs; no new L4 introduced by community recipe."

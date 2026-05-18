@@ -1,0 +1,172 @@
+# spec-trio-template.yaml — community
+#
+# Pre-filled Spec Trio fragments to copy into your project's specs/ directory
+# when implementing the community recipe.
+#
+# Instructions:
+#   1. Copy this file to your project as specs/community-l0.yaml
+#   2. Replace all <PLACEHOLDER> values with project-specific values
+#   3. Extend the items array with domain-specific requirements
+#   4. Ensure business_invariants from RECIPE.md are reflected as spec items
+#
+# This fragment composes the following L4 Spec Trios (reference, do not copy):
+#   - specs/crud-security.yaml
+#   - specs/audit-log-l0.yaml
+#   - specs/notification-l0.yaml
+#   - specs/search-l0.yaml
+#   - specs/auth-asvs-l1.yaml
+
+schema_version: 1
+scope: "<YOUR_PROJECT>-community"
+stack: "Spring Boot 3.2.x + React + sanitizer (jsoup or OWASP Java HTML Sanitizer)"
+standard: "OWASP Top 10 + ASVS V2 + RFC 7807"
+applied_recipes:
+  - community
+compatible_with_catalog_version: "v1.5.0-scheduler-community"
+
+items:
+  # ─── COMMUNITY-INV-001: moderation actions audit-logged ───────────────────
+  - id: "COMMUNITY-INV-001"
+    chapter: "AUDIT"
+    requirement: >
+      Every post or comment moderation status change (HIDE | RESTORE | LOCK)
+      must produce an audit-log record containing operator_id, target_id,
+      before_status, and after_status.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+    notes: >
+      Test: PATCH /api/posts/{id}/status with new status → assert audit_logs has
+      entry with action=post.status.changed + operator_id present + before/after.
+      Implementation: @Audited(action = "post.status.changed") on
+      PostModerationService.changeStatus().
+
+  # ─── COMMUNITY-INV-002: soft-deleted threads excluded from search ─────────
+  - id: "COMMUNITY-INV-002"
+    chapter: "SEARCH"
+    requirement: >
+      Soft-deleted threads (Post.deleted_at IS NOT NULL) must not appear in
+      full-text search results. Filter applied at BOTH index-time and
+      query-time (defense in depth).
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/search-l0.yaml#SEARCH-AUTHZ-001"
+    notes: >
+      Test (positive): publish post, search → present. Soft-delete post,
+      search → not present.
+      Test (negative): forge query with deleted_at IS NULL bypass → reject
+      at query-builder level.
+      Implementation: search-index emitter checks deleted_at; search
+      query-builder adds deleted_at IS NULL clause unconditionally.
+
+  # ─── COMMUNITY-INV-003: reply notifications respect preferences ──────────
+  - id: "COMMUNITY-INV-003"
+    chapter: "NOTIFICATION"
+    requirement: >
+      Reply notifications (ReplyCreated event) must be filtered through
+      NotificationPreferences before fanout. Recipients with opt-out or
+      per-channel disable receive no notification on that channel.
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/notification-l0.yaml#NOTIF-PREF-001"
+    notes: >
+      Test (positive): user with default preferences + reply on watched thread
+      → notification delivered.
+      Test (negative): user with emailEnabled=false → no email row in outbox.
+      Implementation: NotificationDispatcher reads preferences before each
+      channel emit; falls back to defaults if preferences absent (NOTIF-PREF-001
+      lazy-init semantics).
+
+  # ─── COMMUNITY-INV-004: anti-automation rate-limit on post creation ──────
+  - id: "COMMUNITY-INV-004"
+    chapter: "AUTH"
+    requirement: >
+      Authenticated POST /api/posts and POST /api/posts/{id}/comments are
+      rate-limited per user per minute (anti-automation per ASVS-V2.2.1).
+      Idempotency key required to deduplicate retries.
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/auth-asvs-l1.yaml#ASVS-V2.2.1"
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    notes: >
+      Test (positive): N posts within rate limit → 201.
+      Test (negative): N+1 posts within window → 429 with Retry-After.
+      Implementation: rate-limit filter keyed by (userId, endpoint) bucket;
+      idempotency key checked at controller via Idempotency-Key header.
+
+  # ─── COMMUNITY-INV-005: server-side HTML sanitization (co-shipped-rule) ──
+  - id: "COMMUNITY-INV-005"
+    chapter: "SECURITY"
+    requirement: >
+      User-generated HTML in post / comment body fields must be sanitized
+      server-side BEFORE persistence (XSS prevention). The client never trusts
+      the rich-text editor output for storage; the server runs an allowlist
+      sanitizer (jsoup or OWASP Java HTML Sanitizer) before write.
+      Disallowed elements: <script>, <iframe>, <object>, <embed>, <form>,
+      on* event attributes, javascript: URIs.
+    test_method: "Playwright + RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    co-shipped-rule: "community-html-sanitization"
+    invariant_test: "frontend/tests/recipes/community-sanitize.spec.ts"
+    notes: >
+      Test: POST /api/posts with body="<script>alert(1)</script>hello" →
+      201 (post created), then GET /api/posts/{id} → body equals "hello"
+      (script tag stripped). NO new practices/rules/*.md file is added; this
+      is a recipe-level invariant (PRD §1.8 + §10).
+      Implementation: BodySanitizer.sanitize() in the @PrePersist hook of
+      Post and Comment entities, OR in PostService.create() / CommentService.create()
+      before repository.save(). The shipped test asserts script tags are
+      stripped end-to-end.
+
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # enabled_l4_domains:
+  #   skip: ["auth"]
+  #   rationale: "Fully-public read-only mirror; no authenticated writes accepted."
+  #   citation: "<internal ticket / PR url>"
+
+evidence:
+  - provenance_class: external
+    source: "Discourse meta — Discourse API documentation"
+    url: "https://meta.discourse.org/t/discourse-api-documentation/22706"
+    citation: "Discourse is backed by a complete JSON api. Anything you can do on the site you can also do using the JSON api."
+    quoted_at: "2026-05-20"
+    fidelity_note: "Discourse is the canonical open-source community forum platform; its REST API surface is the reference for community-recipe endpoint coverage."
+  - provenance_class: external
+    source: "Reddit GitHub archive — API documentation wiki"
+    url: "https://github.com/reddit-archive/reddit/wiki/API"
+    citation: "Clients must authenticate with OAuth2 — Clients connecting via OAuth2 may make up to 60 requests per minute."
+    quoted_at: "2026-05-20"
+    fidelity_note: "Reddit's archived API doc establishes OAuth2 + per-user rate-limit pattern (anchors COMMUNITY-INV-004). M2 closure per PRD §4.4 — developers.reddit.com remains fetcher-blocked; GitHub archive host preserves the same verbatim semantics."
+  - provenance_class: internal_design
+    source: "PRAW (Reddit Python API Wrapper) docs"
+    url: "https://praw.readthedocs.io/en/stable/"
+    rationale: "200 OK but page is navigation + headings only; no extractable descriptive verbatim. Retained as inspirational context for client-side rate-limit handling."
+  - provenance_class: internal_design
+    source: "Reddit Developer Platform (Devvit)"
+    url: "https://developers.reddit.com/docs/quickstart"
+    rationale: "Fetcher-blocked at 2026-05-20 fetch attempt. Superseded by Reddit GitHub archive verbatim above."
+  - provenance_class: internal_design
+    source: "디시인사이드 (DCinside) — Korean community"
+    url: "https://www.dcinside.com/"
+    rationale: "200 OK but no public REST/OAuth dev API documentation; no extractable verbatim."
+  - provenance_class: internal_design
+    source: "클리앙 (Clien) — Korean community"
+    url: "https://www.clien.net/service/"
+    rationale: "200 OK but no public REST/OAuth dev API documentation; no extractable verbatim."
+  - provenance_class: internal_design
+    source: "Korean tech blog cycle (PRD §4.4 M1 closure)"
+    rationale: "Zero-Korean-verbatim cycle for R7 — 5 host attempts logged in PRD §4.4 (toss.tech, d2.naver.com, tech.kakao.com, techblog.woowahan.com × 2, engineering.linecorp.com/ko); no scheduler/community Korean verbatim extractable without fabrication."
+  - provenance_class: internal_design
+    derives_from:
+      - "SP15 crud"
+      - "SP17 audit-log"
+      - "SP26 notification"
+      - "SP26 search"
+      - "auth ASVS L1"
+    rationale: "Composition derives from existing L4 specs; no new L4 introduced by community recipe."

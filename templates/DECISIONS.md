@@ -1721,3 +1721,109 @@ Tag `v1.3.0-business-patterns` applied and pushed.
 - `skills/_tests/sealed-verdict/` carries companion score summary files
 - PR: `feat/business-patterns-sp35-sp38` → `main`
 - practices catalog: 84 Java rules, 86+ React rules, 3 Business Pattern Recipes
+
+## TD-2026-05-20-020 — SP41: scheduled-task L4 catalog row completed (10 → 11 L4 domains)
+
+```yaml
+---
+adr_id: TD-2026-05-20-020
+title: "Scheduler L4 primitive introduced — completes R3 Spec Trio stub with README + scaffold + ADR"
+provenance_class: external
+evidence:
+  source_type: external
+  source_refs:
+    - url: "https://docs.spring.io/spring-framework/reference/integration/scheduling.html"
+      quote: "In addition to the TaskExecutor abstraction, Spring has a TaskScheduler SPI with a variety of methods for scheduling tasks to run at some point in the future."
+      fetched_at: "2026-05-20"
+    - url: "https://www.quartz-scheduler.org/documentation/quartz-2.3.0/tutorials/tutorial-lesson-01.html"
+      quote: "Triggers do not fire (jobs do not execute) until the scheduler has been started"
+      fetched_at: "2026-05-20"
+  snapshot_ref: "practices/upstream/r7-sp41-scheduler-evidence.md"
+  rationale: |
+    R3 (commit 26de945) authored the full Spec Trio for scheduled-task
+    (specs/scheduled-task-l0.yaml + contracts/scheduled-task-openapi.yaml +
+    blueprints/scheduled-task-manifest.yaml) but never landed templates/L4/
+    scheduled-task/. R7 SP41 closes the catalog-row gap with README + skeleton
+    backend stub + this ADR. No code shipped — the Spec Trio is the contract;
+    R8 LMS/CMS recipes will be the first downstream consumers and will fill
+    in the JobHistory / LockingPolicy / Service / Controller fanout.
+spec_refs:
+  - specs/scheduled-task-l0.yaml#SCHED-REGISTER-001
+  - specs/scheduled-task-l0.yaml#SCHED-LOCK-001
+  - specs/scheduled-task-l0.yaml#SCHED-LOCK-002
+  - specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001
+  - specs/scheduled-task-l0.yaml#SCHED-IDEMPOTENT-001
+status: ACCEPTED
+date: 2026-05-20
+---
+```
+
+### Decision
+
+Add `scheduled-task` as the 11th L4 domain (L4 count: 10 → 11). SP41 ships only
+the catalog-row artifacts: `templates/L4/scheduled-task/README.md` (without an
+`applied_recipes:` key — matches `file-storage` and `practices` precedent for
+unused-by-recipe L4 rows), `templates/L4/scheduled-task/backend/ScheduledTask.java.skeleton`
+minimal entity stub, `skills/_tests/L4/scheduler-domain.test.sh`, and this ADR.
+
+### Drivers
+
+1. **Spec Trio already disk-verified** — R3 commit `26de945` authored
+   `specs/scheduled-task-l0.yaml` (10 items), `contracts/scheduled-task-openapi.yaml`,
+   `blueprints/scheduled-task-manifest.yaml`. The L4 README + scaffold was the only
+   missing piece.
+2. **Unblocks 2 of 4 R6-deferred recipes** — `lms` and `cms` both name
+   "scheduler L4 / scheduler primitive" verbatim in `recipes/_MANIFEST.yaml#deferred_recipes`
+   as their `reintroduction_trigger:`. `internal-it` is independent of scheduler
+   (Jira/ServiceNow REST verbatim is its gate). The "2 of 4" framing supersedes
+   iter-1 PRD's incorrect "3 of 4" claim (Critic soft #3 closure).
+3. **2 external verbatim PASS** — Spring Framework Reference §Scheduling +
+   Quartz 2.3.0 Lesson 1 both 200 OK with extractable verbatim, exceeding the
+   1-floor evidence density requirement for new L4 introduction.
+
+### Alternatives considered
+
+- **Defer indefinitely** — rejected; strands LMS + CMS recipes; composition kit
+  promise of "catalog evolves along its own deferred axis" breaks down.
+- **Tier-2 skill** — rejected; Tier-1/Tier-2 cap is FROZEN at 4 + 8.
+  scheduled-task is a domain primitive (backend cron + lock + history), not a
+  cross-cutting skill.
+- **R6 SP39-style atomic bundle (scheduler + community in one SP)** — rejected
+  in iter-2 PRD; Option-4 Synthesis-B (SP41 scheduler-atomic → SP41b
+  community-atomic-sequential) keeps mutation surfaces disjoint and protects
+  community from any scheduler-harness risk (§7 Pre-Mortem 5).
+
+### Why chosen
+
+Composition kit self-extensibility along the catalog's own deferred axis.
+Scheduler IS that axis for 2 of 3 unblockable R6-deferred recipes. The Spec Trio
+already exists; SP41 only completes the catalog row using the SAME pattern R3
+used for the other 10 L4 domains (billing R5, file-storage R3, payment R5, etc.).
+
+### Consequences
+
+- L4 domain count: 10 → 11. `practices/AGENTS.md` sentinel sha is **unchanged**
+  because `practices/generate_agents.sh` only reads `practices/rules/*.md` —
+  it does NOT depend on `templates/L4/` topology. Conservative-default sha-recompute
+  language from the iter-2 PRD §1/§3 is therefore not exercised this cycle (PRD
+  §11 hedge resolution: NO path).
+- Scheduler README ships **without** an `applied_recipes:` key — matches
+  `file-storage` and `practices` precedent for L4 rows not yet consumed by any
+  active recipe. `recipe_governance_guard.sh#check_applied_recipe_declared` only
+  fires for L4 names that appear in an active recipe's `enabled_l4_domains:`,
+  so the absent-key shape is guard-clean today.
+- R8 will ship LMS + CMS recipes consuming `scheduled-task`; the same R8 atomic
+  commit that lists `scheduled-task` in their `enabled_l4_domains:` will add the
+  `applied_recipes:` key + plural list `[cms, lms]` to this README.
+- `trio_integrity_allowlist.yaml` already lists `scheduled-task: backend_only`
+  (unchanged from R3).
+
+### Follow-ups
+
+- R8 LMS recipe ships consuming scheduler — first downstream consumer; adds
+  `applied_recipes:` plural list to this L4 README.
+- R8 CMS recipe ships consuming scheduler — second downstream consumer; appends
+  `cms` alphabetically to that plural list.
+- When the first consumer recipe lands, the backend skeleton expands to
+  include JobHistory + LockingPolicy + Service + Controller per the existing
+  Spec Trio definitions.

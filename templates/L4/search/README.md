@@ -118,6 +118,7 @@ applied_recipe: e-commerce
 applied_recipe_secondary: crm
 applied_recipes:
   - b2b-admin
+  - community
   - crm
   - e-commerce
   - marketplace
