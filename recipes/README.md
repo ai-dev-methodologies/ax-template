@@ -2,7 +2,7 @@
 
 > **What this is:** Composition manifests that declare WHICH existing L4 domains to assemble for a given business pattern. Recipes do NOT ship code or define new L4 domains.
 
-## Shipped Recipes (v1.4.0-recipes-complete — 6 active)
+## Shipped Recipes (v1.5.0-scheduler-community — 7 active)
 
 | Pattern | Description | Enabled L4 domains | Verdict |
 |---|---|---|---|
@@ -12,19 +12,19 @@
 | [`booking`](booking/RECIPE.md) | Calendar + availability + reservation + cancellation | audit-log, crud, feature-flags, notification, payment | [11/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/booking-verdict.md) |
 | [`marketplace`](marketplace/RECIPE.md) | Listings + bids + escrow + ratings | audit-log, crud, notification, payment, search | [12/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/marketplace-verdict.md) |
 | [`b2b-admin`](b2b-admin/RECIPE.md) | Multi-tenant ops + analytics + audit + impersonation | audit-log, auth, crud, feature-flags, search | [11/12 MUST, 6/8 SHOULD](../skills/_tests/sealed-verdict/b2b-admin-verdict.md) |
+| [`community`](community/RECIPE.md) | Posts + comments + moderation + reply notifications + soft-delete-aware search | audit-log, auth, crud, notification, search | [11/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/community-verdict.md) |
 
-All 6 recipes carry sealed sub-agent verdicts (≥10/12 MUST + ≥5/8 SHOULD). See `skills/_tests/sealed-verdict/`.
+All 7 recipes carry sealed sub-agent verdicts (≥10/12 MUST + ≥5/8 SHOULD). See `skills/_tests/sealed-verdict/`.
 
-## Deferred Recipes (4 remaining — pending fork-receiver demand)
+## Deferred Recipes (3 remaining — pending fork-receiver demand)
 
 | Pattern | Why deferred | Re-introduction trigger |
 |---|---|---|
-| `community` | Korean refs (디시인사이드, 클리앙) lack structured API URLs; pattern overlaps with crm for B2C | Fork-receiver demand with Korean community platform OR Discourse-style API integration request |
-| `lms` | scheduled-task L4 absent; LMS due-date-reminder requires job-scheduler; 인프런 closed API | Fork-receiver demand + job-scheduler L4 + Coursera/Moodle verbatim citation |
-| `cms` | Scheduled publish requires same scheduler as LMS; 네이버 블로그 closed API | Fork-receiver demand + scheduler primitive + Sanity/Contentful verbatim citation |
-| `internal-it` | Jira API not verbatim-fetched (3 failures); webhook patterns too vendor-specific | Fork-receiver demand + verbatim Jira/ServiceNow quote + webhook primitive in notification L4 |
+| `lms` | Scheduler L4 **landed in R7 v1.5.0** (`templates/L4/scheduled-task/`); LMS due-date-reminder primitive now disk-resolvable. Remaining gap: Coursera/Moodle/edX case-study verbatim. 인프런 closed API. | **Scheduler L4 landed in R7 v1.5.0**; remaining gap = Coursera/Moodle/edX case-study URL with verbatim integration text. R8 eligible. |
+| `cms` | Scheduler L4 **landed in R7 v1.5.0**; scheduled-publish primitive now disk-resolvable. Remaining gap: Sanity/Contentful verbatim citation. 네이버 블로그 closed API. | **Scheduler L4 landed in R7 v1.5.0**; remaining gap = Sanity/Contentful verbatim citation. R8 eligible. |
+| `internal-it` | Independent of R7 scheduler. Jira API not verbatim-fetched (3 fetch failures); webhook patterns vendor-specific. | Independent of R7 scheduler. Remaining gap = verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4. R8+ if fetch succeeds. |
 
-All deferred patterns carry `status: deferred-pending-fork-receiver-demand` in `_MANIFEST.yaml`.
+All deferred patterns carry `status: deferred-pending-fork-receiver-demand` in `_MANIFEST.yaml`. R7 scheduler L4 unblocks 2 of these 3 — lms + cms (internal-it is independent).
 
 ## Using a Recipe
 
