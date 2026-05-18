@@ -2,7 +2,7 @@
 
 > **What this is:** Composition manifests that declare WHICH existing L4 domains to assemble for a given business pattern. Recipes do NOT ship code or define new L4 domains.
 
-## Shipped Recipes (v1.6.0-lms-cms — 9 active)
+## Shipped Recipes (v1.7.0-webhook-internal-it — 10 active)
 
 | Pattern | Description | Enabled L4 domains | Verdict |
 |---|---|---|---|
@@ -15,16 +15,23 @@
 | [`community`](community/RECIPE.md) | Posts + comments + moderation + reply notifications + soft-delete-aware search | audit-log, auth, crud, notification, search | [11/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/community-verdict.md) |
 | [`lms`](lms/RECIPE.md) | Course catalog + enrollment + lesson + due-date reminders + role-gated visibility | audit-log, auth, crud, notification, scheduled-task | [11/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/lms-verdict.md) |
 | [`cms`](cms/RECIPE.md) | Content authoring + scheduled publish + editorial workflow + scheduled expiry | audit-log, crud, notification, scheduled-task | [11/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/cms-verdict.md) |
+| [`internal-it`](internal-it/RECIPE.md) | Ticketing + SLA breach reminders + audit + outbound signed (HMAC-SHA256) ITSM webhook relay | audit-log, auth, crud, notification, scheduled-task, webhook | [12/12 MUST, 7/8 SHOULD](../skills/_tests/sealed-verdict/internal-it-verdict.md) |
 
-All 9 recipes carry sealed sub-agent verdicts (≥10/12 MUST + ≥5/8 SHOULD). See `skills/_tests/sealed-verdict/`.
+All 10 recipes carry sealed sub-agent verdicts (≥10/12 MUST + ≥5/8 SHOULD). See `skills/_tests/sealed-verdict/`.
 
-## Deferred Recipes (1 remaining — pending fork-receiver demand)
+## Deferred Recipes (none — queue CLOSED)
 
-| Pattern | Why deferred | Re-introduction trigger |
-|---|---|---|
-| `internal-it` | Independent of R8 scheduler-consuming recipes (lms + cms landed R8 v1.6.0). Jira API not verbatim-fetched (3 fetch failures); webhook patterns vendor-specific. | Independent of R8 scheduler-consuming recipes. Remaining gap = verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4. R9+ if fetch succeeds OR notification L4 gains explicit webhook-emit spec items. |
+**R9 closes the R6 Synthesis-A deferred-recipe queue.** All four R6-deferred
+recipes have shipped across three cycles: community (R7 SP41b →
+`v1.5.0-scheduler-community`), lms + cms (R8 SP43 → `v1.6.0-lms-cms`),
+internal-it (R9 SP45b → `v1.7.0-webhook-internal-it`). The deferred queue is
+now empty; `recipes/_MANIFEST.yaml#deferred_recipes: []`.
 
-`internal-it` carries `status: deferred-pending-fork-receiver-demand` in `_MANIFEST.yaml`. R8 consumed scheduler for lms + cms — internal-it remains gated on webhook-emit primitive (notification L4 extension).
+See `templates/DECISIONS.md` TD-2026-05-22-026 for the queue-closure ADR.
+
+Future R10+ recipes will land in `_MANIFEST.yaml#deferred_recipes:` when
+proposed by ralplan — the queue starts empty from this point; no proactive
+deferral pipeline opens (per R9 PRD §10).
 
 ## Using a Recipe
 
