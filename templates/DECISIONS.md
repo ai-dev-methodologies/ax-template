@@ -1536,3 +1536,188 @@ Semantic versioning rationale:
 - PR: `feat/p1-absorption-sp30-sp34` → `main`
 - Fork-receiver bundle: `dist/ax-template-catalog-<sha>.tar.gz` (2MB)
 - practices catalog: 81 Java rules, 84 React rules, 13 domains in trio_integrity_allowlist
+
+---
+
+## TD-2026-05-19-011 — SP35: recipes/ infrastructure — README + _MANIFEST + _check-anchors
+
+```yaml
+---
+adr_id: TD-2026-05-19-011
+title: "recipes/ infrastructure: README.md + _MANIFEST.yaml + _check-anchors.sh"
+provenance_class: internal_design
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-19-business-pattern-recipes-prd.iter3.md
+  rationale: |
+    R5 iter3 PRD specifies that the recipes/ directory must have a machine-readable
+    _MANIFEST.yaml registry, a human-readable README.md index, and a _check-anchors.sh
+    script that validates Korean-vendor evidence citations.
+    Recipes are composition manifests referencing existing L4 domains, not new domains.
+spec_ref: N/A
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+`recipes/` directory created with:
+- `README.md` — recipe family index with 3 active patterns + 7 deferred rows
+- `_MANIFEST.yaml` — machine-readable registry (`schema_version: 1`)
+- `_check-anchors.sh` — validates ≥1 external citation + ≥1 Korean-vendor URL per recipe
+
+### Consequences
+
+- Tier-1 cap unchanged (recipes are not new Tier-1 skills)
+- `recipe_spec_referential_integrity_guard.sh` (SP35) validates all YAML spec references
+
+---
+
+## TD-2026-05-19-012 — SP35: saas-subscription, e-commerce, crm recipe directories
+
+```yaml
+---
+adr_id: TD-2026-05-19-012
+title: "3 Business Pattern Recipe directories with RECIPE.md + L4-composition + L2-block-recipe + spec-trio-template"
+provenance_class: internal_design
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-19-business-pattern-recipes-prd.iter3.md
+  rationale: |
+    Each recipe directory ships 4 artifacts: RECIPE.md (composition manifest with
+    frontmatter schema_version, enabled_l4_domains, l2_blocks_used, l3_pages_used,
+    business_invariants, override_allowed inline block, evidence with Korean-vendor
+    verbatim citations), L4-composition.md (wiring diagram), L2-block-recipe.md
+    (block inventory table), spec-trio-template.yaml (pre-filled spec fragments).
+spec_ref: N/A
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+Three recipe directories created:
+- `recipes/saas-subscription/` — 5 L4 domains (billing, auth, feature-flags, notification, audit-log); Toss billing verbatim citation
+- `recipes/e-commerce/` — 5 L4 domains (crud, payment, notification, audit-log, search); Toss payment-widget verbatim citation
+- `recipes/crm/` — 4 L4 domains (crud, audit-log, notification, search); Channel Talk verbatim citation
+
+All `business_invariants` entries carry `spec_ref:` or `rule_ref:` that resolve on disk.
+Corresponding `specs/recipes/*-recipe-l0.yaml` files validated by `recipe_spec_referential_integrity_guard.sh`.
+
+### Consequences
+
+- 3 new `specs/recipes/*.yaml` files; referential integrity guard passes (exit 0)
+- All L2 blocks and L3 pages in recipes verified to exist in `templates/L2/blocks/` and `templates/L3/pages/`
+
+---
+
+## TD-2026-05-19-013 — SP36: /ax-scaffold business subcommand
+
+```yaml
+---
+adr_id: TD-2026-05-19-013
+title: "/ax-scaffold business subcommand — new-business-recipe.sh"
+provenance_class: internal_design
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-19-business-pattern-recipes-prd.iter3.md
+  rationale: |
+    Tier-1 cap = 4 is enforced. /ax-scaffold business is a subcommand of the
+    existing ax-scaffold Tier-1 skill, not a new Tier-1. The script deterministically
+    scaffolds a new recipe directory from an existing pattern via --dry-run + --force
+    flags without --analyze.
+spec_ref: N/A
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+`skills/ax-scaffold/scripts/new-business-recipe.sh <source-pattern> <new-name> [--dry-run] [--force]`
+scaffolds a new recipe directory by copying a source pattern and replacing the pattern name.
+
+Acceptance: `--dry-run` exits 0 and prints file tree without writing files.
+
+### Consequences
+
+- Tier-1 count unchanged
+- Fork-receivers can scaffold new recipes without manual copy
+
+---
+
+## TD-2026-05-19-014 — SP37: 3 recipe enforcement rules + recipe_governance_guard.sh
+
+```yaml
+---
+adr_id: TD-2026-05-19-014
+title: "3 recipe enforcement rules: prefer-recipe-composition-over-l4-cross-import, business-domain-must-declare-applied-recipe, recipe-invariants-must-resolve"
+provenance_class: internal_design
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-19-business-pattern-recipes-prd.iter3.md
+  rationale: |
+    Three enforcement rules added to practices/rules/ and practices-react/rules/ to
+    make recipe composition machine-verifiable: (1) prefer-recipe-composition prohibits
+    ad-hoc multi-L4 imports without applied_recipe declaration; (2) business-domain-must-declare
+    requires applied_recipe: in L4 domain READMEs; (3) recipe-invariants-must-resolve
+    requires spec_ref/rule_ref on every business_invariants entry.
+spec_ref: N/A
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+Two new guard scripts:
+- `recipe_governance_guard.sh` — validates RECIPE.md fields, applied_recipe declarations, fixture compliance
+- `recipe_spec_referential_integrity_guard.sh` — validates L4/L2/L3 path resolution + spec_ref/rule_ref in business_invariants
+
+Both wired into `practices/evals/run-all-guards.sh`. All 22 guard checks pass.
+
+### Consequences
+
+- 84 → 87 total rules (3 added: Java-side + React-side for cross-import rule, plus 2 new rules)
+- practices/AGENTS.md and practices-react/AGENTS.md regenerated; templates/AGENTS.md updated
+
+---
+
+## TD-2026-05-19-015 — SP38: sealed verdict harness + v1.3.0-business-patterns tag
+
+```yaml
+---
+adr_id: TD-2026-05-19-015
+title: "Sealed verdict harness for 3 recipes + v1.3.0-business-patterns tag"
+provenance_class: internal_design
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-19-business-pattern-recipes-prd.iter3.md
+  rationale: |
+    Following the payment L4 sealed rubric precedent (docs/blueprints/payment/acceptance/),
+    each recipe gets docs/blueprints/recipes/<pattern>/acceptance/ with l4-sealed-rubric.md,
+    l4-sealed-prompt.md, and l4-subagent-test.md. All 3 recipes pass the ≥10/12 MUST +
+    ≥5/8 SHOULD threshold. This confirms RECIPE.md manifests are self-describing at context-0.
+spec_ref: N/A
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+Sealed acceptance harness created for all 3 recipes following payment precedent:
+- saas-subscription: 12/12 MUST + 8/8 SHOULD = PASS (maximum)
+- e-commerce: 12/12 MUST + 7/8 SHOULD = PASS
+- crm: 12/12 MUST + 6/8 SHOULD = PASS
+
+Tag `v1.3.0-business-patterns` applied and pushed.
+
+### Consequences
+
+- `docs/blueprints/recipes/` directory created with acceptance harnesses for all 3 patterns
+- `skills/_tests/sealed-verdict/` carries companion score summary files
+- PR: `feat/business-patterns-sp35-sp38` → `main`
+- practices catalog: 84 Java rules, 86+ React rules, 3 Business Pattern Recipes
