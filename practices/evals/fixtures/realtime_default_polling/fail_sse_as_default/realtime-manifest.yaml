@@ -1,0 +1,6 @@
+# FAIL fixture — realtime transport defaulting to SSE (not polling)
+# This manifest should cause REALTIME_DEFAULT_NOT_POLLING guard to exit 1.
+realtime:
+  default_transport: sse   # WRONG — polling must be the default
+  opt_in_transports: []
+  polling_interval_ms: 5000
