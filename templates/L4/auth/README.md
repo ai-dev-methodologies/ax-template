@@ -121,4 +121,5 @@ Both must exit 0 before shipping.
 applied_recipe: saas-subscription
 applied_recipes:
   - b2b-admin
+  - community
   - saas-subscription

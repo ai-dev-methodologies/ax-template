@@ -103,6 +103,10 @@ except ImportError:
                 current["spec_ref"] = stripped[len("spec_ref:"):].strip().strip("\"'")
             elif current is not None and stripped.startswith("rule_ref:"):
                 current["rule_ref"] = stripped[len("rule_ref:"):].strip().strip("\"'")
+            elif current is not None and stripped.startswith("co-shipped-rule:"):
+                current["co-shipped-rule"] = stripped[len("co-shipped-rule:"):].strip().strip("\"'")
+            elif current is not None and stripped.startswith("invariant_test:"):
+                current["invariant_test"] = stripped[len("invariant_test:"):].strip().strip("\"'")
             elif stripped and not stripped.startswith("#") and not stripped.startswith("-"):
                 # end of invariants list
                 if not stripped.startswith(" ") and not stripped.startswith("\t"):
@@ -121,9 +125,16 @@ for inv in invariants:
     inv_id = inv.get("id", "<unknown>")
     spec_ref = inv.get("spec_ref", "")
     rule_ref = inv.get("rule_ref", "")
+    # R7 SP41b — co-shipped-rule: is a recipe-level invariant whose rule body
+    # lives inline in the recipe spec (no new practices/rules/*.md file per
+    # PRD §1.8 + §10). Honored when accompanied by invariant_test: pointing
+    # to a co-shipped test file on disk.
+    co_shipped_rule = inv.get("co-shipped-rule", "")
+    invariant_test = inv.get("invariant_test", "")
 
-    if not spec_ref and not rule_ref:
-        print(f"VIOLATION [recipe-invariants-must-resolve]: invariant {inv_id} has neither spec_ref: nor rule_ref:", file=sys.stderr)
+    has_resolved_anchor = bool(spec_ref or rule_ref or (co_shipped_rule and invariant_test))
+    if not has_resolved_anchor:
+        print(f"VIOLATION [recipe-invariants-must-resolve]: invariant {inv_id} has none of spec_ref / rule_ref / (co-shipped-rule + invariant_test)", file=sys.stderr)
         print(f"  recipe: {recipe_path}", file=sys.stderr)
         fail_count += 1
         continue
@@ -141,6 +152,13 @@ for inv in invariants:
         resolved = repo_root / rule_ref.strip()
         if not resolved.exists():
             print(f"VIOLATION [recipe-invariants-must-resolve]: invariant {inv_id} rule_ref '{rule_ref}' does not exist", file=sys.stderr)
+            print(f"  recipe: {recipe_path}", file=sys.stderr)
+            fail_count += 1
+
+    if co_shipped_rule and invariant_test:
+        resolved = repo_root / invariant_test.strip()
+        if not resolved.exists():
+            print(f"VIOLATION [recipe-invariants-must-resolve]: invariant {inv_id} co-shipped-rule invariant_test '{invariant_test}' does not exist on disk", file=sys.stderr)
             print(f"  recipe: {recipe_path}", file=sys.stderr)
             fail_count += 1
 

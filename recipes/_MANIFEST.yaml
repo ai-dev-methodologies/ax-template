@@ -80,23 +80,31 @@ recipes:
       - feature-flags
       - search
 
-deferred_recipes:
   - pattern: community
-    status: deferred-pending-fork-receiver-demand
-    reason: "Discourse + Reddit citations OK; Korean refs (디시인사이드, 클리앙) lack structured API URLs; pattern overlaps with crm for Korean B2C use cases"
-    reintroduction_trigger: "Fork-receiver demand with Korean community platform OR public Discourse-style API integration request; verify in next ralplan cycle."
+    status: active
+    display_name: "Community (Posts + Comments + Moderation + Notifications + Search)"
+    spec: specs/recipes/community-recipe-l0.yaml
+    recipe_dir: recipes/community
+    sealed_verdict: skills/_tests/sealed-verdict/community-verdict.md
+    enabled_l4_domains:
+      - audit-log
+      - auth
+      - crud
+      - notification
+      - search
 
+deferred_recipes:
   - pattern: lms
     status: deferred-pending-fork-receiver-demand
-    reason: "scheduled-task L4 absent; LMS due-date-reminder requires job-scheduler integration; 인프런 closed API"
-    reintroduction_trigger: "Fork-receiver demand + confirmed job-scheduler L4 or notification scheduling primitive; OR Coursera/Moodle case-study URL with verbatim integration text."
+    reason: "Scheduler L4 landed in R7 v1.5.0 (templates/L4/scheduled-task/); LMS due-date-reminder primitive now disk-resolvable. Remaining gap: Coursera/Moodle/edX case-study URL with verbatim integration text. 인프런 closed API."
+    reintroduction_trigger: "Scheduler L4 landed in R7 v1.5.0 (templates/L4/scheduled-task/); remaining gap = Coursera/Moodle/edX case-study URL with verbatim integration text. R8 eligible."
 
   - pattern: cms
     status: deferred-pending-fork-receiver-demand
-    reason: "Scheduled publish needs same scheduler primitive as LMS; 네이버 블로그 closed API"
-    reintroduction_trigger: "Fork-receiver demand + scheduler primitive (shared with LMS) + Sanity/Contentful verbatim citation."
+    reason: "Scheduler L4 landed in R7 v1.5.0; scheduled-publish primitive now disk-resolvable. Remaining gap: Sanity/Contentful verbatim citation. 네이버 블로그 closed API."
+    reintroduction_trigger: "Scheduler L4 landed in R7 v1.5.0; remaining gap = Sanity/Contentful verbatim citation. R8 eligible."
 
   - pattern: internal-it
     status: deferred-pending-fork-receiver-demand
-    reason: "Jira API not verbatim-fetched (3 fetch failures); webhook integration patterns too vendor-specific for catalog-stable recipe"
-    reintroduction_trigger: "Fork-receiver demand + verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4."
+    reason: "Independent of R7 scheduler. Jira API not verbatim-fetched (3 fetch failures); webhook integration patterns too vendor-specific for catalog-stable recipe."
+    reintroduction_trigger: "Independent of R7 scheduler. Remaining gap = verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4. R8+ if fetch succeeds."
