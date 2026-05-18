@@ -1,0 +1,485 @@
+openapi: 3.0.3
+info:
+  title: ax-template Billing API
+  description: |
+    Billing domain contract for ax-template. Covers subscription lifecycle, plan management,
+    invoice listing, billing event history, and webhook reception.
+
+    **Boundary note (§5.2.6):**
+    One-shot payment (authorize/capture/refund) belongs to the payment domain.
+    This API covers recurring subscription lifecycle only. No cross-import from payment.
+
+    **Amount encoding:**
+    All `amount` fields are integers in the minor currency unit (KRW: won, USD: cents).
+    Floating-point amounts are rejected with HTTP 400.
+
+    **Idempotency:**
+    POST mutations require an `Idempotency-Key` header. Duplicate requests within 24 h
+    return the original response without creating a second operation.
+
+    **Error format:**
+    All non-2xx responses use RFC 7807 ProblemDetail with a stable `type` URI.
+  version: "0.1.0"
+servers:
+  - url: /api
+
+paths:
+  /subscriptions:
+    post:
+      operationId: createSubscription
+      summary: Create a new subscription
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSubscriptionRequest' }
+      responses:
+        '201':
+          description: Subscription created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionResponse' }
+        '400':
+          $ref: '#/components/responses/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      operationId: listSubscriptions
+      summary: List caller's subscriptions
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/SubscriptionStatus' }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        '200':
+          description: Paginated subscription list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionPage' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /subscriptions/{id}:
+    get:
+      operationId: getSubscription
+      summary: Get a subscription by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Subscription found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionResponse' }
+        '404':
+          $ref: '#/components/responses/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /subscriptions/{id}/cancel:
+    post:
+      operationId: cancelSubscription
+      summary: Cancel a subscription
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelSubscriptionRequest' }
+      responses:
+        '200':
+          description: Subscription canceled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionResponse' }
+        '409':
+          $ref: '#/components/responses/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /billing/invoices:
+    get:
+      operationId: listInvoices
+      summary: List invoices for the authenticated user
+      parameters:
+        - in: query
+          name: subscriptionId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Paginated invoice list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoicePage' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /billing/events:
+    get:
+      operationId: listBillingEvents
+      summary: List billing events for the authenticated user
+      parameters:
+        - in: query
+          name: subscriptionId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Paginated billing event list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BillingEventPage' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /webhooks/billing:
+    post:
+      operationId: receiveBillingWebhook
+      summary: Receive billing provider webhook
+      description: |
+        Accepts webhook events from Stripe and Toss Payments. Provider is determined
+        by the X-Billing-Provider header or URL path variant. Signature is verified
+        before processing.
+      parameters:
+        - in: header
+          name: Stripe-Signature
+          schema: { type: string }
+          description: "Stripe webhook signature (present for Stripe webhooks)."
+        - in: header
+          name: X-Webhook-Signature
+          schema: { type: string }
+          description: "Toss Payments HMAC-SHA256 signature (present for Toss webhooks)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: Webhook processed
+        '400':
+          $ref: '#/components/responses/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/billing/plans:
+    get:
+      operationId: adminListPlans
+      summary: "[Admin] List all plans"
+      responses:
+        '200':
+          description: Plan list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PlanResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ProblemDetail'
+
+    post:
+      operationId: adminCreatePlan
+      summary: "[Admin] Create a plan"
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePlanRequest' }
+      responses:
+        '201':
+          description: Plan created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ProblemDetail'
+
+components:
+  schemas:
+    SubscriptionStatus:
+      type: string
+      enum: [TRIAL, ACTIVE, PAST_DUE, CANCELLED]
+
+    CreateSubscriptionRequest:
+      type: object
+      required: [planId, currency]
+      properties:
+        planId:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          description: "ISO 4217 currency code (e.g. KRW, USD)"
+          example: KRW
+        trialDays:
+          type: integer
+          minimum: 0
+          maximum: 365
+          description: "Trial period in days. 0 = no trial."
+
+    CancelSubscriptionRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 1024
+          description: "Optional cancellation reason."
+        cancelAtPeriodEnd:
+          type: boolean
+          default: false
+          description: "If true, cancel at billing period end rather than immediately."
+
+    SubscriptionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+        currency:
+          type: string
+        currentPeriodStart:
+          type: string
+          format: date
+        currentPeriodEnd:
+          type: string
+          format: date
+        trialEnd:
+          type: string
+          format: date
+          nullable: true
+        canceledAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    SubscriptionPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/SubscriptionResponse' }
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    InvoiceStatus:
+      type: string
+      enum: [DRAFT, OPEN, PAID, VOID, UNCOLLECTIBLE]
+
+    InvoiceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        subscriptionId:
+          type: string
+          format: uuid
+        amountDue:
+          type: integer
+          description: "Amount in minor currency units (integer)."
+        amountPaid:
+          type: integer
+        currency:
+          type: string
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+        issuedAt:
+          type: string
+          format: date-time
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+
+    InvoicePage:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/InvoiceResponse' }
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    BillingEventType:
+      type: string
+      enum: [SUBSCRIPTION_CREATED, TRIAL_END, PAYMENT_SUCCEEDED, PAYMENT_FAILED,
+             SUBSCRIPTION_RENEWED, SUBSCRIPTION_CANCELLED, PLAN_CHANGED,
+             WEBHOOK_RECEIVED, ADMIN_OVERRIDE]
+
+    BillingEventResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        subscriptionId:
+          type: string
+          format: uuid
+        eventType:
+          $ref: '#/components/schemas/BillingEventType'
+        idempotencyKey:
+          type: string
+        providerEventId:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        occurredAt:
+          type: string
+          format: date-time
+
+    BillingEventPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/BillingEventResponse' }
+        totalElements:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    PlanResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        amount:
+          type: integer
+          description: "Price in minor currency units."
+        currency:
+          type: string
+        intervalDays:
+          type: integer
+          description: "Billing interval in days (30=monthly, 365=annual)."
+        trialDays:
+          type: integer
+        features:
+          type: array
+          items: { type: string }
+        active:
+          type: boolean
+
+    CreatePlanRequest:
+      type: object
+      required: [name, amount, currency, intervalDays]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2048
+        amount:
+          type: integer
+          description: "Price in minor currency units."
+        currency:
+          type: string
+        intervalDays:
+          type: integer
+          minimum: 1
+        trialDays:
+          type: integer
+          minimum: 0
+          default: 0
+        features:
+          type: array
+          items: { type: string }
+
+  responses:
+    ProblemDetail:
+      description: RFC 7807 ProblemDetail error
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            properties:
+              type: { type: string }
+              title: { type: string }
+              status: { type: integer }
+              detail: { type: string }
+              instance: { type: string }
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/problem+json:
+          schema:
+            type: object

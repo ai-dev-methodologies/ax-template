@@ -1,0 +1,47 @@
+version: "1.0.0"
+scope: "billing-frontend"
+stack: "Next.js App Router + React + TanStack Query"
+standard: "WCAG 2.2 AA + ISO 4217 + ax-template React practices"
+items:
+  - id: "BILLING-FE-001"
+    chapter: "DISPLAY"
+    requirement: "Currency amounts in the billing UI must always display in the minor-unit integer format via CurrencyFormatter; raw floating-point display is prohibited."
+    test_method: "Vitest snapshot"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test: CurrencyInput with value=9900 currency=KRW renders '₩9,900'.
+      Test: PricingTable with planPrice=9900 renders '₩9,900' (not '9900.00').
+    policy_ref: "blueprints/billing-ui-manifest.yaml#currency_display"
+
+  - id: "BILLING-FE-002"
+    chapter: "STATE"
+    requirement: "Subscription status badge colors must map correctly: TRIAL→blue, ACTIVE→green, PAST_DUE→yellow, CANCELLED→gray."
+    test_method: "Vitest"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test: <SubscriptionStatusBadge status="PAST_DUE" /> renders with className containing 'yellow' or data-status='past_due'.
+    policy_ref: "blueprints/billing-ui-manifest.yaml#status_display"
+
+  - id: "BILLING-FE-003"
+    chapter: "A11Y"
+    requirement: "PricingTable and PlanComparison must have accessible table headers (scope='col') and ARIA labels on plan tier CTAs."
+    test_method: "Vitest + axe-core"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test: PricingTable renders <th scope='col'> for each plan tier column.
+      Test: CTA button has aria-label='Subscribe to {planName} plan'.
+    policy_ref: "blueprints/billing-ui-manifest.yaml#a11y"
+
+  - id: "BILLING-FE-004"
+    chapter: "CROSS_IMPORT"
+    requirement: "billing L4 and L2 components must not import from the payment L4 or payment L2 modules."
+    test_method: "ESLint rule"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      ESLint rule no-billing-cross-import-from-payment blocks import from '@/templates/L4/payment/*'
+      inside templates/L4/billing/* (and inverse).
+    policy_ref: "blueprints/billing-ui-manifest.yaml#boundary"

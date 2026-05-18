@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "74b56b04dc231cc3b0e867610aa1191c23a8f43ee85cda152371f37f377f284b"
-  rule_count: 76
+  source_concat_sha256: "fc6872f27413de2c66d39683d2f342e5332c90580ddf376ed4af5273b9df8dd3"
+  rule_count: 81
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -620,6 +620,94 @@ try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
 Verification: `./gradlew testPractices --tests "*VirtualThreadExecutor*"` submits a task to the executor and asserts `Thread.currentThread().isVirtual()` is `true` inside the body.
 
 Reference: [JEP 444 — Virtual Threads](https://openjdk.org/jeps/444) · [Spring Boot — Task Execution](https://docs.spring.io/spring-boot/reference/features/task-execution-and-scheduling.html)
+
+
+<!-- @source rules/billing-event-idempotent.md -->
+
+---
+title: "All BillingEvent writes must carry a unique idempotencyKey; duplicate provider events must be rejected without creating a second row"
+rule_id: billing-event-idempotent
+impact: CRITICAL
+impactDescription: "Duplicate webhook delivery (common from Stripe/Toss under network instability) creates duplicate BillingEvents, double-transitions subscription state, and emits double counter increments"
+tags:
+  - billing
+  - idempotency
+  - webhook
+  - event-sourcing
+provenance_class: internal_design
+protects_template_id: templates/backend/billing/BillingEvent.java
+failing_fixture_path: practices/evals/fixtures/billing-event-idempotent/fail_no_idempotency_key/
+spec_ref: "specs/billing-l0.yaml#BILLING-IDEMP-001"
+verification:
+  type: review
+  notes: |
+    Check: every BillingEvent.createInternal() or BillingEvent.fromWebhook() call
+    supplies a non-null, non-empty idempotencyKey.
+    DB: billing_events.idempotency_key has UNIQUE constraint.
+    WebhookBillingReceiver catches duplicate-key exceptions and returns 200 (not 5xx).
+evidence:
+  - source_type: upstream_id
+    upstream_id: stripe-billing-2026-05
+    section: "Idempotency"
+    quote: "Stripe stores results for at least 24 hours. Retrying the same key within the window returns the original response without creating a duplicate resource."
+  - source_type: upstream_id
+    upstream_id: toss-billing-2026-05
+    section: "멱등성"
+    quote: "Idempotency-Key 헤더를 사용하면 네트워크 오류로 인한 재시도 시 중복 결제를 방지할 수 있습니다."
+  - source_type: external
+    citation: "IETF draft — The Idempotency-Key HTTP Header Field (exactly-once semantics)"
+    url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## BillingEvent writes must carry a unique idempotencyKey
+
+**Impact: CRITICAL — Duplicate webhook delivery (normal under provider SLA) creates duplicate BillingEvents that cause double subscription state transitions, double counter increments, and incorrect invoice generation.**
+
+Both Stripe and Toss Payments guarantee **at-least-once** delivery of webhook events. Under network instability, the same event may arrive 2–3 times within a few seconds. Without idempotency protection, each delivery creates a new BillingEvent row, triggering a second state transition (e.g., ACTIVE → PAST_DUE twice) and emitting billing observability counters twice.
+
+### Enforcement
+
+1. **DB UNIQUE constraint** on `billing_events.idempotency_key` (see `BillingEvent.java`).
+2. **Factory constructors** `BillingEvent.createInternal()` and `BillingEvent.fromWebhook()` require non-null `idempotencyKey`.
+3. **WebhookBillingReceiver** catches `DataIntegrityViolationException` from duplicate-key inserts and returns HTTP 200 without re-processing.
+4. **Observability**: `billing.event.idempotency_hit_count` counter increments on every detected duplicate.
+
+**Incorrect — BillingEvent without idempotencyKey:**
+
+```java
+// VIOLATION: no idempotencyKey → duplicate webhook creates second row → double state transition
+BillingEvent event = new BillingEvent();
+event.setSubscriptionId(sub.getId());
+event.setEventType(PAYMENT_SUCCEEDED);
+// idempotencyKey not set → null constraint violation or silent duplicate
+billingEventRepository.save(event);
+```
+
+**Correct — BillingEvent with idempotencyKey from provider event ID:**
+
+```java
+// CORRECT: fromWebhook() sets idempotencyKey from provider event ID
+BillingEvent event = BillingEvent.fromWebhook(
+    sub.getId(),
+    BillingEventType.PAYMENT_SUCCEEDED,
+    providerWebhookEvent.getId(),   // idempotencyKey = stripe evt_xxx or toss payment_xxx
+    providerWebhookEvent.getId(),
+    providerWebhookEvent.getTimestamp(),
+    metadataJson
+);
+billingEventRepository.save(event);
+// Duplicate webhook with same providerEventId → DataIntegrityViolationException → return 200
+```
+
+Reference: https://stripe.com/docs/api/idempotent_requests
+
+## Failing fixture
+
+See: `practices/evals/fixtures/billing-event-idempotent/fail_no_idempotency_key/` — BillingEvent created via a constructor that leaves `idempotencyKey` null. ArchUnit or static analysis flags the missing field.
+
+See: `practices/evals/fixtures/billing-event-idempotent/pass_idempotency_key_set/` — correct usage.
 
 
 <!-- @source rules/build-java-toolchain-explicit.md -->
@@ -1566,6 +1654,143 @@ public class AtomicSingletonCounter {
 Verification: `./gradlew testPractices --tests "*SingletonState*"` runs 32 × 1000 concurrent increments and asserts the atomic counter is exactly equal to the expected total; the unsynchronized counterpart is bounded above by the same total and typically loses updates on real hardware.
 
 Reference: [Spring Framework — Bean scopes](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html)
+
+
+<!-- @source rules/currency-amount-precision-explicit.md -->
+
+---
+title: "All monetary amounts in billing domain must be stored as long integer minor units; float, double, and BigDecimal representations are prohibited"
+rule_id: currency-amount-precision-explicit
+impact: CRITICAL
+impactDescription: "float/double representation of monetary amounts causes silent rounding errors (e.g., 10.1 KRW stored as 10.099999...). BigDecimal is verbose and mutation-prone. Stripe and Toss both use integer minor units as their canonical wire format."
+tags:
+  - billing
+  - currency
+  - precision
+  - integer-minor-units
+provenance_class: internal_design
+protects_template_id: templates/backend/billing/Plan.java
+failing_fixture_path: practices/evals/fixtures/currency-amount-precision/fail_float_amount/
+spec_ref: "specs/billing-l0.yaml#BILLING-CUR-001"
+verification:
+  type: archunit
+  notes: |
+    ArchUnit rule:
+    fields().that().areDeclaredInClassesThat().resideInAPackage("..billing..")
+    .and().haveNameMatching(".*[Aa]mount.*|.*[Pp]rice.*|.*[Ff]ee.*|.*[Cc]ost.*")
+    .should().haveRawType(long.class)
+    Controller validation:
+    POST endpoints that accept amount fields use @RequestBody with a record type;
+    if the field is typed as double/float in the JSON, Jackson rejects it with 400.
+    Failing fixture: any billing entity field named *amount*/*price*/*fee*/*cost* typed as double/float/BigDecimal.
+evidence:
+  - source_type: upstream_id
+    upstream_id: stripe-billing-2026-05
+    section: "Amounts and currencies"
+    quote: "All amounts are stored in the smallest currency unit (e.g., 100 cents to charge $1.00). For zero-decimal currencies such as JPY or KRW, use the amount directly (e.g., 150 to charge ¥150)."
+  - source_type: upstream_id
+    upstream_id: toss-billing-2026-05
+    section: "금액 단위"
+    quote: "amount 필드는 항상 정수(원 단위)로 전달합니다. 소수점 금액은 허용하지 않습니다."
+  - source_type: external
+    citation: "Martin Fowler — Money pattern: store amounts as integer minor units to avoid floating-point rounding; pair with a Currency object for formatting."
+    url: "https://martinfowler.com/eaaCatalog/money.html"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## All monetary amounts must be long integer minor units
+
+**Impact: CRITICAL — float/double amounts silently accumulate rounding errors. A 0.1 KRW float error compounded over 1,000 invoices is 100 KRW gone. Stripe and Toss both define integer minor units as canonical. This template enforces the same.**
+
+Both Stripe and Toss Payments use integer minor-unit amounts as their canonical wire format:
+- KRW (South Korean Won): no subdivisions — 1,000 KRW = `1000` (long)
+- USD (US Dollar): cents — $10.00 = `1000` (long, cents)
+- JPY: no subdivisions — ¥150 = `150` (long)
+
+### What "minor units" means
+
+| Currency | Decimal | Minor units (long) |
+|---|---|---|
+| KRW ₩10,000 | 10000.00 | `10000L` |
+| USD $9.99 | 9.99 | `999L` |
+| EUR €4.50 | 4.50 | `450L` |
+
+**Incorrect — float or BigDecimal storage for monetary amounts:**
+
+```java
+// VIOLATION: float causes rounding loss on any non-exact binary fraction
+private float amount;  // 10.1 stored as 10.09999942779541 (IEE 754)
+// VIOLATION: BigDecimal is verbose and mutation-prone
+private BigDecimal amountDue;
+// VIOLATION: double — same rounding problem as float
+private double price;
+```
+
+**Correct — long integer minor units for all monetary amounts:**
+
+```java
+// CORRECT: long, minor units — KRW 10,000원 stored as 10000L
+private long amount;
+// CORRECT: Invoice.java — both fields as long
+private long amountDue;
+private long amountPaid;
+```
+
+Reference: https://martinfowler.com/eaaCatalog/money.html
+
+### Correct — rejecting float inputs at the HTTP boundary
+
+```java
+// BillingController.java — CreateSubscriptionRequest record
+// amount is declared as long; if client sends 9.99, Jackson throws 400
+record CreateSubscriptionRequest(
+    @NotNull UUID planId,
+    @NotBlank String provider
+) {}
+
+// PlanController.java — CreatePlanRequest record
+record CreatePlanRequest(
+    @NotBlank String name,
+    @Positive long amount,  // rejects float JSON with 400 ProblemDetail
+    @NotBlank String currency,
+    @NotBlank String billingCycle
+) {}
+```
+
+### Display formatting
+
+For display, convert minor units to decimal in the frontend using `CurrencyFormatter` (L1):
+
+```typescript
+import { formatCurrencyAmount } from '@/templates/L1/components/currency-input'
+
+// KRW: no decimal places
+formatCurrencyAmount(10000, 'KRW', 'ko-KR') // → "₩10,000"
+
+// USD: two decimal places
+formatCurrencyAmount(999, 'USD', 'en-US') // → "$9.99"
+```
+
+**Never convert back to float/double for storage or computation.** All arithmetic (discounts, proration) stays in long arithmetic.
+
+## ArchUnit enforcement
+
+```java
+// CurrencyAmountPrecisionArchTest.java
+@ArchTest
+static final ArchRule billingAmountFieldsMustBeLong = fields()
+    .that().areDeclaredInClassesThat().resideInAPackage("..billing..")
+    .and().haveNameMatching(".*[Aa]mount.*|.*[Pp]rice.*|.*[Ff]ee.*|.*[Cc]ost.*")
+    .should().haveRawType(long.class)
+    .because("All monetary amounts in billing domain must be long integer minor units");
+```
+
+## Failing fixture
+
+See: `practices/evals/fixtures/currency-amount-precision/fail_float_amount/BillingPlanFloatAmount.java` — a Plan entity with `private double amount`.
+
+See: `practices/evals/fixtures/currency-amount-precision/pass_integer_amount/BillingPlanLongAmount.java` — correct `private long amount`.
 
 
 <!-- @source rules/error-controller-advice.md -->
@@ -2672,6 +2897,314 @@ src/main/resources/db/migration/
 Verification: `./gradlew testPractices --tests "*VersionedNaming*"` lists `db/migration/*.sql` and asserts each filename matches `^V[0-9]+(?:[._][0-9]+)*__[A-Za-z0-9_]+\.sql$`.
 
 Reference: [Flyway — Migration naming](https://documentation.red-gate.com/fd/migrations-271583622.html) · [Spring Boot — Flyway integration](https://docs.spring.io/spring-boot/reference/data/sql.html)
+
+
+<!-- @source rules/no-billing-cross-import-from-payment.md -->
+
+---
+title: "billing and payment packages must not import each other; the boundary defined in §5.2.6 is enforced by ArchUnit and ESLint"
+rule_id: no-billing-cross-import-from-payment
+impact: CRITICAL
+impactDescription: "Cross-importing between billing and payment creates a circular bounded-context dependency. Any change to payment internals (e.g., PaymentMethod, PaymentStatus) leaks into billing and forces cascading changes. Subscription lifecycle (billing domain) must never depend on one-shot charge logic (payment domain)."
+tags:
+  - billing
+  - payment
+  - boundary
+  - ddd
+  - domain-separation
+provenance_class: internal_design
+protects_template_id: templates/backend/billing/BillingService.java
+failing_fixture_path: practices/evals/fixtures/no-billing-cross-import-from-payment/fail_billing_imports_payment/
+spec_ref: "specs/billing-l0.yaml#BILLING-BOUNDARY-001"
+verification:
+  type: archunit
+  notes: |
+    ArchUnit rules (two directional):
+    noClasses().that().resideInAPackage("..billing..")
+        .should().dependOnClassesThat().resideInAPackage("..payment..")
+    noClasses().that().resideInAPackage("..payment..")
+        .should().dependOnClassesThat().resideInAPackage("..billing..")
+    Failing fixture: any billing class with import ax.template.payment.* or vice versa.
+evidence:
+  - source_type: external
+    citation: "Domain-Driven Design (Evans): Each bounded context has an explicit contract at its boundary. Cross-importing internals couples contexts at the class level, violating autonomy and enabling cascading changes."
+    url: "https://martinfowler.com/bliki/BoundedContext.html"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Stripe API Reference 2026-05 — Charges vs. Subscriptions are separate API resources with no direct dependency between them. A subscription's lifecycle uses invoice and billing objects, not charge objects."
+    url: "https://stripe.com/docs/api/subscriptions"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Sam Newman — Building Microservices (2nd ed.): Services in separate bounded contexts must communicate via published events or APIs, never via direct class-level imports."
+    url: "https://samnewman.io/books/building_microservices_2nd_edition/"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## billing ↔ payment cross-import is prohibited
+
+**Impact: CRITICAL — billing domain (subscription lifecycle, invoices, recurring events) and payment domain (one-shot authorize/capture/refund) are separate bounded contexts per §5.2.6. Cross-imports couple contexts at the Java class level, breaking independent deployability and forcing cascading changes.**
+
+### §5.2.6 Payment vs Billing Boundary
+
+| Concern | Owner |
+|---|---|
+| One-shot authorize/capture/refund | `payment` domain |
+| Subscription lifecycle | `billing` domain |
+| Invoice issuance | `billing` domain |
+| Plan management | `billing` domain |
+| Recurring billing event normalization | `billing` domain |
+
+Communication between the domains, if needed, must go through:
+1. **Application events** (Spring `ApplicationEvent` or Kafka topic)
+2. **Shared kernel** types only (primitives, common value objects in a `shared` package)
+
+Direct Java `import ax.template.payment.*` or `import ax.template.billing.*` from the opposing context is **prohibited**.
+
+**Incorrect — billing imports payment internals (cross-context dependency):**
+
+```java
+// VIOLATION: billing service directly importing payment domain class
+package ax.template.billing;
+
+import ax.template.payment.PaymentMethod;      // ← VIOLATION
+import ax.template.payment.PaymentService;     // ← VIOLATION
+
+@Service
+public class BillingService {
+    private final PaymentService paymentService;
+    public void renewSubscription(UUID subId) {
+        paymentService.charge(...); // cross-context direct call — forbidden
+    }
+}
+```
+
+**Correct — billing domain coordinates via ApplicationEvent, no payment imports:**
+
+```java
+// CORRECT: billing emits an event; payment coordinator listens (no payment.* import)
+package ax.template.billing;
+
+@Service
+public class BillingService {
+    private final ApplicationEventPublisher events;
+    @Transactional
+    public void handleRenewal(UUID subscriptionId) {
+        events.publishEvent(new SubscriptionRenewalDueEvent(subscriptionId, amountDue));
+        // No payment import needed — payment domain handles via its own listener
+    }
+}
+```
+
+Reference: https://martinfowler.com/bliki/BoundedContext.html
+
+### Incorrect — payment imports billing internals
+
+```java
+// VIOLATION: payment domain importing billing domain class
+package ax.template.payment;
+
+import ax.template.billing.Subscription;       // ← VIOLATION
+import ax.template.billing.BillingEvent;       // ← VIOLATION
+
+@Service
+public class PaymentService {
+    public void processRefund(UUID subId) {
+        // Should not know about Subscription entity
+        Subscription sub = subscriptionRepository.findById(subId);
+    }
+}
+```
+
+### Correct — event-driven coordination
+
+```java
+// CORRECT: billing emits an event; payment (or a coordinator) listens
+// billing domain:
+@Service
+public class BillingService {
+    private final ApplicationEventPublisher events;
+
+    @Transactional
+    public void handleSubscriptionRenewal(UUID subscriptionId) {
+        // ... state machine transition ...
+        events.publishEvent(new SubscriptionRenewalDueEvent(subscriptionId, amountDue));
+        // No payment import needed
+    }
+}
+
+// Coordinator (shared layer or separate service) — NOT in billing or payment:
+@Component
+public class RenewalCoordinator {
+    @EventListener
+    public void onRenewalDue(SubscriptionRenewalDueEvent event) {
+        // Calls payment domain via its API, not its internals
+        paymentGateway.charge(event.subscriptionId(), event.amountDue());
+    }
+}
+```
+
+### Correct — shared kernel for common types only
+
+```java
+// shared package (not billing, not payment) — OK to import from either context:
+package ax.template.shared;
+
+public record MoneyAmount(long amount, String currency) {}
+public record UserId(UUID value) {}
+```
+
+## ArchUnit enforcement
+
+```java
+// BillingPaymentBoundaryArchTest.java
+@ArchTest
+static final ArchRule billingMustNotImportPayment = noClasses()
+    .that().resideInAPackage("..billing..")
+    .should().dependOnClassesThat().resideInAPackage("..payment..")
+    .because("billing and payment are separate bounded contexts (§5.2.6)");
+
+@ArchTest
+static final ArchRule paymentMustNotImportBilling = noClasses()
+    .that().resideInAPackage("..payment..")
+    .should().dependOnClassesThat().resideInAPackage("..billing..")
+    .because("billing and payment are separate bounded contexts (§5.2.6)");
+```
+
+## Failing fixture
+
+See: `practices/evals/fixtures/no-billing-cross-import-from-payment/fail_billing_imports_payment/BillingServiceCrossImport.java` — a billing service that imports `ax.template.payment.PaymentService`.
+
+See: `practices/evals/fixtures/no-billing-cross-import-from-payment/pass_idempotency_pattern_no_import/BillingServiceNoPaymentImport.java` — correct billing service with no payment imports.
+
+
+<!-- @source rules/no-rrn-collection-without-legal-basis.md -->
+
+---
+title: "Backend services must not accept, store, or process raw RRN (주민등록번호) without an explicit @LegalBasis annotation"
+rule_id: no-rrn-collection-without-legal-basis
+impact: CRITICAL
+impactDescription: "RRN is a Sensitive Personal Information (고유식별정보) under 개인정보보호법 §24; processing it without explicit statutory legal basis triggers mandatory breach notification and fines up to ₩30M per violation"
+tags:
+  - privacy
+  - pii
+  - rrn
+  - identity
+  - locked_constraint
+  - korean-compliance
+provenance_class: locked_constraint
+protects_template_id: templates/backend/identity-verification/
+failing_fixture_path: practices/evals/fixtures/no-rrn-collection-without-legal-basis/fail_rrn_no_legal_basis/
+spec_ref: "specs/identity-verification-l0.yaml#IDV-CALLBACK-003"
+verification:
+  type: review
+  status: manual
+  notes: "Static analysis: grep -rn '@RequestParam\\|@RequestBody\\|String.*rrn\\|String.*주민' --include='*.java' | grep -v '@LegalBasis\\|//.*CORRECT\\|test/\\|fixture/' must return zero matches in production code. Structural check: VerifiedIdentity entity must have no field named rrn/residentRegistrationNumber/socialSecurityNumber."
+evidence:
+  - source_type: external
+    citation: "개인정보보호법 제24조 제1항 — 고유식별정보의 처리 제한: 사업자는 법령에 특별한 규정이 있는 경우 외에는 주민등록번호 등 고유식별정보를 처리할 수 없음"
+    url: "https://www.law.go.kr/법령/개인정보보호법"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "KISA 본인인증 가이드라인 — CI(연결정보)/DI(중복확인정보)를 이용하여 주민등록번호를 수집하지 않고 본인인증을 수행하는 방법"
+    url: "https://www.kisa.or.kr/2060301/form?postSeq=14&lang_type=KO"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "OWASP ASVS V6.2.1 — Verify that regulated private data is stored encrypted at rest and that this data cannot be easily decrypted"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## Backend services must not accept, store, or process raw RRN (주민등록번호) without an explicit `@LegalBasis` annotation
+
+**Impact: CRITICAL — 개인정보보호법 §24-1 classifies the Resident Registration Number (주민등록번호) as 고유식별정보 (Unique Identification Information). Processing it without a specific statutory basis is prohibited and carries:**
+- **Administrative fines up to ₩30M per violation**
+- **Mandatory breach notification obligations**
+- **Criminal liability for responsible officers (up to 5 years imprisonment, ₩50M fine)**
+
+This rule is a **locked constraint**: it derives from statute and cannot be relaxed by project-level override.
+
+**Incorrect — DTO accepts raw RRN without @LegalBasis annotation:**
+
+```java
+// VIOLATION: RRN in DTO without @LegalBasis — 개인정보보호법 §24 violation
+@PostMapping("/api/users/register")
+public ResponseEntity<Void> register(@RequestBody RegistrationRequest request) {
+    userService.register(request.getName(), request.getRrn());
+    return ResponseEntity.ok().build();
+}
+public record RegistrationRequest(String name, String email, String rrn) {}
+```
+
+**Correct — use CI/DI from KISA 본인인증 instead of RRN:**
+
+```java
+// CORRECT — identity verified via CI/DI; no RRN field in any DTO
+@PostMapping("/api/users/register")
+public ResponseEntity<Void> register(@RequestBody RegistrationRequest request) {
+    userService.registerWithVerifiedIdentity(request.getName(), request.ci());
+    return ResponseEntity.ok().build();
+}
+public record RegistrationRequest(String name, String email, String ci) {}
+```
+
+Reference: https://www.law.go.kr/법령/개인정보보호법
+
+### If RRN processing is legally required (rare statutory case)
+
+```java
+// ✅ CORRECT (statutory exception only) — @LegalBasis annotation is mandatory
+@PostMapping("/api/kyc/verify")
+public ResponseEntity<Void> kycVerify(@RequestBody KycRequest request) {
+    // CORRECT: @LegalBasis documents the specific statute
+    kycService.verifyWithRrn(request.getRrn());
+    return ResponseEntity.ok().build();
+}
+
+public record KycRequest(
+    @LegalBasis(law = "금융실명거래 및 비밀보장에 관한 법률 §3",
+                purpose = "금융거래 실명확인 — 법령상 수집 의무",
+                retentionYears = 5)
+    String rrn   // STATUTORY EXCEPTION: documented legal basis required
+) {}
+```
+
+### Why this matters
+
+개인정보보호법 §24 and related statutes impose:
+1. **Collection prohibition** — Unless a specific law (금융실명법, 주민등록법 §7의5 등) authorizes it.
+2. **Separate consent requirement** — A specific, separate consent gate (§18).
+3. **Encryption requirement** — If collected, must be stored encrypted (§29).
+4. **Minimum necessary principle** — Collect only the minimum required for the stated purpose.
+
+For identity verification (본인인증), KISA provides a lawful alternative:
+- **PASS / KCB 본인인증** produces CI (Connecting Information) and DI (Duplicate Information)
+- CI is a 64-byte hex token that uniquely identifies a person across services — **without the RRN**
+- Use `templates/backend/identity-verification/` for the vendor-agnostic adapter pattern
+
+### RRN field name patterns this rule targets
+
+```
+rrn, residentRegistrationNumber, socialSecurityNumber, idNumber (context: RRN),
+주민등록번호, 주민번호, juminNumber, rrNum
+```
+
+Exclusions (false-positive guard per Risk 4 in PRD):
+```
+ci, di, verifiedIdentityNumber, externalId, connectingInfo, duplicateInfo
+```
+
+## Failing fixture
+
+See: `practices/evals/fixtures/no-rrn-collection-without-legal-basis/fail_rrn_no_legal_basis/`
+— A DTO with a field named `rrn` and no `@LegalBasis` annotation. Static analysis catches field name pattern.
+
+React companion rule: `practices-react/rules/no-rrn-collection-without-legal-basis.md`
+
+Reference: [개인정보보호법 제24조 — 고유식별정보의 처리 제한](https://www.law.go.kr/법령/개인정보보호법)
+
+Reference: [KISA 본인인증 가이드라인 — CI/DI 대체 방법](https://www.kisa.or.kr/2060301/form?postSeq=14&lang_type=KO)
 
 
 <!-- @source rules/no-rrn-logging.md -->
@@ -3998,6 +4531,107 @@ See `templates/backend/data/migrations/V202605181200__add_soft_delete_columns.sq
 Verification: `./gradlew testPractices --tests "*BaseEntitySoftDelete*"` asserts that every `@Entity` in the base template package that extends `BaseEntity` also carries `@SQLDelete`.
 
 Reference: [Hibernate ORM 6.4 — @SQLDelete](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#soft-delete) | [Hibernate ORM 6.4 — @Where](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#mapping-where)
+
+
+<!-- @source rules/subscription-state-machine-explicit.md -->
+
+---
+title: "Subscription.status must only be mutated through SubscriptionStateMachine; direct setStatus() calls outside the state machine are prohibited"
+rule_id: subscription-state-machine-explicit
+impact: CRITICAL
+impactDescription: "Direct setStatus() calls bypass the state machine's transition validation and BillingEvent recording, creating silent state corruption and missing audit trail entries"
+tags:
+  - billing
+  - state-machine
+  - subscription
+  - audit
+provenance_class: internal_design
+protects_template_id: templates/backend/billing/Subscription.java
+failing_fixture_path: practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/
+spec_ref: "specs/billing-l0.yaml#BILLING-STATE-001"
+verification:
+  type: archunit
+  notes: |
+    ArchUnit rule:
+    noClasses().that().areNotAssignableTo(SubscriptionStateMachine.class)
+    .should().callMethodWhere(
+      target().hasName("applyStatusTransition")
+      .and(owner().isAssignableTo(Subscription.class))
+    )
+    Failing fixture: any class besides SubscriptionStateMachine calling applyStatusTransition().
+evidence:
+  - source_type: upstream_id
+    upstream_id: stripe-billing-2026-05
+    section: "Subscription lifecycle"
+    quote: "trialing — trial period active; active — subscription is current; past_due — latest invoice payment attempt failed; canceled — subscription ended"
+  - source_type: upstream_id
+    upstream_id: toss-billing-2026-05
+    section: "정기결제 구독 상태 매핑"
+    quote: "ACTIVE: 정상 사용 가능, INACTIVE: 카드 만료/분실 등으로 비활성화"
+  - source_type: external
+    citation: "Domain-Driven Design — Aggregates encapsulate invariants; state transitions are explicit methods on the aggregate, not raw field mutations"
+    url: "https://martinfowler.com/bliki/DDD_Aggregate.html"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## Subscription.status must only be mutated through SubscriptionStateMachine
+
+**Impact: CRITICAL — Calling `subscription.applyStatusTransition()` directly from service code bypasses transition validation, skips BillingEvent recording, and leaves the audit trail incomplete. Subscription state becomes inconsistent with billing events.**
+
+The `SubscriptionStateMachine` is the sole class responsible for:
+1. Validating whether a transition is allowed (TRIAL→PAST_DUE is invalid; PAST_DUE→ACTIVE is valid).
+2. Calling `Subscription.applyStatusTransition()` (package-private method).
+3. Recording a `BillingEvent` for the transition (append-only audit trail).
+4. Emitting `billing.subscription.lifecycle_transition` counter.
+
+Any code that mutates `Subscription.status` outside this machine will:
+- Skip transition validation (allowing impossible states like CANCELLED→ACTIVE without payment).
+- Leave no BillingEvent audit record (compliance and debugging impact).
+- Cause observability counters to miss transitions.
+
+**Incorrect — direct applyStatusTransition() outside SubscriptionStateMachine:**
+
+```java
+// VIOLATION: direct mutation bypasses validation and BillingEvent recording
+subscription.applyStatusTransition(SubscriptionStatus.ACTIVE);
+subscriptionRepository.save(subscription);
+// No BillingEvent recorded. Transition validation skipped. Counter not incremented.
+```
+
+**Correct — all state transitions through SubscriptionStateMachine.transition():**
+
+```java
+// CORRECT: all state transitions through the state machine
+BillingEvent event = stateMachine.transition(
+    subscription,
+    SubscriptionStateMachine.Trigger.PAYMENT_SUCCEEDED_WEBHOOK,
+    webhookMetadataJson
+);
+// Validates PAST_DUE→ACTIVE transition.
+// Saves BillingEvent(PAYMENT_SUCCEEDED, idempotencyKey=...).
+// Increments billing.subscription.lifecycle_transition counter.
+```
+
+Reference: https://martinfowler.com/bliki/DDD_Aggregate.html
+
+## ArchUnit enforcement
+
+```java
+// OnlyStateMachineMutatesSubscriptionStatusArchTest.java
+@ArchTest
+static final ArchRule onlyStateMachineMutatesStatus = noClasses()
+    .that().areNotAssignableTo(SubscriptionStateMachine.class)
+    .should().callMethodWhere(
+        target().hasName("applyStatusTransition")
+            .and(owner().isAssignableTo(Subscription.class))
+    )
+    .because("Subscription status may only be changed via SubscriptionStateMachine");
+```
+
+## Failing fixture
+
+See: `practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/BillingServiceDirectStatus.java` — a service method that calls `subscription.applyStatusTransition()` directly.
 
 
 <!-- @source rules/testing-archunit-layer-boundary.md -->

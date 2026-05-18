@@ -1,0 +1,93 @@
+# contracts/billing-ui.yaml
+# UI Contract — billing domain, full_trio mode.
+#
+# Backend operationIds from contracts/billing-openapi.yaml are covered.
+# Every route's backend_operation_id resolves against the backend_contract_ref.
+# static_source_ref is [] for all routes (full_trio: FORBIDDEN to be non-empty).
+#
+# Billing-specific UX policies:
+#   - Amount encoding: integer minor units (KRW: won, USD: cents). No floats.
+#   - SubscriptionStatus badge: TRIAL→blue, ACTIVE→green, PAST_DUE→yellow, CANCELLED→gray.
+#   - Currency display: always via CurrencyFormatter (never raw number).
+#   - Cross-import boundary: no import from payment L4 or payment L2.
+
+domain: billing
+backend_contract_ref: contracts/billing-openapi.yaml
+routes:
+  - path: /billing/pricing
+    method: GET
+    backend_operation_id: null
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: PricingTableSkeleton
+      error: ErrorBanner
+      empty: null
+      success: PricingTable + PlanComparison
+    billing_ux:
+      amount_encoding: integer_minor_units
+      currency_display: CurrencyFormatter (KRW default)
+
+  - path: /billing/subscriptions
+    method: GET
+    backend_operation_id: listSubscriptions
+    static_source_ref: []
+    params: {}
+    query: { status: optional }
+    states:
+      loading: TableSkeleton
+      error: ErrorBanner
+      empty: EmptyState
+      success: BillingHistory (subscription list)
+
+  - path: /billing/subscriptions/new
+    method: POST
+    backend_operation_id: createSubscription
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: SpinnerOverlay
+      error: FormErrorBanner
+      success: null
+    billing_ux:
+      idempotency: IdempotencyKeyHandler (key passed as Idempotency-Key header)
+    redirects:
+      on_success: /billing/subscriptions/{id}
+      on_auth_required: /login
+
+  - path: /billing/subscriptions/{id}
+    method: GET
+    backend_operation_id: getSubscription
+    static_source_ref: []
+    params: { id: uuid }
+    query: {}
+    states:
+      loading: Skeleton
+      error: ErrorBanner (404 → "구독을 찾을 수 없습니다")
+      success: UsageMeter + BillingHistory
+
+  - path: /billing/invoices
+    method: GET
+    backend_operation_id: listInvoices
+    static_source_ref: []
+    params: {}
+    query: { subscriptionId: optional }
+    states:
+      loading: TableSkeleton
+      error: ErrorBanner
+      empty: EmptyState ("청구서가 없습니다")
+      success: InvoiceList
+
+  - path: /billing/events
+    method: GET
+    backend_operation_id: listBillingEvents
+    static_source_ref: []
+    params: {}
+    query: { subscriptionId: optional }
+    states:
+      loading: TableSkeleton
+      error: ErrorBanner
+      empty: EmptyState
+      success: BillingHistory (event timeline view)

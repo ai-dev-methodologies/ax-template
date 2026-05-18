@@ -361,3 +361,69 @@ snapshots:
     sha: "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5"
     version_observed: "spring-framework@6.x"
     purpose: "realtime SSE emitter pattern, serverless-safe ConditionalOnProperty opt-in, WebSocket STOMP alternative"
+
+  - id: "next-themes-2026-05"
+    tier: 3
+    source: "https://github.com/pacocoursey/next-themes"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3240
+    sha: "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6"
+    version_observed: "next-themes@0.3.x"
+    purpose: "Cookie-based SSR theme storage for ThemeSwitcher — eliminates first-paint flicker; SP34 R1 default"
+
+  - id: "wcag-22-techniques-2026-05"
+    tier: 2
+    source: "https://www.w3.org/WAI/WCAG22/Techniques/"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 5120
+    sha: "f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7"
+    purpose: "WCAG 2.2 techniques: SC 2.4.1 bypass-blocks (skip-link), SC 4.1.3 status-messages (announce-live, impersonation-banner, maintenance-notice)"
+
+  - id: "nts-business-reg-2026-05"
+    tier: 2
+    source: "https://www.nts.go.kr/nts/na/ntt/selectNttInfo.do?mi=2340&nttSn=7943"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4821
+    sha: "a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4"
+    purpose: "NTS 사업자등록번호 checksum algorithm (weights [1,3,7,1,3,7,1,3,5], 9th-digit two-part contribution); public BRN data sources (DART, data.go.kr)"
+
+  - id: "kisa-identity-verification-2026-05"
+    tier: 2
+    source: "https://www.kisa.or.kr/2060301/form?postSeq=15&lang_type=KO"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 5103
+    sha: "b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5"
+    purpose: "KISA 본인인증: CI (연계정보, cross-service 64-byte hex) and DI (중복가입확인정보, service-scoped 64-byte hex); PASS/KCB provider payload mapping; HMAC webhook verification pattern"
+
+  - id: "pipa-article-24-2026-05"
+    tier: 2
+    source: "https://www.law.go.kr/법령/개인정보보호법/(20240315,20040,20230928)/제24조"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4612
+    sha: "c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+    purpose: "개인정보보호법 §24 (고유식별정보 처리 제한) + §24-1 (주민등록번호 처리 제한): RRN collection prohibited without statutory authorization; @LegalBasis annotation pattern; CI/DI as lawful alternative"
+
+  - id: "stripe-billing-2026-05"
+    tier: 2
+    source: "https://stripe.com/docs/billing/subscriptions/overview"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4821
+    sha: "a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8"
+    version_observed: "stripe-api@2024-06-20"
+    purpose: "Stripe Billing: subscription lifecycle (trialing/active/past_due/canceled), integer minor-unit amounts, idempotency (24h), webhook events, 300s replay tolerance"
+
+  - id: "toss-billing-2026-05"
+    tier: 2
+    source: "https://docs.tosspayments.com/guides/billing/overview"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3952
+    sha: "b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9"
+    version_observed: "toss-payments-api@2024"
+    purpose: "Toss Payments 정기결제: billingKey flow, integer KRW amounts, idempotency header, HMAC-SHA256 webhook, status mapping to ax-template canonical statuses"

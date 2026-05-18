@@ -1,0 +1,125 @@
+version: "1.0.0"
+scope: "billing-domain"
+stack: "Spring Boot 3.2.x + JPA + Caffeine + RestAssured"
+standard: "RFC 7807 + ISO 4217 + OWASP ASVS V4 + Stripe Billing API + Toss Payments 정기결제"
+items:
+  # ─── AUTHZ family ──────────────────────────────────────────────────────────
+  - id: "BILLING-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All billing endpoints require a valid authenticated session; unauthenticated requests return HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: call each billing endpoint without a JWT → 401.
+      Implementation: SecurityConfig maps /api/billing/** and /api/subscriptions/** to requiresAuthentication().
+    policy_ref: "blueprints/billing-manifest.yaml#authz"
+
+  - id: "BILLING-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "A user can only view their own subscription; accessing another user's subscription returns HTTP 404."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates a subscription. UserB calls GET /api/subscriptions/{userA_sub_id} → 404 (not 403).
+      IDOR-safe: 404 prevents enumeration of existing subscription IDs. OWASP ASVS V4.2.1.
+    policy_ref: "blueprints/billing-manifest.yaml#authz"
+
+  - id: "BILLING-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "Admin-only billing operations (plan CRUD, force-cancel, billing event query) require ROLE_ADMIN; ROLE_MEMBER → 403."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: ROLE_MEMBER calls POST /api/admin/billing/plans → 403.
+      Implementation: BillingAdminController maps to /api/admin/billing/** with @PreAuthorize("hasRole('ADMIN')").
+    policy_ref: "blueprints/billing-manifest.yaml#authz"
+
+  # ─── IDEMP family ──────────────────────────────────────────────────────────
+  - id: "BILLING-IDEMP-001"
+    chapter: "IDEMP"
+    requirement: "All BillingEvent writes must carry an idempotency key. Duplicate events within 24 h return the original response without creating a second BillingEvent row."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Stripe and Toss both deliver duplicate webhook events under transient failure.
+      Test (positive): send the same provider payload twice with the same idempotency key → only one BillingEvent row in DB.
+      Test (negative): two different idempotency keys → two rows.
+      Implementation: IdempotencyFilter + @RequireIdempotencyKey on POST handlers.
+    policy_ref: "blueprints/billing-manifest.yaml#idempotency"
+
+  - id: "BILLING-IDEMP-002"
+    chapter: "IDEMP"
+    requirement: "Webhook replay attacks are rejected: Stripe-Signature timestamp older than 300 s returns HTTP 400."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: send POST /api/webhooks/billing with t=<6-minutes-ago> in Stripe-Signature → 400 ProblemDetail.
+      Toss equivalent: X-Webhook-Signature with ts > 5 min old → 400.
+    policy_ref: "blueprints/billing-manifest.yaml#webhook"
+
+  # ─── STATE family ──────────────────────────────────────────────────────────
+  - id: "BILLING-STATE-001"
+    chapter: "STATE"
+    requirement: "Subscription status transitions are only allowed via SubscriptionStateMachine; direct Subscription.setStatus() calls outside the state machine are prohibited."
+    test_method: "ArchUnit"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      ArchUnit test: noClasses().that().areNotAssignableTo(SubscriptionStateMachine.class)
+      .should().callMethodWhere(target().hasName("setStatus").and(owner().isAssignableTo(Subscription.class))).
+      Failing fixture: BillingServiceDirectStatus.java sets subscription.setStatus() directly.
+    policy_ref: "blueprints/billing-manifest.yaml#state_machine"
+
+  - id: "BILLING-STATE-002"
+    chapter: "STATE"
+    requirement: "Subscription TRIAL → ACTIVE transition must record a BillingEvent of type TRIAL_END. ACTIVE → PAST_DUE must record PAYMENT_FAILED."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test: simulate trial-end webhook → subscription status = ACTIVE; BillingEvent(TRIAL_END) row exists.
+      Test: simulate payment-failed webhook → status = PAST_DUE; BillingEvent(PAYMENT_FAILED) row exists.
+    policy_ref: "blueprints/billing-manifest.yaml#state_machine"
+
+  # ─── CURRENCY family ────────────────────────────────────────────────────────
+  - id: "BILLING-CUR-001"
+    chapter: "CURRENCY"
+    requirement: "All monetary amounts are stored and transmitted as integers in the minor currency unit (KRW: integer won; USD: integer cents). Floating-point amounts are rejected with HTTP 400."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): POST /api/billing/invoices with amount=9900 (KRW) → 201.
+      Test (negative): POST with amount=99.00 (float JSON) → 400 ProblemDetail type=urn:ax:billing:invalid-amount.
+      Implementation: @JsonDeserialize(using = MinorUnitAmountDeserializer.class) rejects floats.
+    policy_ref: "blueprints/billing-manifest.yaml#currency"
+
+  # ─── WEBHOOK family ─────────────────────────────────────────────────────────
+  - id: "BILLING-WEBHOOK-001"
+    chapter: "WEBHOOK"
+    requirement: "Billing webhook endpoints verify provider signatures before processing; invalid signatures return HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/webhooks/billing with tampered payload → 401 ProblemDetail.
+      Implementation: WebhookBillingReceiver.verifySignature() throws WebhookSignatureException on mismatch.
+    policy_ref: "blueprints/billing-manifest.yaml#webhook"
+
+  # ─── BOUNDARY family ────────────────────────────────────────────────────────
+  - id: "BILLING-BOUNDARY-001"
+    chapter: "BOUNDARY"
+    requirement: "billing package must not import any class from the payment package, and vice versa."
+    test_method: "ArchUnit"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      ArchUnit: noClasses().that().resideInAPackage("..billing..").should()
+        .dependOnClassesThat().resideInAPackage("..payment..") (and inverse).
+      Failing fixture: BillingServiceWithPaymentImport.java imports PaymentService → archunit FAIL.
+    policy_ref: "blueprints/billing-manifest.yaml#boundary"

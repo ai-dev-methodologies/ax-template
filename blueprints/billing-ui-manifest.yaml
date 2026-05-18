@@ -1,0 +1,67 @@
+template_id: billing-ui-blueprint
+family: scaffold
+status: active
+confidence: high
+domain: billing
+domain_mode: full_trio
+backend_contract_ref: contracts/billing-openapi.yaml
+frontend_spec_ref: specs/billing-frontend-l0.yaml
+
+# ─── Currency display policy ──────────────────────────────────────────────────
+currency_display:
+  component: CurrencyFormatter
+  raw_number_display: PROHIBITED
+  encoding: integer_minor_units  # always integer, never float
+  default_currency: KRW
+  default_locale: ko-KR
+  spec_items: [BILLING-FE-001]
+
+# ─── Status badge color map ──────────────────────────────────────────────────
+status_display:
+  TRIAL: blue
+  ACTIVE: green
+  PAST_DUE: yellow
+  CANCELLED: gray
+  spec_items: [BILLING-FE-002]
+
+# ─── Accessibility ────────────────────────────────────────────────────────────
+a11y:
+  pricing_table:
+    th_scope: col
+    cta_aria_label: "Subscribe to {planName} plan"
+  usage_meter:
+    aria_label: "{usage} of {limit} {unit} used"
+    role: progressbar
+  spec_items: [BILLING-FE-003]
+
+# ─── Cross-import boundary ────────────────────────────────────────────────────
+boundary:
+  forbidden_imports:
+    - from: templates/L4/billing/**
+      must_not_import: templates/L4/payment/**
+    - from: templates/L2/blocks/pricing-table.tsx
+      must_not_import: templates/L2/blocks/payment-checkout-form.tsx
+  rule: no-billing-cross-import-from-payment
+  spec_items: [BILLING-FE-004]
+
+# ─── L2 blocks catalog ───────────────────────────────────────────────────────
+l2_blocks:
+  - id: pricing-table
+    file: templates/L2/blocks/pricing-table.tsx
+    data_source: BillingProvider (static plans prop or fetched)
+  - id: plan-comparison
+    file: templates/L2/blocks/plan-comparison.tsx
+  - id: usage-meter
+    file: templates/L2/blocks/usage-meter.tsx
+  - id: invoice-list
+    file: templates/L2/blocks/invoice-list.tsx
+    data_source: listInvoices (operationId)
+  - id: billing-history
+    file: templates/L2/blocks/billing-history.tsx
+    data_source: listBillingEvents (operationId)
+
+# ─── L3 pages catalog ────────────────────────────────────────────────────────
+l3_pages:
+  - id: pricing-page
+    file: templates/L3/pages/pricing-page/page.tsx
+    composites: [pricing-table, plan-comparison]

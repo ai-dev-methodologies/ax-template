@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "b54b14bda1fc7459c59a7566f677b952f1be95c879cf66fb3c10608c6dc35fe4"
-  rule_count: 77
+  source_concat_sha256: "dc8d6407e88e745ccde51f919708a340331056bfc20c5be6dabf5e1330fa8b48"
+  rule_count: 83
   generated_by: "practices-react/generate_agents.sh"
 ---
 
@@ -2045,6 +2045,152 @@ Sources:
 - [Vercel: bundle-preload](https://github.com/vercel-labs/agent-skills/blob/main/skills/react-best-practices/rules/bundle-preload.md)
 
 
+<!-- @source rules/business-registration-checksum-required.md -->
+
+---
+title: "Frontend must validate 사업자등록번호 (Business Registration Number) checksum using the NTS algorithm before accepting the value"
+rule_id: business-registration-checksum-required
+impact: HIGH
+impactDescription: "Accepting an invalid 사업자등록번호 causes tax-invoice issuance failures (세금계산서 오류) and B2B billing rejections; the NTS (국세청) algorithm is deterministic and must be applied client-side for immediate feedback"
+tags:
+  - form-validation
+  - business-registration
+  - korean-compliance
+  - checksum
+  - b2b
+applicable_to:
+  - react
+  - nextjs
+provenance_class: locked_constraint
+protects_template_id: templates/L1/components/business-registration-input.tsx
+failing_fixture_path: practices/evals/fixtures/business-registration-checksum/fail_invalid_checksum/
+spec_ref: "specs/identity-verification-l0.yaml"
+verification:
+  type: review
+  status: manual
+  notes: "Component test: validateBusinessRegistration() from business-registration-input.tsx must be called in onBlur or onSubmit with all BRN inputs. Static check: any <input name='businessNo' | name='brn' | name='사업자등록번호'> must have an onBlur or onChange handler that calls validateBusinessRegistration."
+evidence:
+  - source_type: external
+    citation: "국세청 사업자등록번호 검증 알고리즘 — 승수 [1,3,7,1,3,7,1,3,5]; 9번째 자리는 floor(5×d9/10) + (5×d9)%10 처리; 체크자리 = (10 - sum%10) % 10"
+    url: "https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2227&cntntsId=7870"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "행정안전부 공공데이터포털 — 사업자 등록 정보 공개 데이터셋: https://www.data.go.kr/data/15081808/fileData.do"
+    url: "https://www.data.go.kr/data/15081808/fileData.do"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "국세청 전자세금계산서 발행 규정 — 사업자등록번호 정확성 필수: 오류 번호로 발행된 세금계산서는 국세청 수령 거부"
+    url: "https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2390"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## Frontend must validate 사업자등록번호 checksum using the NTS algorithm before submitting
+
+**Impact: HIGH — The Korean National Tax Service (NTS, 국세청) rejects tax invoices (세금계산서) issued with invalid 사업자등록번호. Client-side checksum validation provides immediate feedback and prevents backend round-trips for deterministically invalid numbers.**
+
+### Algorithm (국세청 공식 — multiplier sequence [1,3,7,1,3,7,1,3,5])
+
+The 10-digit 사업자등록번호 (format: XXX-XX-XXXXX) uses a weighted checksum:
+
+```
+weights = [1, 3, 7, 1, 3, 7, 1, 3, 5]
+sum  = Σ(digits[i] × weights[i]) for i = 0..7
+sum += floor(digits[8] × 5 / 10)   // 9th digit: integer part
+sum += (digits[8] × 5) % 10        // 9th digit: remainder part (special case)
+checkDigit = (10 - (sum % 10)) % 10
+valid = (checkDigit === digits[9])
+```
+
+**Note:** A valid checksum does not confirm the business is currently registered. Server-side NTS API verification (`사업자등록증명원 API`) is required for live status checks.
+
+### The violation — input without checksum validation
+
+```tsx
+// ❌ WRONG — accepts any 10-digit string; invalid BRNs cause downstream failures
+function BusinessRegistrationForm() {
+  const [brn, setBrn] = useState('')
+  return (
+    <form onSubmit={submitTaxInvoice}>
+      {/* VIOLATION: no validateBusinessRegistration() call before submit */}
+      <input
+        name="businessNo"
+        value={brn}
+        onChange={e => setBrn(e.target.value)}
+        placeholder="000-00-00000"
+      />
+      <button type="submit">세금계산서 발행</button>
+    </form>
+  )
+}
+```
+
+### Correct — checksum validated on blur and on submit
+
+```tsx
+// ✅ CORRECT — use the L1 primitive with built-in NTS checksum
+import BusinessRegistrationInput, {
+  validateBusinessRegistration
+} from 'templates/L1/components/business-registration-input'
+
+function BusinessRegistrationForm() {
+  const [brn, setBrn] = useState('')
+  const [brnError, setBrnError] = useState<string | null>(null)
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    try {
+      if (!validateBusinessRegistration(brn)) {
+        setBrnError('유효하지 않은 사업자등록번호입니다.')
+        return
+      }
+    } catch {
+      setBrnError('10자리 숫자로 입력해 주세요.')
+      return
+    }
+    submitTaxInvoice(brn)
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* CORRECT: L1 primitive validates checksum on blur automatically */}
+      <BusinessRegistrationInput
+        value={brn}
+        onChange={setBrn}
+        errorMessage={brnError ?? undefined}
+      />
+      <button type="submit">세금계산서 발행</button>
+    </form>
+  )
+}
+```
+
+### Public fixture data (verified via 국세청 + data.go.kr)
+
+The following business registration numbers have been verified against the NTS algorithm. See `practices/evals/fixtures/business-registration-checksum/pass/` for fixture files.
+
+| 사업자등록번호 | 검증 결과 | 출처 |
+|---|---|---|
+| 124-81-00998 | VALID | Samsung Electronics Co., Ltd. (공시 자료) |
+| 120-81-47521 | VALID | Kakao Corp. (공시 자료) |
+| 220-81-62517 | VALID | NAVER Corp. (공시 자료) |
+| 107-86-14075 | VALID | LG Electronics Inc. (공시 자료) |
+| 120-81-20653 | VALID | Hyundai Motor Company (공시 자료) |
+
+All numbers are publicly registered companies with filings in the Korean business registry.
+Algorithm reference: https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2227&cntntsId=7870
+
+## Failing fixture
+
+See: `practices/evals/fixtures/business-registration-checksum/fail_invalid_checksum/`
+— Same public BRNs with the last digit mutated; `validateBusinessRegistration()` returns `false`.
+
+See: `practices/evals/fixtures/business-registration-checksum/fail_format_violation/`
+— Non-digit input and wrong-length inputs; `validateBusinessRegistration()` throws `FormatViolationError`.
+
+Reference: [국세청 사업자등록번호 검증 알고리즘](https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2227&cntntsId=7870)
+
+
 <!-- @source rules/client-event-listeners.md -->
 
 ---
@@ -2798,6 +2944,319 @@ The `onCompositionEnd` pattern is also required for Chinese (Pinyin/Zhuyin) and 
 Reference: [MDN Web Docs — CompositionEvent](https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent)
 
 Reference: [W3C UI Events §CompositionEvent](https://www.w3.org/TR/uievents/#events-composition-types)
+
+
+<!-- @source rules/currency-amount-precision-explicit.md -->
+
+---
+title: "All monetary amounts in billing UI must be displayed via CurrencyFormatter using integer minor-unit values; raw number display and float arithmetic are prohibited"
+rule_id: currency-amount-precision-explicit
+impact: CRITICAL
+impactDescription: "Displaying monetary amounts as raw numbers (e.g., 1000 instead of ₩1,000) or converting minor units to float before display silently misrepresents prices. Users may see ₩100,000 displayed as 100000 or $9.99 displayed as $10.00 due to float rounding."
+tags:
+  - billing
+  - currency
+  - precision
+  - integer-minor-units
+  - display
+applicable_to:
+  - react
+  - nextjs
+provenance_class: internal_design
+protects_template_id: templates/L1/components/currency-input.tsx
+failing_fixture_path: practices-react/evals/fixtures/currency-amount-precision-explicit/
+spec_ref: "specs/billing-frontend-l0.yaml#BILLING-FE-001"
+verification:
+  type: script
+  notes: |
+    ESLint rule (custom): no-raw-billing-amount
+    Detects: numeric billing amount literals rendered directly in JSX without CurrencyFormatter.
+    Detects: amount / 100, amount * 0.01, parseFloat(amount), Number(amount).toFixed(2)
+    in billing component files.
+    Failing fixture: a PricingCard that renders {plan.amount} directly in JSX.
+evidence:
+  - source_type: upstream_id
+    upstream_id: stripe-billing-2026-05
+    section: "Amounts and currencies"
+    quote: "All amounts are stored in the smallest currency unit (e.g., 100 cents to charge $1.00). For zero-decimal currencies such as JPY or KRW, use the amount directly."
+  - source_type: upstream_id
+    upstream_id: toss-billing-2026-05
+    section: "금액 단위"
+    quote: "amount 필드는 항상 정수(원 단위)로 전달합니다. 소수점 금액은 허용하지 않습니다."
+  - source_type: external
+    citation: "WCAG 2.2 SC 1.3.3 Sensory Characteristics: Instructions do not rely solely on sensory characteristics. Formatted currency labels (₩10,000) are more accessible than raw numbers (10000) because screen readers announce the currency symbol."
+    url: "https://www.w3.org/WAI/WCAG22/Understanding/sensory-characteristics.html"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## Monetary amounts must use CurrencyFormatter — never raw display
+
+**Impact: CRITICAL — Raw number display of minor-unit amounts misrepresents prices to users. `10000` KRW displayed as `10000` looks like 10,000 but with no currency symbol; `999` USD cents displayed as `999` looks like $999 instead of $9.99. All billing UI must use `formatCurrencyAmount()` from `@/templates/L1/components/currency-input`.**
+
+### What CurrencyFormatter handles
+
+| Amount (long, minor units) | Currency | Locale | Displayed |
+|---|---|---|---|
+| `10000` | `KRW` | `ko-KR` | `₩10,000` |
+| `999` | `USD` | `en-US` | `$9.99` |
+| `450` | `EUR` | `de-DE` | `4,50 €` |
+| `0` | `KRW` | `ko-KR` | `₩0` |
+
+### Incorrect — raw number display
+
+```tsx
+// ❌ WRONG: raw integer, no currency symbol, wrong scale for multi-decimal currencies
+function PricingCard({ plan }: { plan: Plan }) {
+  return (
+    <div>
+      <span>{plan.amount}</span>  {/* → "10000" — looks like ₩10,000 but no symbol */}
+      <span>{plan.amount / 100}</span>  {/* ← VIOLATION: float arithmetic */}
+      <span>{(plan.amount / 100).toFixed(2)}</span>  {/* ← VIOLATION: float */}
+    </div>
+  )
+}
+```
+
+### Incorrect — float arithmetic before display
+
+```tsx
+// ❌ WRONG: parseFloat / Number conversion bypasses integer guarantees
+const displayAmount = parseFloat(plan.amount.toString())  // ← VIOLATION
+const displayAmount = Number(plan.amount) / 100  // ← VIOLATION
+```
+
+### Correct — CurrencyFormatter
+
+```tsx
+// ✅ CORRECT: always via formatCurrencyAmount
+import { formatCurrencyAmount } from '@/templates/L1/components/currency-input'
+
+interface Plan {
+  amount: number  // long integer minor units from API
+  currency: string
+}
+
+function PricingCard({ plan }: { plan: Plan }) {
+  const displayPrice = formatCurrencyAmount(plan.amount, plan.currency, 'ko-KR')
+
+  return (
+    <div>
+      <span aria-label={`월 ${displayPrice}`}>{displayPrice}</span>
+    </div>
+  )
+}
+```
+
+### Correct — currency-input component (interactive)
+
+```tsx
+// ✅ CORRECT: use CurrencyInput for editable amount fields
+import CurrencyInput from '@/templates/L1/components/currency-input'
+
+function PlanForm() {
+  const [amount, setAmount] = useState<number>(0)  // minor units
+
+  return (
+    <CurrencyInput
+      value={amount}
+      currency="KRW"
+      locale="ko-KR"
+      onChange={(val) => setAmount(val)}  // val is always long integer
+    />
+  )
+}
+```
+
+## No-raw-billing-amount ESLint rule (custom)
+
+Detects the following patterns in billing component files:
+
+| Pattern | Violation |
+|---|---|
+| `{plan.amount}` in JSX | ✅ raw render |
+| `{invoice.amountDue}` in JSX | ✅ raw render |
+| `plan.amount / 100` | ✅ float arithmetic |
+| `parseFloat(amount)` | ✅ float conversion |
+| `Number(amount).toFixed(2)` | ✅ float formatting |
+| `formatCurrencyAmount(amount, ...)` | ✅ correct — no violation |
+
+## Failing fixture
+
+See: `practices-react/evals/fixtures/currency-amount-precision-explicit/fail_raw_amount/PricingCardRawAmount.tsx` — a PricingCard that renders `{plan.amount}` directly.
+
+See: `practices-react/evals/fixtures/currency-amount-precision-explicit/pass_formatted_amount/PricingCardFormatted.tsx` — correct usage via `formatCurrencyAmount`.
+
+
+<!-- @source rules/impersonation-banner-required-when-acting-as-other-user.md -->
+
+---
+title: "ImpersonationBanner must render whenever session.actingAs is non-null"
+rule_id: impersonation-banner-required-when-acting-as-other-user
+impact: HIGH
+impactDescription: "Operating as another user without a visible ImpersonationBanner is a security vulnerability: the operator has no persistent visual signal of their elevated context, increasing the risk of accidental data modification or unauthorized action that is attributed to the wrong identity in audit logs."
+tags:
+  - security
+  - impersonation
+  - admin
+  - a11y
+  - l2-block
+applicable_to:
+  - react
+  - nextjs
+provenance_class: internal_design
+protects_template_id: templates/L2/blocks/impersonation-banner.tsx
+failing_fixture_path: practices-react/evals/fixtures/impersonation-banner-required-when-acting-as-other-user/
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-SECURITY-IMPERSONATION-001"
+verification:
+  type: script
+  status: active
+  notes: "The fixture runner checks canonical session.actingAs mutation patterns (direct assignment, immutable update, any helper returning {actingAs}) without a co-located <ImpersonationBanner>. The fail_helper_renamed_runAsUser fixture specifically validates that the rule is NOT bypassable by renaming the helper function."
+evidence:
+  - source_type: external
+    citation: "OWASP Session Management Cheat Sheet: Admin impersonation sessions must be visually distinct and audited; the impersonated identity must always be visible to the operator."
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A): Information, structure, and relationships conveyed through presentation are also available in text. A banner conveying impersonation context must be programmatically determinable."
+    url: "https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html"
+    quoted_at: "2026-05-18"
+  - upstream_id: wcag-22-techniques-2026-05
+    section: "SC 4.1.3 Status Messages — aria-live regions"
+    quote: "status messages can be programmatically determined through role or properties so they can be presented by assistive technologies without receiving focus"
+decided_at: "2026-05-18"
+---
+
+## ImpersonationBanner must render whenever session.actingAs is non-null
+
+**Impact: HIGH — Silently acting as another user without a banner is a security vulnerability. Every operator session with `session.actingAs !== null` must render `<ImpersonationBanner>`.**
+
+### Why this rule exists
+
+Admin impersonation is a high-privilege action. When an operator is viewing or modifying data as another user, this context must be:
+
+1. **Persistently visible** — the operator always sees who they are acting as.
+2. **Programmatically determinable** (WCAG 1.3.1) — the banner is machine-readable.
+3. **Auditable** — the impersonation state is bound to the canonical `session.actingAs` field, not an implicit transient.
+
+The rule fires on the **canonical session state mutation**, not on a specific helper function name. This means renaming `assumeUserId()` to `runAsUser()` or any other name does not bypass the rule.
+
+### The violation — acting-as without banner (direct assignment)
+
+```typescript
+// ❌ WRONG — sets session.actingAs without rendering ImpersonationBanner
+export async function assumeUser(userId: string) {
+  // VIOLATION: canonical actingAs field set; no <ImpersonationBanner> in caller tree
+  session.actingAs = userId
+  return session
+}
+```
+
+### The violation — helper rename bypass (Critic Soft Suggestion 2 — BLOCKED)
+
+```typescript
+// ❌ WRONG — renamed helper does NOT bypass the rule
+// The rule matches {actingAs: ...} return shape, not the function name.
+export function runAsUser(userId: string) {
+  // VIOLATION: returns object with actingAs field without banner requirement met
+  return { ...currentSession, actingAs: userId }
+}
+```
+
+### The violation — immutable update without banner
+
+```typescript
+// ❌ WRONG — spreading {actingAs: id} is also a canonical mutation
+const nextSession = { ...session, actingAs: targetUserId }
+// VIOLATION: nextSession.actingAs is non-null; banner not rendered
+router.push('/admin/dashboard')
+```
+
+### Correct — any helper name, banner always present
+
+```typescript
+// ✅ CORRECT — helper name is irrelevant; banner is wired at the layout level
+// Helper (any name):
+export function runAsUser(userId: string) {
+  return { ...currentSession, actingAs: userId }
+}
+
+// Root layout or admin layout (L4):
+import ImpersonationBanner from 'templates/L2/blocks/impersonation-banner'
+
+export default async function AdminLayout({ children }) {
+  const session = await getAdminSession()
+  return (
+    <>
+      {/* Banner renders iff session.actingAs is non-null */}
+      <ImpersonationBanner
+        session={session}
+        onEndImpersonation={endImpersonation}
+      />
+      {children}
+    </>
+  )
+}
+```
+
+### Correct — server component with cookie-driven session
+
+```typescript
+// ✅ CORRECT — server component reads session from cookie; banner in layout
+// lib/admin-session.ts:
+export async function getAdminSession(): Promise<AdminSession> {
+  const cookie = cookies().get('admin-session')?.value
+  return cookie ? JSON.parse(decrypt(cookie)) : { actingAs: null }
+}
+
+// app/admin/layout.tsx:
+export default async function AdminLayout({ children }) {
+  const session = await getAdminSession()
+  return (
+    <>
+      <ImpersonationBanner session={session} />
+      <main id="main">{children}</main>
+    </>
+  )
+}
+```
+
+### Rule detection scope
+
+The fixture scanner detects the following patterns as violations (any file under `templates/` or `app/admin/`):
+
+| Pattern | Detected | Explanation |
+|---|---|---|
+| `session.actingAs = userId` | ✅ | Direct assignment to canonical field |
+| `{ ...session, actingAs: id }` | ✅ | Immutable update with actingAs key |
+| `return { actingAs: userId }` | ✅ | Helper returning actingAs shape |
+| Missing `<ImpersonationBanner>` in file | ✅ | Banner not co-located with actingAs set |
+| `assumeUserId(id)` without banner | ✅ | Function name irrelevant |
+| `runAsUser(id)` without banner | ✅ | Function name irrelevant |
+
+The scanner does NOT fire on files that:
+- Only read `session.actingAs` (guard checks, `if (session.actingAs)`)
+- Import and render `<ImpersonationBanner>` in the same file
+- Belong to the test/fixture directories themselves
+
+### Why helper rename bypass is impossible
+
+The rule matches the **shape** of the session mutation, not the function name:
+
+```
+// All of these trigger the rule (different names, same shape):
+session.actingAs = id           ← direct
+{ ...s, actingAs: id }          ← spread
+{ actingAs: id, ...other }      ← leading key
+return { actingAs: userId }     ← returned object
+```
+
+Renaming `assumeUserId` → `runAsUser` → `loginAsUser` does not change the
+`actingAs` field in the returned/assigned object. The rule stays intact.
+
+Reference: [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
+
+Reference: [templates/L2/blocks/impersonation-banner.tsx](../../templates/L2/blocks/impersonation-banner.tsx)
 
 
 <!-- @source rules/js-batch-dom-css.md -->
@@ -5176,6 +5635,191 @@ Sources for this rule:
 - [React 19 — cache() (for isolation context)](https://react.dev/reference/react/cache)
 
 
+<!-- @source rules/no-billing-cross-import-from-payment.md -->
+
+---
+title: "billing UI components must not import from payment UI components and vice versa; the L4/billing ↔ L4/payment boundary is enforced by ESLint"
+rule_id: no-billing-cross-import-from-payment
+impact: HIGH
+impactDescription: "Cross-importing between billing and payment UI components couples two separate checkout flows. A payment UI change (e.g., PaymentMethodSelector) should never force billing UI changes (e.g., PricingTable). Subscription UI (billing) and one-shot checkout UI (payment) are independent user flows."
+tags:
+  - billing
+  - payment
+  - boundary
+  - cross-import
+  - l4
+applicable_to:
+  - react
+  - nextjs
+provenance_class: internal_design
+protects_template_id: templates/L4/billing/app/(billing)/subscriptions/page.tsx
+failing_fixture_path: practices-react/evals/fixtures/no-billing-cross-import-from-payment/
+spec_ref: "specs/billing-frontend-l0.yaml#BILLING-FE-004"
+verification:
+  type: script
+  notes: |
+    ESLint rule (import/no-restricted-paths or custom):
+    L4/billing/** must not import from L4/payment/**
+    L4/payment/** must not import from L4/billing/**
+    L2/billing/** must not import from L2/payment/**
+    Shared L1 and L2 neutral blocks are allowed from both.
+    Failing fixture: a billing page importing PaymentMethodSelector from payment UI.
+evidence:
+  - source_type: external
+    citation: "Domain-Driven Design (Evans): Bounded contexts have explicit boundaries. UI components are part of the presentation layer of a bounded context; cross-importing presentation components couples contexts at the view layer."
+    url: "https://martinfowler.com/bliki/BoundedContext.html"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Next.js App Router documentation: Route groups allow separate domain-specific layouts. L4/billing/(billing)/** and L4/payment/(payment)/** are intentionally separate route groups with separate layouts."
+    url: "https://nextjs.org/docs/app/building-your-application/routing/route-groups"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## billing UI ↔ payment UI cross-import is prohibited
+
+**Impact: HIGH — billing and payment are separate UI flows. `L4/billing` handles subscription lifecycle (pricing plans, subscription management, invoices). `L4/payment` handles one-shot checkout (payment method entry, single charge confirmation). Cross-importing couples these flows at the component level.**
+
+### Allowed import directions
+
+```
+L1 components (currency-input, number-input, range-picker)
+    ↑ allowed from both L4/billing and L4/payment
+L2 neutral blocks (pagination, data-table, form elements)
+    ↑ allowed from both
+
+L4/billing/* → L2/billing blocks only → L1
+L4/payment/* → L2/payment blocks only → L1
+
+L4/billing/* ↛ L4/payment/*  (FORBIDDEN)
+L4/payment/* ↛ L4/billing/*  (FORBIDDEN)
+```
+
+### Incorrect — billing page imports payment component
+
+```tsx
+// ❌ WRONG: billing subscription page importing from payment domain
+// app/(billing)/subscriptions/new/page.tsx
+
+import { PaymentMethodSelector } from '@/templates/L4/payment/components/PaymentMethodSelector'  // ← VIOLATION
+import { CheckoutButton } from '@/app/(payment)/checkout/CheckoutButton'  // ← VIOLATION
+
+export default function NewSubscriptionPage() {
+  return (
+    <div>
+      <PlanSelector />
+      <PaymentMethodSelector />  {/* billing should not embed payment UI */}
+    </div>
+  )
+}
+```
+
+### Incorrect — payment checkout imports billing plan data
+
+```tsx
+// ❌ WRONG: payment checkout embedding billing plan display
+// app/(payment)/checkout/page.tsx
+
+import PricingTable from '@/templates/L2/blocks/pricing-table'  // ← VIOLATION if billing-specific
+import { SubscriptionSummary } from '@/templates/L4/billing/components/SubscriptionSummary'  // ← VIOLATION
+
+export default function CheckoutPage() {
+  return (
+    <div>
+      <SubscriptionSummary />  {/* payment checkout should not know billing internals */}
+    </div>
+  )
+}
+```
+
+### Correct — separate flows, independent components
+
+```tsx
+// ✅ CORRECT: billing subscription page only uses billing/L1/L2 imports
+// templates/L4/billing/app/(billing)/subscriptions/new/page.tsx
+
+import { PricingTable } from '@/templates/L2/blocks/pricing-table'
+import { CurrencyInput } from '@/templates/L1/components/currency-input'
+// No payment imports
+
+export default function NewSubscriptionPage() {
+  return (
+    <div>
+      <h1>구독 신청</h1>
+      <PricingTable plans={[]} />
+      {/* User selects plan → POST /api/subscriptions */}
+      {/* Payment method handled separately by payment domain */}
+    </div>
+  )
+}
+```
+
+```tsx
+// ✅ CORRECT: payment checkout only uses payment/L1/L2 imports
+// app/(payment)/checkout/page.tsx
+
+import { CardNumberInput } from '@/templates/L2/blocks/card-number-input'
+// No billing imports
+
+export default function CheckoutPage() {
+  return (
+    <div>
+      <h1>결제</h1>
+      <CardNumberInput />
+    </div>
+  )
+}
+```
+
+### Coordination via URLs, not imports
+
+If a user flow moves from billing (select plan) → payment (enter card), use **navigation** not imports:
+
+```tsx
+// ✅ CORRECT: billing page navigates to payment flow via URL
+import { useRouter } from 'next/navigation'
+
+function PlanSelectButton({ planId }: { planId: string }) {
+  const router = useRouter()
+  const handleSelect = () => {
+    // Navigate to payment flow — no payment component import needed
+    router.push(`/payment/checkout?planId=${planId}&flow=subscription`)
+  }
+  return <button onClick={handleSelect}>구독 시작</button>
+}
+```
+
+## ESLint enforcement (import/no-restricted-paths)
+
+```js
+// eslint.config.js — add to billing context
+{
+  rules: {
+    'import/no-restricted-paths': ['error', {
+      zones: [
+        {
+          target: './templates/L4/billing',
+          from: './templates/L4/payment',
+          message: 'billing UI must not import from payment UI (§5.2.6 boundary)'
+        },
+        {
+          target: './app/(billing)',
+          from: './app/(payment)',
+          message: 'billing route group must not import from payment route group'
+        }
+      ]
+    }]
+  }
+}
+```
+
+## Failing fixture
+
+See: `practices-react/evals/fixtures/no-billing-cross-import-from-payment/fail_cross_import/NewSubscriptionPageCrossImport.tsx` — a billing page that imports `PaymentMethodSelector` from the payment domain.
+
+See: `practices-react/evals/fixtures/no-billing-cross-import-from-payment/pass_no_cross_import/NewSubscriptionPageClean.tsx` — correct billing page with no payment imports.
+
+
 <!-- @source rules/no-hardcoded-user-facing-string-in-l4.md -->
 
 ---
@@ -5409,6 +6053,160 @@ During SP8-SP11 (L4 domain implementation) all cross-cutting concerns (auth stat
 Reference: [Next.js App Router — route colocation](https://nextjs.org/docs/app/building-your-application/routing/colocation)
 
 Reference: [Failing fixture: practices/evals/fixtures/no-l4-cross-import/fail_cross_import/PaymentPage.tsx](practices/evals/fixtures/no-l4-cross-import/fail_cross_import/PaymentPage.tsx)
+
+
+<!-- @source rules/no-rrn-collection-without-legal-basis.md -->
+
+---
+title: "Frontend components must not collect or display raw RRN (주민등록번호) fields without an explicit legal-basis disclosure gate"
+rule_id: no-rrn-collection-without-legal-basis
+impact: CRITICAL
+impactDescription: "RRN is Sensitive Personal Information under 개인정보보호법 §24-1; collecting it in a frontend form without explicit statutory authorization and a dedicated consent gate is a compliance violation"
+tags:
+  - privacy
+  - pii
+  - rrn
+  - identity
+  - forms
+  - locked_constraint
+  - korean-compliance
+applicable_to:
+  - react
+  - nextjs
+provenance_class: locked_constraint
+protects_template_id: templates/L2/blocks/phone-verification-panel.tsx
+failing_fixture_path: practices/evals/fixtures/no-rrn-collection-without-legal-basis/fail_rrn_no_legal_basis/
+spec_ref: "specs/identity-verification-l0.yaml#IDV-CALLBACK-003"
+verification:
+  type: review
+  status: manual
+  notes: "Static check: grep -r 'name=\"rrn\"\\|name=\"주민\\|name=\"residentReg\\|id=\"rrn\"\\|placeholder.*000000-' templates/ must return zero matches. If phone-based identity is needed, use PhoneVerificationPanel which returns CI only. The rule matcher excludes: ci, di, verifiedIdentityNumber, externalId."
+evidence:
+  - source_type: external
+    citation: "개인정보보호법 제24조 제1항 — 주민등록번호 수집은 법령에 특별한 규정이 있는 경우 외에 원칙 금지"
+    url: "https://www.law.go.kr/법령/개인정보보호법"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "주민등록법 제7조의5 — 정보통신서비스 제공자는 원칙적으로 주민등록번호를 수집·이용할 수 없음"
+    url: "https://www.law.go.kr/법령/주민등록법"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "KISA 본인인증 가이드라인 — PhoneVerificationPanel(PASS/KCB)로 CI/DI 수집; RRN 대체 방법"
+    url: "https://www.kisa.or.kr/2060301/form?postSeq=14&lang_type=KO"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## Frontend components must not collect raw RRN (주민등록번호) without legal-basis disclosure
+
+**Impact: CRITICAL — 개인정보보호법 §24-1 prohibits collection of the Resident Registration Number without explicit statutory authorization. Frontend forms that include an RRN input field — even masked — constitute unauthorized collection.**
+
+This rule is a **locked constraint**: it derives from statute and cannot be relaxed by project-level override.
+
+This rule does NOT enable RRN collection. It BLOCKS unsafe RRN collection patterns.
+
+### The violation — form with RRN input
+
+```tsx
+// ❌ WRONG — RRN collected in a standard form field
+function UserRegistrationForm() {
+  return (
+    <form>
+      <input name="name" />
+      <input name="email" type="email" />
+      {/* VIOLATION: RRN field — 개인정보보호법 §24 breach */}
+      <input
+        name="rrn"
+        type="text"
+        placeholder="000000-0000000"
+      />
+      <input
+        name="주민등록번호"
+        type="text"
+      />
+      <button type="submit">가입</button>
+    </form>
+  )
+}
+```
+
+### Correct — use PhoneVerificationPanel with CI/DI instead
+
+```tsx
+// ✅ CORRECT — KISA 본인인증 returns CI token; no RRN collected
+import PhoneVerificationPanel from 'templates/L2/blocks/phone-verification-panel'
+
+function OnboardingPage() {
+  const [verificationResult, setVerificationResult] = useState(null)
+
+  return (
+    <div>
+      {/* CORRECT: panel returns CI only — never RRN */}
+      <PhoneVerificationPanel
+        provider="pass"
+        onRequestVerification={(carrier, provider) => {
+          // Launch provider popup; backend callback persists VerifiedIdentity with CI/DI
+          launchVerificationPopup(carrier, provider)
+        }}
+        onVerified={(result) => {
+          // result.ci is the cross-service unique identifier — not the RRN
+          setVerificationResult(result)
+        }}
+      />
+    </div>
+  )
+}
+```
+
+### If a statutory exception exists (rare)
+
+```tsx
+// ✅ CORRECT (statutory exception — very rare) — requires legal-basis disclosure UI
+import { LegalBasisGate } from 'templates/L2/blocks/legal-basis-gate'
+
+function FinancialKycForm() {
+  return (
+    <LegalBasisGate
+      law="금융실명거래 및 비밀보장에 관한 법률 §3"
+      purpose="금융거래 실명확인 — 법령상 수집 의무"
+      onConsentGranted={() => {/* show RRN input only after explicit consent */}}
+    />
+  )
+}
+```
+
+### Rule matcher (fields that trigger this rule)
+
+Pattern (fires on `name` or `id` attributes):
+```
+rrn, 주민등록번호, 주민번호, residentRegistrationNumber, socialSecurityNumber,
+juminNumber, rrNum, id_number (context: Korean identity)
+```
+
+Exclusions (false-positive guard — these DO NOT trigger the rule):
+```
+ci, di, verifiedIdentityNumber, connectingInfo, duplicateInfo, externalId
+```
+
+### Why CI/DI is the correct alternative
+
+KISA 본인인증 (PASS/KCB) provides:
+- **CI** (Connecting Information): 64-byte hex token, cross-service unique person identifier
+- **DI** (Duplicate Information): 64-byte hex token, per-service unique person identifier
+
+These replace the RRN for identity correlation. Use `<PhoneVerificationPanel>` + backend
+`identity-verification/` domain (SP31).
+
+## Failing fixture
+
+See: `practices/evals/fixtures/no-rrn-collection-without-legal-basis/fail_rrn_no_legal_basis/`
+— A React form component with `name="rrn"` input. Static analysis grep catches the pattern.
+
+Backend companion rule: `practices/rules/no-rrn-collection-without-legal-basis.md`
+
+Reference: [개인정보보호법 제24조](https://www.law.go.kr/법령/개인정보보호법)
+
+Reference: [KISA 본인인증 가이드라인](https://www.kisa.or.kr/2060301/form?postSeq=14&lang_type=KO)
 
 
 <!-- @source rules/no-rrn-in-form-fields.md -->
@@ -8362,6 +9160,183 @@ useEffect(() => {
 
 Sources:
 - [Vercel: rerender-use-ref-transient-values](https://github.com/vercel-labs/agent-skills/blob/main/skills/react-best-practices/rules/rerender-use-ref-transient-values.md)
+
+
+<!-- @source rules/saved-view-must-be-url-state-or-server-persisted.md -->
+
+---
+title: "SavedView persistence must be 'url' or 'server' — localStorage is forbidden"
+rule_id: saved-view-must-be-url-state-or-server-persisted
+impact: HIGH
+impactDescription: "Storing table saved-view config in localStorage makes views non-shareable, non-bookmarkable, and lost on incognito/different browser. URL state enables link-sharing; server persistence enables cross-device sync. localStorage silently breaks UX expectations."
+tags:
+  - url-state
+  - saved-view
+  - table
+  - l2-block
+applicable_to:
+  - react
+  - nextjs
+provenance_class: internal_design
+protects_template_id: templates/L2/blocks/saved-view.tsx
+failing_fixture_path: practices/evals/fixtures/saved-view-must-be-url-state-or-server-persisted/fail_saved_view_localstorage_only/
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-URL-STATE-001"
+verification:
+  type: review
+  status: manual
+  notes: "Any component using SavedView or managing table view config must route persistence through URL search params or a server API endpoint. Usage of localStorage.setItem / localStorage.getItem for view config triggers this rule."
+evidence:
+  - source_type: external
+    citation: "web.dev URL as state — encoding application state in the URL makes it shareable, bookmarkable, and resilient to session loss. localStorage state is invisible to the server and breaks link sharing."
+    url: "https://web.dev/articles/url-state"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Next.js useSearchParams — persisting filter/view state in search params allows deep-linking to exact table state without a database round-trip"
+    url: "https://nextjs.org/docs/app/api-reference/functions/use-search-params"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "MDN Web Docs — localStorage: data is scoped to the origin and session, not shareable via URL, invisible to server, and cleared in incognito mode — making it unsuitable for collaborative or cross-device view state"
+    url: "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## SavedView persistence must be 'url' or 'server' — localStorage is forbidden
+
+**Impact: HIGH — localStorage-based saved views are non-shareable, non-bookmarkable, and silently fail in incognito/other-browser scenarios. Enforcement is binary: either URL state or server API.**
+
+### The violation — localStorage bypass
+
+```typescript
+// ❌ WRONG — view config in localStorage: not shareable, not bookmarkable
+"use client";
+import { SavedView } from "templates/L2/blocks/saved-view";
+
+export function ProductTableToolbar() {
+  const [views, setViews] = React.useState(() => {
+    // VIOLATION: localStorage not a valid persistence mode
+    const stored = localStorage.getItem("product-table-views");
+    return stored ? JSON.parse(stored) : [];
+  });
+
+  function handleSave(name: string, config: SavedViewConfig) {
+    const updated = [...views, { id: crypto.randomUUID(), name, config, persistence: "localStorage" }];
+    setViews(updated);
+    // VIOLATION: writing view config to localStorage
+    localStorage.setItem("product-table-views", JSON.stringify(updated));
+  }
+
+  return <SavedView items={views} onSave={handleSave} onLoad={applyView} onDelete={deleteView} />;
+}
+```
+
+### Correct — URL state (shareable, no server round-trip)
+
+```typescript
+// ✅ CORRECT — persistence: 'url' — view config encoded in URL search params
+"use client";
+import { useRouter, useSearchParams } from "next/navigation";
+import { SavedView, type SavedViewConfig } from "templates/L2/blocks/saved-view";
+
+export function ProductTableToolbar() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Views are bookmarks: each is a URL with ?view=<base64-config>
+  const views = parseViewsFromSearchParams(searchParams);
+
+  function handleSave(name: string, config: SavedViewConfig) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("savedViews", encodeViews([...views, { id: crypto.randomUUID(), name, config }]));
+    router.push(`?${params.toString()}`);
+  }
+
+  return (
+    <SavedView
+      items={views.map(v => ({ ...v, persistence: "url" }))}  // persistence: 'url' ✅
+      onSave={handleSave}
+      onLoad={view => applyViewFromConfig(view.config, router)}
+      onDelete={id => removeViewFromUrl(id, router)}
+    />
+  );
+}
+```
+
+### Correct — server persistence (cross-device sync)
+
+```typescript
+// ✅ CORRECT — persistence: 'server' — stored in user preferences API
+"use client";
+import { SavedView } from "templates/L2/blocks/saved-view";
+import { useSavedViews, useCreateSavedView, useDeleteSavedView } from "@/lib/api/user-prefs";
+
+export function ProductTableToolbar() {
+  const { data: views } = useSavedViews("product-table");
+  const { mutate: createView } = useCreateSavedView();
+  const { mutate: deleteView } = useDeleteSavedView();
+
+  return (
+    <SavedView
+      items={(views ?? []).map(v => ({ ...v, persistence: "server" }))}  // persistence: 'server' ✅
+      onSave={(name, config) => createView({ table: "product-table", name, config })}
+      onLoad={applyView}
+      onDelete={id => deleteView(id)}
+    />
+  );
+}
+```
+
+### Persistence mode decision matrix
+
+| Scenario | Mode | Rationale |
+|---|---|---|
+| Public-facing table (shareable links) | `url` | URL encodes view; anyone with the link sees the same state |
+| Internal admin table (personal preferences) | `server` | Persists across devices; stored in user prefs API |
+| Quick layout tweak (no sharing needed) | `url` | Still shareable; zero server cost |
+| **Any case** | **NEVER `localStorage`** | Not shareable, not server-readable, lost in incognito |
+
+### Failing fixture
+
+`practices/evals/fixtures/saved-view-must-be-url-state-or-server-persisted/fail_saved_view_localstorage_only/`
+
+Contains a component that:
+1. Reads saved views from `localStorage.getItem`
+2. Writes saved views to `localStorage.setItem`
+3. Sets `persistence: 'localStorage'` (not a valid `SavedViewPersistence` type value)
+
+Running the fixture should cause ESLint to flag the localStorage usage.
+
+### TDD anchor
+
+`templates/_tests/saved-view-persistence.spec.ts` asserts:
+
+```typescript
+import { expect, test } from "vitest";
+
+test("SavedView persistence type excludes localStorage", () => {
+  // The SavedViewPersistence type must be 'url' | 'server' only
+  const urlView: import("../L2/blocks/saved-view").SavedViewPersistence = "url";
+  const serverView: import("../L2/blocks/saved-view").SavedViewPersistence = "server";
+  expect(urlView).toBe("url");
+  expect(serverView).toBe("server");
+  // TypeScript compile error if someone passes 'localStorage' — enforced at type level
+});
+
+test("SavedViewItem.persistence is not localStorage", () => {
+  const view = {
+    id: "1",
+    name: "My View",
+    config: { columns: ["id", "name"] },
+    persistence: "url" as const,
+  };
+  expect(view.persistence).toBe("url");
+  expect(view.persistence).not.toBe("localStorage");
+});
+```
+
+Reference: [web.dev — URL as state](https://web.dev/articles/url-state)
+
+Reference: [Next.js — useSearchParams](https://nextjs.org/docs/app/api-reference/functions/use-search-params)
 
 
 <!-- @source rules/server-after-nonblocking.md -->
