@@ -125,17 +125,20 @@ codified in TD-2026-05-21-024 (R8 SP43) — same precedent the `scheduled-task`
 L4 README relied on through R7.
 
 applied_recipes:
-  - internal-it  # verdict pending until SP46 — see _MANIFEST.yaml for active status
+  - api-gateway-relay  # R10 SP47 alphabetical insert — 2nd consumer of webhook L4
+  - internal-it
 
-The `applied_recipes:` key is **born** in R9 SP45b with the single entry
-`[internal-it]` (one simultaneous consumer at first-consumer arrival; alphabetical
-form). The inline M6 Architect-fix annotation `# verdict pending until SP46`
-makes the 3–9 day partial-tag desync window self-documenting for fork-receivers
-who inspect this README in isolation: per the PRD §6 partial-tag table, the
-key stays `[internal-it]` regardless of SP46 verdict outcome (recipe directory
-existence is the bind, not verdict-pass state); `_MANIFEST.yaml#active_recipes`
-membership reflects the verdict. `file-storage` and `practices` L4 READMEs
-remain key-less until *their* first consumers arrive (same precedent the
+The `applied_recipes:` key was **born** in R9 SP45b with the single entry
+`[internal-it]` (one simultaneous consumer at first-consumer arrival;
+alphabetical form). **R10 SP47 performs the first 2-element plural-list
+insertion** — `api-gateway-relay` inserts ABOVE `internal-it` alphabetically,
+making webhook L4 the FIRST L4 to acquire a 2nd consumer via plural-list
+alphabetical-append (R6 dual-form regex shape; proven across R6/R7/R8/R9 — no
+new fixture). This 2nd-consumer arrival RETROACTIVELY VALIDATES R9
+TD-2026-05-22-027 (c) two-consumer-signal gate (R9 internal-it = 1st shipped
+consumer; R10 api-gateway-relay = 2nd shipped consumer; see TD-2026-05-23-028).
+`file-storage` and `practices` L4 READMEs remain key-less until *their* first
+consumers arrive (same precedent the
 scheduler README relied on pre-R8).
 
 ## External evidence (verbatim, fetched 2026-05-22)

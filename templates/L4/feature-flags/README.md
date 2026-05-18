@@ -110,6 +110,7 @@ Use `FeatureFlagToggle` in admin UI:
 
 applied_recipe: saas-subscription
 applied_recipes:
+  - api-gateway-relay
   - b2b-admin
   - booking
   - lms

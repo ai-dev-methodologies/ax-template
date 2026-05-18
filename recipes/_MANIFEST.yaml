@@ -1,6 +1,6 @@
 schema_version: 1
-compatible_with_catalog_version: "v1.7.0-webhook-internal-it"
-generated_at: "2026-05-22"
+compatible_with_catalog_version: "v1.8.0-api-gateway-relay"
+generated_at: "2026-05-23"
 
 recipes:
   - pattern: saas-subscription
@@ -138,9 +138,37 @@ recipes:
       - scheduled-task
       - webhook
 
-# deferred_recipes: EMPTY post-R9 SP45b — R6 Synthesis-A trim of 4 deferred
-# recipes fully realized across R7 (community) + R8 (lms + cms) + R9 (internal-it).
-# See templates/DECISIONS.md TD-2026-05-22-026 for the queue-closure ADR.
-# Future R10+ deferred-recipe candidates land here when proposed by ralplan;
-# the queue starts EMPTY again from this point.
+  - pattern: api-gateway-relay
+    # R10 SP47: VOLUNTARY recipe addition (NOT a deferred-queue promotion —
+    # queue stays closed under all outcomes per Codex L Option (a) /
+    # TD-2026-05-23-029). Validates R9 TD-2026-05-22-027 (c) two-consumer-signal
+    # gate retroactively as the 2nd shipped consumer of webhook L4 (1st was
+    # R9 internal-it). Final status set by SP48 sealed verdict per PRD §6
+    # partial-tag table (degenerate at n=1):
+    #   1/1 PASS → status: active (this default value; tag v1.8.0-api-gateway-relay)
+    #   0/1 FAIL → SP47 reverted CLEAN (this row removed; deferred_recipes
+    #              STAYS [] per Codex L Option (a) — R11+ reintroduction
+    #              requires fresh evidence + explicit trigger).
+    status: active
+    display_name: "API Gateway Relay (Endpoint Registry + Signed Outbound Relay + Route Authz + Rate-Limit + Circuit Breaker)"
+    spec: specs/recipes/api-gateway-relay-recipe-l0.yaml
+    recipe_dir: recipes/api-gateway-relay
+    sealed_verdict: skills/_tests/sealed-verdict/api-gateway-relay-verdict.md
+    enabled_l4_domains:
+      - audit-log
+      - auth
+      - crud
+      - scheduled-task
+      - webhook
+
+# deferred_recipes: STAYS EMPTY post-R10 SP47 — Codex L Option (a) chosen
+# (clean-revert fail-state). The queue closed at R9 SP45b after the R6
+# Synthesis-A trim of 4 deferred recipes was fully realized across R7
+# (community) + R8 (lms + cms) + R9 (internal-it). R10 is a VOLUNTARY recipe
+# addition (api-gateway-relay) and does NOT re-open the queue under any
+# outcome: PASS keeps []; FAIL also keeps [] via clean revert. See
+# templates/DECISIONS.md TD-2026-05-23-028 + TD-2026-05-23-029.
+# Future R11+ deferred-recipe candidates land here only when proposed by
+# ralplan with fresh evidence + explicit trigger; the queue starts EMPTY
+# again from this point (no auto-resurrection of failed voluntary recipes).
 deferred_recipes: []

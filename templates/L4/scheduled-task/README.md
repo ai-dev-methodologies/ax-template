@@ -98,6 +98,7 @@ downstream consumers**, arriving together in the same atomic commit per
 `applied_recipes:` key birth below.
 
 applied_recipes:
+  - api-gateway-relay
   - cms
   - internal-it
   - lms
