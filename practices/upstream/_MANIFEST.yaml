@@ -295,3 +295,31 @@ snapshots:
     fetched_at: "2026-05-17T00:00:00Z"
     bytes: 5310
     sha: "39a54c9bc0d5eae337138bfb0a1221b8d37a61bda815f550c4bda52c88513cee"
+  - id: "opentelemetry-java-2026-05"
+    tier: 3
+    source: "https://opentelemetry.io/docs/languages/java/"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3313
+    sha: "5982908aff90c889bd72ad6fe8c204f10ae5df902338851d6c434dae2a83e3c7"
+  - id: "micrometer-2026-05"
+    tier: 3
+    source: "https://docs.micrometer.io/micrometer/reference/"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3823
+    sha: "67152da089d5b664a46c197b33855ca5b6ea9d292f3cd23d232b57cb18b0549c"
+  - id: "caffeine-2026-05"
+    tier: 3
+    source: "https://github.com/ben-manes/caffeine/wiki/Eviction"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4524
+    sha: "ecc9c5b4f98ca472a0c6f9d16668a473635054622ac320cd9422e24cbc4983dc"
+  - id: "spring-cache-2026-05"
+    tier: 3
+    source: "https://docs.spring.io/spring-framework/reference/integration/cache.html"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3660
+    sha: "8299f64806f1afc21194775a08206a02845225d79ab257dba3908d5a54bd8043"
