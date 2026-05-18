@@ -90,6 +90,7 @@ applied_recipes:
   - community
   - crm
   - e-commerce
+  - internal-it
   - lms
   - marketplace
   - saas-subscription

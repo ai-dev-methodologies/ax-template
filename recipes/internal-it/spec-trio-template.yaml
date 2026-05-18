@@ -1,0 +1,236 @@
+# spec-trio-template.yaml — internal-it
+#
+# Pre-filled Spec Trio fragments to copy into your project's specs/ directory
+# when implementing the internal-it recipe.
+#
+# Instructions:
+#   1. Copy this file to your project as specs/internal-it-l0.yaml
+#   2. Replace all <PLACEHOLDER> values with project-specific values
+#   3. Extend the items array with domain-specific requirements
+#   4. Ensure business_invariants from RECIPE.md are reflected as spec items
+#
+# This fragment composes the following L4 Spec Trios (reference, do not copy):
+#   - specs/crud-security.yaml
+#   - specs/audit-log-l0.yaml
+#   - specs/notification-l0.yaml
+#   - specs/scheduled-task-l0.yaml
+#   - specs/webhook-l0.yaml (NET-NEW in R9 SP45 — TD-2026-05-22-025)
+#   - specs/auth-asvs-l1.yaml
+
+schema_version: 1
+scope: "<YOUR_PROJECT>-internal-it"
+stack: "Spring Boot 3.2.x + React + ShedLock (or DB row + SELECT FOR UPDATE SKIP LOCKED) + HMAC-SHA256 (Mac SPI)"
+standard: "OWASP ASVS V4 + RFC 7807 + RFC 2104 (HMAC) + OWASP ASVS V13.2.6 (webhook payload authenticity)"
+applied_recipes:
+  - internal-it
+compatible_with_catalog_version: "v1.7.0-webhook-internal-it"
+
+items:
+  # ─── INTERNAL-IT-INV-001: ticket state transitions audit-logged ──────────
+  - id: "INTERNAL-IT-INV-001"
+    chapter: "AUDIT"
+    requirement: >
+      Every ticket state transition (OPEN → IN_PROGRESS → RESOLVED → CLOSED)
+      must produce an audit-log record containing operator_id, target_id,
+      before_status, and after_status.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+    notes: >
+      Test: PATCH /api/tickets/{id}/transition with new state → assert
+      audit_logs has matching row with action="ticket.state.changed" +
+      operator_id present + before/after.
+      Implementation: @Audited(action = "ticket.state.changed") on
+      TicketService.transition().
+
+  # ─── INTERNAL-IT-INV-002: SLA breach reminder uses scheduled-task lock ───
+  - id: "INTERNAL-IT-INV-002"
+    chapter: "SCHEDULER"
+    requirement: >
+      SLA breach reminders are emitted by a scheduled-task cron that acquires
+      the distributed lock before each tick AND is idempotent on the
+      (ticket_id, breach_threshold) key. Multi-node deployments must NOT emit
+      the same breach reminder twice within the lock window.
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/scheduled-task-l0.yaml#SCHED-LOCK-001"
+    notes: >
+      Test (positive): single-node cron trigger → breach reminder emitted once.
+      Test (negative): simulate concurrent multi-node trigger → only the lock
+      holder emits; other nodes skip on idempotency-key match.
+      Implementation: SlaBreachReminderTask wraps the scan loop in
+      LockingPolicy.tryAcquire("sla-breach-reminder", node-id); the inner
+      emit call short-circuits if the (ticket_id, breach_threshold) row has
+      been consumed already (SCHED-IDEMPOTENT-001).
+
+  # ─── INTERNAL-IT-INV-003: outbound webhook signed + retried ──────────────
+  - id: "INTERNAL-IT-INV-003"
+    chapter: "WEBHOOK"
+    requirement: >
+      Outbound webhook deliveries to external ITSM endpoints (Jira / ServiceNow
+      / PagerDuty / Slack-incoming / 네이버웍스 etc.) MUST carry an
+      X-Webhook-Signature header in the form sha256=<hex(HMAC-SHA256(secret,
+      timestamp + "." + body))> AND MUST be retried with exponential backoff
+      (30s × 2 multiplier up to 5 attempts) on transient failures before
+      transitioning to FAILED_PERMANENT.
+    test_method: "RestAssured integration test + WireMock for outbound capture"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/webhook-l0.yaml#WEBHOOK-SIGN-001"
+    notes: >
+      Test (positive): emit ticket.escalated → assert captured outbound POST has
+      valid X-Webhook-Signature for the per-endpoint secret + X-Webhook-Timestamp
+      + X-Webhook-Delivery-Id headers.
+      Test (negative): WireMock returns 503 twice → assert WebhookDelivery row
+      transitions to PENDING_RETRY with next_attempt_at growing 30s → 60s; 5
+      failures total → FAILED_PERMANENT.
+      Implementation: WebhookDispatcher.emit(eventType, body) iterates active
+      endpoints, allocates a UUID delivery_id (WEBHOOK-RETRY-002), signs via
+      HmacSigner.sign(secret, timestamp + "." + body), POSTs, persists outcome.
+      RetryPolicy.nextAttemptAt(attemptCount) drives the schedule per
+      WEBHOOK-RETRY-001.
+      Anchor reuse: receiver-side HMAC verification stays scoped to
+      practices/rules/webhook-hmac-required.md (PRACTICES-INTEG-001) which
+      shares the same RFC 2104 + OWASP ASVS V13.2.6 anchor — see
+      templates/DECISIONS.md TD-2026-05-22-025 HMAC bullet.
+
+  # ─── INTERNAL-IT-INV-004: assignee notifications respect preferences ─────
+  - id: "INTERNAL-IT-INV-004"
+    chapter: "NOTIFICATION"
+    requirement: >
+      Assignee notifications (TicketAssigned / TicketStatusChanged /
+      SlaNearBreach) must be filtered through NotificationPreferences before
+      fanout AND must use NOTIF-SEND-001 outbox-write semantics for
+      at-least-once delivery.
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/notification-l0.yaml#NOTIF-PREF-001"
+    notes: >
+      Test (positive): operator with default preferences + TicketAssigned →
+      notification delivered with at-least-once semantics.
+      Test (negative): operator with emailEnabled=false → no email row in
+      outbox; in-app notification still written.
+      Implementation: NotificationDispatcher reads preferences before each
+      channel emit; outbox-write happens inside the same transaction as the
+      ticket-state-change write (NOTIF-SEND-001 outbox-pattern).
+
+  # ─── INTERNAL-IT-INV-005: webhook signing-secret encrypted-at-rest ───────
+  - id: "INTERNAL-IT-INV-005"
+    chapter: "SECURITY"
+    requirement: >
+      Per-endpoint webhook signing_secret column MUST be stored encrypted-at-rest
+      (KMS-managed AES-256 envelope encryption) AND MUST NOT appear in log
+      lines, error responses, or admin UI in plaintext (only the
+      signing_secret_id reference or last-4 fingerprint is permitted).
+    test_method: "RestAssured integration test + JUnit unit test (AttributeConverter)"
+    verification_type: "both"
+    applicable: true
+    co-shipped-rule: "webhook-secret-encryption"
+    invariant_test: "frontend/tests/recipes/internal-it-webhook-secret.spec.ts"
+    notes: >
+      Test (positive): POST /api/admin/webhook-endpoints → assert column raw
+      value in DB is encrypted ciphertext (not the plaintext returned in the
+      response); fetch the same endpoint → assert response body does NOT
+      include signingSecret (only the signing_secret_id or fingerprint).
+      Test (negative): grep ALL log statements emitted by WebhookDispatcher
+      + WebhookEndpointService + the controller — none must contain the
+      plaintext secret value.
+      Implementation: WebhookEndpoint.signingSecret field annotated with a
+      custom @Convert(converter = KmsAttributeConverter.class) that wraps
+      plaintext on persist and unwraps on load using the KMS-managed key.
+      Logging policy: log signingSecretId only.
+      Disallowed in plaintext: 'signingSecret', the raw 64-char hex string.
+
+      INV-005 DELIBERATE FRAMING: binds to (co-shipped-rule + invariant_test)
+      escape hatch — NOT to a spec_ref + rule_ref pair. The catalog has no
+      existing rule covering per-endpoint signing-secret encryption-at-rest
+      (R7 community-INV-005 escape hatch precedent). Promotion to
+      practices/rules/security-secret-encryption-at-rest.md is deferred
+      indefinitely per templates/DECISIONS.md TD-2026-05-22-025 Follow-ups.
+      Disallowed: 'signingSecret' in plaintext log lines (test asserts this).
+
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # enabled_l4_domains:
+  #   skip: ["auth"]
+  #   rationale: "Single-operator personal helpdesk; no role differentiation needed."
+  #   citation: "<internal ticket / PR url>"
+  # enabled_l4_domains:
+  #   skip: ["webhook"]
+  #   rationale: "Fully-internal-only deployment; no external ITSM integration required."
+  #   citation: "<internal ticket / PR url>"
+
+evidence:
+  - provenance_class: external
+    source: "Jira webhooks — Atlassian Server REST API docs"
+    url: "https://developer.atlassian.com/server/jira/platform/webhooks/"
+    citation: "A webhook is a user-defined callback over HTTP."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Jira is the canonical issue-tracker / ITSM platform."
+
+  - provenance_class: external
+    source: "Jira webhooks — Atlassian Server REST API docs (event subscription)"
+    url: "https://developer.atlassian.com/server/jira/platform/webhooks/"
+    citation: "You can use Jira webhooks to notify your app or web application when certain events occur in Jira."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Second Jira verbatim — anchors INTERNAL-IT-INV-003."
+
+  - provenance_class: external
+    source: "PagerDuty webhooks support docs"
+    url: "https://support.pagerduty.com/docs/webhooks"
+    citation: "Webhooks allow you to receive HTTP callbacks when significant events happen in your PagerDuty account, for example, when an incident triggers, escalates or resolves."
+    quoted_at: "2026-05-22"
+    fidelity_note: "PagerDuty is the canonical incident-management ITSM."
+
+  - provenance_class: external
+    source: "PagerDuty webhooks support docs (destination examples)"
+    url: "https://support.pagerduty.com/docs/webhooks"
+    citation: "Details about the event are sent to your specified URL, such as Slack or your own custom PagerDuty webhook processor."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Second PagerDuty verbatim — names destination shapes the recipe fanout targets."
+
+  - provenance_class: external
+    source: "Toss Payments webhook (Korean)"
+    url: "https://docs.tosspayments.com/guides/webhook"
+    citation: "토스페이먼츠 결제, 브랜드페이, 지급대행 상태에 변경사항이 있을 때 웹훅으로 실시간 업데이트를 받아보세요."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Korean webhook verbatim — Toss Payments anchors state-change webhook semantics in Korean enterprise practice."
+
+  - provenance_class: external
+    source: "Toss Payments webhook (Korean) — concept definition"
+    url: "https://docs.tosspayments.com/guides/webhook"
+    citation: "웹훅이란 데이터가 변경되었을 때 실시간으로 알림을 받을 수 있는 기능이에요."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Second Toss verbatim defining 웹훅 (webhook) in Korean."
+
+  - provenance_class: external
+    source: "Naver Works Bot API (Korean)"
+    url: "https://developers.worksmobile.com/kr/docs/bot-api"
+    citation: "Bot API로 봇에서 메시지를 보내거나, 메뉴를 설정하고, 봇을 관리할 수 있다."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Korean enterprise-messaging API anchor — 네이버웍스 Bot API."
+
+  - provenance_class: external
+    source: "Naver Works Bot API (Korean) — authentication"
+    url: "https://developers.worksmobile.com/kr/docs/bot-api"
+    citation: "Bot API를 호출하려면 구성원 계정 또는 서비스 계정으로 인증하여 얻은 Access Token이 필요하다."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Second Naver Works verbatim — token-auth shape parallels per-endpoint signing-secret model in INV-005."
+
+  - provenance_class: internal_design
+    source: "ServiceNow REST API hosts (4 attempts) + Kakao 알림톡 (6 hosts)"
+    url: "https://developer.servicenow.com/dev.do"
+    rationale: "Host-wide downgrade pattern documented in PRD §4.4; verbatim consistently unavailable across attempted hosts. Documented downgrade is honest evidence — not failure."
+
+  - provenance_class: internal_design
+    derives_from:
+      - "SP15 crud"
+      - "SP17 audit-log"
+      - "SP26 notification"
+      - "SP41 scheduled-task"
+      - "SP45 webhook (R9 NET-NEW)"
+      - "auth ASVS L1"
+    rationale: "Composition derives from existing L4 specs + SP45-shipped webhook L4 spec; no new L4 introduced by internal-it recipe."

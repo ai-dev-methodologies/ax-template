@@ -123,5 +123,6 @@ applied_recipes:
   - b2b-admin
   - cms
   - community
+  - internal-it
   - lms
   - saas-subscription

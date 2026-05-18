@@ -1,0 +1,203 @@
+# specs/recipes/internal-it-recipe-l0.yaml — R9 SP45b recipe-level spec
+schema_version: 1
+pattern: internal-it
+display_name: "Internal-IT (Ticketing + SLA + Audit + ITSM Webhook Relay)"
+compatible_with_catalog_version: "v1.7.0-webhook-internal-it"
+last_verified_at: "2026-05-22"
+
+enabled_l4_domains:
+  - audit-log
+  - auth
+  - crud
+  - notification
+  - scheduled-task
+  - webhook
+
+l2_blocks_used:
+  # All entries resolved disk-verified against templates/L2/blocks/*.tsx at
+  # SP45b prep step (R8 Critic L blocker precedent).
+  - confirm-dialog
+  - crud-create-form
+  - crud-edit-form
+  - crud-list-adapter
+  - data-table
+  - filter-bar
+  - kpi-card
+  - notification-bell
+  - notification-list
+
+l3_pages_used:
+  - create-page
+  - dashboard-page
+  - detail-page
+  - edit-page
+  - list-page
+
+business_invariants:
+  - id: INTERNAL-IT-INV-001
+    statement: "Ticket state transitions (open → in-progress → resolved → closed) emit audit-log row with operator + before/after"
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+
+  - id: INTERNAL-IT-INV-002
+    statement: "SLA breach reminder emission uses scheduled-task lock primitive (no double-send on multi-node) AND is idempotent on the breach-event idempotency key"
+    spec_ref: "specs/scheduled-task-l0.yaml#SCHED-LOCK-001"
+
+  - id: INTERNAL-IT-INV-003
+    statement: "Outbound webhook to external ITSM (Jira / ServiceNow / PagerDuty / Slack-incoming) is signed with HMAC-SHA256 over <timestamp>.<body> AND retried with exponential backoff (30s base × 2 multiplier up to 5 attempts) until dead-letter"
+    spec_ref: "specs/webhook-l0.yaml#WEBHOOK-SIGN-001"
+    notes: |
+      Anchored to TWO webhook spec items shipped in R9 SP45 (disk-verified at
+      SP45b prep step against the newly landed specs/webhook-l0.yaml):
+      - WEBHOOK-SIGN-001 — outbound HMAC-SHA256 signature over body
+      - WEBHOOK-RETRY-001 — exponential backoff 30s × 2 up to 5 attempts
+      Both are SP45-shipped (NET-NEW Spec Trio per TD-2026-05-22-025).
+      The HMAC anchor reuses the same RFC 2104 + OWASP ASVS V13.2.6 anchor
+      already cited by practices/rules/webhook-hmac-required.md and
+      specs/spring-practices-l0.yaml#PRACTICES-INTEG-001 (receiver axis).
+      Sender + receiver are distinct catalog axes sharing identical
+      construction (see templates/DECISIONS.md TD-2026-05-22-025 HMAC bullet).
+
+  - id: INTERNAL-IT-INV-004
+    statement: "Assignee notifications (ticket-assigned, status-changed, SLA-near-breach) respect operator preferences + opt-out AND use at-least-once outbox delivery"
+    spec_ref: "specs/notification-l0.yaml#NOTIF-PREF-001"
+
+  - id: INTERNAL-IT-INV-005
+    statement: "Per-endpoint webhook signing-secret stored encrypted-at-rest (KMS-managed AES-256 envelope) and never logged in plaintext"
+    co-shipped-rule: "webhook-secret-encryption"
+    invariant_test: "frontend/tests/recipes/internal-it-webhook-secret.spec.ts"
+    notes: |
+      Recipe-level invariant authored inline here per PRD §1.8 Principle 8 +
+      §10 out-of-scope (NO new practices/rules/*.md file). The
+      recipe_spec_referential_integrity_guard.sh additive branch (R7 SP41b
+      community precedent) accepts (co-shipped-rule + invariant_test) as a
+      valid anchor pair when the catalog has no existing rule.
+      Implementation must: (a) generate the per-endpoint signing_secret via
+      SecureRandom (256-bit) at WebhookEndpoint.create(); (b) wrap secret
+      column in @Convert AttributeConverter that performs envelope encryption
+      (KMS-managed AES-256) before persistence — the database row stores only
+      the encrypted ciphertext, never the plaintext secret; (c) NEVER include
+      the plaintext secret in log lines — log only the signing_secret_id or
+      last-4 fingerprint.
+      Promotion to a standalone practices/rules/security-secret-encryption-at-rest.md
+      rule is **deferred indefinitely** per TD-2026-05-22-025 Follow-ups (M5
+      framing) — remains recipe-level unless cross-domain need emerges.
+
+  # INV-005 disambiguation — R7-community-style escape hatch (deliberate framing)
+  # R8 lms-INV-005 / cms-INV-005 both bound to existing spec + existing rule
+  # (idempotency-key-on-mutations.md) because the catalog already had a rule
+  # covering bulk-enrollment / slug-uniqueness idempotency.
+  # R9 internal-it-INV-005 is the R7-community-style catalog-novel case:
+  # the catalog has NO existing rule covering per-endpoint signing-secret
+  # encryption-at-rest. The choice between paths is determined by catalog
+  # state at SP execution, not policy preference. See RECIPE.md INV-005
+  # disambiguation paragraph for the full framing.
+
+business_observability_advisory:
+  - metric: "recipe.internal-it.ticket_active_total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD; labeled by priority (P1/P2/P3/P4)"
+  - metric: "recipe.internal-it.sla_breach_total"
+    type: counter
+    note: "advisory; counted when a ticket's age exceeds its SLA threshold"
+  - metric: "recipe.internal-it.webhook_failed_permanent_total"
+    type: counter
+    note: "advisory; counted when an outbound ITSM webhook hits WEBHOOK-DEAD-LETTER-001"
+
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # enabled_l4_domains:
+  #   skip: ["auth"]
+  #   rationale: "Single-operator personal helpdesk; no role differentiation needed."
+  #   citation: "<internal ticket / PR url>"
+  #
+  # enabled_l4_domains:
+  #   skip: ["webhook"]
+  #   rationale: "Fully-internal-only deployment; no external ITSM integration required."
+  #   citation: "<internal ticket / PR url>"
+  #
+  # enabled_l4_domains:
+  #   skip: ["feature-flags"]
+  #   rationale: "Single-tenant typical; no toggle gating needed."
+  #   citation: "<internal ticket / PR url>"
+
+evidence:
+  - provenance_class: external
+    source: "Jira webhooks — Atlassian Server REST API docs"
+    url: "https://developer.atlassian.com/server/jira/platform/webhooks/"
+    citation: "A webhook is a user-defined callback over HTTP."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Jira is the canonical issue-tracker / ITSM platform; Atlassian Server REST docs attest the webhook-callback pattern internal-it recipe encodes. Atlassian Cloud REST host returned content truncation across 3 attempts; Server host fallback closes the gap (both are atlassian-canonical for webhook semantics)."
+
+  - provenance_class: external
+    source: "Jira webhooks — Atlassian Server REST API docs (event subscription)"
+    url: "https://developer.atlassian.com/server/jira/platform/webhooks/"
+    citation: "You can use Jira webhooks to notify your app or web application when certain events occur in Jira."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Second Jira verbatim — directly attests the event-driven outbound semantics INTERNAL-IT-INV-003 binds (signed + retried outbound to ITSM)."
+
+  - provenance_class: external
+    source: "PagerDuty webhooks support docs"
+    url: "https://support.pagerduty.com/docs/webhooks"
+    citation: "Webhooks allow you to receive HTTP callbacks when significant events happen in your PagerDuty account, for example, when an incident triggers, escalates or resolves."
+    quoted_at: "2026-05-22"
+    fidelity_note: "PagerDuty is the canonical incident-management ITSM platform; support docs verbatim attests the incident-lifecycle webhook callback pattern. developer.pagerduty.com developer-portal returned empty body across 3 attempts; support host fallback closes the gap (support.pagerduty.com is the canonical product docs host)."
+
+  - provenance_class: external
+    source: "PagerDuty webhooks support docs (destination examples)"
+    url: "https://support.pagerduty.com/docs/webhooks"
+    citation: "Details about the event are sent to your specified URL, such as Slack or your own custom PagerDuty webhook processor."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Second PagerDuty verbatim — names the integration shapes (Slack inbound + custom processor) the internal-it webhook fanout typically targets."
+
+  - provenance_class: external
+    source: "Toss Payments webhook (Korean) — 토스페이먼츠 웹훅"
+    url: "https://docs.tosspayments.com/guides/webhook"
+    citation: "토스페이먼츠 결제, 브랜드페이, 지급대행 상태에 변경사항이 있을 때 웹훅으로 실시간 업데이트를 받아보세요."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Korean webhook verbatim (PRD §4.4 — non-zero-Korean cycle preserved). Toss Payments is a canonical Korean payment platform; the verbatim directly attests state-change webhook semantics in Korean enterprise practice."
+
+  - provenance_class: external
+    source: "Toss Payments webhook (Korean) — concept definition"
+    url: "https://docs.tosspayments.com/guides/webhook"
+    citation: "웹훅이란 데이터가 변경되었을 때 실시간으로 알림을 받을 수 있는 기능이에요."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Second Toss verbatim defining 웹훅 (webhook) primitive in Korean — anchors the L4 webhook concept locale-coverage."
+
+  - provenance_class: external
+    source: "Naver Works Bot API (Korean) — 네이버웍스 봇 API"
+    url: "https://developers.worksmobile.com/kr/docs/bot-api"
+    citation: "Bot API로 봇에서 메시지를 보내거나, 메뉴를 설정하고, 봇을 관리할 수 있다."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Korean enterprise-messaging API anchor (PRD §4.4 — 2nd Korean verbatim; 2 consecutive non-zero-Korean cycles). Naver Works Bot API is the canonical enterprise-messenger callback surface — the internal-it recipe webhook fanout commonly relays to this kind of in-org channel."
+
+  - provenance_class: external
+    source: "Naver Works Bot API (Korean) — authentication"
+    url: "https://developers.worksmobile.com/kr/docs/bot-api"
+    citation: "Bot API를 호출하려면 구성원 계정 또는 서비스 계정으로 인증하여 얻은 Access Token이 필요하다."
+    quoted_at: "2026-05-22"
+    fidelity_note: "Second Naver Works verbatim — names the per-account access-token authentication shape compatible with the per-endpoint signing-secret model in INTERNAL-IT-INV-005."
+
+  - provenance_class: internal_design
+    source: "Atlassian Cloud REST API webhooks docs (alt host)"
+    url: "https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-webhooks/"
+    rationale: "200 OK on 2026-05-22 but page content truncated to navigation skeleton; no extractable verbatim across 3 Cloud-host attempts. Server-host fallback (Atlassian) verbatim closes the gap above."
+
+  - provenance_class: internal_design
+    source: "ServiceNow REST API documentation hosts (4 attempts: developer.servicenow.com landing + docs.servicenow.com utah-application-development + www.servicenow.com/docs/ root + www.servicenow.com/products/rest-api.html)"
+    url: "https://developer.servicenow.com/dev.do"
+    rationale: "Host-wide pattern: developer portal landing lacks API descriptive content; docs.servicenow.com utah-application-development page 301-redirected to root; root has no API descriptive verbatim; www.servicenow.com/products/rest-api.html returned HTTP 403. ServiceNow REST API verbatim consistently unavailable across 4 host attempts (PRD §4.4 host-wide downgrade — documented honest evidence)."
+
+  - provenance_class: internal_design
+    source: "Kakao 알림톡 / 카카오비즈니스 (Korean) — 6 host attempts"
+    url: "https://developers.kakao.com/docs/latest/ko/message/rest-api"
+    rationale: "Host-wide pattern: developers.kakao.com landing returns API status dashboard only; docs/ko/message/rest-api returned HTTP 404 post-redirect; business.kakao.com bizmessage / kakaotalkchannel / root paths return page-shell only; kakaobusiness.gitbook.io main + ad/start/example return navigation skeleton or 404. Kakao 알림톡 verbatim consistently unavailable across 6 host attempts (PRD §4.4 host-wide downgrade — documented honest evidence; further retry deferred per §10 to R10+)."
+
+  - provenance_class: internal_design
+    derives_from:
+      - "SP15 crud"
+      - "SP17 audit-log"
+      - "SP26 notification"
+      - "SP41 scheduled-task"
+      - "SP45 webhook (R9 NET-NEW)"
+      - "auth ASVS L1"
+    rationale: "Composition derives from existing L4 specs (5) + SP45-shipped webhook L4 spec (NET-NEW, 1). No new L4 introduced by internal-it recipe — webhook is the canonical L4 primitive internal-it consumes."

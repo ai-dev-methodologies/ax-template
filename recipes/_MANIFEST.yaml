@@ -1,6 +1,6 @@
 schema_version: 1
-compatible_with_catalog_version: "v1.6.0-lms-cms"
-generated_at: "2026-05-21"
+compatible_with_catalog_version: "v1.7.0-webhook-internal-it"
+generated_at: "2026-05-22"
 
 recipes:
   - pattern: saas-subscription
@@ -118,8 +118,29 @@ recipes:
       - notification
       - scheduled-task
 
-deferred_recipes:
   - pattern: internal-it
-    status: deferred-pending-fork-receiver-demand
-    reason: "Independent of R8 scheduler-consuming recipes (lms + cms landed R8 v1.6.0). Remaining gap = verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4."
-    reintroduction_trigger: "Independent of R8 scheduler-consuming recipes (lms + cms landed R8 v1.6.0). Remaining gap = verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4. R9+ if fetch succeeds OR notification L4 gains explicit webhook-emit spec items."
+    # R9 SP45b: deferred → active. Closes the R6 Synthesis-A deferred-recipe
+    # queue (community → R7, lms + cms → R8, internal-it → R9; all 4 shipped).
+    # Final status set by SP46 sealed verdict per PRD §6 partial-tag table:
+    #   2/2 PASS → status: active (this default value; final-tag v1.7.0-webhook-internal-it)
+    #   webhook-only PASS → status: active-verdict-pending (partial v1.7.0-webhook)
+    #   0/2 FAIL → SP45b reverted (this row removed; internal-it returns to deferred_recipes)
+    status: active
+    display_name: "Internal-IT (Ticketing + SLA + Audit + ITSM Webhook Relay)"
+    spec: specs/recipes/internal-it-recipe-l0.yaml
+    recipe_dir: recipes/internal-it
+    sealed_verdict: skills/_tests/sealed-verdict/internal-it-verdict.md
+    enabled_l4_domains:
+      - audit-log
+      - auth
+      - crud
+      - notification
+      - scheduled-task
+      - webhook
+
+# deferred_recipes: EMPTY post-R9 SP45b — R6 Synthesis-A trim of 4 deferred
+# recipes fully realized across R7 (community) + R8 (lms + cms) + R9 (internal-it).
+# See templates/DECISIONS.md TD-2026-05-22-026 for the queue-closure ADR.
+# Future R10+ deferred-recipe candidates land here when proposed by ralplan;
+# the queue starts EMPTY again from this point.
+deferred_recipes: []

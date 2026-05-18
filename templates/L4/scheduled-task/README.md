@@ -99,13 +99,16 @@ downstream consumers**, arriving together in the same atomic commit per
 
 applied_recipes:
   - cms
+  - internal-it
   - lms
 
-The `applied_recipes:` key is **born** in R8 SP43 with both entries
-alphabetical (`cms`, `lms`) — first-consumer-arrival convention (TD-024) treats
-simultaneous consumers as a single mutation, not two. `file-storage` and
-`practices` L4 READMEs remain key-less until *their* first consumers arrive
-(same precedent the scheduler README itself relied on pre-R8).
+The `applied_recipes:` key was **born** in R8 SP43 with two entries
+alphabetical (`cms`, `lms`) per the first-consumer-arrival convention
+(TD-2026-05-21-024 — simultaneous consumers as a single mutation). R9 SP45b
+alphabetical-inserts `internal-it` between `cms` and `lms` (R6 dual-form
+append-only rule). `file-storage` and `practices` L4 READMEs remain key-less
+until *their* first consumers arrive (same precedent the scheduler README
+itself relied on pre-R8).
 
 ## External evidence (verbatim, fetched 2026-05-20)
 

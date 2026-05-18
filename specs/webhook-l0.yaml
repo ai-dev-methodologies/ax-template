@@ -1,0 +1,157 @@
+version: "1.0.0"
+scope: "webhook-domain"
+stack: "Spring Boot 3.2.x + JPA + HMAC-SHA256 + exponential-backoff retry + DB-row dead-letter queue"
+standard: "RFC 2104 (HMAC) + OWASP ASVS V13.2.6 + RFC 7807"
+items:
+  # ─── EMIT family (2 items) ─────────────────────────────────────────────────
+  - id: "WEBHOOK-EMIT-001"
+    chapter: "EMIT"
+    requirement: "WebhookEndpointService.register() persists a new endpoint with url, active=true, signing_secret, and event_filter; registration is idempotent upsert keyed by URL (re-registering same URL updates secret/filter without creating a duplicate row)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST /api/admin/webhook-endpoints with body {url, eventFilter} →
+      assert saved WebhookEndpoint has active=true, id != null, signingSecret generated
+      server-side. POST same URL again → assert SAME id, secret rotated, no duplicate row.
+      Implementation: WebhookEndpoint.create(url, eventFilter) factory generates a
+      256-bit random signing_secret; service performs SELECT WHERE url=? then
+      INSERT-or-UPDATE.
+    policy_ref: "blueprints/webhook-manifest.yaml#emit"
+
+  - id: "WEBHOOK-EMIT-002"
+    chapter: "EMIT"
+    requirement: "emit(event) POSTs the JSON-serialised event body to every active endpoint whose event_filter matches the event type; outbound request carries Content-Type: application/json."
+    test_method: "RestAssured integration test + Mockito for HTTP client"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): emit("order.created", payload) with 2 active endpoints both
+      subscribed to "order.*" → assert outbound POST sent to BOTH endpoints with the
+      exact serialised body + Content-Type: application/json.
+      Test (negative): endpoint with active=false OR event_filter mismatch → NOT called.
+      Implementation: WebhookDispatcher.emit(type, body) iterates matching endpoints
+      and enqueues a WebhookDelivery row per (endpoint, event) pair before the HTTP call.
+    policy_ref: "blueprints/webhook-manifest.yaml#emit"
+
+  # ─── SIGN family (2 items — RFC 2104 + ASVS V13.2.6 anchor reuse, TD-025) ──
+  - id: "WEBHOOK-SIGN-001"
+    chapter: "SIGN"
+    requirement: "Every outbound webhook request carries an X-Webhook-Signature header in the form sha256=<hex(HMAC-SHA256(secret, signed_input))>; the secret is the per-endpoint signing_secret and signed_input is the canonical replay-resistant string defined by WEBHOOK-SIGN-002 (timestamp + '.' + body). The MAC is computed over the exact bytes that will be sent on the wire."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: emit() outbound request captured (Mockito or WireMock) → assert
+      X-Webhook-Signature header == "sha256=" + hex(HMAC-SHA256(secret, signed_input))
+      where signed_input is the timestamp-prefixed canonical string per
+      WEBHOOK-SIGN-002 (Stripe-style "<timestamp>.<body>"); body-only MAC is
+      not accepted to ensure replay protection from the header value alone.
+      Implementation: HmacSigner.sign(secret, body) uses Mac.getInstance("HmacSHA256").
+      This is the SENDER axis. The RECEIVER axis (verifying inbound HMAC) is scoped to
+      practices/rules/webhook-hmac-required.md and specs/spring-practices-l0.yaml#PRACTICES-INTEG-001
+      and reuses the SAME RFC 2104 + OWASP ASVS V13.2.6 cryptographic anchor (see
+      templates/DECISIONS.md TD-2026-05-22-025 HMAC anchor reuse bullet).
+    policy_ref: "blueprints/webhook-manifest.yaml#sign"
+
+  - id: "WEBHOOK-SIGN-002"
+    chapter: "SIGN"
+    requirement: "Every outbound webhook request carries an X-Webhook-Timestamp header (unix seconds since epoch); the HMAC-SHA256 signature covers timestamp + '.' + body so the receiver can reject replays beyond an agreed clock-skew window."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: assert both X-Webhook-Timestamp and X-Webhook-Signature headers present;
+      assert signature input == "<timestamp>.<body>" (Stripe-style).
+      Implementation: HmacSigner.sign(secret, timestamp + "." + body); timestamp is
+      captured AT request send time (not at enqueue time) to keep skew window tight.
+    policy_ref: "blueprints/webhook-manifest.yaml#sign"
+
+  # ─── RETRY family (2 items) ────────────────────────────────────────────────
+  - id: "WEBHOOK-RETRY-001"
+    chapter: "RETRY"
+    requirement: "A delivery that fails (4xx, 5xx, or network timeout) is re-enqueued with exponential backoff starting at 30 seconds, doubling each attempt (30s → 60s → 120s → 240s → 480s), up to a maximum of 5 attempts including the first."
+    test_method: "JUnit 5 unit test with controlled clock"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): simulate 4xx response → assert WebhookDelivery row has
+      attempt_count=1, next_attempt_at=now+30s, status=PENDING_RETRY.
+      Test (negative — exhaustion): 5 failed attempts in a row → status flips to
+      FAILED_PERMANENT (WEBHOOK-DEAD-LETTER-001 takes over).
+      Implementation: RetryPolicy.nextAttemptAt(attemptCount) returns 30s * 2^(attemptCount-1);
+      retry scheduler picks up rows where status=PENDING_RETRY AND next_attempt_at <= now().
+    policy_ref: "blueprints/webhook-manifest.yaml#retry"
+
+  - id: "WEBHOOK-RETRY-002"
+    chapter: "RETRY"
+    requirement: "Every retry attempt for the same logical event reuses the same X-Webhook-Delivery-Id header (UUID generated at first enqueue) so receivers can detect and discard duplicates."
+    test_method: "JUnit 5 unit test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: enqueue delivery (delivery_id=D1); fail twice; succeed on third attempt →
+      assert all 3 outbound requests carried X-Webhook-Delivery-Id: D1 verbatim.
+      Implementation: WebhookDelivery.id is generated once via UUID.randomUUID() at
+      enqueue time and remains stable across the entire retry chain.
+    policy_ref: "blueprints/webhook-manifest.yaml#retry"
+
+  # ─── DEAD-LETTER family (2 items) ──────────────────────────────────────────
+  - id: "WEBHOOK-DEAD-LETTER-001"
+    chapter: "DEAD-LETTER"
+    requirement: "When a delivery exhausts the max retry budget (WEBHOOK-RETRY-001), its status transitions to FAILED_PERMANENT and the row records last_response_code and last_attempt_at for admin inspection; the row is NOT deleted."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: exhaust 5 retries with 500 responses → assert WebhookDelivery row has
+      status=FAILED_PERMANENT, last_response_code=500, last_attempt_at != null.
+      Implementation: terminal transition in RetryPolicy; row stays for the
+      configurable dead-letter retention window (default 30 days).
+    policy_ref: "blueprints/webhook-manifest.yaml#dead-letter"
+
+  - id: "WEBHOOK-DEAD-LETTER-002"
+    chapter: "DEAD-LETTER"
+    requirement: "Admin replay endpoint takes a FAILED_PERMANENT delivery id, allocates a fresh X-Webhook-Delivery-Id (new attempt chain), and re-enqueues with attempt_count=1 so receivers do not de-dupe on the original delivery_id."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: admin POST /api/admin/webhook-deliveries/{id}/replay → assert a NEW
+      WebhookDelivery row created with status=PENDING_RETRY, attempt_count=1, a
+      fresh delivery_id distinct from the original.
+      Implementation: WebhookAdminService.replay(id) requires ROLE_ADMIN and audit-logs
+      the operator. The original FAILED_PERMANENT row remains for trail integrity.
+    policy_ref: "blueprints/webhook-manifest.yaml#dead-letter"
+
+  # ─── CIRCUIT-BREAKER family (1 item) ───────────────────────────────────────
+  - id: "WEBHOOK-CIRCUIT-001"
+    chapter: "CIRCUIT-BREAKER"
+    requirement: "When a single endpoint's rolling 50-attempt failure rate reaches or exceeds 90%, the endpoint is automatically deactivated (active=false) and an audit-log row is emitted with action=webhook.endpoint.circuit_opened; subsequent emit() calls skip the endpoint until an admin re-activates it."
+    test_method: "JUnit 5 unit test with controlled history"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive): seed 45 FAILED + 5 SUCCESS in the last 50 attempts (90% fail) →
+      assert WebhookEndpoint.active flips to false and audit_logs has the
+      circuit_opened row referencing the endpoint id.
+      Test (negative): 44 FAILED + 6 SUCCESS (88% fail) → endpoint stays active.
+      Implementation: CircuitBreakerPolicy.evaluate(endpointId) runs after every
+      delivery terminal transition; uses a window query against WebhookDelivery.
+    policy_ref: "blueprints/webhook-manifest.yaml#circuit-breaker"
+
+  # ─── IDEMPOTENCY family (1 item — receiver-side contract documentation) ────
+  - id: "WEBHOOK-IDEMPOTENT-001"
+    chapter: "IDEMPOTENCY"
+    requirement: "Receivers MUST treat any two requests with the same X-Webhook-Delivery-Id as the same logical event and respond identically; senders MUST NOT rely on receiver de-duplication for correctness but SHOULD document this contract for fork-receivers integrating downstream."
+    test_method: "Documentation contract assertion — verified by README presence"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      This is a SENDER-SIDE CONTRACT documentation item; the test is README presence
+      (templates/L4/webhook/README.md must describe the X-Webhook-Delivery-Id semantic
+      to fork-receivers writing the corresponding inbound handler).
+      Receiver implementations live in fork-receiver code, not in this catalog.
+      Anchoring rationale: WEBHOOK-RETRY-002 already guarantees stable delivery_id
+      across retry attempts; this item makes the receiver-contract obligation explicit.
+    policy_ref: "blueprints/webhook-manifest.yaml#idempotency"

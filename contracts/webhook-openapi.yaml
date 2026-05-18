@@ -1,0 +1,416 @@
+openapi: 3.0.3
+info:
+  title: ax-template Webhook Admin API
+  description: |
+    Webhook-domain REST contract — admin surface only.
+    All endpoints require ADMIN role (ROLE_ADMIN) in addition to a valid JWT Bearer token.
+    Outbound webhook dispatch happens internally via WebhookDispatcher.emit(); admin
+    endpoints allow endpoint registration / listing / manual retry / dead-letter
+    inspection only.
+  version: 0.1.0
+servers:
+  - url: /api/admin
+
+paths:
+  /webhook-endpoints:
+    get:
+      operationId: listWebhookEndpoints
+      summary: List webhook endpoints (admin)
+      tags: [webhook-admin]
+      parameters:
+        - name: active
+          in: query
+          schema:
+            type: boolean
+          description: When set, filters by active flag (true | false). Unset returns all.
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated list of webhook endpoints
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      operationId: registerWebhookEndpoint
+      summary: Register or upsert a webhook endpoint (admin)
+      tags: [webhook-admin]
+      description: |
+        Idempotent upsert by URL (WEBHOOK-EMIT-001). Re-registering the same URL
+        rotates the signing secret and replaces the event filter without creating
+        a duplicate row. The returned `signingSecret` is shown only once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookEndpointRegistration'
+      responses:
+        '201':
+          description: Endpoint registered (new row)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointDetail'
+        '200':
+          description: Endpoint upserted (existing URL — secret rotated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /webhook-endpoints/{id}:
+    get:
+      operationId: getWebhookEndpoint
+      summary: Get a webhook endpoint by id (admin)
+      tags: [webhook-admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Endpoint detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: deactivateWebhookEndpoint
+      summary: Deactivate a webhook endpoint (admin; soft)
+      tags: [webhook-admin]
+      description: |
+        Soft-deactivation sets active=false; subsequent emit() calls skip the
+        endpoint. The row is retained for audit history.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Endpoint deactivated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /webhook-deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: List webhook deliveries (admin)
+      tags: [webhook-admin]
+      parameters:
+        - name: endpointId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PENDING_RETRY, SUCCESS, FAILED_PERMANENT, ALL]
+            default: ALL
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated delivery history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDeliveryPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /webhook-deliveries/{id}:
+    get:
+      operationId: getWebhookDelivery
+      summary: Get a single webhook delivery (admin)
+      tags: [webhook-admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Delivery detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDeliveryDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /webhook-deliveries/{id}/replay:
+    post:
+      operationId: replayWebhookDelivery
+      summary: Replay a FAILED_PERMANENT delivery (admin)
+      tags: [webhook-admin]
+      description: |
+        Allocates a fresh X-Webhook-Delivery-Id and re-enqueues with attempt_count=1
+        (WEBHOOK-DEAD-LETTER-002). The original FAILED_PERMANENT row is retained.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Replay accepted; new delivery enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookReplayResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Original delivery is not in FAILED_PERMANENT status; replay rejected
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+components:
+  schemas:
+    WebhookEndpointRegistration:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: HTTPS URL the webhook will POST to
+        eventFilter:
+          type: array
+          items:
+            type: string
+          description: |
+            Event-type globs; '*' matches all events. Examples: ["order.*",
+            "ticket.escalated"].
+
+    WebhookEndpointSummary:
+      type: object
+      required: [id, url, active, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        active:
+          type: boolean
+        eventFilter:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    WebhookEndpointDetail:
+      allOf:
+        - $ref: '#/components/schemas/WebhookEndpointSummary'
+        - type: object
+          properties:
+            signingSecret:
+              type: string
+              description: |
+                Per-endpoint HMAC-SHA256 secret. SHOWN ONCE at registration; admin
+                must capture immediately. Storage is encrypted-at-rest (KMS-managed).
+              nullable: true
+            circuitOpenedAt:
+              type: string
+              format: date-time
+              nullable: true
+
+    WebhookEndpointPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookEndpointSummary'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    WebhookDeliverySummary:
+      type: object
+      required: [id, endpointId, eventType, status, attemptCount, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable X-Webhook-Delivery-Id across all retry attempts (WEBHOOK-RETRY-002).
+        endpointId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, PENDING_RETRY, SUCCESS, FAILED_PERMANENT]
+        attemptCount:
+          type: integer
+        nextAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastResponseCode:
+          type: integer
+          nullable: true
+        lastAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    WebhookDeliveryDetail:
+      allOf:
+        - $ref: '#/components/schemas/WebhookDeliverySummary'
+        - type: object
+          properties:
+            bodyPreview:
+              type: string
+              description: First 256 bytes of the serialised JSON body (full body is not retained for storage cost).
+              nullable: true
+            lastError:
+              type: string
+              nullable: true
+
+    WebhookDeliveryPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDeliverySummary'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    WebhookReplayResponse:
+      type: object
+      properties:
+        originalDeliveryId:
+          type: string
+          format: uuid
+        newDeliveryId:
+          type: string
+          format: uuid
+        enqueuedAt:
+          type: string
+          format: date-time
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 problem detail
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: Caller lacks ADMIN role
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    ValidationError:
+      description: Registration body failed RFC 7807 validation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
