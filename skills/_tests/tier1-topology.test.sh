@@ -42,12 +42,12 @@ echo ""
 SKILL_FILES=()
 while IFS= read -r f; do
     SKILL_FILES+=("$f")
-done < <(find "$SKILLS_DIR" -type f -name "SKILL.md" | grep -E "^${SKILLS_DIR}/ax-(transform|verify|scaffold)/SKILL\.md$" | sort)
+done < <(find "$SKILLS_DIR" -type f -name "SKILL.md" | grep -E "^${SKILLS_DIR}/ax-(transform|verify|scaffold|fork-receiver)/SKILL\.md$" | sort)
 
-EXPECTED_COUNT=3
+EXPECTED_COUNT=4
 ACTUAL_COUNT="${#SKILL_FILES[@]}"
 
-echo "[1] Count: expect $EXPECTED_COUNT SKILL.md files under skills/ax-{transform,verify,scaffold}/"
+echo "[1] Count: expect $EXPECTED_COUNT SKILL.md files under skills/ax-{transform,verify,scaffold,fork-receiver}/"
 
 if [ "$ACTUAL_COUNT" -eq "$EXPECTED_COUNT" ]; then
     assert_pass "count=$ACTUAL_COUNT"
@@ -56,7 +56,7 @@ else
 fi
 
 # ── 2. Validate frontmatter for each expected skill ──────────────────────────
-EXPECTED_DIRS=("ax-transform" "ax-verify" "ax-scaffold")
+EXPECTED_DIRS=("ax-transform" "ax-verify" "ax-scaffold" "ax-fork-receiver")
 
 for dir_name in "${EXPECTED_DIRS[@]}"; do
     skill_file="$SKILLS_DIR/$dir_name/SKILL.md"

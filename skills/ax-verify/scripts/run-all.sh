@@ -85,6 +85,18 @@ else
     exit 1
 fi
 
+# ── Step 5: Fork-receiver bundle (SP22) ──────────────────────────────────────
+echo ""
+echo "[5] fork-receiver bundle — /ax-fork-receiver --bundle-only"
+if bash "$REPO_ROOT/skills/ax-fork-receiver/scripts/run.sh" --bundle-only; then
+    step_pass "fork-receiver-bundle"
+else
+    step_fail "fork-receiver-bundle" "ax-fork-receiver"
+    echo ""
+    echo "run-all: FAIL at step 5 (fork-receiver-bundle)" >&2
+    exit 1
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
