@@ -125,6 +125,33 @@ tasks.register<Test>("testSearch") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testAuditLog") {
+    useJUnitPlatform {
+        includeTags("AUDIT_LOG")
+    }
+    description = "Run audit-log domain compliance tests (SP17: append-only log entries, async export)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testFileStorage") {
+    useJUnitPlatform {
+        includeTags("FILE_STORAGE")
+    }
+    description = "Run file-storage domain compliance tests (SP18: upload/list/download/delete + presigned URL)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testFeatureFlags") {
+    useJUnitPlatform {
+        includeTags("FEATURE_FLAGS")
+    }
+    description = "Run feature-flags domain compliance tests (SP28: runtime toggles, admin CRUD)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

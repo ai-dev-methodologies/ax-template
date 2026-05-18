@@ -37,7 +37,8 @@ case "$DOMAIN_LOWER" in
     ratelimit)    GRADLE_TASK="testRatelimit" ;;
     audit-log)    GRADLE_TASK="testAuditLog" ;;
     file-storage) GRADLE_TASK="testFileStorage" ;;
-    notification) GRADLE_TASK="testNotification" ;;
+    notification)    GRADLE_TASK="testNotification" ;;
+    feature-flags)   GRADLE_TASK="testFeatureFlags" ;;
     *)
         # Generic: capitalise first letter of each hyphen-separated segment and join
         DOMAIN_PASCAL="$(echo "$DOMAIN_LOWER" | awk -F'-' '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2); OFS=""; print}')"
