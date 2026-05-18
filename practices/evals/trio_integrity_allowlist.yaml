@@ -25,5 +25,6 @@ domains:
   search: full_trio             # SP26: full-text search + typeahead + Cmd+K palette + charts L2
   feature-flags: full_trio      # SP28: runtime feature toggles, admin CRUD, FeatureGate + FeatureFlagToggle L2
   billing: full_trio            # SP30: subscription lifecycle, plan management, invoice listing, billing event history
+  identity-verification: backend_only  # SP31: KISA 본인인증 callback storage (CI/DI tokens); no frontend UI in scope
   # security: backend_only  # no specs/security-*.yaml yet — add when backend domain is scaffolded
   # user: backend_only      # no specs/user-*.yaml yet — add when backend domain is scaffolded
