@@ -11,3 +11,6 @@ node_modules/
 # practices-react snapshots are SMALL (1-5KB), HAND-CURATED quote sets,
 # and serve as the evidence-anchor audit trail — track them, do NOT ignore.
 .omx/
+
+# /ax-fork-receiver bundle output (regenerable via skills/ax-fork-receiver/scripts/bundle.sh)
+dist/
