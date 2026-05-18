@@ -1,0 +1,48 @@
+# contracts/feature-flags-ui.yaml
+# UI Contract — feature-flags domain, full_trio mode.
+# Describes which pages exist, their route, and which backend operation they bind to.
+
+domain: feature-flags
+domain_mode: full_trio
+backend_contract_ref: contracts/feature-flags-openapi.yaml
+
+pages:
+  - id: "FF-PAGE-001"
+    route: "/admin/feature-flags"
+    title: "Feature Flags Admin"
+    component: "templates/L4/feature-flags/app/(admin)/feature-flags/page.tsx"
+    backend_operation_id: listFeatureFlags
+    spec_ref: FF-FE-001
+    notes: "Table of all flags with toggle; calls listFeatureFlags + updateFeatureFlag per row"
+
+  - id: "FF-PAGE-002"
+    route: "/admin/feature-flags/[name]"
+    title: "Feature Flag Detail"
+    component: "templates/L4/feature-flags/app/(admin)/feature-flags/[name]/page.tsx"
+    backend_operation_id: updateFeatureFlag
+    spec_ref: FF-FE-003
+    notes: "Detail editor: toggle + description; Save calls PATCH"
+
+components:
+  - id: "FF-COMP-001"
+    name: "FeatureGate"
+    layer: L2
+    file: "templates/L2/blocks/feature-gate.tsx"
+    backend_operation_id: isFeatureFlagActive
+    spec_ref: FF-FE-004
+    notes: "Client-side gate: fetches /api/v1/feature-flags/{name}/active; renders children or fallback"
+
+  - id: "FF-COMP-002"
+    name: "FeatureFlagToggle"
+    layer: L2
+    file: "templates/L2/blocks/feature-flag-toggle.tsx"
+    backend_operation_id: updateFeatureFlag
+    spec_ref: FF-FE-002
+    notes: "Admin toggle: optimistic update, rollback on failure"
+
+middleware:
+  - id: "FF-MW-001"
+    file: "templates/L4/feature-flags/middleware.ts"
+    backend_operation_id: isFeatureFlagActive
+    spec_ref: FF-FE-005
+    notes: "Server-side flag evaluation in Next.js middleware; redirect to /not-found if inactive"

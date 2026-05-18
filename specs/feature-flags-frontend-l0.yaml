@@ -1,0 +1,69 @@
+# specs/feature-flags-frontend-l0.yaml
+# Page Compliance Spec — feature-flags domain, full_trio mode.
+# ADR: TD-2026-05-18-028 (Feature Flags atomic domain)
+# ADR: TD-2026-05-17-001 (Next.js 16 App Router)
+#
+# Every item's backend_operation_id resolves to contracts/feature-flags-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in specs/feature-flags-l0.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+
+domain: feature-flags
+domain_mode: full_trio
+backend_spec_ref: specs/feature-flags-l0.yaml
+frontend_required: true
+
+items:
+  - id: FF-FE-001
+    requirement: "Admin page lists all feature flags in a table with name, enabled status (toggle), description, and last-modified; empty state shows 'No flags defined'."
+    backend_operation_id: listFeatureFlags
+    backend_spec_ref: FF-CRUD-002
+    static_source_ref: []
+    test_method: "feature-flags/admin-list.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/feature-flags-ui-manifest.yaml#admin-list"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: FF-FE-002
+    requirement: "FeatureFlagToggle component calls PATCH /api/v1/admin/feature-flags/{name} on toggle interaction; shows optimistic update; rolls back on failure."
+    backend_operation_id: updateFeatureFlag
+    backend_spec_ref: FF-CRUD-003
+    static_source_ref: []
+    test_method: "feature-flags/toggle.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/feature-flags-ui-manifest.yaml#toggle"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: FF-FE-003
+    requirement: "Admin detail page renders FeatureFlagToggle + description editor; Save button calls PATCH; Cancel discards local edits."
+    backend_operation_id: updateFeatureFlag
+    backend_spec_ref: FF-CRUD-003
+    static_source_ref: []
+    test_method: "feature-flags/admin-detail.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/feature-flags-ui-manifest.yaml#admin-detail"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: FF-FE-004
+    requirement: "FeatureGate component renders children when GET /api/v1/feature-flags/{name}/active returns {active: true}; renders fallback (or nothing) when false; handles loading and error states without crashing."
+    backend_operation_id: isFeatureFlagActive
+    backend_spec_ref: FF-EVAL-001
+    static_source_ref: []
+    test_method: "feature-flags/feature-gate.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/feature-flags-ui-manifest.yaml#feature-gate"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: FF-FE-005
+    requirement: "Middleware evaluates feature flags server-side via GET /api/v1/feature-flags/{name}/active; redirects to /not-found when flag is inactive."
+    backend_operation_id: isFeatureFlagActive
+    backend_spec_ref: FF-EVAL-002
+    static_source_ref: []
+    test_method: "feature-flags/middleware.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/feature-flags-ui-manifest.yaml#middleware"
+    coverage_threshold: 1.0
+    backend_only_marker: false

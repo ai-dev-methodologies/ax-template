@@ -1,0 +1,135 @@
+version: "1.0.0"
+scope: "feature-flags-domain"
+stack: "Spring Boot 3.2.x + PostgreSQL + Caffeine cache"
+standard: "RFC 7807 + OWASP ASVS V4"
+items:
+  # ─── AUTHZ family (2 items) ───────────────────────────────────────────────
+  - id: "FF-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "GET /api/v1/feature-flags/{name}/active is public (no authentication required); all admin mutating endpoints require ROLE_ADMIN."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: call POST /api/v1/admin/feature-flags without JWT → 401.
+      Test: call GET /api/v1/feature-flags/some-flag/active without JWT → 200 or 404.
+      Implementation: SecurityConfig permits GET /api/v1/feature-flags/*/active,
+      requires ROLE_ADMIN for /api/v1/admin/feature-flags/**.
+    policy_ref: "blueprints/feature-flags-manifest.yaml#authz"
+
+  - id: "FF-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Non-admin authenticated users calling admin endpoints receive HTTP 403."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: authenticate as ROLE_MEMBER; call POST /api/v1/admin/feature-flags → 403.
+      Implementation: @PreAuthorize("hasRole('ADMIN')") on FeatureFlagAdminController.
+    policy_ref: "blueprints/feature-flags-manifest.yaml#authz"
+
+  # ─── EVAL family (3 items) ────────────────────────────────────────────────
+  - id: "FF-EVAL-001"
+    chapter: "EVAL"
+    requirement: "GET /api/v1/feature-flags/{name}/active returns {active: true} when the flag is enabled and {active: false} when disabled."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create flag 'new-checkout' enabled=true; GET /api/v1/feature-flags/new-checkout/active → 200 {active: true}.
+      Test: update flag to enabled=false; GET → 200 {active: false}.
+      Implementation: FeatureFlagController.isActive() calls FeatureFlagService.isActive().
+    policy_ref: "blueprints/feature-flags-manifest.yaml#eval"
+
+  - id: "FF-EVAL-002"
+    chapter: "EVAL"
+    requirement: "GET /api/v1/feature-flags/{name}/active for an unknown flag returns {active: false} (fail-closed)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: GET /api/v1/feature-flags/nonexistent-flag/active → 200 {active: false}.
+      Fail-closed: unknown flags must never return active=true to prevent accidental rollout.
+      Implementation: FeatureFlagService.isActive() returns false for missing flags.
+    policy_ref: "blueprints/feature-flags-manifest.yaml#eval"
+
+  - id: "FF-EVAL-003"
+    chapter: "EVAL"
+    requirement: "Flag evaluation is served from Caffeine in-process cache with 30-second TTL; cache is invalidated on flag update or delete."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create flag; update it; immediately GET active → reflects updated value (cache evicted).
+      Implementation: FeatureFlagCache.getActive() with @CacheEvict on create/update/delete.
+    policy_ref: "blueprints/feature-flags-manifest.yaml#caching"
+
+  # ─── CRUD family (4 items) ────────────────────────────────────────────────
+  - id: "FF-CRUD-001"
+    chapter: "CRUD"
+    requirement: "POST /api/v1/admin/feature-flags creates a new flag; returns 201 with the created flag; duplicate name returns 409."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST {name: 'beta-ui', enabled: false, description: 'Beta UI'} → 201.
+      Test: POST same name again → 409.
+      Implementation: FeatureFlagAdminController.create() → FeatureFlagService.create().
+    policy_ref: "blueprints/feature-flags-manifest.yaml#crud"
+
+  - id: "FF-CRUD-002"
+    chapter: "CRUD"
+    requirement: "GET /api/v1/admin/feature-flags returns paginated list of all flags (admin only)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create 3 flags; GET /api/v1/admin/feature-flags → 200, content.size == 3.
+      Implementation: FeatureFlagAdminController.list() with Pageable.
+    policy_ref: "blueprints/feature-flags-manifest.yaml#crud"
+
+  - id: "FF-CRUD-003"
+    chapter: "CRUD"
+    requirement: "PATCH /api/v1/admin/feature-flags/{name} updates enabled status and/or description; returns 200."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create flag enabled=false; PATCH {enabled: true} → 200, enabled=true in response.
+      Implementation: FeatureFlagAdminController.update() → FeatureFlagService.update().
+    policy_ref: "blueprints/feature-flags-manifest.yaml#crud"
+
+  - id: "FF-CRUD-004"
+    chapter: "CRUD"
+    requirement: "DELETE /api/v1/admin/feature-flags/{name} removes the flag; returns 204; subsequent GET active returns {active: false}."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create flag; DELETE → 204; GET active → {active: false}.
+      Implementation: FeatureFlagAdminController.delete() → FeatureFlagService.delete() hard delete.
+    policy_ref: "blueprints/feature-flags-manifest.yaml#crud"
+
+  # ─── VALIDATION family (2 items) ──────────────────────────────────────────
+  - id: "FF-VALID-001"
+    chapter: "VALIDATION"
+    requirement: "Flag name must match ^[a-z][a-z0-9-]{1,62}$ (lowercase, hyphen-separated, 2–63 chars); invalid names return 400 RFC 7807."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST {name: 'UPPER_CASE'} → 400.
+      Test: POST {name: 'a'} → 400 (too short).
+      Implementation: @Pattern(regexp = "^[a-z][a-z0-9-]{1,62}$") on FeatureFlagRequest.name.
+    policy_ref: "blueprints/feature-flags-manifest.yaml#validation"
+
+  - id: "FF-VALID-002"
+    chapter: "VALIDATION"
+    requirement: "Description field is optional; max 500 characters; exceeding length returns 400."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST {name: 'ok-flag', description: '501-char string'} → 400.
+      Implementation: @Size(max = 500) on FeatureFlagRequest.description.
+    policy_ref: "blueprints/feature-flags-manifest.yaml#validation"
