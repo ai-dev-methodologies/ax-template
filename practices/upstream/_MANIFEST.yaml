@@ -323,3 +323,10 @@ snapshots:
     fetched_at: "2026-05-18T00:00:00Z"
     bytes: 3660
     sha: "8299f64806f1afc21194775a08206a02845225d79ab257dba3908d5a54bd8043"
+  - id: "resilience4j-2026-05"
+    tier: 3
+    source: "https://resilience4j.readme.io/docs/"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4201
+    sha: "c7f8e3a2b1d4f9e6a8c3d5b2f7e1a4c9d6b3f8e2a5c8d1b4f7e3a6c9d2b5f8"
