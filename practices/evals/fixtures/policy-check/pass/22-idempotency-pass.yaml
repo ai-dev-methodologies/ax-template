@@ -1,0 +1,11 @@
+# Policy-check eval fixture
+# Query idempotency tag matches idempotency rules
+description: "Query idempotency tag matches idempotency rules"
+query:
+  domain: idempotency
+expect:
+  contains:
+    - PAYMENT-IDEMP-001
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-TX-001

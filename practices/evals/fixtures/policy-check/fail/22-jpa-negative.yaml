@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# JPA tag does not return error or async rules
+description: "JPA tag does not return error or async rules"
+query:
+  domain: jpa
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-ERR-001
+    - PRACTICES-ASYNC-001

@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Error tag does not return transaction rules
+description: "Error tag does not return transaction rules"
+query:
+  domain: error
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-PERS-005

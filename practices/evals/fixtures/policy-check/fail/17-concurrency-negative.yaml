@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Concurrency tag does not return error rules
+description: "Concurrency tag does not return error rules"
+query:
+  domain: concurrency
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-ERR-001
+    - PRACTICES-ERR-002

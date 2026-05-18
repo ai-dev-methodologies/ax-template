@@ -1,0 +1,79 @@
+template_id: feature-flags-blueprint
+family: scaffold
+status: draft
+confidence: medium
+stack:
+  frontend: react
+  backend: spring-boot
+  cache: caffeine
+  persistence: postgresql
+  contract: openapi
+  repo_shape: single-repo
+
+when_to_use:
+  - runtime-controlled feature rollout without redeployment
+  - A/B testing gate between old and new UI paths
+  - gradual rollout of new backend behaviour
+  - emergency kill-switch for unstable features
+
+not_for:
+  - user-segment targeting (requires LaunchDarkly or Unleash)
+  - percentage rollouts (use external feature flag service)
+  - A/B test analytics (out of scope — use analytics platform)
+
+# ─── authz ────────────────────────────────────────────────────────────────────
+authz:
+  eval_endpoint_public: true       # GET /api/v1/feature-flags/{name}/active — no auth
+  admin_endpoints_role: ROLE_ADMIN
+  trace:
+    FF-AUTHZ-001: eval endpoint public, admin endpoints require ROLE_ADMIN
+    FF-AUTHZ-002: non-admin callers get 403
+
+# ─── eval policy ──────────────────────────────────────────────────────────────
+eval:
+  endpoint: "GET /api/v1/feature-flags/{name}/active"
+  fail_closed: true              # unknown flag → {active: false}
+  response_shape: "{active: boolean}"
+  trace:
+    FF-EVAL-001: known flag returns correct enabled state
+    FF-EVAL-002: unknown flag returns active=false (fail-closed)
+    FF-EVAL-003: cache TTL 30s, evicted on write
+
+# ─── caching ──────────────────────────────────────────────────────────────────
+caching:
+  library: caffeine
+  cache_name: featureFlags
+  ttl_seconds: 30
+  evict_on: [create, update, delete]
+  trace:
+    FF-EVAL-003: Caffeine @Cacheable/@CacheEvict wires cache lifecycle
+
+# ─── crud policy ──────────────────────────────────────────────────────────────
+crud:
+  create_endpoint: "POST /api/v1/admin/feature-flags"
+  list_endpoint: "GET /api/v1/admin/feature-flags"
+  update_endpoint: "PATCH /api/v1/admin/feature-flags/{name}"
+  delete_endpoint: "DELETE /api/v1/admin/feature-flags/{name}"
+  delete_strategy: hard_delete    # flags are small; hard delete avoids zombie flag accumulation
+  trace:
+    FF-CRUD-001: create returns 201, duplicate returns 409
+    FF-CRUD-002: list returns paginated results
+    FF-CRUD-003: patch updates enabled/description
+    FF-CRUD-004: delete returns 204, subsequent eval returns active=false
+
+# ─── validation ───────────────────────────────────────────────────────────────
+validation:
+  name_pattern: "^[a-z][a-z0-9-]{1,62}$"
+  description_max_length: 500
+  trace:
+    FF-VALID-001: invalid name pattern returns 400
+    FF-VALID-002: description over 500 chars returns 400
+
+# ─── backend components ───────────────────────────────────────────────────────
+backend:
+  entity: "FeatureFlag (name PK, enabled boolean, description varchar, createdAt, updatedAt)"
+  repository: "FeatureFlagRepository extends JpaRepository<FeatureFlag, String>"
+  service: "FeatureFlagService — create/update/delete/isActive"
+  cache: "FeatureFlagCache — @Cacheable(featureFlags) + @CacheEvict"
+  controller: "FeatureFlagController — GET /api/v1/feature-flags/{name}/active (public)"
+  admin_controller: "FeatureFlagAdminController — admin CRUD (ROLE_ADMIN)"

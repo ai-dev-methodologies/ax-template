@@ -1,0 +1,11 @@
+# Policy-check eval fixture
+# Nonexistent tag returns no rules
+description: "Nonexistent tag returns no rules"
+query:
+  domain: nonexistent-tag-xyz
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-PERS-001
+    - PRACTICES-ERR-001
+    - PRACTICES-TX-001

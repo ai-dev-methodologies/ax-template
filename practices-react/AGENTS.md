@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "2f9ef6a7fbb583ef065fb6bbb057e6297165b0a9d0a581369752ffd271561968"
-  rule_count: 75
+  source_concat_sha256: "b54b14bda1fc7459c59a7566f677b952f1be95c879cf66fb3c10608c6dc35fe4"
+  rule_count: 77
   generated_by: "practices-react/generate_agents.sh"
 ---
 
@@ -5176,6 +5176,145 @@ Sources for this rule:
 - [React 19 — cache() (for isolation context)](https://react.dev/reference/react/cache)
 
 
+<!-- @source rules/no-hardcoded-user-facing-string-in-l4.md -->
+
+---
+title: "User-facing strings in L4 templates must use t() — no hardcoded Korean or natural-language literals"
+rule_id: no-hardcoded-user-facing-string-in-l4
+impact: HIGH
+impactDescription: "Hardcoded natural-language strings in L4 templates break i18n: the app cannot switch between ko-KR and en-US, and all Korean text appears in English-locale builds."
+tags:
+  - i18n
+  - locale
+  - korean
+  - l4-template
+  - l2-block
+applicable_to:
+  - react
+  - nextjs
+provenance_class: internal_design
+applies_to: paths_created_after_2026-05-18
+excludes:
+  - templates/L4/auth/**
+  - templates/L4/crud/**
+  - templates/L4/payment/**
+  - templates/L4/practices/**
+  - templates/L4/notification/**
+  - templates/L4/audit-log/**
+  - templates/L4/file-storage/**
+  - templates/L4/search/**
+protects_template_id: templates/L2/blocks/translation-boundary.tsx
+failing_fixture_path: practices-react/evals/fixtures/no_hardcoded_i18n/fail_korean_literal/
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-I18N-001"
+verification:
+  type: regex_scan
+  pattern: "Korean Unicode range \\u3131-\\u3163 \\uAC00-\\uD7A3 in JSX outside t() wrapper"
+  status: fixture_driven
+  notes: |
+    Fixture _run.sh implements the check via a Python regex scan.
+    Pass fixture: uses t('key') — exits 0.
+    Fail fixture: contains <button>결제하기</button> — exits 1.
+    Existing-l4-must-skip: rule excludes pre-2026-05-18 L4 paths — exits 0.
+evidence:
+  - source_type: upstream_id
+    upstream_id: next-intl-2026-05
+    section: "useTranslations"
+    quote: "export function PayButton() { const t = useTranslations('Payment'); return <button>{t('submit')}</button>; }"
+  - source_type: external
+    citation: "next-intl docs — using t() for all user-visible text to enable locale switching"
+    url: "https://next-intl.dev/docs/usage/messages"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Unicode — Hangul syllable block U+AC00 to U+D7A3; Hangul jamo U+3131 to U+3163"
+    url: "https://unicode.org/charts/PDF/UAC00.pdf"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+next_review_by: "2026-11-18"
+---
+
+## User-facing strings in L4 templates must use `t()` — no hardcoded Korean or natural-language literals
+
+**Impact: HIGH — Hardcoded Korean (한글) string literals in JSX break the i18n contract: the application cannot switch to English locale, and templates become non-reusable for non-Korean enterprise deployments.**
+
+**Scope (Option β):** This rule applies **only to files created on or after 2026-05-18**. Existing L4 domains (auth, crud, payment, practices, notification, audit-log, file-storage, search) are explicitly excluded — their string migration is deferred to a future P1 sprint.
+
+### The violation — hardcoded Korean literal in JSX
+
+```tsx
+// ❌ WRONG — hardcoded 한글 literal; breaks ko-KR ↔ en-US switching
+export default function PaymentPage() {
+  return (
+    <div>
+      <h1>결제</h1>
+      <button>결제하기</button>     {/* ← hardcoded Korean, not t() */}
+      <p>금액을 입력해 주세요.</p>  {/* ← hardcoded Korean */}
+    </div>
+  )
+}
+```
+
+### Correct — all user-facing text via `t()`
+
+```tsx
+// ✅ CORRECT — locale-aware strings via next-intl t()
+'use client'
+import { useTranslations } from 'next-intl'
+
+export default function PaymentPage() {
+  const t = useTranslations('Payment')
+  return (
+    <div>
+      <h1>{t('title')}</h1>
+      <button>{t('submit')}</button>
+      <p>{t('amountPrompt')}</p>
+    </div>
+  )
+}
+```
+
+Corresponding message file (`messages/ko.json`):
+```json
+{
+  "Payment": {
+    "title": "결제",
+    "submit": "결제하기",
+    "amountPrompt": "금액을 입력해 주세요."
+  }
+}
+```
+
+English translation (`messages/en.json`):
+```json
+{
+  "Payment": {
+    "title": "Payment",
+    "submit": "Pay Now",
+    "amountPrompt": "Please enter the amount."
+  }
+}
+```
+
+### Detect the violation
+
+Pattern: Korean Unicode characters (`ㄱ–ㅣ` jamo, `가–힣` syllables) appearing in JSX string literals **outside** a `t()` function call.
+
+The `_run.sh` fixture script implements this as a Python regex scan:
+- Regex: `[ㄱ-ㅣ가-힣]` in `.tsx`/`.jsx` files
+- Exclusion: if the Korean text appears as an argument to `t(` (i.e., inside `t('...')` or `t("...")`) it is permitted
+- Exclusion: pre-2026-05-18 L4 domains are skipped entirely
+
+### Why this rule exists
+
+Korean enterprise forks of ax-template must support at minimum two locales: `ko-KR` (default) and `en-US`. Hardcoded Korean strings in new L4 domains:
+1. Break the locale switch — switching to English still renders Korean text
+2. Create template coupling — templates become Korea-only instead of fork-adaptable
+3. Fail the composition-kit promise — a US fork of the template cannot replace strings without modifying component code
+
+The `TranslationBoundary` L2 block (see `templates/L2/blocks/translation-boundary.tsx`) wraps subtrees that depend on translations and provides a graceful fallback when messages fail to load.
+
+See also: `blueprints/i18n-policy-manifest.yaml` for the full locale policy including KRW formatting rules.
+
+
 <!-- @source rules/no-l4-cross-import.md -->
 
 ---
@@ -5398,6 +5537,114 @@ Frontend companion to: `no-rrn-logging.md` in `practices/rules/`.
 Reference: [개인정보보호법 제24조 — 고유식별정보의 처리 제한](https://www.law.go.kr/법령/개인정보보호법)
 
 Reference: [KISA 개인정보보호법 가이드라인 — 주민등록번호 처리](https://www.kisa.or.kr/2060301/form?postSeq=14&lang_type=KO)
+
+
+<!-- @source rules/prefer-feature-gate-over-env-check.md -->
+
+---
+title: "Feature flag checks must use FeatureGate or the feature-flags API — not process.env"
+rule_id: prefer-feature-gate-over-env-check
+impact: HIGH
+impactDescription: "Direct process.env checks for feature flags bypass the runtime admin UI, require redeployment to toggle, and cannot be dynamically controlled without rebuilding the app."
+tags:
+  - feature-flags
+  - runtime-control
+  - process-env
+  - l4-template
+  - l2-block
+applicable_to:
+  - react
+  - nextjs
+provenance_class: internal_design
+applies_to: paths_created_after_2026-05-18
+protects_template_id: templates/L2/blocks/feature-gate.tsx
+failing_fixture_path: practices-react/evals/fixtures/feature_gate/fail_process_env_check/
+spec_ref: "specs/feature-flags-frontend-l0.yaml#FF-FE-004"
+verification:
+  type: regex_scan
+  pattern: "process\\.env\\.(NEXT_PUBLIC_)?FEATURE_|process\\.env\\.(NEXT_PUBLIC_)?FF_"
+  status: fixture_driven
+  notes: |
+    Fixture _run.sh implements the check via a Python regex scan.
+    Pass fixture: uses FeatureGate component — exits 0.
+    Fail fixture: uses process.env.NEXT_PUBLIC_FEATURE_NEW_CHECKOUT — exits 1.
+evidence:
+  - source_type: external
+    citation: "Next.js Docs — Environment variables and the limitation of build-time NEXT_PUBLIC_ variables (cannot be changed at runtime without rebuild)"
+    url: "https://nextjs.org/docs/app/building-your-application/configuring/environment-variables"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Martin Fowler — Feature Toggles (aka Feature Flags): Release toggles should be dynamic and externally managed, not baked into the build artifact"
+    url: "https://martinfowler.com/articles/feature-toggles.html"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+next_review_by: "2026-11-18"
+---
+
+## Feature flag checks must use `FeatureGate` or the feature-flags API — not `process.env`
+
+**Impact: HIGH — `process.env` feature flags require a full rebuild + redeployment to change. Runtime feature flag control via the admin API allows instant toggling without downtime.**
+
+**Scope:** This rule applies **only to files created on or after 2026-05-18**. The feature-flags domain L4 templates are the canonical implementation.
+
+### The violation — `process.env` for feature flag control
+
+```tsx
+// ❌ WRONG — build-time constant; cannot toggle without redeployment
+const isNewCheckoutEnabled = process.env.NEXT_PUBLIC_FEATURE_NEW_CHECKOUT === 'true'
+
+export default function CheckoutPage() {
+  if (!isNewCheckoutEnabled) return <LegacyCheckout />
+  return <NewCheckout />
+}
+```
+
+### Correct — use `FeatureGate` (client-side) or middleware (server-side)
+
+**Client-side gate:**
+```tsx
+// ✅ CORRECT — runtime-controlled via admin API; no rebuild needed
+import { FeatureGate } from '@/templates/L2/blocks/feature-gate'
+
+export default function CheckoutPage() {
+  return (
+    <FeatureGate name="new-checkout" fallback={<LegacyCheckout />}>
+      <NewCheckout />
+    </FeatureGate>
+  )
+}
+```
+
+**Server-side gate (middleware):**
+```ts
+// ✅ CORRECT — evaluated at request time in Next.js middleware
+// templates/L4/feature-flags/middleware.ts
+const FLAGGED_ROUTES: Record<string, string> = {
+  '/new-checkout': 'new-checkout',
+}
+```
+
+### Why this rule exists
+
+| | `process.env` | FeatureGate / API |
+|--|--|--|
+| Toggle without rebuild | ❌ No | ✅ Yes |
+| Admin UI control | ❌ No | ✅ Yes |
+| Fail-closed on unknown flag | ❌ No (depends on default) | ✅ Yes |
+| Runtime observability | ❌ No | ✅ Yes |
+| Emergency kill-switch | ❌ Slow (redeploy) | ✅ Instant |
+
+The `FeatureGate` L2 block (see `templates/L2/blocks/feature-gate.tsx`) fetches
+`GET /api/v1/feature-flags/{name}/active` at render time. The result is cached
+in the backend (Caffeine 30s TTL) so evaluation is fast and consistent.
+
+See `blueprints/feature-flags-manifest.yaml` for the full feature-flags domain policy.
+
+### Detect the violation
+
+Pattern: `process.env.NEXT_PUBLIC_FEATURE_*` or `process.env.NEXT_PUBLIC_FF_*` in `.tsx`/`.jsx` files.
+
+The `_run.sh` fixture script in `practices-react/evals/fixtures/feature_gate/` implements this as a Python regex scan.
 
 
 <!-- @source rules/rendering-activity.md -->

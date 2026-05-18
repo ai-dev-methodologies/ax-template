@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Webhook tag does not return persistence rules
+description: "Webhook tag does not return persistence rules"
+query:
+  domain: webhook
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-PERS-001
+    - PRACTICES-PERS-005

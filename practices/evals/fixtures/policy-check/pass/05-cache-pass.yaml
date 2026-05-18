@@ -1,0 +1,13 @@
+# Policy-check eval fixture
+# Query cache tag matches cache rules
+description: "Query cache tag matches cache rules"
+query:
+  domain: cache
+expect:
+  contains:
+    - PRACTICES-CACHE-001
+    - PRACTICES-CACHE-002
+    - PRACTICES-CACHE-003
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-TX-001

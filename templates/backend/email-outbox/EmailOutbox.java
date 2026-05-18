@@ -28,6 +28,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.SQLDelete;
 
 /**
  * Email outbox entry — represents one outbound email queued for delivery.
@@ -45,6 +46,7 @@ import java.time.Instant;
  * <p>Extends {@code BaseEntity} (SP13) for: id, createdAt, updatedAt, deleted.
  */
 @Entity
+@SQLDelete(sql = "UPDATE email_outbox SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
 @Table(
     name = "email_outbox",
     indexes = {

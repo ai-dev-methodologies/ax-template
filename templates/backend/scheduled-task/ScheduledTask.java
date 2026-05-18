@@ -29,6 +29,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import org.hibernate.annotations.SQLDelete;
 
 /**
  * Scheduled task registration entity.
@@ -45,6 +46,7 @@ import java.time.Instant;
  * <p>Extends {@code BaseEntity} (SP13) for: id, createdAt, updatedAt, deleted.
  */
 @Entity
+@SQLDelete(sql = "UPDATE scheduled_tasks SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
 @Table(
     name = "scheduled_tasks",
     indexes = {

@@ -1,0 +1,13 @@
+# Policy-check eval fixture
+# Query migration tag matches migration rules
+description: "Query migration tag matches migration rules"
+query:
+  domain: migration
+expect:
+  contains:
+    - PRACTICES-MIGRATION-001
+    - PRACTICES-MIGRATION-002
+    - PRACTICES-MIGRATION-003
+  not_contains:
+    - PRACTICES-ERR-001
+    - PRACTICES-TX-001

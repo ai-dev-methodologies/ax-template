@@ -47,6 +47,11 @@ public class SecurityConfig {
                 .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers("/practices/demo/**").permitAll()
                 .requestMatchers("/api/ratelimit/**").permitAll()
+                // PRACTICES-INTEG-001: webhook endpoints are HMAC-authenticated, not JWT.
+                // External systems (GitHub, Stripe, etc.) POST raw payloads with HMAC-SHA256
+                // signatures — they do not carry Bearer tokens. The WebhookReceiver.verify()
+                // call inside the handler is the security gate.
+                .requestMatchers("/api/test/webhooks").permitAll()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers

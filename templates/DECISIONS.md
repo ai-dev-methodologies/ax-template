@@ -656,3 +656,342 @@ via the portability guide in METHODOLOGY.md.
 - `run-all.sh` updated: step 5 added (`/ax-fork-receiver --bundle-only`).
 - TDD anchor: `skills/_tests/fork-receiver-bundle.test.sh` — 31/31 assertions pass.
 - Acceptance gates 1, 2, 4, 5 GREEN (gate 3 requires full ax-verify + E2E suite).
+
+---
+
+## TD-2026-05-18-022 — SP23: MdcCorrelationIdInterceptor adopted as observability primitive (PRACTICES-OBS-006)
+
+```yaml
+---
+adr_id: TD-2026-05-18-022
+title: "SP23: MdcCorrelationIdInterceptor + OncePerRequestFilter for MDC trace propagation"
+provenance_class: practices_catalog
+evidence:
+  source_type: internal
+  source_ref: practices/rules/observability-mdc-trace-propagation.md
+  rationale: |
+    SP23 sealed PRACTICES-OBS-006: every inbound HTTP request must receive a
+    correlation ID in the MDC before any logger call. Implemented as
+    OncePerRequestFilter (not HandlerInterceptor) so it fires on /actuator/**
+    and error dispatch paths where DispatcherServlet is bypassed.
+    Integration test MdcCorrelationIdIT (RestAssured @Tag("INTEGRATION")) confirms
+    X-Correlation-ID is echoed in the response and appears in structured logs.
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-OBS-006"
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+`MdcCorrelationIdInterceptor` extends `OncePerRequestFilter`. On each request it reads the
+`X-Correlation-ID` header (falling back to `UUID.randomUUID()` if absent), puts it in the
+SLF4J MDC under the `correlationId` key, and removes it in the `finally` block. The filter
+is registered at order `Ordered.HIGHEST_PRECEDENCE` so it fires before Spring Security.
+
+The filter is wired via `WebMvcConfig.addInterceptors()` — replaced with the
+`@Bean FilterRegistrationBean<MdcCorrelationIdInterceptor>` pattern once the OncePerRequestFilter
+issue was identified.
+
+### Rationale
+
+`HandlerInterceptor` doesn't fire for Servlet-dispatched error paths or Actuator endpoints
+that bypass DispatcherServlet. `OncePerRequestFilter` fires unconditionally on the Servlet
+chain, providing complete coverage.
+
+### Consequences
+
+- `practices/rules/observability-mdc-trace-propagation.md` added (PRACTICES-OBS-006).
+- `templates/backend/observability/MdcCorrelationIdInterceptor.java` added.
+- `backend/src/test/…/observability/MdcCorrelationIdIT.java` — 4 assertions, GREEN.
+- `run-all-guards.sh` GREEN: 7/7 guards pass after rule addition.
+
+---
+
+## TD-2026-05-18-023 — SP24: External integration + Export/Import templates (PRACTICES-INTEG-001/002)
+
+```yaml
+---
+adr_id: TD-2026-05-18-023
+title: "SP24: HMAC-SHA256 webhook verification + chunked CSV/Excel import templates"
+provenance_class: practices_catalog
+evidence:
+  source_type: external
+  citation: "GitHub Docs — Validating webhook deliveries: MessageDigest.isEqual() for constant-time comparison"
+  url: "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries"
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-INTEG-001"
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+Two new practices rules sealed:
+1. **PRACTICES-INTEG-001** (`webhook-hmac-required.md`): All inbound webhook endpoints must
+   verify HMAC-SHA256 signatures using `MessageDigest.isEqual()` (constant-time) before
+   processing. Use `@RequestBody byte[]` not `String`; store secret in Vault.
+2. **PRACTICES-INTEG-002** (`chunked-import-required-when-rowcount-gt-1000.md`): CSV/Excel
+   imports with potentially >1000 rows must use `CSVReader.readNext()` streaming (never
+   `readAll()`) with per-chunk `@Transactional` at `CHUNK_SIZE=500`.
+
+Templates: `templates/backend/integration/` (5 files: WebClientConfig, ExternalApiTemplate,
+WebhookReceiver, WebhookSender, BulkheadConfig) + `templates/backend/import-export/` (3 files:
+CsvImportService, ExcelImportService, ExportJobService). Three L2 blocks added:
+`ImportPreview.tsx`, `MappingEditor.tsx`, `ImportProgressBar.tsx`.
+
+### Rationale
+
+Webhook endpoints without HMAC are trivially forgeable. Import with `readAll()` OOMs at scale.
+Both are HIGH-impact rules with clear reference implementations and binary pass/fail fixtures.
+
+### Consequences
+
+- `testIntegration` Gradle task added (`@Tag("INTEGRATION")`) — 7 tests GREEN.
+- Security config: `/api/test/webhooks` permit-all (HMAC is the auth mechanism).
+- `practices/evals/fixtures/webhook_hmac/` + `chunked_import/` eval fixtures added.
+- `run-all-guards.sh` 7/7 GREEN after the two new rules + substance guard References.
+
+---
+
+## TD-2026-05-18-024 — SP25: BaseEntity soft-delete + data layer + jobs templates (PRACTICES-PERS-005)
+
+```yaml
+---
+adr_id: TD-2026-05-18-024
+title: "SP25: BaseEntity @SQLDelete foundation — soft-delete enforced at ORM layer"
+provenance_class: practices_catalog
+evidence:
+  source_type: internal
+  source_ref: practices/rules/soft-delete-only-on-base-entity.md
+  rationale: |
+    Soft-delete scattered across individual entities is error-prone and inconsistently
+    applied. Centralizing in BaseEntity + @SQLDelete ensures the ORM rewrite fires for
+    all subclass deletes. PRACTICES-PERS-005 sealed with ArchUnit + IT verification.
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-PERS-005"
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+`BaseEntity` added with `@MappedSuperclass` carrying `deletedAt`, `deletedBy`, `@Version`
+(optimistic locking), and `createdAt`/`updatedAt` audit fields. `@SQLDelete` applied to 8
+existing entities: Notification, NotificationPreferences, EmailOutbox, EmailTemplate,
+ScheduledTask, JobHistory, AuditLog, StoredFile.
+
+Data layer templates added: `JpaAuditConfig`, `FlywayConfig`, `SoftDeleteConfig`,
+`JsonbConverter`, `OptimisticLockingPolicy`, `PageRequestNormalizer`. Jobs templates added:
+`JobDispatcher` (interface), `JobQueue`, `JobWorker`, `JobHistoryProjection`.
+`BaseRepository` with `findActiveById` and `softDelete` default methods.
+
+### Rationale
+
+`@SQLDelete` at the ORM level means no service-level delete hook can bypass soft-delete.
+Per-chunk `@Transactional` in `persistChunk` prevents transaction accumulation during bulk
+operations.
+
+### Consequences
+
+- Flyway migration `V004__create_soft_deleted_records_table.sql` added.
+- `BaseEntitySoftDeleteIT` + `BaseEntitySoftDeleteArchTest` GREEN.
+- `soft-delete-only-on-base-entity.md` rule + ArchUnit fixture added.
+- Dependency chain for SP24 (ExportJobService uses JobDispatcher interface).
+
+---
+
+## TD-2026-05-18-025 — SP26: Search L4 atomic domain + Charts/dataviz L2 blocks
+
+```yaml
+---
+adr_id: TD-2026-05-18-025
+title: "SP26: full-text search domain (Spec Trio + L4) + charts/dataviz L2 blocks"
+provenance_class: domain_scaffold
+evidence:
+  source_type: internal
+  source_ref: specs/search-l0.yaml
+  rationale: |
+    Search is a cross-cutting concern present in almost every enterprise app.
+    Providing a scaffolded L4 domain with Spec Trio (compliance spec + OpenAPI
+    contract + policy manifest) allows fork receivers to start with a working
+    search stack rather than building from scratch.
+spec_ref: "specs/search-l0.yaml"
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+Search domain (L4 atomic) scaffolded per METHODOLOGY.md 5-step:
+- `specs/search-l0.yaml` + `specs/search-frontend-l0.yaml`
+- `contracts/search-openapi.yaml` + `blueprints/search-policy-manifest.yaml`
+- `templates/L4/search/` — Next.js App Router pages for search UI
+- Backend: `testSearch` Gradle task (`@Tag("search")`) covering SEARCH-AUTHZ/QUERY/INDEX/BACKEND
+- `practices/rules/search-index-required-for-full-text-columns.md`
+
+Charts/dataviz L2 blocks added: `BarChart.tsx`, `LineChart.tsx`, `DataTable.tsx` with
+virtualized rows via TanStack Virtual.
+
+### Rationale
+
+The `trio_integrity_allowlist.yaml` `full_trio` classification requires both backend OpenAPI
+and frontend page manifest. The search domain is the first SP26+ domain with a dedicated
+Playwright test suite (composition.spec.ts for L4 contract checking).
+
+### Consequences
+
+- `testSearch` Gradle task: 4 assertions GREEN.
+- `ax-verify-domain search` exit 0.
+- Charts L2 blocks: `evidence:` blocks reference Recharts + TanStack Virtual docs.
+- `run-all-guards.sh` 7/7 GREEN.
+
+---
+
+## TD-2026-05-18-026 — SP27: Realtime/SSE polling-default + Form orchestration L2 blocks
+
+```yaml
+---
+adr_id: TD-2026-05-18-026
+title: "SP27: SSE polling-default realtime pattern + extended form orchestration L2 blocks"
+provenance_class: domain_scaffold
+evidence:
+  source_type: internal
+  source_ref: blueprints/realtime-policy-manifest.yaml
+  rationale: |
+    WebSocket adds operational complexity (stateful connections, sticky sessions).
+    SSE polling-default satisfies 90% of real-time UI requirements with a stateless
+    HTTP transport, compatible with CDN and load balancers out of the box.
+spec_ref: "blueprints/realtime-policy-manifest.yaml"
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+Realtime templates added at `templates/backend/realtime/` (5 files: SseEmitterService,
+SseBroadcaster, SseController, SseConnectionRegistry, SseHeartbeatScheduler). Policy: SSE
+is the default; WebSocket requires an explicit architectural note in the domain's
+policy-manifest.
+
+Form orchestration L2 blocks added (7 files): MultiStepForm, FormSection, FieldArray,
+ConditionalField, FormSummary, AutoSaveForm, FormErrorSummary. SP15 back-compat shells
+added (4 files) for pre-existing form blocks.
+
+Three TDD spec fixtures + 2 binary eval guard scripts (sse-polling-guard.sh,
+form-orchestration-guard.sh) added to `practices/evals/`.
+
+### Rationale
+
+SSE is sufficient for notification feeds, live dashboards, and progress updates. The
+7-block form orchestration set covers multi-step wizard + conditional logic + auto-save —
+patterns repeated in every enterprise app.
+
+### Consequences
+
+- `blueprints/realtime-policy-manifest.yaml` added.
+- `practices/upstream/` snapshots for SSE + EventSource added.
+- `ax-verify-domain` Playwright step for realtime blocks GREEN.
+
+---
+
+## TD-2026-05-18-027 — SP28: i18n Option β + Feature flags atomic domain
+
+```yaml
+---
+adr_id: TD-2026-05-18-027
+title: "SP28: next-intl i18n Cluster 1 + feature-flags full_trio domain"
+provenance_class: domain_scaffold
+evidence:
+  source_type: external
+  citation: "next-intl — App Router internationalization for Next.js 13+"
+  url: "https://next-intl-docs.vercel.app/"
+spec_ref: "specs/feature-flags-l0.yaml"
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+**i18n (Cluster 1)**: `blueprints/i18n-policy-manifest.yaml` + L1 token layer
+(`messages/en.json`, `messages/ko.json`). L2 blocks: `LocaleSwitcher.tsx`,
+`FormattedDate.tsx`, `FormattedCurrency.tsx`. Practice rule:
+`i18n-next-intl-required-for-app-router.md`.
+
+**Feature flags** (full_trio domain): `specs/feature-flags-l0.yaml` +
+`specs/feature-flags-frontend-l0.yaml` + `blueprints/feature-flags-policy-manifest.yaml`.
+L2 blocks: `FeatureGate.tsx`, `FeatureFlagToggle.tsx`. Backend templates:
+`FeatureFlagService`, `FeatureFlagRepository`, `FeatureFlagController`. L4 pages:
+admin CRUD + gate demo page. Practice rule:
+`feature-flag-service-required-for-runtime-toggles.md`.
+
+### Rationale
+
+i18n is a retrofit cost sink without upfront scaffolding. Feature flags are required for
+any production-grade deployment workflow (dark launches, A/B, kill switches). Both are
+"always needed, often deferred" — making them first-class Spec Trio domains reduces that
+deferral.
+
+### Consequences
+
+- `testFeatureFlags` Gradle task added (FEATURE_FLAGS tag).
+- `ax-verify-domain feature-flags` exit 0.
+- `trio_integrity_allowlist.yaml` updated with `feature-flags: full_trio`.
+- `practices-react/AGENTS.md` regenerated: 77 rules.
+
+---
+
+## TD-2026-05-18-028 — SP29: /ax-verify subcommands (F13/F14/F15) — Tier-1 cap stays 4
+
+```yaml
+---
+adr_id: TD-2026-05-18-028
+title: "SP29: ax-verify subcommands (policy-check, evidence-fetch, explain) — Tier-1 cap enforcement"
+provenance_class: skill_adoption
+evidence:
+  source_type: internal
+  source_ref: skills/ax-verify/scripts/policy-check.sh
+  rationale: |
+    AI agents using the catalog need three CLI primitives beyond run-all.sh:
+    policy-check (F13) for FP rate, evidence-fetch (F14) for snapshot currency,
+    and explain (F15) for human-readable rule output. These are subcommands of
+    the existing ax-verify Tier-1 skill — no new Tier-1 added (cap stays at 4).
+spec_ref: "N/A"
+status: ACCEPTED
+date: 2026-05-18
+---
+```
+
+### Decision
+
+Three subcommands added to `skills/ax-verify/scripts/`:
+- `policy-check.sh` (F13): Runs the full guard suite against a target directory, reports
+  which rules PASS/FAIL with exit 0 on ≤5% FP rate. 50-fixture eval set validates
+  FP rate.
+- `evidence-fetch.sh` (F14): Fetches current snapshots for upstream evidence URLs,
+  compares against stored snapshots, reports staleness (>6 months = WARN, >12 = FAIL).
+- `explain.sh` (F15): Renders a specific rule in human-readable format (title, impact,
+  rationale, correct/incorrect examples) from `practices/rules/<rule>.md`.
+
+Legacy compat shim `_legacy-call-compat.sh` added so callers using the pre-SP29 direct
+invocation pattern continue to work. Python helper `_explain_helper.py` handles markdown
+parsing for `explain.sh`.
+
+TDD anchors: 3 test scripts in `skills/_tests/ax-verify-subcommands/` — all 3 GREEN.
+
+### Rationale
+
+Keeping subcommands under the existing ax-verify Tier-1 skill preserves the "4 Tier-1 skills"
+architectural constraint (ax-transform, ax-verify, ax-scaffold, ax-fork-receiver). Adding a
+5th Tier-1 would require a tier1-topology.test.sh update and a separate ADR justifying the
+tier promotion.
+
+### Consequences
+
+- Tier-1 skill count stays 4. `tier1-topology.test.sh` unchanged.
+- `run-all.sh` unchanged (subcommands are additive, not replacing steps).
+- 50-fixture eval set in `practices/evals/fixtures/policy-check/` — FP rate <5% confirmed.
+- TDD: `skills/_tests/ax-verify-subcommands/*.test.sh` — 3/3 GREEN.

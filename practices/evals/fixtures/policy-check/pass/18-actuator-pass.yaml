@@ -1,0 +1,12 @@
+# Policy-check eval fixture
+# Query actuator tag matches actuator rules
+description: "Query actuator tag matches actuator rules"
+query:
+  domain: actuator
+expect:
+  contains:
+    - PRACTICES-ACTUATOR-001
+    - PRACTICES-ACTUATOR-002
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-PERS-005

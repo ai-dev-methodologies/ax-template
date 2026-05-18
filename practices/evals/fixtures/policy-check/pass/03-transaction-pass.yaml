@@ -1,0 +1,11 @@
+# Policy-check eval fixture
+# Query transaction tag matches transaction rules
+description: "Query transaction tag matches transaction rules"
+query:
+  domain: transaction
+expect:
+  contains:
+    - PRACTICES-TX-001
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-ERR-002

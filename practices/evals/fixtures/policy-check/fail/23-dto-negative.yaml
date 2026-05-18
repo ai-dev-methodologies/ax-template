@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# DTO tag does not return transaction or cache rules
+description: "DTO tag does not return transaction or cache rules"
+query:
+  domain: dto
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-CACHE-001

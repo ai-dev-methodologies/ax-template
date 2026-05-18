@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# MDC tag does not return error RFC7807 rules
+description: "MDC tag does not return error RFC7807 rules"
+query:
+  domain: mdc
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-ERR-002
+    - PRACTICES-PERS-005

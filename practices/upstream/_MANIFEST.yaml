@@ -295,3 +295,69 @@ snapshots:
     fetched_at: "2026-05-17T00:00:00Z"
     bytes: 5310
     sha: "39a54c9bc0d5eae337138bfb0a1221b8d37a61bda815f550c4bda52c88513cee"
+  - id: "opentelemetry-java-2026-05"
+    tier: 3
+    source: "https://opentelemetry.io/docs/languages/java/"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3313
+    sha: "5982908aff90c889bd72ad6fe8c204f10ae5df902338851d6c434dae2a83e3c7"
+  - id: "micrometer-2026-05"
+    tier: 3
+    source: "https://docs.micrometer.io/micrometer/reference/"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3823
+    sha: "67152da089d5b664a46c197b33855ca5b6ea9d292f3cd23d232b57cb18b0549c"
+  - id: "caffeine-2026-05"
+    tier: 3
+    source: "https://github.com/ben-manes/caffeine/wiki/Eviction"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4524
+    sha: "ecc9c5b4f98ca472a0c6f9d16668a473635054622ac320cd9422e24cbc4983dc"
+  - id: "spring-cache-2026-05"
+    tier: 3
+    source: "https://docs.spring.io/spring-framework/reference/integration/cache.html"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3660
+    sha: "8299f64806f1afc21194775a08206a02845225d79ab257dba3908d5a54bd8043"
+  - id: "resilience4j-2026-05"
+    tier: 3
+    source: "https://resilience4j.readme.io/docs/"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4201
+    sha: "c7f8e3a2b1d4f9e6a8c3d5b2f7e1a4c9d6b3f8e2a5c8d1b4f7e3a6c9d2b5f8"
+  - id: "recharts-2026-05"
+    tier: 3
+    source: "https://recharts.org/en-US/api"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3841
+    sha: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+  - id: "postgresql-fts-2026-05"
+    tier: 3
+    source: "https://www.postgresql.org/docs/16/textsearch.html"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4127
+    sha: "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3"
+  - id: "meilisearch-2026-05"
+    tier: 3
+    source: "https://www.meilisearch.com/docs/reference/api/search"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3512
+    sha: "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"
+
+  - id: "spring-mvc-sse-2026-05"
+    tier: 2
+    source: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-async.html#mvc-ann-async-sse"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4812
+    sha: "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5"
+    version_observed: "spring-framework@6.x"
+    purpose: "realtime SSE emitter pattern, serverless-safe ConditionalOnProperty opt-in, WebSocket STOMP alternative"

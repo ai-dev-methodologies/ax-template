@@ -1,0 +1,9 @@
+# Policy-check eval fixture
+# Transaction tag does not return soft-delete rule
+description: "Transaction tag does not return soft-delete rule"
+query:
+  domain: transaction
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-PERS-005

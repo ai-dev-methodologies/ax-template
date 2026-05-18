@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# PII tag does not return transaction rules
+description: "PII tag does not return transaction rules"
+query:
+  domain: pii
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-PERS-005

@@ -1,0 +1,20 @@
+-- Adds created_by + last_modified_by columns to all BaseEntity-extending tables
+-- Populated via @CreatedBy + @LastModifiedBy + SecurityAuditorAware
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS created_by VARCHAR(64);
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(64);
+ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS created_by VARCHAR(64);
+ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(64);
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS created_by VARCHAR(64);
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(64);
+ALTER TABLE stored_files ADD COLUMN IF NOT EXISTS created_by VARCHAR(64);
+ALTER TABLE stored_files ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(64);
+ALTER TABLE email_outbox ADD COLUMN IF NOT EXISTS created_by VARCHAR(64);
+ALTER TABLE email_outbox ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(64);
+ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS created_by VARCHAR(64);
+ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(64);
+ALTER TABLE scheduled_tasks ADD COLUMN IF NOT EXISTS created_by VARCHAR(64);
+ALTER TABLE scheduled_tasks ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(64);
+ALTER TABLE job_history ADD COLUMN IF NOT EXISTS created_by VARCHAR(64);
+ALTER TABLE job_history ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(64);
+ALTER TABLE job_queue ADD COLUMN IF NOT EXISTS created_by VARCHAR(64);
+ALTER TABLE job_queue ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(64);

@@ -1,0 +1,65 @@
+template_id: search-blueprint
+family: scaffold
+status: draft
+confidence: medium
+stack:
+  frontend: react
+  backend: spring-boot
+  search_default: postgres-fts
+  search_opt_in: meilisearch
+  contract: openapi
+  repo_shape: single-repo
+
+when_to_use:
+  - new project needing full-text search with Korean (한글) support
+  - React + Spring Boot adding global search (Cmd+K palette)
+  - adding per-domain scoped search (payment, notification, etc.)
+
+not_for:
+  - vector/semantic search (use pgvector or OpenSearch)
+  - log aggregation / analytics search (use Elasticsearch/OpenSearch)
+  - real-time search-as-you-type with sub-10ms latency (use Meilisearch opt-in)
+
+# ─── authz ────────────────────────────────────────────────────────────────────
+authz:
+  all_endpoints_require_auth: true
+  result_scoping: tenant_id   # search results filtered by caller's tenantId
+  trace:
+    SEARCH-AUTHZ-001: all endpoints require JWT
+    SEARCH-AUTHZ-002: results scoped to caller's tenant
+
+# ─── backend ──────────────────────────────────────────────────────────────────
+backend:
+  default_backend: postgres-fts    # MUST remain postgres-fts (R1 mitigation)
+  opt_in_backend: meilisearch      # ax.search.backend=meilisearch activates MeilisearchAdapter
+  tokenizer_default: simple        # PostgreSQL 'simple' dictionary; ~70% Korean recall
+  tokenizer_opt_in: mecab-ko       # opt-in via ax.search.tokenizer=mecab-ko; ~95% Korean recall
+  trace:
+    SEARCH-BACKEND-001: default_backend is postgres-fts
+
+# ─── query policy ─────────────────────────────────────────────────────────────
+query:
+  endpoint: POST /api/v1/search
+  max_page_size: 100
+  default_page_size: 20
+  highlight: true          # ts_headline / Meilisearch highlight included in hits
+  domain_filter: true      # optional ?domain= scoping
+  trace:
+    SEARCH-QUERY-001: paginated results with processingTimeMs
+    SEARCH-QUERY-002: Korean query returns results
+    SEARCH-QUERY-003: blank query → 400
+
+# ─── index policy ─────────────────────────────────────────────────────────────
+index:
+  index_endpoint: POST /api/v1/search/index
+  delete_endpoint: DELETE /api/v1/search/index/{id}
+  trace:
+    SEARCH-INDEX-001: document indexable and findable
+    SEARCH-INDEX-002: deleted document not findable
+
+# ─── frontend policy ──────────────────────────────────────────────────────────
+frontend:
+  palette_shortcut: "Cmd+K"
+  ime_guard: true          # compositionstart/compositionend guard on all search inputs
+  recent_searches_limit: 10
+  recent_searches_storage: localStorage

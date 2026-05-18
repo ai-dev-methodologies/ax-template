@@ -1,0 +1,8 @@
+# PASS fixture — realtime transport defaulting to polling (correct)
+realtime:
+  default_transport: polling
+  opt_in_transports:
+    - name: sse
+      enabled_via: ax.realtime.sse.enabled=true
+      serverless_safe: false
+  polling_interval_ms: 5000

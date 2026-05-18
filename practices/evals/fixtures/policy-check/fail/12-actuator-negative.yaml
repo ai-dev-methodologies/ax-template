@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Actuator tag does not return transaction or soft-delete rules
+description: "Actuator tag does not return transaction or soft-delete rules"
+query:
+  domain: actuator
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-PERS-005

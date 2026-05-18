@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Idempotency tag does not return transaction or persistence rules
+description: "Idempotency tag does not return transaction or persistence rules"
+query:
+  domain: idempotency
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-PERS-005

@@ -29,6 +29,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.SQLDelete;
 
 /**
  * Job history record — one execution attempt of a ScheduledTask.
@@ -44,6 +45,7 @@ import java.util.UUID;
  * <p>Extends {@code BaseEntity} (SP13) for: id, createdAt, updatedAt, deleted.
  */
 @Entity
+@SQLDelete(sql = "UPDATE job_history SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
 @Table(
     name = "job_history",
     indexes = {

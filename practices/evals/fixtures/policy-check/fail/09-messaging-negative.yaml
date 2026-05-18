@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Messaging tag does not return persistence rules
+description: "Messaging tag does not return persistence rules"
+query:
+  domain: messaging
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-PERS-001
+    - PRACTICES-PERS-005

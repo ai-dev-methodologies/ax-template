@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Observability tag does not return cache rules
+description: "Observability tag does not return cache rules"
+query:
+  domain: observability
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-CACHE-001
+    - PRACTICES-CACHE-002

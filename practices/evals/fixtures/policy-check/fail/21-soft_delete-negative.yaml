@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Soft-delete tag does not return transaction or error rules
+description: "Soft-delete tag does not return transaction or error rules"
+query:
+  domain: soft-delete
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-ERR-001

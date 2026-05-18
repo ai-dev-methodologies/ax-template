@@ -1,0 +1,59 @@
+# specs/search-frontend-l0.yaml
+# Page Compliance Spec — search domain, full_trio mode.
+# ADR: TD-2026-05-18-026 (Charts L2 + Search atomic domain)
+# ADR: TD-2026-05-17-001 (Next.js 16 App Router)
+# ADR: TD-2026-05-17-006 (Playwright + Vitest + MSW)
+#
+# Every item's backend_operation_id resolves to contracts/search-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in specs/search-l0.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+
+domain: search
+domain_mode: full_trio
+backend_spec_ref: specs/search-l0.yaml
+frontend_required: true
+
+items:
+  - id: SEARCH-FE-001
+    requirement: "Search page renders SearchPalette (Cmd+K) that sends POST /api/v1/search; results display with highlighting; Korean IME composition does not corrupt the query string"
+    backend_operation_id: search
+    backend_spec_ref: SEARCH-QUERY-001
+    static_source_ref: []
+    test_method: "search/palette.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/search-ui-manifest.yaml#palette"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: SEARCH-FE-002
+    requirement: "TypeaheadSearch component debounces input and suppresses API calls during Korean IME composition (compositionstart → compositionend)"
+    backend_operation_id: search
+    backend_spec_ref: SEARCH-QUERY-002
+    static_source_ref: []
+    test_method: "search/typeahead-search-ime.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/search-ui-manifest.yaml#typeahead"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: SEARCH-FE-003
+    requirement: "Search results page renders ResultHighlighter that wraps matched terms in <mark> tags using ts_headline output from the backend"
+    backend_operation_id: search
+    backend_spec_ref: SEARCH-QUERY-001
+    static_source_ref: []
+    test_method: "search/results.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/search-ui-manifest.yaml#results"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: SEARCH-FE-004
+    requirement: "RecentSearches component persists last 10 queries in localStorage; renders them below the search input on focus; clicking a recent query re-triggers search"
+    backend_operation_id: search
+    backend_spec_ref: SEARCH-QUERY-001
+    static_source_ref: []
+    test_method: "search/recent-searches.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/search-ui-manifest.yaml#recent"
+    coverage_threshold: 1.0
+    backend_only_marker: false

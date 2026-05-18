@@ -24,6 +24,8 @@ package com.example.app.auditlog;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
@@ -49,6 +51,8 @@ import java.util.UUID;
  * <p>Rule references: AUDIT-RECORD-001, AUDIT-RECORD-002, AUDIT-RECORD-003.
  */
 @Entity
+@SQLDelete(sql = "UPDATE audit_logs SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+@Where(clause = "deleted_at IS NULL")
 @Table(
     name = "audit_logs",
     indexes = {
@@ -110,6 +114,14 @@ public class AuditLog {
     @Column(name = "metadata", updatable = false, columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
+    /**
+     * Soft-delete timestamp. NULL = active; non-null = logically deleted.
+     * Set by @SQLDelete — do not set directly.
+     * Excluded from all standard queries by @Where(clause = "deleted_at IS NULL").
+     */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     /** Required by JPA. Do not use directly — use {@link AuditLogBuilder}. */
     protected AuditLog() {}
 
@@ -139,6 +151,8 @@ public class AuditLog {
     public String getCorrelationId() { return correlationId; }
     public String getUserAgent() { return userAgent; }
     public Map<String, Object> getMetadata() { return metadata; }
+    public Instant getDeletedAt() { return deletedAt; }
+    public boolean isDeleted()    { return deletedAt != null; }
 
     // ─── Nested types ────────────────────────────────────────────────────────
 

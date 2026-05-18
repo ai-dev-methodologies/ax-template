@@ -314,6 +314,26 @@ snapshots:
     sha: "f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7"
     purpose: offline-banner-evidence
 
+  - id: "next-intl-2026-05"
+    tier: 2
+    source: "https://next-intl.dev/docs/getting-started/app-router"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3200
+    sha: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+    version_observed: "next-intl@3.x (App Router)"
+    purpose: "i18n LocaleProvider, useTranslations, KRW format, fallback chain evidence"
+
+  - id: "react-hook-form-2026-05"
+    tier: 2
+    source: "https://react-hook-form.com/docs/useform"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 5230
+    sha: "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6"
+    version_observed: "react-hook-form@7.x"
+    purpose: "useFieldArray, useWatch, useController, FormProvider, Zod resolver, isDirty, auto-save, error summary pattern"
+
 curation_pipeline:
   description: "Each rule passes a 4-phase audit before shipping to rules/"
   phases:

@@ -28,6 +28,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.SQLDelete;
 
 /**
  * Notification entity — in-app notification message for a specific recipient.
@@ -44,6 +45,7 @@ import java.util.UUID;
  * <p>Extends {@code BaseEntity} (from SP13) for: id (UUID), createdAt, updatedAt, deleted.
  */
 @Entity
+@SQLDelete(sql = "UPDATE notifications SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
 @Table(
     name = "notifications",
     indexes = {

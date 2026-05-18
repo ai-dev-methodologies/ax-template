@@ -1,0 +1,214 @@
+openapi: 3.0.3
+info:
+  title: ax-template Search API
+  description: |
+    Search domain REST contract. Covers full-text search (PostgreSQL FTS default,
+    Meilisearch opt-in), document indexing, and search index management.
+    All endpoints require a valid JWT Bearer token.
+  version: 0.1.0
+servers:
+  - url: /api/v1
+
+paths:
+  /search:
+    post:
+      operationId: search
+      summary: Full-text search across indexed documents
+      tags: [search]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: Paginated search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResultPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /search/index:
+    post:
+      operationId: indexDocument
+      summary: Index a document for full-text search
+      tags: [search]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndexDocumentRequest'
+      responses:
+        '201':
+          description: Document indexed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexDocumentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /search/index/{id}:
+    delete:
+      operationId: deleteDocument
+      summary: Remove a document from the search index
+      tags: [search]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Document removed from index
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  schemas:
+    SearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          description: Search query string (supports Korean/English)
+          example: "강남 결제"
+        domain:
+          type: string
+          description: Restrict search to a specific domain (e.g. notification, payment)
+          example: "payment"
+        page:
+          type: integer
+          default: 0
+          minimum: 0
+        size:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+
+    SearchResultPage:
+      type: object
+      required: [hits, totalHits, page, size, processingTimeMs]
+      properties:
+        hits:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchHit'
+        totalHits:
+          type: integer
+          description: Total number of matching documents
+        page:
+          type: integer
+        size:
+          type: integer
+        processingTimeMs:
+          type: integer
+          description: Backend search latency in milliseconds
+
+    SearchHit:
+      type: object
+      required: [id, domain, score]
+      properties:
+        id:
+          type: string
+          format: uuid
+        domain:
+          type: string
+          example: "payment"
+        title:
+          type: string
+        snippet:
+          type: string
+          description: Highlighted snippet with <mark> tags around matched terms
+        score:
+          type: number
+          format: float
+        metadata:
+          type: object
+          additionalProperties: true
+
+    IndexDocumentRequest:
+      type: object
+      required: [id, domain, content]
+      properties:
+        id:
+          type: string
+          format: uuid
+        domain:
+          type: string
+          example: "payment"
+        title:
+          type: string
+        content:
+          type: string
+          description: Plain text content to be indexed
+        metadata:
+          type: object
+          additionalProperties: true
+
+    IndexDocumentResponse:
+      type: object
+      required: [id, indexed]
+      properties:
+        id:
+          type: string
+          format: uuid
+        indexed:
+          type: boolean
+
+    Problem:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []

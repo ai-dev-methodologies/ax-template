@@ -1,0 +1,77 @@
+# SP27 Cross-Stack Dependencies
+# Emitted per PRD §7: each SP touching both Java + React must emit this file.
+#
+# SP27: Realtime polling-default transport + Form orchestration blocks
+
+sp: "SP27"
+title: "Realtime polling-default + Form orchestration"
+date: "2026-05-18"
+branch: "feat/functional-extension-sp23-sp29"
+
+java_artifacts:
+  - path: "blueprints/realtime-policy-manifest.yaml"
+    role: "policy anchor — polling-default, SSE/WebSocket opt-in"
+  - path: "templates/backend/realtime/SseEmitterConfig.java"
+    role: "SSE emitter registry (opt-in: ax.realtime.sse.enabled=true)"
+  - path: "templates/backend/realtime/SseSubscription.java"
+    role: "immutable record for subscription metadata"
+  - path: "templates/backend/realtime/RealtimeEventBus.java"
+    role: "transport-agnostic bus — no-op in polling mode, fans out to SSE when enabled"
+  - path: "templates/backend/realtime/RealtimeOutboxRelay.java"
+    role: "scheduled outbox-to-SSE relay (opt-in: ax.realtime.sse.enabled=true)"
+  - path: "templates/backend/realtime/WebSocketConfig.java"
+    role: "STOMP/WebSocket config (opt-in: ax.realtime.websocket.enabled=true)"
+
+react_artifacts:
+  - path: "templates/L2/blocks/event-stream.tsx"
+    role: "transport='polling' default; SSE gated behind transport==='sse'"
+  - path: "templates/L2/blocks/live-presence.tsx"
+    role: "polling presence; 5000ms default interval"
+  - path: "templates/L2/blocks/optimistic-update.tsx"
+    role: "useOptimisticUpdate<T> hook + OptimisticUpdateProvider"
+  - path: "templates/L2/blocks/field-array-extended.tsx"
+    role: "RHF useFieldArray, minItems/maxItems, render-prop, a11y fieldset"
+  - path: "templates/L2/blocks/conditional-field-extended.tsx"
+    role: "RHF useWatch, keepMounted, inert attribute"
+  - path: "templates/L2/blocks/dependent-field.tsx"
+    role: "upstream-driven select, optionsMap, useController"
+  - path: "templates/L2/blocks/form-error-summary-extended.tsx"
+    role: "recursive flattenErrors, aria-live=assertive, anchor focus links"
+  - path: "templates/L2/blocks/auto-save-indicator.tsx"
+    role: "useWatch debounce, 5 states, __axMetrics shim"
+  - path: "templates/L2/blocks/dirty-guard.tsx"
+    role: "beforeunload guard, __axMetrics, FormProvider fallback"
+  - path: "templates/L2/blocks/form-section-extended.tsx"
+    role: "fieldset/legend, step indicator, collapsible, 3 variants"
+  - path: "templates/L2/blocks/field-array.tsx"
+    role: "SP15 back-compat shell — @deprecated + re-export"
+  - path: "templates/L2/blocks/conditional-field.tsx"
+    role: "SP15 back-compat shell — @deprecated + re-export"
+  - path: "templates/L2/blocks/form-error-summary.tsx"
+    role: "SP15 back-compat shell — @deprecated + re-export"
+  - path: "templates/L2/blocks/form-section.tsx"
+    role: "SP15 back-compat shell — @deprecated + re-export"
+
+upstream_snapshots:
+  - id: "spring-mvc-sse-2026-05"
+    catalog: "practices/upstream"
+    evidence_for: "SseEmitterConfig, RealtimeOutboxRelay, WebSocketConfig Java templates"
+  - id: "react-hook-form-2026-05"
+    catalog: "practices-react/upstream"
+    evidence_for: "field-array-extended, conditional-field-extended, dependent-field, form-error-summary-extended, auto-save-indicator, dirty-guard form blocks"
+
+eval_guards:
+  - path: "practices/evals/fixtures/realtime_default_polling/_run.sh"
+    checks: "blueprint exists, default_transport=polling, not SSE default, serverless_safe warning"
+  - path: "practices/evals/fixtures/form_extended_supersede/_run.sh"
+    checks: "all 4 SP15 shells have @deprecated + re-export from -extended"
+
+tdd_fixtures:
+  - path: "templates/L2/_fixtures/realtime-default-polling.spec.ts"
+  - path: "templates/L2/_fixtures/dirty-guard.spec.ts"
+  - path: "templates/L2/_fixtures/auto-save-indicator.spec.ts"
+
+adr:
+  - id: "TD-2026-05-18-027"
+    decision: "polling-is-default; SSE/WebSocket are opt-in via ConditionalOnProperty"
+    rationale: "serverless runtime compatibility (Vercel/Lambda enforce 10-60s function timeouts)"

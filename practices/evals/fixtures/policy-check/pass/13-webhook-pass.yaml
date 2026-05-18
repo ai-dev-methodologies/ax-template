@@ -1,0 +1,11 @@
+# Policy-check eval fixture
+# Query webhook tag matches webhook security rules
+description: "Query webhook tag matches webhook security rules"
+query:
+  domain: webhook
+expect:
+  contains:
+    - PRACTICES-INTEG-001
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-ERR-001

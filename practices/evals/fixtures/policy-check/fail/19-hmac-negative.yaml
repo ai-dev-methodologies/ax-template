@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# HMAC tag does not return persistence or cache rules
+description: "HMAC tag does not return persistence or cache rules"
+query:
+  domain: hmac
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-CACHE-001

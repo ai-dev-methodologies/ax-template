@@ -1,0 +1,13 @@
+# Policy-check eval fixture
+# Query observability tag matches observability rules
+description: "Query observability tag matches observability rules"
+query:
+  domain: observability
+expect:
+  contains:
+    - PRACTICES-OBS-001
+    - PRACTICES-OBS-002
+    - PRACTICES-OBS-003
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-TX-001

@@ -54,27 +54,36 @@ import java.util.Optional;
 public interface BaseRepository<T, ID> extends JpaRepository<T, ID> {
 
     /**
-     * Returns all non-deleted (active) entities, paginated.
+     * Returns all active (non-soft-deleted) entities, paginated.
      *
-     * <p>Replace {@code e.deleted = false} with the actual field name if your
-     * entity uses a different convention (e.g. {@code e.deletedAt IS NULL}).
+     * <p>For entities extending {@code BaseEntity}, the {@code @Where(clause = "deleted_at IS NULL")}
+     * on the superclass already filters out soft-deleted rows from all standard JPQL queries.
+     * This explicit query is provided for repositories whose entity does NOT extend BaseEntity
+     * but still carries a {@code deletedAt} field.
      */
-    @Query("SELECT e FROM #{#entityName} e WHERE e.deleted = false")
+    @Query("SELECT e FROM #{#entityName} e WHERE e.deletedAt IS NULL")
     Page<T> findAllActive(Pageable pageable);
 
     /**
      * Returns an active entity by ID. Returns empty if deleted.
+     *
+     * <p>For BaseEntity subclasses, {@code findById} already excludes deleted rows via
+     * {@code @Where}. Use this method when the entity does not extend BaseEntity.
      */
-    @Query("SELECT e FROM #{#entityName} e WHERE e.id = :id AND e.deleted = false")
+    @Query("SELECT e FROM #{#entityName} e WHERE e.id = :id AND e.deletedAt IS NULL")
     Optional<T> findActiveById(ID id);
 
     /**
-     * Soft-deletes an entity by marking {@code deleted = true}.
+     * Soft-deletes an entity via a JPQL UPDATE.
+     *
+     * <p>Prefer calling {@code repository.deleteById(id)} for BaseEntity subclasses —
+     * Hibernate intercepts the underlying DELETE and runs the {@code @SQLDelete} UPDATE
+     * automatically. This JPQL method is provided as an explicit alternative for batch
+     * or conditional soft-delete operations.
      *
      * <p>The entity row is retained; historical data and FK integrity are preserved.
-     * Hard-delete via {@link #deleteById(Object)} is still available for administrative use.
      */
     @Modifying
-    @Query("UPDATE #{#entityName} e SET e.deleted = true WHERE e.id = :id")
-    void softDelete(ID id);
+    @Query("UPDATE #{#entityName} e SET e.deletedAt = CURRENT_TIMESTAMP WHERE e.id = :id AND e.deletedAt IS NULL")
+    int softDelete(ID id);
 }

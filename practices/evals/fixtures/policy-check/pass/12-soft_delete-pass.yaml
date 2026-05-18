@@ -1,0 +1,12 @@
+# Policy-check eval fixture
+# Query soft-delete tag matches only soft-delete rules
+description: "Query soft-delete tag matches only soft-delete rules"
+query:
+  domain: soft-delete
+expect:
+  contains:
+    - PRACTICES-PERS-005
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-ERR-001
+    - PRACTICES-CACHE-001

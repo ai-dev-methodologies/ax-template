@@ -1,0 +1,11 @@
+# Policy-check eval fixture
+# Testing tag does not return error-handling rules
+description: "Testing tag does not return error-handling rules"
+query:
+  domain: testing
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-ERR-001
+    - PRACTICES-ERR-002
+    - PRACTICES-PERS-005

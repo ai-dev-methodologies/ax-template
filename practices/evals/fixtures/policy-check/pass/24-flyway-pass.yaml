@@ -1,0 +1,11 @@
+# Policy-check eval fixture
+# Query flyway tag matches flyway migration rules
+description: "Query flyway tag matches flyway migration rules"
+query:
+  domain: flyway
+expect:
+  contains:
+    - PRACTICES-MIGRATION-001
+  not_contains:
+    - PRACTICES-ERR-001
+    - PRACTICES-TX-001

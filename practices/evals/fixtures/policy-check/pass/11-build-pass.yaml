@@ -1,0 +1,12 @@
+# Policy-check eval fixture
+# Query build tag matches build rules
+description: "Query build tag matches build rules"
+query:
+  domain: build
+expect:
+  contains:
+    - PRACTICES-BUILD-001
+    - PRACTICES-BUILD-002
+  not_contains:
+    - PRACTICES-TX-001
+    - PRACTICES-ERR-001

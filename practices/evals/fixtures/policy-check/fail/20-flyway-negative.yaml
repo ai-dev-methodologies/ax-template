@@ -1,0 +1,10 @@
+# Policy-check eval fixture
+# Flyway tag does not return error-handling or cache rules
+description: "Flyway tag does not return error-handling or cache rules"
+query:
+  domain: flyway
+expect:
+  contains:
+  not_contains:
+    - PRACTICES-ERR-001
+    - PRACTICES-CACHE-001

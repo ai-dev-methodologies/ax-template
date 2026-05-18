@@ -9,6 +9,13 @@ items:
     verification_type: "integration_test"
     applicable: true
     notes: "Integration test asserts Hibernate Statistics.getQueryExecutionCount() == 1 (or a small constant) when iterating a parent collection. The naive lazy-iterate path is shown in the corresponding rule .md as the Incorrect example."
+  - id: "PRACTICES-PERS-005"
+    chapter: "Persistence / Soft Delete"
+    requirement: "Soft-delete must be implemented via @SQLDelete (UPDATE … SET deleted_at = CURRENT_TIMESTAMP) and @Where(clause = 'deleted_at IS NULL'), not via a boolean deleted flag. Every @Entity that uses @SQLDelete must also carry @Where to auto-filter deleted rows from all JPQL queries."
+    test_method: "practices_PERS_005_softDeletedRecordDisappearsFromList"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "RestAssured IT creates a record, soft-deletes via DELETE endpoint, then asserts it no longer appears in GET list (filtered by @Where). ArchUnit rule (BaseEntitySoftDeleteArchTest) asserts: (1) @SQLDelete → @Where co-presence; (2) no boolean 'deleted' field on @Entity classes."
   - id: "PRACTICES-TX-001"
     chapter: "Transaction Management"
     requirement: "Self-invocation of @Transactional methods through this.method() bypasses the proxy and does not start a transaction. Call across a separate bean to honor @Transactional."
@@ -93,3 +100,17 @@ items:
     verification_type: "integration_test"
     applicable: true
     notes: "Concurrent test runs 32 × 1000 increments; the atomic-backed bean is exact, the unsynchronized counterpart is bounded above by the expected total (lost updates expected on real hardware)."
+  - id: "PRACTICES-INTEG-001"
+    chapter: "Integration / Webhook Security"
+    requirement: "Webhook receiver endpoints must verify the HMAC-SHA256 signature of every inbound request before processing the event. Missing or invalid signatures must be rejected with 401 Unauthorized. Verification must use constant-time comparison to prevent timing attacks."
+    test_method: "practices_INTEG_001_webhookReceiverVerifiesHmacSignature"
+    verification_type: "unit_test"
+    applicable: true
+    notes: "Fixture-based unit test asserts: pass fixture contains MessageDigest.isEqual; fail fixture without signature check is detected via AST pattern (controller @PostMapping without HMAC call). See failing_fixture_path / passing_fixture_path in rule."
+  - id: "PRACTICES-INTEG-002"
+    chapter: "Integration / Chunked Import"
+    requirement: "CSV and Excel import operations that may receive more than 1000 rows must process data in chunks (batch size ≤ 1000 rows per transaction). Loading all rows into heap before persisting causes OutOfMemoryError at production scale and prevents partial-progress recovery."
+    test_method: "practices_INTEG_002_csvImportUsesChunkedProcessing"
+    verification_type: "unit_test"
+    applicable: true
+    notes: "Fixture-based unit test asserts: pass fixture declares CHUNK_SIZE constant and @Transactional on persistChunk; fail fixture using readAll() without chunking is detected. CsvImportChunkedIT (10k rows, no OOM) is the integration anchor."

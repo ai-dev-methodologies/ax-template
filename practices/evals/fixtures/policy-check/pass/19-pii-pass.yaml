@@ -1,0 +1,11 @@
+# Policy-check eval fixture
+# Query pii tag matches PII protection rules
+description: "Query pii tag matches PII protection rules"
+query:
+  domain: pii
+expect:
+  contains:
+    - PRACTICES-OBS-003
+  not_contains:
+    - PRACTICES-PERS-005
+    - PRACTICES-TX-001

@@ -1,0 +1,58 @@
+template_id: feature-flags-ui-blueprint
+family: scaffold
+status: draft
+confidence: medium
+stack:
+  frontend: nextjs-app-router
+  state: tanstack-query
+  l2_blocks: [FeatureGate, FeatureFlagToggle]
+  l4_pages: [admin-list, admin-detail]
+
+# ─── admin-list ───────────────────────────────────────────────────────────────
+admin-list:
+  route: /admin/feature-flags
+  component: templates/L4/feature-flags/app/(admin)/feature-flags/page.tsx
+  operations: [listFeatureFlags, updateFeatureFlag]
+  trace:
+    FF-FE-001: table + toggle + empty state
+    FF-FE-002: toggle calls PATCH with optimistic update
+
+# ─── admin-detail ─────────────────────────────────────────────────────────────
+admin-detail:
+  route: "/admin/feature-flags/[name]"
+  component: "templates/L4/feature-flags/app/(admin)/feature-flags/[name]/page.tsx"
+  operations: [updateFeatureFlag]
+  trace:
+    FF-FE-003: toggle + description editor + Save/Cancel
+
+# ─── feature-gate ─────────────────────────────────────────────────────────────
+feature-gate:
+  component: templates/L2/blocks/feature-gate.tsx
+  operation: isFeatureFlagActive
+  behavior:
+    loading: renders null (no flash)
+    inactive: renders fallback prop or null
+    active: renders children
+    error: renders fallback (fail-closed)
+  trace:
+    FF-FE-004: gate renders children or fallback based on flag state
+
+# ─── toggle ───────────────────────────────────────────────────────────────────
+toggle:
+  component: templates/L2/blocks/feature-flag-toggle.tsx
+  operation: updateFeatureFlag
+  behavior:
+    optimistic: true          # local state updates immediately
+    rollback_on_error: true   # reverts if PATCH fails
+    feedback: toast           # uses toast from L1 toast primitive
+  trace:
+    FF-FE-002: PATCH on toggle, optimistic update, rollback
+
+# ─── middleware ───────────────────────────────────────────────────────────────
+middleware:
+  file: templates/L4/feature-flags/middleware.ts
+  operation: isFeatureFlagActive
+  strategy: server_side_redirect
+  redirect_target: /not-found
+  trace:
+    FF-FE-005: server-side eval redirects when flag inactive
