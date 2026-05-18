@@ -16,6 +16,10 @@ metadata:
     - 'skills/ax-verify/SKILL.md'
   bashPatterns:
     - 'bash skills/ax-verify/scripts/run-all.sh'
+    - 'bash skills/ax-verify/scripts/_legacy-call-compat.sh'
+    - 'bash skills/ax-verify/scripts/policy-check.sh'
+    - 'bash skills/ax-verify/scripts/evidence-fetch.sh'
+    - 'bash skills/ax-verify/scripts/explain.sh'
   importPatterns: []
 retrieval:
   aliases:
@@ -24,13 +28,26 @@ retrieval:
     - run all checks
     - full suite
     - binary pass fail
+    - policy-check
+    - evidence-fetch
+    - explain rule
+    - pre-execution gate
+    - evidence freshness
+    - rule lookup
   intents:
     - verify the entire repo
     - check all guards pass
     - run end-to-end verification
     - confirm SP is done
+    - check which rules apply before editing
+    - look up a rule explanation
+    - check evidence freshness
   entities:
     - run-all.sh
+    - policy-check.sh
+    - evidence-fetch.sh
+    - explain.sh
+    - _legacy-call-compat.sh
     - guards
     - testDomain
     - Playwright
@@ -107,3 +124,110 @@ write an ESCAPE file at `docs/superpowers/escape/<timestamp>.md` and halt.
 bash skills/ax-verify/scripts/run-all.sh
 # Expected: exit 0
 ```
+
+---
+
+## Subcommands (SP29 — F13/F14/F15)
+
+`/ax-verify` now supports subcommands via `_legacy-call-compat.sh`. The Tier-1 cap
+stays at 4 (ax-transform · ax-verify · ax-scaffold · ax-fork-receiver) — these are
+extensions of the existing ax-verify skill, not new Tier-1 skills.
+
+### Subcommand routing table
+
+| Invocation | Script | Purpose |
+|---|---|---|
+| `/ax-verify all` | `run-all.sh` | Full verification suite (legacy, preserved) |
+| `/ax-verify guards` | `run-all-guards.sh` | Guards only (legacy, preserved) |
+| `/ax-verify backend` | `run-backend.sh` | Gradle backend tests only (legacy) |
+| `/ax-verify frontend-unit` | `run-frontend-unit.sh` | Vitest unit tests only (legacy) |
+| `/ax-verify e2e` | `run-e2e.sh` | Playwright E2E only (legacy) |
+| `/ax-verify policy-check` | `policy-check.sh` | F13: pre-execution rule gate |
+| `/ax-verify evidence-fetch` | `evidence-fetch.sh` | F14: evidence freshness check |
+| `/ax-verify explain` | `explain.sh` | F15: rule explanation lookup |
+
+### F13 — policy-check (pre-execution gate)
+
+AI agents invoke this **before editing files** to discover applicable catalog rules.
+
+```bash
+# Discover rules for a domain tag
+bash skills/ax-verify/scripts/policy-check.sh --domain persistence
+
+# Infer domain from a file path
+bash skills/ax-verify/scripts/policy-check.sh --file backend/src/main/java/com/example/UserRepository.java
+
+# Look up a specific rule summary
+bash skills/ax-verify/scripts/policy-check.sh --rule PRACTICES-PERS-005
+
+# JSON output for programmatic consumption
+bash skills/ax-verify/scripts/policy-check.sh --domain error --format json
+
+# List all known tags
+bash skills/ax-verify/scripts/policy-check.sh --list-tags
+```
+
+Exit 0 = lookup complete (0 or more rules printed). The agent must read the output
+and comply with all RULE entries before writing code.
+
+### F14 — evidence-fetch (evidence freshness check)
+
+Detects catalog rules with missing, empty, or broken evidence blocks.
+
+```bash
+# Check all rules in practices/ catalog
+bash skills/ax-verify/scripts/evidence-fetch.sh --all
+
+# Check a specific rule
+bash skills/ax-verify/scripts/evidence-fetch.sh --rule PRACTICES-PERS-005
+
+# Also probe upstream URLs (requires network; slow)
+bash skills/ax-verify/scripts/evidence-fetch.sh --all --http-check
+
+# Check practices-react catalog
+bash skills/ax-verify/scripts/evidence-fetch.sh --all --catalog practices-react
+```
+
+Exit 0 = all checked rules have valid evidence. Exit 1 = issues found.
+Issues detected: `no_evidence_block`, `empty_evidence_block`, `unknown_upstream_id`,
+`external_missing_url`, `external_missing_citation`.
+
+### F15 — explain (rule explanation lookup)
+
+Returns a structured explanation of any catalog rule.
+
+```bash
+# Look up by spec_id
+bash skills/ax-verify/scripts/explain.sh PRACTICES-PERS-005
+
+# Look up by keyword (searches title, tags, filename)
+bash skills/ax-verify/scripts/explain.sh soft-delete
+
+# JSON output
+bash skills/ax-verify/scripts/explain.sh --format json PRACTICES-ERR-001
+
+# List all rule IDs with titles
+bash skills/ax-verify/scripts/explain.sh --list
+```
+
+Exit 0 = rule found. Exit 1 = not found.
+
+### Backward compatibility
+
+All legacy `/ax-verify <step>` calls continue to work unchanged:
+
+```bash
+bash skills/ax-verify/scripts/_legacy-call-compat.sh all
+bash skills/ax-verify/scripts/_legacy-call-compat.sh guards
+bash skills/ax-verify/scripts/_legacy-call-compat.sh backend
+bash skills/ax-verify/scripts/_legacy-call-compat.sh frontend-unit
+bash skills/ax-verify/scripts/_legacy-call-compat.sh e2e
+bash skills/ax-verify/scripts/_legacy-call-compat.sh policy-check --domain persistence
+bash skills/ax-verify/scripts/_legacy-call-compat.sh explain PRACTICES-PERS-005
+```
+
+### Eval set
+
+50-fixture false-positive rate eval lives at `practices/evals/fixtures/policy-check/`.
+Run via: `bash skills/_tests/policy-check-fp-rate.test.sh`
+Acceptance: FP rate < 5% (at most 1 phantom rule per 25 pass-fixture assertions).
