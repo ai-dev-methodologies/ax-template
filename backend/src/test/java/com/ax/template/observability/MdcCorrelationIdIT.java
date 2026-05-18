@@ -1,5 +1,6 @@
 package com.ax.template.observability;
 
+import com.ax.template.authblueprint.AuthBlueprintBackendApplication;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,7 @@ import static org.hamcrest.Matchers.*;
  * @see <a href="https://www.w3.org/TR/trace-context/#trace-id">W3C Trace Context</a>
  */
 @Tag("OBSERVABILITY")
-@SpringBootTest
+@SpringBootTest(classes = AuthBlueprintBackendApplication.class)
 @AutoConfigureMockMvc
 class MdcCorrelationIdIT {
 
