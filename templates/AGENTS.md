@@ -1,9 +1,9 @@
 ---
 sentinel:
-  source_concat_sha256: "4f6d702d64bc65a70f930077131b95867582c75160197949159d9b4a4a91852a"
+  source_concat_sha256: "3d5e71d25109b18fef2e0b2e40678b5a5fefa25b57330f6ad203ff55be25a152"
   source_file_count: 30
   generated_by: "templates/generate_agents.sh"
-  generated_at: "2026-05-18T06:40:24Z"
+  generated_at: "2026-05-18T07:22:29Z"
 ---
 
 # templates/ — AGENTS.md (auto-generated)

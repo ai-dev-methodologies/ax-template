@@ -1133,3 +1133,406 @@ KISA CI/DI tokens are the lawful substitute for all identity-linking use cases.
 - Pass fixture: `practices/evals/fixtures/no-rrn-collection-without-legal-basis/pass_ci_di_verified/RegistrationDto.java`
 - Rule exclusion list: `ci, di, verifiedIdentityNumber, connectingInfo, duplicateInfo, externalId`
 - practices/AGENTS.md sentinel must be regenerated after this rule addition
+
+---
+
+## TD-2026-05-19-001 — SP30: Billing domain delivered as atomic full_trio
+
+```yaml
+---
+adr_id: TD-2026-05-19-001
+title: "SP30 billing domain delivered as atomic full_trio commit — subscription lifecycle, plan management, invoice listing, billing events"
+provenance_class: internal_design
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-18-functional-extension-pr2-codex-review.md
+  rationale: |
+    SP30 delivers a complete billing domain in one atomic commit: backend Spec Trio
+    (specs/billing-l0.yaml, contracts/billing-openapi.yaml, blueprints/billing-manifest.yaml),
+    frontend Spec Trio (specs/billing-frontend-l0.yaml, contracts/billing-ui.yaml,
+    blueprints/billing-frontend-manifest.yaml), 8 RestAssured tests, 5 Vitest TDD anchors,
+    L2 PlanComparison/SubscriptionStatus/InvoiceTable/BillingHistory/BillingEventLog blocks,
+    L4 BillingDashboard composition spec, 4 Java + 2 React practices rules, and upstream
+    snapshots for Stripe Billing and Toss Payments. All 4 hard gates pass on commit.
+spec_ref: "specs/billing-l0.yaml#BILLING-STATE-001"
+status: ACCEPTED
+date: 2026-05-19
+---
+```
+
+### Decision
+
+Billing domain is the 5th domain in ax-template (after auth, CRUD, payment, practices).
+Delivered as a single atomic commit on feat/p1-absorption-sp30-sp34 with all Spec Trio
+files, backend implementation anchors, L2 blocks, and practices catalog rules in one pass.
+
+### Rationale
+
+Atomic delivery ensures that trio_integrity_guard validates the full domain at commit
+time, preventing partial states where backend specs exist without frontend counterparts
+or vice versa. Single-commit atomicity also makes the domain easy to cherry-pick
+into a fork.
+
+### Consequences
+
+- `practices/evals/trio_integrity_allowlist.yaml`: `billing: full_trio` entry added
+- `practices/AGENTS.md`: sentinel regenerated with 81 rules (+6 billing rules)
+- `backend/src/test/java/.../billing/BillingFlowIT.java`: 8 RestAssured tests (@Tag("BILLING"))
+
+---
+
+## TD-2026-05-19-002 — SP30: SubscriptionStateMachine as sole status mutator
+
+```yaml
+---
+adr_id: TD-2026-05-19-002
+title: "Subscription.applyStatusTransition() is package-private; only SubscriptionStateMachine may call it"
+provenance_class: internal_design
+evidence:
+  source_type: external
+  citation: "Domain-Driven Design — Aggregates encapsulate invariants; state transitions are explicit methods on the aggregate, not raw field mutations"
+  url: "https://martinfowler.com/bliki/DDD_Aggregate.html"
+  quoted_at: "2026-05-18"
+spec_ref: "specs/billing-l0.yaml#BILLING-STATE-001"
+status: ACCEPTED
+date: 2026-05-19
+---
+```
+
+### Decision
+
+`Subscription.applyStatusTransition()` is declared `package-private`. Only
+`SubscriptionStateMachine` (same package) may call it. ArchUnit test
+`OnlyStateMachineMutatesSubscriptionStatusArchTest` enforces this via
+`noClasses().that().areNotAssignableTo(SubscriptionStateMachine.class).should()
+.callMethodWhere(target().hasName("applyStatusTransition")...)`.
+
+### Rationale
+
+Direct mutation bypasses: (1) transition validation (TRIAL→PAST_DUE is invalid),
+(2) BillingEvent recording (audit trail gap), (3) observability counter emission.
+DDD aggregate pattern: the state machine IS the invariant enforcer for Subscription.
+
+### Consequences
+
+- Rule: `practices/rules/subscription-state-machine-explicit.md` (CRITICAL)
+- Failing fixture: `practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/`
+- All service code must call `stateMachine.transition(sub, Trigger.X, metadata)`
+
+---
+
+## TD-2026-05-19-003 — SP30: BillingEvent idempotency via DB UNIQUE constraint
+
+```yaml
+---
+adr_id: TD-2026-05-19-003
+title: "All BillingEvent writes must carry a unique idempotencyKey; duplicate webhook delivery is silently absorbed at the DB constraint"
+provenance_class: internal_design
+evidence:
+  source_type: upstream_id
+  upstream_id: stripe-billing-2026-05
+  section: "Idempotency"
+  quote: "Stripe stores results for at least 24 hours. Retrying the same key within the window returns the original response without creating a duplicate resource."
+spec_ref: "specs/billing-l0.yaml#BILLING-IDEMP-001"
+status: ACCEPTED
+date: 2026-05-19
+---
+```
+
+### Decision
+
+`billing_events.idempotency_key` has a DB UNIQUE constraint. `BillingEvent.fromWebhook()`
+and `BillingEvent.createInternal()` require a non-null `idempotencyKey` parameter.
+`WebhookBillingReceiver` catches `DataIntegrityViolationException` from duplicate-key
+inserts and returns HTTP 200 without re-processing. Counter `billing.event.idempotency_hit_count`
+increments on each detected duplicate.
+
+### Rationale
+
+Both Stripe and Toss Payments guarantee at-least-once webhook delivery. Without idempotency,
+the same event causes double state transitions, double counter increments, and incorrect
+invoice generation.
+
+### Consequences
+
+- Rule: `practices/rules/billing-event-idempotent.md` (CRITICAL)
+- Failing fixture: `practices/evals/fixtures/billing-event-idempotent/fail_no_idempotency_key/`
+
+---
+
+## TD-2026-05-19-004 — SP30: Long integer minor units for all monetary amounts
+
+```yaml
+---
+adr_id: TD-2026-05-19-004
+title: "All monetary amounts in billing domain stored as long integer minor units; float/double/BigDecimal prohibited"
+provenance_class: internal_design
+evidence:
+  source_type: upstream_id
+  upstream_id: stripe-billing-2026-05
+  section: "Amounts and currencies"
+  quote: "All amounts are stored in the smallest currency unit (e.g., 100 cents to charge $1.00). For zero-decimal currencies such as JPY or KRW, use the amount directly."
+spec_ref: "specs/billing-l0.yaml#BILLING-CUR-001"
+status: ACCEPTED
+date: 2026-05-19
+---
+```
+
+### Decision
+
+All fields matching `.*[Aa]mount.*|.*[Pp]rice.*|.*[Ff]ee.*|.*[Cc]ost.*` in the
+`..billing..` package must be `long`. KRW: 1,000원 = `1000L`. USD: $9.99 = `999L`.
+ArchUnit test `CurrencyAmountPrecisionArchTest` enforces this. HTTP boundary: `@Positive long`
+in request records rejects float JSON with HTTP 400.
+
+### Rationale
+
+float/double: silent rounding (10.1 → 10.0999...). BigDecimal: mutable and verbose.
+Stripe and Toss both use integer minor units as the canonical wire format.
+
+### Consequences
+
+- Rule: `practices/rules/currency-amount-precision-explicit.md` (CRITICAL)
+- Frontend: `formatCurrencyAmount(amount, currency, locale)` required for display
+
+---
+
+## TD-2026-05-19-005 — SP30: billing↔payment bounded-context boundary enforced by ArchUnit
+
+```yaml
+---
+adr_id: TD-2026-05-19-005
+title: "billing and payment packages must not import each other; boundary enforced by ArchUnit BillingPaymentBoundaryArchTest"
+provenance_class: internal_design
+evidence:
+  source_type: external
+  citation: "Domain-Driven Design (Evans): Each bounded context has an explicit contract at its boundary. Cross-importing internals couples contexts at the class level."
+  url: "https://martinfowler.com/bliki/BoundedContext.html"
+  quoted_at: "2026-05-18"
+spec_ref: "specs/billing-l0.yaml#BILLING-BOUNDARY-001"
+status: ACCEPTED
+date: 2026-05-19
+---
+```
+
+### Decision
+
+`BillingPaymentBoundaryArchTest` enforces two directional rules:
+`noClasses().that().resideInAPackage("..billing..").should().dependOnClassesThat().resideInAPackage("..payment..")`
+and vice versa. Cross-context communication uses Spring `ApplicationEvent` (e.g.,
+`SubscriptionRenewalDueEvent`) + a coordinator in a shared layer.
+
+### Rationale
+
+Subscription lifecycle (billing) and one-shot authorize/capture/refund (payment) are
+separate bounded contexts. Cross-importing forces cascading changes when payment
+internals evolve and breaks independent deployability.
+
+### Consequences
+
+- Rule: `practices/rules/no-billing-cross-import-from-payment.md` (CRITICAL)
+- React rule: `practices-react/rules/no-billing-cross-import-from-payment.md`
+
+---
+
+## TD-2026-05-19-006 — SP32: Rich-content L3 templates (TipTap + Markdown + FieldWizard + ConfirmModal)
+
+```yaml
+---
+adr_id: TD-2026-05-19-006
+title: "SP32 adds 4 rich-content L3 reusable templates: TiptapEditor, MarkdownRenderer, FieldWizard, ConfirmModal"
+provenance_class: internal_design
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-18-functional-extension-pr2-codex-review.md
+  rationale: |
+    SP32 delivers the most commonly-requested form and content primitives that appear
+    across all enterprise apps: rich-text editing, Markdown rendering, multi-step form
+    wizard, and confirmation dialog. All templates follow L3 conventions (TypeScript,
+    named exports, no page-level concerns).
+spec_ref: "specs/billing-frontend-l0.yaml#BILLING-FE-001"
+status: ACCEPTED
+date: 2026-05-19
+---
+```
+
+### Decision
+
+Four L3 templates added to `templates/L3/`:
+- `TiptapEditor.tsx` — TipTap rich-text editor with toolbar
+- `MarkdownRenderer.tsx` — react-markdown with syntax highlighting
+- `FieldWizard.tsx` — multi-step form wizard with progress stepper
+- `ConfirmModal.tsx` — accessible confirmation dialog with destructive variant
+
+### Rationale
+
+These primitives appear in virtually every enterprise app (CMS, onboarding flows,
+delete confirmations). L3 placement means they are composition-ready without
+page-level concerns, making them directly forkable.
+
+### Consequences
+
+- `templates/AGENTS.md` sentinel regenerated to include new L3 source files
+
+---
+
+## TD-2026-05-19-007 — SP33: Advanced tables/filters L3 templates
+
+```yaml
+---
+adr_id: TD-2026-05-19-007
+title: "SP33 adds AdvancedFilterBuilder, SavedView, TreeTable L3 templates for complex data grid use cases"
+provenance_class: internal_design
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-18-functional-extension-pr2-codex-review.md
+  rationale: |
+    Advanced filter builders and tree tables are frequently requested in enterprise
+    apps but rarely exist in open-source templates. SP33 fills this gap with
+    composable, accessible L3 blocks following ax-template conventions.
+spec_ref: "specs/practices-frontend-l0.yaml#PRACTICES-FE-001"
+status: ACCEPTED
+date: 2026-05-19
+---
+```
+
+### Decision
+
+Three L3 templates added:
+- `AdvancedFilterBuilder.tsx` — composable filter builder with add/remove rules
+- `SavedView.tsx` — save/load/delete named filter presets
+- `TreeTable.tsx` — collapsible tree table with lazy-load support
+
+All use React context for state, keyboard-navigable, WCAG 2.1 AA.
+
+### Rationale
+
+These are the most commonly-requested advanced data presentation patterns in
+enterprise dashboards. Without them, teams implement ad-hoc solutions that
+diverge from the template's conventions.
+
+### Consequences
+
+- `templates/AGENTS.md` sentinel refreshed
+
+---
+
+## TD-2026-05-19-008 — SP34: Admin/settings polish — ImpersonationBanner + ThemeSwitcher
+
+```yaml
+---
+adr_id: TD-2026-05-19-008
+title: "SP34 adds ImpersonationBanner and ThemeSwitcher as L3 admin-layer templates; ThemeSwitcher uses CSS custom property strategy, not class-based"
+provenance_class: internal_design
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-18-functional-extension-pr2-codex-review.md
+  rationale: |
+    Admin impersonation (acting as another user) is a critical CRM/support feature.
+    ThemeSwitcher is required for dark/light mode support mandated by WCAG 1.4.3.
+    CSS custom property strategy (vs class-based) avoids Flash Of Unstyled Content
+    and is compatible with SSR without hydration mismatch.
+spec_ref: "specs/practices-frontend-l0.yaml#PRACTICES-FE-001"
+status: ACCEPTED
+date: 2026-05-19
+---
+```
+
+### Decision
+
+- `ImpersonationBanner.tsx`: persistent top banner displayed when admin is acting as
+  another user; includes "Exit Impersonation" CTA; reads from `useAuthStore`.
+- `ThemeSwitcher.tsx`: toggles `data-theme` attribute on `<html>`; persists choice
+  to `localStorage`; CSS custom properties (`--color-bg`, `--color-text`) change
+  automatically without JS class toggling.
+
+### Rationale
+
+CSS custom property strategy: SSR renders without a theme class, so there's no
+flash of wrong theme. The `data-theme` attribute is set synchronously in a script
+tag before React hydrates, preventing CLS.
+
+### Consequences
+
+- `templates/L3/ImpersonationBanner.tsx` and `ThemeSwitcher.tsx` added
+- `templates/AGENTS.md` sentinel refreshed
+
+---
+
+## TD-2026-05-19-009 — FINAL: Next.js 15 middleware must be placed in src/, not project root
+
+```yaml
+---
+adr_id: TD-2026-05-19-009
+title: "When using the src/ directory layout, Next.js 15 silently ignores root-level middleware.ts; file must be at src/middleware.ts"
+provenance_class: internal_design
+evidence:
+  source_type: external
+  citation: "Next.js docs — Middleware: If using a src directory, place the middleware.ts file inside the src directory. The root-level file will be silently ignored."
+  url: "https://nextjs.org/docs/app/building-your-application/routing/middleware"
+  quoted_at: "2026-05-19"
+spec_ref: N/A
+status: ACCEPTED
+date: 2026-05-19
+---
+```
+
+### Decision
+
+`frontend/middleware.ts` (root) → `frontend/src/middleware.ts`. The root file was
+silently ignored by Next.js 15.5.x build, producing an empty `middleware-manifest.json`
+and bypassing all auth guards in E2E tests. Discovered during FINAL verification
+when `page.goto('/dashboard')` returned 200 (no redirect) despite correct middleware
+logic.
+
+### Rationale
+
+Next.js 15 changed behavior: projects using `src/` directory layout MUST place
+middleware in `src/middleware.ts`. The build silently succeeds without the file,
+making this a dangerous non-obvious failure.
+
+### Consequences
+
+- `frontend/src/middleware.ts` is the canonical location going forward
+- All fork-receiver templates must reflect `src/middleware.ts` placement
+- E2E test: `page.goto('/dashboard')` now correctly lands on `/login?from=...`
+
+---
+
+## TD-2026-05-19-010 — FINAL: P1 absorption complete — v1.2.0-p1-absorbed tag anchors SP30–SP34
+
+```yaml
+---
+adr_id: TD-2026-05-19-010
+title: "P1 absorption (SP30–SP34) complete; v1.2.0-p1-absorbed tag marks the verified, releasable state"
+provenance_class: internal_design
+evidence:
+  source_type: internal
+  source_ref: docs/superpowers/specs/2026-05-18-functional-extension-pr2-codex-review.md
+  rationale: |
+    v1.2.0-p1-absorbed is the first release tag that includes all P1 priority items
+    from the functional extension PRD: SP30 (billing full_trio), SP31 (Korean specials),
+    SP32 (rich-content L3), SP33 (advanced tables L3), SP34 (admin/settings polish).
+    All verification gates pass: 7 guards, 5 backend test domains, 447 E2E tests
+    (8 env-gated skips), fork-receiver bundle, trio_integrity for 13 domains.
+spec_ref: N/A
+status: ACCEPTED
+date: 2026-05-19
+---
+```
+
+### Decision
+
+Tag `v1.2.0-p1-absorbed` is created on `feat/p1-absorption-sp30-sp34` branch at the
+commit that includes all SP30–SP34 work plus the FINAL verification fixes. The tag
+is pushed to origin and a PR is opened to merge into main.
+
+Semantic versioning rationale:
+- `v1.2.0`: minor bump because P1 absorption adds 5 new domains/feature clusters
+- `p1-absorbed` suffix: documents the PRD milestone this release satisfies
+
+### Consequences
+
+- PR: `feat/p1-absorption-sp30-sp34` → `main`
+- Fork-receiver bundle: `dist/ax-template-catalog-<sha>.tar.gz` (2MB)
+- practices catalog: 81 Java rules, 84 React rules, 13 domains in trio_integrity_allowlist
