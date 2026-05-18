@@ -16,6 +16,7 @@ export default defineConfig({
       'tests/e2e-*.spec.ts',
       'tests/key-flow.spec.ts',
       'tests/auth/**',
+      'tests/recipes/**',
     ],
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],

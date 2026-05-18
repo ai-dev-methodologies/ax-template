@@ -38,16 +38,30 @@ done
 violations=0
 
 # ── Helper: check applied_recipe: presence in a README file ──────────────────
+# Accepts BOTH forms:
+#   R5 legacy:  applied_recipe: <value>         (singular, line starts with applied_recipe:)
+#   R6+ canonical: applied_recipes:\n  - <name> (plural list; empty list = VIOLATION)
 check_applied_recipe_declared() {
     local readme="$1"
     local domain_label="$2"
-    if grep -q "applied_recipe:" "$readme" 2>/dev/null; then
+    # R5 legacy: singular applied_recipe: (catches applied_recipe: / applied_recipe_secondary: etc.)
+    if grep -qE "^applied_recipe:" "$readme" 2>/dev/null; then
         return 0
-    else
-        echo "VIOLATION [business-domain-must-declare-applied-recipe]: $domain_label README has no applied_recipe: field" >&2
-        echo "  file: $readme" >&2
-        return 1
     fi
+    # R6+ canonical: plural applied_recipes: header
+    if grep -qE "^applied_recipes:" "$readme" 2>/dev/null; then
+        # Must have at least one list item (  - <name>) inside the block
+        if awk '/^applied_recipes:/{f=1;next} f&&/^[[:space:]]+-[[:space:]]+[^[:space:]]/{found=1;exit} f&&/^[^[:space:]]/{exit} END{exit !found}' "$readme" 2>/dev/null; then
+            return 0
+        else
+            echo "VIOLATION [business-domain-must-declare-applied-recipe]: $domain_label README has applied_recipes: but list is empty (no list entries found)" >&2
+            echo "  file: $readme" >&2
+            return 1
+        fi
+    fi
+    echo "VIOLATION [business-domain-must-declare-applied-recipe]: $domain_label README has no applied_recipe: field" >&2
+    echo "  file: $readme" >&2
+    return 1
 }
 
 # ── Helper: validate business_invariants in a recipe YAML ────────────────────
@@ -275,6 +289,40 @@ PY
         fi
     else
         echo "  SKIP [fail fixture not found: $FAIL_RECIPE_MD]"
+    fi
+
+    # ── Fixture 5: pass_applied_recipes_plural — plural list passes guard ──────
+    echo ""
+    echo "[fixture] recipe_governance/pass_applied_recipes_plural (R6+ plural form must PASS)"
+
+    PASS_PLURAL_RECIPE="$FIXTURES_DIR/recipe_governance/pass_applied_recipes_plural/RECIPE.md"
+
+    if [ -f "$PASS_PLURAL_RECIPE" ]; then
+        if check_applied_recipe_declared "$PASS_PLURAL_RECIPE" "pass_plural_fixture" 2>/dev/null; then
+            echo "  PASS [plural applied_recipes: list fixture correctly passes guard]"
+        else
+            echo "  GUARD_ERROR: plural list fixture FAILED guard — guard or fixture is wrong" >&2
+            violations=$((violations + 1))
+        fi
+    else
+        echo "  SKIP [fixture not found: $PASS_PLURAL_RECIPE]"
+    fi
+
+    # ── Fixture 6: fail_applied_recipes_empty_list — empty plural list must FAIL
+    echo ""
+    echo "[fixture] recipe_governance/fail_applied_recipes_empty_list (empty plural list must FAIL)"
+
+    FAIL_EMPTY_RECIPE="$FIXTURES_DIR/recipe_governance/fail_applied_recipes_empty_list/RECIPE.md"
+
+    if [ -f "$FAIL_EMPTY_RECIPE" ]; then
+        if check_applied_recipe_declared "$FAIL_EMPTY_RECIPE" "fail_empty_list_fixture" 2>/dev/null; then
+            echo "  GUARD_ERROR: empty applied_recipes: list PASSED guard — should have FAILED" >&2
+            violations=$((violations + 1))
+        else
+            echo "  PASS [empty applied_recipes: list fixture correctly fails guard with violation]"
+        fi
+    else
+        echo "  SKIP [fixture not found: $FAIL_EMPTY_RECIPE]"
     fi
 
     echo ""

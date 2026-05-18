@@ -1,0 +1,99 @@
+# spec-trio-template.yaml — marketplace
+#
+# Pre-filled Spec Trio fragments to copy into your project's specs/ directory
+# when implementing the marketplace recipe.
+#
+# Instructions:
+#   1. Copy this file to your project as specs/marketplace-l0.yaml
+#   2. Replace all <PLACEHOLDER> values with project-specific values
+#   3. Extend the items array with domain-specific requirements
+#   4. Ensure business_invariants from RECIPE.md are reflected as spec items
+#
+# This fragment composes the following L4 Spec Trios (reference, do not copy):
+#   - specs/crud-security.yaml
+#   - specs/payment-l0.yaml
+#   - specs/search-l0.yaml
+#   - specs/notification-l0.yaml
+#   - specs/audit-log-l0.yaml
+#   - specs/feature-flags-l0.yaml   (optional, for KYC gating)
+#   - specs/identity-verification-l0.yaml  (downstream reference — no L4 template yet)
+
+schema_version: 1
+scope: "<YOUR_PROJECT>-marketplace"
+stack: "Spring Boot 3.2.x + React + Stripe Connect"
+standard: "OWASP Top 10 + PCI-DSS SAQ-A + RFC 7807"
+applied_recipes:
+  - marketplace
+compatible_with_catalog_version: "v1.3.0-business-patterns"
+
+items:
+  # ─── MARKETPLACE-ESCROW-LIFECYCLE-001 (recipe-level invariant) ────────────
+  - id: "MARKETPLACE-ESCROW-LIFECYCLE-001"
+    chapter: "PAYMENT"
+    requirement: >
+      Escrow funds must be released to the seller only after EITHER:
+      (a) the buyer explicitly confirms receipt via POST /api/orders/{id}/release, OR
+      (b) the dispute-window expiry timer fires without an open dispute.
+      In neither case may the platform initiate an automatic release before both conditions.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/payment-l0.yaml#PAYMENT-STATE-002"
+    notes: >
+      Test: buyer confirms → escrow releases to seller immediately.
+      Test: dispute-window expires with no dispute → scheduled job releases escrow.
+      Test: dispute opened before window expiry → escrow held until dispute resolved.
+
+  # ─── MARKETPLACE-INV-001: escrow release lifecycle ────────────────────────
+  - id: "MARKETPLACE-INV-001"
+    chapter: "PAYMENT"
+    requirement: >
+      Escrow funds released only after buyer confirmation OR dispute-window expiry.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/payment-l0.yaml#PAYMENT-STATE-002"
+    notes: >
+      Covered by MARKETPLACE-ESCROW-LIFECYCLE-001 above; repeat at recipe level
+      for guard referential integrity check.
+
+  # ─── MARKETPLACE-INV-002: search authz — no hidden listings ──────────────
+  - id: "MARKETPLACE-INV-002"
+    chapter: "SEARCH"
+    requirement: >
+      Search results must never include soft-deleted or moderator-hidden listings.
+      The authz filter is applied at query time, not as post-processing.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    spec_ref: "specs/search-l0.yaml#SEARCH-AUTHZ-001"
+    notes: >
+      Test: create listing; soft-delete it; search → listing absent from results.
+      Test: create listing; moderator hides it; search → listing absent from results.
+      Implementation: JPA Specification adds `WHERE deleted_at IS NULL AND hidden = FALSE`.
+
+  # ─── MARKETPLACE-INV-003: KYC for high-value listings ────────────────────
+  - id: "MARKETPLACE-INV-003"
+    chapter: "KYC"
+    requirement: >
+      Listings above the KYC threshold (set via feature-flag
+      `marketplace.kyc_required_listing_value_threshold`) require identity
+      verification. POST /api/listings with price above threshold returns 403
+      if KYC is not completed.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    spec_ref: "specs/feature-flags-l0.yaml#FF-AUTHZ-001"
+    rule_ref: "practices/rules/no-rrn-collection-without-legal-basis.md"
+    notes: >
+      Test: set feature-flag threshold = 100000; POST listing with price=200000
+      without IDV completed → 403.
+      Test: with IDV completed → 201.
+      Implementation: FeatureFlagService.isEnabled("marketplace.kyc_required…") +
+      IdentityVerificationService.isVerified(userId) checked before listing creation.
+
+  # ─── Add your project-specific items below ────────────────────────────────
+  # - id: "<YOUR_PROJECT>-MARKETPLACE-001"
+  #   chapter: "<CHAPTER>"
+  #   requirement: "<REQUIREMENT>"
+  #   ...

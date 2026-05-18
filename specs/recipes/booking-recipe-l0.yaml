@@ -1,0 +1,84 @@
+# specs/recipes/booking-recipe-l0.yaml — Recipe-level spec (SP39)
+schema_version: 1
+pattern: booking
+display_name: "Booking (Calendar + Availability + Reservation + Cancellation)"
+compatible_with_catalog_version: "v1.3.0-business-patterns"
+last_verified_at: "2026-05-18"
+
+enabled_l4_domains:
+  - audit-log
+  - crud
+  - feature-flags
+  - notification
+  - payment
+
+l2_blocks_used:
+  # L1 primitives (calendar, date-range-picker, relative-time) are excluded from this list
+  # — they exist at templates/L1/components/ not templates/L2/blocks/
+  - confirm-dialog
+  - crud-create-form
+  - crud-edit-form
+  - crud-list-adapter
+  - data-table
+  - kpi-card
+  - notification-list
+  - payment-checkout-form
+  - payment-method-picker
+
+l3_pages_used:
+  - create-page
+  - dashboard-page
+  - detail-page
+  - edit-page
+  - list-page
+
+business_invariants:
+  - id: BOOKING-INV-001
+    statement: "Reservation must not double-book a resource for overlapping time windows"
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+  - id: BOOKING-INV-002
+    statement: "Cancellation within free-window does not charge deposit"
+    spec_ref: "specs/payment-l0.yaml#PAYMENT-STATE-002"
+  - id: BOOKING-INV-003
+    statement: "No-show triggers audit-log event with operator + timestamp"
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+
+business_observability_advisory:
+  - metric: "recipe.booking.active_total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: "booking.cancellation.total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+  - metric: "booking.noshow.total"
+    type: counter
+    note: "advisory; no emitter test enforced this PRD"
+
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # enabled_l4_domains:
+  #   skip: ["payment"]
+  #   rationale: "Booking is free; no deposit or payment capture needed."
+  #   citation: "<internal ticket / PR url>"
+
+evidence:
+  - provenance_class: external
+    source: "Stripe Connect — Marketplace / platform payments"
+    url: "https://docs.stripe.com/connect"
+    citation: "Collect payments from customers and automatically pay out a portion to sellers or service providers on your marketplace."
+    quoted_at: "2026-05-18"
+    fidelity_note: "Cross-recipe anchor — Stripe Connect payment lifecycle applies to booking deposit management."
+  - provenance_class: internal_design
+    source: "Booking.com Connectivity Provider API"
+    url: "https://partners.booking.com/en-us/help/integrations-channel-manager/connectivity-providers"
+    rationale: "ECONNREFUSED at fetch time (2026-05-18). Downgraded to internal_design."
+  - provenance_class: internal_design
+    source: "야놀자 (Yanolja) — Korean booking platform"
+    rationale: "Fetch blocked by fetcher (2026-05-18). Downgraded to internal_design."
+  - provenance_class: internal_design
+    derives_from:
+      - "SP30 payment"
+      - "SP17 audit-log"
+      - "SP15 crud"
+      - "SP26 notification"
+    rationale: "Composition derives from existing L4 specs."

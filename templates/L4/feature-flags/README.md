@@ -109,3 +109,8 @@ Use `FeatureFlagToggle` in admin UI:
 ## Recipe Composition
 
 applied_recipe: saas-subscription
+applied_recipes:
+  - b2b-admin
+  - booking
+  - marketplace
+  - saas-subscription

@@ -1,0 +1,84 @@
+# spec-trio-template.yaml — b2b-admin
+#
+# Pre-filled Spec Trio fragments to copy into your project's specs/ directory
+# when implementing the b2b-admin recipe.
+#
+# Instructions:
+#   1. Copy this file to your project as specs/b2b-admin-l0.yaml
+#   2. Replace all <PLACEHOLDER> values with project-specific values
+#   3. Extend the items array with domain-specific requirements
+#   4. Ensure business_invariants from RECIPE.md are reflected as spec items
+#
+# This fragment composes the following L4 Spec Trios (reference, do not copy):
+#   - specs/auth-asvs-l1.yaml
+#   - specs/crud-security.yaml
+#   - specs/audit-log-l0.yaml
+#   - specs/feature-flags-l0.yaml
+#   - specs/search-l0.yaml
+
+schema_version: 1
+scope: "<YOUR_PROJECT>-b2b-admin"
+stack: "Spring Boot 3.2.x + React + JWT multi-tenant"
+standard: "OWASP Top 10 + ASVS L1 + RFC 7807"
+applied_recipes:
+  - b2b-admin
+compatible_with_catalog_version: "v1.3.0-business-patterns"
+
+items:
+  # ─── B2BADMIN-INV-001: impersonation audit record ─────────────────────────
+  - id: "B2BADMIN-INV-001"
+    chapter: "AUDIT"
+    requirement: >
+      Every impersonation session must produce an audit-log record containing:
+      impersonator_id, impersonated_id, started_at.
+      Session termination must produce a second record with ended_at.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+    notes: >
+      Test: POST /api/auth/impersonate/{userId} → assert audit_logs has
+      action=impersonation.started with impersonator_id + impersonated_id + started_at.
+      Test: POST /api/auth/impersonate/end → assert audit_logs has
+      action=impersonation.ended with ended_at.
+      Implementation: @Audited on ImpersonationService.start() and .end().
+
+  # ─── B2BADMIN-INV-002: feature-flag history immutable ─────────────────────
+  - id: "B2BADMIN-INV-002"
+    chapter: "FEATURE_FLAGS"
+    requirement: >
+      Feature-flag changes must be immutable history. DELETE on a flag key
+      is rejected with HTTP 405. Every PATCH creates a new version record.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    spec_ref: "specs/feature-flags-l0.yaml#FF-CRUD-003"
+    notes: >
+      Test: DELETE /api/feature-flags/{tenantId}/{flagKey} → 405.
+      Test: PATCH flag twice → version_history has 2 entries.
+      Implementation: FeatureFlagRepository does not expose delete();
+      PATCH inserts new FeatureFlagVersion row.
+
+  # ─── B2BADMIN-INV-003: KPI aggregation tenant isolation ──────────────────
+  - id: "B2BADMIN-INV-003"
+    chapter: "TENANT_ISOLATION"
+    requirement: >
+      KPI aggregation queries must be scoped to the requesting user's tenantId.
+      ADMIN users may query cross-tenant aggregations only via a dedicated
+      ADMIN-only endpoint. No cross-tenant data leakage for non-ADMIN roles.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    spec_ref: "specs/auth-asvs-l1.yaml#ASVS-V4.2.1"
+    notes: >
+      Test: MANAGER role calls GET /api/admin/kpi/all → 403.
+      Test: MANAGER role calls GET /api/tenants/{foreignTenantId}/kpi → 403.
+      Test: ADMIN role calls GET /api/admin/kpi/all → 200 with cross-tenant data.
+      Implementation: @PreAuthorize("hasAuthority('ROLE_ADMIN')") on cross-tenant
+      endpoints; tenantId filter injected by JwtTenantScopeFilter for non-ADMIN.
+
+  # ─── Add your project-specific items below ────────────────────────────────
+  # - id: "<YOUR_PROJECT>-B2BADMIN-001"
+  #   chapter: "<CHAPTER>"
+  #   requirement: "<REQUIREMENT>"
+  #   ...

@@ -119,3 +119,6 @@ Both must exit 0 before shipping.
 ## Recipe Composition
 
 applied_recipe: saas-subscription
+applied_recipes:
+  - b2b-admin
+  - saas-subscription
