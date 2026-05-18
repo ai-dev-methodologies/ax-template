@@ -330,3 +330,24 @@ snapshots:
     fetched_at: "2026-05-18T00:00:00Z"
     bytes: 4201
     sha: "c7f8e3a2b1d4f9e6a8c3d5b2f7e1a4c9d6b3f8e2a5c8d1b4f7e3a6c9d2b5f8"
+  - id: "recharts-2026-05"
+    tier: 3
+    source: "https://recharts.org/en-US/api"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3841
+    sha: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+  - id: "postgresql-fts-2026-05"
+    tier: 3
+    source: "https://www.postgresql.org/docs/16/textsearch.html"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4127
+    sha: "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3"
+  - id: "meilisearch-2026-05"
+    tier: 3
+    source: "https://www.meilisearch.com/docs/reference/api/search"
+    via: "WebFetch"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 3512
+    sha: "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"

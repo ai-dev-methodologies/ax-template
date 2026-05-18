@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "4d2f88cb9bc9516ecd446f4f9a813faaae827db7c0ba6e8d48ece57910be0ffb"
-  rule_count: 74
+  source_concat_sha256: "74b56b04dc231cc3b0e867610aa1191c23a8f43ee85cda152371f37f377f284b"
+  rule_count: 76
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -1095,6 +1095,96 @@ See reference templates:
 Verification: `./gradlew testPractices --tests "*CacheableTtl*"` asserts that every `@Cacheable`-enabled `CacheManager` bean declares a non-zero TTL.
 
 Reference: [Caffeine Wiki — Eviction](https://github.com/ben-manes/caffeine/wiki/Eviction) | [Spring Cache Abstraction](https://docs.spring.io/spring-framework/reference/integration/cache.html)
+
+
+<!-- @source rules/chunked-import-required-when-rowcount-gt-1000.md -->
+
+---
+title: CSV and Excel imports with potentially >1000 rows must use chunked streaming with per-chunk transactions
+impact: HIGH
+impactDescription: "Importing large files with readAll() loads the entire dataset into heap and wraps it in a single transaction, causing OOM errors and blocking rollback of earlier valid rows on late failures"
+tags:
+  - integration
+  - performance
+  - import
+  - chunking
+  - transaction
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-INTEG-002"
+verification:
+  gradle_task: testIntegration
+  tag: INTEGRATION
+failing_fixture_path: "practices/evals/fixtures/chunked_import/fail_no_chunk"
+passing_fixture_path: "practices/evals/fixtures/chunked_import/pass"
+evidence:
+  - source_type: external
+    citation: "OpenCSV — CSVReader.readNext() streams one row at a time from the underlying reader; CSVReader.readAll() materialises the entire file into a List<String[]> in heap memory"
+    url: "https://opencsv.sourceforge.net/#reading_into_beans_by_name"
+  - source_type: external
+    citation: "Apache POI SXSSF API — for large Excel files, use SXSSFWorkbook (streaming read) or XSSFWorkbook with row-by-row iteration; loading all rows at once causes heap pressure above ~50k rows"
+    url: "https://poi.apache.org/components/spreadsheet/how-to.html#sxssf"
+  - source_type: external
+    citation: "Spring Batch Reference — chunk-oriented processing: read N items, process, write, then commit; bounds memory usage to chunk size regardless of total input size"
+    url: "https://docs.spring.io/spring-batch/reference/step/chunk-oriented-processing.html"
+---
+
+## CSV and Excel imports with potentially >1000 rows must use chunked streaming with per-chunk transactions
+
+**Impact: HIGH — Importing large files with `readAll()` loads the entire dataset into heap and wraps it in a single transaction, causing OOM errors and blocking rollback of earlier valid rows on late failures**
+
+Production CSV/Excel imports frequently exceed 10,000–100,000 rows. Two anti-patterns cause catastrophic failures at scale:
+
+1. **`readAll()` / full-load** — `CSVReader.readAll()` and `XSSFWorkbook` sheet iteration into a `List` load all rows into heap simultaneously. A 100,000-row × 5-column file at ~200 bytes/row = 20 MB minimum; object overhead easily doubles this. Concurrent imports OOM the JVM.
+
+2. **Single outer `@Transactional`** — wrapping the entire import in one transaction holds a DB connection open for its entire duration, blocks rollback at the row that fails (rolling back 50,000 already-saved rows), and degrades write performance due to lock accumulation.
+
+**Required pattern:**
+- Use `CSVReader.readNext()` (streaming, one row at a time) or Apache POI row-by-row iteration
+- Accumulate rows into a `List<String[]>` chunk of `CHUNK_SIZE` (100–1000)
+- Call a `@Transactional` method that persists the chunk and returns — this commits only those rows
+- Collect row-level errors into an accumulator without aborting the batch
+
+**Incorrect — `readAll()` + single outer `@Transactional`:**
+
+```java
+@Transactional          // VIOLATION: wraps entire import in one transaction
+public ImportResult importFile(MultipartFile file) {
+    List<String[]> allRows = new CSVReader(reader).readAll();  // VIOLATION: loads all rows into heap
+    repository.saveAll(allRows.stream().map(this::toEntity).toList());
+    return new ImportResult(allRows.size(), 0, List.of());
+}
+```
+
+**Correct — streaming `readNext()` with per-chunk `@Transactional`:**
+
+```java
+public static final int CHUNK_SIZE = 500;
+
+public ImportResult importFile(MultipartFile file) {          // no @Transactional here
+    List<String[]> chunk = new ArrayList<>(CHUNK_SIZE);
+    String[] row;
+    while ((row = csvReader.readNext()) != null) {
+        chunk.add(row);
+        if (chunk.size() >= CHUNK_SIZE) {
+            persistChunk(chunk, ...);    // each chunk is its own transaction
+            chunk.clear();
+        }
+    }
+    if (!chunk.isEmpty()) persistChunk(chunk, ...);
+}
+
+@Transactional                            // CORRECT: scoped to chunk only
+public int persistChunk(List<String[]> rows, ...) {
+    // validate + save rows; collect errors without throwing
+}
+```
+
+See `templates/backend/import-export/CsvImportService.java` for the reference implementation.
+
+Reference: [OpenCSV — Reading large CSV files with readNext()](https://opencsv.sourceforge.net/#reading_into_beans_by_name)
+
+Reference: [Apache POI SXSSF — Streaming API for large Excel files](https://poi.apache.org/components/spreadsheet/how-to.html#sxssf)
+
+Reference: [Spring Batch — Chunk-Oriented Processing](https://docs.spring.io/spring-batch/reference/step/chunk-oriented-processing.html)
 
 
 <!-- @source rules/config-no-secret-in-yaml.md -->
@@ -4969,5 +5059,86 @@ public class UserController {
 Verification: `./gradlew testPractices --tests "*SpecificMappingMethods*"` walks every declared method on `PracticesDemoController`, flags any that carry `@RequestMapping` without one of the method-specific shortcuts.
 
 Reference: [Spring MVC — HTTP method-specific shortcuts](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html)
+
+
+<!-- @source rules/webhook-hmac-required.md -->
+
+---
+title: Inbound webhook endpoints must verify HMAC-SHA256 signatures before processing
+impact: HIGH
+impactDescription: "Webhook endpoints without signature verification accept forged payloads from any attacker who knows the endpoint URL"
+tags:
+  - integration
+  - security
+  - hmac
+  - webhook
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-INTEG-001"
+verification:
+  gradle_task: testIntegration
+  tag: INTEGRATION
+failing_fixture_path: "practices/evals/fixtures/webhook_hmac/fail_no_hmac"
+passing_fixture_path: "practices/evals/fixtures/webhook_hmac/pass"
+evidence:
+  - source_type: external
+    citation: "GitHub Docs — Validating webhook deliveries: use MessageDigest.isEqual() for constant-time comparison to prevent timing attacks; compare sha256= prefix and hex digest"
+    url: "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries"
+  - source_type: external
+    citation: "OWASP ASVS V13.2.6 — Verify that webhook payloads are verified with an HMAC signature or equivalent mechanism before processing to ensure authenticity and integrity"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+  - source_type: external
+    citation: "RFC 2104 — HMAC: Keyed-Hashing for Message Authentication. Section 2: HMAC-SHA256 requires constant-time comparison to prevent timing side channels"
+    url: "https://www.rfc-editor.org/rfc/rfc2104"
+---
+
+## Inbound webhook endpoints must verify HMAC-SHA256 signatures before processing
+
+**Impact: HIGH — Webhook endpoints without signature verification accept forged payloads from any attacker who knows the endpoint URL**
+
+External webhook providers (GitHub, Stripe, Twilio, etc.) sign each outbound event with an HMAC-SHA256 digest of the raw request body using a shared secret. The receiver must verify this signature **before** deserialising or acting on the payload. Skipping verification allows an attacker to POST any payload — triggering deployments, marking orders as paid, or injecting arbitrary events — without possessing the shared secret.
+
+Critical implementation details:
+1. **Raw bytes, not parsed JSON** — use `@RequestBody byte[]`, never `@RequestBody String` or a DTO, because JSON parsers normalise whitespace and key ordering, which alters the byte representation and breaks HMAC verification.
+2. **Constant-time comparison** — use `MessageDigest.isEqual(expected, received)`, never `Arrays.equals` or `String.equals`. The latter short-circuit on the first mismatch and leak the valid prefix length to a timing attacker.
+3. **`sha256=` prefix** — the industry convention (GitHub, Stripe) is `sha256=<hexdigest>`; verify the prefix before hex-decoding.
+4. **Store the secret in Vault / Secrets Manager** — never hardcode in source.
+
+**Incorrect — processes payload without any signature check:**
+
+```java
+@PostMapping("/api/webhooks/github")
+public ResponseEntity<Void> receiveWebhook(@RequestBody String payload) {
+    // VIOLATION: no HMAC verification — any request is accepted
+    processEvent(payload);
+    return ResponseEntity.ok().build();
+}
+```
+
+**Correct — constant-time HMAC verification before processing:**
+
+```java
+@PostMapping("/api/webhooks/github")
+public ResponseEntity<Void> receiveWebhook(
+        @RequestHeader("X-Hub-Signature-256") String signatureHeader,
+        @RequestBody byte[] rawBody) {
+
+    // Step 1: verify HMAC (throws 401 on failure)
+    webhookReceiver.verify(signatureHeader, rawBody);
+
+    // Step 2: idempotency check
+    webhookReceiver.markProcessed(deliveryId);
+
+    // Step 3: process
+    processEvent(rawBody);
+    return ResponseEntity.ok().build();
+}
+```
+
+See `templates/backend/integration/WebhookReceiver.java` for the reference implementation.
+
+Reference: [GitHub Docs — Validating webhook deliveries](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries)
+
+Reference: [OWASP ASVS V13.2.6 — Webhook payload verification](https://owasp.org/www-project-application-security-verification-standard/)
+
+Reference: [RFC 2104 — HMAC: Keyed-Hashing for Message Authentication](https://www.rfc-editor.org/rfc/rfc2104)
 
 
