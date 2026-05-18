@@ -196,6 +196,23 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /billing/plans:
+    get:
+      operationId: listAvailablePlans
+      summary: List publicly available billing plans (for PricingTable)
+      description: |
+        Returns the set of active, publicly visible plans for display on the pricing page.
+        No authentication required — this is a public catalog endpoint.
+        Plans with `active: false` are excluded.
+      responses:
+        '200':
+          description: Active plan list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PlanResponse' }
+
   /admin/billing/plans:
     get:
       operationId: adminListPlans

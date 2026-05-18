@@ -16,7 +16,7 @@ backend_contract_ref: contracts/billing-openapi.yaml
 routes:
   - path: /billing/pricing
     method: GET
-    backend_operation_id: null
+    backend_operation_id: listAvailablePlans
     static_source_ref: []
     params: {}
     query: {}
