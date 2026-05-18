@@ -227,6 +227,56 @@ if [ "$FIXTURES_MODE" -eq 1 ]; then
         echo "  SKIP [pass fixture not found: $PASS_RECIPE_YAML]"
     fi
 
+    # ── Fixture 4: fail_l4_missing_readme — enabled domain has no README ─────────
+    echo ""
+    echo "[fixture] fail_l4_missing_readme (recipe enables domain whose README does not exist)"
+
+    FAIL_RECIPE_MD="$FIXTURES_DIR/recipe_governance/fail_l4_missing_readme/RECIPE.md"
+    FAKE_DOMAIN="fake-domain"
+    FAKE_README="$REPO_ROOT/templates/L4/$FAKE_DOMAIN/README.md"
+
+    if [ -f "$FAIL_RECIPE_MD" ]; then
+        # Guard: fake-domain README must not exist (otherwise fixture is broken)
+        if [ -f "$FAKE_README" ]; then
+            echo "  GUARD_ERROR: $FAKE_README exists — fake-domain README must be absent for this fixture" >&2
+            violations=$((violations + 1))
+        else
+            # Simulate the check: extract domains from fixture RECIPE.md and verify missing README is caught
+            fixture_domains=$(python3 - "$FAIL_RECIPE_MD" <<'PY'
+import pathlib, sys
+content = pathlib.Path(sys.argv[1]).read_text()
+in_front = False
+domains_block = False
+for line in content.splitlines():
+    if line.strip() == "---":
+        in_front = not in_front
+        continue
+    if in_front and "enabled_l4_domains:" in line:
+        domains_block = True
+        continue
+    if domains_block and line.strip().startswith("- "):
+        print(line.strip()[2:])
+    elif domains_block and line.strip() and not line.strip().startswith("-"):
+        break
+PY
+)
+            found_missing=0
+            for d in $fixture_domains; do
+                if [ ! -f "$REPO_ROOT/templates/L4/$d/README.md" ]; then
+                    found_missing=1
+                fi
+            done
+            if [ "$found_missing" -eq 1 ]; then
+                echo "  PASS [fail fixture correctly has a domain with missing README — guard would emit FAIL]"
+            else
+                echo "  GUARD_ERROR: all domains in fail fixture have existing READMEs — fixture is wrong" >&2
+                violations=$((violations + 1))
+            fi
+        fi
+    else
+        echo "  SKIP [fail fixture not found: $FAIL_RECIPE_MD]"
+    fi
+
     echo ""
     if [ "$violations" -gt 0 ]; then
         echo "recipe_governance_guard (fixtures): $violations fixture error(s)" >&2
@@ -276,7 +326,9 @@ PY
     for domain in $domains; do
         readme="$REPO_ROOT/templates/L4/$domain/README.md"
         if [ ! -f "$readme" ]; then
-            echo "  SKIP [$pattern/$domain: README not found at $readme]"
+            echo "  FAIL [$pattern/$domain: enabled by recipe '$pattern' but README missing — required for applied_recipe: declaration]"
+            echo "VIOLATION [business-domain-must-declare-applied-recipe]: $pattern/$domain README not found at $readme" >&2
+            violations=$((violations + 1))
             continue
         fi
         if check_applied_recipe_declared "$readme" "$pattern/$domain"; then
