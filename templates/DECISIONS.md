@@ -2174,3 +2174,52 @@ the `[cms, lms]` key in all 4 verdict outcomes (2/2 PASS, lms-only, cms-only,
   - **Follow-ups:**
     - `webhook-secret-encryption` co-shipped recipe-level invariant (R9 SP45b `internal-it INTERNAL-IT-INV-005`) — **promotion to a standalone `practices/rules/security-secret-encryption-at-rest.md` rule is deferred indefinitely; remains a recipe-level invariant unless cross-domain need emerges.** No R10+ deferred-recipe entry exists today that would consume it; promotion is reactive to demonstrated demand, not speculative (M5 framing).
     - Full backend (HmacSigner, RetryPolicy, CircuitBreakerPolicy, Service, Controller) is deferred to a future webhook backend-expansion cycle — triggered by fork-receiver demand or recipe need, not by ralplan cycle cadence.
+
+- **TD-2026-05-22-026** — internal-it recipe shipped (SP45b atomic-sequential); R6 Synthesis-A deferred-recipe queue CLOSED.
+  - **Decision:** `recipes/internal-it/` moves `deferred` → `active`. Active recipe count 9 → 10. `recipes/_MANIFEST.yaml#deferred_recipes:` becomes EMPTY (`[]`) — the R6 Synthesis-A trim of 4 deferred recipes (community + lms + cms + internal-it) is fully realized across R7 + R8 + R9.
+  - **Drivers:**
+    - Last R6-deferred recipe — internal-it has been pending since R6 SP39 with `reintroduction_trigger: "verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4 OR notification L4 gains explicit webhook-emit spec items"`. R9 satisfies BOTH halves: (a) Jira webhooks Server-host verbatim PASS + PagerDuty support-host verbatim PASS (b) clarified webhook-emit primitive — as its own L4 — per TD-2026-05-22-025.
+    - Evidence rigor: 4 English verbatim (Jira × 2 quotes + PagerDuty × 2 quotes) + 4 Korean verbatim (Toss × 2 + Naver Works × 2) = 8 quote rows clearing 1-floor with 4x buffer; 2 consecutive non-zero-Korean cycles preserved (R8 classting + brunch → R9 toss + naverworks).
+    - 5 invariants disk-resolvable at SP45b prep: 4 against existing L4 specs (audit-log, scheduled-task, notification, plus 1 cross-INV-001 audit-log) + 1 against the SP45-shipped `specs/webhook-l0.yaml#WEBHOOK-SIGN-001/RETRY-001` anchors.
+    - INV-005 escape-hatch disambiguation explicit (R7 community-INV-005 precedent): catalog has no existing rule covering per-endpoint signing-secret encryption-at-rest; co-shipped-rule + invariant_test is the correct path; M5 promotion deferred indefinitely.
+  - **Alternatives considered:**
+    - Wait for ServiceNow + Kakao 알림톡 verbatim (rejected — host-wide pattern across 4 + 6 attempts; further wait won't change; Jira + PagerDuty + Toss + Naver Works clear with buffer).
+    - Merge into crm (rejected — ITSM ≠ sales-pipeline; conflates ticket-lifecycle + SLA + ITSM-relay with lead-contact-deal-activity).
+    - Synthesis-A indefinite defer (rejected — Jira + PagerDuty cleared 2x buffer at PRD signature; further defer with no concrete unblock condition is the "perfect-evidence" anti-pattern that historically stalled the catalog).
+  - **Why chosen:** Closes R6 Synthesis-A trim queue at strongest evidence cycle without fabrication; webhook L4 unblocks the canonical primitive INV-003 requires; INV-005 honors no-new-rule-family discipline.
+  - **Consequences:**
+    - Active recipe count: 9 → 10. Deferred recipe count: 1 → 0 (queue CLOSED).
+    - 6 L4 READMEs touched: 5 plural-list alphabetical-inserts (`audit-log`, `auth`, `crud`, `notification`, `scheduled-task`) + 1 first-consumer key-birth (`webhook` README born `[internal-it]` per TD-2026-05-21-024 + M6 inline desync annotation).
+    - `webhook-secret-encryption` honored as recipe-level co-shipped invariant; no new `practices/rules/*.md` file added (TD-025 Follow-ups M5).
+    - `recipes/README.md` updated: 10 active + 0 deferred. Milestone language: "R9 closes R6 Synthesis-A queue (community + lms + cms + internal-it all shipped across R7 + R8 + R9)."
+  - **Follow-ups:**
+    - R10+ refresh re-attempts ServiceNow + Kakao 알림톡 if either host unblocks; documented downgrades are honest evidence, not failure (PRD §10 + §4.4).
+    - R10+ deferred-recipe candidates land in `_MANIFEST.yaml#deferred_recipes:` when proposed by ralplan; the queue starts empty from this point — no proactive deferral pipeline opens (PRD §10).
+
+- **TD-2026-05-22-027** — Webhook-as-extension-axis convention: when to spin a primitive into its own L4 vs extend an existing one (H1 tightened — 2-consumer-signal gate).
+  - **Decision:** A primitive becomes its own L4 (vs an extension of an existing L4) **only when ALL THREE** conditions hold:
+    - **(a) Materially distinct semantics** — manifest sections, contract endpoints, and observability counters share **< 30% overlap** with the candidate-extension L4. (For R9 webhook vs notification: webhook has emit / sign / retry / dead-letter / circuit-breaker / idempotency sections; notification has send / preferences / channels / templates / outbox sections. Overlap is the bare "I send a thing" verb at ~10% — well under the 30% gate.)
+    - **(b) Evidence-chain integrity** — extending would dilute the candidate-extension L4's existing external-verbatim chain OR force one README to reference two incompatible reference-impl categories. (For R9: notification L4 has 4 anchors all about user channels — overloading with webhook would force the README to reference both Twilio-SMS-style and Stripe-webhook-style references in one breath, breaking evidence-chain integrity.)
+    - **(c) Two consumer signals** — at least **one shipped active recipe** consumes the primitive AND at least **one plausible R10+ deferred candidate** documents the need. (H1 tightening: the iter-1 PRD's single-recipe gate was self-fulfilling — a planner proposing the L4 could also write the qualifying recipe alongside it. The two-signal gate decouples the L4 introduction from the same author's recipe author.)
+  - **Drivers:**
+    - R9 webhook vs notification needs a generalizable rule for R10+ planners considering similar splits (cron-with-orchestration vs scheduled-task; GraphQL-subscriptions vs notification; etc.) — without this ADR, R10+ becomes a debate-by-precedent.
+    - Three-condition gate keeps L4 cap discipline tight while permitting legitimate axis introduction — addresses the steelman antithesis (catalog-sprawl-by-precedent) the Architect raised in iter-1.
+    - H1 tightening (two consumer signals) makes the test reproducible: it cannot be satisfied by writing one recipe in the same SP as the L4 proposal.
+  - **R9 webhook validation against the gate:**
+    - (a) Materially distinct semantics: PASS (manifest section overlap with notification < 10%).
+    - (b) Evidence-chain integrity: PASS (notification 4-anchor user-channel chain stays clean; webhook gets its own 4-anchor system-to-system chain).
+    - (c) Two consumer signals: PASS — (c.1) shipped active recipe = `internal-it` (R9 SP45b, this cycle); (c.2) plausible R10+ deferred candidate = `api-gateway-relay` (named forward-pointer; no `deferred_recipes:` entry today since the queue is closed at SP46 — the candidate exists as a documented potential ralplan proposal, satisfying "plausible R10+ deferred").
+  - **Alternatives considered:**
+    - "L4 cap permanent" (rejected — kills self-extensibility; R5 billing + R7 scheduler precedents would not have happened).
+    - "Any net-new domain = its own L4" (rejected — invites sprawl; would have spun identity-verification + email-outbox into separate L4 when they correctly sit inside auth + notification respectively).
+    - Single-recipe gate without H1 tightening (rejected per Architect iter-1 — self-fulfilling; planner proposing the L4 also writes the qualifying recipe, undermining the test).
+    - Two-recipe gate requiring two SHIPPED recipes (rejected — too restrictive; would block the SP45 + SP45b atomic-sequential pattern which is the natural R7/R9 cycle shape).
+  - **Why chosen:** Captures the actual heuristic Architect + Critic applied during R9 review; gives R10+ planners a deterministic three-condition check; H1 tightening preserves catalog discipline against precedent-sprawl while permitting legitimate axis growth.
+  - **Consequences:**
+    - R10+ L4-introduction proposals MUST cite this ADR AND demonstrate ALL THREE conditions including the 2-consumer-signal gate. Failing any condition → propose as extension of the closest existing L4.
+    - Webhook becomes the canonical reference workload for "passes all three" — proposers cross-cite TD-2026-05-22-025 + TD-2026-05-22-027 together.
+    - `api-gateway-relay` is the named **plausible R10+ deferred candidate** that satisfies condition (c) for the webhook precedent — purely a forward-pointer at this PRD signature; if R10+ ralplan proposes `api-gateway-relay` (or any equivalent system-to-system relay), it consumes webhook as its second consumer signal and validates the gate retroactively.
+  - **Follow-ups:**
+    - First R10+ application of TD-027 (next time someone proposes an L4 split) generates a precedent log entry under this ADR — captures whether all three conditions were satisfied and which deferred candidate served as the second consumer signal.
+    - If `api-gateway-relay` is never proposed by R12, the forward-pointer is replaced with whichever other R10+ deferred candidate consumes webhook (no obligation to ship api-gateway-relay specifically).
+

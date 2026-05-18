@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# skills/_tests/L4/webhook-domain.test.sh — R9 SP45 TDD anchor.
+# skills/_tests/L4/webhook-domain.test.sh — R9 SP45 (SP45b updated) TDD anchor.
 #
 # Sealed catalog-discoverability test for the webhook L4 row (NET-NEW Spec Trio
 # at SP45 — first genuinely net-new L4 since billing R5).
@@ -17,9 +17,10 @@
 #   7. Both backend skeleton stubs exist with .skeleton suffix (not .java —
 #      keeps Gradle compile path clean for forks that copy the L4 tree
 #      wholesale).
-#   8. The R3 / SP45 Spec Trio files (spec + contract + manifest) are intact.
-#   9. The README does NOT carry an `applied_recipes:` key at SP45 (first-
-#      consumer convention; SP45b births the key with `[internal-it]`).
+#   8. The SP45 Spec Trio files (spec + contract + manifest) are intact.
+#   9. The README carries `applied_recipes:` key born `[internal-it]` at SP45b
+#      (R9 SP45b first-consumer-arrival convention per TD-2026-05-21-024;
+#      mirrors R8 SP43 scheduler-domain.test.sh "born key" transition).
 #  10. `trio_integrity_allowlist.yaml` lists `webhook: backend_only`.
 #
 # Semantic anchor (PRD M4 closure):
@@ -150,13 +151,16 @@ for f in "$SPEC" "$CONTRACT" "$MANIFEST"; do
     fi
 done
 
-# ── 9. README has NO applied_recipes: key at SP45 (first-consumer convention)
+# ── 9. README carries applied_recipes: key born [internal-it] at SP45b (TD-024) ─
 if [ -f "$README" ]; then
-    if grep -qE '^applied_recipes:' "$README"; then
-        assert_fail "applied-recipes-key-absent-at-SP45" \
-            "README must NOT carry applied_recipes: key at SP45 introduction (SP45b births key [internal-it] per TD-2026-05-21-024 first-consumer-arrival convention)"
+    if ! grep -qE '^applied_recipes:' "$README"; then
+        assert_fail "applied-recipes-key-born" \
+            "README must carry applied_recipes: key at R9 SP45b first-consumer arrival (TD-2026-05-21-024 convention — born [internal-it])"
+    elif ! awk '/^applied_recipes:/{f=1;next} f&&/^[[:space:]]+-[[:space:]]+internal-it/{i=1} f&&/^[^[:space:]]/{exit} END{exit !i}' "$README"; then
+        assert_fail "applied-recipes-key-born" \
+            "README applied_recipes: list must contain 'internal-it' (R9 SP45b first-consumer arrival)"
     else
-        assert_pass "applied-recipes-key-absent-at-SP45"
+        assert_pass "applied-recipes-key-born"
     fi
 fi
 

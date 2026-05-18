@@ -118,13 +118,25 @@ Spec Trio anchors:
 
 ## Composition
 
-Webhook is introduced standalone in **R9 SP45**. SP45b internal-it recipe is the
-**first downstream consumer**; it will birth the `applied_recipes:` key on this
-README per the first-consumer-arrival convention codified in TD-2026-05-21-024
-(R8 SP43) — same precedent the `scheduled-task` L4 README relied on through R7.
-Until SP45b commits, this README intentionally carries **no** `applied_recipes:`
-key (matches `file-storage` and `practices` L4 precedent for catalog rows not
-yet consumed by an active recipe).
+Webhook was introduced standalone in **R9 SP45**. SP45b internal-it recipe is the
+**first downstream consumer**; it births the `applied_recipes:` key on this
+README in the same atomic SP45b commit per the first-consumer-arrival convention
+codified in TD-2026-05-21-024 (R8 SP43) — same precedent the `scheduled-task`
+L4 README relied on through R7.
+
+applied_recipes:
+  - internal-it  # verdict pending until SP46 — see _MANIFEST.yaml for active status
+
+The `applied_recipes:` key is **born** in R9 SP45b with the single entry
+`[internal-it]` (one simultaneous consumer at first-consumer arrival; alphabetical
+form). The inline M6 Architect-fix annotation `# verdict pending until SP46`
+makes the 3–9 day partial-tag desync window self-documenting for fork-receivers
+who inspect this README in isolation: per the PRD §6 partial-tag table, the
+key stays `[internal-it]` regardless of SP46 verdict outcome (recipe directory
+existence is the bind, not verdict-pass state); `_MANIFEST.yaml#active_recipes`
+membership reflects the verdict. `file-storage` and `practices` L4 READMEs
+remain key-less until *their* first consumers arrive (same precedent the
+scheduler README relied on pre-R8).
 
 ## External evidence (verbatim, fetched 2026-05-22)
 
