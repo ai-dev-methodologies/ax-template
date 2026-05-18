@@ -39,7 +39,7 @@ Spec Trio anchors:
 |---|---|---|
 | `WEBHOOK-EMIT-001` | EMIT | `register()` is an idempotent upsert keyed by URL |
 | `WEBHOOK-EMIT-002` | EMIT | `emit()` POSTs JSON to every active endpoint whose filter matches |
-| `WEBHOOK-SIGN-001` | SIGN | Outbound `X-Webhook-Signature: sha256=<hex(HMAC-SHA256(secret, body))>` |
+| `WEBHOOK-SIGN-001` | SIGN | Outbound `X-Webhook-Signature: sha256=<hex(HMAC-SHA256(secret, signed_input))>` where `signed_input` is the canonical `<timestamp>.<body>` string from `WEBHOOK-SIGN-002` |
 | `WEBHOOK-SIGN-002` | SIGN | `X-Webhook-Timestamp` header; signature covers timestamp + body (replay mitigation) |
 | `WEBHOOK-RETRY-001` | RETRY | Exponential backoff 30s × 2 up to 5 attempts on failure |
 | `WEBHOOK-RETRY-002` | RETRY | `X-Webhook-Delivery-Id` stable across all retries for same event |
