@@ -1,0 +1,91 @@
+template_id: i18n-policy-blueprint
+family: scaffold
+status: draft
+confidence: high
+stack:
+  frontend: react
+  i18n_library: next-intl
+  repo_shape: single-repo
+
+# ─── locale policy ───────────────────────────────────────────────────────────
+locale_policy:
+  minimum_locales:
+    - ko-KR   # Korean (default for Korean enterprise)
+    - en-US   # English fallback
+  default_locale: ko-KR
+  fallback_chain:
+    - ko-KR
+    - en-US
+    - key      # message key itself as last resort
+  pseudo_locale: en-pseudo   # for screenshot testing / visual regression
+
+# ─── currency format (KRW) ───────────────────────────────────────────────────
+currency:
+  code: KRW
+  symbol: "₩"
+  symbol_position: prefix
+  decimal_places: 0
+  group_separator: ","
+  example_raw: 1234
+  example_formatted: "₩1,234"
+  intl_format:
+    locale: ko-KR
+    options:
+      style: currency
+      currency: KRW
+      minimumFractionDigits: 0
+      maximumFractionDigits: 0
+  trace:
+    I18N-KRW-001: KRW has 0 decimal places per ISO 4217
+    I18N-KRW-002: ₩ symbol appears as prefix, not suffix
+
+# ─── string handling rules ───────────────────────────────────────────────────
+string_policy:
+  rule: no-hardcoded-user-facing-string-in-l4
+  applies_to: paths_created_after_2026-05-18
+  excludes:
+    - templates/L4/auth/**
+    - templates/L4/crud/**
+    - templates/L4/payment/**
+    - templates/L4/practices/**
+    - templates/L4/notification/**
+    - templates/L4/audit-log/**
+    - templates/L4/file-storage/**
+    - templates/L4/search/**
+  wrapper_function: "t()"
+  trace:
+    I18N-STR-001: all user-visible text must pass through t()
+    I18N-STR-002: existing L4 domains excluded (Option β — deferred migration)
+
+# ─── component policy ────────────────────────────────────────────────────────
+components:
+  l1_primitives:
+    - locale-switcher.tsx     # dropdown UI to switch ko-KR / en-US
+    - currency-formatter.tsx  # displays KRW amounts via Intl.NumberFormat
+    - relative-time.tsx       # displays relative time (1일 전, 방금 전)
+  l2_blocks:
+    - locale-provider.tsx     # NextIntlClientProvider wrapper + locale state
+    - translation-boundary.tsx # Suspense + error boundary for missing messages
+
+# ─── middleware ───────────────────────────────────────────────────────────────
+middleware:
+  library: next-intl/middleware
+  locales: [ko, en]
+  default_locale: ko
+  locale_detection: true
+  locale_prefix: as-needed   # ko URLs have no prefix; /en/... for English
+  trace:
+    I18N-MW-001: middleware auto-detects Accept-Language header
+
+# ─── testing ─────────────────────────────────────────────────────────────────
+testing:
+  krw_format_assertion:
+    input: 1234
+    expected: "₩1,234"
+    locale: ko-KR
+  locale_switch:
+    trigger: LocaleSwitcher component
+    verifies: page re-renders in selected locale
+  fixture_skip:
+    path: templates/L4/auth/**
+    expected_exit: 0   # rule must skip existing L4 — Option β
