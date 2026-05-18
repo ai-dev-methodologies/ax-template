@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "4f7e804a3f5b7b6fbfae15995d4adc9f6f17641d8a8521edb4b52ec2e92e7b17"
-  rule_count: 68
+  source_concat_sha256: "5bc0b178e8e6c0b258ce76c660f4f15f703a1fe54715339cec84a68ba192a3b5"
+  rule_count: 70
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -2355,6 +2355,107 @@ Verification: `./gradlew testPractices --tests "*VersionedNaming*"` lists `db/mi
 Reference: [Flyway — Migration naming](https://documentation.red-gate.com/fd/migrations-271583622.html) · [Spring Boot — Flyway integration](https://docs.spring.io/spring-boot/reference/data/sql.html)
 
 
+<!-- @source rules/no-rrn-logging.md -->
+
+---
+title: "RRN (주민등록번호) must never appear in any log statement at any level"
+rule_id: no-rrn-logging
+impact: CRITICAL
+impactDescription: "RRN is Sensitive Personal Information under 개인정보보호법 §24; its appearance in application logs constitutes an unauthorized disclosure breach"
+tags:
+  - privacy
+  - pii
+  - rrn
+  - observability
+  - locked_constraint
+provenance_class: locked_constraint
+protects_template_id: templates/backend/global-exception-handler/GlobalExceptionHandler.java
+failing_fixture_path: practices/evals/fixtures/no-rrn-logging/fail_rrn_in_log/
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-OBS-003"
+verification:
+  type: review
+  notes: "Static analysis: grep -rn 'log\\.' --include='*.java' | grep -i 'rrn\\|주민' must return zero matches in production code."
+evidence:
+  - source_type: external
+    citation: "개인정보보호법 제24조 — 고유식별정보의 처리 제한 (Korean Personal Information Protection Act §24 — Restrictions on Processing Unique Identification Information)"
+    url: "https://www.law.go.kr/법령/개인정보보호법"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "KISA 개인정보 기술적·관리적 보호조치 기준 — 접속기록의 위변조방지 및 RRN 처리"
+    url: "https://www.kisa.or.kr/2060301/form?postSeq=14&lang_type=KO"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "OWASP Logging Cheat Sheet — Data to exclude: sensitive personal identifiers must never be written to log files"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## RRN (주민등록번호) must never appear in any log statement at any level
+
+**Impact: CRITICAL — 개인정보보호법 §24 classifies the Resident Registration Number as a unique identification information (고유식별정보); its unauthorized disclosure triggers mandatory breach notification and administrative penalties.**
+
+Application logs are retained by aggregators, SIEMs, object-storage buckets, and developer workstations. Any `log.info(...)`, `log.debug(...)`, `log.warn(...)`, or `log.error(...)` statement that includes an RRN constitutes an unauthorized disclosure if any of those sinks are accessed by personnel without proper clearance.
+
+This rule is a **locked constraint**: it derives from statute (개인정보보호법 §24) rather than engineering preference. It cannot be relaxed by project-level override.
+
+**Incorrect — RRN written to INFO and DEBUG log levels:**
+
+```java
+@Service
+public class UserService {
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+
+    public void registerUser(String name, String rrn) {
+        // VIOLATION: RRN in log — 개인정보보호법 §24 breach
+        log.info("registering user {} with RRN: {}", name, rrn);
+        log.debug("verifying identity for rrn={}", rrn);
+    }
+}
+```
+
+**Correct — log a non-sensitive identifier only:**
+
+```java
+@Service
+public class UserService {
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+
+    public void registerUser(String name, String rrn) {
+        // CORRECT: only the name (non-sensitive) is logged
+        log.info("registering user name={}", name);
+        // RRN processed in-memory and never emitted to any log sink
+    }
+
+    public void verifyIdentity(String rrn) {
+        // CORRECT: log the outcome, not the RRN
+        log.debug("identity verification attempted");
+        boolean result = doVerify(rrn);
+        log.info("identity verification result={}", result);
+    }
+}
+```
+
+## Why this matters
+
+개인정보보호법 §24 imposes:
+- Mandatory consent before collecting unique identification information
+- Processing restrictions: only the minimum necessary for the stated purpose
+- **Disclosure prohibition**: unauthorized disclosure (including to a log aggregator) triggers notification duties and fines up to ₩30M per violation
+
+Application logs flow to: log aggregators (ELK/OpenSearch), S3 retention, developer terminals, CI artifact stores. None of these are controlled personal-information processing systems under §24.
+
+The safe default is to **never log the RRN**, not to try to redact it downstream. Log scrubbers are best-effort and routinely bypass new fields.
+
+## Failing fixture
+
+See: `practices/evals/fixtures/no-rrn-logging/fail_rrn_in_log/UserService.java` — `log.info` and `log.debug` statements containing the `rrn` variable. A static analysis guard scanning for `log\.\(info\|debug\|warn\|error\).*rrn` catches both.
+
+Reference: [개인정보보호법 제24조 — 고유식별정보의 처리 제한 (Korean Personal Information Protection Act §24)](https://www.law.go.kr/법령/개인정보보호법)
+
+Reference: [OWASP Logging Cheat Sheet — Data to exclude](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude)
+
+
 <!-- @source rules/observability-mdc-trace-propagation.md -->
 
 ---
@@ -3568,6 +3669,105 @@ class UserApiTest {
 Verification: `./gradlew testPractices --tests "*RestAssured*"` hits `/actuator/health` over a real port and asserts the test class itself contains no MockMvc references.
 
 Reference: [RestAssured](https://rest-assured.io/) · [Spring Boot Testing](https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#features.testing.spring-boot-applications)
+
+
+<!-- @source rules/traceid-in-error-response.md -->
+
+---
+title: "Every ProblemDetail error response must include a traceId property"
+rule_id: traceid-in-error-response
+impact: HIGH
+impactDescription: "Without traceId in the error body, callers cannot correlate a 4xx/5xx response with the server's structured log entry"
+tags:
+  - observability
+  - error
+  - tracing
+  - rfc-7807
+provenance_class: internal_design
+protects_template_id: templates/backend/global-exception-handler/GlobalExceptionHandler.java
+failing_fixture_path: practices/evals/fixtures/traceid-in-error-response/fail_no_traceid/
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-ERR-001"
+verification:
+  gradle_task: testPractices
+  notes: "Assert ProblemDetail response body for every 4xx/5xx handler contains a non-null 'traceId' property."
+evidence:
+  - upstream_id: rfc-7807
+    section: "Problem Details for HTTP APIs — extension members"
+    quote: "Problem Details"
+  - upstream_id: slf4j-mdc
+    section: "SLF4J Mapped Diagnostic Context (MDC)"
+    quote: "Mapped Diagnostic Context"
+  - source_type: external
+    citation: "RFC 7807 §3.2 — Extension Members: problem detail objects may extend the base format with additional properties to aid debugging"
+    url: "https://www.rfc-editor.org/rfc/rfc7807#section-3.2"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "OpenTelemetry Trace Context W3C Specification — trace-id propagation for cross-service correlation"
+    url: "https://www.w3.org/TR/trace-context/#trace-id"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## Every ProblemDetail error response must include a `traceId` property
+
+**Impact: HIGH — An error body without `traceId` is a dead-end for the caller: they receive a 4xx/5xx but have no handle to find the correlated server log entry.**
+
+RFC 7807 defines a standard error envelope (`application/problem+json`) and explicitly permits extension members. The `traceId` extension member closes the loop between client error UI and server structured logs: when a user reports an error, support can use the displayed `traceId` to pull the exact log line from the SIEM without asking for reproduction steps.
+
+The `traceId` value is sourced from the SLF4J MDC key `trace_id` (populated by the `TraceIdFilter` per `observability-mdc-trace-propagation.md`). If the MDC key is absent (e.g., unit tests), fall back to a synthetic `no-trace` sentinel.
+
+**Incorrect — ProblemDetail returned without `traceId`:**
+
+```java
+@ExceptionHandler(IllegalArgumentException.class)
+public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
+    ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST, ex.getMessage());
+    pd.setTitle("Validation Error");
+    // VIOLATION: no traceId — caller cannot correlate this error with server logs
+    return pd;
+}
+```
+
+**Correct — `traceId` from MDC attached to every error response:**
+
+```java
+@ExceptionHandler(IllegalArgumentException.class)
+public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
+    ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST, ex.getMessage());
+    pd.setTitle("Validation Error");
+    pd.setProperty("traceId", traceId());   // ← required
+    return pd;
+}
+
+@ExceptionHandler(RuntimeException.class)
+public ProblemDetail handleRuntime(RuntimeException ex) {
+    ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+            HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
+    pd.setProperty("traceId", traceId());   // ← required on 5xx especially
+    return pd;
+}
+
+private static String traceId() {
+    String id = MDC.get("trace_id");
+    return id != null ? id : "no-trace";
+}
+```
+
+## Why this matters
+
+- Every `@ExceptionHandler` method in `GlobalExceptionHandler` is a potential terminal point for a user-visible error. Without `traceId`, the client-side error boundary has no correlation data — the support team must rely on approximate timestamps, which is unreliable when multiple users hit the same endpoint.
+- The `traceId` from MDC is set by the `TraceIdFilter` on every inbound request (see `observability-mdc-trace-propagation.md`). Forwarding it in the error response is a zero-overhead operation.
+- Pairs with `traceid-propagated-client.md` in `practices-react/` which requires Server Actions to propagate `traceId` on their error path.
+
+## Failing fixture
+
+See: `practices/evals/fixtures/traceid-in-error-response/fail_no_traceid/GlobalExceptionHandler.java` — both `@ExceptionHandler` methods return `ProblemDetail` without calling `pd.setProperty("traceId", ...)`. Guard catches: response body missing `traceId` key.
+
+Reference: [RFC 7807 §3.2 — Problem Details for HTTP APIs: Extension Members](https://www.rfc-editor.org/rfc/rfc7807#section-3.2)
+
+Reference: [W3C Trace Context — trace-id propagation](https://www.w3.org/TR/trace-context/#trace-id)
 
 
 <!-- @source rules/transaction-no-self-invocation.md -->
