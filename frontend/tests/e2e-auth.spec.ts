@@ -1,18 +1,24 @@
+/// <reference types="node" />
 import { test, expect } from '@playwright/test';
+
+// Backend-dependent tests require AX_LIVE_BACKEND=true (set when Spring Boot is running)
+const LIVE_BACKEND = process.env.AX_LIVE_BACKEND === 'true';
+// OAuth tests require actual provider credentials + running backend
+const OAUTH_E2E = process.env.OAUTH_E2E_ENABLED === 'true';
 
 test.describe('Auth E2E — 실제 브라우저 검증', () => {
 
   test('로그인 페이지 렌더링 + OAuth 버튼 존재', async ({ page }) => {
     await page.goto('/login');
-    
+
     // 페이지 제목
     await expect(page.locator('h1')).toContainText('Login');
-    
+
     // OAuth 버튼 3개
     await expect(page.getByText('Google 로그인')).toBeVisible();
     await expect(page.getByText('Kakao 로그인')).toBeVisible();
     await expect(page.getByText('Naver 로그인')).toBeVisible();
-    
+
     // 이메일 로그인 폼
     await expect(page.getByText('이메일 로그인')).toBeVisible();
   });
@@ -24,18 +30,24 @@ test.describe('Auth E2E — 실제 브라우저 검증', () => {
   });
 
   test('이메일 회원가입 → 성공 메시지', async ({ page }) => {
+    // Requires running Spring Boot backend at :8080
+    test.skip(!LIVE_BACKEND, 'AX_LIVE_BACKEND not set — skipping live signup flow (requires backend at :8080)');
+
     await page.goto('/signup');
-    
+
     const email = `e2e-${Date.now()}@test.com`;
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill('securepassword12');
     await page.getByRole('button', { name: /회원가입/i }).click();
-    
+
     // 성공 메시지
     await expect(page.getByText('이메일을 확인')).toBeVisible({ timeout: 5000 });
   });
 
   test('미인증 이메일로 로그인 시도 → 에러', async ({ page }) => {
+    // Requires running Spring Boot backend at :8080
+    test.skip(!LIVE_BACKEND, 'AX_LIVE_BACKEND not set — skipping live login flow (requires backend at :8080)');
+
     // 먼저 가입
     await page.goto('/signup');
     const email = `e2e-noverify-${Date.now()}@test.com`;
@@ -43,13 +55,13 @@ test.describe('Auth E2E — 실제 브라우저 검증', () => {
     await page.locator('input[type="password"]').fill('securepassword12');
     await page.getByRole('button', { name: /회원가입/i }).click();
     await expect(page.getByText('이메일을 확인')).toBeVisible({ timeout: 5000 });
-    
+
     // 로그인 시도 — 미인증이므로 실패
     await page.goto('/login');
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill('securepassword12');
     await page.getByRole('button', { name: /이메일 로그인/i }).click();
-    
+
     // 에러 메시지 표시 (403 — 미인증) OR 자동 검증(auto-verify=true) 시 대시보드로 이동
     await page.waitForTimeout(2000);
     // Reference workload default: signup.auto-verify=true → 이메일 즉시 검증됨 → 로그인 성공 → /dashboard
@@ -60,23 +72,27 @@ test.describe('Auth E2E — 실제 브라우저 검증', () => {
   });
 
   test('Google OAuth 버튼 → Google 로그인 페이지로 리다이렉트', async ({ page }) => {
+    // Requires running backend + OAuth config (OAUTH_E2E_ENABLED=true)
+    test.skip(!OAUTH_E2E, 'OAUTH_E2E_ENABLED not set — skipping OAuth redirect test (requires backend + provider config)');
+
     await page.goto('/login');
-    
-    // Google 버튼 클릭 시 Google로 리다이렉트되는지 확인
-    const [response] = await Promise.all([
+
+    const [_response] = await Promise.all([
       page.waitForResponse(resp => resp.url().includes('/api/auth/oauth/google/authorize') || resp.url().includes('accounts.google.com'), { timeout: 10000 }).catch(() => null),
       page.getByText('Google 로그인').click(),
     ]);
 
-    // Google 로그인 페이지로 이동했는지 확인
     await page.waitForTimeout(3000);
     const url = page.url();
     expect(url.includes('accounts.google.com') || url.includes('google.com')).toBeTruthy();
   });
 
   test('Kakao OAuth 버튼 → Kakao 로그인 페이지로 리다이렉트', async ({ page }) => {
+    // Requires running backend + OAuth config (OAUTH_E2E_ENABLED=true)
+    test.skip(!OAUTH_E2E, 'OAUTH_E2E_ENABLED not set — skipping OAuth redirect test (requires backend + provider config)');
+
     await page.goto('/login');
-    
+
     const [_] = await Promise.all([
       page.waitForURL(/kauth\.kakao\.com|kakao/, { timeout: 10000 }).catch(() => null),
       page.getByText('Kakao 로그인').click(),
@@ -88,8 +104,11 @@ test.describe('Auth E2E — 실제 브라우저 검증', () => {
   });
 
   test('Naver OAuth 버튼 → Naver 로그인 페이지로 리다이렉트', async ({ page }) => {
+    // Requires running backend + OAuth config (OAUTH_E2E_ENABLED=true)
+    test.skip(!OAUTH_E2E, 'OAUTH_E2E_ENABLED not set — skipping OAuth redirect test (requires backend + provider config)');
+
     await page.goto('/login');
-    
+
     const [_] = await Promise.all([
       page.waitForURL(/nid\.naver\.com|naver/, { timeout: 10000 }).catch(() => null),
       page.getByText('Naver 로그인').click(),
@@ -102,11 +121,8 @@ test.describe('Auth E2E — 실제 브라우저 검증', () => {
 
   test('미인증 사용자 → 대시보드 접근 → 로그인으로 리다이렉트', async ({ page }) => {
     await page.goto('/dashboard');
-    
-    // ProtectedRoute가 /login으로 리다이렉트
-    await expect(page.getByText('로그인이 필요합니다')).toBeVisible({ timeout: 5000 }).catch(async () => {
-      // 또는 /login으로 리다이렉트됨
-      await page.waitForURL(/\/login/, { timeout: 5000 });
-    });
+    // Middleware returns 307 → /login?from=/dashboard; page.goto() follows the redirect.
+    // Assert the final URL synchronously — no need to wait for another navigation.
+    expect(page.url()).toMatch(/\/login/);
   });
 });
