@@ -143,7 +143,10 @@ bash practices/evals/trio_integrity_guard.sh --domain scheduled-task
 - `ScheduledTask.java.skeleton` — minimal JPA entity stub (rename to `.java`,
   fill in `@Entity` package, repository, service)
 
-A fuller skeleton (JobHistory entity, LockingPolicy interface, controller, service)
-lands when the first downstream recipe (R8 LMS or CMS) consumes this domain. The R3
-Spec Trio is fully authored and unblocking; SP41 only completes the catalog row
-(README + ADR + sealed-verdict scaffold).
+R8 cycle (lms + cms recipes — `v1.6.0-lms-cms`) is the first-consumer event for
+this L4: `applied_recipes: [cms, lms]` is now bound at the catalog level (TD-024
+first-consumer convention). R8 deliberately ships recipes only — no backend
+skeleton expansion in this PR per recipe-no-code principle. A fuller skeleton
+(JobHistory entity, LockingPolicy interface, controller, service) is deferred to
+a future scheduler backend-expansion cycle (independent of any specific recipe;
+triggered by fork-receiver demand or AI-implementer needs).
