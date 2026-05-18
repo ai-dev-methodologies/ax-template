@@ -40,6 +40,10 @@ evidence:
 sibling_rules:
   - l2-prefer-data-prop-over-direct-fetch
   - async-api-routes
+provenance_class: internal_design
+protects_template_id: templates/L2/blocks/
+failing_fixture_path: practices/evals/fixtures/l2-prefer-onsubmit-prop/fail_server_action_import/
+decided_at: "2026-05-18"
 ---
 
 ## L2 form blocks — accept `onSubmit` prop; never import server actions directly

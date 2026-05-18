@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "d0a7bffcaf1a0d212fca986c3ceb411f4eef26385a85b019cfbb17af7031ff15"
-  rule_count: 70
+  source_concat_sha256: "33fb6866b819043dca88d1432c4a4d147a55af34a0b5e64d59a7d8f0457b35f2"
+  rule_count: 73
   generated_by: "practices-react/generate_agents.sh"
 ---
 
@@ -2679,6 +2679,127 @@ Sources:
 - [React 19 — use()](https://react.dev/reference/react/use)
 
 
+<!-- @source rules/combobox-respects-hangul-ime-composition.md -->
+
+---
+title: "Combobox / autocomplete must suppress onChange filtering during IME composition (한글 IME guard)"
+rule_id: combobox-respects-hangul-ime-composition
+impact: HIGH
+impactDescription: "Korean IME fires multiple onChange events per keystroke during syllable composition; filtering on partial input produces wrong matches and degrades UX for Korean users"
+tags:
+  - combobox
+  - ime
+  - hangul
+  - accessibility
+  - korean
+  - l1-component
+applicable_to:
+  - react
+  - nextjs
+provenance_class: internal_design
+protects_template_id: templates/L1/components/combobox.tsx
+failing_fixture_path: practices/evals/fixtures/combobox-respects-hangul-ime-composition/fail_fires_during_composition/
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-CLIENT-001"
+verification:
+  type: review
+  status: manual
+  notes: "Combobox onChange handler must check composingRef.current or nativeEvent.isComposing before invoking the filter/search. onCompositionStart must set the guard; onCompositionEnd must clear it and fire the deferred filter."
+evidence:
+  - upstream_id: mdn-addeventlistener-passive
+    section: "CompositionEvent — isComposing property"
+    quote: "isComposing"
+  - source_type: external
+    citation: "MDN Web Docs — CompositionEvent: compositionstart / compositionend lifecycle for CJK input method editors"
+    url: "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "W3C UI Events specification §CompositionEvent — IME composition lifecycle (compositionstart, compositionupdate, compositionend)"
+    url: "https://www.w3.org/TR/uievents/#events-composition-types"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## Combobox / autocomplete must suppress `onChange` filtering during IME composition (한글 IME guard)
+
+**Impact: HIGH — Korean (한글) input via IME fires 2-4 `onChange` events per character while the user is mid-syllable. Filtering on these partial values produces wrong matches ('ㅎ', '하', then '한' for a single keystroke) and causes visible flickering in the dropdown.**
+
+Korean syllables are composed from up to three jamo components (초성/중성/종성). The IME emits:
+1. `compositionstart` — user begins composing
+2. Multiple `compositionupdate` events — each jamo stroke triggers an `input`/`change` event
+3. `compositionend` — syllable committed, final character available
+
+Filtering the option list on `compositionupdate` values produces meaningless partial tokens. The filter must only run after `compositionend`.
+
+### The violation — onChange fires during IME composition
+
+```typescript
+// ❌ WRONG — no isComposing guard; filters fire on 'ㅎ', '하', '한' for one keystroke
+"use client";
+export default function Combobox({ options, onSelect }) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setQuery(val);
+    // BUG: fires on compositionupdate — incomplete syllable triggers filter
+    setFiltered(options.filter(o => o.includes(val)));
+  }
+  return <input type="text" onChange={handleChange} />;
+}
+```
+
+### Correct — composition guard suppresses filter during IME
+
+```typescript
+// ✅ CORRECT — filter fires only after composition is committed
+"use client";
+import { useState, useRef } from "react";
+
+export default function Combobox({ options, onSelect }: ComboboxProps) {
+  const [query, setQuery] = useState("");
+  const [filtered, setFiltered] = useState<string[]>([]);
+  const composingRef = useRef(false); // true while IME is mid-composition
+
+  function handleCompositionStart() { composingRef.current = true; }
+
+  function handleCompositionEnd(e: React.CompositionEvent<HTMLInputElement>) {
+    composingRef.current = false;
+    // Fire filter once syllable is committed (compositionend value is final)
+    const val = (e.target as HTMLInputElement).value;
+    setFiltered(options.filter(o => o.includes(val)));
+  }
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setQuery(val);
+    if (composingRef.current) return; // skip filter during CJK composition
+    setFiltered(options.filter(o => o.includes(val)));
+  }
+
+  return (
+    <input
+      type="text"
+      value={query}
+      onChange={handleChange}
+      onCompositionStart={handleCompositionStart}
+      onCompositionEnd={handleCompositionEnd}
+    />
+  );
+}
+```
+
+### Why this rule exists
+
+First captured in SP14 combobox implementation. Korean users type approximately 30% of all characters via IME. Without the guard, a combobox filtering on `compositionupdate` fires a network search for every jamo stroke, causing:
+1. Unnecessary search requests (3-4x traffic for Korean input)
+2. Incorrect intermediate results visible in the dropdown
+3. Perceived UX jank as the dropdown flickers between partial matches
+
+The `onCompositionEnd` pattern is also required for Chinese (Pinyin/Zhuyin) and Japanese (Hiragana/Katakana) IME input — the same guard handles all CJK scripts.
+
+Reference: [MDN Web Docs — CompositionEvent](https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent)
+
+Reference: [W3C UI Events §CompositionEvent](https://www.w3.org/TR/uievents/#events-composition-types)
+
+
 <!-- @source rules/js-batch-dom-css.md -->
 
 ---
@@ -4101,6 +4222,10 @@ evidence:
 sibling_rules:
   - l2-prefer-data-prop-over-direct-fetch
   - async-api-routes
+provenance_class: internal_design
+protects_template_id: templates/L2/blocks/
+failing_fixture_path: practices/evals/fixtures/l2-prefer-onsubmit-prop/fail_server_action_import/
+decided_at: "2026-05-18"
 ---
 
 ## L2 form blocks — accept `onSubmit` prop; never import server actions directly
@@ -5049,6 +5174,102 @@ Sources for this rule:
 - [Next.js 16 — 'use cache' directive](https://nextjs.org/docs/app/api-reference/directives/use-cache)
 - [Next.js 16 — Caching guide](https://nextjs.org/docs/app/getting-started/caching)
 - [React 19 — cache() (for isolation context)](https://react.dev/reference/react/cache)
+
+
+<!-- @source rules/no-l4-cross-import.md -->
+
+---
+title: "L4 domain pages must not import from other L4 domains"
+rule_id: no-l4-cross-import
+impact: HIGH
+impactDescription: "Cross-importing between L4 domains creates tight coupling, makes domains non-independently deployable, and creates circular dependency risks that break tree-shaking and code-splitting"
+tags:
+  - l4-layer
+  - domain-isolation
+  - imports
+  - architecture
+applicable_to:
+  - nextjs
+  - react
+provenance_class: internal_design
+protects_template_id: templates/L4/
+failing_fixture_path: practices/evals/fixtures/no-l4-cross-import/fail_cross_import/
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-ADVANCED-001"
+verification:
+  type: review
+  status: manual
+  notes: "No file under templates/L4/<domain-A>/ may import from templates/L4/<domain-B>/. Shared cross-cutting concerns (auth state, user context) must be sourced from shared hooks (hooks/), context providers (providers/), or L1/L2 components — never from another L4 domain."
+evidence:
+  - upstream_id: nextjs-app-router-16
+    section: "App Router — route segments as independent modules"
+    quote: "route segments"
+  - source_type: external
+    citation: "Next.js documentation — Domain-driven architecture: each feature domain should be self-contained with no cross-domain imports at the route layer"
+    url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Vercel best practices — Vertical slice architecture: L4 domains are independent vertical slices; cross-slice imports create coupling that breaks hot reloading and incremental static regeneration"
+    url: "https://vercel.com/blog/how-we-optimized-package-imports-in-next-js"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## L4 domain pages must not import from other L4 domains
+
+**Impact: HIGH — L4 domains are independent vertical slices. Cross-domain imports couple their deployment, break tree-shaking between route segments, and create circular dependency risks as each domain grows.**
+
+L4 is the feature layer — auth, payment, notification, file-storage, crud are all L4 domains. Each domain owns its pages, server actions, and domain-specific components. Cross-importing means that changing domain A's internals can silently break domain B, and that both domains must be bundled together even when only one changes.
+
+### The violation — L4 payment importing from L4 auth
+
+```typescript
+// ❌ WRONG — templates/L4/payment/PaymentPage.tsx imports from L4/auth
+"use client";
+// VIOLATION: importing auth domain's store and components directly
+import { useAuthStore } from "templates/L4/auth/store/authStore";
+import { AuthGuard } from "templates/L4/auth/components/AuthGuard";
+
+export default function PaymentPage() {
+  const { user } = useAuthStore(); // couples payment bundle to auth bundle
+  return <AuthGuard><div>Pay for {user?.name}</div></AuthGuard>;
+}
+```
+
+### Correct — shared hooks for cross-cutting concerns
+
+```typescript
+// ✅ CORRECT — payment uses shared hooks, not L4/auth internals
+"use client";
+// Shared hooks in hooks/ are the contract layer between L4 domains
+import { useCurrentUser } from "hooks/useCurrentUser";
+import { useRequireAuth } from "hooks/useRequireAuth";
+
+export default function PaymentPage() {
+  const user = useCurrentUser();   // shared contract — no auth bundle coupling
+  useRequireAuth();                 // redirects if not authenticated
+
+  return <div>Pay for {user?.name}</div>;
+}
+```
+
+### Allowed import directions from L4
+
+| Source (inside L4/domain) | Target | Allowed? |
+|---|---|---|
+| `templates/L4/payment/` | `templates/L1/components/` | ✅ |
+| `templates/L4/payment/` | `templates/L2/blocks/` | ✅ |
+| `templates/L4/payment/` | `templates/L3/pages/` | ✅ |
+| `templates/L4/payment/` | `hooks/`, `providers/`, `lib/` | ✅ |
+| `templates/L4/payment/` | `templates/L4/auth/` | ❌ violation |
+| `templates/L4/payment/` | `templates/L4/notification/` | ❌ violation |
+
+### Why this rule exists
+
+During SP8-SP11 (L4 domain implementation) all cross-cutting concerns (auth state, current user, toast queue, error boundary) were moved to `hooks/` and `providers/`. Any L4 domain that directly imports from another L4 domain is bypassing this shared layer and re-coupling.
+
+Reference: [Next.js App Router — route colocation](https://nextjs.org/docs/app/building-your-application/routing/colocation)
+
+Reference: [Failing fixture: practices/evals/fixtures/no-l4-cross-import/fail_cross_import/PaymentPage.tsx](practices/evals/fixtures/no-l4-cross-import/fail_cross_import/PaymentPage.tsx)
 
 
 <!-- @source rules/rendering-activity.md -->
@@ -8953,5 +9174,125 @@ Sibling rule `server-dedup-props` covers the (lower-impact) case of passing the 
 Sources:
 
 - [Vercel: server-serialization](https://github.com/vercel-labs/agent-skills/blob/main/skills/react-best-practices/rules/server-serialization.md)
+
+
+<!-- @source rules/traceid-propagated-client.md -->
+
+---
+title: "Server Actions must include traceId in error responses so the client can correlate failures with server logs"
+rule_id: traceid-propagated-client
+impact: HIGH
+impactDescription: "Without traceId in the Server Action error response, the client has no correlation handle — users cannot provide support teams with the information needed to find the server log"
+tags:
+  - tracing
+  - server-actions
+  - observability
+  - error-handling
+  - nextjs
+applicable_to:
+  - nextjs
+provenance_class: internal_design
+protects_template_id: templates/L4/
+failing_fixture_path: practices/evals/fixtures/traceid-propagated-client/fail_no_traceid/
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-SERVER-003"
+verification:
+  type: review
+  status: manual
+  notes: "All Server Action return types must include a traceId field. The error branch must populate it from headers().get('x-trace-id') or crypto.randomUUID(). The success branch may omit traceId or include it for full observability."
+evidence:
+  - upstream_id: nextjs-server-actions-16
+    section: "Server Actions — error handling and return types"
+    quote: "Server Actions can return serializable values"
+  - source_type: external
+    citation: "W3C Trace Context — trace-id as a correlation identifier propagated across service boundaries including browser-to-server calls"
+    url: "https://www.w3.org/TR/trace-context/#trace-id"
+    quoted_at: "2026-05-18"
+  - source_type: external
+    citation: "Next.js documentation — Server Actions error handling: return a result object with error field so callers can handle failures gracefully"
+    url: "https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions-and-mutations#error-handling"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## Server Actions must include `traceId` in error responses so the client can correlate failures with server logs
+
+**Impact: HIGH — The client receives a generic error message but has no handle to find the server log. The `traceId` closes this loop: the error UI can display "Error ref: \<traceId\>" and support can pull the exact server log line.**
+
+This rule is the client-side counterpart to `traceid-in-error-response.md` in `practices/rules/`. Both sides of the request lifecycle must propagate the trace ID: the backend sets it in `ProblemDetail.traceId`; the Server Action sets it in the return value's `traceId` field.
+
+### The violation — error returned without traceId
+
+```typescript
+// ❌ WRONG — Server Action returns error without traceId
+"use server";
+
+interface LoginResult {
+  success: boolean;
+  error?: string;
+  // MISSING: traceId — client UI has no correlation handle
+}
+
+export async function loginAction(formData: FormData): Promise<LoginResult> {
+  try {
+    await authenticate(formData);
+    return { success: true };
+  } catch (err) {
+    // VIOLATION: error returned without traceId
+    return { success: false, error: "Authentication failed" };
+  }
+}
+```
+
+### Correct — traceId propagated from request headers
+
+```typescript
+// ✅ CORRECT — traceId sourced from incoming request headers
+"use server";
+import { headers } from "next/headers";
+
+interface LoginResult {
+  success: boolean;
+  error?: string;
+  traceId?: string; // always present — client can display "Error ref: <traceId>"
+}
+
+export async function loginAction(formData: FormData): Promise<LoginResult> {
+  const traceId = (await headers()).get("x-trace-id") ?? crypto.randomUUID();
+  try {
+    await authenticate(formData);
+    return { success: true, traceId };
+  } catch (err) {
+    // CORRECT: traceId in error branch for client correlation
+    return { success: false, error: "Authentication failed", traceId };
+  }
+}
+```
+
+### Client error UI displays traceId
+
+```typescript
+// Error boundary or form error display
+if (!result.success) {
+  toast.error(`Login failed. Reference: ${result.traceId}`);
+}
+```
+
+### Why this rule exists
+
+Without `traceId`:
+- User sees "Authentication failed" but can provide no correlation data to support.
+- Support team must search logs by approximate timestamp — unreliable with concurrent users.
+
+With `traceId`:
+- User quotes "Error ref: a1b2c3d4" to support.
+- Support finds the exact structured log entry and root cause in seconds.
+
+The trace ID comes from `x-trace-id` header (populated by the `TraceIdFilter` on the Java backend or by Next.js middleware). When absent, `crypto.randomUUID()` generates a client-side ID that at least identifies the specific invocation.
+
+Pairs with: `traceid-in-error-response.md` (Java backend `@ExceptionHandler` counterpart).
+
+Reference: [W3C Trace Context — trace-id propagation](https://www.w3.org/TR/trace-context/#trace-id)
+
+Reference: [Next.js Server Actions — error handling](https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions-and-mutations#error-handling)
 
 

@@ -1,6 +1,6 @@
 ---
 name: practices-react
-description: React 19 / Next.js 16 best-practices reviewer for the ax-template practices-react catalog. Triggers when editing practices-react/rules/*.md, specs/react-practices-l0.yaml, or frontend/ source files. Provides the 8-family / 70-rule evidence-anchored catalog (Vercel react-best-practices seed cross-checked against React 19 / Next.js 16 / MDN canonical docs and codex consensus).
+description: React 19 / Next.js 16 best-practices reviewer for the ax-template practices-react catalog. Triggers when editing practices-react/rules/*.md, specs/react-practices-l0.yaml, or frontend/ source files. Provides the 8-family / 73-rule evidence-anchored catalog (Vercel react-best-practices seed cross-checked against React 19 / Next.js 16 / MDN canonical docs and codex consensus).
 metadata:
   priority: 4
   docs:
