@@ -1,0 +1,133 @@
+---
+title: "All monetary amounts in billing domain must be stored as long integer minor units; float, double, and BigDecimal representations are prohibited"
+rule_id: currency-amount-precision-explicit
+impact: CRITICAL
+impactDescription: "float/double representation of monetary amounts causes silent rounding errors (e.g., 10.1 KRW stored as 10.099999...). BigDecimal is verbose and mutation-prone. Stripe and Toss both use integer minor units as their canonical wire format."
+tags:
+  - billing
+  - currency
+  - precision
+  - integer-minor-units
+provenance_class: internal_design
+protects_template_id: templates/backend/billing/Plan.java
+failing_fixture_path: practices/evals/fixtures/currency-amount-precision/fail_float_amount/
+spec_ref: "specs/billing-l0.yaml#BILLING-CUR-001"
+verification:
+  type: archunit
+  notes: |
+    ArchUnit rule:
+    fields().that().areDeclaredInClassesThat().resideInAPackage("..billing..")
+    .and().haveNameMatching(".*[Aa]mount.*|.*[Pp]rice.*|.*[Ff]ee.*|.*[Cc]ost.*")
+    .should().haveRawType(long.class)
+    Controller validation:
+    POST endpoints that accept amount fields use @RequestBody with a record type;
+    if the field is typed as double/float in the JSON, Jackson rejects it with 400.
+    Failing fixture: any billing entity field named *amount*/*price*/*fee*/*cost* typed as double/float/BigDecimal.
+evidence:
+  - source_type: upstream_id
+    upstream_id: stripe-billing-2026-05
+    section: "Amounts and currencies"
+    quote: "All amounts are stored in the smallest currency unit (e.g., 100 cents to charge $1.00). For zero-decimal currencies such as JPY or KRW, use the amount directly (e.g., 150 to charge ¥150)."
+  - source_type: upstream_id
+    upstream_id: toss-billing-2026-05
+    section: "금액 단위"
+    quote: "amount 필드는 항상 정수(원 단위)로 전달합니다. 소수점 금액은 허용하지 않습니다."
+  - source_type: external
+    citation: "Martin Fowler — Money pattern: store amounts as integer minor units to avoid floating-point rounding; pair with a Currency object for formatting."
+    url: "https://martinfowler.com/eaaCatalog/money.html"
+    quoted_at: "2026-05-18"
+decided_at: "2026-05-18"
+---
+
+## All monetary amounts must be long integer minor units
+
+**Impact: CRITICAL — float/double amounts silently accumulate rounding errors. A 0.1 KRW float error compounded over 1,000 invoices is 100 KRW gone. Stripe and Toss both define integer minor units as canonical. This template enforces the same.**
+
+Both Stripe and Toss Payments use integer minor-unit amounts as their canonical wire format:
+- KRW (South Korean Won): no subdivisions — 1,000 KRW = `1000` (long)
+- USD (US Dollar): cents — $10.00 = `1000` (long, cents)
+- JPY: no subdivisions — ¥150 = `150` (long)
+
+### What "minor units" means
+
+| Currency | Decimal | Minor units (long) |
+|---|---|---|
+| KRW ₩10,000 | 10000.00 | `10000L` |
+| USD $9.99 | 9.99 | `999L` |
+| EUR €4.50 | 4.50 | `450L` |
+
+**Incorrect — float or BigDecimal storage for monetary amounts:**
+
+```java
+// VIOLATION: float causes rounding loss on any non-exact binary fraction
+private float amount;  // 10.1 stored as 10.09999942779541 (IEE 754)
+// VIOLATION: BigDecimal is verbose and mutation-prone
+private BigDecimal amountDue;
+// VIOLATION: double — same rounding problem as float
+private double price;
+```
+
+**Correct — long integer minor units for all monetary amounts:**
+
+```java
+// CORRECT: long, minor units — KRW 10,000원 stored as 10000L
+private long amount;
+// CORRECT: Invoice.java — both fields as long
+private long amountDue;
+private long amountPaid;
+```
+
+Reference: https://martinfowler.com/eaaCatalog/money.html
+
+### Correct — rejecting float inputs at the HTTP boundary
+
+```java
+// BillingController.java — CreateSubscriptionRequest record
+// amount is declared as long; if client sends 9.99, Jackson throws 400
+record CreateSubscriptionRequest(
+    @NotNull UUID planId,
+    @NotBlank String provider
+) {}
+
+// PlanController.java — CreatePlanRequest record
+record CreatePlanRequest(
+    @NotBlank String name,
+    @Positive long amount,  // rejects float JSON with 400 ProblemDetail
+    @NotBlank String currency,
+    @NotBlank String billingCycle
+) {}
+```
+
+### Display formatting
+
+For display, convert minor units to decimal in the frontend using `CurrencyFormatter` (L1):
+
+```typescript
+import { formatCurrencyAmount } from '@/templates/L1/components/currency-input'
+
+// KRW: no decimal places
+formatCurrencyAmount(10000, 'KRW', 'ko-KR') // → "₩10,000"
+
+// USD: two decimal places
+formatCurrencyAmount(999, 'USD', 'en-US') // → "$9.99"
+```
+
+**Never convert back to float/double for storage or computation.** All arithmetic (discounts, proration) stays in long arithmetic.
+
+## ArchUnit enforcement
+
+```java
+// CurrencyAmountPrecisionArchTest.java
+@ArchTest
+static final ArchRule billingAmountFieldsMustBeLong = fields()
+    .that().areDeclaredInClassesThat().resideInAPackage("..billing..")
+    .and().haveNameMatching(".*[Aa]mount.*|.*[Pp]rice.*|.*[Ff]ee.*|.*[Cc]ost.*")
+    .should().haveRawType(long.class)
+    .because("All monetary amounts in billing domain must be long integer minor units");
+```
+
+## Failing fixture
+
+See: `practices/evals/fixtures/currency-amount-precision/fail_float_amount/BillingPlanFloatAmount.java` — a Plan entity with `private double amount`.
+
+See: `practices/evals/fixtures/currency-amount-precision/pass_integer_amount/BillingPlanLongAmount.java` — correct `private long amount`.

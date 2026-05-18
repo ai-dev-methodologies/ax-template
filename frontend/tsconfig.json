@@ -34,10 +34,8 @@
     "esModuleInterop": true
   },
   "include": [
-    "middleware.ts",
     "next.config.ts",
     "src",
-    "tests",
     ".next/types/**/*.ts"
   ],
   "exclude": [

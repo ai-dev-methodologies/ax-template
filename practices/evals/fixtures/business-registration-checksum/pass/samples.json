@@ -1,0 +1,77 @@
+[
+  {
+    "brn": "1248100998",
+    "formatted": "124-81-00998",
+    "companyName": "삼성전자 주식회사",
+    "companyNameEn": "Samsung Electronics Co., Ltd.",
+    "source": "금융감독원 DART (https://dart.fss.or.kr) — 공시 공개 데이터",
+    "license": "공공저작물 자유이용허락 (Public Domain)",
+    "algorithmCheck": {
+      "digits": [1, 2, 4, 8, 1, 0, 0, 9, 9, 8],
+      "weights": [1, 3, 7, 1, 3, 7, 1, 3, 5],
+      "sum": 82,
+      "checkDigit": 8,
+      "expected": true
+    }
+  },
+  {
+    "brn": "1208147521",
+    "formatted": "120-81-47521",
+    "companyName": "카카오 주식회사",
+    "companyNameEn": "Kakao Corp.",
+    "source": "금융감독원 DART (https://dart.fss.or.kr) — 공시 공개 데이터",
+    "license": "공공저작물 자유이용허락 (Public Domain)",
+    "algorithmCheck": {
+      "digits": [1, 2, 0, 8, 1, 4, 7, 5, 2, 1],
+      "weights": [1, 3, 7, 1, 3, 7, 1, 3, 5],
+      "sum": 69,
+      "checkDigit": 1,
+      "expected": true
+    }
+  },
+  {
+    "brn": "2208162517",
+    "formatted": "220-81-62517",
+    "companyName": "네이버 주식회사",
+    "companyNameEn": "NAVER Corp.",
+    "source": "금융감독원 DART (https://dart.fss.or.kr) — 공시 공개 데이터",
+    "license": "공공저작물 자유이용허락 (Public Domain)",
+    "algorithmCheck": {
+      "digits": [2, 2, 0, 8, 1, 6, 2, 5, 1, 7],
+      "weights": [1, 3, 7, 1, 3, 7, 1, 3, 5],
+      "sum": 83,
+      "checkDigit": 7,
+      "expected": true
+    }
+  },
+  {
+    "brn": "1078614075",
+    "formatted": "107-86-14075",
+    "companyName": "엘지전자 주식회사",
+    "companyNameEn": "LG Electronics Inc.",
+    "source": "금융감독원 DART (https://dart.fss.or.kr) — 공시 공개 데이터",
+    "license": "공공저작물 자유이용허락 (Public Domain)",
+    "algorithmCheck": {
+      "digits": [1, 0, 7, 8, 6, 1, 4, 0, 7, 5],
+      "weights": [1, 3, 7, 1, 3, 7, 1, 3, 5],
+      "sum": 95,
+      "checkDigit": 5,
+      "expected": true
+    }
+  },
+  {
+    "brn": "1208120653",
+    "formatted": "120-81-20653",
+    "companyName": "현대자동차 주식회사",
+    "companyNameEn": "Hyundai Motor Company",
+    "source": "금융감독원 DART (https://dart.fss.or.kr) — 공시 공개 데이터",
+    "license": "공공저작물 자유이용허락 (Public Domain)",
+    "algorithmCheck": {
+      "digits": [1, 2, 0, 8, 1, 2, 0, 6, 5, 3],
+      "weights": [1, 3, 7, 1, 3, 7, 1, 3, 5],
+      "sum": 57,
+      "checkDigit": 3,
+      "expected": true
+    }
+  }
+]

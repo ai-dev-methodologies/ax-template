@@ -1,0 +1,136 @@
+template_id: identity-verification-blueprint
+family: scaffold
+status: draft
+confidence: high
+domain_mode: backend_only   # server-to-server callback only; no frontend UI in scope for SP31
+stack:
+  backend: spring-boot
+  contract: openapi
+  repo_shape: single-repo
+
+when_to_use:
+  - Korean enterprise services requiring CI (Connecting Information) / DI (Duplicate Information) based identity verification
+  - B2C SaaS requiring KISA-compliant 본인인증 (phone-based identity verification)
+  - Services that must comply with 개인정보보호법 §24 (restrictions on processing unique identification information)
+  - Any domain requiring vendor-agnostic identity verification (PASS, KCB, or future providers)
+
+not_for:
+  - Collecting raw RRN (주민등록번호) — use the no-rrn-collection-without-legal-basis rule instead
+  - Document verification (passport, driver's license) — out of scope for this domain
+  - AML / KYC screening — extend with a separate compliance-screening domain
+
+# ─── hmac ─────────────────────────────────────────────────────────────────────
+hmac:
+  algorithm: HmacSHA256
+  signature_header: "X-Identity-Signature"
+  signature_prefix: "sha256="
+  constant_time_comparison: true   # MessageDigest.isEqual() — never Arrays.equals()
+  secret_storage: "ax.identity-verification.{provider}.secret (Vault/env — never hardcoded)"
+  raw_body_required: true   # @RequestBody byte[] to preserve HMAC integrity
+  trace:
+    IDV-CALLBACK-001: invalid or absent HMAC → 401
+
+# ─── persist ──────────────────────────────────────────────────────────────────
+persist:
+  entity: VerifiedIdentity
+  fields:
+    - ci: "String (64 hex chars) — Connecting Information, cross-service unique"
+    - di: "String (64 hex chars) — Duplicate Information, per-service unique"
+    - name: "String — verified legal name"
+    - dob: "LocalDate — date of birth"
+    - verifiedAt: "Instant — server-side timestamp of persistence"
+    - providerName: "String — 'pass' | 'kcb'"
+    - metadata: "Map<String,String> — provider-specific extras (NOT RRN)"
+  forbidden_fields:
+    - rrn: "주민등록번호 MUST NOT be stored — use CI/DI instead"
+    - residentRegistrationNumber: forbidden
+    - socialSecurityNumber: forbidden
+  trace:
+    IDV-CALLBACK-002: valid HMAC + payload → 200 + VerifiedIdentity persisted
+
+# ─── no-rrn ───────────────────────────────────────────────────────────────────
+no-rrn:
+  policy: "CI and DI are opaque tokens; adapters MUST NOT store or log the source RRN"
+  applicable_rule: "practices/rules/no-rrn-collection-without-legal-basis.md"
+  trace:
+    IDV-CALLBACK-003: VerifiedIdentity entity must have no RRN field
+
+# ─── provider-contract ────────────────────────────────────────────────────────
+provider-contract:
+  interface: IdentityVerificationProvider
+  method: "extract(IdentityVerificationDto dto) → VerifiedIdentityData"
+  adapters:
+    - name: PassAdapter
+      provider: pass
+      description: "PASS 본인인증 (SKT/KT/LGU+ consortium) CI/DI extraction"
+    - name: KcbAdapter
+      provider: kcb
+      description: "KCB (Korea Credit Bureau) CI/DI extraction"
+  canonical_shape:
+    ci: required
+    di: required
+    name: required
+    dob: required
+    verifiedAt: required
+    providerName: required
+    metadata: "Map<String,String> — provider extras (no RRN)"
+  trace:
+    IDV-PROVIDER-001: both adapters produce identical VerifiedIdentity shape
+    IDV-PROVIDER-002: unknown provider → 400
+
+# ─── audit ────────────────────────────────────────────────────────────────────
+audit:
+  publisher: AuditLogPublisher   # SP17 event bus
+  event_type: IDENTITY_VERIFICATION_CALLBACK
+  fields:
+    - providerName: always logged
+    - outcome: "SUCCESS | HMAC_FAIL | EXTRACTION_FAIL"
+    - ci: "logged on success; null on failure"
+    - verifiedAt: "logged on success; null on failure"
+  forbidden_in_audit:
+    - rrn: "주민등록번호 MUST NOT appear in audit log entries"
+  trace:
+    IDV-AUDIT-001: every callback attempt is audited
+
+# ─── admin ────────────────────────────────────────────────────────────────────
+admin:
+  endpoints:
+    - GET /api/admin/identity-verification
+  required_role: ROLE_ADMIN
+  unauthenticated_response: 401
+  non_admin_response: 403
+  trace:
+    IDV-ADMIN-001: admin list endpoint requires ADMIN role
+
+# ─── testing ──────────────────────────────────────────────────────────────────
+testing_baseline:
+  unit: "JUnit 5 + Mockito — adapter extraction, provider resolution, audit hook"
+  integration: "RestAssured + @SpringBootTest — HMAC verify, callback persist, admin RBAC"
+  e2e: "not in scope — provider sandbox integration is advisory"
+
+verification_checkpoints:
+  - "IDV-CALLBACK-001: invalid HMAC → 401"
+  - "IDV-CALLBACK-002: valid HMAC → 200 + VerifiedIdentity persisted"
+  - "IDV-CALLBACK-003: VerifiedIdentity has no RRN field"
+  - "IDV-PROVIDER-001: PASS + KCB adapters produce identical shape"
+  - "IDV-PROVIDER-002: unknown provider → 400"
+  - "IDV-AUDIT-001: every callback attempt produces audit entry"
+  - "IDV-ADMIN-001: admin list requires ROLE_ADMIN"
+
+must_not:
+  - "Store or log RRN at any point in the callback processing pipeline"
+  - "Use String equality for HMAC comparison (timing attack risk)"
+  - "Leak provider-specific fields into VerifiedIdentity domain object"
+  - "Hardcode provider secrets in source code"
+  - "Call the RRN verification flow with raw RRN input — use CI/DI only"
+
+reject_if:
+  - "Request with invalid HMAC accepted"
+  - "VerifiedIdentity entity has a field containing 'rrn' (case-insensitive)"
+  - "RRN appears in any audit log entry"
+  - "PASS payload and KCB payload produce structurally different VerifiedIdentity records"
+
+source_precedence:
+  - "KISA 본인인증 가이드라인 (https://www.kisa.or.kr/2060301/form?postSeq=14)"
+  - "개인정보보호법 §24 — 고유식별정보의 처리 제한 (https://www.law.go.kr/법령/개인정보보호법)"
+  - "OWASP ASVS V6 — Verification of Stored Cryptography"

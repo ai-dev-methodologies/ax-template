@@ -1,4 +1,4 @@
-// L1 component barrel — 39 components (32 shadcn/ui + 7 SP14 P0 primitives)
+// L1 component barrel — 42 components (32 shadcn/ui + 7 SP14 P0 primitives + 3 SP32 rich-content)
 // Fork receivers: copy this directory and run `npm install` with PEER_DEPS.md
 
 // Form primitives (10)
@@ -51,6 +51,11 @@ export * from './components/date-range-picker'
 export * from './components/file-dropzone'
 export * from './components/otp-input'
 export * from './components/address-search'
+
+// SP32 Rich-Content primitives (3) — code-block, markdown, wysiwyg editor
+export * from './components/code-block'
+export * from './components/markdown-renderer'
+export * from './components/rich-text-editor'
 
 // Utilities
 export { cn } from './lib/utils'

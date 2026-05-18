@@ -1,0 +1,42 @@
+[
+  {
+    "brn": "1248100999",
+    "formatted": "124-81-00999",
+    "note": "Samsung Electronics BRN with last digit mutated: 8→9. Should return false.",
+    "originalBrn": "124-81-00998",
+    "mutationType": "last_digit_plus_one",
+    "expected": false
+  },
+  {
+    "brn": "1208147522",
+    "formatted": "120-81-47522",
+    "note": "Kakao Corp BRN with last digit mutated: 1→2. Should return false.",
+    "originalBrn": "120-81-47521",
+    "mutationType": "last_digit_plus_one",
+    "expected": false
+  },
+  {
+    "brn": "2208162518",
+    "formatted": "220-81-62518",
+    "note": "NAVER Corp BRN with last digit mutated: 7→8. Should return false.",
+    "originalBrn": "220-81-62517",
+    "mutationType": "last_digit_plus_one",
+    "expected": false
+  },
+  {
+    "brn": "1078614076",
+    "formatted": "107-86-14076",
+    "note": "LG Electronics BRN with last digit mutated: 5→6. Should return false.",
+    "originalBrn": "107-86-14075",
+    "mutationType": "last_digit_plus_one",
+    "expected": false
+  },
+  {
+    "brn": "1208120654",
+    "formatted": "120-81-20654",
+    "note": "Hyundai Motor BRN with last digit mutated: 3→4. Should return false.",
+    "originalBrn": "120-81-20653",
+    "mutationType": "last_digit_plus_one",
+    "expected": false
+  }
+]

@@ -1,0 +1,112 @@
+version: "1.0.0"
+scope: "identity-verification-domain"
+stack: "Spring Boot 3.2.x + JPA + HMAC-SHA256 + PASS / KCB adapters"
+standard: "KISA 본인인증 가이드라인 + 개인정보보호법 §24 + OWASP ASVS V6"
+domain_mode: backend_only   # no frontend UI in scope; CI/DI callback is server-to-server
+items:
+  # ─── CALLBACK family (3 items) ─────────────────────────────────────────────
+  - id: "IDV-CALLBACK-001"
+    chapter: "CALLBACK"
+    requirement: "IdentityVerificationCallbackController must verify the provider HMAC-SHA256 signature before processing the payload; requests with invalid or absent signatures are rejected with HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/identity-verification/callback/{provider} with tampered payload
+      (valid CI/DI body, wrong signature) → 401.
+      POST with no signature header → 401.
+      Implementation: delegates to IdentityVerificationService.verifyHmac(signatureHeader, rawBody);
+      uses constant-time MessageDigest.isEqual() (HMAC-SHA256) per
+      practices/rules/webhook-hmac-required.md pattern.
+      Provider secret stored in ax.identity-verification.{provider}.secret (Vault/env).
+    policy_ref: "blueprints/identity-verification-manifest.yaml#hmac"
+
+  - id: "IDV-CALLBACK-002"
+    chapter: "CALLBACK"
+    requirement: "On valid HMAC + successful CI/DI extraction, a VerifiedIdentity record is persisted with: ci, di, name, dob, verifiedAt, providerName; the callback returns HTTP 200."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST /api/identity-verification/callback/pass with valid PASS HMAC + sample CI/DI payload →
+      200. Assert VerifiedIdentity persisted with ci non-null, di non-null, providerName='pass',
+      verifiedAt within 5s of test time.
+      Implementation: IdentityVerificationService.processCallback(provider, dto) →
+      IdentityVerificationProvider.extract(dto) → VerifiedIdentity.create(...) → repository.save().
+    policy_ref: "blueprints/identity-verification-manifest.yaml#persist"
+
+  - id: "IDV-CALLBACK-003"
+    chapter: "CALLBACK"
+    requirement: "CI token is treated as the cross-service unique identifier; DI token is the per-service unique identifier; neither CI nor DI is used to reconstruct the original RRN."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: VerifiedIdentity entity has fields ci (String, non-null), di (String, non-null).
+      Assert no field named 'rrn', 'residentRegistrationNumber', '주민등록번호' or similar.
+      Assert IdentityVerificationService has no method that accepts or returns an RRN string.
+      Implementation: CI (64 hex) and DI (64 hex) are opaque correlation tokens; adapter
+      mapping must never store the source RRN even transiently.
+    policy_ref: "blueprints/identity-verification-manifest.yaml#no-rrn"
+
+  # ─── PROVIDER family (2 items) ─────────────────────────────────────────────
+  - id: "IDV-PROVIDER-001"
+    chapter: "PROVIDER"
+    requirement: "PassAdapter and KcbAdapter both implement IdentityVerificationProvider; they produce identical VerifiedIdentity shape from provider-specific payloads (same fields, no provider-specific extras leaked into the domain object)."
+    test_method: "JUnit 5 unit test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: PassAdapter.extract(samplePassPayload) and KcbAdapter.extract(sampleKcbPayload) both
+      produce VerifiedIdentity with {ci, di, name, dob, verifiedAt, providerName}.
+      Assert no provider-specific field bleeds into VerifiedIdentity (provider metadata goes to
+      Map<String, String> metadata only).
+      Implementation: IdentityVerificationProvider interface defines
+      extract(IdentityVerificationDto) → VerifiedIdentityData record.
+      Both adapters map their native field names to the canonical shape.
+    policy_ref: "blueprints/identity-verification-manifest.yaml#provider-contract"
+
+  - id: "IDV-PROVIDER-002"
+    chapter: "PROVIDER"
+    requirement: "IdentityVerificationService resolves the correct adapter by provider name string; unknown provider names produce HTTP 400 with RFC 7807 ProblemDetail."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: IdentityVerificationService.processCallback('unknown', dto) →
+      throws IdentityVerificationException with status 400.
+      Implementation: service uses a Map<String, IdentityVerificationProvider> injected via
+      Spring qualifier; unknown key → throw IdentityVerificationException("Unknown provider: " + name).
+    policy_ref: "blueprints/identity-verification-manifest.yaml#provider-contract"
+
+  # ─── AUDIT family (1 item) ─────────────────────────────────────────────────
+  - id: "IDV-AUDIT-001"
+    chapter: "AUDIT"
+    requirement: "Every verification callback attempt (success or failure) is logged via the audit hook (AuditLogPublisher) with event type IDENTITY_VERIFICATION_CALLBACK; the log entry records providerName, outcome (SUCCESS/HMAC_FAIL/EXTRACTION_FAIL), and verifiedAt (nullable on failure); the CI token is logged but the raw RRN is never logged."
+    test_method: "JUnit 5 unit test with Mockito"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (success): AuditLogPublisher.publish() called once with
+      {eventType=IDENTITY_VERIFICATION_CALLBACK, outcome=SUCCESS, providerName='pass', ci=non-null}.
+      Test (HMAC failure): AuditLogPublisher.publish() called once with
+      {eventType=IDENTITY_VERIFICATION_CALLBACK, outcome=HMAC_FAIL, ci=null}.
+      Assert no field named 'rrn' in audit log payload.
+      Implementation: IdentityVerificationService wraps processCallback in try-catch;
+      audit hook fires in finally block. Uses SP17 AuditLogPublisher (SP13 BaseEntity + SP17 event bus).
+    policy_ref: "blueprints/identity-verification-manifest.yaml#audit"
+
+  # ─── ADMIN API family (1 item) ─────────────────────────────────────────────
+  - id: "IDV-ADMIN-001"
+    chapter: "ADMIN"
+    requirement: "GET /api/admin/identity-verification returns paginated VerifiedIdentity records; requires ADMIN role; non-admin callers receive HTTP 403."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: call GET /api/admin/identity-verification with non-admin JWT → 403.
+      Call without JWT → 401.
+      Call with ADMIN JWT → 200 with paginated VerifiedIdentity list.
+      Implementation: @PreAuthorize("hasAuthority('ROLE_ADMIN')") on controller.
+      SecurityConfig maps /api/admin/** to authenticated() + admin role check.
+    policy_ref: "blueprints/identity-verification-manifest.yaml#admin"

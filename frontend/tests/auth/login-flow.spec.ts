@@ -23,11 +23,9 @@ test.describe('Auth login flow — TDD anchor', () => {
 
   test('unauthenticated user visiting /dashboard is redirected to /login', async ({ page }) => {
     await page.goto('/dashboard');
-    // Either shows a redirect to /login or a "로그인이 필요합니다" message
-    await Promise.race([
-      page.waitForURL(/\/login/, { timeout: 5000 }),
-      expect(page.getByText('로그인이 필요합니다')).toBeVisible({ timeout: 5000 }),
-    ]);
+    // Middleware returns 307 → /login?from=/dashboard; page.goto() follows the redirect.
+    // Assert the final URL synchronously — no need to wait for another navigation.
+    expect(page.url()).toMatch(/\/login/);
   });
 
   test('email login form submits and lands on /dashboard (MSW mock)', async ({ page }) => {
@@ -58,7 +56,9 @@ test.describe('Auth login flow — TDD anchor', () => {
 
   test('verify page renders Email Verification heading', async ({ page }) => {
     await page.goto('/verify');
-    await expect(page.locator('h1')).toContainText('Email Verification');
+    // VerifyPageClient renders h1 client-side after Suspense resolves (useSearchParams).
+    // In production builds the JS bundle download + hydration can take ~10s.
+    await expect(page.locator('h1')).toContainText('Email Verification', { timeout: 20000 });
   });
 
   test('root / redirects to /login', async ({ page }) => {

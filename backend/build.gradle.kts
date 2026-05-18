@@ -152,6 +152,24 @@ tasks.register<Test>("testFeatureFlags") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testBilling") {
+    useJUnitPlatform {
+        includeTags("BILLING")
+    }
+    description = "Run billing domain compliance tests (SP30: subscription lifecycle, plan management, invoice listing)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testIdentityVerification") {
+    useJUnitPlatform {
+        includeTags("IDENTITY_VERIFICATION")
+    }
+    description = "Run identity-verification domain compliance tests (SP31: KISA 본인인증 CI/DI token storage)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: ax-template Identity Verification API
+  description: |
+    Identity verification domain REST contract — backend_only domain.
+    Server-to-server callback surface for PASS and KCB 본인인증 providers.
+    All admin endpoints require ADMIN role (ROLE_ADMIN) + valid JWT Bearer token.
+    No end-user-facing REST endpoints (callback is server-to-server).
+  version: 0.1.0
+servers:
+  - url: /api
+
+paths:
+  /identity-verification/callback/{provider}:
+    post:
+      operationId: receiveIdentityVerificationCallback
+      summary: Receive 본인인증 CI/DI callback from provider (server-to-server)
+      tags: [identity-verification-callback]
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [pass, kcb]
+          description: "Provider identifier: 'pass' for PASS (SKT/KT/LGU+), 'kcb' for KCB"
+        - name: X-Identity-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: "HMAC-SHA256 signature of raw request body: 'sha256=<hexdigest>'"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityVerificationCallbackRequest'
+      responses:
+        '200':
+          description: Callback accepted; VerifiedIdentity persisted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityVerificationCallbackResponse'
+        '400':
+          description: Unknown provider or malformed payload
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          description: Missing or invalid HMAC signature
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          description: Internal error during CI/DI extraction or persistence
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /admin/identity-verification:
+    get:
+      operationId: listVerifiedIdentities
+      summary: List verified identities (admin)
+      tags: [identity-verification-admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: provider
+          in: query
+          schema:
+            type: string
+            enum: [pass, kcb, ALL]
+            default: ALL
+          description: Filter by provider
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated verified identity records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedVerifiedIdentityResponse'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '403':
+          description: Insufficient role (requires ADMIN)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    IdentityVerificationCallbackRequest:
+      type: object
+      description: "Provider-specific callback payload — field names vary by provider. CI and DI are extracted by the adapter."
+      required: [transactionId]
+      properties:
+        transactionId:
+          type: string
+          description: Provider-assigned transaction identifier for this verification event
+        ci:
+          type: string
+          description: "Connecting Information — 64-byte hex token, cross-service unique person identifier"
+        di:
+          type: string
+          description: "Duplicate Information — 64-byte hex token, per-service unique person identifier"
+        name:
+          type: string
+          description: "Verified legal name (Korean full name)"
+        dob:
+          type: string
+          format: date
+          description: "Date of birth (YYYY-MM-DD)"
+        providerPayload:
+          type: object
+          additionalProperties: true
+          description: "Raw provider-specific payload forwarded from the provider server"
+
+    IdentityVerificationCallbackResponse:
+      type: object
+      required: [verifiedAt, providerName]
+      properties:
+        verifiedAt:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp of verification persistence
+        providerName:
+          type: string
+          enum: [pass, kcb]
+
+    VerifiedIdentityDto:
+      type: object
+      required: [id, ci, di, providerName, verifiedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        ci:
+          type: string
+          description: "CI token (64 hex chars) — cross-service unique; NOT the original RRN"
+        di:
+          type: string
+          description: "DI token (64 hex chars) — per-service unique"
+        name:
+          type: string
+        dob:
+          type: string
+          format: date
+        providerName:
+          type: string
+          enum: [pass, kcb]
+        verifiedAt:
+          type: string
+          format: date-time
+
+    PagedVerifiedIdentityResponse:
+      type: object
+      required: [content, totalElements, totalPages, page, size]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/VerifiedIdentityDto'
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    ProblemDetail:
+      type: object
+      required: [title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri

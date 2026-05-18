@@ -1,0 +1,127 @@
+template_id: billing-blueprint
+family: scaffold
+status: active
+confidence: high
+stack:
+  backend: spring-boot
+  contract: openapi
+  repo_shape: single-repo
+
+# ─── Boundary (§5.2.6) ────────────────────────────────────────────────────────
+# billing domain owns: subscription lifecycle, invoice issuance, plan management,
+#                      recurring billing event normalization, state machine.
+# payment domain owns: one-shot authorize, capture, refund.
+# Cross-import between billing and payment is PROHIBITED (rule: no-billing-cross-import-from-payment).
+boundary:
+  owner: billing
+  payment_domain_interactions: NONE  # no cross-import; idempotency pattern is rule-enforced
+  one_shot_payment_owner: payment    # PaymentService.authorize/capture/refund stay in payment package
+
+# ─── Authentication + Authorization ───────────────────────────────────────────
+authz:
+  unauthenticated: HTTP_401
+  cross_user_subscription_access: HTTP_404  # IDOR-safe; not 403
+  admin_only_endpoints:
+    - pattern: "/api/admin/billing/**"
+      role: ROLE_ADMIN
+  spec_items: [BILLING-AUTHZ-001, BILLING-AUTHZ-002, BILLING-AUTHZ-003]
+
+# ─── Idempotency ──────────────────────────────────────────────────────────────
+idempotency:
+  window_hours: 24
+  store: caffeine  # upgrade to postgres-backed store for distributed env
+  key_scope: "userId + Idempotency-Key header value"
+  on_duplicate: return_original_response
+  required_on:
+    - POST /api/subscriptions
+    - POST /api/subscriptions/{id}/cancel
+    - POST /api/admin/billing/plans
+    - POST /api/webhooks/billing
+  spec_items: [BILLING-IDEMP-001, BILLING-IDEMP-002]
+
+# ─── Currency ────────────────────────────────────────────────────────────────
+currency:
+  encoding: integer_minor_units  # KRW: won, USD: cents — never float
+  krw_decimals: 0
+  rejection: HTTP_400_PROBLEM_DETAIL  # float amounts rejected with type=urn:ax:billing:invalid-amount
+  spec_items: [BILLING-CUR-001]
+
+# ─── State Machine ────────────────────────────────────────────────────────────
+state_machine:
+  class: SubscriptionStateMachine
+  transitions:
+    TRIAL:
+      - to: ACTIVE
+        trigger: TRIAL_END_WEBHOOK
+        records_event: TRIAL_END
+      - to: CANCELLED
+        trigger: USER_CANCEL
+        records_event: SUBSCRIPTION_CANCELLED
+    ACTIVE:
+      - to: PAST_DUE
+        trigger: PAYMENT_FAILED_WEBHOOK
+        records_event: PAYMENT_FAILED
+      - to: ACTIVE
+        trigger: PAYMENT_SUCCEEDED_WEBHOOK
+        records_event: SUBSCRIPTION_RENEWED
+      - to: CANCELLED
+        trigger: USER_CANCEL
+        records_event: SUBSCRIPTION_CANCELLED
+    PAST_DUE:
+      - to: ACTIVE
+        trigger: PAYMENT_SUCCEEDED_WEBHOOK
+        records_event: PAYMENT_SUCCEEDED
+      - to: CANCELLED
+        trigger: UNPAID_THRESHOLD_EXCEEDED
+        records_event: SUBSCRIPTION_CANCELLED
+  sole_mutator: SubscriptionStateMachine  # enforced by ArchUnit
+  spec_items: [BILLING-STATE-001, BILLING-STATE-002]
+
+# ─── Webhook ─────────────────────────────────────────────────────────────────
+webhook:
+  providers:
+    - name: stripe
+      signature_header: Stripe-Signature
+      timestamp_tolerance_seconds: 300
+      event_normalization: BillingEvent  # canonical event after normalization
+    - name: toss
+      signature_header: X-Webhook-Signature
+      timestamp_tolerance_seconds: 300
+      algorithm: HMAC-SHA256
+      event_normalization: BillingEvent
+  invalid_signature: HTTP_401
+  replay_outside_tolerance: HTTP_400
+  spec_items: [BILLING-WEBHOOK-001, BILLING-IDEMP-002]
+
+# ─── Providers ────────────────────────────────────────────────────────────────
+providers:
+  interface: BillingProvider
+  implementations:
+    - class: StripeBillingAdapter
+      provider: stripe
+    - class: TossBillingAdapter
+      provider: toss
+  canonical_event_type: BillingEvent  # no provider-specific fields leak out
+  timeout_ms: 5000
+  retry:
+    max: 3
+    backoff: exponential
+    initial_delay_ms: 1000
+
+# ─── Observability ────────────────────────────────────────────────────────────
+observability:
+  counters:
+    - name: billing.invoice.generated_count
+      tags: [provider, status]
+    - name: billing.subscription.lifecycle_transition
+      tags: [from, to, reason]
+    - name: billing.webhook.received_count
+      tags: [provider, event_type]
+    - name: billing.event.idempotency_hit_count
+      description: "Replay-detection signal. Increment on duplicate idempotency key."
+
+# ─── Soft-delete ─────────────────────────────────────────────────────────────
+soft_delete:
+  policy: "@SQLDelete per-subclass"
+  entities_requiring_sql_delete: [Subscription, Plan, Invoice, BillingEvent]
+  base_class: BaseEntity  # SP25 BaseEntity with @Where(clause = "deleted_at IS NULL")

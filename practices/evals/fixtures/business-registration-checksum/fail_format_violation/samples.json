@@ -1,0 +1,28 @@
+[
+  {
+    "brn": "ABC-12-34567",
+    "note": "Contains letters — should throw FormatViolationError",
+    "expectedError": "FormatViolationError"
+  },
+  {
+    "brn": "123-45-678",
+    "note": "Only 9 digits (too short) — should throw FormatViolationError",
+    "expectedError": "FormatViolationError"
+  },
+  {
+    "brn": "123-456-7890",
+    "note": "Wrong grouping (3-3-4 instead of 3-2-5) — total 10 digits but invalid format? Actually 10 digits, so algorithm runs. But format check on hyphens should reject this. Note: pure digit strip gives 10 digits, so only the checksum fails.",
+    "note2": "This input strips to '1234567890' (10 digits). The algorithm runs and checkDigit = 1, last digit = 0 → returns false (not FormatViolationError). Fixture documents this boundary.",
+    "expectedBehavior": "returns false (invalid checksum, not FormatViolationError)"
+  },
+  {
+    "brn": "123-45-6789012",
+    "note": "12 digits after strip (too long) — should throw FormatViolationError",
+    "expectedError": "FormatViolationError"
+  },
+  {
+    "brn": "124-81-0099!",
+    "note": "Special character '!' at end — should throw FormatViolationError",
+    "expectedError": "FormatViolationError"
+  }
+]

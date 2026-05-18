@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { test, expect } from '@playwright/test';
 
 test.describe('OAuth Full Flow — 실제 로그인 검증', () => {
@@ -50,6 +51,11 @@ test.describe('OAuth Full Flow — 실제 로그인 검증', () => {
   });
 
   test('Kakao OAuth: 로그인 → 콜백 → JWT', async ({ page }) => {
+    // Skip when real Kakao test credentials are not configured (requires KAKAO_TEST_EMAIL + KAKAO_TEST_PASSWORD)
+    if (!process.env.KAKAO_TEST_EMAIL || !process.env.KAKAO_TEST_PASSWORD) {
+      test.skip(true, 'KAKAO_TEST_EMAIL/KAKAO_TEST_PASSWORD not set — skipping live Kakao OAuth flow');
+    }
+
     await page.goto('/login');
     await page.getByText('Kakao 로그인').click();
     
@@ -82,6 +88,11 @@ test.describe('OAuth Full Flow — 실제 로그인 검증', () => {
   });
 
   test('Naver OAuth: 로그인 → 콜백 → JWT', async ({ page }) => {
+    // Skip when real Naver test credentials are not configured (requires NAVER_TEST_EMAIL + NAVER_TEST_PASSWORD)
+    if (!process.env.NAVER_TEST_EMAIL || !process.env.NAVER_TEST_PASSWORD) {
+      test.skip(true, 'NAVER_TEST_EMAIL/NAVER_TEST_PASSWORD not set — skipping live Naver OAuth flow');
+    }
+
     await page.goto('/login');
     await page.getByText('Naver 로그인').click();
     
