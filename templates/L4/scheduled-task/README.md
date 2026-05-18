@@ -89,16 +89,23 @@ Spec Trio anchors:
 
 ## Composition
 
-scheduled-task stands alone in R7 — no R7 recipe consumes it. R8 LMS (due-date
-reminders) and CMS (scheduled publish) are the first planned consumers per
-`practices/DECISIONS.md` TD-2026-05-20-020 and `recipes/_MANIFEST.yaml#deferred_recipes`.
+scheduled-task ships its first-consumer-arrival key in **R8 SP43** — LMS (due-date
+reminders) and CMS (scheduled publish + scheduled archive) are the **first
+downstream consumers**, arriving together in the same atomic commit per
+`practices/DECISIONS.md` TD-2026-05-21-024 (first-consumer-arrival convention)
++ TD-2026-05-20-020 (R7 follow-up). Both recipe directories list
+`scheduled-task` in their `enabled_l4_domains:` and trigger the
+`applied_recipes:` key birth below.
 
-When R8 lms / cms ships, this README will gain an `applied_recipes:` plural list
-in the same atomic commit that lists `scheduled-task` in their `enabled_l4_domains:`.
-Until then the key is intentionally absent — matching the `file-storage` and `practices`
-L4 README pattern (unused-by-recipe L4 domains carry no `applied_recipes:` key; the
-existing `recipe_governance_guard.sh#check_applied_recipe_declared` only fires for
-L4 domains named by an active recipe's `enabled_l4_domains:`).
+applied_recipes:
+  - cms
+  - lms
+
+The `applied_recipes:` key is **born** in R8 SP43 with both entries
+alphabetical (`cms`, `lms`) — first-consumer-arrival convention (TD-024) treats
+simultaneous consumers as a single mutation, not two. `file-storage` and
+`practices` L4 READMEs remain key-less until *their* first consumers arrive
+(same precedent the scheduler README itself relied on pre-R8).
 
 ## External evidence (verbatim, fetched 2026-05-20)
 

@@ -1,6 +1,6 @@
 schema_version: 1
-compatible_with_catalog_version: "v1.2.0-p1-absorbed"
-generated_at: "2026-05-18"
+compatible_with_catalog_version: "v1.6.0-lms-cms"
+generated_at: "2026-05-21"
 
 recipes:
   - pattern: saas-subscription
@@ -93,18 +93,33 @@ recipes:
       - notification
       - search
 
-deferred_recipes:
   - pattern: lms
-    status: deferred-pending-fork-receiver-demand
-    reason: "Scheduler L4 landed in R7 v1.5.0 (templates/L4/scheduled-task/); LMS due-date-reminder primitive now disk-resolvable. Remaining gap: Coursera/Moodle/edX case-study URL with verbatim integration text. 인프런 closed API."
-    reintroduction_trigger: "Scheduler L4 landed in R7 v1.5.0 (templates/L4/scheduled-task/); remaining gap = Coursera/Moodle/edX case-study URL with verbatim integration text. R8 eligible."
+    status: active
+    display_name: "LMS (Course + Enrollment + Lesson + Due-date Reminders)"
+    spec: specs/recipes/lms-recipe-l0.yaml
+    recipe_dir: recipes/lms
+    sealed_verdict: skills/_tests/sealed-verdict/lms-verdict.md
+    enabled_l4_domains:
+      - audit-log
+      - auth
+      - crud
+      - notification
+      - scheduled-task
 
   - pattern: cms
-    status: deferred-pending-fork-receiver-demand
-    reason: "Scheduler L4 landed in R7 v1.5.0; scheduled-publish primitive now disk-resolvable. Remaining gap: Sanity/Contentful verbatim citation. 네이버 블로그 closed API."
-    reintroduction_trigger: "Scheduler L4 landed in R7 v1.5.0; remaining gap = Sanity/Contentful verbatim citation. R8 eligible."
+    status: active
+    display_name: "CMS (Content Authoring + Scheduled Publish + Editorial Workflow + Expiry)"
+    spec: specs/recipes/cms-recipe-l0.yaml
+    recipe_dir: recipes/cms
+    sealed_verdict: skills/_tests/sealed-verdict/cms-verdict.md
+    enabled_l4_domains:
+      - audit-log
+      - crud
+      - notification
+      - scheduled-task
 
+deferred_recipes:
   - pattern: internal-it
     status: deferred-pending-fork-receiver-demand
-    reason: "Independent of R7 scheduler. Jira API not verbatim-fetched (3 fetch failures); webhook integration patterns too vendor-specific for catalog-stable recipe."
-    reintroduction_trigger: "Independent of R7 scheduler. Remaining gap = verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4. R8+ if fetch succeeds."
+    reason: "Independent of R8 scheduler-consuming recipes (lms + cms landed R8 v1.6.0). Remaining gap = verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4."
+    reintroduction_trigger: "Independent of R8 scheduler-consuming recipes (lms + cms landed R8 v1.6.0). Remaining gap = verbatim Jira/ServiceNow REST API quote + clarified webhook-emit primitive in notification L4. R9+ if fetch succeeds OR notification L4 gains explicit webhook-emit spec items."

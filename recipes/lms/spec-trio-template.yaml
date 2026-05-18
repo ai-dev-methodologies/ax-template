@@ -1,0 +1,181 @@
+# spec-trio-template.yaml — lms
+#
+# Pre-filled Spec Trio fragments to copy into your project's specs/ directory
+# when implementing the lms recipe.
+#
+# Instructions:
+#   1. Copy this file to your project as specs/lms-l0.yaml
+#   2. Replace all <PLACEHOLDER> values with project-specific values
+#   3. Extend the items array with domain-specific requirements
+#   4. Ensure business_invariants from RECIPE.md are reflected as spec items
+#
+# This fragment composes the following L4 Spec Trios (reference, do not copy):
+#   - specs/crud-security.yaml
+#   - specs/audit-log-l0.yaml
+#   - specs/notification-l0.yaml
+#   - specs/scheduled-task-l0.yaml
+#   - specs/auth-asvs-l1.yaml
+
+schema_version: 1
+scope: "<YOUR_PROJECT>-lms"
+stack: "Spring Boot 3.2.x + React + ShedLock (or DB row + SELECT FOR UPDATE SKIP LOCKED)"
+standard: "OWASP Top 10 + ASVS V4 + RFC 7807"
+applied_recipes:
+  - lms
+compatible_with_catalog_version: "v1.6.0-lms-cms"
+
+items:
+  # ─── LMS-INV-001: course mutations audit-logged ──────────────────────────
+  - id: "LMS-INV-001"
+    chapter: "AUDIT"
+    requirement: >
+      Every Course content mutation (title / description / lesson body) and
+      every visibility transition (DRAFT → PUBLISHED → ARCHIVED) must produce
+      an audit-log record containing operator_id, target_id, before_status,
+      and after_status.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+    notes: >
+      Test: PATCH /api/courses/{id} content + PATCH visibility → assert
+      audit_logs has matching rows with action prefix course.* + operator_id
+      present + before/after.
+      Implementation: @Audited(action = "course.content.changed") on
+      CourseService.updateContent(); @Audited(action = "course.visibility.changed")
+      on CourseService.transitionVisibility().
+
+  # ─── LMS-INV-002: due-date reminder uses scheduled-task lock ─────────────
+  - id: "LMS-INV-002"
+    chapter: "SCHEDULER"
+    requirement: >
+      Due-date reminder emission must acquire the scheduled-task distributed
+      lock before scanning and emitting reminders. Multi-node deployments
+      must NOT double-send reminders for the same (learner, lesson) pair
+      within the lock window.
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/scheduled-task-l0.yaml#SCHED-LOCK-001"
+    notes: >
+      Test (positive): single-node trigger → reminder emitted exactly once.
+      Test (negative): simulate concurrent multi-node trigger → only the
+      lock holder emits; other nodes skip without emitting.
+      Implementation: DueDateReminderTask wraps the scan loop in
+      LockingPolicy.tryAcquire("due-date-reminder", node-id) +
+      JobHistory.start/markSuccess/markFailure.
+
+  # ─── LMS-INV-003: reminder notifications respect preferences ─────────────
+  - id: "LMS-INV-003"
+    chapter: "NOTIFICATION"
+    requirement: >
+      DueDateReached notifications must be filtered through
+      NotificationPreferences before fanout. Learners with opt-out or
+      per-channel disable receive no notification on that channel.
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/notification-l0.yaml#NOTIF-PREF-001"
+    notes: >
+      Test (positive): learner with default preferences + due-date reminder
+      window reached → notification delivered.
+      Test (negative): learner with emailEnabled=false → no email row in outbox.
+      Implementation: NotificationDispatcher reads preferences before each
+      channel emit; falls back to defaults if preferences absent.
+
+  # ─── LMS-INV-004: course visibility gated by author OR admin ─────────────
+  - id: "LMS-INV-004"
+    chapter: "AUTH"
+    requirement: >
+      Course visibility transitions (DRAFT → PUBLISHED → ARCHIVED) are gated
+      by author identity OR admin role per ASVS-V4.1.1 (least-privilege
+      object-level authorization).
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/auth-asvs-l1.yaml#ASVS-V4.1.1"
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    notes: >
+      Test (positive): admin user transitions any course → 200.
+      Test (positive): author transitions own course → 200.
+      Test (negative): non-author non-admin user → 403.
+      Implementation: @PreAuthorize("hasRole('ADMIN') or #course.authorId == principal.id")
+      on CourseService.transitionVisibility(). Idempotency-Key required on
+      the mutating endpoint per shared mutation discipline.
+
+  # ─── LMS-INV-005: bulk enrollment idempotent (existing-rule binding) ─────
+  - id: "LMS-INV-005"
+    chapter: "ENROLLMENT"
+    requirement: >
+      Bulk enrollment (POST /api/courses/{id}/enrollments with N learner-ids)
+      must be idempotent — re-submission of the same Idempotency-Key MUST
+      NOT duplicate enrollment rows. Server dedupes on
+      (course_id, learner_id, idempotency_key) tuple.
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/scheduled-task-l0.yaml#SCHED-IDEMPOTENT-001"
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    notes: >
+      Test (positive): N=100 enrollments with new key → 201 + 100 rows.
+      Test (negative): same N=100 enrollments with same key → 200 + 0 new rows
+      (dedupe).
+      INV-005 deliberate framing: binds to existing rule + existing spec item
+      pair (NOT co-shipped-rule, which is the catalog-novel escape hatch
+      reserved for invariants without an existing anchor — see RECIPE.md
+      INV-005 disambiguation paragraph). R7 community-INV-005 used
+      co-shipped-rule because no rule covered server-side XSS HTML sanitize;
+      R8 lms-INV-005 has a fully resolved existing anchor pair.
+
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # enabled_l4_domains:
+  #   skip: ["feature-flags"]
+  #   rationale: "Open-courseware fork — no toggle gating needed."
+  #   citation: "<internal ticket / PR url>"
+
+evidence:
+  - provenance_class: external
+    source: "Coursera homepage"
+    url: "https://www.coursera.org/"
+    citation: "Learn from 350+ leading universities and companies"
+    quoted_at: "2026-05-21"
+    fidelity_note: "Coursera anchors the large-scale cross-institutional MOOC pattern."
+
+  - provenance_class: external
+    source: "Moodle Web Services API"
+    url: "https://docs.moodle.org/dev/Web_services_API"
+    citation: "Once you have done this, your plugin's functions will be accessible to other systems through Web services using one of a number of protocols, like XML-RPC, REST or SOAP."
+    quoted_at: "2026-05-21"
+    fidelity_note: "Moodle is the canonical open-source LMS; its REST surface mirrors the LMS recipe CRUD layer."
+
+  - provenance_class: external
+    source: "Classting (Korean K-12 LMS)"
+    url: "https://www.classting.com/"
+    citation: "개인화 교육을 실현하는 교육 AI 에이전트"
+    quoted_at: "2026-05-21"
+    fidelity_note: "Korean K-12 LMS verbatim (PRD §4.4 H1 closure — first non-zero-Korean-verbatim LMS cycle since R6)."
+
+  - provenance_class: internal_design
+    source: "edX OpenedX REST API docs"
+    url: "https://docs.openedx.org/projects/edx-platform/en/latest/concepts/rest_api.html"
+    rationale: "HTTP 404 on 2026-05-21 fetch; documented URL moved upstream. Moodle + Coursera + classting clear 1-floor."
+
+  - provenance_class: internal_design
+    source: "인프런 (Inflearn)"
+    url: "https://www.inflearn.com"
+    rationale: "200 OK on 2026-05-21 but no public developer API documentation extractable; closed-API consistent with R6/R7 Korean closed-platform pattern."
+
+  - provenance_class: internal_design
+    source: "tech.kakao.com (Korean tech blog)"
+    url: "https://tech.kakao.com/"
+    rationale: "200 OK on 2026-05-21 but page is dev-tool-centric; no learning-focused verbatim sentence extractable."
+
+  - provenance_class: internal_design
+    derives_from:
+      - "SP15 crud"
+      - "SP17 audit-log"
+      - "SP26 notification"
+      - "SP41 scheduled-task"
+      - "auth ASVS L1"
+    rationale: "Composition derives from existing L4 specs; no new L4 introduced by lms recipe."

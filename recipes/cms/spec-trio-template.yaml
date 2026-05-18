@@ -1,0 +1,192 @@
+# spec-trio-template.yaml — cms
+#
+# Pre-filled Spec Trio fragments to copy into your project's specs/ directory
+# when implementing the cms recipe.
+#
+# Instructions:
+#   1. Copy this file to your project as specs/cms-l0.yaml
+#   2. Replace all <PLACEHOLDER> values with project-specific values
+#   3. Extend the items array with domain-specific requirements
+#   4. Ensure business_invariants from RECIPE.md are reflected as spec items
+#
+# This fragment composes the following L4 Spec Trios (reference, do not copy):
+#   - specs/crud-security.yaml
+#   - specs/audit-log-l0.yaml
+#   - specs/notification-l0.yaml
+#   - specs/scheduled-task-l0.yaml
+
+schema_version: 1
+scope: "<YOUR_PROJECT>-cms"
+stack: "Spring Boot 3.2.x + React + ShedLock (or DB row + SELECT FOR UPDATE SKIP LOCKED)"
+standard: "OWASP Top 10 + ASVS V5 + RFC 7807"
+applied_recipes:
+  - cms
+compatible_with_catalog_version: "v1.6.0-lms-cms"
+
+items:
+  # ─── CMS-INV-001: publish-state transitions audit-logged ─────────────────
+  - id: "CMS-INV-001"
+    chapter: "AUDIT"
+    requirement: >
+      Every Content publish-state transition (DRAFT → SCHEDULED → PUBLISHED →
+      ARCHIVED) must produce an audit-log record containing operator_id,
+      target_id, before_status, and after_status.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
+    notes: >
+      Test: PATCH /api/content/{id}/publish-state with new state → assert
+      audit_logs has matching row with action="content.publish_state.changed"
+      + operator_id present + before/after.
+      Implementation: @Audited(action = "content.publish_state.changed") on
+      ContentService.transitionPublishState().
+
+  # ─── CMS-INV-002: scheduled-publish uses scheduled-task lock + idempotency
+  - id: "CMS-INV-002"
+    chapter: "SCHEDULER"
+    requirement: >
+      Scheduled-publish (SCHEDULED → PUBLISHED transition triggered by cron)
+      must acquire the scheduled-task distributed lock before each tick AND
+      must be idempotent on the per-content publish_idempotency_key. Multi-node
+      deployments must NOT publish the same content row twice within the lock
+      window.
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/scheduled-task-l0.yaml#SCHED-LOCK-001"
+    notes: >
+      Test (positive): single-node cron trigger → content row publishes once.
+      Test (negative): simulate concurrent multi-node trigger → only the
+      lock holder publishes; other nodes skip on idempotency-key match.
+      Implementation: ScheduledPublishTask wraps the scan loop in
+      LockingPolicy.tryAcquire("scheduled-publish", node-id); the inner
+      publish call short-circuits if the publish_idempotency_key has been
+      consumed already.
+
+  # ─── CMS-INV-003: content expiry runs via scheduled-task ─────────────────
+  - id: "CMS-INV-003"
+    chapter: "SCHEDULER"
+    requirement: >
+      Scheduled-archive (content expiry) runs via a scheduled-task cron that
+      appends a JobHistory row per run AND respects audit-retention for the
+      archived content trail.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    spec_ref: "specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001"
+    notes: >
+      Test: register ContentExpiryTask + run → assert JobHistory has new
+      row with status SUCCESS + audit_logs has matching ARCHIVED transition
+      row for each expired content + audit-log retention ≥ 90 days
+      (AUDIT-RETENTION-001).
+      Implementation: ContentExpiryTask.execute() iterates expired content,
+      transitions to ARCHIVED via the standard publish-state transition path
+      (which already audit-logs), JobHistory.markSuccess() in finally.
+
+  # ─── CMS-INV-004: editorial notifications respect preferences ────────────
+  - id: "CMS-INV-004"
+    chapter: "NOTIFICATION"
+    requirement: >
+      Editorial workflow notifications (ReviewRequested / ReviewApproved /
+      ReviewRejected) must be filtered through NotificationPreferences before
+      fanout AND must use NOTIF-SEND-001 delivery semantics for at-least-once
+      dispatch.
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/notification-l0.yaml#NOTIF-PREF-001"
+    notes: >
+      Test (positive): editor with default preferences + ReviewRequested
+      event → notification delivered with at-least-once semantics.
+      Test (negative): editor with emailEnabled=false → no email row in outbox.
+      Implementation: NotificationDispatcher reads preferences before each
+      channel emit; outbox-write happens inside the same transaction as the
+      review-event-table write (NOTIF-SEND-001 semantics).
+
+  # ─── CMS-INV-005: slug uniqueness (existing-rule binding) ────────────────
+  - id: "CMS-INV-005"
+    chapter: "VALIDATION"
+    requirement: >
+      Content slug uniqueness is enforced server-side per (locale,
+      content_type) combination. Re-submission of the same slug within the
+      same (locale, content_type) returns RFC 7807 problem+json with
+      validation-error semantics.
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    spec_ref: "specs/crud-security.yaml#CRUD-VAL-1"
+    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    notes: >
+      Test (positive): POST /api/content with new slug → 201.
+      Test (negative): POST same slug + same locale + same content_type → 422
+      RFC 7807 with validation error.
+      Test (positive): POST same slug under different locale → 201 (uniqueness
+      is scoped per locale + content_type).
+      INV-005 deliberate framing: binds to existing rule + existing spec item
+      pair (NOT co-shipped-rule, which is the catalog-novel escape hatch
+      reserved for invariants without an existing anchor — see RECIPE.md
+      INV-005 disambiguation paragraph). R7 community-INV-005 used
+      co-shipped-rule because no rule covered server-side XSS HTML sanitize;
+      R8 cms-INV-005 has a fully resolved existing anchor pair.
+
+override_allowed:
+  # Inline override block — no separate RECIPE_DEVIATION.md
+  # enabled_l4_domains:
+  #   skip: ["auth"]
+  #   rationale: "Single-author personal CMS; no multi-role gating needed."
+  #   citation: "<internal ticket / PR url>"
+
+evidence:
+  - provenance_class: external
+    source: "Sanity Docs landing"
+    url: "https://www.sanity.io/docs"
+    citation: "Real-time database for structured content"
+    quoted_at: "2026-05-21"
+    fidelity_note: "Sanity is the canonical headless CMS; docs landing tagline."
+
+  - provenance_class: external
+    source: "Contentful Content Management API"
+    url: "https://www.contentful.com/developers/docs/references/content-management-api/"
+    citation: "Contentful's Content Management API (CMA) helps you manage content in your spaces."
+    quoted_at: "2026-05-21"
+    fidelity_note: "Contentful CMA is the canonical headless-CMS management REST surface."
+
+  - provenance_class: external
+    source: "Strapi REST API docs"
+    url: "https://docs.strapi.io/dev-docs/api/rest"
+    citation: "The REST API allows accessing the content-types through API endpoints."
+    quoted_at: "2026-05-21"
+    fidelity_note: "Strapi is the canonical open-source headless CMS."
+
+  - provenance_class: external
+    source: "Sanity scheduled-publishing deprecation notice"
+    url: "https://www.sanity.io/docs/scheduled-publishing"
+    citation: "Scheduled publishing has been deprecated as of October 2025."
+    quoted_at: "2026-05-21"
+    fidelity_note: "Topic-relevant verbatim — deprecation notice attests Sanity historically shipped scheduled-publishing; CMS-INV-002 binds to internal scheduled-task L4 primitive (orthogonal to Sanity's hosted offering)."
+
+  - provenance_class: external
+    source: "Brunch (Korean publication CMS)"
+    url: "https://brunch.co.kr/"
+    citation: "글이 작품이 되는 공간, 브런치"
+    quoted_at: "2026-05-21"
+    fidelity_note: "Korean publishing/CMS verbatim (PRD §4.4 H1 closure)."
+
+  - provenance_class: internal_design
+    source: "Naver developers blog API docs"
+    url: "https://developers.naver.com/docs/blog/"
+    rationale: "Host-level fetcher block on 2026-05-21; consistent with R6/R7 Naver-host block pattern."
+
+  - provenance_class: internal_design
+    source: "Naver terms (alternate subdomain attempt)"
+    url: "https://terms.naver.com/"
+    rationale: "Host-level fetcher block on 2026-05-21; pattern is host-wide. R9 may consider retiring Naver from the standard Korean URL pool."
+
+  - provenance_class: internal_design
+    derives_from:
+      - "SP15 crud"
+      - "SP17 audit-log"
+      - "SP26 notification"
+      - "SP41 scheduled-task"
+    rationale: "Composition derives from existing L4 specs; no new L4 introduced by cms recipe."
