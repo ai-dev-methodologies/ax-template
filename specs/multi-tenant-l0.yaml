@@ -13,7 +13,7 @@ items:
   # ── ISOLATION family (4 items — 1 default + 3 strategies + propagation) ────
   - id: "MULTI-TENANT-ISOLATION-DEFAULT-001"
     chapter: "ISOLATION"
-    requirement: "Recipes that do not adopt an explicit multi-tenant strategy MUST be treated as single-tenant. RECIPE.md frontmatter MUST declare `tenant_model: single` OR `tenant_model: multi`. Default in absence of declaration is `single`. fork-receivers reading single-tenant RECIPE.md MUST NOT assume cross-tenant data isolation."
+    requirement: "Recipes that do not adopt an explicit multi-tenant strategy MUST be treated as single-tenant. Both fork-receiver entry surfaces MUST declare tenant model: (a) recipes/*/RECIPE.md frontmatter declares `tenant_model: single` OR `tenant_model: multi`, (b) every templates/L4/<domain>/README.md declares its tenant model via a `**Tenant model**:` line that cites this spec anchor. Default in absence of declaration is `single`. fork-receivers reading either entry surface MUST NOT assume cross-tenant data isolation without an explicit `multi` declaration AND adoption of one of MULTI-TENANT-ISOLATION-001/002/003 + MULTI-TENANT-PROPAGATION-001/002."
     test_method: "static analysis"
     verification_type: "structural"
     applicable: true

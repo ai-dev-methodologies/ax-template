@@ -11,10 +11,11 @@
 #   MUST #2 (iter-4, NC7) — every recipe that declares `tenant_model: multi`
 #   ALSO cites at least one of `MULTI-TENANT-ISOLATION-00{1,2,3}` or
 #   `MULTI-TENANT-PROPAGATION-00{1,2}` somewhere in the RECIPE.md body
-#   (typically the business_invariants table). Spec lines 22-23 require
-#   multi-tenant recipes to adopt an isolation strategy + propagation.
-#   A `multi` declaration without any anchor cite is a documented
-#   adoption claim with zero anchored basis — Spec Trio self-violation.
+#   (typically the business_invariants table). The MULTI-TENANT-ISOLATION-001
+#   /-002/-003 items in specs/multi-tenant-l0.yaml require multi-tenant
+#   recipes to adopt one isolation strategy + propagation. A `multi`
+#   declaration without any anchor cite is a documented adoption claim
+#   with zero anchored basis — Spec Trio self-violation.
 #
 # Usage:
 #   bash practices/evals/recipe_tenant_model_declaration_guard.sh
@@ -56,7 +57,7 @@ for recipe_md in "$RECIPES_DIR"/*/RECIPE.md; do
     # ISOLATION-001/002/003 or PROPAGATION-001/002 anchor.
     if echo "$line" | grep -qE '^tenant_model:[[:space:]]*multi'; then
         if ! grep -qE 'MULTI-TENANT-(ISOLATION-00[123]|PROPAGATION-00[12])' "$recipe_md"; then
-            echo "VIOLATION [$name]: tenant_model: multi declared but RECIPE.md does not cite any MULTI-TENANT-ISOLATION-00{1,2,3} or MULTI-TENANT-PROPAGATION-00{1,2} anchor (specs/multi-tenant-l0.yaml lines 22-23 require multi-tenant recipes to adopt an isolation strategy + propagation)" >&2
+            echo "VIOLATION [$name]: tenant_model: multi declared but RECIPE.md does not cite any MULTI-TENANT-ISOLATION-00{1,2,3} or MULTI-TENANT-PROPAGATION-00{1,2} anchor (specs/multi-tenant-l0.yaml MULTI-TENANT-ISOLATION-001/002/003 + MULTI-TENANT-PROPAGATION-001/002 require multi-tenant recipes to adopt one isolation strategy + propagation)" >&2
             violations=$((violations + 1))
             continue
         fi

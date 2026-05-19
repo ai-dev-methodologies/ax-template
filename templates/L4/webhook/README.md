@@ -1,5 +1,7 @@
 # L4 / webhook — Outbound Webhook Emission Domain
 
+**Tenant model**: `single` — per [`specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001`](../../../specs/multi-tenant-l0.yaml). This L4 reference workload ships as **single-tenant**. Recipes composing this domain into a multi-tenant SaaS (e.g. `b2b-admin` with `tenant_model: multi`) MUST adopt one of `MULTI-TENANT-ISOLATION-001` (Hibernate filter row-level) / `-002` (schema-per-tenant) / `-003` (AOP guard) plus `MULTI-TENANT-PROPAGATION-001` (request-scoped TenantContext) + `-002` (async propagation) before production. fork-receivers MUST NOT assume cross-tenant data isolation in this L4 as-shipped.
+
 **ax-template R9 SP45** — Webhook L4 reference workload (catalog-only L4 primitive
 introduction; Spec Trio NET-NEW at SP45 — first genuinely net-new L4 since
 billing R5). 12th L4 domain.
