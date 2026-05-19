@@ -45,7 +45,15 @@ business_invariants:
     spec_ref: "specs/feature-flags-l0.yaml#FF-CRUD-003"
   - id: B2BADMIN-INV-003
     statement: "KPI aggregation respects tenant boundary (no cross-tenant leakage)"
-    spec_ref: "specs/auth-asvs-l1.yaml#ASVS-V4.2.1"
+    # Iter-1 (2026-05-20): re-anchored from auth-asvs-l1.yaml#ASVS-V4.2.1 (per-user IDOR,
+    # NOT tenant boundary) to multi-tenant-l0.yaml. RECIPE.md (line 84) was re-anchored
+    # in R16 but this machine-readable sibling slipped through — closes P2 4th-visit NC4.
+    # Primary anchor pinned to ISOLATION-001 for guard parsing; additional required
+    # anchors enumerated in additional_spec_refs (advisory list — guard reads primary).
+    spec_ref: "specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-001"
+    additional_spec_refs:
+      - "specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-003"
+      - "specs/multi-tenant-l0.yaml#MULTI-TENANT-PROPAGATION-001"
 
 business_observability_advisory:
   - metric: "recipe.b2b_admin.impersonation_total"
