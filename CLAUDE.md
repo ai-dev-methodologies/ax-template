@@ -10,7 +10,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (12 L4 domains + 11 active recipes + 86 Java rules + 86 React rules + 7 ESLint rules + 25 hard guards + AGENTS.md sentinel)
+    ↓ (12 L4 domains + 11 active recipes + 86 Java rules + 86 React rules + 7 ESLint rules + 26 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -90,7 +90,7 @@ AI agent (Claude Code 등)가 코드를 작성할 때 가장 큰 risk:
 
 - `./gradlew testAsvs` — auth 도메인 (26 ASVS items)
 - `./gradlew testCrud` — CRUD 도메인 (Spec Trio 시연)
-- `./gradlew testPractices` — 64 practices rules
+- `./gradlew testPractices` — 86 practices rules
 - `./gradlew testPortability` — advisory; 외부 fixture에 룰 적용
 
 ### 외부 참조 정규화

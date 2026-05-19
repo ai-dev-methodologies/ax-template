@@ -216,6 +216,19 @@ echo "[11] agents_md_toc_disk_truth_guard.sh (live repo)"
 run_guard "agents_md_toc_disk_truth/live" 0 \
     bash "$SCRIPT_DIR/agents_md_toc_disk_truth_guard.sh"
 
+# ── 12. spec_policy_ref_guard (R17 — TD-2026-05-20-035) ──────────────────────
+echo "[12] spec_policy_ref_guard.sh (live repo)"
+# 26th hard guard. Validates every `policy_ref: blueprints/<file>.yaml#<anchor>`
+# in specs/*.yaml resolves to (1) an existing blueprint file and (2) an
+# existing top-level or nested YAML anchor inside it. Closes the P2 R16
+# critique: cross_trio_guard caught templates/ imports but missed
+# spec-internal policy_ref dangling references — Spec Trio self-violation
+# slipped through. R17 also fixed 5 pre-existing dangling refs discovered
+# on first guard run (audit-log#immutability, auth#login.rate_limit,
+# email-outbox#admin, file-storage#security × 2).
+run_guard "spec_policy_ref/live" 0 \
+    bash "$SCRIPT_DIR/spec_policy_ref_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

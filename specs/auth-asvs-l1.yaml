@@ -51,7 +51,7 @@ items:
     verification_type: "api_test"
     applicable: true
     notes: "API test: 5 failed login attempts within 15 minutes for the same email → 6th attempt returns HTTP 429. Rate limit values: max_attempts=5, window=15min (source: blueprints/auth-manifest.yaml login.rate_limit). After window expires, counter resets."
-    policy_ref: "blueprints/auth-manifest.yaml#login.rate_limit"
+    policy_ref: "blueprints/auth-manifest.yaml#rate_limits.login"
   - id: "ASVS-V2.5.2"
     chapter: "V2 - Authentication"
     requirement: "Verify that security questions or 'knowledge-based authentication' are not used."

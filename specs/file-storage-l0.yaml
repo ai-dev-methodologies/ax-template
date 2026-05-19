@@ -144,7 +144,7 @@ items:
       URL or 200 with Content-Disposition header; the actual storage URI is opaque.
       Implementation: StoredFileDto omits storageKey. PresignedUrlService generates a time-limited
       (TTL: manifest#presigned_url_ttl_seconds) token for download.
-    policy_ref: "blueprints/file-storage-manifest.yaml#security"
+    policy_ref: "blueprints/file-storage-manifest.yaml#authz"
 
   - id: "FILE-SEC-002"
     chapter: "SEC"
@@ -157,7 +157,7 @@ items:
       and must not contain the value of storageKey from the database.
       Implementation: StoredFileDto is constructed by FileStorageMapper, which deliberately omits
       storageKey and storageBucket fields from the entity. Jackson @JsonIgnore on entity fields.
-    policy_ref: "blueprints/file-storage-manifest.yaml#security"
+    policy_ref: "blueprints/file-storage-manifest.yaml#authz"
 
   # ─── OBS family (1 item) ───────────────────────────────────────────────────
   - id: "FILE-OBS-001"

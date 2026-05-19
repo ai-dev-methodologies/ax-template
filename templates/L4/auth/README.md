@@ -2,7 +2,8 @@
 
 **Layer**: L4 (full vertical)  
 **Domain**: auth  
-**Mode**: `full_trio` — bound to `contracts/auth-openapi.yaml` + `contracts/auth-ui.yaml`
+**Mode**: `full_trio` — bound to `contracts/auth-openapi.yaml` + `contracts/auth-ui.yaml`  
+**Status** (per [`docs/IMPLEMENTATION-STATUS.md`](../../../docs/IMPLEMENTATION-STATUS.md)): **impl** — backend Java reference workload ready at `backend/src/main/java/com/ax/template/authblueprint/auth/`. **Single-tenant by default.** Recipes that need multi-tenant auth (e.g., b2b-admin with `tenant_model: multi`) MUST adopt `specs/multi-tenant-l0.yaml` ISOLATION + PROPAGATION items before production.
 
 This directory is the **reference workload** for the auth domain. It is the
 composition of L1 (shadcn wrappers) + L2 (feature blocks) + L3 (page templates)

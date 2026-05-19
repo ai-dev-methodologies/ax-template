@@ -1,6 +1,7 @@
 # L4/practices — Practices Catalog Viewer
 
 **Domain mode:** `frontend_only` — reads static markdown files; no backend API.
+**Status** (per [`docs/IMPLEMENTATION-STATUS.md`](../../../docs/IMPLEMENTATION-STATUS.md)): **impl** — frontend reference workload (catalog viewer); backend is intentionally absent (rules-as-code, no runtime service). Tenant model: N/A (read-only static markdown).
 
 This is a reference workload for the `practices` domain in ax-template.
 It demonstrates the `frontend_only` Spec Trio schema introduced in iter4.

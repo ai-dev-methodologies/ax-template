@@ -33,7 +33,7 @@ items:
       assert that no such public method exists on AuditLogService (or that any attempt throws).
       Implementation: AuditLogRepository exposes only save() and read operations.
       No delete/update methods are defined. @Column(updatable=false) on all fields.
-    policy_ref: "blueprints/audit-log-manifest.yaml#immutability"
+    policy_ref: "blueprints/audit-log-manifest.yaml#retention"
 
   - id: "AUDIT-RECORD-003"
     chapter: "RECORD"

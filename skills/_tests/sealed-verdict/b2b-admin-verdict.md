@@ -77,7 +77,7 @@ was downgraded to internal_design; agent cannot independently verify). Scored as
 | M11 | Does NOT invent L4 domains absent from `enabled_l4_domains:` (no payment, notification, billing) | No hallucinated domains ✓ | ✅ |
 | M12 | Identifies tenant isolation requirement from RECIPE.md (B2BADMIN-INV-003 → specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-001/003 + PROPAGATION-001) | tenant boundary mentioned — multi-tenant spec correctly identified after R16 re-anchor | ✅ |
 
-**MUST: 11 / 12**
+**MUST: 12 / 12** (post-R16 re-anchor — M12 was ❌ pre-R16; now ✅ via specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-001/003 + PROPAGATION-001)
 
 ## SHOULD Rubric (8 items)
 
