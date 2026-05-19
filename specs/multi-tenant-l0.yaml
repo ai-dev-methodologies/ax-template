@@ -1,0 +1,104 @@
+version: "1.0.0"
+scope: "multi-tenant isolation"
+stack: "Spring Boot 3.2.x + JPA (Hibernate filter / RLS / schema-per-tenant) + AOP guard + TenantContext propagation"
+standard: "OWASP ASVS V4.x (Access Control) + RFC 7235 + ad-hoc multi-tenancy patterns (Spring Modulith / Hibernate Filter)"
+introduced_at: "R16 — closes P2 critique that b2b-admin INV-003 cited ASVS-V4.2.1 (IDOR) + V4.2.2 (CSRF) as multi-tenant boundary anchors. Neither ASVS item defines tenant isolation; both address per-user resource access. This spec provides the missing direct anchor."
+
+# Multi-tenant isolation is OPT-IN. ax-template's 4 impl L4 (auth, crud, payment,
+# practices) ship as SINGLE-TENANT by default. Multi-tenant recipes (b2b-admin,
+# future SaaS variants) MUST adopt one of the 3 isolation strategies below and
+# wire enforcement at controller / service / repository boundaries.
+
+items:
+  # ── ISOLATION family (4 items — 1 default + 3 strategies + propagation) ────
+  - id: "MULTI-TENANT-ISOLATION-DEFAULT-001"
+    chapter: "ISOLATION"
+    requirement: "Recipes that do not adopt an explicit multi-tenant strategy MUST be treated as single-tenant. RECIPE.md frontmatter MUST declare `tenant_model: single` OR `tenant_model: multi`. Default in absence of declaration is `single`. fork-receivers reading single-tenant RECIPE.md MUST NOT assume cross-tenant data isolation."
+    test_method: "static analysis"
+    verification_type: "structural"
+    applicable: true
+    notes: >
+      Closes P2 critique: backend/src/main/java/com/ax/template/authblueprint/{auth,crud,payment} ships as
+      single-tenant reference workload. b2b-admin recipe enabling multi-tenant
+      semantics MUST adopt ISOLATION-001/002/003 + PROPAGATION-001. Without
+      declaration, downstream fork-receivers risk cross-tenant leakage.
+    policy_ref: "blueprints/multi-tenant-manifest.yaml#tenant-model-declaration"
+
+  - id: "MULTI-TENANT-ISOLATION-001"
+    chapter: "ISOLATION"
+    requirement: "Row-level isolation via tenant_id column + Hibernate @Filter (`@FilterDef name='tenantFilter'`) applied to every JPA entity carrying tenant-scoped data. Repository queries MUST NOT bypass the filter. Cross-tenant read/write attempts MUST return HTTP 404 (not 403) to avoid existence-leakage."
+    test_method: "RestAssured integration test"
+    verification_type: "positive + negative"
+    applicable: true
+    notes: >
+      Test: tenant A creates record → tenant B authenticated request to same
+      resource URL → assert 404 (not 403, not 200). Static analysis: every
+      @Entity with tenant-scoped semantics has @FilterDef + @Filter applied;
+      every Repository method runs under tenant context.
+    policy_ref: "blueprints/multi-tenant-manifest.yaml#row-level-strategy"
+
+  - id: "MULTI-TENANT-ISOLATION-002"
+    chapter: "ISOLATION"
+    requirement: "Schema-per-tenant isolation via Hibernate `MultiTenantConnectionProvider` + `CurrentTenantIdentifierResolver`. Each tenant resolved to its own schema before connection acquisition. PUBLIC schema reserved for tenant catalog + shared reference data only."
+    test_method: "integration test against PostgreSQL with 2+ tenant schemas"
+    verification_type: "positive + negative"
+    applicable: true
+    notes: >
+      Alternative to ISOLATION-001 for stricter isolation. Higher operational
+      cost (per-tenant migration, schema sprawl, connection pool sizing).
+      Test: switch tenant context → assert connection acquires correct schema;
+      attempt cross-schema query → assert SQL error or empty result.
+    policy_ref: "blueprints/multi-tenant-manifest.yaml#schema-per-tenant-strategy"
+
+  - id: "MULTI-TENANT-ISOLATION-003"
+    chapter: "ISOLATION"
+    requirement: "Service-boundary AOP guard (`@AuthorizedTenant` annotation + `AuthorizedTenantInterceptor`) enforces tenant context match between request principal and resource tenant_id BEFORE service method executes. Mismatch throws `TenantBoundaryViolationException` (HTTP 404 mapped via RFC 7807 problem detail)."
+    test_method: "integration test"
+    verification_type: "negative-primary"
+    applicable: true
+    notes: >
+      Defense-in-depth alongside ISOLATION-001 or 002. Test: tenant A principal
+      with manually-constructed resource ID from tenant B → assert
+      TenantBoundaryViolationException + 404 response. NEVER 403 (would leak
+      existence of cross-tenant resource).
+    policy_ref: "blueprints/multi-tenant-manifest.yaml#aop-guard"
+
+  # ── PROPAGATION family (2 items — request-scoped context + async boundary) ─
+  - id: "MULTI-TENANT-PROPAGATION-001"
+    chapter: "PROPAGATION"
+    requirement: "Tenant context resolved from authenticated principal (JWT claim, session attribute, or subdomain) at controller entry; stored in request-scoped `TenantContext` ThreadLocal; cleared on response (Filter / Interceptor). MUST NOT be derivable from URL path parameter or request body (forgeable)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive + negative"
+    applicable: true
+    notes: >
+      Test: authenticated request → TenantContext populated from JWT claim;
+      response sent → ThreadLocal cleared (next request on same thread sees
+      empty context, not leftover). Negative test: malicious request with
+      `?tenant_id=victim` query param → assert ignored; tenant resolved from
+      principal only.
+    policy_ref: "blueprints/multi-tenant-manifest.yaml#context-resolution"
+
+  - id: "MULTI-TENANT-PROPAGATION-002"
+    chapter: "PROPAGATION"
+    requirement: "Async boundary (CompletableFuture, @Async, message listeners) MUST explicitly propagate TenantContext via `TaskDecorator` or message header. Failure to propagate MUST cause `TenantContextMissing` exception, NOT silent default-tenant fallback."
+    test_method: "integration test with @Async method"
+    verification_type: "negative-primary"
+    applicable: true
+    notes: >
+      Test: controller calls @Async service method without TaskDecorator →
+      assert TenantContextMissing. Add TaskDecorator → assert context
+      propagated to async thread. Closes the common async leak vector
+      (TenantContext is request-scoped; @Async runs on a different thread).
+    policy_ref: "blueprints/multi-tenant-manifest.yaml#async-propagation"
+
+evidence:
+  - source_type: external
+    citation: "OWASP ASVS V4.x Access Control — but ASVS does not directly define multi-tenant isolation. ASVS-V4.2.1 (IDOR per-user) and V4.2.2 (CSRF) are commonly mis-cited as tenant boundary anchors. This spec separates the concern."
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Hibernate User Guide — Multi-tenancy. `@FilterDef` + `MultiTenantConnectionProvider` patterns documented."
+    url: "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#multitenacy"
+    quoted_at: "2026-05-20"
+
+decided_at: "2026-05-20"

@@ -2,8 +2,11 @@
 
 `templates/L4/payment/` is the **payment domain** reference workload for
 **ax-template**. It demonstrates how to compose L1 shadcn primitives, L2
-payment feature blocks, and L3 page templates into a production-ready payment
-vertical backed by the `contracts/payment-openapi.yaml` Spring Boot API.
+payment feature blocks, and L3 page templates into a payment vertical backed
+by the `contracts/payment-openapi.yaml` Spring Boot API.
+
+**Status (per [`docs/IMPLEMENTATION-STATUS.md`](../../../docs/IMPLEMENTATION-STATUS.md))**:
+**impl** — backend Java reference workload ready at `backend/src/main/java/com/ax/template/authblueprint/payment/` (20+ files: state machine, ledger, refund, slow-provider decorator). Frontend layer here is a stub. Single-tenant by default. Korean PG (Toss/Kakao/Naver) adapter implementations are deferred to R17+ — current PaymentProvider interface is generic.
 
 ---
 

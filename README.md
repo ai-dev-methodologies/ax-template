@@ -183,7 +183,7 @@ ax-template/
 │   └── ratelimit-manifest.yaml
 │
 ├── practices/                      # Java/Spring catalog
-│   ├── rules/                      # 64 rule.md files
+│   ├── rules/                      # 86 rule.md files
 │   ├── upstream/                   # External doc snapshots
 │   ├── evals/                      # 4 hard gates + advisory probes
 │   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)
@@ -192,7 +192,7 @@ ax-template/
 │   └── DECISIONS.md                # rule provenance trail
 │
 ├── practices-react/                # React/Next.js catalog
-│   ├── rules/                      # 68 rule.md files
+│   ├── rules/                      # 86 rule.md files
 │   ├── upstream/                   # External doc snapshots
 │   ├── eslint-plugin-ax/           # @ax/eslint-plugin-ax — 7 ESLint rules
 │   ├── evals/                      # 3 hard gates

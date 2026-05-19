@@ -2,8 +2,11 @@
 
 `templates/L4/crud/` is the **crud domain** reference workload for
 **ax-template**. It demonstrates how to compose L1 shadcn primitives, L2
-feature blocks, and L3 page templates into a production-ready CRUD vertical
-backed by the `contracts/crud-openapi.yaml` Spring Boot API.
+feature blocks, and L3 page templates into a CRUD vertical backed by the
+`contracts/crud-openapi.yaml` Spring Boot API.
+
+**Status (per [`docs/IMPLEMENTATION-STATUS.md`](../../../docs/IMPLEMENTATION-STATUS.md))**:
+**impl** — backend Java reference workload ready at `backend/src/main/java/com/ax/template/authblueprint/crud/`; frontend layer here is a stub. Single-tenant by default (no multi-tenant isolation enforcement).
 
 ---
 
