@@ -4,3 +4,8 @@ dist/
 playwright-report/
 test-results/
 .playwright/
+
+# Next.js build artifacts (regenerable via `npm run build`)
+.next/
+next-env.d.ts
+*.tsbuildinfo
