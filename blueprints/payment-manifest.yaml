@@ -173,3 +173,26 @@ reconciliation:
   job_enabled: true
   job_schedule: "every 5 minutes"
   on_drift: "emit recon_drift_detected_total counter + log WARN with payment_id"
+
+# ─── Callback policy (iter-9, PAYMENT-CALLBACK-001..003) ─────────────────────
+# Anchor block for redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 /
+# KCP / Toss V1). Stripe / Toss V2 tokenization flows do NOT use this path —
+# they go through the synchronous PaymentProvider.authorizeAndCapture surface.
+#
+# This policy block exists so Spec Trio integrity is intact when the spec
+# items below cite policy_ref: blueprints/payment-manifest.yaml#callback.
+# Backend implementation (PaymentCallbackController + signature SPI +
+# markCapturedFromCallback service hook) is intentionally deferred — see
+# templates/L4/payment/README.md "How to fork" Step 7 redirect-style branch
+# and the PaymentProvider interface extension PRD (R18+).
+callback:
+  applicability: "redirect-style PGs only (KG이니시스 / NICE페이먼츠 / KCP / Toss V1). Tokenization-style PGs (Stripe / Toss V2) do NOT enter this code path."
+  endpoint_path: "/api/payments/callback/{provider}"
+  signature_verification: required   # fail-closed: missing/mismatched signature MUST reject with 401 BEFORE any state read
+  signature_verifier_spi: "PaymentCallbackVerifier"   # SPI interface name; fork-receiver provides per-provider impl (KG SignatureKey, NICE MerchantKey, etc.)
+  idempotency_key_source: "callback payload (PG-issued TID + orderId composite)"
+  idempotent_replay: "if Payment is already CAPTURED for the same TID, return 200 with existing state — do NOT double-CAPTURE"
+  allowed_states_before_callback: [AUTHORIZED, UNKNOWN]   # CAPTURED stays idempotent; CREATED + REFUNDED reject 409
+  allowed_states_after_callback: [CAPTURED, FAILED]
+  ledger_metadata: {source: "callback", provider_txn_id: "required"}
+  audit_required: true   # every callback (success OR signature-fail) MUST emit an audit ledger row
