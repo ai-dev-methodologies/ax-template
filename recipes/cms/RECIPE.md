@@ -1,6 +1,7 @@
 ---
 pattern: cms
 display_name: "CMS (Content Authoring + Scheduled Publish + Editorial Workflow + Expiry)"
+tenant_model: single  # iter-2: explicit declaration per specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001. Recipe ships single-tenant; fork-receivers adopting multi-tenant MUST switch to `tenant_model: multi` AND adopt ISOLATION-001/002/003 + PROPAGATION-001/002.
 schema_version: 1
 compatible_with_catalog_version: "v1.6.0-lms-cms"
 last_verified_at: "2026-05-21"
