@@ -449,3 +449,45 @@ items:
       atomically with each ledger append. ReconciliationJob (periodic) queries the invariant and emits
       recon_drift_detected_total if divergence is found. Reference: manifest.reconciliation.invariant.
     policy_ref: "blueprints/payment-manifest.yaml#reconciliation"
+
+  # ─── CALLBACK family (3 items, iter-9 — Spec Trio extension for redirect-style PGs) ──
+  - id: "PAYMENT-CALLBACK-001"
+    chapter: "CALLBACK"
+    requirement: "Every redirect-style PG callback POST to /api/payments/callback/{provider} MUST verify the provider-issued signature BEFORE reading any payment state. Verification is delegated to a per-provider PaymentCallbackVerifier SPI implementation; missing or mismatched signature MUST reject with HTTP 401 and emit an audit ledger row tagged source=callback, outcome=signature_fail."
+    test_method: "RestAssured integration test"
+    verification_type: "negative-primary"
+    applicable: true
+    notes: >
+      Test: POST to /api/payments/callback/{provider} with a forged signature → assert 401; assert an audit ledger
+      row with metadata.source=callback and metadata.outcome=signature_fail; assert NO Payment state change. Then
+      POST with valid signature → assert appropriate state transition. Reference:
+      manifest.callback.signature_verification = required, manifest.callback.signature_verifier_spi =
+      PaymentCallbackVerifier. Spec-only this iter; backend impl deferred (see templates/L4/payment/README.md
+      Step 7 redirect-style branch).
+    policy_ref: "blueprints/payment-manifest.yaml#callback"
+
+  - id: "PAYMENT-CALLBACK-002"
+    chapter: "CALLBACK"
+    requirement: "Callback handling MUST be idempotent on the PG-issued TID. A duplicate callback for an already-CAPTURED payment MUST NOT emit a second CAPTURED ledger event; it MUST return the existing Payment state with HTTP 200. Idempotency key source is the (provider, TID) composite."
+    test_method: "RestAssured integration test"
+    verification_type: "positive + negative"
+    applicable: true
+    notes: >
+      Test: POST a valid callback to drive Payment to CAPTURED. POST the same callback (same TID) again → assert
+      200 with the same payment_id and balance; assert the payment_events ledger has exactly ONE CAPTURED entry for
+      that payment (no duplicate). Reference: manifest.callback.idempotency_key_source = "(provider, TID)",
+      manifest.callback.idempotent_replay.
+    policy_ref: "blueprints/payment-manifest.yaml#callback"
+
+  - id: "PAYMENT-CALLBACK-003"
+    chapter: "CALLBACK"
+    requirement: "Only Payments in {AUTHORIZED, UNKNOWN} states MAY transition via callback (typically to CAPTURED or FAILED). Callbacks targeting a payment in CREATED state (no prior PG round-trip) MUST reject 409 Conflict. Callbacks targeting REFUNDED MUST reject 409. CAPTURED stays idempotent per CALLBACK-002."
+    test_method: "RestAssured integration test"
+    verification_type: "negative-primary"
+    applicable: true
+    notes: >
+      Test: callback for CREATED payment → 409; callback for REFUNDED payment → 409; callback for AUTHORIZED →
+      transitions to CAPTURED. Re-use the existing PaymentStateMachine entry points where possible. Reference:
+      manifest.callback.allowed_states_before_callback = [AUTHORIZED, UNKNOWN],
+      manifest.callback.allowed_states_after_callback = [CAPTURED, FAILED].
+    policy_ref: "blueprints/payment-manifest.yaml#callback"
