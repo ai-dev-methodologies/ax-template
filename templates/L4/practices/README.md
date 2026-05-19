@@ -1,5 +1,7 @@
 # L4/practices — Practices Catalog Viewer
 
+**Tenant model**: `single` — per [`specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001`](../../../specs/multi-tenant-l0.yaml). (`practices` is `frontend_only` — reads static markdown; no per-tenant runtime state. `single` is the spec-compliant default in absence of an explicit strategy.) Recipes composing this domain into a multi-tenant SaaS (e.g. `b2b-admin` with `tenant_model: multi`) MUST adopt one of `MULTI-TENANT-ISOLATION-001` / `-002` / `-003` plus `MULTI-TENANT-PROPAGATION-001` + `-002` before production. fork-receivers MUST NOT assume cross-tenant data isolation in this L4 as-shipped.
+
 **Domain mode:** `frontend_only` — reads static markdown files; no backend API.
 **Status** (per [`docs/IMPLEMENTATION-STATUS.md`](../../../docs/IMPLEMENTATION-STATUS.md)): **impl** — frontend reference workload (catalog viewer); backend is intentionally absent (rules-as-code, no runtime service). Tenant model: N/A (read-only static markdown).
 
