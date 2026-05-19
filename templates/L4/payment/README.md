@@ -175,6 +175,30 @@ verified server-side TID as the canonical token — see the upcoming
 `PaymentProvider` interface extension (deferred R18+) for callback-verify
 + multi-step authorize support.
 
+### Day 3 callback wiring (redirect-style PG)
+
+Once your PG popup returns to the server-side callback URL, follow the
+PAYMENT-CALLBACK-001/002/003 spec items in `specs/payment-l0.yaml` and
+the policy block at `blueprints/payment-manifest.yaml#callback`:
+
+| Spec item | What to enforce |
+|---|---|
+| **PAYMENT-CALLBACK-001** | Verify the PG-issued signature **before** reading any payment state. Missing or mismatched signature MUST reject with HTTP 401 and emit an audit ledger row with `metadata.outcome=signature_fail`. Delegate to a per-provider `PaymentCallbackVerifier` SPI implementation. |
+| **PAYMENT-CALLBACK-002** | Idempotency key is the `(provider, TID)` composite. A duplicate callback for an already-`CAPTURED` payment MUST return the existing state with HTTP 200, not emit a second `CAPTURED` ledger event. |
+| **PAYMENT-CALLBACK-003** | Only `{AUTHORIZED, UNKNOWN}` may transition via callback. Callbacks targeting `CREATED` (no prior PG round-trip) MUST reject 409. `REFUNDED` MUST reject 409. `CAPTURED` stays idempotent per CALLBACK-002. |
+
+The catalog ships the **spec, manifest policy, and Spec Trio anchors only**;
+backend implementation (`PaymentCallbackController`, `PaymentCallbackVerifier`
+SPI default impl, `PaymentService.markCapturedFromCallback` hook, and the
+`PaymentStateMachine` transition extension) is intentionally deferred to a
+follow-up PRD so the state-machine entry table can be redesigned without
+breaking the existing `PaymentStateMachineTest` negative-transition table.
+
+Fork-receiver path until that PRD ships: implement the three spec items in
+your own controller, citing each spec ID in a Javadoc on the handler.
+`run-all-guards.sh` already verifies the spec/manifest anchors resolve;
+your callback handler is the only piece left to write.
+
 ---
 
 ## Spec Trio binding
