@@ -1,0 +1,7 @@
+# Fixture: FAIL — alpha and beta both claim (audit-log, AUDIT-INV-001).
+schema_version: 1
+pattern: alpha
+business_invariants:
+  - id: AUDIT-INV-001
+    statement: "non-recipe-prefixed INV id pointing at audit-log spec"
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"

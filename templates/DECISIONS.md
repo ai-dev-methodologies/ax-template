@@ -2275,3 +2275,55 @@ the `[cms, lms]` key in all 4 verdict outcomes (2/2 PASS, lms-only, cms-only,
   - **Follow-ups:**
     - First R11+ application of TD-2026-05-22-027 (post-R10) generates a precedent log entry capturing whether all three conditions were satisfied independently of R10 retroactive validation.
     - Voluntary-recipe-failure precedent established (CLEAN REVERT, no deferred resurrection); first R11+ voluntary-recipe-failure (if any) cites this ADR for the rollback shape.
+
+---
+
+## R12 ADR Bullets
+
+> *R12 format note.* Bullets below follow the compact bullet entry shape
+> codified at TD-2026-05-22-025 (`## Format convention` block above, lines
+> 2126–2150). R12 ADRs land alongside R9/R10 entries — no new file split.
+> R12 is the first catalog-quality cycle: no new L4/L3/L2/L1/recipe/sealed
+> verdict; the cycle mechanizes two previously-manual disciplines and adds
+> two Korean enterprise rules. Tag target: `v1.9.0-catalog-quality`.
+
+- **TD-2026-05-24-030** — Hard guard `cross_recipe_inv_uniqueness_guard.sh` shipped to mechanize R6-R10 manual INV-id collision discipline (R12 SP49 atomic-4).
+  - **Decision:** `practices/evals/cross_recipe_inv_uniqueness_guard.sh` added to `practices/evals/run-all-guards.sh` rotation. Hard guard count 22 → 23. Block any two active recipes from declaring identical `(L4_domain_prefix, business_invariants[].id)` pairs. `L4_domain_prefix` is derived from each INV's `spec_ref` (e.g. `specs/audit-log-l0.yaml#AUDIT-RECORD-001` → prefix `audit-log`). Recipe-prefixed IDs (`CRM-INV-001`, `API-GATEWAY-RELAY-INV-001`, etc.) are exempt by construction — no two recipes share a recipe-name prefix so their `(prefix, id)` keys cannot collide.
+  - **Drivers:**
+    - R7 + R8 + R9 + R10 each manually verified no two recipes claim the same `(L4_domain, INV-id)` pair; discipline currently relies on planner attention. Disk census at R12 PRD signature (2026-05-24) shows the 11-recipe state has zero collisions across 47 indexed INVs (5 anchored only via `rule_ref` or `co-shipped-rule` are skipped for indexing — no L4 domain derivable), so guard is authored against a clean baseline.
+    - The catalog should not depend on planner attention to maintain invariants that scripts can enforce (R12 PRD §1 Principle 6 — catalog quality as self-strengthening loop).
+  - **Value framing — PROTECTIVE, not corrective (Architect M2 + Codex M2 closure):** The current live value is **R13+ regression prevention**, not closure of existing violations. Disk census at 2026-05-24 confirms all recipe IDs are recipe-prefixed (`API-GATEWAY-RELAY-INV-001`, `CRM-INV-001`, `SAAS-INV-001`, `B2BADMIN-INV-001`, `ECOM-INV-001`, `INTERNAL-IT-INV-001`, `BOOKING-INV-001`, `MARKETPLACE-INV-001`, `LMS-INV-001`, `CMS-INV-001`, `COMMUNITY-INV-001`) — collision space is empty today. The guard's value materializes only when a future cycle introduces a recipe that would otherwise collide. R12 ships it now because the discipline is already manual and the marginal cost of mechanizing it is low.
+  - **Alternatives considered:**
+    - Advisory probe only (rejected — discipline already manual; promoting to hard guard is the value).
+    - Rename-based avoidance forcing every recipe to recipe-prefixed IDs (rejected — would break R5-R10 stable INV-IDs and require touching all 11 recipe specs).
+    - Defer to R13 with TD-032 (rejected — no semantic dependency on the deferred AGENTS.md TOC work; quality cycle pairs naturally with TD-031).
+  - **Why chosen:** Maximum mechanization of an already-manual discipline; zero current violations; clean baseline. The guard pairs naturally with TD-031 (applied_recipes alphabetical mechanization) — both ship as R12 SP49 atomic-4, both protective-not-corrective.
+  - **Consequences:**
+    - Future recipe additions in R13+ must avoid collision. Adding a recipe that would share `(audit-log, AUDIT-INV-001)` triggers guard exit 1.
+    - Hard guard count 22 → 23 in R12 SP49 (paired with TD-031: 23 → 24).
+    - Guard supports `--fixtures` mode (2 fixtures under `practices/evals/fixtures/cross_recipe_inv_uniqueness/`: `pass_recipe_prefixed_no_collision/`, `fail_two_recipes_same_audit_inv/`) and `--root DIR` for fixture-directory scanning. Live mode scans `specs/recipes/*.yaml`.
+    - Contingency closure (R12 PRD §7 Pre-Mortem #1): if disk census at SP49 execution surfaces an existing collision (LOW likelihood — disk census at PRD signature was clean), backfill is performed **within the same SP49 atomic commit** (one-time, not a recurring exception), TD-030 captures the backfill scope, and the protective framing remains intact from SP49+1 onward.
+  - **Follow-ups:**
+    - R13+ verifies guard remains GREEN as new recipes (if any) ship.
+
+- **TD-2026-05-24-031** — Hard guard `applied_recipes_alphabetical_guard.sh` shipped to mechanize R6-R10 manual alphabetical-insert discipline (R12 SP49 atomic-4).
+  - **Decision:** `practices/evals/applied_recipes_alphabetical_guard.sh` added to `practices/evals/run-all-guards.sh` rotation. Hard guard count 23 → 24. For each `templates/L4/<domain>/README.md` containing an `applied_recipes:` plural-list block, assert the entries are alphabetically sorted (ASCII case-insensitive lexical). Inline trailing comments are stripped before comparison (e.g. `- api-gateway-relay  # R10 SP47 alphabetical insert` → `api-gateway-relay`).
+  - **Drivers:**
+    - R6 dual-form regex accepts plural `applied_recipes:` lists with ≥1 entry but does NOT enforce alphabetical sort. R6 SP39 + R7 SP41 + R8 SP43 + R9 SP45b + R10 SP47 all manually authored the alphabetical-insert by planner attention.
+    - R12 PRD §6 pre-flight disk command confirms **9 plural-shape L4 READMEs OK** (audit-log / auth / crud / feature-flags / notification / payment / scheduled-task / search / webhook) at 2026-05-24 — zero backfill needed in the expected case. **3 L4 READMEs SKIP** per guard contract: `billing` (R5 legacy singular `applied_recipe:`) + `file-storage` (keyless, no first-consumer arrived yet) + `practices` (keyless, no first-consumer arrived yet) — same precedent codified at TD-2026-05-21-024 (R8 first-consumer-arrival convention).
+  - **Value framing — PROTECTIVE, not corrective (parallel to TD-030):** Disk census at R12 PRD signature confirms all 9 plural-shape L4 READMEs are already alphabetical; live value is R13+ regression prevention. The discipline is already manual across R6-R10; mechanization is the marginal cost-down.
+  - **Alternatives considered:**
+    - Auto-sort fixer (rejected — would silently mutate L4 READMEs in unrelated PRs).
+    - Document-only convention (rejected — unenforceable; same failure mode as R6-R10).
+    - R12 backfill-only without persistent guard (rejected — recurring discipline benefits from recurring check).
+    - Strict ASCII (case-sensitive) sort (rejected — readability suffers; case-insensitive matches the human-author convention preserved across R6-R10 and currently observed on all 9 plural-shape READMEs).
+  - **Why chosen:** Same rationale as TD-030; quality-cycle pairing reinforces mechanization theme; pre-flight disk command confirms zero backfill needed in expected case. Skip rules (R5 singular + keyless) are by-design and align with the R6 dual-form + TD-2026-05-21-024 first-consumer-arrival precedents.
+  - **Consequences:**
+    - Future L4 README mutations in R13+ must respect alphabetical order.
+    - Hard guard count 23 → 24 in R12 SP49 (paired with TD-030: 22 → 23).
+    - Guard supports `--fixtures` mode (2 fixtures under `practices/evals/fixtures/applied_recipes_alphabetical/`: `pass_sorted_two_entries/`, `fail_unsorted_two_entries/`) and `--root DIR` for fixture-directory scanning. Live mode scans `templates/L4/*/README.md`.
+    - Contingency closure (R12 PRD §7 Pre-Mortem #2): if any L4 README is unsorted at SP49 execution (LOW likelihood per disk census), SP49 fixes it **within the same atomic commit** (one-time backfill, not recurring exception); TD-031 captures the backfill scope explicitly and the protective framing remains intact from SP49+1 onward.
+  - **Follow-ups:**
+    - R13+ verifies guard remains GREEN as new recipes / new L4 READMEs ship.
+    - **Deferred R13+ rule candidate:** `korean-brn-checksum` (mod-10 weighted-sum). R12 evidence collection on 2026-05-24 found no verbatim Korean authoritative source (위키백과 사업자등록번호 alt URL is 200 OK but lacks 10-digit/format/checksum content; namu.wiki 403; en.wikipedia "Business_registration_number" 404; law.go.kr / hometax.go.kr / NTS-7660 host-wide downgraded — see `practices/upstream/r12-sp49-evidence-snapshot.md` rows D1-D4). Trigger to ship: an authoritative Korean source (academic paper / NTS notice / standards doc) reachable on PRD-signature day.
+    - **Deferred R13 catalog quality:** AGENTS.md generated TOC + `generate_agents.sh` extension (TD-032 placeholder); separate cycle with own ADR for TD-024 amendment + post-extension script shape. R12 explicitly does NOT amend TD-024 — AGENTS.md sentinel sha refreshes naturally from 84 → 86 rule concat with the existing unchanged generator (R12 PRD §1 Cycle frame bullet 4 + §5 + §11 Architect H2 closure).

@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "15c54ebbb876a78f3f17fb04d4cf9fba1573b827a7a70041d4e50785b9e14016"
-  rule_count: 84
+  source_concat_sha256: "d367ba2fdbee00f71c4ba0098c60e645192dd7076e3bff7c79b85ce4f7c102e4"
+  rule_count: 86
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -2401,6 +2401,228 @@ See: `practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/P
 Reference: [IETF draft — The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
 
 Reference: [Stripe API Reference — Idempotent requests](https://docs.stripe.com/api/idempotent_requests)
+
+
+<!-- @source rules/korean-brn-format.md -->
+
+---
+title: "Backend endpoints accepting a Korean Business Registration Number (사업자등록번호) must validate the input against the 10-digit NNN-NN-NNNNN format before persistence or logging"
+rule_id: korean-brn-format
+impact: HIGH
+impactDescription: "Korean B2B integration endpoints (tax invoices, e-Tax, supplier onboarding, payment ledger) silently accept malformed BRN strings (truncated, free-form, including 주민등록번호 by mistake) when no format check runs at the controller boundary. The downstream effects — failed NTS reconciliation, mis-routed VAT, RRN leakage through a field reused as a BRN slot — surface only at audit time. A 10-digit NNN-NN-NNNNN regex enforced at the DTO layer rejects all four classes at the boundary."
+tags:
+  - validation
+  - identity
+  - brn
+  - korean-compliance
+  - locked_constraint
+provenance_class: locked_constraint
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-VAL-001"
+verification:
+  type: review
+  status: manual
+  notes: "Static analysis: every backend DTO field semantically representing a 사업자등록번호 (commonly named brn, businessRegistrationNumber, businessNumber, 사업자등록번호, businessRegNo) must be wired to a Jakarta `ConstraintValidator` that applies the regex ^[0-9]{3}-[0-9]{2}-[0-9]{5}$ before any service-layer call. Inputs failing the regex must be rejected with HTTP 400 + RFC 7807 problem detail; never persisted in unvalidated form; never logged in raw form. The checksum algorithm (mod-10 weighted-sum) is intentionally OUT-OF-SCOPE for this rule (deferred R13+ as a separate rule contingent on an authoritative source landing) — see practices/DECISIONS.md TD-2026-05-24-030/031 cycle scope."
+evidence:
+  - source_type: external
+    citation: "한국은행 — 통화정책의 효율적 수행을 통해 물가 안정과 금융안정을 도모 (Korean enterprise financial authority surface; adjacent-Korean anchor per the R8/R9/R10 adjacent-fallback precedent — direct BRN-format Korean docs at 위키백과 사업자등록번호, namu.wiki, hometax.go.kr, law.go.kr were unreachable on 2026-05-24 per practices/upstream/r12-sp49-evidence-snapshot.md downgrade cluster)"
+    url: "https://www.bok.or.kr/portal/main/main.do"
+    quoted_at: "2026-05-24"
+decided_at: "2026-05-24"
+---
+
+## Backend endpoints accepting a 사업자등록번호 must validate the input against the 10-digit NNN-NN-NNNNN format
+
+**Impact: HIGH — Korean B2B endpoints (세금계산서, e-Tax, supplier onboarding, payment ledger) silently accept malformed 사업자등록번호 input when no controller-boundary check runs. Downstream effects (failed NTS reconciliation, mis-routed VAT, accidental RRN leakage through a reused field) surface only at audit time.**
+
+The 사업자등록번호 (Business Registration Number, BRN) is a 10-digit identifier issued by the 국세청 (National Tax Service) to every business entity registered in Korea. Its canonical display form is `NNN-NN-NNNNN` — 3-digit 세무서 code + 2-digit individual/corporate code + 5-digit sequence — and the same 10-digit shape is what `세금계산서 작성요령` requires on every issued tax invoice. The rule constrained here is **format-only**: any backend endpoint accepting a BRN field must run the regex `^[0-9]{3}-[0-9]{2}-[0-9]{5}$` (or the equivalent compact `[0-9]{10}` form normalised before validation) at the DTO layer before the service tier runs.
+
+The **mod-10 weighted-sum checksum** that NTS publishes alongside the format is intentionally **out of scope** for this rule. R12 evidence collection on 2026-05-24 could not surface a verbatim Korean authoritative source for the checksum algorithm (위키백과 사업자등록번호 alt URL is 200 OK but its content does not cover the 10-digit format or the checksum; namu.wiki is bot-blocked; en.wikipedia "Business_registration_number" returns 404; law.go.kr / hometax.go.kr / NTS-7660 host-wide downgraded — see practices/upstream/r12-sp49-evidence-snapshot.md). A separate `korean-brn-checksum` rule is queued in `practices/DECISIONS.md#deferred-rules-r13` and will ship once an authoritative source lands.
+
+**Incorrect — DTO accepts arbitrary string in a BRN slot; service layer assumes well-formed input:**
+
+```java
+public record CreateSupplierRequest(
+        @NotBlank String name,
+        @NotBlank String brn,            // accepts "1234567890", "abc", a raw 13-digit RRN, "123-45-6789012", anything
+        @NotBlank String contactEmail
+) {}
+
+@PostMapping("/api/suppliers")
+public ResponseEntity<Void> create(@RequestBody @Valid CreateSupplierRequest req) {
+    supplierService.register(req.name(), req.brn(), req.contactEmail());  // persisted unvalidated
+    return ResponseEntity.created(URI.create("/api/suppliers/" + req.brn())).build();
+}
+```
+
+**Correct — Jakarta ConstraintValidator runs at the DTO boundary; only the 10-digit NNN-NN-NNNNN shape proceeds to the service tier:**
+
+```java
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = BusinessRegistrationNumberValidator.class)
+public @interface BusinessRegistrationNumber {
+    String message() default "BRN must match NNN-NN-NNNNN (3-2-5 digits)";
+    Class<?>[] groups() default {};
+    Class<? extends Payload>[] payload() default {};
+}
+
+public final class BusinessRegistrationNumberValidator
+        implements ConstraintValidator<BusinessRegistrationNumber, String> {
+
+    // Canonical Korean format: 3-digit 세무서 code · 2-digit individual/corporate code · 5-digit sequence.
+    private static final java.util.regex.Pattern BRN =
+            java.util.regex.Pattern.compile("^[0-9]{3}-[0-9]{2}-[0-9]{5}$");
+
+    @Override
+    public boolean isValid(String value, ConstraintValidatorContext ctx) {
+        if (value == null) {
+            return false;   // @NotNull is enforced separately; here, null = invalid BRN shape.
+        }
+        return BRN.matcher(value).matches();
+    }
+}
+
+public record CreateSupplierRequest(
+        @NotBlank String name,
+        @NotBlank @BusinessRegistrationNumber String brn,
+        @NotBlank @Email String contactEmail
+) {}
+```
+
+The matching 400 response is shaped by the project's existing `GlobalExceptionHandler` (RFC 7807 ProblemDetail). No raw BRN appears in the error message — only a stable problem `type` URI (`urn:ax:supplier:invalid-brn`) and a sanitized property pointer, so the application logs do not leak the rejected value.
+
+### Why "format-only" and not checksum
+
+The mod-10 weighted-sum checksum NTS publishes is a stronger check (it rejects typos that pass the format gate), but R12 evidence collection on 2026-05-24 found no Korean authoritative source verbatim-reachable to anchor the algorithm. Shipping a checksum-coupled rule against vendor-blog reconstructions of the algorithm would fail the catalog's `evidence:` discipline (every normative claim must be sourced from a verbatim upstream — see `practices/AGENTS.md` evidence-anchored rule provenance contract).
+
+R12 PRD §4.3 + practices/DECISIONS.md TD-2026-05-24-030/031 cycle explicitly defers `korean-brn-checksum` to a later cycle. The format-only rule still closes the four most common failure modes — truncated input, free-form text, an RRN pasted into a BRN slot, the wrong separator pattern.
+
+### What this rule does NOT do
+
+- It does not validate that the 3-digit prefix is a real 세무서 code (NTS publishes the list; the list rotates as offices reorganise — too volatile for a static rule).
+- It does not validate the checksum (see above).
+- It does not cover RRN (주민등록번호); that lives in `no-rrn-collection-without-legal-basis.md` and is a stricter legal-basis rule, not a format rule.
+- It does not impose a storage encoding; teams choose between persisting the dashed form (`123-45-67890`) or the bare-digit form (`1234567890`) per their schema convention. Both shapes are valid as long as the controller-boundary regex accepts only the dashed canonical form on the wire.
+
+Reference: https://www.bok.or.kr/portal/main/main.do
+
+
+<!-- @source rules/korean-vat-10-percent-calculation.md -->
+
+---
+title: "Backend services computing Korean VAT must use BigDecimal with rate 0.10 and HALF_UP rounding; float, double, and inline rate literals (0.10d / 0.10f) are prohibited"
+rule_id: korean-vat-10-percent-calculation
+impact: HIGH
+impactDescription: "Korean VAT (부가가치세) is fixed at 10% by statute. Computing VAT with float / double silently introduces sub-부 rounding errors that compound across invoices; declaring the rate as 0.10d (double literal) inside a BigDecimal constructor (`new BigDecimal(0.10d)`) materializes the float-noise value 0.1000000000000000055511151231257827021181583404541015625 into the audit trail. The HALF_UP requirement matches the Korean invoice rounding convention — different rounding modes systematically over- or under-collect across invoice volume."
+tags:
+  - billing
+  - tax
+  - vat
+  - korean-compliance
+  - currency
+provenance_class: external
+spec_ref: "specs/billing-l0.yaml#BILLING-CUR-001"
+verification:
+  type: review
+  status: manual
+  notes: "Static analysis (1): grep -rE '\\b0\\.10[dfDF]?\\b' against any billing / payment / invoice / tax module must return zero matches OUTSIDE a BigDecimal(\"0.10\") string-constructor call. Static analysis (2): every method computing a VAT amount must use BigDecimal.setScale(0, RoundingMode.HALF_UP) (or the equivalent 2-arg .multiply + .setScale chain) — never .doubleValue() / .floatValue() intermediates. The 3 representative fixtures asserted by review: (i) supply 1000 → vat 100; (ii) supply 1001 → vat 100; (iii) supply 1005 → vat 101 (HALF_UP on the .5 boundary). Cross-links: lang-bigdecimal-for-money.md + currency-amount-precision-explicit.md (long minor-units transport) — the VAT rate is the lone decimal-rate exception that BigDecimal exists to handle."
+evidence:
+  - source_type: external
+    citation: "Wikipedia (Korean) 부가가치세 — verbatim '대한민국 10% VAT = 부가세(附加稅) 또는 부가가치세(附加價値稅)'"
+    url: "https://ko.wikipedia.org/wiki/부가가치세"
+    quoted_at: "2026-05-24"
+  - source_type: external
+    citation: "Wikipedia (Korean) 부가가치세 — verbatim '대한민국에서는 1977년 7월 1일부터 시행하였다.'"
+    url: "https://ko.wikipedia.org/wiki/부가가치세"
+    quoted_at: "2026-05-24"
+  - source_type: external
+    citation: "국세청 (NTS) 부가가치세 기장의무 — verbatim '직전연도(2024년) 업종별 수입금액 기준으로 판단'"
+    url: "https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2272&cntntsId=7669"
+    quoted_at: "2026-05-24"
+  - source_type: external
+    citation: "PwC Tax Summaries (Korea) — verbatim 'VAT is generally levied at a rate of 10% on the supply of goods and services in Korea.'"
+    url: "https://taxsummaries.pwc.com/republic-of-korea/corporate/other-taxes"
+    quoted_at: "2026-05-24"
+decided_at: "2026-05-24"
+---
+
+## Korean VAT must be computed with BigDecimal("0.10") and HALF_UP rounding
+
+**Impact: HIGH — Korean 부가가치세 is fixed at 10% by statute. Float / double arithmetic silently accumulates rounding noise; inline `0.10d` literals materialize float-noise values into the audit trail; non-HALF_UP rounding systematically biases collection across invoice volume.**
+
+The Korean 부가가치세 (Value-Added Tax) rate is 10% on the supply of goods and services and has been in force since 1977-07-01. The PwC Tax Summaries restate the rule in English: *"VAT is generally levied at a rate of 10% on the supply of goods and services in Korea."* The 국세청 (NTS) `부가가치세 기장의무` page restates the bookkeeping threshold tied to the prior-year revenue ('직전연도(2024년) 업종별 수입금액 기준으로 판단'). The rate itself is single-valued and statutory — there is no business case for computing it with floating-point arithmetic, and every Korean-domain backend that bills, invoices, or settles must use the BigDecimal-with-HALF_UP path.
+
+This rule sits beside `currency-amount-precision-explicit.md` (which mandates long integer minor units for transport storage) and `lang-bigdecimal-for-money.md` (which forbids float / double for money). The VAT rate is the **only** decimal-rate exception in the Korean billing pipeline — long arithmetic still applies to the resulting amounts.
+
+**Incorrect — double rate; float intermediate; banker's-rounding default; inline 0.10d:**
+
+```java
+public long computeVatAmount(long supplyAmount) {
+    // VIOLATION (1): double accumulates IEEE 754 noise.
+    double rate = 0.10d;
+    double vat = supplyAmount * rate;          // 1005 * 0.10 = 100.50000000000001
+    return Math.round(vat);                    // banker's-rounding NOT HALF_UP — drifts on .5
+}
+
+// VIOLATION (2): inline double literal inside BigDecimal materializes float noise.
+public BigDecimal vat(BigDecimal supply) {
+    return supply.multiply(new BigDecimal(0.10d));   // rate becomes 0.1000000000000000055511...
+}
+```
+
+**Correct — BigDecimal("0.10") string constructor; HALF_UP rounding to scale 0; cross-linked to long minor-units transport:**
+
+```java
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+public final class KoreanVat {
+
+    // Statutory rate per 위키백과 부가가치세 + PwC Tax Summaries (Korea).
+    // String constructor is mandatory: new BigDecimal(0.10d) materializes IEEE 754 noise.
+    private static final BigDecimal RATE = new BigDecimal("0.10");
+
+    private KoreanVat() {}
+
+    /**
+     * Compute the VAT amount (in 원, integer scale 0) for a supply amount.
+     * HALF_UP matches the Korean tax-invoice rounding convention.
+     */
+    public static long computeVatAmount(long supplyAmount) {
+        // supply * 0.10, rounded HALF_UP to the nearest 원.
+        return BigDecimal.valueOf(supplyAmount)
+                .multiply(RATE)
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
+    }
+}
+```
+
+The three boundary cases anchored by review:
+
+| `supplyAmount` (원) | `RATE` | unrounded product | `HALF_UP` (scale 0) | result |
+|---|---|---|---|---|
+| `1000`  | `BigDecimal("0.10")` | `100.00`     | `100`           | `100`  |
+| `1001`  | `BigDecimal("0.10")` | `100.10`     | `100`           | `100`  |
+| `1005`  | `BigDecimal("0.10")` | `100.50`     | `101` (HALF_UP) | `101`  |
+
+These three cases pin the rule unambiguously: the exact-zero-cents case (`1000 → 100`), the round-down case (`1001 → 100`), and the half-boundary case (`1005 → 101`) where HALF_UP differs from HALF_EVEN (banker's rounding) — `HALF_EVEN` would round `1005 → 100`, and the silent drift across invoice volume is what the rule prevents.
+
+### Cross-links
+
+- Transport storage: `currency-amount-precision-explicit.md` — supply / VAT amounts are stored and wired as long integer minor units (원). The BigDecimal path exists only inside the VAT computation method.
+- Money type rule: `lang-bigdecimal-for-money.md` — float / double prohibited for all monetary fields. The VAT rate constant is the only decimal value in the chain.
+- Statutory rate: 위키백과 부가가치세 establishes the 10% rate and the 1977-07-01 enactment; PwC Tax Summaries cross-anchors in English; NTS 부가가치세 기장의무 provides the surrounding bookkeeping context.
+
+### Why HALF_UP and not HALF_EVEN
+
+Korean tax-invoice convention rounds the 0.5 boundary **up**, not to the nearest even integer (banker's rounding). `setScale(0, RoundingMode.HALF_UP)` matches `세금계산서` rounding; `RoundingMode.HALF_EVEN` (Java's default for `BigDecimal.divide` without a mode argument) does not. The rule is enforced by explicit `HALF_UP` at every VAT site — never by reliance on the BigDecimal default.
+
+Reference: https://ko.wikipedia.org/wiki/부가가치세
+
+Reference: https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2272&cntntsId=7669
+
+Reference: https://taxsummaries.pwc.com/republic-of-korea/corporate/other-taxes
 
 
 <!-- @source rules/lang-bigdecimal-for-money.md -->

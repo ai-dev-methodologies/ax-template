@@ -1,0 +1,7 @@
+# Fixture: PASS — recipe-prefixed IDs against audit-log spec; non-colliding by construction.
+schema_version: 1
+pattern: alpha
+business_invariants:
+  - id: ALPHA-INV-001
+    statement: "alpha-recipe scoped invariant"
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-001"
