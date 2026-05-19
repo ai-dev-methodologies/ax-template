@@ -1,0 +1,70 @@
+version: "1.0.0"
+scope: "multi-tenant isolation policy values (Spring Boot + JPA)"
+binds_spec: "specs/multi-tenant-l0.yaml"
+introduced_at: "R17 — closes P2 R16 critique that specs/multi-tenant-l0.yaml's 6 policy_ref entries pointed to this file but it did not exist (Spec Trio self-violation). R17 ships the blueprint AND the spec_policy_ref_guard.sh that mechanically detects this kind of dangling reference."
+
+# Multi-tenant policy anchors. Each spec item in specs/multi-tenant-l0.yaml
+# declares a policy_ref of the form `blueprints/multi-tenant-manifest.yaml#<anchor>`.
+# The anchors below are the canonical recipient definitions.
+
+tenant-model-declaration:
+  description: "RECIPE.md frontmatter MUST declare `tenant_model: single` OR `tenant_model: multi`. Single is the default when absent."
+  enforcement_point: "recipe_governance_guard.sh extension OR static review (R17 ships static review; mechanical guard deferred R18+)"
+  default: "single"
+  rationale: "Closes P2 R15 critique that backend/src/main/java single-tenant assumption was implicit. Fork-receiver MUST see explicit declaration."
+
+row-level-strategy:
+  description: "Row-level isolation via tenant_id column + Hibernate @FilterDef('tenantFilter')."
+  hibernate_filter_name: "tenantFilter"
+  tenant_id_column: "tenant_id"
+  http_error_on_violation: 404   # NOT 403 — 404 prevents existence-leakage
+  test_pattern: "RestAssured: tenant A creates → tenant B accesses same URL → assert 404"
+  cost_estimate_eng_days: 7
+
+schema-per-tenant-strategy:
+  description: "Schema-per-tenant via Hibernate MultiTenantConnectionProvider + CurrentTenantIdentifierResolver."
+  shared_schema_purpose: "tenant catalog + shared reference data only"
+  cost_estimate_eng_days: 12
+  trade_off: "stricter isolation; higher operational cost (per-tenant migration, schema sprawl, connection pool sizing)"
+
+aop-guard:
+  description: "Service-boundary AOP via @AuthorizedTenant + AuthorizedTenantInterceptor."
+  exception_thrown: "TenantBoundaryViolationException"
+  http_mapping: 404   # RFC 7807 problem detail; never 403 (existence-leakage)
+  defense_in_depth: "use alongside row-level-strategy OR schema-per-tenant-strategy"
+  cost_estimate_eng_days: 3
+
+context-resolution:
+  description: "TenantContext resolved from authenticated principal at controller entry."
+  allowed_sources:
+    - "JWT claim (sub or custom tenant_id claim)"
+    - "session attribute (server-side, not client-readable)"
+    - "subdomain (e.g., tenant1.example.com)"
+  forbidden_sources:
+    - "URL path parameter (forgeable)"
+    - "request body (forgeable)"
+    - "query string (forgeable)"
+  storage: "request-scoped ThreadLocal in TenantContext class"
+  cleanup_point: "response sent (Filter or Interceptor postHandle)"
+
+async-propagation:
+  description: "Async boundary (CompletableFuture, @Async, message listeners) MUST explicitly propagate TenantContext."
+  mechanisms:
+    - "TaskDecorator implementation for @Async ThreadPoolTaskExecutor"
+    - "Message header for AMQP / Kafka listeners"
+  failure_mode: "TenantContextMissing exception (NOT silent default-tenant fallback)"
+  rationale: "TenantContext is request-scoped (ThreadLocal); async runs on different thread; no propagation = empty context = either crash (preferred) or silent leak (forbidden)"
+  cost_estimate_eng_days: 2
+
+# Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
+# row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2) = ~13 eng-days.
+# Schema-per-tenant alternative: 12 + 3 + 1 + 2 = ~18 eng-days.
+# These match the R16 b2b-admin frontmatter "~10-15 eng-days" estimate (with row-level strategy chosen).
+
+evidence:
+  - source_type: external
+    citation: "Hibernate User Guide — Multi-tenancy. Documents @FilterDef + MultiTenantConnectionProvider patterns."
+    url: "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#multitenacy"
+    quoted_at: "2026-05-20"
+
+decided_at: "2026-05-20"

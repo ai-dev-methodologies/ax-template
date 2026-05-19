@@ -112,4 +112,4 @@ items:
       Call without JWT → 401.
       Implementation: @PreAuthorize("hasAuthority('ROLE_ADMIN')") on controller methods.
       SecurityConfig maps /api/admin/** to authenticated() + admin role check.
-    policy_ref: "blueprints/email-outbox-manifest.yaml#admin"
+    policy_ref: "blueprints/email-outbox-manifest.yaml#authz"
