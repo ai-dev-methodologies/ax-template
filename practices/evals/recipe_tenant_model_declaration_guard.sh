@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-# practices/evals/recipe_tenant_model_declaration_guard.sh — iter-3 hard gate.
+# practices/evals/recipe_tenant_model_declaration_guard.sh — iter-3/4 hard gate.
 #
-# Mechanical regression prevention: every recipes/*/RECIPE.md MUST declare
-# a `tenant_model:` frontmatter key with value `single` OR `multi`. Closes
-# P2 Round 3 NC6 — the iter-2 fix of 10 missing declarations needs a
-# regression lock so the next recipe author cannot silently re-introduce
-# the violation. Spec anchor:
-# specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001.
+# Two-MUST enforcement of specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001
+# and the related "Multi-tenant recipes MUST adopt one of the 3 isolation
+# strategies" clause:
+#
+#   MUST #1 (iter-3, NC6) — every recipes/*/RECIPE.md declares a
+#   `tenant_model:` frontmatter key with value `single` OR `multi`.
+#
+#   MUST #2 (iter-4, NC7) — every recipe that declares `tenant_model: multi`
+#   ALSO cites at least one of `MULTI-TENANT-ISOLATION-00{1,2,3}` or
+#   `MULTI-TENANT-PROPAGATION-00{1,2}` somewhere in the RECIPE.md body
+#   (typically the business_invariants table). Spec lines 22-23 require
+#   multi-tenant recipes to adopt an isolation strategy + propagation.
+#   A `multi` declaration without any anchor cite is a documented
+#   adoption claim with zero anchored basis — Spec Trio self-violation.
 #
 # Usage:
 #   bash practices/evals/recipe_tenant_model_declaration_guard.sh
@@ -43,6 +51,17 @@ for recipe_md in "$RECIPES_DIR"/*/RECIPE.md; do
         violations=$((violations + 1))
         continue
     fi
+
+    # MUST #2 (iter-4, NC7) — multi declarations must cite at least one
+    # ISOLATION-001/002/003 or PROPAGATION-001/002 anchor.
+    if echo "$line" | grep -qE '^tenant_model:[[:space:]]*multi'; then
+        if ! grep -qE 'MULTI-TENANT-(ISOLATION-00[123]|PROPAGATION-00[12])' "$recipe_md"; then
+            echo "VIOLATION [$name]: tenant_model: multi declared but RECIPE.md does not cite any MULTI-TENANT-ISOLATION-00{1,2,3} or MULTI-TENANT-PROPAGATION-00{1,2} anchor (specs/multi-tenant-l0.yaml lines 22-23 require multi-tenant recipes to adopt an isolation strategy + propagation)" >&2
+            violations=$((violations + 1))
+            continue
+        fi
+    fi
+
     pass=$((pass + 1))
 done
 
