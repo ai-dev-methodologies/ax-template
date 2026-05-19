@@ -39,7 +39,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-12 L4 domains + 11 active recipes · 86 Java rules · 86 React rules · 7 ESLint rules · 26 hard guards · AGENTS.md sentinel
+12 L4 domains + 11 active recipes · 86 Java rules · 86 React rules · 7 ESLint rules · 27 hard guards · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -76,6 +76,8 @@ loop.
 
 ### 30-minute quickstart (fork-receiver path)
 
+> **Step 0 — Read [`docs/IMPLEMENTATION-STATUS.md`](./docs/IMPLEMENTATION-STATUS.md) first.** It documents which of the 12 L4 domains have backend Java reference workloads ready (4: `auth` / `crud` / `payment` / `practices`) vs spec-only (6: `audit-log` / `billing` / `feature-flags` / `file-storage` / `notification` / `search`) vs skeleton (2: `scheduled-task` / `webhook`). Sealed verdict PASS validates **catalog self-discoverability by AI agents**, NOT that all backend code is production-ready. Skipping this step is the #1 cause of fork-receiver scope misjudgment.
+
 The fastest way to evaluate: pick **one of 11 active recipes** that matches your scenario, then compose. Each recipe is a documented composition of L4 domains (auth, crud, payment, audit-log, etc.) with sealed-verdict self-discoverability.
 
 ```bash
@@ -95,15 +97,13 @@ cat recipes/_MANIFEST.yaml | head -40
 cat recipes/saas-subscription/RECIPE.md     # example
 
 # 4. Run the full catalog verification (proves the bundle is intact)
-bash practices/evals/run-all-guards.sh       # 26 hard guards
+bash practices/evals/run-all-guards.sh       # 27 hard guards
 cd backend && ./gradlew test && cd ..        # full Java regression (testAsvs / testCrud / testPractices)
 cd frontend && npm install && npm run build && cd ..
 
 # 5. Optional: install pre-commit + pre-push hooks (opt-in)
 bash practices/scripts/install-hooks.sh
 ```
-
-**Critical context for fork-receivers:** Read [`docs/IMPLEMENTATION-STATUS.md`](./docs/IMPLEMENTATION-STATUS.md) **first**. It documents which of the 12 L4 domains have backend Java reference workloads ready (4: `auth`/`crud`/`payment`/`practices`) vs spec-only (6: `audit-log`/`billing`/`feature-flags`/`file-storage`/`notification`/`search`) vs skeleton (2: `scheduled-task`/`webhook`). Sealed verdict PASS validates **catalog self-discoverability by AI agents**, NOT that all backend code is production-ready.
 
 ### Bundle for external delivery (`/ax-fork-receiver` skill)
 
