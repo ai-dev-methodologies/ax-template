@@ -26,6 +26,13 @@ pci_dss:
 # both additions without breaking changes (L4 AI2-3 paper exercise).
 provider:
   type: mock
+  # PAYMENT-PROVIDER-ENUM-001 (iter-10): enumerated allow-list for provider.type.
+  # Any value outside this list is rejected by
+  # practices/evals/payment_provider_type_enum_guard.sh before Spring boot.
+  # Iteration A (current): mock only. Iteration B adds `stripe`.
+  # Iteration C adds `toss_v2`. Identifier rule: ^[a-z][a-z0-9_]*$ (snake_case ASCII).
+  type_allowed:
+    - mock
   timeout_ms: 5000
   # PAYMENT-PROVIDER-007: any provider call whose wall-clock latency exceeds this
   # threshold triggers a WARN log + payment_provider_slow_total counter increment.

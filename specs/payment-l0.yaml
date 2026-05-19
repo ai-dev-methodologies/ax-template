@@ -466,6 +466,30 @@ items:
       Step 7 redirect-style branch).
     policy_ref: "blueprints/payment-manifest.yaml#callback"
 
+  - id: "PAYMENT-PROVIDER-ENUM-001"
+    chapter: "PROVIDER"
+    requirement: "The blueprints/payment-manifest.yaml#provider.type scalar MUST be a member of an explicitly enumerated allow-list declared at blueprints/payment-manifest.yaml#provider.type_allowed. A type value outside the allow-list (typo, casing variant, unregistered adapter slug) MUST be rejected by a hard guard before Spring boot. Closes the silent-acceptance gap whereby PaymentProvider SPI selection was unbounded free-string equality and a typo such as `kgInicis` vs `kg_inicis` vs `KG_INICIS` would either route to the wrong adapter or fall through to mock in production fork-receivers."
+    test_method: "Static analysis"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: practices/evals/payment_provider_type_enum_guard.sh parses
+      blueprints/payment-manifest.yaml, reads the scalar at provider.type and
+      the list at provider.type_allowed, and exits 1 if any of:
+        (a) manifest file missing,
+        (b) provider.type_allowed missing or empty,
+        (c) provider.type missing,
+        (d) provider.type not in provider.type_allowed (strict string equality;
+            no case-folding, no whitespace leniency),
+        (e) any allow-list member violates ^[a-z][a-z0-9_]*$ (snake_case ASCII).
+      Acceptable members for iteration A: [mock]. Iteration B (Stripe) extends
+      to [mock, stripe]. Iteration C (Toss V2) extends to [mock, stripe,
+      toss_v2]. The guard registers in practices/evals/run-all-guards.sh as
+      the 29th hard guard. It is independent of any Java-side SPI dispatch;
+      the spec MUST enforces manifest-side enumeration regardless of how
+      PaymentProviderFactory evolves.
+    policy_ref: "blueprints/payment-manifest.yaml#provider.type_allowed"
+
   - id: "PAYMENT-CALLBACK-002"
     chapter: "CALLBACK"
     requirement: "Callback handling MUST be idempotent on the PG-issued TID. A duplicate callback for an already-CAPTURED payment MUST NOT emit a second CAPTURED ledger event; it MUST return the existing Payment state with HTTP 200. Idempotency key source is the (provider, TID) composite."

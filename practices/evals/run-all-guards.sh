@@ -251,6 +251,17 @@ echo "[12] spec_policy_ref_guard.sh (live repo)"
 run_guard "spec_policy_ref/live" 0 \
     bash "$SCRIPT_DIR/spec_policy_ref_guard.sh"
 
+# ── 13. payment_provider_type_enum_guard (iter-10 — NEW-NC6 closure) ─────────
+echo "[13] payment_provider_type_enum_guard.sh (live repo)"
+# 29th hard guard. Enforces spec MUST
+# specs/payment-l0.yaml#PAYMENT-PROVIDER-ENUM-001:
+# blueprints/payment-manifest.yaml#provider.type MUST be a member of
+# #provider.type_allowed (strict string equality, snake_case ASCII).
+# Closes P2 Round 10 NEW-NC6 — silent-acceptance of free-string typos
+# in the PaymentProvider SPI selection key.
+run_guard "payment_provider_type_enum/live" 0 \
+    bash "$SCRIPT_DIR/payment_provider_type_enum_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

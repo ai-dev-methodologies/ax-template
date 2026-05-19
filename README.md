@@ -39,7 +39,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-12 L4 domains + 11 active recipes · 86 Java rules · 86 React rules · 7 ESLint rules · 27 hard guards · AGENTS.md sentinel
+12 L4 domains + 11 active recipes · 86 Java rules · 86 React rules · 7 ESLint rules · 29 hard guards · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -97,7 +97,7 @@ cat recipes/_MANIFEST.yaml | head -40
 cat recipes/saas-subscription/RECIPE.md     # example
 
 # 4. Run the full catalog verification (proves the bundle is intact)
-bash practices/evals/run-all-guards.sh       # 27 hard guards
+bash practices/evals/run-all-guards.sh       # 29 hard guards
 cd backend && ./gradlew test && cd ..        # full Java regression (testAsvs / testCrud / testPractices)
 cd frontend && npm install && npm run build && cd ..
 
