@@ -1,6 +1,7 @@
 ---
 pattern: saas-subscription
 display_name: "Multi-tenant SaaS Subscription"
+tenant_model: single  # iter-2: SaaS subscription patterns ARE COMMONLY multi-tenant in production B2B SaaS. Declared as `single` here because backend/src/main/java reference impl is single-tenant. Fork-receivers building a real subscription product MUST stop and decide: `single` (B2C-style per-user subscription) OR `multi` (B2B per-tenant subscription billing with cross-tenant isolation per ISOLATION-001/002/003 + PROPAGATION-001/002). Choice is non-trivial and affects billing schema, RBAC, and tenant context propagation across async billing events.
 schema_version: 1
 compatible_with_catalog_version: "v1.2.0-p1-absorbed"
 last_verified_at: "2026-05-18"

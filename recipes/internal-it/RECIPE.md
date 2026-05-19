@@ -1,6 +1,7 @@
 ---
 pattern: internal-it
 display_name: "Internal-IT (Ticketing + SLA + Audit + ITSM Webhook Relay)"
+tenant_model: single  # iter-2: explicit declaration per specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001. Recipe ships single-tenant; fork-receivers adopting multi-tenant MUST switch to `tenant_model: multi` AND adopt ISOLATION-001/002/003 + PROPAGATION-001/002.
 schema_version: 1
 compatible_with_catalog_version: "v1.7.0-webhook-internal-it"
 last_verified_at: "2026-05-22"
