@@ -128,6 +128,33 @@ See [`METHODOLOGY.md`](./METHODOLOGY.md). Short version:
 
 Currently: **12 L4 domains** (auth, crud, payment, audit-log, billing, feature-flags, file-storage, notification, practices, scheduled-task, search, webhook) and **11 active recipes** — all 12 L4 documented with Spec Trio; 4 have backend Java reference workload. See `docs/IMPLEMENTATION-STATUS.md` for the full status taxonomy.
 
+### Korean PG callback wiring (redirect-style branch)
+
+Korean PGs (KG이니시스 / NICE페이먼츠 / KCP / Toss V1) use a redirect-style flow:
+the PG POSTs `{authToken, TID, signature, ...}` back to a server-side callback URL
+after the user completes card entry on the PG's hosted page. The catalog covers
+this branch in three places — start here when forking for a Korean PG PoC:
+
+1. **Spec** — [`specs/payment-l0.yaml`](./specs/payment-l0.yaml) items
+   `PAYMENT-CALLBACK-001` (signature verification fail-closed → 401),
+   `PAYMENT-CALLBACK-002` (idempotent replay on PG-issued TID), and
+   `PAYMENT-CALLBACK-003` (allowed-state transitions: only
+   `{AUTHORIZED, UNKNOWN}` → `{CAPTURED, FAILED}`).
+2. **Policy** — [`blueprints/payment-manifest.yaml`](./blueprints/payment-manifest.yaml)
+   `callback:` block pins the SPI name (`PaymentCallbackVerifier`),
+   idempotency key source (`(provider, TID)` composite), and the audit-row
+   contract (every callback — success or signature-fail — MUST emit a row).
+3. **Fork guide** — [`templates/L4/payment/README.md`](./templates/L4/payment/README.md)
+   "How to fork" Step 7 redirect-style branch walks through the full
+   browser → PG popup → callback → ledger sequence with KG / NICE / KCP
+   specifics.
+
+Tokenization-style PGs (Stripe / Toss V2) do NOT enter the callback code path —
+they use the existing `PaymentProvider.charge()` server-side call. The backend
+reference workload ships `mock` provider only; the redirect-style hook
+(`markCapturedFromCallback`) is deferred to R18+ per the
+`PaymentProvider` interface extension PRD.
+
 ## Rules currently enforced
 
 ### Spring/Java (testPractices — 86 rules / 22 categories)
