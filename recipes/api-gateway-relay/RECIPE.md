@@ -54,6 +54,23 @@ override_allowed:
   #   citation: "<internal ticket / PR url>"
 ---
 
+## Backend Implementation Status
+
+> See [`docs/IMPLEMENTATION-STATUS.md`](../../docs/IMPLEMENTATION-STATUS.md) for the full 12-L4 status taxonomy and fork-receiver expectation alignment (R15+ mandatory section).
+
+| L4 domain | Status | Effort if not impl |
+|---|---|---|
+| `audit-log` | **spec-only** 📋 | ~5-10 eng-days (implement backend) |
+| `auth` | **impl** ✅ | — (ready) |
+| `crud` | **impl** ✅ | — (ready) |
+| `scheduled-task` | **skeleton** ⚠️ | ~3-7 eng-days (flesh out .skeleton) |
+| `webhook` | **skeleton** ⚠️ | ~3-7 eng-days (flesh out .skeleton) |
+
+**Summary**: 2 impl ready · 1 spec-only (implement) · 2 skeleton (flesh out) · est. ~15-22 engineering days for the gap.
+
+**Reading guide**: `impl` = backend Java reference workload ready in `backend/src/main/java/com/ax/template/authblueprint/<domain>/`. `spec-only` = Spec Trio + Next.js stub only; backend NOT included. `skeleton` = `.skeleton` file present; flesh out controller/service yourself. Sealed verdict PASS validates catalog self-discoverability, NOT runnable backend code.
+
+
 # Recipe: api-gateway-relay
 
 > **Disambiguation preamble (per PRD M3 + Codex M3 — must appear verbatim in this RECIPE.md so the context-0 sealed sub-agent reads it as the gateway-vs-primitive anchor):**

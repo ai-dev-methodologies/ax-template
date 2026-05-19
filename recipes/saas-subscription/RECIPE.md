@@ -39,6 +39,23 @@ override_allowed:
   #   citation: "<internal ticket / PR url>"
 ---
 
+## Backend Implementation Status
+
+> See [`docs/IMPLEMENTATION-STATUS.md`](../../docs/IMPLEMENTATION-STATUS.md) for the full 12-L4 status taxonomy and fork-receiver expectation alignment (R15+ mandatory section).
+
+| L4 domain | Status | Effort if not impl |
+|---|---|---|
+| `billing` | **spec-only** 📋 | ~5-10 eng-days (implement backend) |
+| `auth` | **impl** ✅ | — (ready) |
+| `feature-flags` | **spec-only** 📋 | ~5-10 eng-days (implement backend) |
+| `notification` | **spec-only** 📋 | ~5-10 eng-days (implement backend) |
+| `audit-log` | **spec-only** 📋 | ~5-10 eng-days (implement backend) |
+
+**Summary**: 1 impl ready · 4 spec-only (implement) · 0 skeleton (flesh out) · est. ~26-33 engineering days for the gap.
+
+**Reading guide**: `impl` = backend Java reference workload ready in `backend/src/main/java/com/ax/template/authblueprint/<domain>/`. `spec-only` = Spec Trio + Next.js stub only; backend NOT included. `skeleton` = `.skeleton` file present; flesh out controller/service yourself. Sealed verdict PASS validates catalog self-discoverability, NOT runnable backend code.
+
+
 # Recipe: saas-subscription
 
 **Business context:** Multi-tenant B2B SaaS with plan tiers, usage metering, recurring invoicing.
