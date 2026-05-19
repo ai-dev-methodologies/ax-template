@@ -219,12 +219,24 @@ run_guard "agents_md_toc_disk_truth/live" 0 \
 # ── 11.5. recipe_tenant_model_declaration_guard (iter-3 — NC6 closure) ──────
 echo "[11.5] recipe_tenant_model_declaration_guard.sh (live repo)"
 # Mechanical regression prevention for spec MUST
-# specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001
+# specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001 clause (a)
 # ("RECIPE.md frontmatter MUST declare tenant_model: single | multi").
 # iter-2 closed the 10-recipe coverage gap; this guard locks the
 # regression so the next recipe author cannot silently omit declaration.
 run_guard "recipe_tenant_model_declaration/live" 0 \
     bash "$SCRIPT_DIR/recipe_tenant_model_declaration_guard.sh"
+
+# ── 11.6. l4_readme_tenant_model_declaration_guard (iter-8 — NC11 symmetry) ─
+echo "[11.6] l4_readme_tenant_model_declaration_guard.sh (live repo)"
+# Mechanical regression prevention for spec MUST
+# specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001 clause (b)
+# ("every templates/L4/<domain>/README.md MUST declare its tenant model
+# via a `**Tenant model**:` line that cites this spec anchor"). iter-7
+# extended the spec MUST to cover both entry surfaces and added the
+# declaration line to all 12 L4 READMEs; this guard locks the L4 side
+# symmetrically (the RECIPE.md side is already locked above).
+run_guard "l4_readme_tenant_model_declaration/live" 0 \
+    bash "$SCRIPT_DIR/l4_readme_tenant_model_declaration_guard.sh"
 
 # ── 12. spec_policy_ref_guard (R17 — TD-2026-05-20-035) ──────────────────────
 echo "[12] spec_policy_ref_guard.sh (live repo)"
