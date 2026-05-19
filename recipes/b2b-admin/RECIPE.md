@@ -39,6 +39,7 @@ override_allowed:
   #   skip: ["search"]
   #   rationale: "Single-tenant deployment; no cross-tenant search needed."
   #   citation: "<internal ticket / PR url>"
+tenant_model: multi   # R16: explicit declaration per MULTI-TENANT-ISOLATION-DEFAULT-001. Fork-receiver MUST adopt ISOLATION-001 (row-level) OR ISOLATION-002 (schema-per-tenant) + ISOLATION-003 (AOP guard) + PROPAGATION-001/002 before production use. backend/src/main/java currently single-tenant — multi-tenant infra is fork-receiver responsibility (~10-15 eng-days).
 ---
 
 ## Backend Implementation Status
@@ -80,7 +81,7 @@ feature-flag administration.
 |---|---|---|
 | B2BADMIN-INV-001 | Impersonation events always emit audit-log row with `impersonator_id`, `impersonated_id`, `started_at`, `ended_at` | `spec_ref: specs/audit-log-l0.yaml#AUDIT-RECORD-001` + `spec_ref: specs/audit-log-l0.yaml#AUDIT-RECORD-002` |
 | B2BADMIN-INV-002 | Tenant-scoped feature-flag changes are immutable history (no destructive delete) | `spec_ref: specs/feature-flags-l0.yaml#FF-CRUD-003` + `spec_ref: specs/audit-log-l0.yaml#AUDIT-RETENTION-001` |
-| B2BADMIN-INV-003 | KPI aggregation respects tenant boundary (no cross-tenant leakage) | `spec_ref: specs/auth-asvs-l1.yaml#ASVS-V4.2.1` + `spec_ref: specs/auth-asvs-l1.yaml#ASVS-V4.2.2` |
+| B2BADMIN-INV-003 | KPI aggregation respects tenant boundary (no cross-tenant leakage) | `spec_ref: specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-001` + `spec_ref: specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-003` + `spec_ref: specs/multi-tenant-l0.yaml#MULTI-TENANT-PROPAGATION-001` (R16 re-anchored — see disambiguation below) |
 
 ## Business Observability (advisory — no emitter test enforced this cycle)
 

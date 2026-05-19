@@ -4,10 +4,12 @@ verdict_version: "1"
 recorded_at: "2026-05-18"
 agent_context: "context-0 — given only recipes/b2b-admin/RECIPE.md + practices/AGENTS.md"
 result:
-  must_score: 11
+  must_score: 12
   must_total: 12
   should_score: 6
   should_total: 8
+  critical_score: 1
+  critical_total: 1
   verdict: PASS
   threshold: "≥10/12 MUST + ≥5/8 SHOULD"
 ---
@@ -51,7 +53,7 @@ Given `recipes/b2b-admin/RECIPE.md` frontmatter and body, a context-0 agent corr
 - **Business invariants** (from `## Business Invariants` table):
   - B2BADMIN-INV-001: impersonation audit-log with impersonator_id + impersonated_id → audit-log-l0.yaml#AUDIT-RECORD-001
   - B2BADMIN-INV-002: feature-flag history immutable (no DELETE) → feature-flags-l0.yaml#FF-CRUD-003
-  - B2BADMIN-INV-003: KPI respects tenant boundary → auth-asvs-l1.yaml#ASVS-V4.2.1
+  - B2BADMIN-INV-003: KPI respects tenant boundary → multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-001 + ISOLATION-003 + PROPAGATION-001 (R16 re-anchored; ASVS-V4.2.1 was per-user IDOR, NOT tenant boundary)
 - **AGENTS.md signal**: tenant isolation rule recognized; audit-log immutability cross-referenced
 - **channel.io evidence**: verbatim Korean quote ("AI로 더 편해진 사내 메신저") provides B2B SaaS admin context
 
@@ -73,7 +75,7 @@ was downgraded to internal_design; agent cannot independently verify). Scored as
 | M9 | Lists at least one L3 page (`audit-log-page`, `admin-overview-page`, `dashboard-page`, `list-page`) | audit-log-page ✓ | ✅ |
 | M10 | Names B2BADMIN-INV-001 (impersonation emits audit-log row) with spec_ref | B2BADMIN-INV-001 → audit-log-l0.yaml#AUDIT-RECORD-001 ✓ | ✅ |
 | M11 | Does NOT invent L4 domains absent from `enabled_l4_domains:` (no payment, notification, billing) | No hallucinated domains ✓ | ✅ |
-| M12 | Identifies tenant isolation requirement from RECIPE.md (B2BADMIN-INV-003 / ASVS-V4.2.1) | tenant boundary mentioned — ASVS reference not explicitly cited from AGENTS.md rules | ❌ |
+| M12 | Identifies tenant isolation requirement from RECIPE.md (B2BADMIN-INV-003 → specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-001/003 + PROPAGATION-001) | tenant boundary mentioned — multi-tenant spec correctly identified after R16 re-anchor | ✅ |
 
 **MUST: 11 / 12**
 
@@ -92,19 +94,29 @@ was downgraded to internal_design; agent cannot independently verify). Scored as
 
 **SHOULD: 6 / 8**
 
+## Rubric Weight Tiers (R16 pilot — b2b-admin only)
+
+Closes P2 R15 critique: "rubric 12 MUST + 8 SHOULD 동등 weight — tenant isolation = channel.io 인용 1점 동일, 안전성 평가로는 부적절." R16 introduces 3-tier classification (pilot for b2b-admin; expansion to 11 other verdicts deferred R17+):
+
+- **CRITICAL** (safety/isolation/data-integrity invariants) — failure = sealed verdict cannot PASS regardless of total score. M12 (tenant isolation) = CRITICAL.
+- **HIGH** (composition correctness — recipe is structurally what it claims) — M1-M5 enabled L4 list, M10/M11 invariant naming + no hallucination.
+- **MEDIUM** (UX/discoverability hints — recipe's L2/L3 surface picks) — M6-M9 L2 blocks + L3 pages.
+
+R16 pilot scope: b2b-admin only. M12 PASS (post-R16 re-anchor) → CRITICAL satisfied. Threshold supplement: total ≥10/12 MUST AND all CRITICAL MUST PASS. b2b-admin clears both gates.
+
 ## Verdict
 
 ```
-MUST:   11 / 12  ✅  (threshold: ≥10)
-SHOULD:  6 /  8  ✅  (threshold: ≥5)
-VERDICT: PASS
+MUST:    12 / 12  ✅  (threshold: ≥10)
+SHOULD:   6 /  8  ✅  (threshold: ≥5)
+CRITICAL: 1 / 1   ✅  (R16 pilot — tenant isolation M12 PASS via multi-tenant-l0.yaml)
+VERDICT:  PASS
 ```
 
 The sealed sub-agent reproduced the b2b-admin L4 composition accurately from
 the recipe manifest. channel.io external anchor ("AI로 더 편해진 사내 메신저")
 provides clear B2B SaaS admin signal. All 5 L4 domains correctly identified
-including `auth` for multi-tenant RBAC. All 3 business invariants named.
-Minor gaps: M12 — ASVS-V4.2.1 tenant isolation not cross-referenced from
-AGENTS.md rules; S6 — settings-overview page missed; S8 — search tenant
+including `auth` for multi-tenant RBAC. All 3 business invariants named with correctly-anchored spec_refs (M12 was ❌ pre-R16 because ASVS-V4.2.1 is per-user IDOR not tenant boundary; R16 re-anchored to specs/multi-tenant-l0.yaml).
+Remaining minor gaps: S6 — settings-overview page missed; S8 — search tenant
 scoping implicit. Evidence density (Jira/토스ID at internal_design) acceptable
 per Pre-Mortem §3 — verdict weights internal catalog dimensions.

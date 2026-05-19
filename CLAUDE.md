@@ -55,7 +55,7 @@ catalog 시스템.**
 ### 이 skill이 제공하는 것
 
 1. **Spec Trio** — `specs/` + `contracts/` + `blueprints/`. AI가 코드보다 spec을 먼저 읽도록 강제하는 contract-first 구조. AI 환각 차단의 1차 방어선.
-2. **practices/ catalog** — Java/Spring best-practices 64룰. evidence-anchored (외부 URL/quote 필수)라 AI가 임의로 룰을 발명하지 못함.
+2. **practices/ catalog** — Java/Spring best-practices 86룰 + practices-react 86룰 + ESLint 7룰. evidence-anchored (외부 URL/quote 필수)라 AI가 임의로 룰을 발명하지 못함.
 3. **Verification feedback loop** — `./gradlew test{Domain}` 단일 명령으로 binary pass/fail. AI가 자기 결과를 self-verify 가능.
 4. **AGENTS.md sentinel** — AI agent가 진입 시 즉시 컨텍스트 받음. sha256 anchoring으로 catalog와 동기화 보장.
 5. **4 hard gates** — spec_ref / substance / time_decay / evidence. AI 결과물이 외부 사실에 anchor 안 되면 통과 불가.
@@ -146,7 +146,7 @@ cd backend && ./gradlew build         # 빌드
 cd backend && ./gradlew test          # 전체 테스트
 cd backend && ./gradlew testAsvs      # auth ASVS 검증
 cd backend && ./gradlew testCrud      # CRUD spec 검증
-cd backend && ./gradlew testPractices # practices/ 64룰 검증
+cd backend && ./gradlew testPractices # practices/ 86룰 검증
 cd backend && ./gradlew testPortability  # advisory: 외부 fixture에 룰 적용
 
 # Frontend
@@ -175,7 +175,7 @@ ax-template/
 ├── blueprints/                # 정책 매니페스트 (핵심)
 │   └── auth-manifest.yaml
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
-│   ├── rules/                 # 64룰, 21 categories
+│   ├── rules/                 # 86룰, 22 categories
 │   ├── upstream/              # 외부 사실 snapshot
 │   ├── evals/                 # 4 hard gates + advisory probes
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
