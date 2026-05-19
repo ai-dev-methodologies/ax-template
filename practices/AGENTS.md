@@ -10,6 +10,9 @@ sentinel:
 This file is auto-generated from `practices/rules/*.md` in lexical order.
 Do not edit by hand — re-run `practices/generate_agents.sh` after rule changes.
 
+Sentinel sha covers rule concat ONLY (TD-024 sha-input clause).
+TOC section below is observability outside the fingerprint (TD-033 R13).
+
 <!-- @source rules/actuator-build-info.md -->
 
 ---
@@ -6369,4 +6372,53 @@ Reference: [OWASP ASVS V13.2.6 — Webhook payload verification](https://owasp.o
 
 Reference: [RFC 2104 — HMAC: Keyed-Hashing for Message Authentication](https://www.rfc-editor.org/rfc/rfc2104)
 
+
+---
+
+# Catalog TOC (observability — not part of sentinel sha)
+
+## L4 domains
+
+- **audit-log** — applied by: api-gateway-relay, b2b-admin, booking, cms, community, crm, e-commerce, internal-it, lms, marketplace, saas-subscription
+- **auth** — applied by: api-gateway-relay, b2b-admin, cms, community, internal-it, lms, saas-subscription
+- **billing** — applied by: (none)
+- **crud** — applied by: api-gateway-relay, b2b-admin, booking, cms, community, crm, e-commerce, internal-it, lms, marketplace
+- **feature-flags** — applied by: api-gateway-relay, b2b-admin, booking, lms, marketplace, saas-subscription
+- **file-storage** — applied by: (none)
+- **notification** — applied by: api-gateway-relay, booking, cms, community, crm, e-commerce, internal-it, lms, marketplace, saas-subscription
+- **payment** — applied by: booking, e-commerce, marketplace
+- **practices** — applied by: (none)
+- **scheduled-task** — applied by: api-gateway-relay, cms, internal-it, lms
+- **search** — applied by: b2b-admin, cms, community, crm, e-commerce, marketplace
+- **webhook** — applied by: api-gateway-relay, internal-it
+
+## Active recipes
+
+- **api-gateway-relay** — enabled L4: audit-log, auth, crud, scheduled-task, webhook
+- **b2b-admin** — enabled L4: audit-log, auth, crud, feature-flags, search
+- **booking** — enabled L4: audit-log, crud, feature-flags, notification, payment
+- **cms** — enabled L4: audit-log, crud, notification, scheduled-task
+- **community** — enabled L4: audit-log, auth, crud, notification, search
+- **crm** — enabled L4: crud, audit-log, notification, search
+- **e-commerce** — enabled L4: crud, payment, notification, audit-log, search
+- **internal-it** — enabled L4: audit-log, auth, crud, notification, scheduled-task, webhook
+- **lms** — enabled L4: audit-log, auth, crud, notification, scheduled-task
+- **marketplace** — enabled L4: audit-log, crud, notification, payment, search
+- **saas-subscription** — enabled L4: billing, auth, feature-flags, notification, audit-log
+
+## Sealed verdicts
+
+- api-gateway-relay-verdict
+- b2b-admin-verdict
+- booking-verdict
+- cms-verdict
+- community-verdict
+- crm-verdict
+- e-commerce-verdict
+- internal-it-verdict
+- lms-verdict
+- marketplace-verdict
+- saas-subscription-verdict
+- scheduler-l4-verdict
+- webhook-l4-verdict
 
