@@ -1,0 +1,8 @@
+# Fixture: PASS — recipe-prefixed IDs against same audit-log spec; no collision because
+# (audit-log, ALPHA-INV-001) and (audit-log, BETA-INV-001) are distinct keys.
+schema_version: 1
+pattern: beta
+business_invariants:
+  - id: BETA-INV-001
+    statement: "beta-recipe scoped invariant"
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-002"

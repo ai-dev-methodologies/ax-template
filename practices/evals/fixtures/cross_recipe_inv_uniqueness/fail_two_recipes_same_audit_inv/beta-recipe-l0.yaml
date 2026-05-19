@@ -1,0 +1,7 @@
+# Fixture: FAIL — beta also declares AUDIT-INV-001 against audit-log → collision.
+schema_version: 1
+pattern: beta
+business_invariants:
+  - id: AUDIT-INV-001
+    statement: "second recipe claiming the same (audit-log, AUDIT-INV-001) key"
+    spec_ref: "specs/audit-log-l0.yaml#AUDIT-RECORD-002"

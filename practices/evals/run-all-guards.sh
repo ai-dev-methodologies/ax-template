@@ -151,6 +151,18 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     echo "[7] recipe_governance_guard.sh (fixtures)"
     run_guard "recipe_governance/fixtures" 0 \
         bash "$SCRIPT_DIR/recipe_governance_guard.sh" --fixtures
+
+    # ── 9f. cross_recipe_inv_uniqueness_guard fixtures (R12 SP49) ────────────
+    echo ""
+    echo "[9f] cross_recipe_inv_uniqueness_guard.sh (fixtures)"
+    run_guard "cross_recipe_inv_uniqueness/fixtures" 0 \
+        bash "$SCRIPT_DIR/cross_recipe_inv_uniqueness_guard.sh" --fixtures
+
+    # ── 10f. applied_recipes_alphabetical_guard fixtures (R12 SP49) ──────────
+    echo ""
+    echo "[10f] applied_recipes_alphabetical_guard.sh (fixtures)"
+    run_guard "applied_recipes_alphabetical/fixtures" 0 \
+        bash "$SCRIPT_DIR/applied_recipes_alphabetical_guard.sh" --fixtures
 fi
 
 # ── 7. recipe_governance_guard (live repo) ───────────────────────────────────
@@ -167,6 +179,22 @@ echo "[8] recipe_spec_referential_integrity_guard.sh (live repo)"
 # Enforces the recipe-invariants-must-resolve rule (SP37).
 run_guard "recipe_spec_referential_integrity/live" 0 \
     bash "$SCRIPT_DIR/recipe_spec_referential_integrity_guard.sh"
+
+# ── 9. cross_recipe_inv_uniqueness_guard (R12 SP49 — TD-2026-05-24-030) ──────
+echo "[9] cross_recipe_inv_uniqueness_guard.sh (live repo)"
+# Protective guard: blocks future cycles from declaring the same
+# (L4_domain_prefix, business_invariants[].id) pair across ≥2 recipes.
+# Disk census at R12 PRD signature: zero current collisions.
+run_guard "cross_recipe_inv_uniqueness/live" 0 \
+    bash "$SCRIPT_DIR/cross_recipe_inv_uniqueness_guard.sh"
+
+# ── 10. applied_recipes_alphabetical_guard (R12 SP49 — TD-2026-05-24-031) ────
+echo "[10] applied_recipes_alphabetical_guard.sh (live repo)"
+# Mechanizes R6-R10 manual alphabetical-insert discipline for the
+# applied_recipes: plural list in templates/L4/*/README.md. Skips R5 legacy
+# singular form and keyless L4 READMEs.
+run_guard "applied_recipes_alphabetical/live" 0 \
+    bash "$SCRIPT_DIR/applied_recipes_alphabetical_guard.sh"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
