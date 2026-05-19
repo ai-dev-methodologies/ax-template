@@ -1,15 +1,15 @@
 # ax-template
 
-> **Full-stack React 19 / Next.js 16 + Spring Boot 3 fork-base template that mechanically enforces development rules so AI agents can't drift off the rails.**
+> **Full-stack React 19 / Next.js 15 + Spring Boot 3 fork-base template that mechanically enforces development rules so AI agents can't drift off the rails.**
 
 ax = **AI transformation**. This repo is the source of the Claude Code skill
-**`/ax-transform`** and a composition kit you fork (or `npx`) to start a new
+**`/ax-transform`** and a composition kit you fork to start a new
 project. Every layer of the stack ships with rule-enforcement wired in:
 
-- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint + 68-rule
+- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (7 ESLint rules) + 86-rule
   evidence-anchored catalog (`practices-react/rules/`).
 - **Spring Boot side** — `@Tag`-based JUnit + RestAssured tests
-  (`./gradlew test{Domain}`) + 64-rule Java/Spring catalog
+  (`./gradlew test{Domain}`) + 86-rule Java/Spring catalog
   (`practices/rules/`).
 - **Spec-first contract** — every domain has a Spec Trio
   (`specs/X.yaml` + `contracts/X-openapi.yaml` + `blueprints/X-manifest.yaml`).
@@ -39,7 +39,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-auth + CRUD + rate-limit blueprints ready · 64 Java rules · 68 React rules · 7 ESLint rules · AGENTS.md sentinel
+12 L4 domains + 11 active recipes · 86 Java rules · 86 React rules · 7 ESLint rules · 25 hard guards · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -63,9 +63,9 @@ loop.
 | Layer | Asset | Mechanism |
 |-------|-------|-----------|
 | Backend reference workload | `backend/` — Spring Boot 3 + Java 21, 14 auth endpoints (signup/login/OAuth Google·Naver·Kakao/password reset/RBAC ADMIN·MANAGER·MEMBER), 5 CRUD endpoints, 1 rate-limit endpoint | TDD-built; `./gradlew test{Domain}` is binary pass/fail |
-| Frontend reference workload | `frontend/` — React 19 + Next.js 16, OAuth UI, login pages, e2e Playwright tests | self-tests the ESLint plugin |
-| Java/Spring rule catalog | `practices/` — 64 rules / 22 categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
-| React/Next.js rule catalog | `practices-react/` — 68 rules / 8 families, all citing canonical React 19 / Next.js 16 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
+| Frontend reference workload | `frontend/` — React 19 + Next.js 15, OAuth UI, login pages, e2e Playwright tests | self-tests the ESLint plugin |
+| Java/Spring rule catalog | `practices/` — 86 rules / 22 categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
+| React/Next.js rule catalog | `practices-react/` — 86 rules / 8 families, all citing canonical React 19 / Next.js 15 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
 | ESLint plugin (React enforcement) | `practices-react/eslint-plugin-ax/` — 7 custom rules; `react-async-parallel` + `prefer-functional-setstate` recommended; 5 others opt-in | RuleTester suites; install in any downstream project |
 | Spec Trio (per domain) | `specs/<domain>.yaml` + `contracts/<domain>-openapi.yaml` + `blueprints/<domain>-manifest.yaml` | enforced by `spec_ref_guard.sh` — every rule must point to a spec item |
 | 4 hard gates | `practices/evals/{spec_ref,substance,time_decay,evidence}_guard.sh` (Java) + `practices-react/evals/run.sh` (React) | block commits / pushes via `.githooks/{pre-commit,pre-push}` when catalog quality degrades |
@@ -74,28 +74,47 @@ loop.
 
 ## Use as a project starter
 
+### 30-minute quickstart (fork-receiver path)
+
+The fastest way to evaluate: pick **one of 11 active recipes** that matches your scenario, then compose. Each recipe is a documented composition of L4 domains (auth, crud, payment, audit-log, etc.) with sealed-verdict self-discoverability.
+
 ```bash
+# 1. Fork + bundle (first 5 minutes)
 git clone https://github.com/ai-dev-methodologies/ax-template my-project
 cd my-project
-git submodule update --init   # fetches portability fixtures (petclinic / realworld / modulith)
+git submodule update --init   # fixtures: petclinic / realworld / modulith
 
-# Backend
-cd backend && ./gradlew test          # full regression — testAsvs + testCrud + testPractices
-cd ..
+# 2. Pick a recipe (open recipes/_MANIFEST.yaml or recipes/README.md)
+#    11 active recipes: saas-subscription · e-commerce · crm · booking · marketplace
+#                     · b2b-admin · community · lms · cms · internal-it · api-gateway-relay
+cat recipes/_MANIFEST.yaml | head -40
 
-# Frontend
-cd frontend && npm install && npm run build
+# 3. Read your chosen recipe's RECIPE.md — every recipe has a
+#    "Backend Implementation Status" table showing which L4 are
+#    ready-to-run (impl) vs require fork-receiver implementation (spec-only)
+cat recipes/saas-subscription/RECIPE.md     # example
 
-# Catalog hard gates (both stacks)
-bash practices/evals/spec_ref_guard.sh
-bash practices/evals/substance_guard.sh
-bash practices/evals/time_decay_guard.sh
-bash practices/evals/evidence_guard.sh
-bash practices-react/evals/run.sh
+# 4. Run the full catalog verification (proves the bundle is intact)
+bash practices/evals/run-all-guards.sh       # 25 hard guards
+cd backend && ./gradlew test && cd ..        # full Java regression (testAsvs / testCrud / testPractices)
+cd frontend && npm install && npm run build && cd ..
 
-# Install local pre-commit / pre-push hooks (opt-in, enforces catalog quality on every commit)
+# 5. Optional: install pre-commit + pre-push hooks (opt-in)
 bash practices/scripts/install-hooks.sh
 ```
+
+**Critical context for fork-receivers:** Read [`docs/IMPLEMENTATION-STATUS.md`](./docs/IMPLEMENTATION-STATUS.md) **first**. It documents which of the 12 L4 domains have backend Java reference workloads ready (4: `auth`/`crud`/`payment`/`practices`) vs spec-only (6: `audit-log`/`billing`/`feature-flags`/`file-storage`/`notification`/`search`) vs skeleton (2: `scheduled-task`/`webhook`). Sealed verdict PASS validates **catalog self-discoverability by AI agents**, NOT that all backend code is production-ready.
+
+### Bundle for external delivery (`/ax-fork-receiver` skill)
+
+To ship the catalog as a tarball (e.g., for downstream teams, vendor delivery, or air-gapped onboarding):
+
+```bash
+bash skills/ax-fork-receiver/scripts/bundle.sh    # produces dist/ax-template-catalog-<sha>.tar.gz
+bash skills/ax-fork-receiver/scripts/smoke.sh     # validates the tarball is self-contained
+```
+
+The `/ax-fork-receiver` skill (`skills/ax-fork-receiver/SKILL.md`) wraps these in a Claude Code workflow.
 
 ## Adding a new domain (the 5-step playbook)
 
@@ -107,11 +126,11 @@ See [`METHODOLOGY.md`](./METHODOLOGY.md). Short version:
 4. **Portable Tests** — `@Tag("<DOMAIN>")` JUnit + RestAssured tests
 5. **Build Verification** — register `./gradlew test<Domain>` task
 
-Auth, CRUD, and rate-limit are three worked examples of this playbook.
+Currently: **12 L4 domains** (auth, crud, payment, audit-log, billing, feature-flags, file-storage, notification, practices, scheduled-task, search, webhook) and **11 active recipes** — all 12 L4 documented with Spec Trio; 4 have backend Java reference workload. See `docs/IMPLEMENTATION-STATUS.md` for the full status taxonomy.
 
 ## Rules currently enforced
 
-### Spring/Java (testPractices — 64 rules / 22 categories)
+### Spring/Java (testPractices — 86 rules / 22 categories)
 
 `lang-`, `core-`, `config-`, `web-`, `http-`, `persistence-`, `transaction-`,
 `migration-`, `security-`, `validation-`, `error-`, `api-`, `async-`,
@@ -120,7 +139,7 @@ Auth, CRUD, and rate-limit are three worked examples of this playbook.
 source (Spring Docs, OWASP ASVS, RFC, JEP). Full catalog:
 [`practices/AGENTS.md`](./practices/AGENTS.md).
 
-### React/Next.js (`@ax/eslint-plugin-ax` + 68-rule catalog)
+### React/Next.js (`@ax/eslint-plugin-ax` + 86-rule catalog)
 
 | Rule | Default | Catches |
 |------|---------|---------|

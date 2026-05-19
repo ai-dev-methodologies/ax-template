@@ -10,7 +10,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (auth + CRUD + rate-limit blueprint ready, 64 Java rules, 68 React rules, 7 ESLint rules, AGENTS.md sentinel)
+    ↓ (12 L4 domains + 11 active recipes + 86 Java rules + 86 React rules + 7 ESLint rules + 25 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -66,7 +66,7 @@ catalog 시스템.**
 - **Deployment / release** — 어떻게 배포하든 catalog 품질과 무관
 - **Code review** — 1인 maintainer, 팀 review, AI review 어떤 방식이든 OK
 - **CI 정책** — sentinel CI는 catalog quality probe로만 제공. merge gate 여부는 fork받는 팀이 결정
-- **언어/프레임워크 확장** — 현재 Java/Spring catalog만. 다른 stack 추가는 동일 패턴 (spec → rule → evidence → test) 따라 확장
+- **언어/프레임워크 확장** — Java/Spring 카탈로그(86 rules) + React/Next.js 카탈로그(86 rules + 7 ESLint rules) 둘 다 active. 다른 stack(Kotlin/Go/Python 등) 추가는 동일 패턴 (spec → rule → evidence → test) 따라 확장.
 
 → 한 줄: **catalog 품질**은 skill이 보장, **인간 협업 정책**은 fork받은 팀 자율.
 
@@ -194,7 +194,7 @@ ax-template/
 |---|---|---|---|
 | Auth | `specs/auth-asvs-l1.yaml` | 14 (signup, login, OAuth Google/Naver/Kakao 등) | 26 ASVS items |
 | CRUD | `specs/crud-l0.yaml` | 5 (CRUD-001~005) | 7 security tests |
-| Practices | `specs/spring-practices-l0.yaml` | — | 64 rules / 21 categories |
+| Practices | `specs/spring-practices-l0.yaml` | — | 86 rules / 22 categories |
 
 각 도메인은 동일한 패턴: spec YAML → `@Tag` test → `./gradlew test{Domain}` binary verification.
 
