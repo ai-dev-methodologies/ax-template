@@ -163,6 +163,16 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     echo "[10f] applied_recipes_alphabetical_guard.sh (fixtures)"
     run_guard "applied_recipes_alphabetical/fixtures" 0 \
         bash "$SCRIPT_DIR/applied_recipes_alphabetical_guard.sh" --fixtures
+
+    # ── 11f. agents_md_toc_disk_truth_guard fixtures (R13 SP51 — TD-2026-05-25-033)
+    echo ""
+    echo "[11f] agents_md_toc_disk_truth_guard.sh (fixtures)"
+    run_guard "agents_md_toc_disk_truth/pass_unmodified_toc" 0 \
+        bash "$SCRIPT_DIR/agents_md_toc_disk_truth_guard.sh" \
+            --root "$SCRIPT_DIR/fixtures/agents_md_toc_disk_truth/pass_unmodified_toc"
+    run_guard "agents_md_toc_disk_truth/fail_manual_toc_edit" 1 \
+        bash "$SCRIPT_DIR/agents_md_toc_disk_truth_guard.sh" \
+            --root "$SCRIPT_DIR/fixtures/agents_md_toc_disk_truth/fail_manual_toc_edit"
 fi
 
 # ── 7. recipe_governance_guard (live repo) ───────────────────────────────────
@@ -195,6 +205,16 @@ echo "[10] applied_recipes_alphabetical_guard.sh (live repo)"
 # singular form and keyless L4 READMEs.
 run_guard "applied_recipes_alphabetical/live" 0 \
     bash "$SCRIPT_DIR/applied_recipes_alphabetical_guard.sh"
+
+# ── 11. agents_md_toc_disk_truth_guard (R13 SP51 — TD-2026-05-25-033) ────────
+echo "[11] agents_md_toc_disk_truth_guard.sh (live repo)"
+# 25th hard guard. Re-runs practices/generate_agents.sh and diffs against
+# the committed practices/AGENTS.md (whole file + defensive TOC slice).
+# Surfaces sha-asymmetry: rule edits trigger sentinel sha refresh, but
+# L4/recipe/verdict adds or hand-edited TOC bodies leave the sentinel intact
+# while drifting the TOC — caught here.
+run_guard "agents_md_toc_disk_truth/live" 0 \
+    bash "$SCRIPT_DIR/agents_md_toc_disk_truth_guard.sh"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""

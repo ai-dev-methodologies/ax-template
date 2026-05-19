@@ -176,6 +176,53 @@ the trigger event, do not relitigate.
 - Alternatives considered: ACCEPT broad suffix set (rejected — false-positive risk on generic naming); annotation-based detection like `@RecordDto` (rejected — fixture authors won't opt in, so still vacuous); leave at `*Request` / `*Response` (chosen — honest scope, documented limitation).
 - Re-evaluation trigger: a Spring-blessed style guide that endorses a specific DTO naming convention beyond `*Request` / `*Response`, OR portability measurement on a third fixture that demonstrates the rule failing to catch a real anti-pattern that the wider suffix set would have caught.
 
+---
+
+# Technical-debt entries
+
+> Cycle-level architectural decisions and follow-ups. Rule provenance lives above; this
+> section records changes to generators, guards, evidence policy, and the catalog's I/O
+> surface — anything that affects how the catalog is built, verified, or interpreted.
+
+## TD-2026-05-25-033 — AGENTS.md TOC + `generate_agents.sh` extension + 25th hard guard
+
+- Status: ACCEPT
+- Date: 2026-05-25 (R13 SP51)
+- Predecessors: TD-024 (sha-input clause, R7 TD-020 idempotency); TD-032 (R12 PRD deferred-to-R13 standalone ADR)
+- Owning PRD: `docs/superpowers/specs/2026-05-25-r13-toc-brn-checksum-prd.md`
+- Decision: Extend `practices/generate_agents.sh` (+50 LOC) to append a `# Catalog TOC` section AFTER the rule-concat body. Sub-sections: L4 domains (with `applied_recipes:` cross-link), active recipes (with `enabled_l4_domains:` cross-link), sealed verdicts. Single-pass `MANIFEST_ROWS` cache parses `recipes/_MANIFEST.yaml` once. Cross-link rows comma-space join via awk helper `join_cs()` — NOT `paste -sd ', '` (cycles delimiter chars, producing malformed tokens `a,b c,d`). New 25th hard guard `practices/evals/agents_md_toc_disk_truth_guard.sh` (≤50 LOC) binary-verifies sha-asymmetry by re-running the generator and diffing the committed AGENTS.md (whole file + defensive TOC slice). Pass + fail fixtures under `practices/evals/fixtures/agents_md_toc_disk_truth/` prove the guard detects hand-edited TOC bodies.
+- TD-024 amendment (Architect M1 / Codex hard #4 wording precision):
+  - **sha-input clause UNCHANGED.** The sentinel `source_concat_sha256:` still covers `practices/rules/*.md` concatenation ONLY. Rule add/remove/modify triggers a genuine sha refresh; TOC-only mutations (L4/recipe/verdict adds) do NOT.
+  - **I/O surface clause AMENDED.** `generate_agents.sh` now reads 3 additional disk surfaces — `templates/L4/*/README.md` (`applied_recipes:` block), `recipes/_MANIFEST.yaml` (`recipes:` / `- pattern:` / `enabled_l4_domains:`), `skills/_tests/sealed-verdict/*.md` listing — to emit observability TOC outside the fingerprint. Explicit documented expansion, not a side effect.
+- Drivers: (i) R12 §8 mandate to specify whether the sentinel sha covers rule-concat only or full AGENTS.md content, and provide post-extension script shape before merging the cycle; (ii) Architect H2 / Codex hard #2 — sha-asymmetry deserves a binary guard, not documented-only handling (fork-receiver seeing sentinel unchanged might assume whole-file consistency).
+- Alternatives considered:
+  - Option (b) full-AGENTS.md sha — REJECTED. Amends TD-024 sha-input clause; rule-only edits would now ALSO refresh on cosmetic TOC changes, conflating two failure surfaces.
+  - Defer R13 — REJECTED. R12 TD-032 stale debt; observability gap persists across cycles.
+  - Bundle Axis B (BRN checksum) — REJECTED. R13 evidence-floor gate UNMET on 2026-05-25 (0 verbatim Korean authoritative primary + 0 international; 9 downgrades; 2 OSS-comment below R8-R10 rigor floor). Shipping low-rigor Axis B re-opens R12 Architect H1 BLOCKING.
+  - Documented-only sha-asymmetry (iter 1 plan) — REJECTED iter 2. Fork-receiver semantic risk: prose alone does not surface drift on push.
+  - Hand-edited TOC — REJECTED. Round-trip violation; re-opens R12 Architect H2.
+  - `paste -sd ', '` join — REJECTED. Cycles delimiter chars across stdin lines; emits `a,b c,d` instead of `a, b, c, d` (Codex BLOCKING L).
+- Why chosen: sha-input clause preserved (TD-024 invariant intact); I/O expansion explicit and bounded to 3 disk surfaces; ≤50 LOC generator add + ≤50 LOC guard; sha-asymmetry binary-verified on every push.
+- Consequences:
+  - Rule add → sha refresh (R12 behaviour preserved).
+  - L4 / recipe / verdict add → TOC drift WITHOUT sha refresh, surfaced by 25th guard (NEW R13+).
+  - Hand-edited TOC → guard restores committed AGENTS.md and exits non-zero (NEW R13+).
+  - Schema drift in `_MANIFEST.yaml` (e.g. `- id:` instead of `- pattern:`) → inline `REC_COUNT == 11` assertion fails fast (NEW R13+).
+  - macOS bash 3.2 + Linux bash 5.x both PASS — `cross_host_policy:` dual-host gate; single-host acceptance NOT permitted (Architect M2).
+- Verification:
+  - `bash practices/generate_agents.sh && bash practices/generate_agents.sh && git diff --exit-code practices/AGENTS.md` — idempotent.
+  - `head -5 practices/AGENTS.md | grep source_concat_sha256:` → `d367ba2fdbee00f71c4ba0098c60e645192dd7076e3bff7c79b85ce4f7c102e4` (UNCHANGED from R12 baseline).
+  - `bash practices/evals/agents_md_toc_disk_truth_guard.sh` → exit 0.
+  - `bash practices/evals/run-all-guards.sh` → all guards PASS (24 → 25).
+  - `bash practices/evals/run-all-guards.sh --include-fixtures` → all guards PASS (pass-fixture exit 0; fail-fixture exit 1 as expected).
+- Re-evaluation trigger:
+  - Catalog grows past current 12 L4 / 11 active recipes / 13 sealed verdicts (inline 12/11/13 assertion intentionally fails — update assertion + regenerate AGENTS.md in the same atomic SP).
+  - AGENTS.md size exceeds ~10K lines (consider TD-034 split per R14+).
+  - `## Hard guards` TOC sub-section requested (deferred to R14 TD-034 per Architect M4 / Codex soft #3).
+- Follow-ups (deferred to R14+):
+  - TD-034 `korean-brn-checksum` rule (R14/R15 retry on a bounded 9-source list; R16 UNMET → escalate to Architect rigor-floor downgrade vote).
+  - TD-034 `## Hard guards` TOC sub-section.
+
 # Audit
 
 - Last reviewed: 2026-05-16
@@ -186,3 +233,4 @@ the trigger event, do not relitigate.
 - 2026-05-16 (afternoon) — N1 REVERSED: branch protection codification REMOVED. ax-template was scope-corrected to `/ax-transform` skill source — git workflow / branch protection / PR policy is fork-받은 팀의 영역, not the skill's. Files deleted: `.github/rulesets/main-protection.json`, `practices/scripts/setup-branch-protection.sh`. `.githooks/pre-push` Stage 0 (block direct push to main) removed. DECISIONS-P3.md §Activation reduced to catalog-quality-only. break-glass procedure + `practices/break-glass-log.md` deleted (procedure assumed PR-based workflow which the skill must not impose).
 - 2026-05-16 — N2 resolved: lang-records-for-dtos-widen DEFERRED. Rule's detection surface stays at `*Request` / `*Response`. Re-evaluation trigger: Spring-blessed style guide endorsement OR portability measurement on a 3rd fixture revealing a missed anti-pattern.
 - 2026-05-16 — N3 resolved: spring-modulith-example added as 3rd portability fixture (frademacher/spring-modulith-example, MIT-licensed, JDK 21, ~10s build). Result: all 5 rules PASS on modulith; the realworld cycle finding from the 1st run is now corroborated rather than tied — petclinic+modulith both cycle-free, realworld alone has the cycle. portability/run.sh auto-detects JDK 21 on macOS.
+- 2026-05-25 — TD-2026-05-25-033 (R13 SP51 atomic-4) ACCEPTED: AGENTS.md TOC + `generate_agents.sh` extension (42 → 92 LOC, +50) + 25th hard guard `practices/evals/agents_md_toc_disk_truth_guard.sh` (39 LOC) + pass/fail fixtures. TD-024 sha-input clause UNCHANGED; I/O surface clause AMENDED for observability TOC emission outside sha scope. Sentinel `d367ba2f...` UNCHANGED across R13 (proof of TD-024 sha-input honored). Hard guards 24 → 25. R12 TD-032 closed. Axis B (BRN checksum) deferred R14 per §10 bounded 9-source retry — evidence floor UNMET 2026-05-25 (0 verbatim primary; 9 downgrades; 2 OSS-comment below floor).
