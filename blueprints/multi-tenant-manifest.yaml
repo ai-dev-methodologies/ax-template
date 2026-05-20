@@ -280,6 +280,86 @@ context-resolution:
   storage: "request-scoped ThreadLocal in TenantContext class"
   cleanup_point: "response sent (Filter or Interceptor postHandle)"
 
+  # ── Closure for P2 Round 3 gap NEW-1 (TenantContext skeleton missing) ───────
+  # P2 dogfooding session 2026-05-20 (R3): TaskDecorator + AOP interceptor +
+  # ActivationFilter ALL depend on TenantContext.{current, set, clear}, but
+  # the manifest never specified the class itself — only its semantics.
+  # fork-receiver was forced to guess: ThreadLocal vs InheritableThreadLocal
+  # (InheritableThreadLocal silently propagates across @Async without
+  # TaskDecorator, defeating the failure_mode contract), getter return type
+  # (Optional<UUID> required for empty-context detection), and whether
+  # set() validates the UUID argument. Round 3 ships the canonical skeleton.
+
+  tenant_context_skeleton:
+    fqcn: "<cross_cutting_package>.TenantContext"
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      import java.util.Objects;
+      import java.util.Optional;
+      import java.util.UUID;
+
+      /**
+       * Request-scoped tenant identity holder.
+       *
+       * Storage choice (load-bearing): plain ThreadLocal — NOT
+       * InheritableThreadLocal. The latter silently propagates the
+       * value to child threads, defeating the explicit-propagation
+       * contract in #async-propagation. With plain ThreadLocal,
+       * crossing an @Async boundary without TenantContextAwareTaskDecorator
+       * surfaces a hard failure (empty Optional → exception), which
+       * is the only safe behaviour for tenant isolation.
+       *
+       * Lifecycle:
+       *   set()     — called by TenantFilterActivationFilter (or the
+       *               equivalent SecurityFilterChain extension) at
+       *               request entry, AFTER principal resolution.
+       *   current() — called by AOP interceptor, repository @Filter
+       *               parameter binding, and TaskDecorator capture.
+       *   clear()   — called in finally{} at request end AND by
+   *               TaskDecorator after the async task runs.
+       *
+       * The set/clear pair MUST be balanced; ThreadLocal leaks
+       * silently corrupt the next request scheduled on the same
+       * Tomcat / Undertow worker thread.
+       */
+      public final class TenantContext {
+
+          private static final ThreadLocal<UUID> CURRENT = new ThreadLocal<>();
+
+          private TenantContext() {
+              // utility class — no instances
+          }
+
+          public static Optional<UUID> current() {
+              return Optional.ofNullable(CURRENT.get());
+          }
+
+          public static void set(UUID tenantId) {
+              // Validate at boundary — never accept null silently. Empty
+              // context is a distinct state (Optional.empty()) and MUST
+              // be reached via clear(), not via set(null).
+              Objects.requireNonNull(tenantId, "tenantId");
+              CURRENT.set(tenantId);
+          }
+
+          public static void clear() {
+              CURRENT.remove();   // remove(), not set(null) — frees the slot
+          }
+      }
+    forbidden_alternatives:
+      - "InheritableThreadLocal   # silently propagates across @Async, defeats failure_mode contract"
+      - "ThreadLocal<String>      # loses UUID type discipline; allows '', 'null', 'undefined' values"
+      - "static volatile UUID     # not request-scoped — single global tenant"
+    enforcement_contract: >
+      The three skeletons (TaskDecorator, AOP interceptor,
+      ActivationFilter) call TenantContext.current() expecting
+      Optional<UUID>. Changing the return type to bare UUID (or
+      throwing on empty) breaks the empty-context detection path
+      and shifts the failure mode from #async-propagation contract
+      (loud exception with named type) to whatever the call site
+      does with NPE (typically: 500 with leaky stack trace).
+
 async-propagation:
   description: "Async boundary (CompletableFuture, @Async, message listeners) MUST explicitly propagate TenantContext."
   mechanisms:
