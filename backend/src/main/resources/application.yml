@@ -18,6 +18,14 @@ spring:
     show-sql: false
     open-in-view: false
 
+  # R16 file-storage — Spring multipart layer enforces upload size limit
+  # (FILE-UPLOAD-002). Service layer re-validates via FileStorageProperties.
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 100MB
+      max-request-size: 105MB
+
   security:
     oauth2:
       client:
