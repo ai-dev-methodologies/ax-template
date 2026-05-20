@@ -378,4 +378,51 @@ public class PaymentService {
      * was already processed.
      */
     public record CallbackOutcome(PaymentState state, boolean idempotentReplay) {}
+
+    /**
+     * Audit-only ledger append for a callback that failed signature verification.
+     * Called by {@code PaymentCallbackController} BEFORE returning HTTP 401, so
+     * the audit trail captures the attempt regardless of whether the inbound
+     * {@code orderId} maps to a real Payment.
+     *
+     * <p>Spec anchor: specs/payment-l0.yaml#PAYMENT-CALLBACK-001
+     * ("audit ledger row tagged source=callback, outcome=signature_fail").
+     *
+     * <p>Lookup by {@code inboundOrderId} is best-effort. When the lookup misses,
+     * the ledger row still appends with {@code paymentId=null} so forensic teams
+     * can correlate by {@code orderId} + {@code provider} alone.
+     *
+     * <p>Metrics: increments {@code payment_callback_signature_fail_total} with
+     * a {@code provider} tag.
+     *
+     * @param providerName    slug matching {@link PaymentCallbackVerifier#providerName()}
+     * @param failReason      short reason code (e.g. {@code SIGNATURE_MISMATCH},
+     *                        {@code MISSING_SIGNATURE}, {@code REPLAY_WINDOW})
+     * @param inboundOrderId  the {@code orderId} the callback payload claimed;
+     *                        nullable when the payload had no extractable order id
+     */
+    @Transactional
+    public void auditCallbackFailure(String providerName, String failReason, String inboundOrderId) {
+        UUID paymentId = null;
+        if (inboundOrderId != null && !inboundOrderId.isBlank()) {
+            paymentId = paymentRepository.findAll().stream()
+                .filter(p -> inboundOrderId.equals(p.getOrderId()))
+                .map(Payment::getId)
+                .findFirst()
+                .orElse(null);
+        }
+        ledger.append(paymentId, PaymentEventType.CALLBACK_SIGNATURE_FAIL, BigDecimal.ZERO,
+            Map.of(
+                "source", "callback",
+                "outcome", "signature_fail",
+                "provider", providerName == null ? "unknown" : providerName,
+                "failReason", failReason == null ? "UNSPECIFIED" : failReason,
+                "inboundOrderId", inboundOrderId == null ? "(none)" : inboundOrderId
+            ));
+        meterRegistry.counter("payment_callback_signature_fail_total",
+            "provider", providerName == null ? "unknown" : providerName)
+            .increment();
+        log.warn("payment callback signature fail provider={} reason={} orderId={}",
+            providerName, failReason, inboundOrderId);
+    }
 }
