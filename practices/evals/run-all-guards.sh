@@ -274,6 +274,17 @@ echo "[14] multi_tenant_aop_guard_skeleton_guard.sh (live repo + passing fixture
 run_guard "multi_tenant_aop_guard_skeleton/live" 0 \
     bash "$SCRIPT_DIR/multi_tenant_aop_guard_skeleton_guard.sh"
 
+# ── 15. recipe_sibling_sync_guard (dogfood-7 — gap 5 closure) ────────────────
+echo "[15] recipe_sibling_sync_guard.sh (live repo)"
+# 31st hard guard. Compares recipes/<pattern>/RECIPE.md frontmatter against
+# specs/recipes/<pattern>-recipe-l0.yaml across enabled_l4_domains,
+# l2_blocks_used, l3_pages_used. Discovered by P2 R7 dry-run: booking
+# RECIPE.md had three L1 primitives (calendar / date-range-picker /
+# relative-time) in l2_blocks_used that the spec yaml deliberately
+# excluded — cross_trio_guard never compared the two recipe siblings.
+run_guard "recipe_sibling_sync/live" 0 \
+    bash "$SCRIPT_DIR/recipe_sibling_sync_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

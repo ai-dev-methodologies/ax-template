@@ -12,18 +12,19 @@ enabled_l4_domains:
   - notification
   - payment
 l2_blocks_used:
-  - calendar
+  # L1 primitives (calendar, date-range-picker, relative-time) live at
+  # templates/L1/components/ — kept out of l2_blocks_used to keep this
+  # frontmatter in sync with specs/recipes/booking-recipe-l0.yaml.
+  # Detected by recipe_sibling_sync_guard.sh (dogfood-7 closure).
   - confirm-dialog
   - crud-create-form
   - crud-edit-form
   - crud-list-adapter
   - data-table
-  - date-range-picker
   - kpi-card
   - notification-list
   - payment-checkout-form
   - payment-method-picker
-  - relative-time
 l3_pages_used:
   - create-page
   - dashboard-page
