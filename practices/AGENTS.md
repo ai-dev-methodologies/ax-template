@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "73e8776af24d03698ee59666de667f526a9e0a0e512438c1f82d58aa01059d55"
+  source_concat_sha256: "ef8ad3eda5fbce6148411eefef0b028cf632565deda6335d6297219620cc5b7a"
   rule_count: 87
   generated_by: "practices/generate_agents.sh"
 ---
@@ -3269,7 +3269,7 @@ verification:
   failing_fixture: practices/evals/fixtures/multi-tenant-aop-guard-skeleton/failing/
   notes: |
     Mechanical guard (dogfood-5 — promoted from review). Walks every
-    `.../multitenancy/` subpackage and asserts the 14 canonical files exist:
+    `.../multitenancy/` subpackage and asserts the 15 canonical files exist:
       (1) TenantContext.java
       (2) TenantOwned.java
       (3) TenantBoundaryViolationException.java
@@ -3284,6 +3284,7 @@ verification:
       (12) AuditEvent.java                       ← added R4 (GAP-R3-3)
       (13) TenantIterationScheduler.java         ← added R6 (GAP-R3-5)
       (14) TenantAwareSseEmitterRegistry.java    ← added R7 (GAP-NEW-1)
+      (15) TenantAwareRedisPubSubBridge.java     ← added R8 (GAP-NEW-2)
     Failing-fixture sibling omits (11) — guard MUST trip with --fixtures.
     Body verification (@Around pointcut wiring, generic detail message,
     fail-fast on @TenantId misuse) anchored in manifest interceptor_skeleton.
@@ -3342,7 +3343,11 @@ com/<root>/multitenancy/
 ├── TenantAwareAsyncConfig.java                 # explicit ThreadPoolTaskExecutor
 ├── TenantContextAwareTaskDecorator.java        # captures + restores context across @Async
 ├── TenantFilterActivationFilter.java           # enables Hibernate @Filter per request
-└── AuthorizedTenantInterceptor.java            # service-boundary AOP guard
+├── AuthorizedTenantInterceptor.java            # service-boundary AOP guard
+├── AuditEvent.java                             # @TenantId-annotated audit row (R4)
+├── TenantIterationScheduler.java               # per-tenant @Scheduled iteration (R6)
+├── TenantAwareSseEmitterRegistry.java          # long-lived push connection registry (R7)
+└── TenantAwareRedisPubSubBridge.java           # cross-node broker fan-out bridge (R8, opt-in)
 ```
 
 Each file's body is shipped as `java_skeleton:` block in `blueprints/multi-tenant-manifest.yaml` — adoption is mechanical substitution of `<root>` and integration into existing config.

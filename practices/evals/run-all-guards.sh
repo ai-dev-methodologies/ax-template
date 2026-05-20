@@ -468,6 +468,44 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/realtime_connection_tenant_scope_guard.sh" --fixtures
 fi
 
+# ── 26. broker_fanout_tenant_scope_guard (R8 — P2 GAP-NEW-2 closure, 41st guard) ─
+echo ""
+echo "[26] broker_fanout_tenant_scope_guard.sh (live repo + passing fixture)"
+# 41st hard guard. Enforces blueprints/multi-tenant-manifest.yaml
+# #broker-fanout-tenant-scope: cross-node broker fan-out bridges
+# (Redis Pub/Sub, Kafka) used to scale SSE / WebSocket realtime push
+# horizontally beyond a single node MUST adopt the envelope-header +
+# per-message set/clear pattern with four load-bearing clauses —
+# publish-side wraps payload in TenantBrokerEnvelope (or Kafka
+# X-Tenant-Id header) before convertAndSend (not bare
+# convertAndSend(channel, payload)), subscribe-side listener body
+# reads tenantId from the envelope BEFORE TenantContext.current()
+# (broker thread has empty TenantContext by construction),
+# per-message TenantContext.set / TenantContext.clear wraps each
+# dispatch with count equality (mirrors the R7 40th clause-3
+# algorithm), and local sendToTenant dispatch passes
+# envelope.tenantId() EXPLICITLY (not TenantContext.current()).
+# Closes P2 dogfood R8 GAP-NEW-2: R7 closed single-node long-lived
+# connection scope but explicitly named broker fan-out as the
+# unresolved >1-node SSE deployment case. fork-receivers writing
+# a 2-node SSE deployment behind an LB would reach for either bare
+# redisTemplate.convertAndSend(channel, payload) (consumer-side
+# listener has no tenant signal — NPE / silent default-tenant
+# fallback / stale-tenantId-from-previous-message leak) or
+# consumer-side TenantContext.current() (returns Optional.empty on
+# broker thread). 41st guard mechanically blocks all four
+# anti-patterns. Single-node deployments live-repo SKIP — no
+# .../multitenancy/TenantAware*Bridge.java present.
+run_guard "broker_fanout_tenant_scope/live" 0 \
+    bash "$SCRIPT_DIR/broker_fanout_tenant_scope_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[26f] broker_fanout_tenant_scope_guard.sh --fixtures"
+    run_guard "broker_fanout_tenant_scope/fixtures" 0 \
+        bash "$SCRIPT_DIR/broker_fanout_tenant_scope_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

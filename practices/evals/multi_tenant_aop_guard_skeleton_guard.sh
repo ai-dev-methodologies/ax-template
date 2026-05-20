@@ -14,6 +14,7 @@
 #                the callback-tenant-resolution guard owns content verification)
 #   R6 closure : +TenantIterationScheduler.java           → 13 files (GAP-R3-5)
 #   R7 closure : +TenantAwareSseEmitterRegistry.java      → 14 files (GAP-NEW-1)
+#   R8 closure : +TenantAwareRedisPubSubBridge.java       → 15 files (GAP-NEW-2)
 #
 # Closes P2 Round 3 GAP-NEW-2 (manifest aop-guard named
 # AuthorizedTenantInterceptor + the @AuthorizedTenant/@TenantId annotation
@@ -32,7 +33,7 @@
 #   bash practices/evals/multi_tenant_aop_guard_skeleton_guard.sh --fixtures
 #
 # Exit codes:
-#   0 — every multitenancy/ package contains the 14 expected files
+#   0 — every multitenancy/ package contains the 15 expected files
 #   1 — at least one file missing OR failing/ fixture unexpectedly passes
 
 set -uo pipefail
@@ -69,6 +70,16 @@ REQUIRED_FILES=(
     # blueprints/multi-tenant-manifest.yaml#realtime-connection-tenant-scope
     # and is content-verified by realtime_connection_tenant_scope_guard.sh (40th).
     "TenantAwareSseEmitterRegistry.java"
+    # 15th file added R8 — closes GAP-NEW-2 (broker fan-out across
+    # multi-node SSE scale-out). Pairs with anchor
+    # blueprints/multi-tenant-manifest.yaml#broker-fanout-tenant-scope
+    # and is content-verified by broker_fanout_tenant_scope_guard.sh (41st).
+    # Single-node deployments SKIP via the 41st guard's live-repo SKIP
+    # branch — this file is OPT-IN for multi-node fan-out adoption.
+    # The Kafka variant TenantAwareKafkaFanoutBridge.java is recognized
+    # by the 41st guard but not listed here to keep one canonical file
+    # per surface (Redis is the documented default).
+    "TenantAwareRedisPubSubBridge.java"
 )
 
 verify_dir() {
@@ -109,7 +120,7 @@ if [ "$LIVE_FOUND" -eq 0 ]; then
     echo "multi_tenant_aop_guard_skeleton: live-repo SKIP — no .../multitenancy/ package (single-tenant default)"
 fi
 
-# Passing fixture: the canonical fork-receiver simulation MUST have all 11 files.
+# Passing fixture: the canonical fork-receiver simulation MUST have all 15 files.
 PASS_DIR="$SCRIPT_DIR/fixtures/multi-tenant-aop-guard-skeleton/passing/com/acme/multitenancy"
 PASS_OK=1
 verify_dir "passing-fixture" "$PASS_DIR" || PASS_OK=0
