@@ -506,6 +506,42 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/broker_fanout_tenant_scope_guard.sh" --fixtures
 fi
 
+# ── 27. kafka_consumer_tenant_scope_guard (R9 — kafka-consumer closure, 42nd guard) ─
+echo ""
+echo "[27] kafka_consumer_tenant_scope_guard.sh (live repo + passing fixture)"
+# 42nd hard guard. Enforces blueprints/multi-tenant-manifest.yaml
+# #kafka-consumer-tenant-scope: long-running Kafka business-event
+# consumers (distinct surface from #broker-fanout-tenant-scope which
+# covers fan-out-INTO-SSE bridges) MUST adopt the shared-topic +
+# X-Tenant-Id header + per-record set/clear pattern with five
+# load-bearing clauses — listener body reads the per-record
+# X-Tenant-Id header BEFORE any TenantContext.current() call
+# (consumer poll thread has empty TenantContext by construction);
+# batch listeners (List<ConsumerRecord> / ConsumerRecords
+# signature) MUST set TenantContext INSIDE the for-loop, not
+# once at method entry (batch_set_once is the most subtle
+# failure mode — passes single-tenant tests, leaks in
+# interleaved production batches); count(set) == count(clear)
+# in the listener body; ConsumerRebalanceListener callbacks
+# (onPartitionsAssigned / onPartitionsRevoked) MUST be tenant-
+# free (the poll thread between batches has no tenant signal);
+# manual Acknowledgment MUST NOT run inside the per-record
+# TenantContext span (canonical: batch ack after the for-loop).
+# Closes the kafka-consumer open question carried in R7
+# (#realtime-connection-tenant-scope.open_questions_remaining[2])
+# and re-affirmed in R8 (#broker-fanout-tenant-scope.open_questions_remaining[1]).
+# Kafka-free deployments live-repo SKIP — no
+# .../multitenancy/TenantAwareKafkaConsumer.java present.
+run_guard "kafka_consumer_tenant_scope/live" 0 \
+    bash "$SCRIPT_DIR/kafka_consumer_tenant_scope_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[27f] kafka_consumer_tenant_scope_guard.sh --fixtures"
+    run_guard "kafka_consumer_tenant_scope/fixtures" 0 \
+        bash "$SCRIPT_DIR/kafka_consumer_tenant_scope_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

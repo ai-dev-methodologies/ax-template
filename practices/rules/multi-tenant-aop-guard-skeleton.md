@@ -21,7 +21,7 @@ verification:
   failing_fixture: practices/evals/fixtures/multi-tenant-aop-guard-skeleton/failing/
   notes: |
     Mechanical guard (dogfood-5 — promoted from review). Walks every
-    `.../multitenancy/` subpackage and asserts the 15 canonical files exist:
+    `.../multitenancy/` subpackage and asserts the 16 canonical files exist:
       (1) TenantContext.java
       (2) TenantOwned.java
       (3) TenantBoundaryViolationException.java
@@ -37,6 +37,7 @@ verification:
       (13) TenantIterationScheduler.java         ← added R6 (GAP-R3-5)
       (14) TenantAwareSseEmitterRegistry.java    ← added R7 (GAP-NEW-1)
       (15) TenantAwareRedisPubSubBridge.java     ← added R8 (GAP-NEW-2)
+      (16) TenantAwareKafkaConsumer.java         ← added R9 (kafka-consumer)
     Failing-fixture sibling omits (11) — guard MUST trip with --fixtures.
     Body verification (@Around pointcut wiring, generic detail message,
     fail-fast on @TenantId misuse) anchored in manifest interceptor_skeleton.
@@ -99,7 +100,8 @@ com/<root>/multitenancy/
 ├── AuditEvent.java                             # @TenantId-annotated audit row (R4)
 ├── TenantIterationScheduler.java               # per-tenant @Scheduled iteration (R6)
 ├── TenantAwareSseEmitterRegistry.java          # long-lived push connection registry (R7)
-└── TenantAwareRedisPubSubBridge.java           # cross-node broker fan-out bridge (R8, opt-in)
+├── TenantAwareRedisPubSubBridge.java           # cross-node broker fan-out bridge (R8, opt-in)
+└── TenantAwareKafkaConsumer.java               # tenant-scoped Kafka business-event consumer (R9, opt-in)
 ```
 
 Each file's body is shipped as `java_skeleton:` block in `blueprints/multi-tenant-manifest.yaml` — adoption is mechanical substitution of `<root>` and integration into existing config.
