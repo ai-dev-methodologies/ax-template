@@ -15,21 +15,27 @@ protects_template_id: blueprints/multi-tenant-manifest.yaml
 failing_fixture_path: practices/evals/fixtures/multi-tenant-aop-guard-skeleton/
 spec_ref: "specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-003"
 verification:
-  type: review
+  type: fixture
+  guard_script: practices/evals/multi_tenant_aop_guard_skeleton_guard.sh
+  passing_fixture: practices/evals/fixtures/multi-tenant-aop-guard-skeleton/passing/
+  failing_fixture: practices/evals/fixtures/multi-tenant-aop-guard-skeleton/failing/
   notes: |
-    Static analysis (deferred to next round — mechanical guard not yet shipped):
-    For every recipe with `tenant_model: multi` in its RECIPE.md frontmatter,
-    assert the following exist in the fork-receiver's source tree:
-      (1) <root>.multitenancy package (NOT nested under a business-domain package),
-      (2) TenantOwned interface in that package with UUID getTenantId() signature,
-      (3) TenantBoundaryViolationException + TenantContextMissingException in same package,
-      (4) MultiTenantProblemDetailAdvice with @RestControllerAdvice (no basePackages)
-          AND @Order at HIGHEST_PRECEDENCE + 100,
-      (5) explicit ThreadPoolTaskExecutor bean (NOT default SimpleAsyncTaskExecutor)
-          with setTaskDecorator(new TenantContextAwareTaskDecorator()),
-      (6) every @Entity not in `non_tenant_scoped_entities:` allow-list implements TenantOwned.
-    Missing any of (1)–(6) = VIOLATION. ax-template ships the skeletons in
-    blueprints/multi-tenant-manifest.yaml; the rule enforces fork-receiver adoption.
+    Mechanical guard (dogfood-5 — promoted from review). Walks every
+    `.../multitenancy/` subpackage and asserts the 11 canonical files exist:
+      (1) TenantContext.java
+      (2) TenantOwned.java
+      (3) TenantBoundaryViolationException.java
+      (4) TenantContextMissingException.java
+      (5) MultiTenantProblemDetailAdvice.java
+      (6) TenantAwareAsyncConfig.java
+      (7) TenantContextAwareTaskDecorator.java
+      (8) TenantFilterActivationFilter.java
+      (9) AuthorizedTenant.java                 ← added dogfood-5
+      (10) TenantId.java                        ← added dogfood-5
+      (11) AuthorizedTenantInterceptor.java     ← added dogfood-5
+    Failing-fixture sibling omits (11) — guard MUST trip with --fixtures.
+    Body verification (@Around pointcut wiring, generic detail message,
+    fail-fast on @TenantId misuse) anchored in manifest interceptor_skeleton.
 evidence:
   - source_type: external
     citation: "Hibernate User Guide — Multi-tenancy: @FilterDef('tenantFilter') with row-level discriminator is the documented row-level isolation pattern; the guide is explicit that the filter must be enabled per Session and that 'forgetting to enable the filter is silent — queries simply return rows from all tenants'"
