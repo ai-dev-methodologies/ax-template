@@ -3,9 +3,16 @@
 #
 # Mechanically enforces practices/rules/multi-tenant-aop-guard-skeleton.md.
 # Every `.../multitenancy/` subpackage that ships a multi-tenant skeleton
-# MUST contain the 11 canonical files defined in
+# MUST contain the canonical files defined in
 # blueprints/multi-tenant-manifest.yaml. Fork-receiver adoption is
 # mechanical substitution of `<root>` — this guard verifies completeness.
+# File count has grown by closure round:
+#   R3 baseline: 11 files (#aop-guard + #async-propagation + #context-resolution)
+#   R4 closure : +AuditEvent.java                          → 12 files (GAP-R3-3)
+#   R5 closure : +TenantAwareCallbackVerifier.java + 2 exns → +callback skeleton
+#                (counted separately; not added to REQUIRED_FILES list since
+#                the callback-tenant-resolution guard owns content verification)
+#   R6 closure : +TenantIterationScheduler.java           → 13 files (GAP-R3-5)
 #
 # Closes P2 Round 3 GAP-NEW-2 (manifest aop-guard named
 # AuthorizedTenantInterceptor + the @AuthorizedTenant/@TenantId annotation
@@ -48,6 +55,14 @@ REQUIRED_FILES=(
     # blueprints/multi-tenant-manifest.yaml#ledger-audit-tenant-scope and
     # is content-verified by ledger_audit_tenant_nullable_guard.sh (37th).
     "AuditEvent.java"
+    # 13th file added R6 — closes GAP-R3-5 (scheduled-task tenant scope).
+    # Pairs with anchor
+    # blueprints/multi-tenant-manifest.yaml#scheduled-task-tenant-scope
+    # and is content-verified by scheduled_task_tenant_scope_guard.sh (39th).
+    # The sibling TenantCatalog.java interface is verified by the 39th
+    # guard's tenant_catalog_contract clause (not duplicated here to
+    # keep this list to one canonical file per surface).
+    "TenantIterationScheduler.java"
 )
 
 verify_dir() {
