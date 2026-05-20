@@ -793,15 +793,298 @@ ledger-audit-tenant-scope:
     - "PaymentEvent (ax-template reference workload) — currently has no tenant_id column. Single-tenant default; if a fork-receiver multi-tenant-izes payments, they add tenant_id with this policy."
     - "Any spec emitting `audit_required: true` (payment-manifest #callback.audit_required line 205) — the audit ledger row policy automatically pulls #ledger-audit-tenant-scope when the recipe is `tenant_model: multi`."
 
-# Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
-# row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2) = ~13 eng-days.
-# Schema-per-tenant alternative: 12 + 3 + 1 + 2 = ~18 eng-days.
-# These match the R16 b2b-admin frontmatter "~10-15 eng-days" estimate (with row-level strategy chosen).
+callback-tenant-resolution:
+  description: >
+    Tenant resolution policy for external PG callbacks (NICE / Toss / KakaoPay
+    webhooks) and other unauthenticated permitAll endpoints that nonetheless
+    write to tenant-scoped resources. #context-resolution above assumes an
+    authenticated principal at controller entry — but PG callbacks arrive
+    with NO principal (the PG signs the request, not a user). This is the
+    most security-critical gap: a wrong tenant resolution at this boundary
+    silently writes a Payment row under the WRONG tenant, leaking data
+    across organizations.
+  introduced_at: >
+    R5 — closes P2 R3 GAP-R3-4 surfaced during compact dogfood: external PG
+    callback controllers (PaymentCallbackController, IdentityVerificationCallbackController)
+    run at permitAll endpoints where TenantContext is empty. #context-resolution
+    forbids resolving tenant from request body / query / path (all forgeable),
+    but the manifest never specified what IS allowed for the callback case.
+    Without a canonical policy, fork-receivers reach for the easy
+    (orderId-prefix / path-segment) routes that are explicitly forbidden
+    elsewhere in the manifest — a Spec Trio self-violation by omission.
+
+  threat_model:
+    attacker: >
+      Tenant B user with legitimate PG account at the same provider.
+      Wants to write a Payment row under tenant A's namespace (e.g. to
+      inflate A's reported revenue, frame A for refund fraud, or trigger
+      A's downstream automation against B's order data).
+    attack_vectors_to_defeat:
+      - "orderId forgery: attacker crafts an orderId with tenant A's prefix and triggers a real PG charge"
+      - "path forgery: attacker discovers tenant-specific callback URL via DNS enum / log scraping"
+      - "header forgery: attacker adds X-Tenant-Id: <A> to a callback they originate via PG sandbox"
+      - "replay across tenants: attacker captures a real tenant A callback and resubmits with their PG credentials"
+    silent_failure_consequence: >
+      Wrong-tenant Payment row inserted (tenant_id = A but funds settled to
+      B's PG account). Downstream audit shows A received a payment that
+      A's ledger does not match. Reconciliation looks like a bug, not an
+      attack — detection latency typically days to weeks.
+
+  candidate_strategies:
+
+    candidate_a_subdomain:
+      shape: "Per-tenant callback subdomain (e.g. tenantA.callbacks.example.com vs tenantB.callbacks.example.com). Tenant resolved from Host header at the proxy / SecurityFilterChain layer."
+      strengths:
+        - "DNS-level isolation — wildcard cert + per-tenant nginx server_name route the callback to a tenant-scoped Spring profile / context"
+        - "Defense in depth: even if PG signing key leaks, the wrong-subdomain callback never reaches the wrong tenant's controller"
+        - "Auditable: subdomain visible in nginx access logs without parsing request body"
+      weaknesses:
+        - "Many Korean PGs (NICE, Toss V1) allow only ONE callback URL per merchant account — fork-receiver MUST run per-tenant merchant accounts (multiplies PG-side ops cost)"
+        - "Subdomain alone is NOT cryptographic — attacker who can DNS-spoof or compromise the proxy gets full bypass"
+        - "TLS SNI not required by all PG clients; some emit Host header without enforcing it server-side"
+      cost_estimate_eng_days: 4   # nginx per-tenant + DNS + cert management + per-tenant PG merchant onboarding flow
+      verdict: "SECONDARY — defense in depth only; never the primary signal"
+
+    candidate_b_orderid_prefix:
+      shape: "orderId carries tenant prefix (e.g. A-9f3e... / B-7c21...). Controller parses the prefix and resolves TenantContext from it."
+      strengths:
+        - "Zero PG-side configuration — works with single-merchant-account setups"
+        - "Cheap to implement (one regex)"
+      weaknesses:
+        - "orderId is CLIENT-SUPPLIED at PG checkout init — attacker creates an order with prefix 'A-' from tenant B's frontend and the PG dutifully echoes it back in the callback"
+        - "Forbidden in spirit by #context-resolution.forbidden_sources line 407-409 (URL/body/query — orderId arrives in body)"
+        - "No cryptographic binding between prefix and tenant — equivalent to trusting an HTTP header"
+      cost_estimate_eng_days: 0.5
+      verdict: "FORBIDDEN — strictly worse than #context-resolution.forbidden_sources because it adds the illusion of tenant scoping without any cryptographic backing. Recipes MUST NOT use this strategy."
+
+    candidate_c_per_tenant_secret:
+      shape: >
+        Each tenant onboards a distinct webhook signing secret with the PG
+        (NICE merchant key per tenant, Toss webhook secret per tenant, etc.).
+        Callback verifier walks the active per-tenant secrets and accepts
+        the request only when EXACTLY ONE secret produces a matching HMAC.
+        The matching secret's owning tenant becomes the resolved TenantContext.
+      strengths:
+        - "Cryptographic binding: attacker without tenant A's PG webhook secret cannot forge a callback that resolves to tenant A — regardless of orderId, path, subdomain, or header content"
+        - "Defeats all four attack_vectors_to_defeat above (orderId forgery, path forgery, header forgery, cross-tenant replay)"
+        - "Tenant resolution is a SIDE EFFECT of signature verification — fork-receivers cannot accidentally enable callbacks without resolving tenant (the two operations are the same function)"
+        - "Works with single-merchant-account setups (one PG, multiple webhook secrets per tenant)"
+      weaknesses:
+        - "PG MUST support per-tenant webhook secrets — verified supported by NICE (per merchant), Toss (per webhook endpoint), KakaoPay (per cid). Some smaller PGs only support one global secret per merchant — those PGs CANNOT be safely used for multi-tenant"
+        - "Secret-walk is O(n_active_tenants) per callback — at 1000+ tenants the verifier MUST short-circuit on a leading tenant hint (header / subdomain) to keep p99 latency bounded"
+        - "Constant-time comparison required to avoid timing oracle on which tenant matched (use MessageDigest.isEqual, never Arrays.equals)"
+      cost_estimate_eng_days: 1.5
+      verdict: "CANONICAL — defaults to this for any recipe with tenant_model: multi AND callback endpoints"
+
+  canonical_choice: "candidate_c_per_tenant_secret"
+  defense_in_depth_pairing: "candidate_a_subdomain (when PG supports multi-URL) — subdomain narrows the secret-walk and gives an audit signal, but never replaces the per-tenant secret verification"
+
+  verifier_contract:
+    fqcn: "<cross_cutting_package>.TenantAwareCallbackVerifier"
+    interface_shape: |
+      package com.<root>.multitenancy;
+
+      import java.util.UUID;
+
+      /**
+       * Verifies an external PG callback and resolves the originating
+       * tenant in a single operation. The two steps MUST NOT be split
+       * across separate calls — splitting allows a bug where callback
+       * verification passes against tenant A's secret but TenantContext
+       * is set from a different (forgeable) source.
+       *
+       * Returns the tenant_id whose secret produced the matching HMAC.
+       * Caller (the controller) MUST call TenantContext.set(result)
+       * BEFORE invoking any tenant-scoped service. The audit append
+       * path (see #ledger-audit-tenant-scope) runs BEFORE this
+       * resolution succeeds — signature_fail audit rows correctly
+       * carry tenant_id = null.
+       *
+       * Throws CallbackSignatureMismatchException when NO active
+       * tenant's secret produces a matching HMAC. Throws
+       * AmbiguousTenantResolutionException when MORE THAN ONE
+       * tenant's secret matches (collision = key reuse across
+       * tenants = operational error, never silently pick one).
+       */
+      public interface TenantAwareCallbackVerifier {
+          UUID verifyAndResolveTenant(
+              byte[] rawBody,
+              String providerSignatureHeader,
+              String providerName /* "nice" / "toss" / "kakaopay" */
+          );
+      }
+    failure_modes:
+      no_match:        "CallbackSignatureMismatchException — append signature_fail audit row with tenant_id=null per #ledger-audit-tenant-scope, return 200 OK to PG to avoid retry storm OR (per spec) return 401 to PG depending on provider contract"
+      multiple_match:  "AmbiguousTenantResolutionException — operational error (key reuse). Return 500 to PG. Loud alert on ops. Loud BECAUSE the request itself is structurally valid but the catalog is misconfigured."
+      single_match:    "Return matched tenant_id. Caller MUST TenantContext.set(...) before invoking downstream services."
+
+    forbidden_alternatives:
+      - "two-call shape: `verify(raw, header)` then `resolveTenantFromOrderId(orderId)` — splits the verification-and-resolution atomic; attacker can pass a valid signature for tenant B and an orderId from tenant A"
+      - "trust the first matching secret without walking the rest — masks the multiple_match failure mode (silent cross-tenant collision)"
+      - "Arrays.equals on HMAC bytes — timing oracle leaks which tenant's secret matched (attacker can mount a timing attack to enumerate active tenants)"
+      - "fall back to orderId prefix when no secret matches — strictly worse than rejecting (now the attacker has a path that requires zero PG secret knowledge)"
+
+  bounded_secret_walk:
+    description: >
+      Per-tenant secret verification is O(n_active_tenants). For deployments
+      with >100 tenants, the verifier MUST short-circuit on a non-authoritative
+      hint to keep p99 latency under SLO. The hint is SUGGESTIVE only — the
+      cryptographic verification MUST still complete against the candidate
+      tenant's secret, and a hint mismatch MUST NOT skip secrets that would
+      otherwise match.
+    allowed_hints:
+      - "Host header (when candidate_a_subdomain is paired) — narrows search to tenants registered for that subdomain"
+      - "X-Tenant-Hint header (advisory; never trusted as authoritative) — narrows search but full walk happens on hint miss"
+    forbidden_hints:
+      - "orderId prefix — explicitly forbidden as a tenant signal (candidate_b verdict)"
+      - "path segment — same forbiddance as orderId; both are forgeable"
+    fallback_on_hint_miss: >
+      Walk all active tenants. Never silently drop on hint mismatch — a hint
+      that points to no active tenant might be an attack probe OR a stale DNS
+      record; both must reach the cryptographic verification stage.
+
+  worked_example:
+    scenario: >
+      Tenant A has webhook secret SA registered with NICE merchant account.
+      Tenant B has webhook secret SB registered with the same NICE account
+      under a different sub-merchant id. Attacker (legitimate user of tenant
+      B) initiates a real PG charge with orderId "A-fake-001" trying to
+      impersonate tenant A. NICE signs the callback with SB (the attacker's
+      sub-merchant secret), POSTs to /api/payments/callback/nice with
+      orderId=A-fake-001.
+    flow_with_canonical_policy: >
+      1. Controller receives callback at permitAll endpoint.
+      2. TenantContext.current() → Optional.empty() (no principal).
+      3. Controller invokes TenantAwareCallbackVerifier.verifyAndResolveTenant(raw, sig, "nice").
+      4. Verifier walks active tenants {A: SA, B: SB}. HMAC matches SB only.
+      5. Verifier returns tenant_id = B.
+      6. Controller calls TenantContext.set(B).
+      7. Controller delegates to PaymentService which looks up Payment by orderId.
+      8. orderId "A-fake-001" either does not exist OR exists under tenant A.
+      9. Payment row's tenant_id (A) ≠ TenantContext.current() (B) → @AuthorizedTenant interceptor throws TenantBoundaryViolationException → 404.
+      10. PG sees 404 (not 500) → no retry storm; orphan audit row preserved with tenant_id=B (the verified attacker tenant).
+      Net result: attacker's attempt to fabricate a tenant A Payment row FAILS at the cryptographic verifier (step 4) regardless of orderId content.
+    flow_without_policy_using_orderid_prefix: >
+      1. Controller parses orderId prefix "A-" → sets TenantContext(A).
+      2. Verifier checks signature against tenant A's secret SA — FAILS.
+      3. Naive implementation either: returns 500 (PG retries) OR falls
+         back to global secret (catastrophic — accepts any signed callback
+         as tenant A).
+      Net result: either retry storm OR silent cross-tenant write — both
+      are observable in the wild on misconfigured Korean PG integrations.
+
+  enforcement_static_check: >
+    A practices rule candidate (multi-tenant-callback-verifier-required)
+    can flag any controller annotated @PermitAll (or in a permitAll path
+    of SecurityFilterChain) that writes to a TenantOwned @Entity WITHOUT
+    invoking a TenantAwareCallbackVerifier in the call chain. Detection
+    shape: AST-walk from the controller method body; if any reachable
+    call chain reaches a JpaRepository.save() on a TenantOwned entity
+    AND no call to a method whose return type is the resolved tenant_id
+    intervenes, flag. 38th hard guard candidate.
+
+  cost_estimate_eng_days: 1.5
+
+scheduled-task-tenant-scope:
+  description: >
+    Tenant resolution policy for @Scheduled / Quartz / shedlock-style
+    periodic jobs (reconciliation sweeps, retention purges, daily
+    summaries) that run with NO inbound HTTP request and therefore
+    NO request-scoped TenantContext. #async-propagation already
+    covers @Async / message listeners where the SUBMITTING thread
+    has a TenantContext that can be captured; the scheduler case is
+    different — the job itself originates the unit of work and has
+    no prior tenant context to propagate from.
+  introduced_at: >
+    R5 — opens P2 R3 GAP-R3-5 surfaced during compact dogfood: the
+    manifest covered request-scoped (#context-resolution), AOP-scoped
+    (#aop-guard), async-submission-scoped (#async-propagation), and
+    callback-scoped (#callback-tenant-resolution) — but the scheduler
+    /cron path was undefined. fork-receivers writing a nightly
+    PaymentReconciliationJob would reach for either (a) bare
+    repository.findAll() (silent cross-tenant read — every tenant's
+    rows processed under no tenant context) OR (b) a single
+    TenantContext.set(SYSTEM_TENANT_UUID) (creates a synthetic
+    cross-tenant principal — the GAP-R3-3 sentinel anti-pattern in
+    a new disguise). R5 anchors the canonical pattern at the
+    catalog level; the executable skeleton + 39th guard are
+    deferred to a future round.
+
+  canonical_pattern: per_tenant_iteration
+
+  per_tenant_iteration:
+    description: >
+      The scheduler enumerates the active tenant catalog and for
+      EACH tenant, opens a tenant-scoped unit of work that sets
+      TenantContext, runs the job body, then clears. The job body
+      sees the same tenant-scoped repository view as any inbound
+      HTTP request — the @Filter activation, AOP interceptor, and
+      audit-row attribution all behave identically.
+    shape: |
+      // PSEUDOCODE — full skeleton + 39th guard deferred to R6+.
+      //
+      // @Scheduled(cron = "0 0 3 * * *")  // every day at 03:00
+      // public void reconcilePayments() {
+      //     for (UUID tenantId : tenantCatalog.listActive()) {
+      //         try {
+      //             TenantContext.set(tenantId);
+      //             reconcilePaymentsForCurrentTenant();
+      //         } finally {
+      //             TenantContext.clear();
+      //         }
+      //     }
+      // }
+      //
+      // Two load-bearing properties:
+      //   1. set/clear is balanced per iteration — a leak between
+      //      tenants is the cross-tenant write vector to guard against.
+      //   2. tenantCatalog.listActive() is the SINGLE source of
+      //      tenant enumeration. Hardcoding tenant ids or reading
+      //      from a foreign cache lets a deactivated tenant continue
+      //      receiving job side effects.
+
+  forbidden_alternatives:
+    - "bare repository.findAll() with no TenantContext set — every tenant's rows processed under empty context; @Filter activation may either pass (filter not enabled — leaks all rows) or fail (TenantContextMissingException — job dies on first iteration)"
+    - "TenantContext.set(SYSTEM_TENANT_UUID) — synthetic cross-tenant principal; @AuthorizedTenant boundary checks pass spuriously; audit rows attributed to a non-existent tenant; identical anti-pattern to the GAP-R3-3 sentinel UUID(0,0) just under a different name"
+    - "per-tenant @Scheduled methods (one cron per tenant) — does not scale past ~10 tenants; new tenants require code change + redeploy"
+    - "InheritableThreadLocal-backed TenantContext for scheduler threads — same forbiddance as #async-propagation; silent propagation across @Async defeats explicit-failure contract"
+
+  open_questions:
+    - "Catalog source for tenantCatalog.listActive(): same JPA repository (chicken-and-egg — listing tenants requires bootstrapping tenant context) or a separate non-tenant-scoped Tenant entity? Answer assumed: Tenant entity itself is NOT TenantOwned (it is the discriminator), but explicit anchor is deferred."
+    - "Distributed scheduler coordination (shedlock / Quartz cluster) — does the lock key include tenant_id so two nodes can process two tenants in parallel? Answer assumed: yes (parallelism benefit), but the lock-key contract is undefined."
+    - "Failure handling per tenant: one tenant's job throws — does the iteration continue (skip tenant) or abort (entire run fails)? Answer assumed: per-tenant try/catch logs + continues, but the audit-row attribution of the failure is undefined."
+
+  defer_to: "R6 or a dedicated multi-tenant follow-up cycle — R5 final landed the callback-tenant-resolution closure (GAP-R3-4); GAP-R3-5 anchor is staked here to prevent fork-receivers from reaching for the forbidden_alternatives in the meantime, but the canonical Java skeleton + 39th guard + scheduled-task spec MUST clause are not in R5 scope."
+
+  cost_estimate_eng_days: 1.5
 
 evidence:
   - source_type: external
     citation: "Hibernate User Guide — Multi-tenancy. Documents @FilterDef + MultiTenantConnectionProvider patterns."
     url: "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#multitenacy"
     quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "NICE페이먼츠 API 가이드 — 가맹점별 시크릿 키 발급. 각 사업자(merchant)는 별도 sub-merchant ID 및 시크릿 키를 발급받을 수 있으며, 웹훅 callback 검증에 사용. (per-tenant secret 가능 근거)"
+    url: "https://manual.smartro.co.kr/spc/dvz/intro.html"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Stripe Webhook Signature Verification — recommends per-endpoint signing secret; explicitly documents constant-time HMAC comparison and forbids trust based on URL path or body content alone. Pattern: cryptographic verification is the tenant signal, not metadata."
+    url: "https://stripe.com/docs/webhooks/signatures"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2023) — API1:2023 Broken Object Level Authorization. Tenant-scoping at the resource boundary; cross-tenant write via forged identifiers is canonical BOLA."
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Spring Framework Reference — Task Execution and Scheduling, @Scheduled. Default scheduler runs on a single-threaded TaskScheduler; multi-tenant fork-receivers MUST either (a) per-tenant iterate or (b) provision a per-tenant pool. (manifest #scheduled-task-tenant-scope chooses iteration; pool variant deferred)"
+    url: "https://docs.spring.io/spring-framework/reference/integration/scheduling.html"
+    quoted_at: "2026-05-20"
+
+# Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
+# row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2)
+# + callback tenant resolution (~1.5) = ~14.5 eng-days.
+# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 = ~19.5 eng-days.
+# These match the R16 b2b-admin frontmatter "~10-15 eng-days" estimate (with row-level strategy chosen),
+# with the R5 callback policy adding ~1.5 eng-days for PG-side per-tenant secret onboarding.
 
 decided_at: "2026-05-20"

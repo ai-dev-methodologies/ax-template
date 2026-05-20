@@ -385,6 +385,25 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/ledger_audit_tenant_nullable_guard.sh" --fixtures
 fi
 
+# ── 23. callback_tenant_resolution_guard (R5 — P2 GAP-R3-4 closure, 38th guard) ─
+echo ""
+echo "[23] callback_tenant_resolution_guard.sh (live repo + passing fixture)"
+# 38th hard guard. Enforces blueprints/multi-tenant-manifest.yaml
+# #callback-tenant-resolution.verifier_contract: external PG callback
+# verifiers (NICE / Toss / KakaoPay) in multi-tenant fork-receivers MUST
+# atomically pair signature verification with tenant resolution in one
+# call returning UUID, MUST consume raw bytes (not String) for the
+# request body, and MUST distinguish no-match from multiple-match via
+# two distinct exception types (CallbackSignatureMismatchException vs
+# AmbiguousTenantResolutionException). Closes P2 dogfood R3 GAP-R3-4:
+# the manifest's #context-resolution forbade orderId / path / query as
+# tenant signals but never said what IS allowed for permitAll callback
+# endpoints, leaving the most security-critical resolution to invented
+# (and forgeable) heuristics. R5 ships the canonical per-tenant secret
+# policy + this guard.
+run_guard "callback_tenant_resolution/live" 0 \
+    bash "$SCRIPT_DIR/callback_tenant_resolution_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
