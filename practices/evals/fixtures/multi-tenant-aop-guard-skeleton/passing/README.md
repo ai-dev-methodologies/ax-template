@@ -18,6 +18,7 @@ decision is left to the fork-receiver.
 | `TenantAwareAsyncConfig.java` | `async-propagation.prerequisite_executor_bean` |
 | `TenantContextAwareTaskDecorator.java` | `async-propagation.task_decorator_skeleton` |
 | `TenantFilterActivationFilter.java` | `row-level-strategy.filter_activation` |
+| `AuditEvent.java` | `ledger-audit-tenant-scope.java_skeleton` (added R4 — closes GAP-R3-3) |
 
 **Missing from this fixture**: `AuthorizedTenantInterceptor.java` —
 manifest `aop-guard.description` names it as a load-bearing component
