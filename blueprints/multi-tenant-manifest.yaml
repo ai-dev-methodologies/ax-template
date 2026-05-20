@@ -17,9 +17,80 @@ row-level-strategy:
   description: "Row-level isolation via tenant_id column + Hibernate @FilterDef('tenantFilter')."
   hibernate_filter_name: "tenantFilter"
   tenant_id_column: "tenant_id"
+  tenant_id_type: "java.util.UUID"   # canonical — see #aop-guard.tenant_id_shape
   http_error_on_violation: 404   # NOT 403 — 404 prevents existence-leakage
   test_pattern: "RestAssured: tenant A creates → tenant B accesses same URL → assert 404"
   cost_estimate_eng_days: 7
+
+  # ── Closure for P2 Round 2 gap D/E (filter activation lifecycle undefined) ──
+  # P2 dogfooding session 2026-05-20: blueprint named @FilterDef('tenantFilter')
+  # but never specified (1) where the filter is enabled per-request, (2) where
+  # the tenantId parameter is bound, (3) where it is disabled / when the
+  # Hibernate Session ends. Servlet Filter cannot inject request-scoped
+  # EntityManager safely; Interceptor runs after EntityManager opens which
+  # is too late for the first query in some flows.
+
+  filter_activation:
+    enable_point: "OncePerRequestFilter — extends EntityManagerFactoryAccessor; opens EntityManager explicitly OR delegates to OpenEntityManagerInViewFilter ordering"
+    disable_point: "implicit — filter scope ends when EntityManager closes (request end via OEMIV)"
+    parameter_binding: "session.enableFilter('tenantFilter').setParameter('tenantId', TenantContext.current().orElseThrow(...))"
+    failure_mode: "if TenantContext is empty at enable_point → throw TenantContextMissingException (NOT enableFilter with null — that silently disables tenant scoping)"
+    ordering_constraint: >
+      MUST run AFTER the security filter chain (so principal is resolved
+      and TenantContext is populated) and BEFORE the first @Transactional
+      boundary (otherwise the first query in the transaction runs without
+      filter). In a typical Spring Boot setup this means filter order is
+      between SecurityFilterChain and OpenEntityManagerInViewFilter.
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      import jakarta.persistence.EntityManager;
+      import jakarta.servlet.FilterChain;
+      import jakarta.servlet.ServletException;
+      import jakarta.servlet.http.HttpServletRequest;
+      import jakarta.servlet.http.HttpServletResponse;
+      import java.io.IOException;
+      import org.hibernate.Session;
+      import org.springframework.stereotype.Component;
+      import org.springframework.web.filter.OncePerRequestFilter;
+
+      @Component
+      public class TenantFilterActivationFilter extends OncePerRequestFilter {
+
+          private final EntityManager entityManager;
+
+          public TenantFilterActivationFilter(EntityManager entityManager) {
+              this.entityManager = entityManager;
+          }
+
+          @Override
+          protected void doFilterInternal(HttpServletRequest req,
+                                          HttpServletResponse res,
+                                          FilterChain chain)
+                  throws ServletException, IOException {
+              Session session = entityManager.unwrap(Session.class);
+              try {
+                  TenantContext.current().ifPresentOrElse(
+                      tenantId -> session.enableFilter("tenantFilter")
+                                         .setParameter("tenantId", tenantId),
+                      () -> {
+                          // No tenant context = unauthenticated / public endpoint.
+                          // Filter NOT enabled — relies on Spring Security to gate
+                          // the endpoint. Tenant-scoped endpoints MUST be
+                          // SecurityFilterChain-protected; otherwise data leaks.
+                      }
+                  );
+                  chain.doFilter(req, res);
+              } finally {
+                  // Disable explicitly — even though session typically closes at
+                  // request end, OEMIV / pooled sessions can outlive a single
+                  // request in misconfigured setups.
+                  if (session.isOpen()) {
+                      session.disableFilter("tenantFilter");
+                  }
+              }
+          }
+      }
 
 schema-per-tenant-strategy:
   description: "Schema-per-tenant via Hibernate MultiTenantConnectionProvider + CurrentTenantIdentifierResolver."
@@ -33,6 +104,168 @@ aop-guard:
   http_mapping: 404   # RFC 7807 problem detail; never 403 (existence-leakage)
   defense_in_depth: "use alongside row-level-strategy OR schema-per-tenant-strategy"
   cost_estimate_eng_days: 3
+
+  # ── Closure for P2 Round 2 gap A/B (advice scope + package layout undefined) ─
+  # P2 dogfooding session 2026-05-20: fork-receiver attempting to write
+  # TenantBoundaryViolationException blocked at three decisions —
+  #   (1) which package owns cross-cutting multi-tenant types,
+  #   (2) which @RestControllerAdvice scope catches the exception (per-domain
+  #       advices like PracticesProblemDetailAdvice are basePackages-scoped),
+  #   (3) what marker interface tags tenant-owned resources so static
+  #       analysis can confirm every tenant-scoped @Entity declares tenant_id.
+
+  package_layout:
+    cross_cutting_package: "com.<root>.multitenancy"
+    rationale: >
+      Multi-tenant infrastructure (TenantContext, TenantOwned marker, the
+      AOP interceptor, the boundary exception, the ProblemDetail advice,
+      the TaskDecorator) is cross-cutting — it MUST NOT live under any
+      single business domain package (e.g. authblueprint/payment/) because
+      every tenant-scoped domain depends on it. ax-template's reference
+      workload is single-tenant by default so this package is absent;
+      fork-receivers adopting multi-tenant create it at the top level
+      alongside their existing domain packages.
+    forbidden_locations:
+      - "<root>.<auth-package>.multitenancy   # framing as auth-owned is wrong; multi-tenant is cross-cutting"
+      - "<root>.<any-business-domain>.multitenancy   # creates hidden coupling to that domain"
+
+  marker_interface:
+    name: "TenantOwned"
+    location: "<cross_cutting_package>.TenantOwned"
+    rationale: >
+      Every JPA @Entity carrying tenant-scoped rows MUST implement
+      TenantOwned. The interface exposes the tenant_id getter so:
+      (a) static analysis can enumerate tenant-scoped entities,
+      (b) the row-level @Filter activation aspect can verify the
+          current entity is tenant-scoped before forcing the filter,
+      (c) downstream audit / export tools can detect cross-tenant leak
+          by reflection over entities marked TenantOwned.
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      /**
+       * Marker interface for every JPA @Entity whose rows are
+       * tenant-scoped. The tenant_id MUST be populated at insert
+       * time from TenantContext.current() — never from request body
+       * or query parameter (PROPAGATION-001 forbids forgeable
+       * sources). The getter type MUST match #tenant-id-shape
+       * (canonical: java.util.UUID).
+       *
+       * Defense in depth: row-level @Filter + AOP interceptor +
+       * TenantOwned marker together close the three vectors —
+       * SQL leak (filter), service-call leak (interceptor),
+       * static-analysis blind spot (marker).
+       */
+      public interface TenantOwned {
+          java.util.UUID getTenantId();
+      }
+    enforcement_static_check: >
+      A practices rule (multi-tenant-aop-guard-skeleton) requires that
+      every @Entity in a recipe declaring `tenant_model: multi` either
+      implements TenantOwned OR sits in an explicit
+      `non_tenant_scoped_entities:` allow-list in the recipe's
+      RECIPE.md. fork-receivers can wire this check into their CI
+      with the same shape as recipe_governance_guard.sh.
+
+  exception_skeleton:
+    fqcn: "<cross_cutting_package>.TenantBoundaryViolationException"
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      /**
+       * Thrown by AuthorizedTenantInterceptor when the request principal's
+       * TenantContext.current() does not match the resource's tenant_id.
+       * Mapped to HTTP 404 via MultiTenantProblemDetailAdvice — NEVER 403
+       * (would leak existence of cross-tenant resource).
+       *
+       * Symmetry note (Round 1 gap 3 closure): TenantContextMissingException
+       * (thrown when async boundary lost context — see #async-propagation)
+       * MUST sit in the same package and follow the same naming pattern.
+       */
+      public class TenantBoundaryViolationException extends RuntimeException {
+          public TenantBoundaryViolationException(String message) {
+              super(message);
+          }
+      }
+
+  advice_scope:
+    fqcn: "<cross_cutting_package>.MultiTenantProblemDetailAdvice"
+    scope_strategy: "global"
+    ordering_annotation: "@Order(Ordered.HIGHEST_PRECEDENCE + 100)"
+    rationale: >
+      Existing per-domain advices (e.g. PracticesProblemDetailAdvice with
+      basePackages = "...practices") do NOT catch TenantBoundaryViolation
+      thrown from a different domain. The multi-tenant advice MUST be
+      globally scoped (no basePackages) AND ordered with high precedence
+      so it wins over domain-scoped advices when the same exception type
+      is handled differently in their fallback handlers. Without explicit
+      @Order the ResolverOrder is undefined — first-match wins which is
+      brittle.
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      import java.net.URI;
+      import org.springframework.core.Ordered;
+      import org.springframework.core.annotation.Order;
+      import org.springframework.http.HttpStatus;
+      import org.springframework.http.MediaType;
+      import org.springframework.http.ProblemDetail;
+      import org.springframework.http.ResponseEntity;
+      import org.springframework.web.bind.annotation.ExceptionHandler;
+      import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+      @RestControllerAdvice
+      @Order(Ordered.HIGHEST_PRECEDENCE + 100)
+      public class MultiTenantProblemDetailAdvice {
+
+          private static final URI TENANT_BOUNDARY_TYPE =
+              URI.create("https://errors.example.com/tenant-boundary");
+          private static final URI TENANT_CONTEXT_MISSING_TYPE =
+              URI.create("https://errors.example.com/tenant-context-missing");
+
+          @ExceptionHandler(TenantBoundaryViolationException.class)
+          public ResponseEntity<ProblemDetail> handleBoundary(TenantBoundaryViolationException ex) {
+              // 404 — never 403. Existence-leakage prevention is the whole point.
+              ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Resource not found");
+              pd.setType(TENANT_BOUNDARY_TYPE);
+              pd.setTitle("Resource Not Found");
+              // Detail message stays generic — never include tenant_id or resource id.
+              return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                      .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                      .body(pd);
+          }
+
+          @ExceptionHandler(TenantContextMissingException.class)
+          public ResponseEntity<ProblemDetail> handleMissingContext(TenantContextMissingException ex) {
+              // 500 not 404 — this is a server bug (async boundary lost context),
+              // not a client authz failure. Distinct ProblemDetail type so ops can
+              // alert on it separately.
+              ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
+              pd.setType(TENANT_CONTEXT_MISSING_TYPE);
+              pd.setTitle("Internal Server Error");
+              return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                      .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                      .body(pd);
+          }
+      }
+
+  tenant_id_shape:
+    type: "java.util.UUID"
+    column_name: "tenant_id"
+    jwt_claim_name: "tenant_id"
+    rationale: >
+      Round 1 gap 1 closure: canonical JWT claim is snake_case `tenant_id`
+      (matches RFC 7519 convention for custom claims and SCIM tenant
+      identifiers — neither vendor specifies camelCase). The Java getter
+      is `getTenantId()` (camelCase per JavaBeans), but the wire format
+      (JWT claim, DB column, JSON property) is snake_case `tenant_id`.
+      Type is UUID not Long: cross-tenant id collision in dev/staging
+      with monotonic Long is a real foot-gun; UUID makes accidental
+      cross-tenant reference detectable in logs.
+    forbidden_alternatives:
+      - "Long   # collision risk across tenants in dev/staging; not opaque"
+      - "String # too loose — no format validation at boundary"
+      - "tenantId (camelCase wire format)  # inconsistent with JWT custom-claim convention"
 
 context-resolution:
   description: "TenantContext resolved from authenticated principal at controller entry."
@@ -55,6 +288,126 @@ async-propagation:
   failure_mode: "TenantContextMissing exception (NOT silent default-tenant fallback)"
   rationale: "TenantContext is request-scoped (ThreadLocal); async runs on different thread; no propagation = empty context = either crash (preferred) or silent leak (forbidden)"
   cost_estimate_eng_days: 2
+
+  # ── Closure for P2 Round 2 gap C (executor bean prerequisite undefined) ─────
+  # P2 dogfooding session 2026-05-20: @EnableAsync alone uses Spring's default
+  # SimpleAsyncTaskExecutor (new thread per task) which CANNOT be decorated —
+  # TaskDecorator only applies to ThreadPoolTaskExecutor / ConcurrentTaskExecutor.
+  # ax-template's reference workload has @EnableAsync but no explicit executor
+  # bean (verified at backend/.../AuthBlueprintBackendApplication.java + grep
+  # for ThreadPoolTaskExecutor returns empty). fork-receivers MUST declare the
+  # executor bean explicitly before this propagation strategy works at all.
+
+  prerequisite_executor_bean:
+    required: true
+    failure_if_absent: >
+      Without an explicit ThreadPoolTaskExecutor bean, @EnableAsync falls back
+      to SimpleAsyncTaskExecutor which spawns a new thread per task and has
+      no TaskDecorator hook. The TenantContext silently fails to propagate
+      and every @Async method runs with an empty ThreadLocal — leading to
+      either NullPointerException at TenantContext.current() OR (worse)
+      a silent default-tenant fallback if defensive code masks the missing
+      context. fork-receivers MUST verify the executor bean exists before
+      claiming PROPAGATION-002 compliance.
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      import java.util.concurrent.Executor;
+      import org.springframework.context.annotation.Bean;
+      import org.springframework.context.annotation.Configuration;
+      import org.springframework.scheduling.annotation.AsyncConfigurer;
+      import org.springframework.scheduling.annotation.EnableAsync;
+      import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+      @Configuration
+      @EnableAsync
+      public class TenantAwareAsyncConfig implements AsyncConfigurer {
+
+          @Override
+          @Bean(name = "taskExecutor")
+          public Executor getAsyncExecutor() {
+              ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+              executor.setCorePoolSize(4);
+              executor.setMaxPoolSize(16);
+              executor.setQueueCapacity(50);
+              executor.setThreadNamePrefix("ax-async-");
+              executor.setTaskDecorator(new TenantContextAwareTaskDecorator());
+              executor.initialize();
+              return executor;
+          }
+      }
+    note_to_fork_receiver: >
+      The bean name "taskExecutor" is the Spring default that @Async picks
+      up without explicit qualifier. If multiple executor beans exist, use
+      @Async("name") on the method side to disambiguate; otherwise Spring
+      logs a warning and falls back to SimpleAsyncTaskExecutor — silently
+      defeating this entire propagation strategy.
+
+  task_decorator_skeleton:
+    fqcn: "<cross_cutting_package>.TenantContextAwareTaskDecorator"
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      import java.util.Optional;
+      import java.util.UUID;
+      import org.springframework.core.task.TaskDecorator;
+
+      /**
+       * Captures the calling thread's TenantContext at submission time
+       * and restores it on the worker thread before the task runs.
+       * Guarantees:
+       *   (a) absent context at submission → wrapped Runnable raises
+       *       TenantContextMissingException on the worker (NOT a silent
+       *       default-tenant fallback). This matches #async-propagation
+       *       failure_mode contract.
+       *   (b) ThreadLocal is cleared in finally — no leakage to the next
+       *       task scheduled on the same worker thread.
+       */
+      public class TenantContextAwareTaskDecorator implements TaskDecorator {
+
+          @Override
+          public Runnable decorate(Runnable runnable) {
+              // Captured at SUBMISSION (calling thread, still has request context).
+              Optional<UUID> captured = TenantContext.current();
+              return () -> {
+                  if (captured.isEmpty()) {
+                      // Crash loud — see #async-propagation failure_mode contract.
+                      throw new TenantContextMissingException(
+                          "TenantContext was empty at @Async submission; refusing to run async task");
+                  }
+                  try {
+                      TenantContext.set(captured.get());
+                      runnable.run();
+                  } finally {
+                      // MUST clear — worker threads are pooled and reused.
+                      TenantContext.clear();
+                  }
+              };
+          }
+      }
+
+  context_missing_exception_skeleton:
+    fqcn: "<cross_cutting_package>.TenantContextMissingException"
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      /**
+       * Thrown by TenantContextAwareTaskDecorator when an @Async task was
+       * submitted from a thread with no TenantContext (typically: the
+       * submission happened outside a tenant-aware request, OR the
+       * filter that populates TenantContext was bypassed).
+       *
+       * Symmetry note (Round 1 gap 3 closure): pair with
+       * TenantBoundaryViolationException — both extend RuntimeException,
+       * both live in <cross_cutting_package>, both are handled by
+       * MultiTenantProblemDetailAdvice. Boundary → 404 (client-side
+       * authz fail), ContextMissing → 500 (server bug, ops alert).
+       */
+      public class TenantContextMissingException extends RuntimeException {
+          public TenantContextMissingException(String message) {
+              super(message);
+          }
+      }
 
 # Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
 # row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2) = ~13 eng-days.
