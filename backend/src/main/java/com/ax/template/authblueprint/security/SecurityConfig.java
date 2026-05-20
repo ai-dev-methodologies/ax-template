@@ -64,6 +64,13 @@ public class SecurityConfig {
                 // service layer via the caller's userId from Authentication,
                 // never from a path parameter.
                 .requestMatchers("/api/files/**").authenticated()
+                // R17 search domain (specs/search-l0.yaml):
+                // SEARCH-AUTHZ-001 — every endpoint requires a valid JWT.
+                // SEARCH-AUTHZ-002 — tenant scoping is derived from
+                // Authentication#getName(); clients never pass a tenantId in
+                // the URL or body. Cross-tenant queries return 0 hits because
+                // the tenant filter is appended to every backend call.
+                .requestMatchers("/api/v1/search/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per
