@@ -542,6 +542,43 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/kafka_consumer_tenant_scope_guard.sh" --fixtures
 fi
 
+# ── 28. kafka_streams_tenant_scope_guard (R10 — kafka-streams closure, 43rd guard) ─
+echo ""
+echo "[28] kafka_streams_tenant_scope_guard.sh (live repo + passing fixture)"
+# 43rd hard guard. Enforces blueprints/multi-tenant-manifest.yaml
+# #kafka-streams-tenant-scope: Kafka Streams (KStream / KTable)
+# topologies (distinct surface from #kafka-consumer-tenant-scope:
+# R9 covers stateless @KafkaListener consumers; this anchor covers
+# stateful aggregation pipelines with RocksDB-backed state stores,
+# wall-clock punctuators, and tenant-namespaced joins) MUST adopt
+# the tenant-prefixed-key + punctuator key-decode + tenant-namespaced
+# join pattern with five load-bearing clauses — topologies with
+# groupBy/groupByKey/aggregate MUST have an upstream selectKey
+# lambda that reads the X-Tenant-Id header and constructs a
+# composite key with KEY_SEPARATOR (single RocksDB store partitions
+# per-tenant by key prefix); punctuator bodies that call forward(...)
+# MUST wrap each per-key forward in TenantContext.set/clear
+# (StreamThread has empty TenantContext by construction);
+# count(set) == count(clear) inside the punctuator lambda body;
+# topologies with .join/.leftJoin/.outerJoin MUST also have a
+# tenant-prefix selectKey on the upstream stream; Materialized.as
+# state store names MUST NOT interpolate tenantId (static topology
+# build cannot declare dynamic stores — rebalance/standby breaks).
+# Closes the kafka-streams open question that was the first
+# entry (R9-era index [0]) of #kafka-consumer-tenant-scope.open_questions_remaining
+# in the R9-committed manifest — entry removed on R10 closure.
+# Stream-processing-free deployments live-repo SKIP — no
+# .../multitenancy/TenantAwareKafkaStreamsTopology.java present.
+run_guard "kafka_streams_tenant_scope/live" 0 \
+    bash "$SCRIPT_DIR/kafka_streams_tenant_scope_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[28f] kafka_streams_tenant_scope_guard.sh --fixtures"
+    run_guard "kafka_streams_tenant_scope/fixtures" 0 \
+        bash "$SCRIPT_DIR/kafka_streams_tenant_scope_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

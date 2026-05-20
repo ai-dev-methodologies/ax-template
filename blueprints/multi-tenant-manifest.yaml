@@ -2130,9 +2130,438 @@ kafka-consumer-tenant-scope:
         (per-record-but-outside-span).
 
   open_questions_remaining:
-    - "Kafka Streams (KStream / KTable topology) tenant scope — Streams uses its own thread pool (StreamThread) with different lifecycle than @KafkaListener. The per-record set/clear contract should extend but Streams' punctuators and stateful transformations (KTable joins) create state across tenants in the same store. Not yet anchored; opens R10 candidate."
     - "Kafka transactional consumer (read_committed + producer transactions for exactly-once semantics) — the producer.send inside the consumer loop must also carry the X-Tenant-Id header; coupling between consumer-context and producer-record-header is implicit. Not yet anchored."
     - "RabbitMQ topic exchange with per-message tenant header — adjacent regime. The Spring AMQP @RabbitListener analogue should follow the same per-message header + set/clear contract, but the broker semantics differ (queue-based vs partition-based). Same staked-anchor status as the broker-fanout RabbitMQ open question."
+
+  cost_estimate_eng_days: 1.0
+
+# ─────────────────────────────────────────────────────────────────────
+# kafka-streams-tenant-scope — R10 closure (kafka-consumer open question)
+# ─────────────────────────────────────────────────────────────────────
+kafka-streams-tenant-scope:
+  description: >
+    Tenant resolution policy for Kafka Streams (KStream / KTable)
+    topologies — stateful real-time aggregation pipelines that
+    consume a shared business-event topic and materialise per-
+    tenant metrics into state stores. Distinct surface from
+    #kafka-consumer-tenant-scope: the R9 @KafkaListener consumer
+    processes records statelessly (handler invocation per record);
+    Kafka Streams maintains durable state stores (RocksDB-backed
+    KTables), invokes punctuators on a wall-clock or stream-time
+    schedule, and performs KStream / KTable joins across records
+    that may belong to different tenants. The per-record set/clear
+    contract from R9 is necessary but not sufficient — Streams
+    introduces three failure surfaces that have no @KafkaListener
+    analogue:
+      (a) state-store key collision: a single RocksDB store backs
+          the whole topology; without tenant namespacing in the
+          store key, every tenant's aggregate state merges into
+          one bucket (silent cross-tenant aggregation).
+      (b) punctuator context loss: punctuators fire on the
+          StreamThread independent of any record processing; the
+          punctuator method body iterates the state store and has
+          NO tenant signal beyond what the key encodes.
+      (c) join key collision: KStream-KTable joins match on key
+          equality; if the join key is the business key alone
+          (e.g. orderId) without tenant scoping, Tenant A's order
+          can match Tenant B's customer.
+    R10 closes the kafka-streams open question that was
+    #kafka-consumer-tenant-scope.open_questions_remaining[0]
+    in the R9-committed manifest (item removed on closure;
+    the surviving 2-item list slides up by one index).
+  introduced_at: >
+    R10 — closes the kafka-streams open question staked in R9
+    as the first entry of #kafka-consumer-tenant-scope.open_questions_remaining
+    (R9-era index [0]; entry removed at R10 closure):
+    "Kafka Streams (KStream / KTable topology) tenant scope —
+    Streams uses its own thread pool (StreamThread) with
+    different lifecycle than @KafkaListener. The per-record
+    set/clear contract should extend but Streams' punctuators
+    and stateful transformations (KTable joins) create state
+    across tenants in the same store. Not yet anchored; opens
+    R10 candidate." Fork-receivers writing a B2B SaaS real-time
+    aggregation topology would reach for one of three failure
+    modes: (a) bare groupBy(...) keyed on the business-key only
+    (e.g. orderId.toString()) — all tenants' state merges into
+    one RocksDB bucket; aggregate counts span every tenant.
+    (b) Punctuator method body iterates the state store and
+    forwards results without setting TenantContext per key —
+    downstream services see records as the StreamThread's empty
+    TenantContext (NPE) or as the LAST record's stale tenant
+    (silent cross-tenant write). (c) KStream / KTable join with
+    business-key-only join: Tenant A's order joins Tenant B's
+    customer; silent cross-tenant data fabrication. R10 anchors
+    the canonical pattern.
+  closed_at: >
+    R10 — full closure. Manifest moves from staked-anchor to
+    executable contract: TenantAwareKafkaStreamsTopology skeleton
+    ships in the multi-tenant fixture, the (tenant-prefixed
+    state-store key + punctuator key-decode set/clear + tenant-
+    namespaced join key) chain is concrete, and the 43rd hard
+    guard (kafka_streams_tenant_scope_guard.sh) blocks any of
+    the failure modes from sneaking in via fork-receiver code.
+
+  canonical_pattern: tenant_prefixed_state_store_with_punctuator_key_decode
+
+  tenant_prefixed_state_store_with_punctuator_key_decode:
+    description: >
+      Multi-tenant Kafka Streams topology reads from the SHARED
+      ax.tenant.events topic (same wire-format as
+      #kafka-consumer-tenant-scope). Stateful operations (groupBy,
+      aggregate, join, materialised KTable) MUST use a composite
+      key of the form `tenantId#originalKey` so the single RocksDB
+      state store partitions per-tenant by key prefix. Punctuators
+      (Processor.context().schedule(...)) iterate the state store
+      and decode the tenant prefix to set TenantContext per key
+      before forwarding downstream.
+
+      Five load-bearing properties:
+        (1) Tenant-prefixed key transform BEFORE groupBy /
+            selectKey: the topology declares an upstream selectKey
+            (or map) step that rewrites the record key to
+            `tenantId + "#" + originalKey` where tenantId is read
+            from the X-Tenant-Id header. The downstream groupBy(),
+            aggregate(), join(), and materialised KTable() then
+            operate on the tenant-namespaced key — RocksDB stores
+            each tenant's state in its own contiguous key range.
+            A bare groupBy(...) without upstream key namespacing
+            is the cross_tenant_state_store_collision anti-pattern.
+        (2) Punctuator key-decode set/clear: every Processor or
+            Transformer that registers a punctuator
+            (context.schedule(..., PunctuationType.WALL_CLOCK_TIME,
+            ts -> { ... })) MUST, inside the punctuator body,
+            iterate the store via store.all() / store.range(),
+            split each KeyValue.key on the "#" separator to
+            extract tenantId, and wrap the per-key processing in
+            try { TenantContext.set(tenantId); ... } finally {
+            TenantContext.clear(); }. The punctuator runs on the
+            StreamThread with NO inherited TenantContext — same
+            failure-class as the consumer poll thread (R9
+            clause 1) but on the punctuator surface. A punctuator
+            that forwards downstream without setting TenantContext
+            is the punctuator_silent_context_loss anti-pattern.
+        (3) count(TenantContext.set) == count(TenantContext.clear)
+            inside any punctuator body. Mirrors the R9 42nd-guard
+            clause(3) for the punctuator surface — unbalanced
+            set/clear leaks tenant N into tenant N+1's punctuator
+            iteration. Detection scope is the lambda body of
+            context.schedule(...) calls and the punctuate(long ts)
+            method body of registered Punctuator implementations.
+        (4) Join keys MUST be tenant-namespaced: KStream.join(),
+            KStream.leftJoin(), KTable.join(), and KStream-KTable
+            joins operate on key equality. Both sides MUST already
+            be keyed by `tenantId#businessKey` (property 1
+            guarantees this for KStream side; the KTable side
+            MUST be sourced from a topic that was likewise
+            keyed). A join where one side uses business-key-only
+            and the other uses tenant-prefixed-key produces zero
+            matches in production (silent zero-result) AND, worse,
+            a join where both sides use business-key-only matches
+            across tenants — Tenant A's order joins Tenant B's
+            customer. The cross_tenant_join_key anti-pattern.
+        (5) State store naming MUST not encode tenantId:
+            Materialized.as("orders-by-tenant") is canonical;
+            Materialized.as("orders-tenant-" + tenantId) creates
+            one RocksDB store per tenant on each StreamThread,
+            which (a) is impossible to declare ahead of topology
+            build (tenants are dynamic), (b) breaks Streams'
+            standby replica + rebalance assumptions (one store
+            per partition, not per key prefix), and (c) loses
+            the operational benefit of one queryable store via
+            Interactive Queries with tenant filtering at read
+            time. Per-tenant store naming is the
+            per_tenant_state_store_anti_pattern (parallel to
+            #kafka-consumer-tenant-scope.per_tenant_topic_anti_pattern).
+
+    canonical_skeleton: |
+      package com.acme.multitenancy;
+
+      import java.nio.charset.StandardCharsets;
+      import java.time.Duration;
+      import java.util.UUID;
+      import org.apache.kafka.common.serialization.Serdes;
+      import org.apache.kafka.streams.KeyValue;
+      import org.apache.kafka.streams.kstream.Consumed;
+      import org.apache.kafka.streams.kstream.Grouped;
+      import org.apache.kafka.streams.kstream.KStream;
+      import org.apache.kafka.streams.kstream.KTable;
+      import org.apache.kafka.streams.kstream.Materialized;
+      import org.apache.kafka.streams.processor.PunctuationType;
+      import org.apache.kafka.streams.processor.api.Processor;
+      import org.apache.kafka.streams.processor.api.ProcessorContext;
+      import org.apache.kafka.streams.processor.api.Record;
+      import org.apache.kafka.streams.state.KeyValueIterator;
+      import org.apache.kafka.streams.state.KeyValueStore;
+      import org.apache.kafka.streams.StreamsBuilder;
+      import org.springframework.stereotype.Component;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#kafka-streams-tenant-scope.tenant_prefixed_state_store_with_punctuator_key_decode.canonical_skeleton
+       * with <root> = acme.
+       *
+       * Tenant-scoped Kafka Streams real-time aggregation topology.
+       * Distinct from TenantAwareKafkaConsumer (R9): the R9 consumer
+       * processes records statelessly via @KafkaListener; this
+       * topology builds durable state stores (RocksDB-backed
+       * KTables), runs wall-clock punctuators, and performs
+       * tenant-namespaced joins.
+       *
+       * Five guard-checked properties:
+       *   (1) Upstream selectKey rewrites every record key to
+       *       tenantId + "#" + originalKey BEFORE any groupBy /
+       *       join / aggregate.
+       *   (2) Punctuator body decodes the tenant prefix and wraps
+       *       per-key forwarding in TenantContext set/clear.
+       *   (3) count(set)==count(clear) inside the punctuator body.
+       *   (4) Join keys are tenant-namespaced on both sides.
+       *   (5) State store names are tenant-agnostic ("orders-by-key",
+       *       NOT "orders-tenant-" + id); per-tenant store naming
+       *       is rejected.
+       */
+      @Component
+      public class TenantAwareKafkaStreamsTopology {
+
+          static final String TENANT_HEADER = "X-Tenant-Id";
+          static final String KEY_SEPARATOR = "#";
+          static final String EVENTS_TOPIC = "ax.tenant.events";
+          static final String METRICS_STORE = "tenant-metrics-by-key";
+
+          /**
+           * Build the topology. Called once at StreamsBuilder
+           * wiring time.
+           *
+           * Property (1): selectKey runs FIRST in the topology,
+           * rewriting every record key to "tenantId#originalKey"
+           * using the per-record X-Tenant-Id header. All
+           * downstream stateful operators see the tenant-
+           * namespaced key.
+           */
+          public KTable<String, Long> build(StreamsBuilder builder) {
+              KStream<String, String> source =
+                  builder.stream(EVENTS_TOPIC,
+                      Consumed.with(Serdes.String(), Serdes.String()));
+
+              KStream<String, String> tenantNamespaced = source
+                  .selectKey((key, value, recordContext) -> {
+                      // Read the per-record X-Tenant-Id header.
+                      // Headers travel with the record (KIP-82);
+                      // recordContext.headers() exposes them.
+                      var header = recordContext.headers()
+                          .lastHeader(TENANT_HEADER);
+                      if (header == null || header.value() == null) {
+                          throw new TenantContextMissingException(
+                              "Streams record lacks " + TENANT_HEADER
+                              + " header at offset "
+                              + recordContext.offset());
+                      }
+                      String tenantId = new String(
+                          header.value(), StandardCharsets.UTF_8);
+                      // Property (1): tenant-prefixed key BEFORE
+                      // groupBy. Downstream RocksDB stores will
+                      // partition by tenant via key prefix.
+                      return tenantId + KEY_SEPARATOR + key;
+                  });
+
+              // Property (4): both sides of any join MUST already
+              // be tenant-namespaced (this stream's selectKey
+              // above; the KTable side MUST be sourced from a
+              // topic that was likewise keyed at production time).
+              KTable<String, Long> metrics = tenantNamespaced
+                  .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+                  .count(Materialized.<String, Long,
+                      org.apache.kafka.streams.state.KeyValueStore<
+                          org.apache.kafka.common.utils.Bytes, byte[]>>
+                      as(METRICS_STORE)
+                      .withKeySerde(Serdes.String())
+                      .withValueSerde(Serdes.Long()));
+
+              return metrics;
+          }
+
+          /**
+           * Punctuator-bearing processor. Registered into the
+           * topology via .process(() -> new MetricsPunctuator(),
+           * METRICS_STORE) so the punctuate(long) method body
+           * has access to the materialized state store.
+           *
+           * Property (2): inside the punctuator, decode the
+           * tenant prefix from each key and wrap per-key forward
+           * in try { TenantContext.set(tenantId); ... } finally {
+           * TenantContext.clear(); }.
+           * Property (3): count(set)==count(clear) inside the
+           * punctuator body.
+           */
+          public static class MetricsPunctuator
+                  implements Processor<String, Long, String, Long> {
+
+              private KeyValueStore<String, Long> store;
+
+              @Override
+              public void init(ProcessorContext<String, Long> context) {
+                  this.store = context.getStateStore(METRICS_STORE);
+                  // Punctuator fires on the StreamThread every
+                  // 60 seconds wall-clock. The StreamThread has
+                  // NO inherited TenantContext — same failure-
+                  // class as the consumer poll thread (R9).
+                  context.schedule(
+                      Duration.ofSeconds(60),
+                      PunctuationType.WALL_CLOCK_TIME,
+                      timestamp -> {
+                          try (KeyValueIterator<String, Long> it = store.all()) {
+                              while (it.hasNext()) {
+                                  KeyValue<String, Long> kv = it.next();
+                                  // Decode the tenant prefix from
+                                  // the composite key — property (2).
+                                  int sep = kv.key.indexOf(KEY_SEPARATOR);
+                                  if (sep <= 0) {
+                                      // Defensive: skip malformed
+                                      // keys rather than processing
+                                      // them under empty context.
+                                      continue;
+                                  }
+                                  UUID tenantId = UUID.fromString(
+                                      kv.key.substring(0, sep));
+                                  try {
+                                      // MUST set: downstream
+                                      // forward() invocations may
+                                      // trigger sinks (e.g. metrics
+                                      // emitter) that call
+                                      // TenantContext.current().
+                                      TenantContext.set(tenantId);
+                                      context.forward(new Record<>(
+                                          kv.key, kv.value, timestamp));
+                                  } finally {
+                                      // MUST clear: punctuator
+                                      // iteration reuses the same
+                                      // StreamThread; leaking
+                                      // tenant N into the next key
+                                      // (which may belong to tenant
+                                      // N+1) is the
+                                      // punctuator_silent_context_loss
+                                      // failure mode.
+                                      TenantContext.clear();
+                                  }
+                              }
+                          }
+                      });
+              }
+
+              @Override
+              public void process(Record<String, Long> record) {
+                  // Stream-time forwarding: the key is already
+                  // tenant-namespaced from property (1), so the
+                  // upstream selectKey ran. Forward as-is.
+                  // (TenantContext was set on the consumer-side
+                  // before this Processor was invoked; per-record
+                  // set/clear at process() entry is OPTIONAL here
+                  // because the StreamThread already ran the
+                  // selectKey lambda which read the header.)
+                  // Punctuator-driven forwarding is the surface
+                  // that REQUIRES explicit set/clear above.
+              }
+          }
+      }
+
+  per_tenant_state_store_anti_pattern:
+    description: >
+      An alternative considered and rejected: one Materialized
+      state store per tenant (METRICS_STORE = "orders-tenant-" +
+      tenantId.toString()). Pros: implicit tenant scoping via
+      store name; no key-prefix parsing. Cons, decisive:
+        - Streams stores are declared at topology build time;
+          tenants are dynamic at runtime. New tenant onboarding
+          would require a topology restart (full rebuild from
+          earliest offsets — minutes-to-hours of downtime).
+        - Streams' standby replica + partition assignment
+          assumes one store per partition, not per key prefix.
+          Per-tenant stores break the rebalance assumptions and
+          cause replica fan-out proportional to tenant count.
+        - Interactive Queries (one queryable HTTP endpoint per
+          state store) becomes N endpoints. Per-tenant
+          discoverability is harder, not easier.
+      The tenant-prefixed-key + single-store pattern is canonical
+      for any tenant count >5. <5 tenants MAY use per-tenant
+      stores as a fork-receiver simplification (not enforced
+      because Streams is opt-in entirely).
+
+  forbidden_alternatives:
+    - "Bare groupBy(...) on the business key without an upstream selectKey that tenant-namespaces the key — cross_tenant_state_store_collision. All tenants' state merges into one RocksDB bucket; aggregate counts span every tenant. The most subtle failure mode in this regime because it produces NO runtime error: every count is numerically larger than expected, but tests with one tenant pass cleanly."
+    - "Punctuator body iterates the state store and calls context.forward(...) without setting TenantContext from the decoded key prefix — punctuator_silent_context_loss. Downstream sinks see records as the StreamThread's empty TenantContext (NPE on TenantContext.current().orElseThrow()) OR (with defensive code) the LAST iteration's stale tenant (silent cross-tenant write). Same failure-class as #kafka-consumer-tenant-scope.failure_modes.stale_per_record_context but on the punctuator surface."
+    - "Unbalanced TenantContext.set and TenantContext.clear inside the punctuator body — punctuator_set_clear_imbalance. Mirrors R9 stale_per_record_context but scoped to the punctuator iteration. A punctuator that sets but never clears leaks the LAST key's tenant into the NEXT punctuator firing on the same StreamThread (60 seconds later, possibly under a rebalanced partition assignment owned by a different tenant in the routing topology)."
+    - "KStream-KTable join (or KStream-KStream join, or KTable-KTable join) where the join key is the business key alone (e.g. orderId.toString()) without tenant namespacing — cross_tenant_join_key. Tenant A's order joins Tenant B's customer; silent cross-tenant data fabrication. Detection: the topology contains .join() / .leftJoin() / .outerJoin() AND the upstream selectKey for any side does NOT include the X-Tenant-Id header read + tenantId + KEY_SEPARATOR substring."
+    - "Materialized.as(\"<name>-tenant-\" + tenantId) — per_tenant_state_store_anti_pattern. See per_tenant_state_store_anti_pattern section above. Per-tenant store naming is REJECTED because topology build is static; tenants are dynamic; rebalance/standby replicas assume one store per partition."
+
+  failure_modes:
+    cross_tenant_state_store_collision:
+      description: >
+        Topology contains groupBy() or groupByKey() WITHOUT an
+        upstream selectKey/map that tenant-prefixes the key.
+        All tenants' state merges into one RocksDB bucket. No
+        runtime error — tests with one tenant pass cleanly;
+        production aggregate counts span every tenant.
+      detection: >
+        43rd guard scans the topology file for groupBy /
+        groupByKey / aggregate substrings. If found, the file
+        MUST also contain a selectKey (or map) lambda body that
+        references the X-Tenant-Id header (lastHeader call or
+        TENANT_HEADER substring) AND constructs a composite key
+        with KEY_SEPARATOR (the "#" or KEY_SEPARATOR constant).
+        Absence trips the clause.
+    punctuator_silent_context_loss:
+      description: >
+        Processor/Transformer registers a punctuator via
+        context.schedule(...). The punctuator body iterates the
+        state store and calls context.forward(...) WITHOUT
+        setting TenantContext from the decoded key prefix. The
+        StreamThread runs the punctuator with empty
+        TenantContext by construction.
+      detection: >
+        43rd guard extracts every context.schedule(...) lambda
+        body in the file. Each body that contains a forward(
+        substring MUST also contain BOTH a TenantContext.set(
+        substring AND a TenantContext.clear( substring. Absence
+        of either trips the clause.
+    punctuator_set_clear_imbalance:
+      description: >
+        count(TenantContext.set) != count(TenantContext.clear)
+        inside the punctuator body. Mirrors R9 42nd-guard
+        clause(3) for the punctuator surface.
+      detection: >
+        43rd guard counts TenantContext.set and TenantContext.clear
+        substrings inside each context.schedule lambda body. If
+        the counts differ (or both are zero while forward( is
+        present), trip the clause.
+    cross_tenant_join_key:
+      description: >
+        Topology contains .join() / .leftJoin() / .outerJoin()
+        without upstream tenant-prefixed selectKey on every
+        joined stream. Tenant A's record joins Tenant B's
+        record; silent cross-tenant data fabrication.
+      detection: >
+        43rd guard scans for .join( / .leftJoin( / .outerJoin(
+        substrings. If found, the file MUST also contain at
+        least one selectKey lambda body that reads the
+        X-Tenant-Id header (lastHeader / TENANT_HEADER) AND
+        constructs a composite key with KEY_SEPARATOR. A
+        file with joins but no tenant-prefix selectKey trips
+        the clause.
+    per_tenant_state_store_naming:
+      description: >
+        Materialized.as("...-tenant-" + tenantId) or any
+        construction that interpolates a tenant identifier into
+        the state store name. Static topology build cannot
+        declare dynamic stores; rebalance/standby breaks.
+      detection: >
+        43rd guard scans for Materialized.as( calls. If the
+        string argument contains a "+" concatenation with a
+        tenantId / tenant_id / .toString() substring, trip the
+        clause. Static literal names ("tenant-metrics-by-key")
+        pass.
+
+  open_questions_remaining:
+    - "Kafka Streams interactive queries (HTTP endpoint that exposes the state store via store.range(prefix, prefix + '\\uFFFF')) for tenant-scoped reads — the read-side filter is the OBVERSE of the write-side prefix. Not yet anchored; opens the read-side counterpart of R10."
+    - "Kafka Streams Global KTables (cross-partition replicated tables) — global KTable replicates the entire topic to every StreamThread; tenant prefix in the key is still required for namespacing but the per-StreamThread copy creates a per-node RocksDB store of all tenants' data. Capacity/cost question, not correctness."
+    - "Kafka transactional producer + Streams EOS_V2 (exactly-once semantics) — already staked at #kafka-consumer-tenant-scope.open_questions_remaining[0]; EOS_V2 transactions span the consumer-side input + state store + downstream producer; the X-Tenant-Id header propagation across this transactional span is not yet anchored."
 
   cost_estimate_eng_days: 1.0
 
@@ -2193,14 +2622,26 @@ evidence:
     citation: "Spring for Apache Kafka Reference — Manual Acknowledgment. 'When using MANUAL or MANUAL_IMMEDIATE ack mode, the listener can invoke Acknowledgment.acknowledge() to commit offsets.' Documents that ack.acknowledge() runs on the consumer poll thread and interacts with the broker client. Confirms the structural reason ack_inside_tenant_span is the canonical failure mode in #kafka-consumer-tenant-scope: calling ack inside a TenantContext.set span can leak tenant context into the broker client thread pool."
     url: "https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/listener-container.html"
     quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Apache Kafka Streams Documentation — State Stores. 'A processor or a Streams DSL operator can store and query data. Streams provides so-called state stores, which can be used by stream processing applications to store and query data, which is an important capability when implementing stateful operations.' Documents that state stores are declared at topology build time with a static name; tenants cannot be dynamically materialised as separate stores at runtime — confirms the structural basis for the per_tenant_state_store_anti_pattern in #kafka-streams-tenant-scope."
+    url: "https://kafka.apache.org/documentation/streams/developer-guide/processor-api.html#state-stores"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Apache Kafka Streams Documentation — Punctuator and ProcessorContext.schedule. 'A processor can schedule a periodic action through ProcessorContext.schedule(). A typical use of this method is to call .schedule from the init() method.' Documents that the punctuator callback fires on the StreamThread independent of any record processing, with NO inherited context — confirms the structural reason punctuator_silent_context_loss is the canonical failure mode in #kafka-streams-tenant-scope.failure_modes."
+    url: "https://kafka.apache.org/documentation/streams/developer-guide/processor-api.html#defining-a-stream-processor"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Apache Kafka Streams Documentation — KStream-KTable Join. 'Performs a join on the keys of KStream and KTable. Records with null keys are dropped.' Documents that joins are key-equality-based: both sides MUST be keyed identically for matches to occur — confirms the cross_tenant_join_key failure mode in #kafka-streams-tenant-scope (business-key-only joins match across tenants because the join semantic does not consider any tenant context outside the key itself)."
+    url: "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#joining"
+    quoted_at: "2026-05-20"
 
 # Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
 # row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2)
 # + callback tenant resolution (~1.5) + scheduled-task (1) + realtime-connection (1)
-# + broker fan-out (1.5) + kafka-consumer (1.0) = ~19 eng-days.
-# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 + 1.0 = ~24 eng-days.
+# + broker fan-out (1.5) + kafka-consumer (1.0) + kafka-streams (1.0) = ~20 eng-days.
+# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 + 1.0 + 1.0 = ~25 eng-days.
 # These match the R16 b2b-admin frontmatter "~10-15 eng-days" estimate plus
-# the R5/R6/R7/R8/R9 successive regime closures (~4.5 eng-days incremental beyond
+# the R5/R6/R7/R8/R9/R10 successive regime closures (~5.5 eng-days incremental beyond
 # the baseline single-node deployment).
 # Broker fan-out is opt-in: single-node deployments SKIP and never adopt
 # TenantAwareRedisPubSubBridge; the 41st guard recognises this and live-repo
@@ -2208,5 +2649,9 @@ evidence:
 # Kafka consumer is opt-in: deployments without Kafka SKIP and never adopt
 # TenantAwareKafkaConsumer; the 42nd guard recognises this and live-repo
 # SKIPs when no .../multitenancy/TenantAwareKafkaConsumer.java is present.
+# Kafka Streams is opt-in: deployments without stateful real-time aggregation
+# SKIP and never adopt TenantAwareKafkaStreamsTopology; the 43rd guard
+# recognises this and live-repo SKIPs when no
+# .../multitenancy/TenantAwareKafkaStreamsTopology.java is present.
 
 decided_at: "2026-05-20"

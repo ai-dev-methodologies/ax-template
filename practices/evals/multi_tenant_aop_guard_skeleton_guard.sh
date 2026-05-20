@@ -16,6 +16,7 @@
 #   R7 closure : +TenantAwareSseEmitterRegistry.java      → 14 files (GAP-NEW-1)
 #   R8 closure : +TenantAwareRedisPubSubBridge.java       → 15 files (GAP-NEW-2)
 #   R9 closure : +TenantAwareKafkaConsumer.java           → 16 files (kafka-consumer)
+#   R10 closure: +TenantAwareKafkaStreamsTopology.java    → 17 files (kafka-streams)
 #
 # Closes P2 Round 3 GAP-NEW-2 (manifest aop-guard named
 # AuthorizedTenantInterceptor + the @AuthorizedTenant/@TenantId annotation
@@ -34,7 +35,7 @@
 #   bash practices/evals/multi_tenant_aop_guard_skeleton_guard.sh --fixtures
 #
 # Exit codes:
-#   0 — every multitenancy/ package contains the 16 expected files
+#   0 — every multitenancy/ package contains the 17 expected files
 #   1 — at least one file missing OR failing/ fixture unexpectedly passes
 
 set -uo pipefail
@@ -91,6 +92,18 @@ REQUIRED_FILES=(
     # deployments SKIP via the 42nd guard's live-repo SKIP branch — this
     # file is OPT-IN for fork-receivers that adopt Kafka consumers.
     "TenantAwareKafkaConsumer.java"
+    # 17th file added R10 — closes the kafka-streams open question
+    # staked in R9 (#kafka-consumer-tenant-scope.open_questions_remaining[0]
+    # pre-R10 ordering). Pairs with anchor
+    # blueprints/multi-tenant-manifest.yaml#kafka-streams-tenant-scope
+    # and is content-verified by kafka_streams_tenant_scope_guard.sh (43rd).
+    # Distinct surface from TenantAwareKafkaConsumer (R9): R9 is the
+    # stateless @KafkaListener consumer; this topology builds durable
+    # state stores (KTables), runs wall-clock punctuators, and performs
+    # tenant-namespaced joins. Stream-processing-free deployments SKIP
+    # via the 43rd guard's live-repo SKIP branch — this file is OPT-IN
+    # for fork-receivers that adopt Kafka Streams real-time aggregation.
+    "TenantAwareKafkaStreamsTopology.java"
 )
 
 verify_dir() {
@@ -131,7 +144,7 @@ if [ "$LIVE_FOUND" -eq 0 ]; then
     echo "multi_tenant_aop_guard_skeleton: live-repo SKIP — no .../multitenancy/ package (single-tenant default)"
 fi
 
-# Passing fixture: the canonical fork-receiver simulation MUST have all 15 files.
+# Passing fixture: the canonical fork-receiver simulation MUST have all 17 files.
 PASS_DIR="$SCRIPT_DIR/fixtures/multi-tenant-aop-guard-skeleton/passing/com/acme/multitenancy"
 PASS_OK=1
 verify_dir "passing-fixture" "$PASS_DIR" || PASS_OK=0
