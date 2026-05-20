@@ -170,6 +170,15 @@ tasks.register<Test>("testIdentityVerification") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testScheduledTask") {
+    useJUnitPlatform {
+        includeTags("SCHEDULED_TASK")
+    }
+    description = "Run scheduled-task domain compliance tests (R18: 5 items / 4 families — REGISTER, LOCK, EXECUTE, IDEMPOTENCY)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")
