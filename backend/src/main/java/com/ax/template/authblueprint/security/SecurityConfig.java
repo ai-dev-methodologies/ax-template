@@ -48,6 +48,15 @@ public class SecurityConfig {
                 // from verifier 401) before this carve-out.
                 .requestMatchers("/api/payments/callback/**").permitAll()
                 .requestMatchers("/api/payments/**").authenticated()
+                // Identity verification callbacks (PASS / KCB) follow the same
+                // pattern: authentication is the provider HMAC signature
+                // verified inside IdentityVerificationCallbackController per
+                // IDV-CALLBACK-001 (specs/identity-verification-l0.yaml). The
+                // permitAll() carve-out MUST appear before any catch-all so the
+                // callback POST reaches the controller (and the controller's 401
+                // on HMAC mismatch), not a Spring Security 401 — same false-
+                // confidence trap closed for /api/payments/callback in dogfood-6.
+                .requestMatchers("/api/identity-verification/callback/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/email/password-change").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/oauth/link").authenticated()

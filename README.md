@@ -99,7 +99,7 @@ cat recipes/saas-subscription/RECIPE.md     # example
 # 4. Run the full catalog verification (proves the bundle is intact)
 bash practices/evals/run-all-guards.sh       # 29 hard guards (all PASS expected)
 
-# Per-domain catalog tasks — the "binary pass/fail" surface (R1 baseline 2026-05-20)
+# Per-domain catalog tasks — the "binary pass/fail" surface (R2 baseline 2026-05-20)
 cd backend
 ./gradlew testAsvs              # GREEN — 26 ASVS items
 ./gradlew testCrud              # GREEN — 7 CRUD security tests
@@ -107,10 +107,10 @@ cd backend
 ./gradlew testPayment           # GREEN — 29 PAYMENT items
 ./gradlew testRateLimit         # GREEN
 ./gradlew testNotification      # GREEN
+./gradlew testIdentityVerification  # GREEN — 8/8 (HMAC envelope + PASS/KCB shape parity). VerifiedIdentity persistence + admin list are catalog contract surface, fork-receiver implements.
 ./gradlew testBilling           # RED — TDD anchor only; subscription/plan/webhook endpoints intentionally unimplemented
-./gradlew testIdentityVerification  # RED — catalog gap: HMAC callback controller incomplete
 ./gradlew testPortability       # advisory — external fixture (spring-realworld-example-app) cycle, not your code
-./gradlew test                  # aggregate of the above; expect 9 failures in R1 baseline (4+4+1)
+./gradlew test                  # aggregate of the above; expect 5 failures in R2 baseline (4 Billing + 1 Portability)
 cd ..
 
 cd frontend && npm install && npm run build && cd ..
