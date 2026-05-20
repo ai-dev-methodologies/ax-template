@@ -1,0 +1,126 @@
+# specs/recipes/_override-schema.yaml
+# JSON Schema 2020-12 (YAML encoding) for the `override_allowed:` block of
+# every specs/recipes/<pattern>-recipe-l0.yaml.
+# Generated: dogfood-8 | task: P2 R8 gap 6 closure
+#
+# Purpose
+#   The override_allowed block declares per-fork legal deviations from the
+#   recipe's enabled_l4_domains baseline. Today (2026-05-20) 11 recipes
+#   carry the block, all values are commented-out examples, and 0 forks
+#   exercise an override in this repo. The schema is therefore a SENTINEL:
+#   it locks the shape now so that the first real override (which will
+#   land in a downstream fork) is structurally validated against the
+#   convention the catalog has been emitting commented-out examples of.
+#
+# Why the schema is needed
+#   Without a published shape, every fork that uncomments an override
+#   is free to invent its own keys. Once the first divergent shape lands
+#   and gets copied, the catalog's read-side (cross_recipe_inv_uniqueness,
+#   recipe_sibling_sync, the future /ax-verify-recipe) all fork
+#   silently — the catalog stops being able to reason about overrides
+#   uniformly.
+#
+# Shape (validated by override_schema_guard.sh, 33rd hard guard candidate)
+#   override_allowed:                       # top-level mapping, may be empty
+#     enabled_l4_domains:                   # the ONLY field-path supported in R8
+#       <add|skip>: [<l4-domain>, ...]       # at least one of add | skip
+#       rationale: "<one-line natural-language reason>"
+#       citation:  "<URL or internal ticket ID>"
+#
+# The block MAY be empty (`override_allowed: {}`). It MAY hold one entry
+# per field-path. Multiple entries on the same field-path are NOT allowed
+# under the duplicate-key rule of the strict YAML loader (see the 32nd
+# guard, manifest_yaml_strict_parse_guard.sh) — a fork that needs both
+# `add` and `skip` for the same field-path declares them inside one
+# entry (both array keys present).
+#
+# allowed l4-domain enum
+#   Sourced from blueprints/templates/L4/ on disk at SP execution time.
+#   Hard-coded here for the dogfood-8 cut; the 33rd guard re-derives the
+#   enum from disk before validating values.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://ax-template/schemas/recipe-override-allowed/v1"
+title: "Recipe override_allowed block"
+description: >
+  Schema for the override_allowed block of specs/recipes/<pattern>-recipe-l0.yaml.
+  Defines the legal shape of a fork-receiver's per-fork deviation from the
+  recipe's baseline enabled_l4_domains list.
+
+type: object
+additionalProperties: false
+
+$defs:
+  l4_domain:
+    type: string
+    enum:
+      - audit-log
+      - auth
+      - billing
+      - crud
+      - email-outbox
+      - feature-flags
+      - file-storage
+      - i18n-policy
+      - identity-verification
+      - multi-tenant
+      - notification
+      - payment
+      - ratelimit
+      - realtime-policy
+      - scheduled-task
+      - search
+      - webhook
+
+  l4_domain_list:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      $ref: "#/$defs/l4_domain"
+
+properties:
+  enabled_l4_domains:
+    type: object
+    additionalProperties: false
+    description: >
+      Override of the recipe's baseline enabled_l4_domains. At least one
+      of `add` or `skip` must be present. Both may co-exist when the fork
+      simultaneously removes one baseline domain and substitutes another.
+    properties:
+      add:
+        $ref: "#/$defs/l4_domain_list"
+      skip:
+        $ref: "#/$defs/l4_domain_list"
+      rationale:
+        type: string
+        minLength: 16
+        description: "One-line natural-language reason (≥16 chars; rejects placeholder strings)."
+      citation:
+        type: string
+        minLength: 1
+        description: "URL or internal ticket ID. Empty string forbidden."
+
+    anyOf:
+      - required: [add, rationale, citation]
+      - required: [skip, rationale, citation]
+    required: [rationale, citation]
+
+# ─── examples (informational, not validated) ───
+# Empty (default):
+#   override_allowed: {}
+#
+# Single skip:
+#   override_allowed:
+#     enabled_l4_domains:
+#       skip: ["payment"]
+#       rationale: "Booking is free; no deposit or capture needed."
+#       citation: "PROJ-1234"
+#
+# Combined add + skip:
+#   override_allowed:
+#     enabled_l4_domains:
+#       add: ["feature-flags"]
+#       skip: ["scheduled-task"]
+#       rationale: "Stateless circuit-breaker; toggle gating via flags."
+#       citation: "https://github.com/<org>/<repo>/pull/42"

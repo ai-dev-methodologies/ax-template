@@ -285,6 +285,27 @@ echo "[15] recipe_sibling_sync_guard.sh (live repo)"
 run_guard "recipe_sibling_sync/live" 0 \
     bash "$SCRIPT_DIR/recipe_sibling_sync_guard.sh"
 
+# ── 16. manifest_yaml_strict_parse_guard (dogfood-9 — NEW-3 closure, 32nd guard) ─
+echo "[16] manifest_yaml_strict_parse_guard.sh (live repo)"
+# Strict YAML parse + duplicate-key detection for every blueprints/*-manifest.yaml.
+# Discovered by P2 R8 dry-run: ui-tokens-manifest.yaml line 27 had
+# `placeholder:{ ... }` (no space between key colon and inline flow mapping)
+# — lenient parsers accept, strict reject. Same pattern as the dogfood-6
+# manifest typo fix; this guard locks in the property across all 29 manifests.
+run_guard "manifest_yaml_strict_parse/live" 0 \
+    bash "$SCRIPT_DIR/manifest_yaml_strict_parse_guard.sh"
+
+# ── 17. override_schema_guard (dogfood-9 — gap 6 sentinel, 33rd guard) ───────
+echo "[17] override_schema_guard.sh (live repo)"
+# Sentinel: validates `override_allowed:` blocks in recipes/<slug>/RECIPE.md
+# frontmatter + specs/recipes/<slug>-recipe-l0.yaml against the contract at
+# specs/recipes/_override-schema.yaml. Today (dogfood-9 land) every override
+# is commented-out — guard fires only when fork-receivers activate one and
+# violate the schema (missing rationale, unknown L4 domain, placeholder
+# citation, etc.). Closes P2 R3 gap 6.
+run_guard "override_schema/live" 0 \
+    bash "$SCRIPT_DIR/override_schema_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
