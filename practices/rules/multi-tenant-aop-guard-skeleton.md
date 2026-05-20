@@ -21,7 +21,7 @@ verification:
   failing_fixture: practices/evals/fixtures/multi-tenant-aop-guard-skeleton/failing/
   notes: |
     Mechanical guard (dogfood-5 — promoted from review). Walks every
-    `.../multitenancy/` subpackage and asserts the 16 canonical files exist:
+    `.../multitenancy/` subpackage and asserts the 17 canonical files exist:
       (1) TenantContext.java
       (2) TenantOwned.java
       (3) TenantBoundaryViolationException.java
@@ -38,6 +38,7 @@ verification:
       (14) TenantAwareSseEmitterRegistry.java    ← added R7 (GAP-NEW-1)
       (15) TenantAwareRedisPubSubBridge.java     ← added R8 (GAP-NEW-2)
       (16) TenantAwareKafkaConsumer.java         ← added R9 (kafka-consumer)
+      (17) TenantAwareKafkaStreamsTopology.java  ← added R10 (kafka-streams)
     Failing-fixture sibling omits (11) — guard MUST trip with --fixtures.
     Body verification (@Around pointcut wiring, generic detail message,
     fail-fast on @TenantId misuse) anchored in manifest interceptor_skeleton.
@@ -101,7 +102,8 @@ com/<root>/multitenancy/
 ├── TenantIterationScheduler.java               # per-tenant @Scheduled iteration (R6)
 ├── TenantAwareSseEmitterRegistry.java          # long-lived push connection registry (R7)
 ├── TenantAwareRedisPubSubBridge.java           # cross-node broker fan-out bridge (R8, opt-in)
-└── TenantAwareKafkaConsumer.java               # tenant-scoped Kafka business-event consumer (R9, opt-in)
+├── TenantAwareKafkaConsumer.java               # tenant-scoped Kafka business-event consumer (R9, opt-in)
+└── TenantAwareKafkaStreamsTopology.java        # tenant-scoped Kafka Streams (KStream/KTable) topology (R10, opt-in)
 ```
 
 Each file's body is shipped as `java_skeleton:` block in `blueprints/multi-tenant-manifest.yaml` — adoption is mechanical substitution of `<root>` and integration into existing config.
