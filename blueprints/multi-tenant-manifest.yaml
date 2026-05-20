@@ -267,6 +267,136 @@ aop-guard:
       - "String # too loose — no format validation at boundary"
       - "tenantId (camelCase wire format)  # inconsistent with JWT custom-claim convention"
 
+  # ── dogfood-5 (P2 R3 GAP-NEW-2 closure) — three new aop-guard anchors ────
+  # The previous aop-guard description named @AuthorizedTenant +
+  # AuthorizedTenantInterceptor as the service-boundary mechanism but
+  # shipped no body. Fork-receivers stalled at the most security-critical
+  # 60 lines, risking 403-vs-404 existence leakage and tenant_id detail
+  # leakage. The three anchors below pin the canonical bodies.
+  authorized_tenant_annotation:
+    fqcn: "<cross_cutting_package>.AuthorizedTenant"
+    target: "ElementType.METHOD"
+    retention: "RetentionPolicy.RUNTIME"
+    rationale: >
+      Marks a service method that accesses tenant-scoped resources.
+      AuthorizedTenantInterceptor enforces that every parameter
+      annotated with @TenantId matches TenantContext.current() before
+      the method body runs. Mismatch → TenantBoundaryViolationException
+      → 404. Missing context → TenantContextMissingException → 500.
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      import java.lang.annotation.ElementType;
+      import java.lang.annotation.Retention;
+      import java.lang.annotation.RetentionPolicy;
+      import java.lang.annotation.Target;
+
+      @Target(ElementType.METHOD)
+      @Retention(RetentionPolicy.RUNTIME)
+      public @interface AuthorizedTenant {
+      }
+
+  tenant_id_marker:
+    fqcn: "<cross_cutting_package>.TenantId"
+    target: "ElementType.PARAMETER"
+    retention: "RetentionPolicy.RUNTIME"
+    rationale: >
+      Marks a method parameter whose value is the tenant_id of the
+      resource being accessed. Parameter type MUST be java.util.UUID
+      (see #aop-guard.tenant_id_shape). Three forbidden alternatives
+      (below) all lead to silent miss or leaks — a dedicated parameter
+      annotation is the only refactor-safe form.
+    forbidden_alternatives:
+      - "convention-by-name (e.g. parameter literally named 'tenantId')   # silent miss on rename or DTO wrap"
+      - "SpEL on @AuthorizedTenant(\"#dto.tenantId\")                       # not refactor-safe; no IDE rename"
+      - "@PathVariable + manual check in controller                        # service-boundary leak vector remains"
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      import java.lang.annotation.ElementType;
+      import java.lang.annotation.Retention;
+      import java.lang.annotation.RetentionPolicy;
+      import java.lang.annotation.Target;
+
+      @Target(ElementType.PARAMETER)
+      @Retention(RetentionPolicy.RUNTIME)
+      public @interface TenantId {
+      }
+
+  interceptor_skeleton:
+    fqcn: "<cross_cutting_package>.AuthorizedTenantInterceptor"
+    advised_pointcut: "@annotation(<cross_cutting_package>.AuthorizedTenant)"
+    failure_modes:
+      empty_context:       "throw TenantContextMissingException (500 via MultiTenantProblemDetailAdvice)"
+      parameter_not_uuid:  "throw IllegalStateException on first call (wiring bug, NOT a runtime authz failure)"
+      missing_tenant_id_param: "throw IllegalStateException (misuse — @AuthorizedTenant method with no @TenantId param)"
+      cross_tenant:        "throw TenantBoundaryViolationException (404 via MultiTenantProblemDetailAdvice; detail message MUST stay generic — never include tenant_id or resource id; existence-leakage prevention)"
+      same_tenant:         "proceed"
+    java_skeleton: |
+      package com.<root>.multitenancy;
+
+      import java.lang.annotation.Annotation;
+      import java.lang.reflect.Method;
+      import java.lang.reflect.Parameter;
+      import java.util.UUID;
+      import org.aspectj.lang.ProceedingJoinPoint;
+      import org.aspectj.lang.annotation.Around;
+      import org.aspectj.lang.annotation.Aspect;
+      import org.aspectj.lang.reflect.MethodSignature;
+      import org.springframework.stereotype.Component;
+
+      @Aspect
+      @Component
+      public class AuthorizedTenantInterceptor {
+
+          @Around("@annotation(com.<root>.multitenancy.AuthorizedTenant)")
+          public Object enforce(ProceedingJoinPoint joinPoint) throws Throwable {
+              UUID currentTenant = TenantContext.current().orElseThrow(() ->
+                  new TenantContextMissingException(
+                      "TenantContext empty at @AuthorizedTenant boundary: "
+                          + joinPoint.getSignature().toShortString()));
+
+              Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
+              Parameter[] parameters = method.getParameters();
+              Object[] args = joinPoint.getArgs();
+
+              UUID resourceTenant = null;
+              for (int i = 0; i < parameters.length; i++) {
+                  if (hasTenantIdAnnotation(parameters[i])) {
+                      if (!(args[i] instanceof UUID)) {
+                          throw new IllegalStateException(
+                              "@TenantId parameter must be UUID; got "
+                                  + (args[i] == null ? "null" : args[i].getClass().getName())
+                                  + " in " + method);
+                      }
+                      resourceTenant = (UUID) args[i];
+                      break;
+                  }
+              }
+
+              if (resourceTenant == null) {
+                  throw new IllegalStateException(
+                      "@AuthorizedTenant method missing @TenantId parameter: " + method);
+              }
+
+              if (!currentTenant.equals(resourceTenant)) {
+                  // Generic message — never include tenant_id or resource id.
+                  throw new TenantBoundaryViolationException("Resource not found");
+              }
+
+              return joinPoint.proceed();
+          }
+
+          private static boolean hasTenantIdAnnotation(Parameter parameter) {
+              for (Annotation annotation : parameter.getAnnotations()) {
+                  if (annotation.annotationType() == TenantId.class) {
+                      return true;
+                  }
+              }
+              return false;
+          }
+      }
+
 context-resolution:
   description: "TenantContext resolved from authenticated principal at controller entry."
   allowed_sources:

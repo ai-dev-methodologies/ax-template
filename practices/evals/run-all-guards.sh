@@ -262,6 +262,18 @@ echo "[13] payment_provider_type_enum_guard.sh (live repo)"
 run_guard "payment_provider_type_enum/live" 0 \
     bash "$SCRIPT_DIR/payment_provider_type_enum_guard.sh"
 
+# ── 14. multi_tenant_aop_guard_skeleton (dogfood-5 — P2 R3 GAP-NEW-2 closure) ─
+echo "[14] multi_tenant_aop_guard_skeleton_guard.sh (live repo + passing fixture)"
+# 30th hard guard. Enforces practices/rules/multi-tenant-aop-guard-skeleton.md
+# 11-file canonical adoption at every .../multitenancy/ package. Closes
+# P2 Round 3 GAP-NEW-2: manifest aop-guard named AuthorizedTenantInterceptor
+# + @AuthorizedTenant + @TenantId but shipped no body, leaving the most
+# security-critical 60 lines of multi-tenant adoption to fork-receiver
+# invention (risking 403-vs-404 existence leakage and tenant_id detail
+# leakage). dogfood-5 ships the bodies + this guard.
+run_guard "multi_tenant_aop_guard_skeleton/live" 0 \
+    bash "$SCRIPT_DIR/multi_tenant_aop_guard_skeleton_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
