@@ -447,7 +447,7 @@ context-resolution:
        *   current() — called by AOP interceptor, repository @Filter
        *               parameter binding, and TaskDecorator capture.
        *   clear()   — called in finally{} at request end AND by
-   *               TaskDecorator after the async task runs.
+       *               TaskDecorator after the async task runs.
        *
        * The set/clear pair MUST be balanced; ThreadLocal leaks
        * silently corrupt the next request scheduled on the same

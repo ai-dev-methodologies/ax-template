@@ -38,6 +38,15 @@ public class SecurityConfig {
                 // P5 security-review finding (US-014, HIGH): tightened from permitAll.
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/api/items/**").authenticated()
+                // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
+                // are unauthenticated by user JWT — authentication is the PG signature
+                // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The
+                // permitAll() carve-out MUST appear BEFORE /api/payments/** so callback
+                // POSTs reach the controller (and the verifier's 401), not a Spring
+                // Security 401. dogfood-6 G-NEW-1 closure — PaymentCallbackTest
+                // CALLBACK-001 was false-confidence PASS (Spring 401 indistinguishable
+                // from verifier 401) before this carve-out.
+                .requestMatchers("/api/payments/callback/**").permitAll()
                 .requestMatchers("/api/payments/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/email/password-change").authenticated()
