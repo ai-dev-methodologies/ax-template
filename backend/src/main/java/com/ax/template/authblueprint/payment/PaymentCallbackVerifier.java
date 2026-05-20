@@ -95,5 +95,29 @@ public interface PaymentCallbackVerifier {
         public static Result invalid(String failReason) {
             return new Result(false, null, null, null, failReason);
         }
+
+        /**
+         * Invalid result that preserves the inbound {@code orderId} extracted from
+         * the callback payload BEFORE signature verification failed. Most Korean
+         * PGs include the merchant order id as a plaintext field, separate from
+         * the signed hash, so the verifier can pull it out for the audit ledger
+         * even when the signature itself is rejected.
+         *
+         * <p>Spec anchor: specs/payment-l0.yaml#PAYMENT-CALLBACK-001 — the audit
+         * row tagged {@code source=callback, outcome=signature_fail} SHOULD
+         * include the inbound order id when extractable, so forensic teams can
+         * correlate failed callbacks to a specific Payment without scanning the
+         * whole ledger.
+         *
+         * <p>If the payload provided no usable {@code orderId} (e.g. malformed
+         * form-data with no merchant fields at all), pass {@code null} or use
+         * the single-arg {@link #invalid(String)} overload.
+         *
+         * @param failReason short, non-secret reason code; goes to the audit row
+         * @param inboundOrderId the claimed merchant order id, or null if absent
+         */
+        public static Result invalid(String failReason, String inboundOrderId) {
+            return new Result(false, null, inboundOrderId, null, failReason);
+        }
     }
 }
