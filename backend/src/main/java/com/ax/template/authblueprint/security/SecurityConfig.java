@@ -58,6 +58,12 @@ public class SecurityConfig {
                 // service layer via the caller's userId from Authentication,
                 // never from a path parameter.
                 .requestMatchers("/api/notifications/**").authenticated()
+                // R16 file-storage domain (specs/file-storage-l0.yaml):
+                // FILE-AUTHZ-001 — every endpoint requires a valid JWT.
+                // Owner-only access (FILE-AUTHZ-002/003) is enforced in the
+                // service layer via the caller's userId from Authentication,
+                // never from a path parameter.
+                .requestMatchers("/api/files/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per
