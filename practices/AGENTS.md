@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "9382794ee867c757e2b1d983870e600ede2003c3b53cf5341a0103cd97e42ac2"
+  source_concat_sha256: "7f8f0a1ae068c6f1c4e57b8420600d28ee14244c738fdd98fdaaf2f0ab16b74a"
   rule_count: 87
   generated_by: "practices/generate_agents.sh"
 ---
@@ -3269,7 +3269,7 @@ verification:
   failing_fixture: practices/evals/fixtures/multi-tenant-aop-guard-skeleton/failing/
   notes: |
     Mechanical guard (dogfood-5 — promoted from review). Walks every
-    `.../multitenancy/` subpackage and asserts the 18 canonical files exist:
+    `.../multitenancy/` subpackage and asserts the 19 canonical files exist:
       (1) TenantContext.java
       (2) TenantOwned.java
       (3) TenantBoundaryViolationException.java
@@ -3288,6 +3288,7 @@ verification:
       (16) TenantAwareKafkaConsumer.java              ← added R9 (kafka-consumer)
       (17) TenantAwareKafkaStreamsTopology.java       ← added R10 (kafka-streams)
       (18) TenantAwareInteractiveQueryService.java    ← added R11 (kafka-streams-iq)
+      (19) TenantAwareStandbyForwardingService.java   ← added R12 (kafka-streams-standby-rpc)
     Failing-fixture sibling omits (11) — guard MUST trip with --fixtures.
     Body verification (@Around pointcut wiring, generic detail message,
     fail-fast on @TenantId misuse) anchored in manifest interceptor_skeleton.
@@ -3352,7 +3353,9 @@ com/<root>/multitenancy/
 ├── TenantAwareSseEmitterRegistry.java          # long-lived push connection registry (R7)
 ├── TenantAwareRedisPubSubBridge.java           # cross-node broker fan-out bridge (R8, opt-in)
 ├── TenantAwareKafkaConsumer.java               # tenant-scoped Kafka business-event consumer (R9, opt-in)
-└── TenantAwareKafkaStreamsTopology.java        # tenant-scoped Kafka Streams (KStream/KTable) topology (R10, opt-in)
+├── TenantAwareKafkaStreamsTopology.java        # tenant-scoped Kafka Streams (KStream/KTable) topology (R10, opt-in)
+├── TenantAwareInteractiveQueryService.java     # tenant-scoped state-store reads via store.range (R11, opt-in)
+└── TenantAwareStandbyForwardingService.java    # tenant-scoped cross-node IQ fan-out (R12, opt-in)
 ```
 
 Each file's body is shipped as `java_skeleton:` block in `blueprints/multi-tenant-manifest.yaml` — adoption is mechanical substitution of `<root>` and integration into existing config.

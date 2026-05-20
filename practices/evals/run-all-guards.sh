@@ -615,6 +615,47 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/kafka_streams_interactive_queries_tenant_scope_guard.sh" --fixtures
 fi
 
+# ── 30. kafka_streams_standby_rpc_tenant_scope_guard
+#      (R12 — cluster fan-out OBVERSE of R11 closure, 45th guard) ──────────────
+echo ""
+echo "[30] kafka_streams_standby_rpc_tenant_scope_guard.sh (live repo + passing fixture)"
+# 45th hard guard. Enforces blueprints/multi-tenant-manifest.yaml
+# #kafka-streams-standby-rpc-tenant-scope: Kafka Streams Interactive
+# Queries cluster fan-out (the cross-node RPC layer that activates
+# when the local node does NOT host the partition for a tenant's
+# prefix; distinct surface from
+# #kafka-streams-interactive-queries-tenant-scope: R11 is the
+# SINGLE-NODE store-range read, this anchor covers the MULTI-NODE
+# router that decides local-vs-remote and HTTP-forwards remote
+# calls) MUST adopt the (TenantContext.current() at the router +
+# X-Tenant-Id header on every forward + no tenantId in forward URL
+# + fresh metadata lookup per query) pattern with four load-bearing
+# clauses — standby forwarder files MUST set X-Tenant-Id on every
+# forward (without it the receiving node's TenantContext is empty
+# and R11 clause(1) trips on the remote IQ service); MUST call
+# TenantContext.current() (no path/query/body tenantId as the
+# metadata-lookup key); MUST NOT embed tenantId as a URL path
+# segment (header is the sole tenant carrier across the wire);
+# MUST NOT cache KeyQueryMetadata / Collection<StreamsMetadata>
+# fields or HostInfo fields with initialisers (Streams rebalance
+# invalidates prior metadata — constructor-injected self-host
+# HostInfo identity fields without `=` initialisers are permitted).
+# Closes the standby replica RPC open question that was the first
+# entry (R11-era index [0]) of
+# #kafka-streams-interactive-queries-tenant-scope.open_questions_remaining
+# in the R11-committed manifest — entry removed on R12 closure.
+# Single-node clusters and IQ-free deployments live-repo SKIP —
+# no .../multitenancy/TenantAwareStandbyForwardingService.java present.
+run_guard "kafka_streams_standby_rpc_tenant_scope/live" 0 \
+    bash "$SCRIPT_DIR/kafka_streams_standby_rpc_tenant_scope_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[30f] kafka_streams_standby_rpc_tenant_scope_guard.sh --fixtures"
+    run_guard "kafka_streams_standby_rpc_tenant_scope/fixtures" 0 \
+        bash "$SCRIPT_DIR/kafka_streams_standby_rpc_tenant_scope_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
