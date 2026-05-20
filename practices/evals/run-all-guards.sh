@@ -306,6 +306,21 @@ echo "[17] override_schema_guard.sh (live repo)"
 run_guard "override_schema/live" 0 \
     bash "$SCRIPT_DIR/override_schema_guard.sh"
 
+# ── 18. ledger_audit_nullability_guard (dogfood-11 — R11 GAP-B closure, 34th guard) ─
+echo "[18] ledger_audit_nullability_guard.sh (live repo)"
+# Locks the JPA entity column nullability (PaymentEvent.paymentId @Column
+# nullable=...) and the Flyway migration SQL nullability (CREATE TABLE
+# payment_events.payment_id + any ALTER COLUMN DROP/SET NOT NULL statements
+# across V*.sql) in lockstep. Closes the dogfood-10 stopgap that routed
+# redirect-style PG callback signature_fail audit rows with unresolved
+# inboundOrderId to a sentinel UUID(0,0) inside payment_events — which
+# polluted the PAYMENT-RECON-001 hash chain. dogfood-11 relaxed the NOT NULL
+# (V006 + entity update) so orphan audit rows persist with paymentId=null;
+# this guard makes future desync between the two sides a hard fail. Spec
+# anchor: specs/payment-l0.yaml#PAYMENT-CALLBACK-001.
+run_guard "ledger_audit_nullability/live" 0 \
+    bash "$SCRIPT_DIR/ledger_audit_nullability_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

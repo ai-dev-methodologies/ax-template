@@ -41,7 +41,26 @@ public class PaymentEventLedger {
     /**
      * Appends a ledger event with hash-chain linkage.
      *
-     * @param paymentId payment whose history is being extended
+     * <p>Two append modes:
+     * <ol>
+     *   <li><b>Payment-anchored</b> (paymentId != null) — normal case. The new event's
+     *       {@code prev_hash} is set to the previous event's {@code payload_hash}
+     *       for the same {@code paymentId}, forming the PAYMENT-RECON-001 hash chain.</li>
+     *   <li><b>Orphan audit</b> (paymentId == null) — dogfood-11 R11 GAP-B closure.
+     *       Used by {@code PaymentService.auditCallbackFailure} when an inbound
+     *       redirect-style PG callback fails signature verification BEFORE the
+     *       inbound {@code orderId} can be resolved to a Payment row. Each orphan
+     *       audit row is intentionally isolated: {@code prev_hash} is fixed to
+     *       {@code null} so the audit row does NOT chain with any other orphan
+     *       (preventing a "sentinel chain" from forming, which was the dogfood-10
+     *       sentinel-UUID(0,0) workaround's failure mode), and the row is NEVER
+     *       picked up as a {@code prev_hash} source for a future event. The
+     *       {@code payload.paymentId} field is omitted from the serialized JSON
+     *       so {@code sha256(payload)} cannot accidentally collide with a real
+     *       payment's genesis event.</li>
+     * </ol>
+     *
+     * @param paymentId payment whose history is being extended; null for orphan audit rows
      * @param type      event type
      * @param amount    canonical amount for the event (CAPTURED→capturedAmount,
      *                  REFUNDED→refund.amount, etc.); may be null for non-amount events
@@ -50,7 +69,9 @@ public class PaymentEventLedger {
     @Transactional
     public PaymentEvent append(UUID paymentId, PaymentEventType type, BigDecimal amount, Map<String, Object> extras) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("paymentId", paymentId.toString());
+        if (paymentId != null) {
+            payload.put("paymentId", paymentId.toString());
+        }
         payload.put("type", type.name());
         if (amount != null) {
             payload.put("amount", amount.toPlainString());
@@ -68,9 +89,20 @@ public class PaymentEventLedger {
             throw new IllegalStateException("ledger payload serialization failed", e);
         }
 
-        String prevHash = eventRepository.findFirstByPaymentIdOrderByOccurredAtDesc(paymentId)
-            .map(PaymentEvent::getPayloadHash)
-            .orElse(null);
+        // Orphan audit rows (paymentId == null) deliberately skip the prev_hash
+        // lookup. Chaining them would either (a) require a separate "orphan
+        // chain" repository method that finds by paymentId IS NULL — which would
+        // group unrelated signature-fail events from different inbound callbacks
+        // into a fake chain — or (b) leave Spring Data JPA's derived query
+        // {@code findFirstByPaymentIdOrderByOccurredAtDesc(null)} to map null
+        // parameter to a literal {@code = ?} (returning empty by default) and
+        // depend on undocumented behavior. Explicit null-skip is the safer
+        // semantic: every orphan audit row is a self-contained genesis entry.
+        String prevHash = paymentId == null
+            ? null
+            : eventRepository.findFirstByPaymentIdOrderByOccurredAtDesc(paymentId)
+                .map(PaymentEvent::getPayloadHash)
+                .orElse(null);
 
         PaymentEvent event = new PaymentEvent();
         event.setEventId(UUID.randomUUID());

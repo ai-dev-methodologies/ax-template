@@ -38,7 +38,26 @@ public class PaymentEvent {
     @Column(name = "event_id", nullable = false, updatable = false)
     private UUID eventId;
 
-    @Column(name = "payment_id", nullable = false, updatable = false)
+    /**
+     * Owning payment for payment-anchored events (CREATE/AUTHORIZE/CAPTURE/REFUND/etc.).
+     *
+     * <p>Nullable since dogfood-11 (R11 GAP-B closure): audit rows from a redirect-style
+     * PG callback that fails signature verification BEFORE the inbound orderId can be
+     * resolved to a Payment are persisted with {@code paymentId = null}. Spec anchor:
+     * specs/payment-l0.yaml#PAYMENT-CALLBACK-001 ("audit ledger row tagged
+     * source=callback, outcome=signature_fail"). The spec does not require these
+     * audit rows to be anchored to a known payment, and the dogfood-10 stopgap of
+     * routing them to a sentinel UUID(0,0) contaminated the payment_events hash
+     * chain semantics — see {@link PaymentEventLedger#append} for the null-safe
+     * append path (orphan audit rows form independent prev_hash=null entries
+     * instead of chaining with each other or with a fake payment).
+     *
+     * <p>Schema synchronization: Flyway V006 ({@code db/migration/V006__make_payment_event_payment_id_nullable.sql})
+     * mirrors this nullability for production Postgres deployments. The mechanical
+     * guard {@code practices/evals/ledger_audit_nullability_guard.sh} enforces
+     * that the entity column and the migration SQL stay in agreement.
+     */
+    @Column(name = "payment_id", nullable = true, updatable = false)
     private UUID paymentId;
 
     @Enumerated(EnumType.STRING)
