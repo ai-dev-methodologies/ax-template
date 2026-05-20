@@ -24,7 +24,7 @@ color:
     default:    { token: "--color-text",              oklch: "18% 0 0",         wcag_ratio: "≥16:1 vs surface.default" }
     muted:      { token: "--color-text-muted",        oklch: "50% 0 0",         wcag_ratio: "≥4.5:1 vs surface.default" }
     inverse:    { token: "--color-text-inverse",      oklch: "98% 0 0",         wcag_ratio: "≥4.5:1 vs surface.inverse" }
-    placeholder:{ token: "--color-text-placeholder",  oklch: "55% 0 0",         wcag_ratio: "≥4.5:1 vs surface.default" }
+    placeholder: { token: "--color-text-placeholder", oklch: "55% 0 0",         wcag_ratio: "≥4.5:1 vs surface.default" }
   accent:
     default:    { token: "--color-accent",            oklch: "55% 0.21 250",    wcag_ratio: "≥4.5:1 vs surface.default" }
     hover:      { token: "--color-accent-hover",      oklch: "48% 0.21 250",    note: "10% darkened" }
