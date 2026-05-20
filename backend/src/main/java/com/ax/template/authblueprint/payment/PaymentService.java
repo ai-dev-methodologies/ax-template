@@ -306,4 +306,76 @@ public class PaymentService {
 
     /** Outcome of {@link #createPayment} — distinguishes 201 (created) from 200 (replay). */
     public record PaymentOutcome(Payment payment, boolean replay) {}
+
+    /**
+     * Service hook for redirect-style PG callbacks. Called by
+     * {@code PaymentCallbackController} after {@link PaymentCallbackVerifier}
+     * has verified the signature.
+     *
+     * <p>Spec anchors:
+     * <ul>
+     *   <li>specs/payment-l0.yaml#PAYMENT-CALLBACK-002 — idempotent on
+     *       (provider, TID); duplicate callback for already-CAPTURED payment
+     *       returns the existing state, NOT a second CAPTURED ledger event.</li>
+     *   <li>specs/payment-l0.yaml#PAYMENT-CALLBACK-003 — only
+     *       {AUTHORIZED, UNKNOWN} states may transition via callback;
+     *       CREATED and REFUNDED reject with {@link IllegalStateTransitionException}.</li>
+     *   <li>blueprints/payment-manifest.yaml#callback — ledger_metadata
+     *       must include {@code source=callback, provider_txn_id=<TID>}.</li>
+     * </ul>
+     *
+     * <p>This is intentionally a contract-only stub. The full implementation
+     * (idempotency check, state-machine transition, ledger append, provider
+     * call via {@link PaymentProvider#captureFromCallback}) ships in a
+     * follow-up PRD so the {@code PaymentStateMachine} transition table can
+     * be extended without breaking the existing negative-transition tests.
+     *
+     * <p>Fork-receivers implementing a redirect-style PG today MUST override
+     * this method in a subclass or replace the service bean. The signature
+     * is part of the catalog contract — do not deviate. The
+     * {@code UnsupportedOperationException} message names the spec items so
+     * any caller running into it sees exactly which specs must be satisfied.
+     *
+     * @param paymentId        the merchant-side payment id (looked up from
+     *                         {@code orderId} in the callback payload by the
+     *                         caller)
+     * @param providerName     slug matching {@link PaymentCallbackVerifier#providerName()}
+     *                         (also the {@code {provider}} path parameter)
+     * @param verifiedTid      PG-issued TID, already signature-verified
+     * @param signedPayload    canonical signed payload (opaque to the service;
+     *                         passed through to the provider on second-stage
+     *                         approval if the adapter needs it)
+     * @return outcome describing the post-callback Payment state and whether
+     *         this was an idempotent replay
+     * @throws PaymentNotFoundException        when {@code paymentId} does not exist
+     * @throws IllegalStateTransitionException when the Payment is in CREATED or
+     *         REFUNDED state (PAYMENT-CALLBACK-003)
+     */
+    public CallbackOutcome markCapturedFromCallback(
+        UUID paymentId,
+        String providerName,
+        String verifiedTid,
+        String signedPayload
+    ) {
+        throw new UnsupportedOperationException(
+            "markCapturedFromCallback is contract-only in this catalog release. "
+            + "Implement per specs/payment-l0.yaml#PAYMENT-CALLBACK-001..003 "
+            + "and blueprints/payment-manifest.yaml#callback. "
+            + "Required behavior: (1) load Payment by paymentId, (2) if already "
+            + "CAPTURED for the same verifiedTid, return idempotent replay "
+            + "(PAYMENT-CALLBACK-002), (3) if state is CREATED or REFUNDED, "
+            + "throw IllegalStateTransitionException → HTTP 409 "
+            + "(PAYMENT-CALLBACK-003), (4) call provider.captureFromCallback "
+            + "and on APPROVED transition to CAPTURED with a ledger row "
+            + "tagged source=callback,provider_txn_id=" + verifiedTid + "."
+        );
+    }
+
+    /**
+     * Outcome of {@link #markCapturedFromCallback}. Field {@code state} is
+     * the post-callback Payment state ({@code CAPTURED} on success).
+     * {@code idempotentReplay} is true when the same (provider, TID) callback
+     * was already processed.
+     */
+    public record CallbackOutcome(PaymentState state, boolean idempotentReplay) {}
 }
