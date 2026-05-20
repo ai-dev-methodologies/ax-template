@@ -427,3 +427,41 @@ snapshots:
     sha: "b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9"
     version_observed: "toss-payments-api@2024"
     purpose: "Toss Payments 정기결제: billingKey flow, integer KRW amounts, idempotency header, HMAC-SHA256 webhook, status mapping to ax-template canonical statuses"
+
+  # ── Korean PG callback signature spec (R14 G11 closure) ──────────────────────
+  # Closes the evidence-anchored rule provenance gap for redirect-style Korean
+  # PGs. ax-template's templates/L4/payment manifest is redirect-style (Korean
+  # market default) but had NO snapshot entries for the three dominant Korean
+  # PG signature specs — fork-receiver rules authored against a Korean adapter
+  # would fail evidence_guard.sh because no upstream_id resolved. These three
+  # entries provide stable anchors; the snapshot bodies record canonical
+  # algorithm + signing string + header/param name + key var.
+  - id: "kg-inicis-signature-2026-05"
+    tier: 2
+    source: "https://manual.inicis.com/"
+    via: "fork-receiver-provided"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4501
+    sha: "6a060948bb271d9facae4630c26097fe6ce3afbe9faeb6c4967e283aac765e88"
+    version_observed: "INIstdpay-manual@v3.2.7-2026-04-10"
+    purpose: "KG이니시스 redirect-style callback signature: SHA-256 hex over (authToken+timestamp), 'signature' query-param, INICIS_SIGN_KEY env, 5min replay window"
+
+  - id: "nice-payments-signature-2026-05"
+    tier: 2
+    source: "https://developers.nicepay.co.kr/"
+    via: "fork-receiver-provided"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4161
+    sha: "e53ff2607e326ef3c2c5878cad3521bdf488dfd910bfccc2c73b1d596d526958"
+    version_observed: "nicepay-v2-php-sample-2026-03-30"
+    purpose: "NICE페이먼츠 v2 callback signature: SHA-256 hex over (authToken+mid+amount+ediDate+merchantKey), form-POST 'signature', NICEPAY_MERCHANT_KEY env, 10min replay window"
+
+  - id: "kcp-payments-signature-2026-05"
+    tier: 2
+    source: "https://developer.kcp.co.kr/"
+    via: "fork-receiver-provided"
+    fetched_at: "2026-05-18T00:00:00Z"
+    bytes: 4260
+    sha: "2ce20f7165ae7d4227ee2d960f89aa4ea7bbe7dc889300546a65e0bfb1fdd47e"
+    version_observed: "kcp-pp-cli-java-v1.4.0"
+    purpose: "KCP redirect-style callback signature: Base64(SHA-256(site_cd+tno+amount+tran_cd+cust_ip+ediDate+secret_key)), form-POST envelope, KCP_SECRET_KEY + KCP_PRIVATE_KEY env, 3min replay window"

@@ -3,6 +3,7 @@ package com.ax.template.authblueprint.payment;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -17,8 +18,16 @@ import org.springframework.stereotype.Component;
  *
  * <p>This is the implementation of {@code specs/payment-l0.yaml#PAYMENT-PROVIDER-007}.
  * The decorator is marked {@link Primary @Primary} so {@link PaymentService} and any
- * other injection site receive the decorator transparently; {@link MockProvider} (and
- * future Stripe / Toss adapters) are injected as the delegate via concrete class type.
+ * other injection site receive the decorator transparently.
+ *
+ * <p><b>R14 GAP-A fix (qualifier consistency):</b> the delegate is resolved by the
+ * interface {@link PaymentProvider} + {@code @Qualifier("rawPaymentProvider")} bean
+ * name — NOT by the concrete {@link MockProvider} class. This unblocks fork-receivers
+ * who replace {@code MockProvider} with a real PG adapter (Stripe / Toss / KG Inicis /
+ * NICE / KCP): they register the new adapter under the same bean name
+ * {@code rawPaymentProvider} and disable the mock via profile/property gating. The
+ * decorator wires transparently in both cases. Enforced mechanically by
+ * {@code practices/evals/payment_provider_qualifier_consistency_guard.sh} (36th hard guard).
  *
  * <p>Slow detection is an observability cross-cut — the payment outcome is unchanged.
  * The decorator does not catch, mutate, or interpret the {@link ProviderResponse}; it
@@ -33,11 +42,14 @@ public class SlowProviderLatencyDecorator implements PaymentProvider {
     /** Counter name pinned to {@code blueprints/payment-manifest.yaml#observability.metrics}. */
     static final String SLOW_COUNTER = "payment_provider_slow_total";
 
+    /** Bean-name contract — see class Javadoc. Locked by the 36th hard guard. */
+    static final String RAW_PROVIDER_BEAN_NAME = "rawPaymentProvider";
+
     private final PaymentProvider delegate;
     private final MeterRegistry meterRegistry;
     private final SlowProviderProperties properties;
 
-    public SlowProviderLatencyDecorator(MockProvider delegate,
+    public SlowProviderLatencyDecorator(@Qualifier(RAW_PROVIDER_BEAN_NAME) PaymentProvider delegate,
                                         MeterRegistry meterRegistry,
                                         SlowProviderProperties properties) {
         this.delegate = delegate;

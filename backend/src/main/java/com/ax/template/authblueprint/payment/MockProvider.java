@@ -17,8 +17,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>IDEMPOTENCY_REPLAY mode caches the first response keyed by idempotencyKey and
  * returns the cached response on subsequent calls — simulating a provider's own
  * idempotency-key replay.
+ *
+ * <p><b>Bean naming contract (R14 GAP-A closure):</b> registered under the bean name
+ * {@code rawPaymentProvider}. {@link SlowProviderLatencyDecorator} resolves the raw
+ * (un-decorated) provider via {@code @Qualifier("rawPaymentProvider")} so the decorator
+ * never depends on the concrete {@code MockProvider} type. Fork-receivers adding a real
+ * PG adapter (Stripe / Toss / KG Inicis / NICE / KCP) MUST register that adapter under
+ * the same bean name {@code rawPaymentProvider} (typically {@code @Component("rawPaymentProvider")})
+ * and disable {@code MockProvider} via profile/property gating so only one raw provider
+ * exists at runtime. Enforced mechanically by
+ * {@code practices/evals/payment_provider_qualifier_consistency_guard.sh} (36th hard guard).
  */
-@Component
+@Component("rawPaymentProvider")
 public class MockProvider implements PaymentProvider {
 
     private static final int DEFAULT_MAX_RETRIES = 3;

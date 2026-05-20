@@ -347,6 +347,19 @@ echo "[20] payment_callback_restassured_compliance_guard.sh (live repo)"
 run_guard "payment_callback_restassured_compliance/live" 0 \
     bash "$SCRIPT_DIR/payment_callback_restassured_compliance_guard.sh"
 
+# ── 21. payment_provider_qualifier_consistency_guard (dogfood-14 — R14 GAP-A closure, 36th guard) ─
+echo ""
+echo "[21] payment_provider_qualifier_consistency_guard.sh (live repo)"
+# 36th hard guard. Locks the SlowProviderLatencyDecorator ↔ MockProvider bean
+# resolution contract: decorator constructor MUST take interface PaymentProvider
+# + @Qualifier("rawPaymentProvider"), MockProvider MUST register under bean name
+# "rawPaymentProvider". Without this guard, a fork-receiver adding a real PG
+# adapter (Stripe / Toss / KG Inicis / NICE / KCP) would hit a silent bean
+# resolution conflict the moment they tried to keep both beans scoped by
+# @Profile — discovered only at runtime when @Primary fell back to the mock.
+run_guard "payment_provider_qualifier_consistency/live" 0 \
+    bash "$SCRIPT_DIR/payment_provider_qualifier_consistency_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
