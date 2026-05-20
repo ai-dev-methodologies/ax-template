@@ -179,6 +179,15 @@ tasks.register<Test>("testScheduledTask") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testWebhook") {
+    useJUnitPlatform {
+        includeTags("WEBHOOK")
+    }
+    description = "Run webhook domain compliance tests (R19: 10 items / 5 families — EMIT, SIGN, RETRY, DEAD-LETTER, CIRCUIT-BREAKER, IDEMPOTENCY)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")
