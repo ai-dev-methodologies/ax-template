@@ -43,6 +43,11 @@ REQUIRED_FILES=(
     "AuthorizedTenant.java"
     "TenantId.java"
     "AuthorizedTenantInterceptor.java"
+    # 12th file added R4 — closes GAP-R3-3 (audit/ledger entity outside
+    # tenant-scoped request boundary). Pairs with anchor
+    # blueprints/multi-tenant-manifest.yaml#ledger-audit-tenant-scope and
+    # is content-verified by ledger_audit_tenant_nullable_guard.sh (37th).
+    "AuditEvent.java"
 )
 
 verify_dir() {

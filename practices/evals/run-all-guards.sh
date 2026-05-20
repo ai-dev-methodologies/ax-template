@@ -360,6 +360,31 @@ echo "[21] payment_provider_qualifier_consistency_guard.sh (live repo)"
 run_guard "payment_provider_qualifier_consistency/live" 0 \
     bash "$SCRIPT_DIR/payment_provider_qualifier_consistency_guard.sh"
 
+# ── 22. ledger_audit_tenant_nullable_guard (R4 — P2 GAP-R3-3 closure, 37th guard) ─
+echo ""
+echo "[22] ledger_audit_tenant_nullable_guard.sh (live repo + passing fixture)"
+# 37th hard guard. Enforces blueprints/multi-tenant-manifest.yaml
+# #ledger-audit-tenant-scope: audit / ledger / append-only event entities
+# that may be appended OUTSIDE a tenant-scoped request boundary
+# (e.g. PG callback signature_fail at permitAll endpoint) MUST NOT
+# implement TenantOwned, MUST declare tenant_id @Column nullable=true,
+# and MUST expose getTenantId() returning Optional<UUID>. Closes
+# P2 dogfood R3 GAP-R3-3: PaymentEventLedger.append() invoked from
+# PaymentCallbackController signature_fail path threw
+# TenantContextMissingException → 500 → external PG retried indefinitely
+# (NICE / Toss V1 retry up to 24h). The catalog previously had no
+# policy for the asymmetry between request-scoped resources and audit
+# entities; this guard locks the policy mechanically.
+run_guard "ledger_audit_tenant_nullable/live" 0 \
+    bash "$SCRIPT_DIR/ledger_audit_tenant_nullable_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[22f] ledger_audit_tenant_nullable_guard.sh --fixtures"
+    run_guard "ledger_audit_tenant_nullable/fixtures" 0 \
+        bash "$SCRIPT_DIR/ledger_audit_tenant_nullable_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

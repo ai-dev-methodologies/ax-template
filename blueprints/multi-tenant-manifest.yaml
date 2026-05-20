@@ -619,6 +619,180 @@ async-propagation:
           }
       }
 
+ledger-audit-tenant-scope:
+  description: >
+    Tenant policy for append-only audit/ledger entities (PaymentEvent-style)
+    that can be appended OUTSIDE a tenant-scoped request boundary — most
+    commonly: signature_fail callbacks at permitAll endpoints where the
+    request has no authenticated principal and therefore no TenantContext.
+  introduced_at: >
+    R4 — closes P2 R3 GAP-R3-3 surfaced during dogfood: PaymentEventLedger.append()
+    is invoked from PaymentCallbackController on signature_fail path
+    BEFORE any orderId → Payment → tenant_id resolution can succeed. With
+    TenantContext.current() returning Optional.empty() AND audit entity
+    declared TenantOwned (mandatory tenant_id), the callback handler
+    threw TenantContextMissingException → 500 → external PG retried
+    indefinitely (NICE / Toss V1 retry policy: up to 24h). The catalog
+    previously had no policy for this asymmetry — the AOP / row-level
+    anchors all assume request-scoped context exists.
+
+  scope_decision: >
+    Audit / ledger / append-only event entities are NOT tenant-scoped
+    resources in the AOP-boundary sense. They are operational records
+    whose tenant attribution is a best-effort enrichment, NOT an
+    isolation boundary. The isolation boundary lives on the resource
+    they reference (Payment, Order, etc.) — and orphan audit rows
+    that reference no resource MUST be preserved with tenant_id = null
+    rather than dropped or assigned a sentinel tenant.
+
+  policy:
+    entity_must_implement_tenant_owned: false
+    rationale_for_not_implementing: >
+      TenantOwned mandates a non-null getTenantId() (UUID). Forcing audit
+      entities to implement it pushes one of three bad outcomes:
+        (a) sentinel UUID(0,0,...) → pollutes any cross-tenant analytics
+            and creates a synthetic "system tenant" that is itself a
+            cross-tenant leak vector (admin queries filtered by
+            tenant=sentinel see ALL orphan rows across tenants);
+        (b) reject the append → external PG retries indefinitely
+            (the GAP-R3-3 observed failure mode);
+        (c) drop the audit row → loss of forensic evidence on the
+            single path the auditor cares about most (signature_fail).
+      Honest null is the only outcome consistent with the catalog
+      vision (orphan audit row + null tenant_id is informative).
+
+    tenant_id_column_nullability: nullable
+    tenant_id_column_type: "java.util.UUID"
+    tenant_id_field_visibility: "package-private getter that returns Optional<UUID>"
+
+    append_call_site_contract: >
+      Audit append code MUST use `TenantContext.current().orElse(null)`
+      (Optional → null), NEVER `TenantContext.current().orElseThrow(...)`.
+      The orElseThrow form is correct for tenant-scoped resources
+      (matches AuthorizedTenantInterceptor line 354) but wrong for audit
+      entities — the whole point of the orphan audit row is to capture
+      the request that had no tenant context. The Optional API surface
+      remains unchanged; this is purely a call-site discipline.
+
+    cross_tenant_query_discipline: >
+      Read queries on audit entities MUST filter by tenant_id explicitly
+      (WHERE tenant_id = :currentTenant) AND treat null tenant_id rows
+      as a separate operational concern (sysadmin queries with a
+      distinct, explicitly-authorized role). Do NOT add the @Filter
+      activation for audit tables — it would silently exclude null
+      rows from the operational view, defeating the purpose.
+
+    forbidden_alternatives:
+      - "sentinel UUID(0,0,...) — creates synthetic cross-tenant ‘system’ tenant; admin queries filtered by sentinel see ALL orphan rows across tenants (cross-tenant leak vector)"
+      - "TenantContext.current().orElseThrow() at audit append — pushes external PG into 24h retry loop on signature_fail"
+      - "tenant_id NOT NULL on audit table — same effect as orElseThrow: insert fails, retry storm"
+      - "implementing TenantOwned with @Override getTenantId() returning UUID — type system forbids null return; forces sentinel or NPE"
+      - "Hibernate @Filter on audit table — silently hides null tenant_id rows from operational reads; loses orphan audit forensics"
+
+  java_skeleton: |
+    // Audit / ledger entity that may be appended OUTSIDE a tenant-scoped
+    // request (e.g. PG callback signature_fail at permitAll endpoint).
+    //
+    // Does NOT implement TenantOwned (see #ledger-audit-tenant-scope policy).
+    // tenant_id is nullable in both the JPA mapping AND the Flyway schema —
+    // the ledger_audit_nullability_guard.sh-style lockstep guard applies.
+    //
+    // Read access: Optional<UUID> getTenantId() (NOT bare UUID) — forces
+    // call sites to handle the empty case explicitly. There is no setter;
+    // tenant_id is captured at insert time from TenantContext.current()
+    // via Optional → null collapse below.
+    package com.<root>.<audit-package>;
+
+    import jakarta.persistence.Column;
+    import jakarta.persistence.Entity;
+    import java.util.Optional;
+    import java.util.UUID;
+
+    @Entity
+    public class AuditEvent {
+
+        @Column(name = "tenant_id", nullable = true, updatable = false)
+        private UUID tenantId;   // nullable — orphan audit rows are valid
+
+        protected AuditEvent() {
+            // JPA
+        }
+
+        // Constructor — called from the append() service. The Optional
+        // contract makes the null path explicit at every call site.
+        public AuditEvent(Optional<UUID> tenantId /*, other audit fields */) {
+            this.tenantId = tenantId.orElse(null);
+        }
+
+        public Optional<UUID> getTenantId() {
+            return Optional.ofNullable(tenantId);
+        }
+    }
+
+    // ─── Append call site (service layer) ─────────────────────────────
+    // The single load-bearing line is `TenantContext.current()` →
+    // passed unchanged to the AuditEvent constructor. NO orElseThrow.
+    //
+    //   public AuditEvent append(/* event fields */) {
+    //       AuditEvent ev = new AuditEvent(TenantContext.current() /*, fields */);
+    //       return auditRepo.save(ev);
+    //   }
+
+  schema_lockstep_contract: >
+    The audit entity's tenant_id JPA nullability and the Flyway migration
+    nullability MUST agree, identical in shape to the payment_events
+    payment_id lockstep enforced by ledger_audit_nullability_guard.sh.
+    A companion guard (ledger_audit_tenant_nullable_guard.sh) can mirror
+    that algorithm for the audit table's tenant_id column when a
+    fork-receiver wires multi-tenant onto an existing audit table.
+
+  worked_example:
+    scenario: >
+      External PG (NICE페이먼츠) POSTs callback to
+      /api/payments/callback/nice. Signature header is malformed
+      (the integration partner regenerated keys but did not redeploy
+      their callback signer). PaymentCallbackController.handle() runs at
+      permitAll; SecurityFilterChain placed no Authentication on the
+      context; TenantFilterActivationFilter (correctly) observed
+      empty context and did NOT enable tenantFilter (multi-tenant-manifest
+      #row-level-strategy.filter_activation.failure_mode line 36-37
+      already documents this branch as a public endpoint case).
+    audit_append_path: >
+      Controller delegates to PaymentEventLedger.appendSignatureFailure().
+      With #ledger-audit-tenant-scope policy applied:
+        1. TenantContext.current() → Optional.empty()
+        2. AuditEvent constructor receives Optional.empty() → stores null
+        3. Insert succeeds (tenant_id column nullable)
+        4. Controller returns 200 OK to PG → no retry storm
+        5. Forensic record exists with tenant_id=null + provider_txn_id
+           + raw signature + reason="signature_mismatch"
+      Without the policy (TenantOwned mandatory tenant_id):
+        1. TenantContext.current().orElseThrow() throws
+           TenantContextMissingException
+        2. MultiTenantProblemDetailAdvice maps to 500
+        3. PG retries (NICE: up to 24h) → 500 storm until human ops
+           manually clears or upstream signer is fixed
+        4. No forensic record of the original failure — the 500s
+           overwrite each other in alerting
+
+  evidence_anchor: >
+    multi-tenant-manifest #aop-guard.tenant_id_shape (line 252-264)
+    fixes the type as UUID and forbids nullable wire formats for
+    *tenant-scoped resource columns*. This anchor (#ledger-audit-tenant-scope)
+    is the explicit exception: audit / ledger entities are not
+    tenant-scoped resources in the isolation sense, so the UUID type
+    is preserved but nullability is permitted. The two anchors
+    together form a complete partition — every entity in a
+    `tenant_model: multi` recipe is classified as either
+    tenant-scoped (TenantOwned, NOT NULL) OR audit (NOT TenantOwned,
+    nullable). No third bucket; recipe authors who reach for one
+    SHOULD reach for the other by exclusion.
+
+  cost_estimate_eng_days: 0.5
+  applies_to_existing_anchors:
+    - "PaymentEvent (ax-template reference workload) — currently has no tenant_id column. Single-tenant default; if a fork-receiver multi-tenant-izes payments, they add tenant_id with this policy."
+    - "Any spec emitting `audit_required: true` (payment-manifest #callback.audit_required line 205) — the audit ledger row policy automatically pulls #ledger-audit-tenant-scope when the recipe is `tenant_model: multi`."
+
 # Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
 # row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2) = ~13 eng-days.
 # Schema-per-tenant alternative: 12 + 3 + 1 + 2 = ~18 eng-days.
