@@ -1461,11 +1461,335 @@ realtime-connection-tenant-scope:
         clause-1 algorithm).
 
   open_questions_remaining:
-    - "Broker fan-out (Redis Pub/Sub, Kafka) for horizontal SSE scale — the cross-node hop loses TenantContext just as @Async does. Likely solved by attaching tenantId as a message header and re-setting on the consumer; deferred until a fork-receiver hits the >1-node SSE deployment case."
-    - "gRPC server-streaming RPC tenant scope — same long-lived-connection regime but over gRPC instead of HTTP/SSE. Same canonical pattern (registry per stream, per-message set/clear) should apply; not anchored until a fork-receiver introduces gRPC. Open gap NEW for any R8+ session that adopts gRPC streaming."
-    - "Kafka consumer tenant scope — long-running consumer poll loop with no per-message HTTP boundary. Adjacent regime to scheduled tasks; the per-tenant-iteration model does not directly apply since messages arrive interleaved across tenants. Likely solved by reading tenantId from a message header and per-message set/clear, but the consumer-group / partition-assignment interaction with tenant scoping is not yet anchored."
+    - "Broker fan-out (Redis Pub/Sub, Kafka) for horizontal SSE scale — CLOSED in R8 via #broker-fanout-tenant-scope. Anchor encodes the message-envelope + consumer-side per-message set/clear pattern; the 41st guard mechanically enforces all three clauses."
+    - "gRPC server-streaming RPC tenant scope — same long-lived-connection regime but over gRPC instead of HTTP/SSE. Same canonical pattern (registry per stream, per-message set/clear) should apply; not anchored until a fork-receiver introduces gRPC. Open gap NEW for any R9+ session that adopts gRPC streaming."
+    - "Kafka consumer tenant scope — long-running consumer poll loop with no per-message HTTP boundary. Adjacent regime to scheduled tasks; the per-tenant-iteration model does not directly apply since messages arrive interleaved across tenants. The R8 #broker-fanout-tenant-scope envelope-header + per-message set/clear contract is the closest analogue but consumer-group / partition-assignment interaction with tenant scoping is not yet anchored; opens R9 candidate."
 
   cost_estimate_eng_days: 1.0
+
+# ─────────────────────────────────────────────────────────────────────
+# broker-fanout-tenant-scope — R8 closure (GAP-NEW-2)
+# ─────────────────────────────────────────────────────────────────────
+broker-fanout-tenant-scope:
+  description: >
+    Tenant resolution policy for cross-node broker fan-out (Redis
+    Pub/Sub, Kafka, RabbitMQ topic exchange) used to scale SSE /
+    WebSocket realtime push horizontally beyond a single node.
+    #realtime-connection-tenant-scope (R7) anchored the single-node
+    registry + per-message set/clear contract; this anchor covers the
+    fourth thread-flow regime: a message published on Node A reaches
+    Node B via the broker, where the broker-client listener thread
+    has NEVER touched any HTTP request, never ran through
+    TenantFilterActivationFilter, and has empty TenantContext by
+    construction. The broker hop is the canonical context-loss
+    boundary — same shape as #async-propagation across @Async, except
+    the boundary crosses a PROCESS not just a thread.
+  introduced_at: >
+    R8 — opens P2 R7 GAP-NEW-2 surfaced during compact dogfood:
+    #realtime-connection-tenant-scope.open_questions_remaining[0]
+    explicitly named broker fan-out as the unresolved >1-node SSE
+    deployment case. fork-receivers writing a 2-node SSE deployment
+    behind an LB would reach for either (a) bare
+    redisTemplate.convertAndSend(channel, payload) — the consumer-side
+    listener has no tenant signal, so it either (i) NPEs on
+    TenantContext.current().orElseThrow() inside the local
+    sendToTenant() call, (ii) silently broadcasts to every locally
+    connected emitter if the listener swallows the missing context,
+    or (iii) leaks the previous message's tenantId if the broker-pool
+    thread is reused and the listener trusts a stale ThreadLocal.
+    R8 anchors the canonical pattern: tenantId travels INSIDE the
+    message envelope as a structural header; the consumer
+    deserializes the envelope, set/clears TenantContext per-message,
+    and dispatches to the local sendToTenant by passing the
+    envelope's tenantId explicitly.
+  closed_at: >
+    R8 — full closure. Manifest moves from staked-anchor to
+    executable contract: TenantAwareRedisPubSubBridge skeleton ships
+    in the multi-tenant fixture, the (envelope-tenantId-header →
+    consumer-deserializes-envelope → per-message set/clear → local
+    sendToTenant call) chain is concrete, and the 41st hard guard
+    (broker_fanout_tenant_scope_guard.sh) blocks any of the three
+    forbidden_alternatives from sneaking in via fork-receiver code.
+
+  canonical_pattern: envelope_header_per_message_set_clear
+
+  envelope_header_per_message_set_clear:
+    description: >
+      Every cross-node broker message carries a structural envelope
+      record containing { UUID tenantId, Object payload }. The
+      envelope is the wire-format contract — payloads alone (raw
+      domain events) are FORBIDDEN because they have no tenant
+      signal across the broker hop.
+
+      Four load-bearing properties:
+        (1) Publish-side wraps the domain payload in
+            TenantBrokerEnvelope(TenantContext.current().orElseThrow(),
+            payload) at the call site — BEFORE handing to the broker
+            template. Resolving tenantId from any other source
+            (config, default tenant, system tenant) is FORBIDDEN
+            (#failure_modes.publish_without_envelope_header).
+        (2) Subscribe-side deserializes the envelope FIRST. The
+            broker-client listener thread has empty TenantContext by
+            construction (never ran through
+            TenantFilterActivationFilter). Reading
+            TenantContext.current() at listener entry is the
+            consumer_assumes_current_context anti-pattern — it
+            returns Optional.empty() and the .orElseThrow() either
+            NPEs or (worse) falls back to a default tenant.
+        (3) Per-message TenantContext.set / TenantContext.clear wraps
+            the LOCAL sendToTenant(envelope.tenantId(),
+            envelope.payload()) call in try/finally. Same algorithm
+            as the R7 40th-guard clause-3 and the R6 39th-guard
+            clause-1: count(set) == count(clear) > 0 in the listener
+            method body.
+        (4) Local dispatch passes envelope.tenantId() EXPLICITLY
+            into the existing TenantAwareSseEmitterRegistry
+            .sendToTenant(tenantId, payload) call — NEVER
+            TenantContext.current() and NEVER a tenantId field on
+            the listener bean. The envelope IS the tenant signal;
+            anything else is a stale-context leak vector.
+
+    canonical_skeleton: |
+      package com.acme.multitenancy;
+
+      import java.util.UUID;
+      import org.springframework.beans.factory.annotation.Autowired;
+      import org.springframework.data.redis.connection.Message;
+      import org.springframework.data.redis.connection.MessageListener;
+      import org.springframework.data.redis.core.RedisTemplate;
+      import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
+      import org.springframework.stereotype.Component;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#broker-fanout-tenant-scope.envelope_header_per_message_set_clear.canonical_skeleton
+       * with <root> = acme.
+       *
+       * Tenant-scoped Redis Pub/Sub bridge for multi-node SSE
+       * fan-out. Three guard-checked properties:
+       *   (1) publish() wraps the payload in a TenantBrokerEnvelope
+       *       carrying TenantContext.current() as a structural
+       *       header — bare convertAndSend(channel, payload) is the
+       *       publish_without_envelope_header anti-pattern.
+       *   (2) onMessage() reads tenantId from the deserialized
+       *       envelope — NOT from TenantContext.current() (which is
+       *       empty on the Lettuce / Jedis broker thread).
+       *   (3) Per-message TenantContext.set / TenantContext.clear
+       *       wraps the local sendToTenant dispatch in try/finally
+       *       so downstream serializers see the receiving tenant's
+       *       context and the broker-pool thread is released clean.
+       */
+      @Component
+      public class TenantAwareRedisPubSubBridge implements MessageListener {
+
+          private static final String CHANNEL = "ax.tenant.events";
+
+          private final RedisTemplate<String, TenantBrokerEnvelope> redisTemplate;
+          private final TenantAwareSseEmitterRegistry registry;
+          private final Jackson2JsonRedisSerializer<TenantBrokerEnvelope> envelopeSerializer;
+
+          @Autowired
+          public TenantAwareRedisPubSubBridge(
+                  RedisTemplate<String, TenantBrokerEnvelope> redisTemplate,
+                  TenantAwareSseEmitterRegistry registry,
+                  Jackson2JsonRedisSerializer<TenantBrokerEnvelope> envelopeSerializer) {
+              this.redisTemplate = redisTemplate;
+              this.registry = registry;
+              this.envelopeSerializer = envelopeSerializer;
+          }
+
+          /**
+           * Called from an @EventListener / service-layer publisher.
+           * TenantContext is populated by the originating request
+           * thread — resolving tenantId from any other source
+           * (config default, system tenant) is FORBIDDEN.
+           */
+          public void publish(Object payload) {
+              UUID tenantId = TenantContext.current()
+                  .orElseThrow(() -> new TenantContextMissingException(
+                      "TenantContext empty at broker publish; "
+                      + "publisher MUST run inside a tenant-scoped request"));
+              TenantBrokerEnvelope envelope = new TenantBrokerEnvelope(tenantId, payload);
+              redisTemplate.convertAndSend(CHANNEL, envelope);
+          }
+
+          /**
+           * Redis MessageListener entrypoint — runs on the Lettuce /
+           * Jedis broker thread which has empty TenantContext by
+           * construction (never ran through
+           * TenantFilterActivationFilter).
+           *
+           * Tenant signal is the ENVELOPE, never TenantContext.current().
+           */
+          @Override
+          public void onMessage(Message message, byte[] pattern) {
+              TenantBrokerEnvelope envelope =
+                  envelopeSerializer.deserialize(message.getBody());
+              if (envelope == null || envelope.tenantId() == null) {
+                  // Reject malformed messages explicitly — fall-through
+                  // to bare emitters.forEach would leak across tenants.
+                  throw new TenantContextMissingException(
+                      "Broker message lacks tenantId envelope header");
+              }
+              try {
+                  // MUST set: downstream serializers / @JsonView /
+                  // @AuthorizedTenant getters reached during
+                  // sendToTenant may call TenantContext.current().
+                  TenantContext.set(envelope.tenantId());
+                  // MUST pass envelope.tenantId() EXPLICITLY — passing
+                  // TenantContext.current() here would be a tautology
+                  // that the guard still rejects because the call must
+                  // also be tenantId-equality-filtered downstream.
+                  registry.sendToTenant(envelope.tenantId(), envelope.payload());
+              } finally {
+                  // MUST clear: broker-pool thread is reused across
+                  // messages. Leaving tenant N's context set for tenant
+                  // N+1's onMessage is the stale_tenant_context vector.
+                  TenantContext.clear();
+              }
+          }
+
+          /**
+           * Wire-format envelope. tenantId is a STRUCTURAL header,
+           * not a payload property — it travels alongside the
+           * payload regardless of payload shape. Tolerated variants:
+           *   - tenantId stored on a Spring Message HEADER (Kafka,
+           *     RabbitMQ ProducerRecord/AMQP header) instead of an
+           *     envelope record
+           *   - envelope record where tenantId precedes payload field
+           * Forbidden: payload-only messages where tenantId is buried
+           * inside the domain object (parser-dependent, brittle,
+           * indistinguishable from absence on a malformed payload).
+           */
+          public record TenantBrokerEnvelope(UUID tenantId, Object payload) {}
+      }
+
+  kafka_header_contract:
+    description: >
+      For Kafka-backed fan-out, the analogue of the
+      TenantBrokerEnvelope record is the Kafka ProducerRecord header.
+      Producer side: producerRecord.headers().add("X-Tenant-Id",
+      tenantId.toString().getBytes(UTF_8)). Consumer side: read
+      consumerRecord.headers().lastHeader("X-Tenant-Id") and
+      .orElseThrow() if absent. Same per-message set/clear contract
+      applies on the @KafkaListener method.
+    interface_shape: |
+      package com.acme.multitenancy;
+
+      import java.nio.charset.StandardCharsets;
+      import java.util.UUID;
+      import org.apache.kafka.clients.consumer.ConsumerRecord;
+      import org.apache.kafka.common.header.Header;
+      import org.springframework.kafka.annotation.KafkaListener;
+      import org.springframework.stereotype.Component;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#broker-fanout-tenant-scope.kafka_header_contract
+       * with <root> = acme.
+       *
+       * Kafka analogue of TenantAwareRedisPubSubBridge. The
+       * X-Tenant-Id header is the structural tenant signal;
+       * consumer MUST read it from headers and MUST per-message
+       * set/clear before dispatching to the local registry.
+       */
+      @Component
+      public class TenantAwareKafkaFanoutBridge {
+
+          private static final String TENANT_HEADER = "X-Tenant-Id";
+
+          private final TenantAwareSseEmitterRegistry registry;
+
+          public TenantAwareKafkaFanoutBridge(TenantAwareSseEmitterRegistry registry) {
+              this.registry = registry;
+          }
+
+          @KafkaListener(topics = "ax.tenant.events")
+          public void onMessage(ConsumerRecord<String, Object> record) {
+              Header tenantHeader = record.headers().lastHeader(TENANT_HEADER);
+              if (tenantHeader == null || tenantHeader.value() == null) {
+                  throw new TenantContextMissingException(
+                      "Kafka message lacks " + TENANT_HEADER + " header");
+              }
+              UUID tenantId = UUID.fromString(
+                  new String(tenantHeader.value(), StandardCharsets.UTF_8));
+              try {
+                  TenantContext.set(tenantId);
+                  registry.sendToTenant(tenantId, record.value());
+              } finally {
+                  TenantContext.clear();
+              }
+          }
+      }
+
+  forbidden_alternatives:
+    - "bare redisTemplate.convertAndSend(channel, payload) without envelope wrapping — publish_without_envelope_header. The consumer-side listener has no tenant signal across the broker hop; either (a) it NPEs on TenantContext.current().orElseThrow(), or (b) it silently falls back to a default tenant if defensive code masks the missing context, or (c) it leaks the previous message's stale tenantId from a reused broker-pool thread. The envelope IS the wire-format contract — there is no other tenant signal across a process boundary."
+    - "consumer-side listener reads tenantId via TenantContext.current() instead of from the envelope / Kafka header — consumer_assumes_current_context. The Lettuce / Jedis / kafka-clients thread has never run through TenantFilterActivationFilter; TenantContext is empty by construction. orElseThrow() either explodes or silently masks via a defensive fallback. Tenant signal MUST be the envelope payload, never an ambient context."
+    - "consumer-side listener iterates ALL locally-connected emitters and calls .send() without an envelope-tenantId filter — consumer_broadcast_no_filter. Same failure-class as #realtime-connection-tenant-scope.failure_modes.broadcast_no_tenant_filter except surfaced post-broker-hop. Tenant A's PaymentCapturedEvent reaches every connected admin on Node B; cross-tenant push leak across nodes."
+    - "InheritableThreadLocal-backed TenantContext propagation across the broker client (Lettuce / Jedis) thread pool — InheritableThreadLocal_workaround. Already forbidden by #context-resolution.tenant_context_skeleton. Broker-pool threads outlive any reasonable request boundary and are reused across tenants; silent propagation defeats the explicit-failure contract."
+    - "publishing the raw domain event (PaymentCapturedEvent) directly without wrapping in TenantBrokerEnvelope and relying on a tenantId field inside the domain event — payload_embedded_tenant_signal. Coupling the wire-format tenant signal to the domain event's internal shape is brittle: every new event type needs its own tenant-extraction logic, malformed payloads have no tenant signal at all, and refactoring a domain event silently breaks fan-out tenant scoping. The structural envelope decouples wire-format from domain shape."
+
+  failure_modes:
+    publish_without_envelope_header:
+      description: >
+        Publish-side calls
+        redisTemplate.convertAndSend(channel, rawPayload) without
+        wrapping in TenantBrokerEnvelope. The cross-node hop has no
+        tenant signal; consumer-side either NPEs, silently
+        broadcasts, or leaks a stale tenantId.
+      detection: >
+        41st guard scans the bridge file for any .convertAndSend(
+        / .send( / .publish( call. Each call MUST be preceded by a
+        TenantBrokerEnvelope constructor invocation (or equivalent
+        Kafka producer record with X-Tenant-Id header) in the same
+        method body. Bare convertAndSend with a non-envelope
+        argument trips the clause.
+    consumer_assumes_current_context:
+      description: >
+        @KafkaListener / Redis MessageListener method body reads
+        TenantContext.current() instead of the envelope header.
+        The broker thread has empty TenantContext by construction —
+        orElseThrow() NPEs OR (worse) defensive code masks the
+        empty Optional with a default tenant fallback.
+      detection: >
+        41st guard scans onMessage / @KafkaListener-annotated
+        method bodies for the substring TenantContext.current()
+        BEFORE a TenantContext.set(...) call appears. Tenant
+        signal MUST come from the deserialized envelope, NOT
+        ambient context.
+    stale_tenant_context:
+      description: >
+        Listener calls TenantContext.set(envelope.tenantId()) but
+        omits TenantContext.clear() in finally. Broker-pool thread
+        is reused; the next message's listener invocation sees the
+        prior tenantId in TenantContext.current() before its own
+        envelope is deserialized — cross-tenant leak in the
+        consumer-broadcast direction.
+      detection: >
+        41st guard requires count(TenantContext.set) ==
+        count(TenantContext.clear) > 0 in any file with a .send(
+        / .convertAndSend( / .publish( / onMessage / @KafkaListener
+        signature. Same algorithm as the R7 40th-guard clause-3.
+    consumer_broadcast_no_filter:
+      description: >
+        Consumer-side listener calls
+        registry.sendToTenant(TenantContext.current(), payload) OR
+        bare emitters.forEach(e -> e.send(payload)) instead of
+        passing envelope.tenantId() EXPLICITLY. Local registry
+        either dispatches under the WRONG tenant or broadcasts
+        across all tenants on the receiving node.
+      detection: >
+        41st guard requires that any .sendToTenant(...) /
+        .send(...) call inside an onMessage / @KafkaListener body
+        passes either envelope.tenantId() (record accessor),
+        envelope.getTenantId(), or a UUID parsed from a Kafka
+        header — explicitly, not via TenantContext.current() and
+        not via a bridge-bean field.
+
+  open_questions_remaining:
+    - "STOMP user-destination cross-node fan-out (Spring's @SendToUser) — uses the user registry / broker relay; the analogue here is binding tenantId into the StompHeaderAccessor session attributes during the CONNECT frame's interceptor, but the cross-node user-destination resolution model differs from raw pub/sub and is not yet anchored."
+    - "Kafka consumer group / partition assignment with tenant scoping — should every tenant get its own topic, its own partition key derived from tenantId, or a single shared topic with header-only routing? Partition assignment interaction with consumer-group rebalancing under tenant-aware ordering guarantees is not yet anchored; opens R9 candidate alongside the existing Kafka-consumer open question."
+    - "RabbitMQ topic exchange routing keys carrying tenantId in the key namespace (e.g. ax.tenant.<tenantId>.events.payment-captured) vs. header-only — routing-key-based tenant scoping is a cheap-but-leaky variant where a malformed binding silently delivers cross-tenant. The structural envelope/header pattern is the safer default; routing-key-only is forbidden for the same reason payload_embedded_tenant_signal is forbidden, but a hybrid is plausible and not yet pinned."
+
+  cost_estimate_eng_days: 1.5
 
 evidence:
   - source_type: external
@@ -1500,12 +1824,29 @@ evidence:
     citation: "Spring Framework Reference — WebSocket HandshakeInterceptor. 'Interceptor for WebSocket handshake requests. Can be used to inspect the handshake request and response as well as to pass attributes to the target WebSocketHandler.' Establishes that the handshake is the canonical (and only) lifecycle point at which TenantContext is still populated from the upgrade HTTP request — confirming the WebSocketSession attribute capture contract in #realtime-connection-tenant-scope.websocket_session_attribute_contract."
     url: "https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/socket/server/HandshakeInterceptor.html"
     quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Spring Data Redis Reference — Pub/Sub Messaging. Documents RedisMessageListenerContainer and that 'message listeners are invoked on a Lettuce/Jedis I/O thread that is not part of any servlet request lifecycle.' Establishes that the broker-listener thread has empty TenantContext by construction and confirms why the envelope-header pattern in #broker-fanout-tenant-scope is required — the listener thread CANNOT inherit request-scoped state."
+    url: "https://docs.spring.io/spring-data/redis/reference/redis/pubsub.html"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Apache Kafka Documentation — Record Headers (KIP-82). 'Headers are key-value pairs that are added to messages and travel with them. They are not part of the key or value of the record.' Establishes the canonical wire-format slot for cross-process metadata such as the X-Tenant-Id header in #broker-fanout-tenant-scope.kafka_header_contract — the structural alternative to burying tenantId inside the payload."
+    url: "https://kafka.apache.org/documentation/#producerapi"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "CNCF CloudEvents Specification v1.0.2 — Context Attributes. Defines the cross-broker envelope pattern: 'CloudEvents attributes are the meta-data about an event' and explicitly recommends that broker-portable metadata (such as tenant scope) travel as STRUCTURAL context attributes, NOT inside the data payload. Industry-standard endorsement of the envelope-header pattern over payload-embedded tenant signals."
+    url: "https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md#context-attributes"
+    quoted_at: "2026-05-20"
 
 # Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
 # row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2)
-# + callback tenant resolution (~1.5) = ~14.5 eng-days.
-# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 = ~19.5 eng-days.
-# These match the R16 b2b-admin frontmatter "~10-15 eng-days" estimate (with row-level strategy chosen),
-# with the R5 callback policy adding ~1.5 eng-days for PG-side per-tenant secret onboarding.
+# + callback tenant resolution (~1.5) + scheduled-task (1) + realtime-connection (1)
+# + broker fan-out (1.5) = ~18 eng-days.
+# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 = ~23 eng-days.
+# These match the R16 b2b-admin frontmatter "~10-15 eng-days" estimate plus
+# the R5/R6/R7/R8 successive regime closures (~3.5 eng-days incremental beyond
+# the baseline single-node deployment).
+# Broker fan-out is opt-in: single-node deployments SKIP and never adopt
+# TenantAwareRedisPubSubBridge; the 41st guard recognises this and live-repo
+# SKIPs when no .../multitenancy/TenantAwareRedisPubSubBridge.java is present.
 
 decided_at: "2026-05-20"
