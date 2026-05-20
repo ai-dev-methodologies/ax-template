@@ -21,7 +21,7 @@ verification:
   failing_fixture: practices/evals/fixtures/multi-tenant-aop-guard-skeleton/failing/
   notes: |
     Mechanical guard (dogfood-5 — promoted from review). Walks every
-    `.../multitenancy/` subpackage and asserts the 19 canonical files exist:
+    `.../multitenancy/` subpackage and asserts the 20 canonical files exist:
       (1) TenantContext.java
       (2) TenantOwned.java
       (3) TenantBoundaryViolationException.java
@@ -41,6 +41,7 @@ verification:
       (17) TenantAwareKafkaStreamsTopology.java       ← added R10 (kafka-streams)
       (18) TenantAwareInteractiveQueryService.java    ← added R11 (kafka-streams-iq)
       (19) TenantAwareStandbyForwardingService.java   ← added R12 (kafka-streams-standby-rpc)
+      (20) TenantAwareWebClientFilter.java            ← added R13 (webclient-async-tenant-scope)
     Failing-fixture sibling omits (11) — guard MUST trip with --fixtures.
     Body verification (@Around pointcut wiring, generic detail message,
     fail-fast on @TenantId misuse) anchored in manifest interceptor_skeleton.
@@ -107,7 +108,8 @@ com/<root>/multitenancy/
 ├── TenantAwareKafkaConsumer.java               # tenant-scoped Kafka business-event consumer (R9, opt-in)
 ├── TenantAwareKafkaStreamsTopology.java        # tenant-scoped Kafka Streams (KStream/KTable) topology (R10, opt-in)
 ├── TenantAwareInteractiveQueryService.java     # tenant-scoped state-store reads via store.range (R11, opt-in)
-└── TenantAwareStandbyForwardingService.java    # tenant-scoped cross-node IQ fan-out (R12, opt-in)
+├── TenantAwareStandbyForwardingService.java    # tenant-scoped cross-node IQ fan-out (R12, opt-in)
+└── TenantAwareWebClientFilter.java             # tenant-scoped outbound WebFlux WebClient filter (R13, opt-in)
 ```
 
 Each file's body is shipped as `java_skeleton:` block in `blueprints/multi-tenant-manifest.yaml` — adoption is mechanical substitution of `<root>` and integration into existing config.

@@ -19,6 +19,7 @@
 #   R10 closure: +TenantAwareKafkaStreamsTopology.java    → 17 files (kafka-streams)
 #   R11 closure: +TenantAwareInteractiveQueryService.java → 18 files (kafka-streams-interactive-queries)
 #   R12 closure: +TenantAwareStandbyForwardingService.java → 19 files (kafka-streams-standby-rpc)
+#   R13 closure: +TenantAwareWebClientFilter.java         → 20 files (webclient-async-tenant-scope)
 #
 # Closes P2 Round 3 GAP-NEW-2 (manifest aop-guard named
 # AuthorizedTenantInterceptor + the @AuthorizedTenant/@TenantId annotation
@@ -37,7 +38,7 @@
 #   bash practices/evals/multi_tenant_aop_guard_skeleton_guard.sh --fixtures
 #
 # Exit codes:
-#   0 — every multitenancy/ package contains the 19 expected files
+#   0 — every multitenancy/ package contains the 20 expected files
 #   1 — at least one file missing OR failing/ fixture unexpectedly passes
 
 set -uo pipefail
@@ -150,6 +151,29 @@ REQUIRED_FILES=(
     # fork-receivers that adopt 2+ node Kafka Streams clusters
     # with Interactive Queries enabled.
     "TenantAwareStandbyForwardingService.java"
+    # 20th file added R13 — closes the WebClient async fan-out
+    # open question staked in R12
+    # (#kafka-streams-standby-rpc-tenant-scope.open_questions_remaining[2]
+    # pre-R13 ordering: "Reactive / WebClient async fan-out —
+    # same canonical pattern but the forward primitive is
+    # reactive. Subscriber context propagation interacts with
+    # the existing #async-propagation rule. Not yet anchored;
+    # opens the reactive-router counterpart."). Pairs with
+    # anchor blueprints/multi-tenant-manifest.yaml#webclient-async-tenant-scope
+    # and is content-verified by
+    # webclient_async_tenant_scope_guard.sh (46th). Distinct
+    # surface from TenantAwareStandbyForwardingService (R12):
+    # R12 forwards via blocking RestTemplate on the servlet
+    # thread where TenantContext.current() IS populated; this
+    # filter forwards via reactive WebClient on a Reactor
+    # scheduler thread where TenantContext.current() is empty —
+    # Reactor Context (Mono.contextWrite + Mono.deferContextual)
+    # is the only chain-safe tenant carrier. WebClient-free
+    # deployments SKIP via the 46th guard's live-repo SKIP
+    # branch — this file is OPT-IN for fork-receivers that
+    # call external SaaS APIs (Slack, Stripe, SendGrid, etc.)
+    # via Spring WebFlux WebClient.
+    "TenantAwareWebClientFilter.java"
 )
 
 verify_dir() {
@@ -190,7 +214,7 @@ if [ "$LIVE_FOUND" -eq 0 ]; then
     echo "multi_tenant_aop_guard_skeleton: live-repo SKIP — no .../multitenancy/ package (single-tenant default)"
 fi
 
-# Passing fixture: the canonical fork-receiver simulation MUST have all 18 files.
+# Passing fixture: the canonical fork-receiver simulation MUST have all 20 files.
 PASS_DIR="$SCRIPT_DIR/fixtures/multi-tenant-aop-guard-skeleton/passing/com/acme/multitenancy"
 PASS_OK=1
 verify_dir "passing-fixture" "$PASS_DIR" || PASS_OK=0

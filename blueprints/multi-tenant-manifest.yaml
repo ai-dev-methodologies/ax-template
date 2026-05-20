@@ -3210,7 +3210,329 @@ kafka-streams-standby-rpc-tenant-scope:
   open_questions_remaining:
     - "Apache HTTP client RPC pool sizing — beyond R12's per-request RestTemplate forward, large clusters need a connection-pooled HTTP client (PoolingHttpClientConnectionManager) where the per-tenant header still rides on every request. Not yet anchored; opens the connection-pool counterpart."
     - "mTLS / SPIFFE identity on the standby fan-out — the receiving node currently trusts X-Tenant-Id; production multi-tenant clusters MUST authenticate the forwarder so a leaked URL cannot let an external caller spoof an internal node. Not yet anchored; opens the cluster-identity counterpart."
-    - "Reactive / WebClient async fan-out — same canonical pattern (X-Tenant-Id header + TenantContext.current() at the router + no path tenantId in URL + fresh metadata) but the forward primitive is reactive. Subscriber context propagation interacts with the existing #async-propagation rule. Not yet anchored; opens the reactive-router counterpart."
+
+  cost_estimate_eng_days: 0.5
+
+webclient-async-tenant-scope:
+  description: >
+    Tenant resolution policy for outbound async / reactive
+    HTTP calls — the WebFlux WebClient surface that
+    fork-receivers reach for when calling third-party
+    SaaS APIs (Slack notify, Stripe billing, SendGrid email,
+    NICE페이먼츠 채널 조회, etc.) from a Spring Boot
+    multi-tenant admin backend. The structural problem is
+    NOT specific to any one upstream — it is that
+    TenantContext.CURRENT is a plain ThreadLocal populated
+    by TenantFilterActivationFilter on the servlet request
+    thread, and WebClient subscriptions run on a Reactor
+    scheduler (parallel / boundedElastic / single / I/O)
+    that is a DIFFERENT thread from the servlet thread. By
+    the time the ExchangeFilterFunction runs,
+    TenantContext.current() is empty in the best case OR
+    holds a STALE prior request's tenant in a pooled-
+    scheduler worst case → canonical cross-tenant leak.
+    The four failure surfaces R13 anchors:
+      (a) tenant_header_dropped_on_reactive_forward: the
+          ExchangeFilterFunction composes the outbound
+          ClientRequest without an X-Tenant-Id header. The
+          third-party service (or downstream internal
+          service) sees no tenant signal — for audit-trail
+          and per-tenant billing-rate purposes the call is
+          unattributable; for trust-boundary purposes the
+          receiving service's TenantFilterActivationFilter
+          (when forwarding to a sibling tenant-aware
+          service) sees an empty TenantContext and either
+          500s or — worse — falls back to a default tenant.
+      (b) thread_local_in_reactive_chain: the filter calls
+          TenantContext.current() DIRECTLY inside the
+          reactive chain. The Reactor scheduler thread
+          executing the filter is NOT the servlet thread
+          that TenantFilterActivationFilter populated; the
+          ThreadLocal is empty in the best case OR — far
+          more dangerous — holds a STALE prior
+          subscription's tenant in a pooled-scheduler
+          worst case (Reactor reuses scheduler workers
+          across subscriptions). This is the R8
+          #async-propagation rule's reactive-scheduler
+          obverse.
+      (c) reactor_context_missing: the file does not
+          reference Mono.deferContextual / ContextView /
+          Mono.contextWrite anywhere. Reactor's Context
+          API is the ONLY chain-safe tenant carrier (it
+          rides with the subscription, not with the
+          executing thread); a filter that bypasses
+          Context cannot be tenant-scoped on any non-
+          trivial chain that hops schedulers between
+          operators.
+      (d) thread_local_inside_chain_lambda: the filter
+          calls TenantContext.set / TenantContext.clear
+          inside a Mono.flatMap / Mono.map / Mono.doOnNext
+          / Mono.subscribe lambda. Reactor scheduler
+          workers are reused across subscriptions; the
+          set() call pollutes the worker's ThreadLocal
+          for the NEXT subscription that lands on the
+          same worker → canonical cross-tenant leak the
+          R8 #async-propagation rule explicitly forbids
+          for @Async / TaskDecorator and which applies
+          to reactive chains a fortiori (Reactor scheduler
+          pools are tighter than @Async TaskExecutor pools,
+          so the worker-reuse window is shorter and the
+          leak more frequent).
+    R13 closes the reactive-router counterpart that was
+    #kafka-streams-standby-rpc-tenant-scope.open_questions_remaining
+    R12-era index [2] in the R12-committed manifest
+    ("Reactive / WebClient async fan-out — same canonical
+    pattern but the forward primitive is reactive.
+    Subscriber context propagation interacts with the
+    existing #async-propagation rule. Not yet anchored;
+    opens the reactive-router counterpart."). Item removed
+    on R13 closure; the surviving 2-item list at
+    #kafka-streams-standby-rpc-tenant-scope.open_questions_remaining
+    slides up by one index.
+  introduced_at: >
+    R13 — closes the reactive / WebClient async fan-out
+    open question staked in R12 as the third entry of
+    #kafka-streams-standby-rpc-tenant-scope.open_questions_remaining
+    (R12-era index [2]; entry removed at R13 closure).
+    Fork-receivers calling external SaaS APIs (Slack,
+    Stripe, SendGrid, NICE페이먼츠 채널 조회, etc.) via
+    Spring WebFlux WebClient would reach for one of four
+    failure modes: (a) `webClient.get().uri(url)
+    .retrieve()` — no .header(TENANT_HEADER, ...) on the
+    outbound ClientRequest — receiving service sees empty
+    TenantContext. (b) `UUID t = TenantContext.current()
+    .orElseThrow();` inside the filter — ThreadLocal
+    empty on Reactor scheduler thread → fails fast in the
+    best case, returns the WRONG tenant when a scheduler
+    worker is reused across subscriptions in the worst
+    case. (c) NO Mono.deferContextual / ContextView read
+    anywhere — Reactor Context API bypassed; no chain-
+    safe tenant carrier. (d) `.flatMap(r -> {
+    TenantContext.set(t); return Mono.just(r); })` —
+    sets the ThreadLocal on a Reactor scheduler worker
+    that is reused across subscriptions; pollutes the
+    NEXT subscription's tenant scope.
+  closed_at: >
+    R13 — full closure. Manifest moves from staked-anchor
+    to executable contract: TenantAwareWebClientFilter
+    skeleton ships in the multi-tenant fixture (20th
+    canonical file), the (X-Tenant-Id header set in the
+    filter + Mono.deferContextual as the SOLE tenant
+    extraction point + Reactor Context written at the
+    controller from TenantContext.current() + zero
+    ThreadLocal access inside the reactive chain) chain
+    is concrete, and the 46th hard guard
+    (webclient_async_tenant_scope_guard.sh) blocks any of
+    the failure modes from sneaking in via fork-receiver
+    code.
+
+  canonical_pattern: tenant_context_propagated_webclient_filter
+
+  tenant_context_propagated_webclient_filter:
+    description: >
+      Multi-tenant outbound WebFlux WebClient adopter uses
+      a single ExchangeFilterFunction that propagates the
+      tenant scope across the servlet-thread → Reactor-
+      scheduler-thread hop. The controller (running on the
+      servlet thread where TenantFilterActivationFilter
+      has populated TenantContext) wraps its publisher
+      chain with .contextWrite(Context.of(TENANT_ID_CONTEXT_KEY,
+      TenantContext.current().orElseThrow())); the filter
+      (running on a Reactor scheduler thread) extracts the
+      tenantId via Mono.deferContextual and stamps an
+      X-Tenant-Id header on every outbound request.
+
+      Four load-bearing properties:
+        (1) X-Tenant-Id header on every reactive forward:
+            the ExchangeFilterFunction MUST set an
+            X-Tenant-Id header whose value derives from
+            the Reactor Context entry. Without it,
+            third-party services see no tenant attribution
+            and downstream tenant-aware services see an
+            empty TenantContext. The header name MUST
+            match #aop-guard.tenant_header_canonical_name.
+        (2) Mono.deferContextual as the SOLE tenant
+            extraction point inside the filter: the filter
+            MUST call Mono.deferContextual(ctx -> ...) or
+            read a ContextView to obtain the tenantId.
+            Calling TenantContext.current() DIRECTLY
+            inside the filter returns Optional.empty (the
+            filter is on a Reactor scheduler thread; the
+            servlet thread's ThreadLocal is not visible)
+            or — worse — returns a STALE prior
+            subscription's tenant when a scheduler worker
+            is reused. The R8 #async-propagation rule's
+            reactive-scheduler obverse.
+        (3) Reactor Context entry sourced from
+            TenantContext.current() at the request-thread
+            boundary: the controller's .contextWrite call
+            MUST read TenantContext.current() (which is
+            populated on the servlet thread by
+            TenantFilterActivationFilter). Path / query /
+            body tenantId is validated for equality
+            against the context tenantId and discarded —
+            it NEVER flows into Context.of(...) directly.
+            Same IDOR-vector closure as R12 clause(2) at
+            the async-router layer.
+        (4) Zero ThreadLocal access inside the reactive
+            chain: the filter (and any helper invoked
+            from the chain) MUST NOT call
+            TenantContext.current / TenantContext.set /
+            TenantContext.clear inside any
+            Mono.flatMap / Mono.map / Mono.doOnNext /
+            Mono.subscribe / Mono.then / Flux.* lambda.
+            Reactor scheduler workers are reused across
+            subscriptions; set() inside a chain lambda
+            leaks the tenantId to the NEXT subscription
+            that lands on the same worker. Reactor
+            Context is the only chain-safe carrier.
+
+    canonical_skeleton: |
+      package com.<root>.multitenancy;
+
+      import java.util.UUID;
+      import org.springframework.http.client.reactive.ClientHttpConnector;
+      import org.springframework.stereotype.Component;
+      import org.springframework.web.reactive.function.client.ClientRequest;
+      import org.springframework.web.reactive.function.client.ClientResponse;
+      import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
+      import org.springframework.web.reactive.function.client.ExchangeFunction;
+      import org.springframework.web.reactive.function.client.WebClient;
+      import reactor.core.publisher.Mono;
+      import reactor.util.context.Context;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#webclient-async-tenant-scope.tenant_context_propagated_webclient_filter.canonical_skeleton
+       * with <root> = acme.
+       *
+       * Async-reactive OBVERSE of TenantAwareStandbyForwardingService
+       * (R12 #kafka-streams-standby-rpc-tenant-scope). Four
+       * guard-checked properties:
+       *   (1) X-Tenant-Id header set on every outbound ClientRequest.
+       *   (2) Mono.deferContextual is the SOLE tenant extraction
+       *       point inside the filter (NO TenantContext.current()
+       *       call anywhere in the reactive chain).
+       *   (3) Reactor Context entry sourced from TenantContext.current()
+       *       at the controller (servlet thread) — NEVER from a
+       *       request parameter.
+       *   (4) Zero TenantContext.set / .clear / .current() calls
+       *       inside Mono.* / Flux.* lambdas (scheduler-worker
+       *       reuse leaks the tenant to the next subscription).
+       */
+      @Component
+      public class TenantAwareWebClientFilter implements ExchangeFilterFunction {
+
+          public static final String TENANT_ID_CONTEXT_KEY = "tenantId";
+          static final String TENANT_HEADER = "X-Tenant-Id";
+
+          @Override
+          public Mono<ClientResponse> filter(ClientRequest request, ExchangeFunction next) {
+              return Mono.deferContextual(ctx -> {
+                  if (!ctx.hasKey(TENANT_ID_CONTEXT_KEY)) {
+                      return Mono.error(new TenantContextMissingException(
+                          "WebClient invoked outside a tenant-scoped subscription"));
+                  }
+                  UUID tenantId = ctx.get(TENANT_ID_CONTEXT_KEY);
+                  ClientRequest stamped = ClientRequest.from(request)
+                      .header(TENANT_HEADER, tenantId.toString())
+                      .build();
+                  return next.exchange(stamped);
+              });
+          }
+
+          public WebClient.Builder register(
+                  WebClient.Builder builder,
+                  ClientHttpConnector connector) {
+              return builder.clientConnector(connector).filter(this);
+          }
+
+          public static Context tenantContextFor(UUID pathTenantId) {
+              UUID contextTenantId = TenantContext.current()
+                  .orElseThrow(() -> new TenantContextMissingException(
+                      "Controller invoked without TenantContext"));
+              if (pathTenantId != null && !pathTenantId.equals(contextTenantId)) {
+                  throw new TenantBoundaryViolationException(
+                      "Path tenantId does not match authenticated tenant");
+              }
+              return Context.of(TENANT_ID_CONTEXT_KEY, contextTenantId);
+          }
+      }
+
+  forbidden_alternatives:
+    - "WebClient ExchangeFilterFunction that does NOT set the X-Tenant-Id header on the outbound ClientRequest — tenant_header_dropped_on_reactive_forward. The third-party service sees no tenant attribution; downstream tenant-aware services see empty TenantContext."
+    - "TenantContext.current() called DIRECTLY inside the ExchangeFilterFunction (or any of its lambdas) — thread_local_in_reactive_chain. The filter runs on a Reactor scheduler thread where the ThreadLocal is empty in the best case or holds a STALE prior subscription's tenant in a pooled-scheduler worst case. Same structural failure as the R8 #async-propagation rule (ThreadLocal does not cross thread hops without explicit propagation), applied to the reactive-scheduler case."
+    - "Filter implementation that does NOT call Mono.deferContextual / read a ContextView anywhere — reactor_context_missing. Reactor Context is the only chain-safe tenant carrier; a filter that bypasses Context cannot be tenant-scoped across scheduler hops."
+    - "TenantContext.set / TenantContext.clear / TenantContext.current() inside a Mono.flatMap / Mono.map / Mono.doOnNext / Mono.subscribe lambda — thread_local_inside_chain_lambda. Reactor scheduler workers are reused across subscriptions; the set() call pollutes the worker's ThreadLocal for the NEXT subscription → cross-tenant leak. The R8 #async-propagation forbidden alternative re-stated for reactive chains."
+
+  failure_modes:
+    tenant_header_dropped_on_reactive_forward:
+      description: >
+        Filter does not set the X-Tenant-Id header on the
+        outbound ClientRequest. Third-party services see
+        no tenant attribution; downstream tenant-aware
+        services see empty TenantContext on the receiving
+        servlet thread.
+      detection: >
+        46th guard scans the filter file. If the file
+        implements ExchangeFilterFunction (or contains an
+        ExchangeFilterFunction lambda factory) but does
+        NOT reference the X-Tenant-Id header string
+        literal, trip the clause.
+    thread_local_in_reactive_chain:
+      description: >
+        Filter calls TenantContext.current() DIRECTLY
+        (outside a Mono.deferContextual / ContextView).
+        On a Reactor scheduler thread this returns
+        Optional.empty in the best case (filter throws
+        TenantContextMissingException — surfaces as 500),
+        or — in a pooled-scheduler worst case where the
+        worker was previously used by a different tenant's
+        subscription — returns the WRONG tenant's UUID
+        (cross-tenant leak silently succeeds).
+      detection: >
+        46th guard requires every file that implements
+        ExchangeFilterFunction (or an
+        ExchangeFilterFunction lambda factory) to ALSO
+        reference Mono.deferContextual / ContextView /
+        Mono.contextWrite. Absence of Reactor Context
+        access — combined with a TenantContext.current()
+        / TenantContext.set / TenantContext.clear call —
+        trips the clause.
+    reactor_context_missing:
+      description: >
+        The filter implementation does not reference
+        Mono.deferContextual / ContextView /
+        Mono.contextWrite anywhere. Reactor Context API
+        — the only chain-safe tenant carrier — is
+        bypassed entirely.
+      detection: >
+        46th guard requires every file that implements
+        ExchangeFilterFunction to reference at least one
+        of: `Mono.deferContextual`, `ContextView`,
+        `deferContextual(`. Absence trips the clause.
+    thread_local_inside_chain_lambda:
+      description: >
+        TenantContext.set / TenantContext.clear /
+        TenantContext.current() invoked inside a
+        Mono.flatMap / Mono.map / Mono.doOnNext /
+        Mono.subscribe lambda. Reactor scheduler workers
+        are reused across subscriptions; the call
+        pollutes the worker's ThreadLocal for the NEXT
+        subscription on the same worker.
+      detection: >
+        46th guard scans the filter file for the regex
+        pattern `\.(flatMap|map|doOnNext|doOnSuccess|subscribe|then|filterWhen)\s*\(` followed
+        within the same file by a `TenantContext\.(set|clear|current)\s*\(` reference. The
+        spatial-proximity check is approximated by the
+        co-occurrence of the operator and the
+        TenantContext access in the SAME file (the file
+        is small — a single ExchangeFilterFunction is
+        ~50 lines).
+
+  open_questions_remaining:
+    - "WebClient.Builder bean wiring — the filter is shipped, but the multi-tenant fork-receiver still has to call `.filter(tenantAwareWebClientFilter)` on every WebClient.Builder instance. A future R14+ closure could anchor an AOP / BeanPostProcessor that auto-wires the filter into every WebClient.Builder bean so adoption cannot be silently skipped. Not yet anchored; opens the auto-wiring counterpart."
+    - "OAuth2 / mTLS client identity on the third-party call — third-party SaaS APIs (Slack, Stripe, SendGrid) authenticate the fork-receiver's tenant via a per-tenant API key or per-tenant OAuth2 token, not via X-Tenant-Id. The header is the INTERNAL tenant signal; the API key is the EXTERNAL one. A future closure could anchor a TenantAwareWebClientCredentialsResolver that picks the per-tenant API key from a TenantCredentialCatalog. Not yet anchored; opens the per-tenant external credentials counterpart."
+    - "Reactor 3.5+ ThreadLocal accessor — Reactor 3.5 introduced ContextSnapshot / ThreadLocalAccessor that can auto-restore ThreadLocals across scheduler hops. The R13 closure deliberately picks the explicit-propagation (Mono.contextWrite + Mono.deferContextual) variant because it surfaces missing propagation as a hard failure (R13 clause(3)); the auto-restore variant would mask omissions. A future closure could anchor the auto-restore variant as an OPT-IN escape hatch for fork-receivers with a large existing WebClient surface area. Not yet anchored; opens the auto-restore opt-in counterpart."
 
   cost_estimate_eng_days: 0.5
 
@@ -3307,15 +3629,35 @@ evidence:
     citation: "OWASP API Security Top 10 (2023) — API1:2023 Broken Object Level Authorization. 'Object level authorization is an access control mechanism that is usually implemented at the code level to validate that one user can only access objects that they should have access to.' Re-applied to #kafka-streams-standby-rpc-tenant-scope.failure_modes.router_uses_path_tenant_id: the routing layer is a second authorization surface where the same BOLA logic must apply — TenantContext (not the URL tenantId) is the authoritative scope at metadata lookup time, just as it is at store-range time."
     url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
     quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Spring Framework Reference — WebClient. 'WebClient is a non-blocking, reactive client to perform HTTP requests, exposing a fluent, reactive API over underlying HTTP client libraries such as Reactor Netty.' Documents that WebClient is the reactive HTTP client surface in Spring; its subscriptions run on a Reactor scheduler thread that is distinct from the servlet request thread. Establishes the structural basis for #webclient-async-tenant-scope: the servlet thread's ThreadLocal-backed TenantContext is NOT visible on the Reactor scheduler thread that executes the ExchangeFilterFunction."
+    url: "https://docs.spring.io/spring-framework/reference/web/webflux-webclient.html"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Project Reactor Reference — Adding a Context to a Reactive Sequence. 'In Reactor, the equivalent of ThreadLocal is the Context. […] Operating on a chain of operators on multiple threads, you might want to pass an arbitrary key-value at one stage and read it back further down the chain.' Establishes that Reactor Context is the canonical (and only chain-safe) tenant carrier across scheduler hops — confirms the structural basis for #webclient-async-tenant-scope.tenant_context_propagated_webclient_filter property (2) (Mono.deferContextual as the SOLE tenant extraction point) and property (4) (no ThreadLocal access inside the chain)."
+    url: "https://projectreactor.io/docs/core/release/reference/advancedFeatures/context.html"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Project Reactor — Mono.deferContextual(Function<ContextView, ? extends Mono<? extends T>> contextualMonoFactory). 'Create a Mono that supplies its value or completion via a provided ContextView at subscription time.' Documents the canonical Reactor-native entry point for reading a Context entry inside an operator chain — confirms the API used by #webclient-async-tenant-scope.tenant_context_propagated_webclient_filter to extract the tenantId on the subscription thread without leaking ThreadLocal access into the chain."
+    url: "https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html#deferContextual-java.util.function.Function-"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Spring Framework Reference — ExchangeFilterFunction. 'Represents a function that filters an ExchangeFunction. […] You can use the filter() method on WebClient.Builder to register multiple filters.' Establishes that ExchangeFilterFunction is the canonical Spring extension point for cross-cutting outbound-request mutation (such as stamping the X-Tenant-Id header) — confirms the structural basis for #webclient-async-tenant-scope.tenant_context_propagated_webclient_filter property (1) (X-Tenant-Id header set in a single filter, applied to every WebClient.Builder)."
+    url: "https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/reactive/function/client/ExchangeFilterFunction.html"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Project Reactor — Schedulers.parallel() and Schedulers.boundedElastic(). 'Workers obtained from a Scheduler may be reused for subsequent tasks.' Documents that scheduler workers (Reactor's thread-pool equivalent) are reused across subscriptions — confirms the structural basis for #webclient-async-tenant-scope.failure_modes.thread_local_inside_chain_lambda: a TenantContext.set call inside a chain lambda persists the ThreadLocal on the worker after the current subscription completes, leaking it to the NEXT subscription that lands on the same worker."
+    url: "https://projectreactor.io/docs/core/release/reference/coreFeatures/schedulers.html"
+    quoted_at: "2026-05-20"
 
 # Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
 # row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2)
 # + callback tenant resolution (~1.5) + scheduled-task (1) + realtime-connection (1)
 # + broker fan-out (1.5) + kafka-consumer (1.0) + kafka-streams (1.0)
-# + kafka-streams-iq (0.5) + kafka-streams-standby-rpc (0.5) = ~21 eng-days.
-# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 + 1.0 + 1.0 + 0.5 + 0.5 = ~26 eng-days.
+# + kafka-streams-iq (0.5) + kafka-streams-standby-rpc (0.5) + webclient-async (0.5) = ~21.5 eng-days.
+# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 + 1.0 + 1.0 + 0.5 + 0.5 + 0.5 = ~26.5 eng-days.
 # These match the R16 b2b-admin frontmatter "~10-15 eng-days" estimate plus
-# the R5/R6/R7/R8/R9/R10/R11/R12 successive regime closures (~6.5 eng-days incremental
+# the R5/R6/R7/R8/R9/R10/R11/R12/R13 successive regime closures (~7 eng-days incremental
 # beyond the baseline single-node deployment).
 # Broker fan-out is opt-in: single-node deployments SKIP and never adopt
 # TenantAwareRedisPubSubBridge; the 41st guard recognises this and live-repo
@@ -3335,5 +3677,9 @@ evidence:
 # and deployments without IQ never adopt TenantAwareStandbyForwardingService;
 # the 45th guard recognises this and live-repo SKIPs when no
 # .../multitenancy/TenantAwareStandbyForwardingService.java is present.
+# WebClient async fan-out is opt-in: deployments that do not call external
+# SaaS APIs via Spring WebFlux WebClient never adopt
+# TenantAwareWebClientFilter; the 46th guard recognises this and live-repo
+# SKIPs when no .../multitenancy/TenantAwareWebClientFilter.java is present.
 
 decided_at: "2026-05-20"
