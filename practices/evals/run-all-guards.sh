@@ -435,6 +435,39 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/scheduled_task_tenant_scope_guard.sh" --fixtures
 fi
 
+# ── 25. realtime_connection_tenant_scope_guard (R7 — P2 GAP-NEW-1 closure, 40th guard) ─
+echo ""
+echo "[25] realtime_connection_tenant_scope_guard.sh (live repo + passing fixture)"
+# 40th hard guard. Enforces blueprints/multi-tenant-manifest.yaml
+# #realtime-connection-tenant-scope: SseEmitter / WebSocketSession-based
+# long-lived push connections in multi-tenant fork-receivers MUST adopt
+# the registry + per-message set/clear pattern with three load-bearing
+# clauses — connection-registration reads tenantId from TenantContext
+# .current() (not from @RequestParam / @RequestHeader), broadcast
+# iterates with a tenantId equality filter (not bare emitters.forEach
+# (send)), and per-message TenantContext.set / TenantContext.clear
+# wraps each .send() call with count equality (mirrors the R6 39th
+# clause-1 algorithm). Closes P2 dogfood R7 GAP-NEW-1: the manifest
+# covered request-scoped (#context-resolution), AOP-scoped
+# (#aop-guard), async-submission-scoped (#async-propagation),
+# callback-scoped (#callback-tenant-resolution), and scheduler-scoped
+# (#scheduled-task-tenant-scope) — but the long-lived push connection
+# regime (SSE / STOMP @MessageMapping / raw WebSocketHandler) was
+# undefined, leaving fork-receivers writing a tenant admin dashboard
+# SseEmitter to reach for either bare emitters.forEach(e -> e.send(...))
+# inside an @EventListener (silent cross-tenant push leak) or
+# @RequestParam("tenant_id") tenantId at register time (attacker
+# subscribes to any tenant's stream by passing the URL).
+run_guard "realtime_connection_tenant_scope/live" 0 \
+    bash "$SCRIPT_DIR/realtime_connection_tenant_scope_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[25f] realtime_connection_tenant_scope_guard.sh --fixtures"
+    run_guard "realtime_connection_tenant_scope/fixtures" 0 \
+        bash "$SCRIPT_DIR/realtime_connection_tenant_scope_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

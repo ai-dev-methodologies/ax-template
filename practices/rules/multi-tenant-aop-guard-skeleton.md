@@ -21,7 +21,7 @@ verification:
   failing_fixture: practices/evals/fixtures/multi-tenant-aop-guard-skeleton/failing/
   notes: |
     Mechanical guard (dogfood-5 — promoted from review). Walks every
-    `.../multitenancy/` subpackage and asserts the 11 canonical files exist:
+    `.../multitenancy/` subpackage and asserts the 14 canonical files exist:
       (1) TenantContext.java
       (2) TenantOwned.java
       (3) TenantBoundaryViolationException.java
@@ -30,9 +30,12 @@ verification:
       (6) TenantAwareAsyncConfig.java
       (7) TenantContextAwareTaskDecorator.java
       (8) TenantFilterActivationFilter.java
-      (9) AuthorizedTenant.java                 ← added dogfood-5
-      (10) TenantId.java                        ← added dogfood-5
-      (11) AuthorizedTenantInterceptor.java     ← added dogfood-5
+      (9) AuthorizedTenant.java                  ← added dogfood-5
+      (10) TenantId.java                         ← added dogfood-5
+      (11) AuthorizedTenantInterceptor.java      ← added dogfood-5
+      (12) AuditEvent.java                       ← added R4 (GAP-R3-3)
+      (13) TenantIterationScheduler.java         ← added R6 (GAP-R3-5)
+      (14) TenantAwareSseEmitterRegistry.java    ← added R7 (GAP-NEW-1)
     Failing-fixture sibling omits (11) — guard MUST trip with --fixtures.
     Body verification (@Around pointcut wiring, generic detail message,
     fail-fast on @TenantId misuse) anchored in manifest interceptor_skeleton.

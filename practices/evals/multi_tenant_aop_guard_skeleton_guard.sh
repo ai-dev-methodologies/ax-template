@@ -13,6 +13,7 @@
 #                (counted separately; not added to REQUIRED_FILES list since
 #                the callback-tenant-resolution guard owns content verification)
 #   R6 closure : +TenantIterationScheduler.java           → 13 files (GAP-R3-5)
+#   R7 closure : +TenantAwareSseEmitterRegistry.java      → 14 files (GAP-NEW-1)
 #
 # Closes P2 Round 3 GAP-NEW-2 (manifest aop-guard named
 # AuthorizedTenantInterceptor + the @AuthorizedTenant/@TenantId annotation
@@ -31,7 +32,7 @@
 #   bash practices/evals/multi_tenant_aop_guard_skeleton_guard.sh --fixtures
 #
 # Exit codes:
-#   0 — every multitenancy/ package contains the 11 expected files
+#   0 — every multitenancy/ package contains the 14 expected files
 #   1 — at least one file missing OR failing/ fixture unexpectedly passes
 
 set -uo pipefail
@@ -63,6 +64,11 @@ REQUIRED_FILES=(
     # guard's tenant_catalog_contract clause (not duplicated here to
     # keep this list to one canonical file per surface).
     "TenantIterationScheduler.java"
+    # 14th file added R7 — closes GAP-NEW-1 (realtime long-lived
+    # connection tenant scope). Pairs with anchor
+    # blueprints/multi-tenant-manifest.yaml#realtime-connection-tenant-scope
+    # and is content-verified by realtime_connection_tenant_scope_guard.sh (40th).
+    "TenantAwareSseEmitterRegistry.java"
 )
 
 verify_dir() {

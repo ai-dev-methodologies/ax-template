@@ -1191,6 +1191,282 @@ scheduled-task-tenant-scope:
 
   cost_estimate_eng_days: 1.5
 
+realtime-connection-tenant-scope:
+  description: >
+    Tenant resolution policy for long-lived push connections (SSE
+    SseEmitter, STOMP @MessageMapping over WebSocket, raw
+    WebSocketHandler). #context-resolution covers request-scoped
+    TenantContext (set on request entry, cleared on request exit);
+    #async-propagation covers short-lived submission-to-worker
+    propagation via TaskDecorator; this anchor covers the third
+    thread-flow regime: a connection registered on one HTTP request
+    thread that subsequently emits messages on a DIFFERENT thread
+    (the event publisher / broker pool) AFTER the originating
+    request has exited and TenantContext has been cleared.
+  introduced_at: >
+    R7 — opens P2 R6 GAP-NEW-1 surfaced during compact dogfood:
+    blueprints/realtime-policy-manifest.yaml defines transport
+    selection (polling default, SSE / WebSocket opt-in) but is
+    silent on tenant scope across the long-lived connection
+    lifecycle. fork-receivers writing a tenant admin dashboard
+    SseEmitter at /api/v1/events would reach for either
+    (a) bare emitters.forEach(e -> e.send(payload)) inside an
+    @EventListener — silent cross-tenant push leak when payload
+    is tenant-A's PaymentCapturedEvent and the subscriber set
+    contains tenant-B's admin) OR (b) capture TenantContext at
+    subscribe time but never re-set it at send time — payload
+    serializes under empty TenantContext, audit-event MDC has no
+    tenant_id, and any TenantOwned lookup inside the
+    serialization path NPEs. R7 anchors the canonical pattern.
+  closed_at: >
+    R7 — full closure. Manifest moves from staked-anchor to
+    executable contract: TenantAwareSseEmitterRegistry skeleton
+    ships in the multi-tenant fixture, the
+    (connection-registration → broadcast-filter → per-message
+    set/clear) triad is concrete, and the 40th hard guard
+    (realtime_connection_tenant_scope_guard.sh) blocks any of
+    the three forbidden_alternatives from sneaking in via
+    fork-receiver code.
+
+  canonical_pattern: registry_per_message_set_clear
+
+  registry_per_message_set_clear:
+    description: >
+      Connection registration captures the subscribing tenant's
+      tenantId at HTTP-request thread time (when TenantContext is
+      populated by TenantFilterActivationFilter) and stores it
+      ALONGSIDE the SseEmitter / WebSocketSession in a
+      ConcurrentHashMap<UUID emitterId, TenantBoundEmitter> owned
+      by a singleton registry bean. Event publishers do NOT iterate
+      raw emitter sets; they iterate the registry's
+      sendToTenant(tenantId, payload) method which (a) filters the
+      registry by tenantId, (b) wraps each send call in a
+      TenantContext set/clear around send(), and (c) handles
+      IOException by unregistering the dead emitter.
+
+      Four load-bearing properties:
+        (1) Connection-registration happens at HTTP-request time —
+            TenantContext.current().orElseThrow() is the tenant
+            signal. Resolving tenantId from a query parameter, a
+            client-supplied header, or the connection URL path is
+            FORBIDDEN (#failure_modes.client_supplied_tenant).
+        (2) Storage is a singleton bean keyed by emitterId, NOT a
+            ThreadLocal. SseEmitter outlives the originating HTTP
+            request thread by design; ThreadLocal-keyed registries
+            are empty at send time.
+        (3) Broadcast is sendToTenant(tenantId, ...), NEVER
+            sendToAll(...). Server-side broadcast iterates the
+            ENTIRE registry by default; without a tenant filter
+            the payload reaches every connected tenant's admin.
+        (4) Per-message TenantContext.set is wrapped in try/finally
+            around the actual SseEmitter.send() / WebSocketSession
+            .sendMessage() call. The send may trigger downstream
+            serializers, @JsonView resolvers, or AOP-intercepted
+            getters that call TenantContext.current() — they MUST
+            see the receiving tenant's context, not the publisher's.
+            finally clears so the broker-pool thread is released
+            with empty TenantContext (mirrors #async-propagation
+            failure_mode contract).
+
+    canonical_skeleton: |
+      package com.acme.multitenancy;
+
+      import java.io.IOException;
+      import java.util.UUID;
+      import java.util.concurrent.ConcurrentHashMap;
+      import org.springframework.stereotype.Component;
+      import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#realtime-connection-tenant-scope.registry_per_message_set_clear.canonical_skeleton
+       * with <root> = acme.
+       *
+       * Tenant-scoped SseEmitter registry. Connection registration
+       * captures TenantContext at HTTP-request time; broadcast is
+       * sendToTenant only; per-message TenantContext set/clear
+       * wraps each send() so the serialization path sees the
+       * receiving tenant's context, not the publisher's.
+       */
+      @Component
+      public class TenantAwareSseEmitterRegistry {
+
+          private final ConcurrentHashMap<UUID, TenantBoundEmitter> emitters =
+              new ConcurrentHashMap<>();
+
+          /**
+           * Called from a controller @GetMapping("/api/v1/events")
+           * handler. TenantContext is populated by
+           * TenantFilterActivationFilter at this point — resolving
+           * tenantId from any other source is the
+           * client_supplied_tenant anti-pattern.
+           */
+          public SseEmitter register(SseEmitter emitter) {
+              UUID tenantId = TenantContext.current()
+                  .orElseThrow(() -> new TenantContextMissingException(
+                      "TenantContext empty at SseEmitter register; "
+                      + "TenantFilterActivationFilter not in chain"));
+              UUID emitterId = UUID.randomUUID();
+              emitters.put(emitterId, new TenantBoundEmitter(tenantId, emitter));
+              emitter.onCompletion(() -> emitters.remove(emitterId));
+              emitter.onTimeout(()    -> emitters.remove(emitterId));
+              emitter.onError(ex      -> emitters.remove(emitterId));
+              return emitter;
+          }
+
+          /**
+           * Broadcast filter: ONLY emitters bound to tenantId
+           * receive the payload. Iterating emitters.values() and
+           * calling send() without filtering is the
+           * broadcast_no_tenant_filter anti-pattern — silent
+           * cross-tenant message leak.
+           */
+          public void sendToTenant(UUID tenantId, Object payload) {
+              for (TenantBoundEmitter bound : emitters.values()) {
+                  if (!bound.tenantId().equals(tenantId)) {
+                      continue;
+                  }
+                  try {
+                      // MUST set: serializers / @JsonView resolvers
+                      // downstream of send() may call TenantContext.current().
+                      TenantContext.set(bound.tenantId());
+                      bound.emitter().send(payload);
+                  } catch (IOException ex) {
+                      // Dead connection — silent prune; the
+                      // onError callback also fires asynchronously.
+                      emitters.values().remove(bound);
+                  } finally {
+                      // MUST clear: broker-pool thread is reused
+                      // across tenants. Leaving N's context set
+                      // for N+1's send() is the cross-tenant write
+                      // vector — same failure_mode as
+                      // #async-propagation and
+                      // #scheduled-task-tenant-scope.
+                      TenantContext.clear();
+                  }
+              }
+          }
+
+          /**
+           * Value record: emitter + its bound tenantId. Storing
+           * tenantId on the SseEmitter subclass (instead of in a
+           * separate record) is an acceptable variant; the guard
+           * tolerates either as long as broadcast filtering on
+           * tenantId exists.
+           */
+          public record TenantBoundEmitter(UUID tenantId, SseEmitter emitter) {}
+      }
+
+  websocket_session_attribute_contract:
+    description: >
+      For STOMP @MessageMapping or raw WebSocketHandler flows, the
+      analogue of register-time TenantContext.set is the
+      HandshakeInterceptor: it runs on the upgrade HTTP request
+      (TenantContext IS populated by TenantFilterActivationFilter)
+      and binds tenantId into the WebSocketSession attributes map.
+      Subsequent message-handler invocations read tenantId from
+      WebSocketSession.getAttributes().get("tenantId") and re-set
+      TenantContext per message via try/finally.
+    interface_shape: |
+      package com.acme.multitenancy;
+
+      import java.util.Map;
+      import java.util.UUID;
+      import org.springframework.http.server.ServerHttpRequest;
+      import org.springframework.http.server.ServerHttpResponse;
+      import org.springframework.web.socket.WebSocketHandler;
+      import org.springframework.web.socket.server.HandshakeInterceptor;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#realtime-connection-tenant-scope.websocket_session_attribute_contract
+       * with <root> = acme.
+       *
+       * Binds TenantContext.current() into WebSocketSession
+       * attributes during the HTTP upgrade handshake — the LAST
+       * point in the connection lifecycle where the request-scoped
+       * TenantContext is populated.
+       */
+      public class TenantBindingHandshakeInterceptor implements HandshakeInterceptor {
+
+          @Override
+          public boolean beforeHandshake(ServerHttpRequest request,
+                                         ServerHttpResponse response,
+                                         WebSocketHandler wsHandler,
+                                         Map<String, Object> attributes) {
+              UUID tenantId = TenantContext.current()
+                  .orElseThrow(() -> new TenantContextMissingException(
+                      "TenantContext empty at WS handshake; "
+                      + "TenantFilterActivationFilter not in chain"));
+              attributes.put("tenantId", tenantId);
+              return true;
+          }
+
+          @Override
+          public void afterHandshake(ServerHttpRequest request,
+                                     ServerHttpResponse response,
+                                     WebSocketHandler wsHandler,
+                                     Exception exception) {
+              // no-op
+          }
+      }
+
+  forbidden_alternatives:
+    - "bare emitters.forEach(e -> e.send(payload)) inside an @EventListener — broadcast_no_tenant_filter. Tenant A's PaymentCapturedEvent reaches every connected admin; silent cross-tenant push leak. Identical failure-class to GAP-R3-3 audit-row attribution but in the push direction."
+    - "tenantId resolved from a query parameter or client header at SseEmitter register time (e.g. /api/v1/events?tenant_id=X) — client_supplied_tenant. Attacker subscribes to tenant B's stream by passing tenant_id=B; the registry trusts the URL and binds the wrong tenantId. Tenant signal MUST be TenantContext.current() at HTTP-request thread time (populated by JWT-bearing TenantFilterActivationFilter)."
+    - "TenantContext captured at register time but NOT re-set at send time — per_message_no_set. The send() worker thread (broker pool / @Async event listener) has empty TenantContext; downstream serializers, @JsonView resolvers, and @AuthorizedTenant-annotated getters NPE or AOP-throw TenantBoundaryViolationException; audit-event MDC has no tenant_id."
+    - "InheritableThreadLocal-backed TenantContext as a workaround for the per-message problem — forbidden by #context-resolution.tenant_context_skeleton. Silent propagation across broker pool defeats the explicit-failure contract; broker threads outlive any sane request boundary."
+    - "Storing the SseEmitter in a static field or per-thread map instead of a ConcurrentHashMap-backed singleton bean — registry_lifecycle_unbound. SseEmitter outlives both the HTTP request thread and any reasonable garbage-collection window; ThreadLocal-keyed registries are empty by the first send."
+
+  failure_modes:
+    broadcast_no_tenant_filter:
+      description: >
+        Event publisher iterates emitters.values() without a
+        tenantId filter and calls send() on every connected
+        emitter. Tenant A's PaymentCapturedEvent payload reaches
+        tenant B's admin dashboard. Cross-tenant read leak in
+        the push direction; the dual of GAP-R3-3 in the audit
+        write direction.
+      detection: >
+        40th guard scans every TenantAwareSseEmitterRegistry-shaped
+        class (any class with field type SseEmitter inside a
+        ConcurrentHashMap / List / Set) for a method that calls
+        .send(...) on an emitter without a preceding tenantId
+        equality check (.equals / == on TenantContext.current()
+        or on a tenantId field of the bound record).
+    client_supplied_tenant:
+      description: >
+        SseEmitter register method resolves tenantId from a query
+        parameter, a client-supplied header, the connection URL
+        path, or the SSE topic name instead of from
+        TenantContext.current(). Attacker subscribes to another
+        tenant's stream simply by passing the target tenantId.
+      detection: >
+        40th guard scans the register / @GetMapping handler that
+        constructs SseEmitter — requires the body to read
+        TenantContext.current() (or .orElseThrow()) and forbids
+        reading the substring @RequestParam("tenant" or @RequestHeader
+        ("X-Tenant" near the SseEmitter construction.
+    per_message_no_set:
+      description: >
+        Registry stores tenantId at register time but the
+        sendToTenant / broadcast method does NOT call
+        TenantContext.set(...) before the .send(...) invocation.
+        Serializers and @AuthorizedTenant-annotated getters
+        downstream of send() see empty TenantContext.
+      detection: >
+        40th guard requires that any class containing both
+        SseEmitter (as field type) AND a .send(...) call also
+        contains a TenantContext.set(...) call AND a
+        TenantContext.clear() call in the same file, with
+        count(set) == count(clear) (mirrors the R6 39th-guard
+        clause-1 algorithm).
+
+  open_questions_remaining:
+    - "Broker fan-out (Redis Pub/Sub, Kafka) for horizontal SSE scale — the cross-node hop loses TenantContext just as @Async does. Likely solved by attaching tenantId as a message header and re-setting on the consumer; deferred until a fork-receiver hits the >1-node SSE deployment case."
+    - "gRPC server-streaming RPC tenant scope — same long-lived-connection regime but over gRPC instead of HTTP/SSE. Same canonical pattern (registry per stream, per-message set/clear) should apply; not anchored until a fork-receiver introduces gRPC. Open gap NEW for any R8+ session that adopts gRPC streaming."
+    - "Kafka consumer tenant scope — long-running consumer poll loop with no per-message HTTP boundary. Adjacent regime to scheduled tasks; the per-tenant-iteration model does not directly apply since messages arrive interleaved across tenants. Likely solved by reading tenantId from a message header and per-message set/clear, but the consumer-group / partition-assignment interaction with tenant scoping is not yet anchored."
+
+  cost_estimate_eng_days: 1.0
+
 evidence:
   - source_type: external
     citation: "Hibernate User Guide — Multi-tenancy. Documents @FilterDef + MultiTenantConnectionProvider patterns."
@@ -1215,6 +1491,14 @@ evidence:
   - source_type: external
     citation: "ShedLock README — @SchedulerLock distributes lock key by name across cluster nodes; lock name supports SpEL via Spring's annotation processing. Per-tenant iteration scheduler MUST scope @SchedulerLock name by tenantId substring (e.g. \"reconciliation-#tenantId\") so two nodes can process two tenants in parallel; a bare job-name lock serializes all tenants behind a single node and turns one tenant's hang into a fleet-wide outage."
     url: "https://github.com/lukas-krecan/ShedLock#readme"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Spring Framework Reference — SseEmitter. 'A specialization of ResponseBodyEmitter for sending Server-Sent Events.' Documents that the emitter's send() is invoked asynchronously after the controller method has returned and the originating HTTP request thread has been released. Establishes that request-scoped state (ThreadLocal-backed TenantContext) is NOT live at send time — confirming the registry + per-message set/clear contract required by #realtime-connection-tenant-scope."
+    url: "https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/servlet/mvc/method/annotation/SseEmitter.html"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Spring Framework Reference — WebSocket HandshakeInterceptor. 'Interceptor for WebSocket handshake requests. Can be used to inspect the handshake request and response as well as to pass attributes to the target WebSocketHandler.' Establishes that the handshake is the canonical (and only) lifecycle point at which TenantContext is still populated from the upgrade HTTP request — confirming the WebSocketSession attribute capture contract in #realtime-connection-tenant-scope.websocket_session_attribute_contract."
+    url: "https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/socket/server/HandshakeInterceptor.html"
     quoted_at: "2026-05-20"
 
 # Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
