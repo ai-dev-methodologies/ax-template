@@ -78,6 +78,15 @@ public class SecurityConfig {
                 // the URL or body. Cross-tenant queries return 0 hits because
                 // the tenant filter is appended to every backend call.
                 .requestMatchers("/api/v1/search/**").authenticated()
+                // R21 billing domain (specs/billing-l0.yaml):
+                // BILLING-WEBHOOK-001 — webhook intake is permitAll; auth is
+                // the provider HMAC verified inside BillingWebhookController.
+                // The carve-out MUST appear before /api/subscriptions/** so
+                // unsigned callers reach the controller's 401, not Spring's.
+                .requestMatchers("/api/webhooks/billing").permitAll()
+                // BILLING-AUTHZ-001 — every subscription endpoint requires JWT.
+                // BILLING-AUTHZ-002 — owner-scoped lookups in BillingService.
+                .requestMatchers("/api/subscriptions/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per
