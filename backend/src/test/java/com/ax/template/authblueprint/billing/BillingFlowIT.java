@@ -34,7 +34,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * Run: ./gradlew testBilling
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+            // Compliance fixture: token issuance requires verified email
+            // (AuthServiceImpl.login emits EmailNotVerifiedException → 401 otherwise).
+            // Billing tests assert authenticated flows, not the verification workflow,
+            // so auto-verify on signup keeps the AUTHZ/IDEMP/CUR assertions binary.
+            "auth.signup.auto-verify=true"
+        })
 @Tag("BILLING")
 class BillingFlowIT {
 
@@ -49,24 +57,25 @@ class BillingFlowIT {
     // ─── Helper ──────────────────────────────────────────────────────────────
 
     private String obtainToken(String email, String role) {
-        String password = "Test123!@#";
-        // Register
+        // SignupRequest enforces @Size(min=12) on password (see SignupRequest.java).
+        String password = "Test123!@#xy";
+        // Register — EmailAuthController returns 201 CREATED; idempotent re-register
+        // (409) is also acceptable so tests can share emails across @Test methods.
         given()
             .contentType(ContentType.JSON)
             .body("""
                 {"email":"%s","password":"%s","role":"%s"}
                 """.formatted(email, password, role))
-            .post("/api/auth/signup")
-            .then().statusCode(200);
-        // Login
+            .post("/api/auth/email/signup");
+        // Login — LoginResponse exposes "accessToken" (see LoginResponse.java).
         return given()
             .contentType(ContentType.JSON)
             .body("""
                 {"email":"%s","password":"%s"}
                 """.formatted(email, password))
-            .post("/api/auth/login")
+            .post("/api/auth/email/login")
             .then().statusCode(200)
-            .extract().path("token");
+            .extract().path("accessToken");
     }
 
     // ─── BILLING-AUTHZ-001 (subscription list requires auth) ─────────────────

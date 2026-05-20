@@ -62,7 +62,7 @@ loop.
 
 | Layer | Asset | Mechanism |
 |-------|-------|-----------|
-| Backend reference workload | `backend/` — Spring Boot 3 + Java 21, 14 auth endpoints (signup/login/OAuth Google·Naver·Kakao/password reset/RBAC ADMIN·MANAGER·MEMBER), 5 CRUD endpoints, 1 rate-limit endpoint | TDD-built; `./gradlew test{Domain}` is binary pass/fail |
+| Backend reference workload | `backend/` — Spring Boot 3 + Java 21, 14 auth endpoints (signup/login/OAuth Google·Naver·Kakao/password reset/RBAC ADMIN·MANAGER·MEMBER), 5 CRUD endpoints, 1 rate-limit endpoint | TDD-built; per-domain `./gradlew test{Domain}` is binary pass/fail (status matrix in CLAUDE.md Build & Test) |
 | Frontend reference workload | `frontend/` — React 19 + Next.js 15, OAuth UI, login pages, e2e Playwright tests | self-tests the ESLint plugin |
 | Java/Spring rule catalog | `practices/` — 86 rules / 22 categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
 | React/Next.js rule catalog | `practices-react/` — 86 rules / 8 families, all citing canonical React 19 / Next.js 15 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
@@ -97,8 +97,22 @@ cat recipes/_MANIFEST.yaml | head -40
 cat recipes/saas-subscription/RECIPE.md     # example
 
 # 4. Run the full catalog verification (proves the bundle is intact)
-bash practices/evals/run-all-guards.sh       # 29 hard guards
-cd backend && ./gradlew test && cd ..        # full Java regression (testAsvs / testCrud / testPractices)
+bash practices/evals/run-all-guards.sh       # 29 hard guards (all PASS expected)
+
+# Per-domain catalog tasks — the "binary pass/fail" surface (R1 baseline 2026-05-20)
+cd backend
+./gradlew testAsvs              # GREEN — 26 ASVS items
+./gradlew testCrud              # GREEN — 7 CRUD security tests
+./gradlew testPractices         # GREEN — 86 rules
+./gradlew testPayment           # GREEN — 29 PAYMENT items
+./gradlew testRateLimit         # GREEN
+./gradlew testNotification      # GREEN
+./gradlew testBilling           # RED — TDD anchor only; subscription/plan/webhook endpoints intentionally unimplemented
+./gradlew testIdentityVerification  # RED — catalog gap: HMAC callback controller incomplete
+./gradlew testPortability       # advisory — external fixture (spring-realworld-example-app) cycle, not your code
+./gradlew test                  # aggregate of the above; expect 9 failures in R1 baseline (4+4+1)
+cd ..
+
 cd frontend && npm install && npm run build && cd ..
 
 # 5. Optional: install pre-commit + pre-push hooks (opt-in)
