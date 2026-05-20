@@ -48,6 +48,10 @@ public class SecurityConfig {
                 // from verifier 401) before this carve-out.
                 .requestMatchers("/api/payments/callback/**").permitAll()
                 .requestMatchers("/api/payments/**").authenticated()
+                // R14 audit-log domain (specs/audit-log-l0.yaml):
+                // LIST / GET — any authenticated user (blueprints/audit-log-manifest.yaml#rbac).
+                // EXPORT — method-level @PreAuthorize on AuditLogExportController enforces ADMIN/AUDITOR.
+                .requestMatchers("/api/audit-logs/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per

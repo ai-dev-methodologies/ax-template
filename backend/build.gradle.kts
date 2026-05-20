@@ -129,7 +129,7 @@ tasks.register<Test>("testAuditLog") {
     useJUnitPlatform {
         includeTags("AUDIT_LOG")
     }
-    description = "Run audit-log domain compliance tests (SP17: append-only log entries, async export)"
+    description = "Run audit-log domain compliance tests (R14: 11 items / 5 families — RECORD, LIST, RETENTION, EXPORT, PII)"
     group = "verification"
     shouldRunAfter("test")
 }
