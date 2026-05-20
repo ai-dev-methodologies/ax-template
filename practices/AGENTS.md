@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "07fb2246edabbd09fd85be7c11a40b01755f34f208dd0f08ad94a11ac27ecbf9"
+  source_concat_sha256: "9382794ee867c757e2b1d983870e600ede2003c3b53cf5341a0103cd97e42ac2"
   rule_count: 87
   generated_by: "practices/generate_agents.sh"
 ---
@@ -3269,7 +3269,7 @@ verification:
   failing_fixture: practices/evals/fixtures/multi-tenant-aop-guard-skeleton/failing/
   notes: |
     Mechanical guard (dogfood-5 — promoted from review). Walks every
-    `.../multitenancy/` subpackage and asserts the 17 canonical files exist:
+    `.../multitenancy/` subpackage and asserts the 18 canonical files exist:
       (1) TenantContext.java
       (2) TenantOwned.java
       (3) TenantBoundaryViolationException.java
@@ -3278,15 +3278,16 @@ verification:
       (6) TenantAwareAsyncConfig.java
       (7) TenantContextAwareTaskDecorator.java
       (8) TenantFilterActivationFilter.java
-      (9) AuthorizedTenant.java                  ← added dogfood-5
-      (10) TenantId.java                         ← added dogfood-5
-      (11) AuthorizedTenantInterceptor.java      ← added dogfood-5
-      (12) AuditEvent.java                       ← added R4 (GAP-R3-3)
-      (13) TenantIterationScheduler.java         ← added R6 (GAP-R3-5)
-      (14) TenantAwareSseEmitterRegistry.java    ← added R7 (GAP-NEW-1)
-      (15) TenantAwareRedisPubSubBridge.java     ← added R8 (GAP-NEW-2)
-      (16) TenantAwareKafkaConsumer.java         ← added R9 (kafka-consumer)
-      (17) TenantAwareKafkaStreamsTopology.java  ← added R10 (kafka-streams)
+      (9) AuthorizedTenant.java                       ← added dogfood-5
+      (10) TenantId.java                              ← added dogfood-5
+      (11) AuthorizedTenantInterceptor.java           ← added dogfood-5
+      (12) AuditEvent.java                            ← added R4 (GAP-R3-3)
+      (13) TenantIterationScheduler.java              ← added R6 (GAP-R3-5)
+      (14) TenantAwareSseEmitterRegistry.java         ← added R7 (GAP-NEW-1)
+      (15) TenantAwareRedisPubSubBridge.java          ← added R8 (GAP-NEW-2)
+      (16) TenantAwareKafkaConsumer.java              ← added R9 (kafka-consumer)
+      (17) TenantAwareKafkaStreamsTopology.java       ← added R10 (kafka-streams)
+      (18) TenantAwareInteractiveQueryService.java    ← added R11 (kafka-streams-iq)
     Failing-fixture sibling omits (11) — guard MUST trip with --fixtures.
     Body verification (@Around pointcut wiring, generic detail message,
     fail-fast on @TenantId misuse) anchored in manifest interceptor_skeleton.

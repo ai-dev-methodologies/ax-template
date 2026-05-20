@@ -579,6 +579,42 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/kafka_streams_tenant_scope_guard.sh" --fixtures
 fi
 
+# ── 29. kafka_streams_interactive_queries_tenant_scope_guard
+#      (R11 — IQ read-side OBVERSE of R10 closure, 44th guard) ────────────────
+echo ""
+echo "[29] kafka_streams_interactive_queries_tenant_scope_guard.sh (live repo + passing fixture)"
+# 44th hard guard. Enforces blueprints/multi-tenant-manifest.yaml
+# #kafka-streams-interactive-queries-tenant-scope: Kafka Streams
+# Interactive Queries (HTTP-exposed state-store reads — distinct
+# surface from #kafka-streams-tenant-scope: R10 is the WRITE side
+# (selectKey tenant-prefix + punctuator set/clear); this anchor
+# covers the READ side that mirrors the write-side prefix at
+# request time) MUST adopt the (TenantContext.current() prefix +
+# store.range scoped scan + path mismatch → 404 + fresh store
+# reference per query) pattern with four load-bearing clauses —
+# IQ files MUST call TenantContext.current() (no path/query/body
+# tenantId as prefix); MUST NOT call store.all() (unscoped scan
+# fragile under refactor); MUST NOT throw AccessDeniedException
+# or map to HTTP 403 (existence leak — canonical is 404 via
+# TenantBoundaryViolationException + MultiTenantProblemDetailAdvice);
+# MUST NOT declare a ReadOnly*Store field (caching across requests
+# breaks under Streams rebalance — partition reassignment makes
+# the cached reference read from the OLD assignment).
+# Closes the IQ open question that was the first entry (R10-era
+# index [0]) of #kafka-streams-tenant-scope.open_questions_remaining
+# in the R10-committed manifest — entry removed on R11 closure.
+# IQ-free deployments live-repo SKIP — no
+# .../multitenancy/TenantAwareInteractiveQueryService.java present.
+run_guard "kafka_streams_interactive_queries_tenant_scope/live" 0 \
+    bash "$SCRIPT_DIR/kafka_streams_interactive_queries_tenant_scope_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[29f] kafka_streams_interactive_queries_tenant_scope_guard.sh --fixtures"
+    run_guard "kafka_streams_interactive_queries_tenant_scope/fixtures" 0 \
+        bash "$SCRIPT_DIR/kafka_streams_interactive_queries_tenant_scope_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
