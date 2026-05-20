@@ -1,0 +1,149 @@
+# specs/l4-domain-classification.yaml
+# Canonical 3-tier classification of L4 domains across ax-template.
+# Generated: dogfood-12 | task: P2 R12 closure (3-source coherence)
+#
+# Purpose
+#   ax-template tracks L4 domains across three independent sources of truth:
+#
+#     1. DISK         — templates/L4/<domain>/ directories (reference workloads)
+#     2. SCHEMA       — specs/recipes/_override-schema.yaml#$defs/l4_domain enum
+#                       (legal target of recipe override_allowed blocks)
+#     3. RECIPES      — specs/recipes/*-recipe-l0.yaml#enabled_l4_domains lists
+#                       (currently-composed Business Pattern Recipes)
+#
+#   These three sources are NOT identical. Disagreement is intentional, but
+#   the *kind* of disagreement must be classifiable. This file is the
+#   canonical declaration of which kind each L4 domain belongs to. The
+#   35th hard guard (l4_domain_enum_sync_guard.sh) reads this file and
+#   mechanically validates the six coherence invariants below.
+#
+# Tier semantics
+#
+#   INFRA
+#     - on disk: YES (templates/L4/<domain>/ exists)
+#     - in schema enum: NO (cannot be added/skipped via override_allowed)
+#     - in any recipe enabled_l4_domains: NO
+#     Rationale: cross-cutting infrastructure scaffolding, not a composable
+#     business domain. Always present, never recipe-selected.
+#
+#   SELECTABLE
+#     - on disk: YES (templates/L4/<domain>/ exists)
+#     - in schema enum: YES (forks may add/skip via override)
+#     - in any recipe enabled_l4_domains: USUALLY (≥1 active recipe);
+#       a SELECTABLE domain MAY be on disk + in schema yet not referenced
+#       by any active recipe (recipe-orphan state) — provisioned for forks,
+#       awaiting recipe activation. Tracked under `recipe_orphan: true`.
+#
+#   FUTURE_ADD
+#     - on disk: NO (no templates/L4/<domain>/ directory)
+#     - in schema enum: YES (override target reserved for downstream forks)
+#     - in any recipe enabled_l4_domains: NO
+#     Rationale: schema reserves the namespace so the first fork that
+#     adds the domain on disk does not have to also patch the schema.
+#     Disk absence is intentional, not an oversight.
+#
+# Coherence invariants (enforced by l4_domain_enum_sync_guard.sh)
+#
+#   I1  Every disk dir under templates/L4/ (excluding .gitkeep + INFRA-listed)
+#       appears in exactly one tier here.
+#   I2  Every schema enum entry appears in exactly one of SELECTABLE or
+#       FUTURE_ADD here (never INFRA — INFRA is schema-excluded by design).
+#   I3  Every name listed in any tier here is unique across all tiers.
+#   I4  INFRA entries: on disk AND NOT in schema enum AND NOT in any recipe.
+#   I5  SELECTABLE entries: on disk AND in schema enum.
+#   I6  FUTURE_ADD entries: NOT on disk AND in schema enum.
+#
+# Allowed deviations (NOT invariants — informational)
+#   - A SELECTABLE domain MAY have recipe_orphan: true (on disk + in schema
+#     but currently no recipe references it; intentional fork-only state).
+#   - The classification file MAY introduce new FUTURE_ADD names ahead of
+#     the schema; in that case the schema enum MUST be updated in the
+#     same commit (guard catches mismatch as I2 violation).
+#
+# Snapshot — dogfood-12 cut (2026-05-20)
+#   disk:   12 dirs (1 INFRA + 11 SELECTABLE)
+#   schema: 17 entries (11 SELECTABLE + 6 FUTURE_ADD)
+#   recipes union: 10 distinct domains (10 of 11 SELECTABLE active;
+#                  file-storage is recipe_orphan)
+
+generated: "2026-05-20"
+task: "P2 R12 — 3-source coherence enforcement"
+schema_anchor: "specs/recipes/_override-schema.yaml#$defs/l4_domain"
+guard: "practices/evals/l4_domain_enum_sync_guard.sh"
+
+tiers:
+
+  infra:
+    description: >
+      Cross-cutting infrastructure scaffolding present on disk, intentionally
+      excluded from the override schema enum and from recipe composition.
+    items:
+      - name: "practices"
+        rationale: >
+          The practices/ catalog is shipped as an L4 reference workload only
+          for fork visibility — it is not a recipe-selectable business
+          domain. Excluded from the override schema enum because no recipe
+          can add/skip it.
+
+  selectable:
+    description: >
+      Business L4 domains present on disk and listed in the override schema
+      enum. Each is composable into a recipe via enabled_l4_domains and
+      modifiable by a fork via override_allowed.
+    items:
+      - name: "audit-log"
+        active_recipes: ["api-gateway-relay", "b2b-admin", "booking", "cms",
+                         "community", "crm", "e-commerce", "internal-it",
+                         "lms", "marketplace", "saas-subscription"]
+      - name: "auth"
+        active_recipes: ["api-gateway-relay", "b2b-admin", "community",
+                         "internal-it", "lms", "saas-subscription"]
+      - name: "billing"
+        active_recipes: ["saas-subscription"]
+      - name: "crud"
+        active_recipes: ["api-gateway-relay", "b2b-admin", "booking", "cms",
+                         "community", "crm", "e-commerce", "internal-it",
+                         "lms", "marketplace"]
+      - name: "feature-flags"
+        active_recipes: ["b2b-admin", "booking", "saas-subscription"]
+      - name: "file-storage"
+        recipe_orphan: true
+        rationale: >
+          Provisioned reference workload (templates/L4/file-storage/ ships
+          with full SP18 trio) awaiting recipe activation. Forks compose it
+          via override_allowed.add when their pattern needs upload + virus
+          scan lifecycle.
+        active_recipes: []
+      - name: "notification"
+        active_recipes: ["booking", "cms", "community", "crm", "e-commerce",
+                         "internal-it", "lms", "marketplace", "saas-subscription"]
+      - name: "payment"
+        active_recipes: ["booking", "e-commerce", "marketplace"]
+      - name: "scheduled-task"
+        active_recipes: ["api-gateway-relay", "cms", "internal-it", "lms"]
+      - name: "search"
+        active_recipes: ["b2b-admin", "community", "crm", "e-commerce",
+                         "marketplace"]
+      - name: "webhook"
+        active_recipes: ["api-gateway-relay", "internal-it"]
+
+  future_add:
+    description: >
+      Schema-reserved L4 namespaces intentionally absent from disk. Forks
+      that need one of these must (a) add templates/L4/<domain>/ on disk,
+      (b) move the entry from future_add to selectable in this file, and
+      (c) re-run l4_domain_enum_sync_guard.sh. The schema enum already
+      authorises the name so no schema patch is required by the fork.
+    items:
+      - name: "email-outbox"
+        intended_use: "Transactional email outbox pattern with retry + dead-letter."
+      - name: "i18n-policy"
+        intended_use: "Locale + currency + RTL policy enforcement."
+      - name: "identity-verification"
+        intended_use: "KYC / document verification pipeline."
+      - name: "multi-tenant"
+        intended_use: "Row-level / schema-per-tenant isolation runtime (separate from the policy spec at specs/multi-tenant-l0.yaml)."
+      - name: "ratelimit"
+        intended_use: "API rate-limiting policy + counter store."
+      - name: "realtime-policy"
+        intended_use: "WebSocket / SSE channel auth + back-pressure policy."

@@ -321,6 +321,20 @@ echo "[18] ledger_audit_nullability_guard.sh (live repo)"
 run_guard "ledger_audit_nullability/live" 0 \
     bash "$SCRIPT_DIR/ledger_audit_nullability_guard.sh"
 
+# ── 19. l4_domain_enum_sync_guard (dogfood-12 — R12 closure, 35th guard) ─────
+echo "[19] l4_domain_enum_sync_guard.sh (live repo)"
+# Enforces 3-source coherence of L4 domain enumeration across
+# (1) templates/L4/<domain>/ disk dirs,
+# (2) specs/recipes/_override-schema.yaml $defs.l4_domain enum,
+# (3) specs/recipes/*-recipe-l0.yaml enabled_l4_domains lists,
+# against the canonical classification specs/l4-domain-classification.yaml.
+# Validates 6 invariants (I1..I6): tier uniqueness + classified-disk-coverage
+# + classified-schema-coverage + per-tier disk/schema/recipe presence rules.
+# Closes the R12 framing gap (3-source disagreement was undocumented +
+# unverified before dogfood-12).
+run_guard "l4_domain_enum_sync/live" 0 \
+    bash "$SCRIPT_DIR/l4_domain_enum_sync_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
