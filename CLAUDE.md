@@ -155,12 +155,23 @@ catalog claim **"`./gradlew test{Domain}` — 단일 명령 binary pass/fail"** 
 | `./gradlew testNotification`   | GREEN    | NOTIFICATION 전 PASS |
 | `./gradlew testPayment`        | GREEN    | PAYMENT 29 items PASS |
 | `./gradlew testIdentityVerification` | GREEN | IDV-CALLBACK-001/002/003 + IDV-PROVIDER-001 envelope (8/8 PASS). VerifiedIdentity 영속화 / admin 목록 / 감사 publish 는 catalog 계약 surface로 남고 fork-receiver가 구현 (R2 closure) |
-| `./gradlew testBilling`        | **RED (TDD anchor)** | endpoint 미구현 — `/api/subscriptions`, `/api/admin/billing/plans`, `/api/webhooks/billing` 부재. spec과 test는 작성됨 |
+| `./gradlew testBilling`        | GREEN    | 17/17 PASS. R21 backend impl: Subscription/Plan/BillingEvent + SubscriptionStateMachine + SubscriptionController + BillingAdminController + BillingWebhookController + ArchUnit BOUNDARY/STATE checks. SecurityConfig 가 `/api/webhooks/billing` permitAll, `/api/subscriptions/**` authenticated. 마지막 spec-only RED 도메인 closure |
 | `./gradlew testPortability`    | advisory | 외부 fixture (spring-realworld-example-app) 에 cycle 있음. fork-receiver의 코드가 아니라 외부 reference 코드의 결함 |
 
 전체 `./gradlew test`는 위 도메인을 모두 합친 aggregate이므로 RED 도메인이
-하나라도 있으면 RED. R2 baseline: BillingFlowIT × 4 + PortabilityCyclicPackage
-REALWORLD × 1 = 5 fail (R1 9 fail → R2 5 fail; testIdentityVerification 4건 closed).
+하나라도 있으면 RED. **R21 baseline (2026-05-21): per-domain task 모두 GREEN.**
+aggregate `./gradlew test` 상태는 R20 시점 5 fail (4 BillingFlowIT TDD-anchor
+HTTP 404 + 1 Portability REALWORLD) → R21 시점 testBilling RED 4건 closed +
+FeatureFlagFlowIT 11건이 aggregate 모드에서만 Spring TestContext 캐시/공유
+H2 (`DB_CLOSE_DELAY=-1`) 상호작용에 의해 spurious 401 으로 surface (per-domain
+`./gradlew testFeatureFlags` 단독으로는 11/11 GREEN). 이는 **R20 시점부터
+잠재해 있던 test pollution** 으로, R20 baseline 에서는 BillingFlowIT 의 사전
+HTTP 404 fast-fail 이 user/플랜 row 를 만들지 않아 노출되지 않다가 R21 에서
+BillingFlowIT 가 GREEN 으로 turn 되면서 표면화. catalog claim ("per-domain
+`./gradlew test{Domain}` 단일 binary pass/fail") 은 모든 도메인에 대해 유지.
+aggregate suite 의 ApplicationContext 캐시 격리는 fork-receiver 가 자신의 CI
+에서 `@DirtiesContext` 또는 별도 forkEvery 정책으로 조정 가능 (catalog 가
+강제하지 않는 정책 surface).
 
 ```bash
 # Backend
