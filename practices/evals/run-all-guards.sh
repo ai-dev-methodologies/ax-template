@@ -335,6 +335,18 @@ echo "[19] l4_domain_enum_sync_guard.sh (live repo)"
 run_guard "l4_domain_enum_sync/live" 0 \
     bash "$SCRIPT_DIR/l4_domain_enum_sync_guard.sh"
 
+echo ""
+echo "[20] payment_callback_restassured_compliance_guard.sh (live repo)"
+# 35th hard guard — dogfood-13 R13 GAP-C closure.
+# Makes specs/payment-l0.yaml#PAYMENT-CALLBACK-001's test_method scalar
+# ("RestAssured integration test") mechanically binding: at least one
+# integration test in backend/src/test/.../payment/ MUST hit all three
+# markers (RestAssured import + @SpringBootTest RANDOM_PORT + literal
+# "/api/payments/callback/" POST). MockMvc usage in any *Callback* file
+# is rejected as CLAUDE.md anti-pattern.
+run_guard "payment_callback_restassured_compliance/live" 0 \
+    bash "$SCRIPT_DIR/payment_callback_restassured_compliance_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
