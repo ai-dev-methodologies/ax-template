@@ -656,6 +656,46 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/kafka_streams_standby_rpc_tenant_scope_guard.sh" --fixtures
 fi
 
+# ── 31. webclient_async_tenant_scope_guard
+#      (R13 — reactive async-router OBVERSE of R12 closure, 46th guard) ─────────
+echo ""
+echo "[31] webclient_async_tenant_scope_guard.sh (live repo + passing fixture)"
+# 46th hard guard. Enforces blueprints/multi-tenant-manifest.yaml
+# #webclient-async-tenant-scope: outbound Spring WebFlux WebClient
+# adoption (the reactive HTTP client surface that fork-receivers
+# reach for when calling third-party SaaS APIs — Slack, Stripe,
+# SendGrid, NICE페이먼츠 채널 조회, etc.) MUST adopt the
+# (X-Tenant-Id header set in the filter + Mono.deferContextual as
+# the SOLE tenant extraction point + Reactor Context written at the
+# controller from TenantContext.current() + zero ThreadLocal access
+# inside the reactive chain) pattern with four load-bearing
+# clauses — every ExchangeFilterFunction file MUST stamp the
+# X-Tenant-Id header (without it the receiving service sees no
+# tenant signal); MUST reference Mono.deferContextual / ContextView
+# (Reactor Context is the only chain-safe tenant carrier across
+# scheduler hops); MUST NOT call TenantContext.current() outside a
+# `public static` servlet-thread helper (the filter body runs on a
+# Reactor scheduler thread where the ThreadLocal is empty or holds
+# a stale prior subscription's tenant); MUST NOT call
+# TenantContext.set / TenantContext.clear at all (these have zero
+# legitimate use inside a WebClient filter and are the canonical
+# scheduler-worker reuse leak vector). Closes the reactive /
+# WebClient async fan-out open question that was the third entry
+# (R12-era index [2]) of
+# #kafka-streams-standby-rpc-tenant-scope.open_questions_remaining
+# in the R12-committed manifest — entry removed on R13 closure.
+# WebClient-free deployments live-repo SKIP —
+# no .../multitenancy/TenantAwareWebClientFilter.java present.
+run_guard "webclient_async_tenant_scope/live" 0 \
+    bash "$SCRIPT_DIR/webclient_async_tenant_scope_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[31f] webclient_async_tenant_scope_guard.sh --fixtures"
+    run_guard "webclient_async_tenant_scope/fixtures" 0 \
+        bash "$SCRIPT_DIR/webclient_async_tenant_scope_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
