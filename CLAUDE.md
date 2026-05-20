@@ -144,7 +144,7 @@ skill은 **catalog quality probe만 제공**. fork받은 팀이 자신의 정책
 
 catalog claim **"`./gradlew test{Domain}` — 단일 명령 binary pass/fail"** 은
 **per-domain task** 에 적용된다. 전체 `./gradlew test` 가 항상 GREEN 이라는
-약속이 **아니다**. 도메인별 상태는 아래 매트릭스(R1 baseline, 2026-05-20):
+약속이 **아니다**. 도메인별 상태는 아래 매트릭스(R2 baseline, 2026-05-20):
 
 | Per-domain task                | 상태       | 비고 |
 |--------------------------------|----------|---|
@@ -154,13 +154,13 @@ catalog claim **"`./gradlew test{Domain}` — 단일 명령 binary pass/fail"** 
 | `./gradlew testRateLimit`      | GREEN    | RATELIMIT 전 PASS |
 | `./gradlew testNotification`   | GREEN    | NOTIFICATION 전 PASS |
 | `./gradlew testPayment`        | GREEN    | PAYMENT 29 items PASS |
+| `./gradlew testIdentityVerification` | GREEN | IDV-CALLBACK-001/002/003 + IDV-PROVIDER-001 envelope (8/8 PASS). VerifiedIdentity 영속화 / admin 목록 / 감사 publish 는 catalog 계약 surface로 남고 fork-receiver가 구현 (R2 closure) |
 | `./gradlew testBilling`        | **RED (TDD anchor)** | endpoint 미구현 — `/api/subscriptions`, `/api/admin/billing/plans`, `/api/webhooks/billing` 부재. spec과 test는 작성됨 |
-| `./gradlew testIdentityVerification` | **RED (catalog gap)** | callback HMAC 401 — controller/SecurityConfig 카탈로그 미완 |
 | `./gradlew testPortability`    | advisory | 외부 fixture (spring-realworld-example-app) 에 cycle 있음. fork-receiver의 코드가 아니라 외부 reference 코드의 결함 |
 
 전체 `./gradlew test`는 위 도메인을 모두 합친 aggregate이므로 RED 도메인이
-하나라도 있으면 RED. R1 baseline: 270 tests, 9 failed (BillingFlowIT × 4 +
-IdentityVerificationFlowIT × 4 + PortabilityCyclicPackage REALWORLD × 1).
+하나라도 있으면 RED. R2 baseline: BillingFlowIT × 4 + PortabilityCyclicPackage
+REALWORLD × 1 = 5 fail (R1 9 fail → R2 5 fail; testIdentityVerification 4건 closed).
 
 ```bash
 # Backend
