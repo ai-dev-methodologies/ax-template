@@ -15,6 +15,7 @@
 #   R6 closure : +TenantIterationScheduler.java           → 13 files (GAP-R3-5)
 #   R7 closure : +TenantAwareSseEmitterRegistry.java      → 14 files (GAP-NEW-1)
 #   R8 closure : +TenantAwareRedisPubSubBridge.java       → 15 files (GAP-NEW-2)
+#   R9 closure : +TenantAwareKafkaConsumer.java           → 16 files (kafka-consumer)
 #
 # Closes P2 Round 3 GAP-NEW-2 (manifest aop-guard named
 # AuthorizedTenantInterceptor + the @AuthorizedTenant/@TenantId annotation
@@ -33,7 +34,7 @@
 #   bash practices/evals/multi_tenant_aop_guard_skeleton_guard.sh --fixtures
 #
 # Exit codes:
-#   0 — every multitenancy/ package contains the 15 expected files
+#   0 — every multitenancy/ package contains the 16 expected files
 #   1 — at least one file missing OR failing/ fixture unexpectedly passes
 
 set -uo pipefail
@@ -80,6 +81,16 @@ REQUIRED_FILES=(
     # by the 41st guard but not listed here to keep one canonical file
     # per surface (Redis is the documented default).
     "TenantAwareRedisPubSubBridge.java"
+    # 16th file added R9 — closes the kafka-consumer open question
+    # carried over from R7/R8. Pairs with anchor
+    # blueprints/multi-tenant-manifest.yaml#kafka-consumer-tenant-scope
+    # and is content-verified by kafka_consumer_tenant_scope_guard.sh (42nd).
+    # Distinct surface from TenantAwareRedisPubSubBridge (R8): R8 dispatches
+    # INTO the SSE registry (push-out); this consumer processes business
+    # events and invokes service-layer code (in-direction). Kafka-free
+    # deployments SKIP via the 42nd guard's live-repo SKIP branch — this
+    # file is OPT-IN for fork-receivers that adopt Kafka consumers.
+    "TenantAwareKafkaConsumer.java"
 )
 
 verify_dir() {

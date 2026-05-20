@@ -1786,10 +1786,355 @@ broker-fanout-tenant-scope:
 
   open_questions_remaining:
     - "STOMP user-destination cross-node fan-out (Spring's @SendToUser) — uses the user registry / broker relay; the analogue here is binding tenantId into the StompHeaderAccessor session attributes during the CONNECT frame's interceptor, but the cross-node user-destination resolution model differs from raw pub/sub and is not yet anchored."
-    - "Kafka consumer group / partition assignment with tenant scoping — should every tenant get its own topic, its own partition key derived from tenantId, or a single shared topic with header-only routing? Partition assignment interaction with consumer-group rebalancing under tenant-aware ordering guarantees is not yet anchored; opens R9 candidate alongside the existing Kafka-consumer open question."
+    - "Kafka consumer group / partition assignment with tenant scoping — CLOSED in R9 via #kafka-consumer-tenant-scope. Anchor pins the shared-topic + X-Tenant-Id header + per-record set/clear contract for business-event consumers (distinct from the broker-fanout-to-SSE bridge surface), including batch poll loops, manual Acknowledgment, ConsumerRebalanceListener tenant-cleanliness, and concurrent container semantics. The 42nd guard mechanically enforces."
     - "RabbitMQ topic exchange routing keys carrying tenantId in the key namespace (e.g. ax.tenant.<tenantId>.events.payment-captured) vs. header-only — routing-key-based tenant scoping is a cheap-but-leaky variant where a malformed binding silently delivers cross-tenant. The structural envelope/header pattern is the safer default; routing-key-only is forbidden for the same reason payload_embedded_tenant_signal is forbidden, but a hybrid is plausible and not yet pinned."
 
   cost_estimate_eng_days: 1.5
+
+# ─────────────────────────────────────────────────────────────────────
+# kafka-consumer-tenant-scope — R9 closure (broker-fanout open question)
+# ─────────────────────────────────────────────────────────────────────
+kafka-consumer-tenant-scope:
+  description: >
+    Tenant resolution policy for long-running Kafka business-event
+    consumers — listeners that process domain events (e.g. payment
+    captured, subscription renewed, audit append) arriving on a
+    shared topic with interleaved tenant traffic. Distinct surface
+    from #broker-fanout-tenant-scope: the R8 bridge dispatches into
+    the local SSE registry (push-out direction); this anchor covers
+    the IN-DIRECTION business-event consumer that calls service
+    layer code under per-record tenant context. R9 closes the
+    open question staked by #broker-fanout-tenant-scope:
+    "Kafka consumer group / partition assignment with tenant
+    scoping (rebalancing under tenant-aware ordering)".
+  introduced_at: >
+    R9 — closes the kafka-consumer open question opened in R7
+    (#realtime-connection-tenant-scope.open_questions_remaining[2])
+    and re-affirmed in R8
+    (#broker-fanout-tenant-scope.open_questions_remaining[1]).
+    Fork-receivers writing a B2B SaaS Kafka consumer for the
+    tenant-events topic would reach for one of three failure
+    modes: (a) read TenantContext.current() at the @KafkaListener
+    method entry (consumer poll thread has empty context by
+    construction — same failure-class as R8 broker-fanout but on
+    a different bean naming surface), (b) set TenantContext ONCE
+    per batch poll instead of per-record (Tenant N's processing
+    runs under Tenant N-1's context for every record after the
+    first in an interleaved batch — silent cross-tenant write),
+    (c) skip clear() and leak the last record's tenantId into
+    ConsumerRebalanceListener callbacks or the next poll cycle.
+    R9 anchors the canonical pattern.
+  closed_at: >
+    R9 — full closure. Manifest moves from staked-anchor to
+    executable contract: TenantAwareKafkaConsumer skeleton ships
+    in the multi-tenant fixture, the (per-record header read →
+    per-record set/clear in for-loop → rebalance-listener
+    tenant-free → batch ack outside set/clear) chain is concrete,
+    and the 42nd hard guard (kafka_consumer_tenant_scope_guard.sh)
+    blocks any of the failure modes from sneaking in via
+    fork-receiver code.
+
+  canonical_pattern: shared_topic_header_per_record_set_clear
+
+  shared_topic_header_per_record_set_clear:
+    description: >
+      Multi-tenant business-event consumer reads from a SHARED
+      topic (single ax.tenant.events topic carries all tenants'
+      domain events interleaved; per-tenant topics are an
+      anti-pattern at >10 tenants because Kafka cluster
+      metadata cost is O(topics)). Tenant scope travels as a
+      ConsumerRecord X-Tenant-Id header — the same wire-format
+      contract as #broker-fanout-tenant-scope.kafka_header_contract.
+
+      Five load-bearing properties:
+        (1) Per-record header read INSIDE the batch for-loop:
+            every ConsumerRecord in the batch carries its own
+            X-Tenant-Id header. The consumer MUST read each
+            record's header inside the iteration, NOT once at
+            method entry. Setting TenantContext from the first
+            record and processing the whole batch under that
+            context is the batch_set_once anti-pattern: every
+            record after the first runs under the prior record's
+            tenantId. Silent cross-tenant write at every batch
+            boundary.
+        (2) Per-record TenantContext.set + TenantContext.clear
+            wrapped in try/finally INSIDE the for-loop. count(set)
+            == count(clear) inside the listener body MUST equal
+            the number of records iterated. The R8 41st guard
+            algorithm extends here: same count-equality check, but
+            scoped to the for-loop body to handle batch listeners.
+        (3) ConsumerRebalanceListener callbacks
+            (onPartitionsRevoked, onPartitionsAssigned) MUST NOT
+            read or set TenantContext. These callbacks run on the
+            consumer poll thread between record batches with NO
+            tenant signal available — the poll thread is shared
+            across all tenants in the partition assignment. Any
+            TenantContext.set inside a rebalance callback is the
+            rebalance_carries_tenant_context anti-pattern: the
+            value leaks into the next poll cycle's first record
+            (which may belong to a different tenant).
+        (4) Manual Acknowledgment (when used) MUST be batch-level
+            (single ack.acknowledge() AFTER the for-loop completes)
+            OR per-record but OUTSIDE the try/finally context span.
+            ack.acknowledge() invokes the consumer client which
+            may interact with the broker pool; calling ack inside
+            the TenantContext.set/clear span risks the broker
+            client thread inheriting tenant context unintentionally
+            (in fork-receiver code that uses InheritableThreadLocal
+            workarounds — already forbidden by #context-resolution,
+            but defense-in-depth applies).
+        (5) Partition key policy (advisory, fork-receiver choice):
+            for tenant-aware ordering guarantees, the PRODUCER
+            side MAY set producerRecord.key() = tenantId.toString()
+            so all of one tenant's events land on one partition.
+            This is NOT canonical-enforced: single-tenant ordering
+            is a fork-receiver business decision. The structural
+            tenant signal is the X-Tenant-Id header, not the
+            partition key — header is mandatory, key is optional.
+
+    canonical_skeleton: |
+      package com.acme.multitenancy;
+
+      import java.nio.charset.StandardCharsets;
+      import java.util.Collection;
+      import java.util.UUID;
+      import org.apache.kafka.clients.consumer.ConsumerRecord;
+      import org.apache.kafka.common.TopicPartition;
+      import org.apache.kafka.common.header.Header;
+      import org.springframework.kafka.annotation.KafkaListener;
+      import org.springframework.kafka.listener.ConsumerAwareRebalanceListener;
+      import org.springframework.kafka.support.Acknowledgment;
+      import org.springframework.stereotype.Component;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#kafka-consumer-tenant-scope.shared_topic_header_per_record_set_clear.canonical_skeleton
+       * with <root> = acme.
+       *
+       * Tenant-scoped Kafka business-event consumer. Distinct from
+       * TenantAwareRedisPubSubBridge / TenantAwareKafkaFanoutBridge
+       * (which dispatch into the local SSE registry): this consumer
+       * processes domain events and calls service-layer business
+       * code under per-record tenant context.
+       *
+       * Five guard-checked properties:
+       *   (1) X-Tenant-Id header read INSIDE the for-loop, never
+       *       once at method entry.
+       *   (2) TenantContext.set + clear wrapped in try/finally
+       *       INSIDE the for-loop. count(set)==count(clear) per
+       *       batch invocation.
+       *   (3) Rebalance callbacks NEVER touch TenantContext.
+       *   (4) Manual ack runs OUTSIDE the set/clear span (after
+       *       the for-loop, or as a batch ack at method exit).
+       *   (5) Partition key is producer-side choice; consumer
+       *       trusts the header only.
+       */
+      @Component
+      public class TenantAwareKafkaConsumer implements ConsumerAwareRebalanceListener {
+
+          private static final String TENANT_HEADER = "X-Tenant-Id";
+          private static final String TOPIC = "ax.tenant.events";
+
+          private final TenantEventHandler handler;
+
+          public TenantAwareKafkaConsumer(TenantEventHandler handler) {
+              this.handler = handler;
+          }
+
+          /**
+           * Batch poll listener — receives a List of records that
+           * may interleave tenants. Each record's X-Tenant-Id
+           * header is the structural tenant signal; the consumer
+           * MUST read it per-record inside the for-loop.
+           *
+           * Setting TenantContext once before the loop is the
+           * batch_set_once anti-pattern: every record after the
+           * first runs under the prior tenant.
+           */
+          @KafkaListener(topics = TOPIC, containerFactory = "kafkaListenerContainerFactory")
+          public void onBatch(java.util.List<ConsumerRecord<String, Object>> records,
+                              Acknowledgment ack) {
+              for (ConsumerRecord<String, Object> record : records) {
+                  Header tenantHeader = record.headers().lastHeader(TENANT_HEADER);
+                  if (tenantHeader == null || tenantHeader.value() == null) {
+                      // Reject malformed records — falling through to
+                      // handler invocation would either NPE in business
+                      // code or run under the previous record's stale
+                      // tenantId (silent cross-tenant write).
+                      throw new TenantContextMissingException(
+                          "Kafka record lacks " + TENANT_HEADER + " header at offset "
+                          + record.offset() + " partition " + record.partition());
+                  }
+                  UUID tenantId = UUID.fromString(
+                      new String(tenantHeader.value(), StandardCharsets.UTF_8));
+                  try {
+                      // MUST set: business-layer handlers may call
+                      // TenantContext.current() during repository
+                      // queries, @AuthorizedTenant-annotated getters,
+                      // audit-event MDC enrichment.
+                      TenantContext.set(tenantId);
+                      handler.handle(record.value());
+                  } finally {
+                      // MUST clear: poll thread is reused across
+                      // batches. Leaving record N's context set for
+                      // record N+1's iteration is the stale-context
+                      // leak inside a single batch.
+                      TenantContext.clear();
+                  }
+              }
+              // Batch-level ack AFTER all per-record set/clear cycles.
+              // ack.acknowledge() interacts with the broker pool and
+              // MUST NOT run inside any record's TenantContext span.
+              ack.acknowledge();
+          }
+
+          /**
+           * Rebalance callback — runs on the consumer poll thread
+           * BETWEEN batches with NO tenant signal. The poll thread
+           * is shared across all tenants in the partition
+           * assignment; TenantContext.set here would leak the value
+           * into the first record of the next batch (which may
+           * belong to a different tenant).
+           *
+           * Rebalance callbacks are tenant-free by contract.
+           */
+          @Override
+          public void onPartitionsRevokedBeforeCommit(
+                  org.apache.kafka.clients.consumer.Consumer<?, ?> consumer,
+                  Collection<TopicPartition> partitions) {
+              // no-op — no TenantContext interaction.
+          }
+
+          @Override
+          public void onPartitionsAssigned(
+                  org.apache.kafka.clients.consumer.Consumer<?, ?> consumer,
+                  Collection<TopicPartition> partitions) {
+              // no-op — no TenantContext interaction.
+          }
+
+          /**
+           * Business-event handler abstraction — fork-receivers
+           * implement this with their domain-event dispatch logic.
+           * The handler is invoked under TenantContext set to the
+           * record's tenantId; the handler is FORBIDDEN from
+           * resolving tenantId from any other source (record key,
+           * payload field, config). TenantContext.current() is
+           * the single source of truth inside the handler.
+           */
+          public interface TenantEventHandler {
+              void handle(Object payload);
+          }
+      }
+
+  per_tenant_topic_anti_pattern:
+    description: >
+      An alternative considered and rejected: one topic per
+      tenant (ax.tenant.<uuid>.events). Pros: implicit tenant
+      scoping via topic name; no header parsing needed. Cons,
+      decisive at scale:
+        - Kafka cluster metadata cost is O(topics). 1000 tenants
+          = 1000 topics = ~5x metadata cache vs single-topic.
+        - Consumer-group rebalancing on topic add/remove is a
+          fleet-wide event. New tenant onboarding triggers a
+          rebalance.
+        - Topic-name-based ACLs at the per-tenant granularity
+          create N ACL rules; header-based dispatch with one ACL
+          for the consumer group is operationally simpler.
+        - Cross-tenant query (e.g. aggregate metrics) requires
+          consumer-group subscription to a pattern; one
+          mis-pattern silently misses tenants.
+      The shared-topic + header pattern is canonical for
+      >10-tenant deployments. <10 tenants MAY use per-tenant
+      topics as a fork-receiver simplification (not enforced).
+
+  forbidden_alternatives:
+    - "@KafkaListener method reads TenantContext.current() at method entry instead of from the per-record X-Tenant-Id header — consumer_assumes_current_context. The Kafka consumer poll thread has empty TenantContext by construction (never ran through TenantFilterActivationFilter). Same failure-class as #broker-fanout-tenant-scope.failure_modes.consumer_assumes_current_context but on the business-event-consumer surface."
+    - "TenantContext.set called ONCE before the batch for-loop, then handler invoked for every record under the first record's tenantId — batch_set_once. Every record after the first in an interleaved batch runs under the wrong tenantId. Silent cross-tenant write at every batch boundary; the most subtle failure mode in this regime because single-tenant batches (test fixtures) pass while production interleaved batches leak."
+    - "TenantContext.set inside the for-loop but TenantContext.clear() missing or at method exit (outside the for-loop) — stale_per_record_context. Record N's tenantId leaks into record N+1's handler invocation. Same failure-class as the R8 stale_tenant_context but multiplied by batch size — a batch of 500 records can produce 499 cross-tenant writes."
+    - "ConsumerRebalanceListener.onPartitionsAssigned / onPartitionsRevoked calls TenantContext.set(...) — rebalance_carries_tenant_context. The rebalance callback runs on the consumer poll thread between batches with NO tenant signal; the value leaks into the first record of the next batch. Defensive fork-receiver code that 'restores' a tenant from config or default-tenant lookup inside the rebalance callback is the canonical bug shape."
+    - "ack.acknowledge() called INSIDE the per-record try block, between TenantContext.set and TenantContext.clear — ack_inside_tenant_span. Manual ack interacts with the broker client thread pool; inheriting tenant context into the broker pool defeats the explicit-propagation contract (#context-resolution.tenant_context_skeleton). Ack MUST happen after the for-loop (batch-level) OR after clear() (per-record but outside the span)."
+    - "Per-tenant topic naming (ax.tenant.<uuid>.events) at >10 tenants — per_tenant_topic_anti_pattern. See per_tenant_topic_anti_pattern section above. Allowed for <10-tenant fork-receivers as a simplification; FORBIDDEN at scale because cluster metadata cost and rebalancing churn become operational hazards."
+
+  failure_modes:
+    consumer_assumes_current_context:
+      description: >
+        @KafkaListener method body reads TenantContext.current()
+        at method entry. The consumer poll thread has empty
+        TenantContext by construction; orElseThrow() NPEs OR
+        (worse) defensive code masks the empty Optional with a
+        default-tenant fallback (cross-tenant write under the
+        default tenant's identity).
+      detection: >
+        42nd guard requires that any @KafkaListener-annotated
+        method body has an X-Tenant-Id header read substring
+        (.lastHeader("X-Tenant-Id"), lastHeader(TENANT_HEADER))
+        BEFORE any TenantContext.current() call. Same algorithm
+        as the R8 41st-guard clause(2) but scoped to consumer
+        beans named *Consumer.java / *EventConsumer.java
+        (distinct from the bridge naming convention).
+    batch_set_once:
+      description: >
+        TenantContext.set(...) called ONCE before the batch
+        for-loop, then handler invoked for every record. Every
+        record after the first runs under the first record's
+        tenantId. The most subtle failure mode: passes in
+        single-tenant test batches; leaks in production
+        interleaved batches.
+      detection: >
+        42nd guard scans the @KafkaListener method body. If the
+        body contains a `for (... records)` or
+        `records.forEach(...)` loop, the body MUST also contain
+        TenantContext.set INSIDE the loop scope (detected by
+        brace-balanced extraction of the for-loop body).
+        TenantContext.set OUTSIDE any for-loop while the method
+        signature is List<ConsumerRecord> trips this clause.
+    stale_per_record_context:
+      description: >
+        Per-record TenantContext.set inside the for-loop but
+        TenantContext.clear() missing or placed at method exit
+        (outside the for-loop). Record N's tenantId leaks into
+        record N+1's handler invocation. A batch of 500 records
+        can produce 499 cross-tenant writes.
+      detection: >
+        42nd guard requires count(TenantContext.set) ==
+        count(TenantContext.clear) > 0 in any file with a
+        @KafkaListener signature AND a List<ConsumerRecord> /
+        ConsumerRecords parameter. Mirrors the R8 41st-guard
+        clause(3) count algorithm but scoped to batch listeners.
+    rebalance_carries_tenant_context:
+      description: >
+        ConsumerRebalanceListener.onPartitionsAssigned or
+        onPartitionsRevoked method body contains a
+        TenantContext.set call. The value leaks into the first
+        record of the next batch (which may belong to a
+        different tenant). Defensive "restore from config"
+        fork-receiver code is the canonical bug shape.
+      detection: >
+        42nd guard scans methods named onPartitionsAssigned /
+        onPartitionsRevoked / onPartitionsRevokedBeforeCommit
+        and forbids any TenantContext.set / TenantContext.clear
+        substring in the method body. Rebalance callbacks MUST
+        be tenant-free.
+    ack_inside_tenant_span:
+      description: >
+        ack.acknowledge() called inside the per-record try block,
+        between TenantContext.set and TenantContext.clear. Ack
+        interacts with the broker client thread pool; inheriting
+        tenant context into the broker pool defeats the
+        explicit-propagation contract.
+      detection: >
+        42nd guard scans for `.acknowledge(` calls. If the call
+        appears AFTER a TenantContext.set on the same lexical
+        path AND BEFORE the matching TenantContext.clear (i.e.,
+        inside the try block), trip the clause. Ack is allowed
+        AFTER the for-loop (batch-level) or AFTER clear()
+        (per-record-but-outside-span).
+
+  open_questions_remaining:
+    - "Kafka Streams (KStream / KTable topology) tenant scope — Streams uses its own thread pool (StreamThread) with different lifecycle than @KafkaListener. The per-record set/clear contract should extend but Streams' punctuators and stateful transformations (KTable joins) create state across tenants in the same store. Not yet anchored; opens R10 candidate."
+    - "Kafka transactional consumer (read_committed + producer transactions for exactly-once semantics) — the producer.send inside the consumer loop must also carry the X-Tenant-Id header; coupling between consumer-context and producer-record-header is implicit. Not yet anchored."
+    - "RabbitMQ topic exchange with per-message tenant header — adjacent regime. The Spring AMQP @RabbitListener analogue should follow the same per-message header + set/clear contract, but the broker semantics differ (queue-based vs partition-based). Same staked-anchor status as the broker-fanout RabbitMQ open question."
+
+  cost_estimate_eng_days: 1.0
 
 evidence:
   - source_type: external
@@ -1836,17 +2181,32 @@ evidence:
     citation: "CNCF CloudEvents Specification v1.0.2 — Context Attributes. Defines the cross-broker envelope pattern: 'CloudEvents attributes are the meta-data about an event' and explicitly recommends that broker-portable metadata (such as tenant scope) travel as STRUCTURAL context attributes, NOT inside the data payload. Industry-standard endorsement of the envelope-header pattern over payload-embedded tenant signals."
     url: "https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md#context-attributes"
     quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Spring for Apache Kafka Reference — Batch Listeners. '@KafkaListener can receive a list of records.' Documents that batch consumer methods accept List<ConsumerRecord> or ConsumerRecords and that the listener container delivers each batch as a single invocation. Confirms that per-record state management (TenantContext.set/clear) MUST happen INSIDE the batch iteration, not at method entry — the structural reason batch_set_once is the canonical failure mode in #kafka-consumer-tenant-scope."
+    url: "https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/listener-annotation.html"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Apache Kafka Documentation — ConsumerRebalanceListener. 'A callback interface that the user can implement to trigger custom actions when the set of partitions assigned to the consumer changes.' Establishes that rebalance callbacks fire on the consumer poll thread between batches; the documented contract does not surface any per-tenant signal to these callbacks, confirming the rebalance_carries_tenant_context anti-pattern in #kafka-consumer-tenant-scope is structural (the API does not provide tenant signal at rebalance time, so any TenantContext.set inside the callback is a fork-receiver hallucination)."
+    url: "https://kafka.apache.org/documentation/#consumerconfigs_partition.assignment.strategy"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Spring for Apache Kafka Reference — Manual Acknowledgment. 'When using MANUAL or MANUAL_IMMEDIATE ack mode, the listener can invoke Acknowledgment.acknowledge() to commit offsets.' Documents that ack.acknowledge() runs on the consumer poll thread and interacts with the broker client. Confirms the structural reason ack_inside_tenant_span is the canonical failure mode in #kafka-consumer-tenant-scope: calling ack inside a TenantContext.set span can leak tenant context into the broker client thread pool."
+    url: "https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/listener-container.html"
+    quoted_at: "2026-05-20"
 
 # Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
 # row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2)
 # + callback tenant resolution (~1.5) + scheduled-task (1) + realtime-connection (1)
-# + broker fan-out (1.5) = ~18 eng-days.
-# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 = ~23 eng-days.
+# + broker fan-out (1.5) + kafka-consumer (1.0) = ~19 eng-days.
+# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 + 1.0 = ~24 eng-days.
 # These match the R16 b2b-admin frontmatter "~10-15 eng-days" estimate plus
-# the R5/R6/R7/R8 successive regime closures (~3.5 eng-days incremental beyond
+# the R5/R6/R7/R8/R9 successive regime closures (~4.5 eng-days incremental beyond
 # the baseline single-node deployment).
 # Broker fan-out is opt-in: single-node deployments SKIP and never adopt
 # TenantAwareRedisPubSubBridge; the 41st guard recognises this and live-repo
 # SKIPs when no .../multitenancy/TenantAwareRedisPubSubBridge.java is present.
+# Kafka consumer is opt-in: deployments without Kafka SKIP and never adopt
+# TenantAwareKafkaConsumer; the 42nd guard recognises this and live-repo
+# SKIPs when no .../multitenancy/TenantAwareKafkaConsumer.java is present.
 
 decided_at: "2026-05-20"
