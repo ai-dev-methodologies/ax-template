@@ -140,13 +140,35 @@ skill은 **catalog quality probe만 제공**. fork받은 팀이 자신의 정책
 
 ## Build & Test
 
+### "단일 명령 binary pass/fail" — 정확한 의미
+
+catalog claim **"`./gradlew test{Domain}` — 단일 명령 binary pass/fail"** 은
+**per-domain task** 에 적용된다. 전체 `./gradlew test` 가 항상 GREEN 이라는
+약속이 **아니다**. 도메인별 상태는 아래 매트릭스(R1 baseline, 2026-05-20):
+
+| Per-domain task                | 상태       | 비고 |
+|--------------------------------|----------|---|
+| `./gradlew testCrud`           | GREEN    | 7/7 PASS |
+| `./gradlew testAsvs`           | GREEN    | 26 ASVS items PASS |
+| `./gradlew testPractices`      | GREEN    | 86 rules PASS |
+| `./gradlew testRateLimit`      | GREEN    | RATELIMIT 전 PASS |
+| `./gradlew testNotification`   | GREEN    | NOTIFICATION 전 PASS |
+| `./gradlew testPayment`        | GREEN    | PAYMENT 29 items PASS |
+| `./gradlew testBilling`        | **RED (TDD anchor)** | endpoint 미구현 — `/api/subscriptions`, `/api/admin/billing/plans`, `/api/webhooks/billing` 부재. spec과 test는 작성됨 |
+| `./gradlew testIdentityVerification` | **RED (catalog gap)** | callback HMAC 401 — controller/SecurityConfig 카탈로그 미완 |
+| `./gradlew testPortability`    | advisory | 외부 fixture (spring-realworld-example-app) 에 cycle 있음. fork-receiver의 코드가 아니라 외부 reference 코드의 결함 |
+
+전체 `./gradlew test`는 위 도메인을 모두 합친 aggregate이므로 RED 도메인이
+하나라도 있으면 RED. R1 baseline: 270 tests, 9 failed (BillingFlowIT × 4 +
+IdentityVerificationFlowIT × 4 + PortabilityCyclicPackage REALWORLD × 1).
+
 ```bash
 # Backend
 cd backend && ./gradlew build         # 빌드
-cd backend && ./gradlew test          # 전체 테스트
-cd backend && ./gradlew testAsvs      # auth ASVS 검증
-cd backend && ./gradlew testCrud      # CRUD spec 검증
-cd backend && ./gradlew testPractices # practices/ 86룰 검증
+cd backend && ./gradlew test          # 전체 — 위 매트릭스의 aggregate
+cd backend && ./gradlew testAsvs      # auth ASVS 검증 (GREEN)
+cd backend && ./gradlew testCrud      # CRUD spec 검증 (GREEN)
+cd backend && ./gradlew testPractices # practices/ 86룰 검증 (GREEN)
 cd backend && ./gradlew testPortability  # advisory: 외부 fixture에 룰 적용
 
 # Frontend
