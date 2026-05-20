@@ -411,7 +411,17 @@ public class PaymentService {
                 .findFirst()
                 .orElse(null);
         }
-        ledger.append(paymentId, PaymentEventType.CALLBACK_SIGNATURE_FAIL, BigDecimal.ZERO,
+        // dogfood-10 R10 catalog GAP — payment_events.payment_id is @Column(nullable=false)
+        // (PaymentEvent.java:41) but the spec for PAYMENT-CALLBACK-001 audit row
+        // explicitly contemplates "lookup miss → paymentId=null". Schema and spec
+        // are in direct conflict. As a stopgap, route lookup-miss rows to a
+        // sentinel zero UUID so the audit row still lands and the metric counter
+        // increments. Proper fix is a Flyway migration making payment_id nullable
+        // (or a separate audit_events table). See R10 verdict, R11 candidate.
+        UUID auditPaymentId = paymentId == null
+            ? new UUID(0L, 0L)
+            : paymentId;
+        ledger.append(auditPaymentId, PaymentEventType.CALLBACK_SIGNATURE_FAIL, BigDecimal.ZERO,
             Map.of(
                 "source", "callback",
                 "outcome", "signature_fail",
