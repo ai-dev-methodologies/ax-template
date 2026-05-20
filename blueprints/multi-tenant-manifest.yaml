@@ -2856,9 +2856,361 @@ kafka-streams-interactive-queries-tenant-scope:
         .fromNameAndType(...)).
 
   open_questions_remaining:
-    - "Standby replica routing (KafkaStreams.allMetadataForKey + Apache HTTP client RPC fan-out across the Streams cluster) — when the local node does NOT host the partition for a tenant's key range, IQ must HTTP-forward to the host that does. The tenant scope on the forwarded request MUST carry the same X-Tenant-Id header so the receiving node's TenantFilterActivationFilter populates the context. Not yet anchored; opens the cluster-aware IQ counterpart."
     - "Long-polling / windowed Interactive Queries (windowStore.fetch(key, from, to)) — the temporal axis is orthogonal to the tenant axis but the same prefix-only-from-TenantContext rule applies. Not yet anchored; opens the windowed-store counterpart."
     - "gRPC / Reactive Interactive Queries surface — same canonical pattern (TenantContext.current() as prefix; fresh store reference per call) but the controller surface is gRPC or WebFlux instead of MVC. Not yet anchored; opens the non-MVC IQ counterpart."
+
+  cost_estimate_eng_days: 0.5
+
+# ─────────────────────────────────────────────────────────────────────
+# kafka-streams-standby-rpc-tenant-scope — R12 closure
+# (kafka-streams-interactive-queries open question — cluster fan-out)
+# ─────────────────────────────────────────────────────────────────────
+kafka-streams-standby-rpc-tenant-scope:
+  description: >
+    Tenant resolution policy for Kafka Streams Interactive
+    Queries (IQ) cluster fan-out — the cross-node RPC surface
+    that activates when a tenant's key range lives on a remote
+    node's local state store rather than the request-receiving
+    node. R11 closed the single-node IQ read (TenantContext
+    .current() prefix + store.range scoped scan + path mismatch
+    → 404 + fresh store reference per query); R12 closes the
+    multi-node fan-out OBVERSE that fires whenever
+    KafkaStreams.allMetadataForKey / queryMetadataForKey
+    reports a non-local active host for the prefix lookup.
+    The four failure surfaces R12 anchors:
+      (a) tenant_header_dropped_on_forward: the router node
+          composes the HTTP/RPC forward without an X-Tenant-Id
+          header. The receiving node's
+          TenantFilterActivationFilter sees no tenant signal,
+          TenantContext.current() is empty at the IQ service,
+          R11 clause(1) (tenant_context_current_only) trips —
+          producing a TenantContextMissingException that
+          masquerades as a 500 to the original caller while
+          the actual root cause is the dropped header.
+      (b) router_uses_path_tenant_id: the router node decides
+          which host owns the partition by hashing the
+          @PathVariable / @RequestParam tenantId rather than
+          TenantContext.current(). An attacker who can call
+          /api/tenants/{tenantId}/metrics with any tenantId
+          gets the partition lookup routed to the host that
+          owns THAT tenant's range — even when the request
+          credentials only authorise the authenticated tenant.
+          A classic IDOR re-introduced at the routing layer
+          that R11 closed at the store-range layer.
+      (c) path_tenant_id_in_forward_url: the forwarded URL
+          embeds the tenantId as a path segment
+          (e.g. POST http://node-b:8080/api/tenants/{tenantId}
+          /internal/metrics). Two cumulative failures: the
+          receiving node's controller binds @PathVariable
+          tenantId and a misconfigured filter chain that
+          permits internal traffic would let that path
+          tenantId reach the IQ service WITHOUT a populated
+          TenantContext — the exact path-tenant-id-as-prefix
+          IDOR R11 clause(1) closes. Plus, the URL itself
+          leaks the tenantId to access logs / proxy logs /
+          mesh telemetry; X-Tenant-Id header is the canonical
+          private channel for cluster-internal scope signal.
+      (d) cached_metadata_lookup_after_rebalance: the router
+          caches KafkaStreams.allMetadataForKey /
+          queryMetadataForKey results as a field at
+          construction time. Streams rebalance reassigns
+          partitions across hosts; a stale metadata reference
+          routes the forward to a host that no longer owns
+          the partition — at best a 404 from a no-data host,
+          at worst (when the partition has been reassigned
+          to a host that ALSO owns a different tenant's
+          partition) a route that lands on a node where the
+          local store happens to contain another tenant's
+          data. The OBVERSE of R11 clause(4)
+          (cached_store_reference_after_rebalance), at the
+          metadata layer instead of the store layer.
+    R12 closes the standby replica RPC open question that
+    was #kafka-streams-interactive-queries-tenant-scope
+    .open_questions_remaining[0] in the R11-committed
+    manifest (item removed on closure; the surviving 2-item
+    list slides up by one index).
+  introduced_at: >
+    R12 — closes the standby replica RPC open question
+    staked in R11 as the first entry of
+    #kafka-streams-interactive-queries-tenant-scope
+    .open_questions_remaining (R11-era index [0]; entry
+    removed at R12 closure): "Standby replica routing
+    (KafkaStreams.allMetadataForKey + Apache HTTP client RPC
+    fan-out across the Streams cluster) — when the local
+    node does NOT host the partition for a tenant's key
+    range, IQ must HTTP-forward to the host that does. The
+    tenant scope on the forwarded request MUST carry the
+    same X-Tenant-Id header so the receiving node's
+    TenantFilterActivationFilter populates the context. Not
+    yet anchored; opens the cluster-aware IQ counterpart."
+    Fork-receivers running a 2+ node Kafka Streams cluster
+    with IQ enabled would reach for one of four failure
+    modes: (a) `restTemplate.getForObject(forwardUrl,
+    MetricsResponse.class)` — no X-Tenant-Id header set on
+    the outgoing request — receiving node sees empty
+    TenantContext. (b) `HostInfo host = streams
+    .queryMetadataForKey(STORE, pathTenantId, ...)` — uses
+    PATH tenantId for the metadata lookup; attacker
+    substitutes the URL tenantId and the router obediently
+    routes to that tenant's partition host. (c) `String
+    forwardUrl = "http://" + host + ":" + port + "/api
+    /tenants/" + tenantId + "/internal/metrics"` — tenantId
+    embedded in URL path; logs / mesh / proxy access logs
+    capture it. (d) `private HostInfo activeHost =
+    streams.allMetadataForKey(...).iterator().next();`
+    initialised in `@PostConstruct` — stale on rebalance.
+  closed_at: >
+    R12 — full closure. Manifest moves from staked-anchor to
+    executable contract: TenantAwareStandbyForwardingService
+    skeleton ships in the multi-tenant fixture (19th
+    canonical file), the (TenantContext.current() as router
+    prefix + X-Tenant-Id header on forward + no path
+    tenantId in forward URL + fresh metadata lookup per
+    query) chain is concrete, and the 45th hard guard
+    (kafka_streams_standby_rpc_tenant_scope_guard.sh) blocks
+    any of the failure modes from sneaking in via
+    fork-receiver code.
+
+  canonical_pattern: tenant_context_propagated_standby_rpc_forward
+
+  tenant_context_propagated_standby_rpc_forward:
+    description: >
+      Multi-tenant Kafka Streams Interactive Queries router
+      decides per-request whether the local node owns the
+      partition for the current tenant's key range. When
+      ownership is local, the router delegates to the R11
+      TenantAwareInteractiveQueryService (which already
+      enforces the four single-node clauses). When ownership
+      is remote, the router HTTP-forwards to the active host
+      reported by KafkaStreams.queryMetadataForKey,
+      propagating the tenant scope via an X-Tenant-Id header
+      so the receiving node's TenantFilterActivationFilter
+      can populate TenantContext on the remote thread.
+
+      Four load-bearing properties:
+        (1) X-Tenant-Id header on every forward: the
+            forwarding HTTP/RPC call MUST set an X-Tenant-Id
+            header whose value is the
+            TenantContext.current().toString(). Without it,
+            the receiving node's
+            TenantFilterActivationFilter sees no tenant
+            signal, TenantContext.current() on the remote
+            IQ service throws TenantContextMissingException,
+            and the original caller sees a 500 that masks
+            a routing-layer omission. The header name MUST
+            match the request-side header constant
+            #aop-guard.tenant_header_canonical_name so the
+            receiving filter recognises it.
+        (2) TenantContext.current() as SOLE source of the
+            partition-lookup key: the router MUST resolve
+            the active host via
+            streams.queryMetadataForKey(STORE,
+            contextTenantId.toString() + KEY_SEPARATOR,
+            stringSerializer) where contextTenantId comes
+            from TenantContext.current(). The @PathVariable
+            / @RequestParam tenantId is validated for
+            equality against contextTenantId and discarded;
+            it NEVER flows into queryMetadataForKey directly.
+            Same IDOR-vector closure as R11 clause(1), at
+            the routing layer instead of the store-range
+            layer.
+        (3) Forward URL has NO tenantId path segment: the
+            outgoing forward URL targets a cluster-internal
+            endpoint with no per-tenant routing (e.g.
+            POST http://{host}:{port}/internal/iq/metrics)
+            and the tenant scope rides exclusively on the
+            X-Tenant-Id header. Embedding the tenantId in
+            the URL path leaks it to access logs and re-opens
+            the IDOR vector closed at clause(2) — a
+            misconfigured filter chain that lets internal
+            traffic skip TenantFilterActivationFilter would
+            let the path tenantId reach the receiving IQ
+            service.
+        (4) Fresh metadata lookup per query: each public
+            router method MUST call
+            streams.queryMetadataForKey(...) (or
+            allMetadataForKey) inside the method body. The
+            KeyQueryMetadata / HostInfo / Collection
+            <StreamsMetadata> reference MUST NOT be a field
+            (cached at construction time). Streams rebalance
+            reassigns partitions across hosts; a stale
+            metadata reference routes to a node that no
+            longer owns the partition. The OBVERSE of R11
+            clause(4) at the metadata layer.
+
+    canonical_skeleton: |
+      package com.<root>.multitenancy;
+
+      import java.net.URI;
+      import java.util.Map;
+      import java.util.Optional;
+      import java.util.UUID;
+      import org.apache.kafka.common.serialization.StringSerializer;
+      import org.apache.kafka.streams.KafkaStreams;
+      import org.apache.kafka.streams.KeyQueryMetadata;
+      import org.apache.kafka.streams.state.HostInfo;
+      import org.springframework.http.HttpHeaders;
+      import org.springframework.http.HttpMethod;
+      import org.springframework.http.RequestEntity;
+      import org.springframework.http.ResponseEntity;
+      import org.springframework.stereotype.Service;
+      import org.springframework.web.client.RestTemplate;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#kafka-streams-standby-rpc-tenant-scope.tenant_context_propagated_standby_rpc_forward.canonical_skeleton
+       * with <root> = acme.
+       *
+       * Cluster fan-out OBVERSE of TenantAwareInteractiveQueryService
+       * (R11 #kafka-streams-interactive-queries-tenant-scope).
+       * Four guard-checked properties:
+       *   (1) X-Tenant-Id header set on every forwarded call.
+       *   (2) TenantContext.current() is the SOLE source of the
+       *       partition-lookup key (path tenantId is validated
+       *       for equality and discarded).
+       *   (3) Forward URL targets a cluster-internal endpoint
+       *       (NO tenantId path segment); the X-Tenant-Id header
+       *       is the sole tenant carrier across the wire.
+       *   (4) KeyQueryMetadata is fetched fresh on every query —
+       *       never cached as a field; Streams rebalance
+       *       invalidates prior metadata.
+       */
+      @Service
+      public class TenantAwareStandbyForwardingService {
+
+          static final String KEY_SEPARATOR = "#";
+          static final String METRICS_STORE = "tenant-metrics-by-key";
+          static final String TENANT_HEADER = "X-Tenant-Id";
+          static final String INTERNAL_IQ_PATH = "/internal/iq/metrics";
+
+          private final KafkaStreams streams;
+          private final RestTemplate restTemplate;
+          private final HostInfo selfHostInfo;
+          private final TenantAwareInteractiveQueryService localQuery;
+
+          public TenantAwareStandbyForwardingService(
+                  KafkaStreams streams,
+                  RestTemplate restTemplate,
+                  HostInfo selfHostInfo,
+                  TenantAwareInteractiveQueryService localQuery) {
+              this.streams = streams;
+              this.restTemplate = restTemplate;
+              this.selfHostInfo = selfHostInfo;
+              this.localQuery = localQuery;
+          }
+
+          public Map<String, Long> metricsForCurrentTenant(UUID pathTenantId) {
+              UUID contextTenantId = TenantContext.current()
+                  .orElseThrow(() -> new TenantContextMissingException(
+                      "Standby router invoked without TenantContext"));
+
+              if (pathTenantId != null && !pathTenantId.equals(contextTenantId)) {
+                  throw new TenantBoundaryViolationException(
+                      "Path tenantId does not match authenticated tenant");
+              }
+
+              String lookupKey = contextTenantId.toString() + KEY_SEPARATOR;
+              KeyQueryMetadata metadata = streams.queryMetadataForKey(
+                  METRICS_STORE, lookupKey, new StringSerializer());
+              if (metadata == null || metadata == KeyQueryMetadata.NOT_AVAILABLE) {
+                  throw new StandbyMetadataNotAvailableException(
+                      "Streams rebalance in progress");
+              }
+
+              HostInfo activeHost = metadata.activeHost();
+              if (isLocal(activeHost)) {
+                  return localQuery.metricsForCurrentTenant(pathTenantId);
+              }
+
+              URI forwardUri = URI.create(
+                  "http://" + activeHost.host() + ":" + activeHost.port()
+                  + INTERNAL_IQ_PATH);
+              HttpHeaders headers = new HttpHeaders();
+              headers.set(TENANT_HEADER, contextTenantId.toString());
+              RequestEntity<Void> request = new RequestEntity<>(
+                  headers, HttpMethod.GET, forwardUri);
+              ResponseEntity<Map<String, Long>> response =
+                  restTemplate.exchange(request,
+                      (Class<Map<String, Long>>) (Class<?>) Map.class);
+              return Optional.ofNullable(response.getBody())
+                  .orElse(Map.of());
+          }
+
+          private boolean isLocal(HostInfo other) {
+              return selfHostInfo.host().equals(other.host())
+                  && selfHostInfo.port() == other.port();
+          }
+      }
+
+  forbidden_alternatives:
+    - "HTTP / RPC forward without X-Tenant-Id header — tenant_header_dropped_on_forward. The receiving node's TenantFilterActivationFilter sees no tenant signal; TenantContext.current() throws on the remote IQ service. Surfaces as a 500 that masks the routing-layer omission."
+    - "queryMetadataForKey(...) called with the @PathVariable / @RequestParam tenantId as the lookup key — router_uses_path_tenant_id. Attacker substitutes the URL tenantId and the router routes to that tenant's partition host. Re-opens the IDOR vector R11 closed at the store-range layer, now at the routing layer."
+    - "Forward URL embedding tenantId as a path segment (e.g. /api/tenants/{tenantId}/internal/...) — path_tenant_id_in_forward_url. Leaks tenantId to access / proxy / mesh logs and re-introduces the IDOR vector if a misconfigured filter chain skips TenantFilterActivationFilter on internal traffic. Use a tenantId-free internal endpoint + X-Tenant-Id header."
+    - "Cached KeyQueryMetadata / HostInfo / Collection<StreamsMetadata> field initialised at construction — cached_metadata_lookup_after_rebalance. Streams rebalance invalidates the reference; stale metadata routes forwards to a host that no longer owns the partition. Acquire fresh in each query method via streams.queryMetadataForKey / allMetadataForKey."
+
+  failure_modes:
+    tenant_header_dropped_on_forward:
+      description: >
+        Router composes the HTTP/RPC forward without an
+        X-Tenant-Id header. Receiving node sees empty
+        TenantContext; R11 clause(1) trips and the original
+        caller observes a 500 (TenantContextMissingException)
+        that masks the actual cause (routing-layer omission).
+      detection: >
+        45th guard scans the standby forwarder file. If the
+        file contains a forwarding HTTP/RPC primitive
+        (RestTemplate, WebClient, HttpClient, RestClient) AND
+        a queryMetadataForKey / allMetadataForKey call but
+        does NOT also reference the X-Tenant-Id header string
+        constant, trip the clause.
+    router_uses_path_tenant_id:
+      description: >
+        queryMetadataForKey / allMetadataForKey lookup key
+        derives from a request parameter (path / query / body)
+        rather than TenantContext.current(). The router
+        delegates IDOR control to the attacker; the URL's
+        tenantId picks the routing target.
+      detection: >
+        45th guard requires that any file calling
+        queryMetadataForKey / allMetadataForKey also calls
+        TenantContext.current(). Absence trips the clause —
+        the lookup key must derive from the verified
+        TenantContext, never from a request field directly.
+    path_tenant_id_in_forward_url:
+      description: >
+        Forwarded URL embeds tenantId as a path segment.
+        Leaks tenantId to access / mesh / proxy logs and
+        re-opens the IDOR vector if the receiving filter
+        chain is misconfigured to skip
+        TenantFilterActivationFilter on internal traffic.
+      detection: >
+        45th guard scans the forward URL builder for the
+        substring `/tenants/` followed by an interpolated
+        identifier (e.g. `"/tenants/" + tenantId`,
+        `"/tenants/" + pathTenantId`, `"/tenants/" +
+        contextTenantId`, `"/tenants/{` Spring URL template).
+        Presence in a file that also calls a forwarding HTTP
+        primitive trips the clause.
+    cached_metadata_lookup_after_rebalance:
+      description: >
+        KeyQueryMetadata / HostInfo / Collection
+        <StreamsMetadata> reference cached as a field at
+        construction. Streams rebalance invalidates the
+        reference; stale metadata routes the forward to a
+        host that no longer owns the partition.
+      detection: >
+        45th guard scans for `private ... KeyQueryMetadata
+        <name>;`, `private ... HostInfo <name> = ...;` (with
+        an initialiser — the constructor-injected selfHostInfo
+        identity field is permitted, so the guard requires
+        an `=` initialiser OR `@PostConstruct` proximity),
+        and `private ... Collection<StreamsMetadata>
+        <name>;` field declarations. Presence trips the
+        clause.
+
+  open_questions_remaining:
+    - "Apache HTTP client RPC pool sizing — beyond R12's per-request RestTemplate forward, large clusters need a connection-pooled HTTP client (PoolingHttpClientConnectionManager) where the per-tenant header still rides on every request. Not yet anchored; opens the connection-pool counterpart."
+    - "mTLS / SPIFFE identity on the standby fan-out — the receiving node currently trusts X-Tenant-Id; production multi-tenant clusters MUST authenticate the forwarder so a leaked URL cannot let an external caller spoof an internal node. Not yet anchored; opens the cluster-identity counterpart."
+    - "Reactive / WebClient async fan-out — same canonical pattern (X-Tenant-Id header + TenantContext.current() at the router + no path tenantId in URL + fresh metadata) but the forward primitive is reactive. Subscriber context propagation interacts with the existing #async-propagation rule. Not yet anchored; opens the reactive-router counterpart."
 
   cost_estimate_eng_days: 0.5
 
@@ -2943,16 +3295,28 @@ evidence:
     citation: "Apache Kafka Streams Documentation — KafkaStreams.store(StoreQueryParameters). 'Get a facade wrapping the local KeyValueStore instances with the provided storeName if the Streams instance isRunning. The returned object can be used to query the StateStores. Note that this method must be called on every new query in order to avoid stale state stores after a rebalance.' Establishes that the store reference MUST be acquired fresh on every query because rebalance invalidates prior references — confirms the structural basis for #kafka-streams-interactive-queries-tenant-scope.failure_modes.cached_store_reference_after_rebalance."
     url: "https://kafka.apache.org/40/javadoc/org/apache/kafka/streams/KafkaStreams.html#store(org.apache.kafka.streams.StoreQueryParameters)"
     quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Apache Kafka Streams Documentation — KafkaStreams.queryMetadataForKey(String storeName, K key, Serializer<K> keySerializer). 'Finds the metadata containing the active host and standby hosts where the key is hosted in the given store, assuming the given keySerializer. Returns null if the corresponding topic is not found or KeyQueryMetadata.NOT_AVAILABLE if Kafka Streams is (re-)initialising.' Establishes that queryMetadataForKey is the canonical entry point for cluster-aware IQ routing — the active host returned is the node that owns the partition for the given key. Confirms the structural basis for #kafka-streams-standby-rpc-tenant-scope.tenant_context_propagated_standby_rpc_forward property 2 (lookup key derives from TenantContext.current()) and property 4 (fresh metadata lookup per query — the NOT_AVAILABLE sentinel exists precisely because rebalance invalidates prior metadata)."
+    url: "https://kafka.apache.org/40/javadoc/org/apache/kafka/streams/KafkaStreams.html#queryMetadataForKey(java.lang.String,K,org.apache.kafka.common.serialization.Serializer)"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Apache Kafka Streams Documentation — Interactive Queries, Querying Remote State Stores For The Entire App. 'You will need to communicate with remote Kafka Streams application instances over the network — Kafka Streams does not provide this communication layer; you must implement it yourself.' Documents that the cross-node RPC layer is fork-receiver-implemented and that no tenant scope is propagated by Kafka Streams itself — confirms the structural reason every property of #kafka-streams-standby-rpc-tenant-scope must be enforced at the fork-receiver layer (the framework has no per-tenant scope abstraction at the cluster fan-out boundary)."
+    url: "https://kafka.apache.org/documentation/streams/developer-guide/interactive-queries.html#querying-remote-state-stores-for-the-entire-app"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2023) — API1:2023 Broken Object Level Authorization. 'Object level authorization is an access control mechanism that is usually implemented at the code level to validate that one user can only access objects that they should have access to.' Re-applied to #kafka-streams-standby-rpc-tenant-scope.failure_modes.router_uses_path_tenant_id: the routing layer is a second authorization surface where the same BOLA logic must apply — TenantContext (not the URL tenantId) is the authoritative scope at metadata lookup time, just as it is at store-range time."
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+    quoted_at: "2026-05-20"
 
 # Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
 # row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2)
 # + callback tenant resolution (~1.5) + scheduled-task (1) + realtime-connection (1)
 # + broker fan-out (1.5) + kafka-consumer (1.0) + kafka-streams (1.0)
-# + kafka-streams-iq (0.5) = ~20.5 eng-days.
-# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 + 1.0 + 1.0 + 0.5 = ~25.5 eng-days.
+# + kafka-streams-iq (0.5) + kafka-streams-standby-rpc (0.5) = ~21 eng-days.
+# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 + 1.0 + 1.0 + 0.5 + 0.5 = ~26 eng-days.
 # These match the R16 b2b-admin frontmatter "~10-15 eng-days" estimate plus
-# the R5/R6/R7/R8/R9/R10/R11 successive regime closures (~6 eng-days incremental beyond
-# the baseline single-node deployment).
+# the R5/R6/R7/R8/R9/R10/R11/R12 successive regime closures (~6.5 eng-days incremental
+# beyond the baseline single-node deployment).
 # Broker fan-out is opt-in: single-node deployments SKIP and never adopt
 # TenantAwareRedisPubSubBridge; the 41st guard recognises this and live-repo
 # SKIPs when no .../multitenancy/TenantAwareRedisPubSubBridge.java is present.
@@ -2967,5 +3331,9 @@ evidence:
 # read endpoints SKIP and never adopt TenantAwareInteractiveQueryService;
 # the 44th guard recognises this and live-repo SKIPs when no
 # .../multitenancy/TenantAwareInteractiveQueryService.java is present.
+# Kafka Streams standby replica RPC fan-out is opt-in: single-node clusters
+# and deployments without IQ never adopt TenantAwareStandbyForwardingService;
+# the 45th guard recognises this and live-repo SKIPs when no
+# .../multitenancy/TenantAwareStandbyForwardingService.java is present.
 
 decided_at: "2026-05-20"

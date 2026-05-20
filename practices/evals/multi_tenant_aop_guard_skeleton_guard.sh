@@ -18,6 +18,7 @@
 #   R9 closure : +TenantAwareKafkaConsumer.java           → 16 files (kafka-consumer)
 #   R10 closure: +TenantAwareKafkaStreamsTopology.java    → 17 files (kafka-streams)
 #   R11 closure: +TenantAwareInteractiveQueryService.java → 18 files (kafka-streams-interactive-queries)
+#   R12 closure: +TenantAwareStandbyForwardingService.java → 19 files (kafka-streams-standby-rpc)
 #
 # Closes P2 Round 3 GAP-NEW-2 (manifest aop-guard named
 # AuthorizedTenantInterceptor + the @AuthorizedTenant/@TenantId annotation
@@ -36,7 +37,7 @@
 #   bash practices/evals/multi_tenant_aop_guard_skeleton_guard.sh --fixtures
 #
 # Exit codes:
-#   0 — every multitenancy/ package contains the 18 expected files
+#   0 — every multitenancy/ package contains the 19 expected files
 #   1 — at least one file missing OR failing/ fixture unexpectedly passes
 
 set -uo pipefail
@@ -125,6 +126,30 @@ REQUIRED_FILES=(
     # 44th guard's live-repo SKIP branch — this file is OPT-IN
     # for fork-receivers that adopt Kafka Streams IQ HTTP reads.
     "TenantAwareInteractiveQueryService.java"
+    # 19th file added R12 — closes the standby replica RPC
+    # open question staked in R11
+    # (#kafka-streams-interactive-queries-tenant-scope.open_questions_remaining[0]
+    # pre-R12 ordering: "Standby replica routing
+    # (KafkaStreams.allMetadataForKey + Apache HTTP client RPC
+    # fan-out across the Streams cluster) — when the local node
+    # does NOT host the partition for a tenant's key range, IQ
+    # must HTTP-forward to the host that does. The tenant scope
+    # on the forwarded request MUST carry the same X-Tenant-Id
+    # header so the receiving node's TenantFilterActivationFilter
+    # populates the context."). Pairs with anchor
+    # blueprints/multi-tenant-manifest.yaml#kafka-streams-standby-rpc-tenant-scope
+    # and is content-verified by
+    # kafka_streams_standby_rpc_tenant_scope_guard.sh (45th).
+    # Distinct surface from TenantAwareInteractiveQueryService
+    # (R11): R11 is the SINGLE-NODE store-range read (the local
+    # node owns the partition); this service is the MULTI-NODE
+    # router that decides local-vs-remote and HTTP-forwards
+    # remote calls with the X-Tenant-Id header. Single-node
+    # clusters and IQ-free deployments SKIP via the 45th
+    # guard's live-repo SKIP branch — this file is OPT-IN for
+    # fork-receivers that adopt 2+ node Kafka Streams clusters
+    # with Interactive Queries enabled.
+    "TenantAwareStandbyForwardingService.java"
 )
 
 verify_dir() {
