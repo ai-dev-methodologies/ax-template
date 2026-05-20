@@ -1007,8 +1007,15 @@ scheduled-task-tenant-scope:
     TenantContext.set(SYSTEM_TENANT_UUID) (creates a synthetic
     cross-tenant principal — the GAP-R3-3 sentinel anti-pattern in
     a new disguise). R5 anchors the canonical pattern at the
-    catalog level; the executable skeleton + 39th guard are
-    deferred to a future round.
+    catalog level.
+  closed_at: >
+    R6 — full closure. Manifest moves from staked-anchor to executable
+    contract: TenantIterationScheduler + TenantCatalog skeleton ship
+    in the multi-tenant fixture, the lock-key contract is concrete
+    (Shedlock @SchedulerLock(name = "<job>-<tenantId>")), and the
+    39th hard guard (scheduled_task_tenant_scope_guard.sh) blocks
+    any of the three forbidden_alternatives from sneaking in via
+    fork-receiver code.
 
   canonical_pattern: per_tenant_iteration
 
@@ -1020,41 +1027,167 @@ scheduled-task-tenant-scope:
       sees the same tenant-scoped repository view as any inbound
       HTTP request — the @Filter activation, AOP interceptor, and
       audit-row attribution all behave identically.
-    shape: |
-      // PSEUDOCODE — full skeleton + 39th guard deferred to R6+.
-      //
-      // @Scheduled(cron = "0 0 3 * * *")  // every day at 03:00
-      // public void reconcilePayments() {
-      //     for (UUID tenantId : tenantCatalog.listActive()) {
-      //         try {
-      //             TenantContext.set(tenantId);
-      //             reconcilePaymentsForCurrentTenant();
-      //         } finally {
-      //             TenantContext.clear();
-      //         }
-      //     }
-      // }
-      //
-      // Two load-bearing properties:
-      //   1. set/clear is balanced per iteration — a leak between
-      //      tenants is the cross-tenant write vector to guard against.
-      //   2. tenantCatalog.listActive() is the SINGLE source of
-      //      tenant enumeration. Hardcoding tenant ids or reading
-      //      from a foreign cache lets a deactivated tenant continue
-      //      receiving job side effects.
+
+      Three load-bearing properties:
+        (1) set/clear is balanced per iteration via try/finally —
+            a leak between tenants is the cross-tenant write vector
+            to guard against. The guard scans for an unmatched
+            TenantContext.set without a sibling TenantContext.clear
+            in the same finally block.
+        (2) tenantCatalog.listActive() is the SINGLE source of
+            tenant enumeration. Hardcoding tenant ids or reading
+            from a foreign cache lets a deactivated tenant continue
+            receiving job side effects.
+        (3) The distributed lock key (Shedlock @SchedulerLock name)
+            MUST include the tenantId scalar — see #scheduled-task-tenant-scope.lock_key_contract
+            below. A single global lock per @Scheduled method
+            serializes all tenants behind one node, eliminating the
+            parallelism the per-tenant iteration model is supposed
+            to enable.
+
+    canonical_skeleton: |
+      package com.acme.multitenancy;
+
+      import java.util.UUID;
+      import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+      import org.springframework.scheduling.annotation.Scheduled;
+      import org.springframework.stereotype.Component;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#scheduled-task-tenant-scope.per_tenant_iteration.canonical_skeleton
+       * with <root> = acme.
+       *
+       * Per-tenant iteration scheduler. Each cron tick enumerates the
+       * active tenant catalog and runs the job body in a tenant-scoped
+       * unit of work. set/clear is balanced via try/finally; the
+       * distributed lock key includes the tenantId so two nodes can
+       * process two tenants in parallel (see #lock_key_contract).
+       */
+      @Component
+      public class TenantIterationScheduler {
+
+          private final TenantCatalog tenantCatalog;
+          private final ReconciliationJob reconciliationJob;
+
+          public TenantIterationScheduler(TenantCatalog tenantCatalog,
+                                          ReconciliationJob reconciliationJob) {
+              this.tenantCatalog = tenantCatalog;
+              this.reconciliationJob = reconciliationJob;
+          }
+
+          @Scheduled(cron = "0 0 3 * * *")
+          @SchedulerLock(name = "reconciliation-#tenantId",
+                         lockAtMostFor = "PT10M",
+                         lockAtLeastFor = "PT30S")
+          public void reconcilePayments() {
+              for (UUID tenantId : tenantCatalog.listActive()) {
+                  try {
+                      TenantContext.set(tenantId);
+                      reconciliationJob.runForCurrentTenant();
+                  } catch (RuntimeException ex) {
+                      // Per-tenant try/catch: one tenant's failure
+                      // MUST NOT abort the iteration for siblings.
+                      // Logged via SLF4J at WARN; audit row attributed
+                      // to the failing tenant_id (set() succeeded).
+                  } finally {
+                      // MUST clear — scheduler threads are pooled by
+                      // TaskScheduler and reused across iterations.
+                      TenantContext.clear();
+                  }
+              }
+          }
+      }
+
+  tenant_catalog_contract:
+    description: >
+      The single source of tenant enumeration. MUST be a separate
+      non-TenantOwned bean (it is the tenant discriminator, not
+      a tenant-scoped resource — chicken-and-egg avoidance).
+      Returns active tenants only; deactivated tenants MUST NOT
+      receive scheduled-task side effects.
+    interface_shape: |
+      package com.acme.multitenancy;
+
+      import java.util.List;
+      import java.util.UUID;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#scheduled-task-tenant-scope.tenant_catalog_contract
+       * with <root> = acme.
+       *
+       * Non-TenantOwned bean — the tenant discriminator itself. Reads
+       * the Tenant entity table directly without going through @Filter
+       * activation (see #context-resolution); this is the only entity
+       * type that legitimately bypasses tenant scoping.
+       */
+      public interface TenantCatalog {
+          List<UUID> listActive();
+      }
+
+  lock_key_contract:
+    description: >
+      Distributed scheduler coordination (Shedlock / Quartz cluster /
+      Redis lock) MUST scope the lock key by tenantId so two nodes
+      can process two tenants in parallel. The lock name template
+      "<job>-#tenantId" (Shedlock SpEL syntax) resolves at each
+      iteration; a single global lock per @Scheduled method
+      serializes all tenants behind one node.
+    required_substring: "#tenantId"
+    forbidden_substrings:
+      - 'lockKey = "global"'
+      - "@SchedulerLock(name = \"reconciliation\")"  # bare job name; no tenantId scoping
+    rationale: >
+      Without the tenantId in the lock key, a 100-tenant fork-receiver
+      running a 30s-per-tenant reconciliation on a 2-node cluster
+      observes 100×30s = 50min serial latency instead of the expected
+      50×30s = 25min parallel latency. Worse, if any tenant's
+      reconciliation hangs, ALL subsequent tenants block behind it on
+      the global lock until lockAtMostFor expires — turning a
+      single-tenant pathology into a cluster-wide outage.
 
   forbidden_alternatives:
     - "bare repository.findAll() with no TenantContext set — every tenant's rows processed under empty context; @Filter activation may either pass (filter not enabled — leaks all rows) or fail (TenantContextMissingException — job dies on first iteration)"
     - "TenantContext.set(SYSTEM_TENANT_UUID) — synthetic cross-tenant principal; @AuthorizedTenant boundary checks pass spuriously; audit rows attributed to a non-existent tenant; identical anti-pattern to the GAP-R3-3 sentinel UUID(0,0) just under a different name"
     - "per-tenant @Scheduled methods (one cron per tenant) — does not scale past ~10 tenants; new tenants require code change + redeploy"
     - "InheritableThreadLocal-backed TenantContext for scheduler threads — same forbiddance as #async-propagation; silent propagation across @Async defeats explicit-failure contract"
+    - "global @SchedulerLock(name = \"reconciliation\") without #tenantId — single cluster-wide lock serializes all tenants behind one node and turns one tenant's hang into a fleet-wide outage (see lock_key_contract.rationale)"
 
-  open_questions:
-    - "Catalog source for tenantCatalog.listActive(): same JPA repository (chicken-and-egg — listing tenants requires bootstrapping tenant context) or a separate non-tenant-scoped Tenant entity? Answer assumed: Tenant entity itself is NOT TenantOwned (it is the discriminator), but explicit anchor is deferred."
-    - "Distributed scheduler coordination (shedlock / Quartz cluster) — does the lock key include tenant_id so two nodes can process two tenants in parallel? Answer assumed: yes (parallelism benefit), but the lock-key contract is undefined."
-    - "Failure handling per tenant: one tenant's job throws — does the iteration continue (skip tenant) or abort (entire run fails)? Answer assumed: per-tenant try/catch logs + continues, but the audit-row attribution of the failure is undefined."
+  failure_modes:
+    set_without_clear:
+      description: >
+        TenantContext.set(tenantId) called without a matching
+        TenantContext.clear() in a finally block. Worker thread
+        reused for the next iteration retains tenantId N's context;
+        tenantId N+1's job body executes under N's TenantContext.
+        Cross-tenant write vector.
+      detection: >
+        Mechanical AST proxy via 39th guard: in any scheduler file
+        that calls TenantContext.set, count must equal count of
+        TenantContext.clear in the same file. Strict equality, not
+        inequality — extra clears without sets are also a smell.
+    catalog_bypass:
+      description: >
+        Scheduler enumerates tenants from a hardcoded array, a
+        property file, or a foreign cache instead of calling
+        tenantCatalog.listActive(). Deactivated tenants continue
+        receiving job side effects; new tenants miss the job until
+        a redeploy.
+      detection: >
+        39th guard scans for the absence of a tenantCatalog field
+        and a listActive() call in any @Scheduled-bearing class.
+    no_lock_key_tenant_scope:
+      description: >
+        @SchedulerLock present but name does not include the
+        tenantId scalar — either bare job name or a global key.
+        See lock_key_contract.forbidden_substrings.
+      detection: >
+        39th guard scans @SchedulerLock annotations and requires
+        the name attribute to contain the substring "#tenantId"
+        (Shedlock SpEL) or "${tenantId}".
 
-  defer_to: "R6 or a dedicated multi-tenant follow-up cycle — R5 final landed the callback-tenant-resolution closure (GAP-R3-4); GAP-R3-5 anchor is staked here to prevent fork-receivers from reaching for the forbidden_alternatives in the meantime, but the canonical Java skeleton + 39th guard + scheduled-task spec MUST clause are not in R5 scope."
+  open_questions_remaining:
+    - "Cluster-wide degraded-tenant skip list (e.g. tenant N's job has thrown 5 times in a row → skip for the rest of the day): not yet anchored. Operator policy, not a tenant-isolation concern; deferred."
+    - "Per-tenant rate limiting inside the iteration (Token bucket per tenant to throttle PG API calls): can be added via existing #ratelimit-manifest.yaml; not in scope."
 
   cost_estimate_eng_days: 1.5
 
@@ -1076,8 +1209,12 @@ evidence:
     url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
     quoted_at: "2026-05-20"
   - source_type: external
-    citation: "Spring Framework Reference — Task Execution and Scheduling, @Scheduled. Default scheduler runs on a single-threaded TaskScheduler; multi-tenant fork-receivers MUST either (a) per-tenant iterate or (b) provision a per-tenant pool. (manifest #scheduled-task-tenant-scope chooses iteration; pool variant deferred)"
+    citation: "Spring Framework Reference — Task Execution and Scheduling, @Scheduled. Default scheduler runs on a single-threaded TaskScheduler; multi-tenant fork-receivers MUST either (a) per-tenant iterate or (b) provision a per-tenant pool. (manifest #scheduled-task-tenant-scope chooses iteration; R6 closes the full skeleton + 39th guard; pool variant remains deferred for the >100-tenant scale-out case)"
     url: "https://docs.spring.io/spring-framework/reference/integration/scheduling.html"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "ShedLock README — @SchedulerLock distributes lock key by name across cluster nodes; lock name supports SpEL via Spring's annotation processing. Per-tenant iteration scheduler MUST scope @SchedulerLock name by tenantId substring (e.g. \"reconciliation-#tenantId\") so two nodes can process two tenants in parallel; a bare job-name lock serializes all tenants behind a single node and turns one tenant's hang into a fleet-wide outage."
+    url: "https://github.com/lukas-krecan/ShedLock#readme"
     quoted_at: "2026-05-20"
 
 # Total estimated fork-receiver effort to adopt multi-tenant (full pattern):

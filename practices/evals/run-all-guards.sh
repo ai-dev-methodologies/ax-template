@@ -404,6 +404,37 @@ echo "[23] callback_tenant_resolution_guard.sh (live repo + passing fixture)"
 run_guard "callback_tenant_resolution/live" 0 \
     bash "$SCRIPT_DIR/callback_tenant_resolution_guard.sh"
 
+# ── 24. scheduled_task_tenant_scope_guard (R6 — P2 GAP-R3-5 closure, 39th guard) ─
+echo ""
+echo "[24] scheduled_task_tenant_scope_guard.sh (live repo + passing fixture)"
+# 39th hard guard. Enforces blueprints/multi-tenant-manifest.yaml
+# #scheduled-task-tenant-scope: @Scheduled / Quartz / Shedlock-style
+# periodic jobs (reconciliation sweeps, retention purges, daily summaries)
+# in multi-tenant fork-receivers MUST adopt the per-tenant iteration
+# pattern with three load-bearing properties — balanced TenantContext
+# set/clear via try/finally (count equality), tenantCatalog.listActive()
+# as the SINGLE source of tenant enumeration (no hardcoded UUID lists),
+# and a @SchedulerLock name template containing the #tenantId substring
+# (Shedlock SpEL) so two cluster nodes can process two tenants in
+# parallel instead of serializing the whole fleet behind one global
+# lock. Closes P2 dogfood R3 GAP-R3-5: the manifest covered
+# request-scoped (#context-resolution), AOP-scoped (#aop-guard),
+# async-submission-scoped (#async-propagation), and callback-scoped
+# (#callback-tenant-resolution) — but the scheduler/cron path was
+# undefined, leaving fork-receivers writing a nightly
+# PaymentReconciliationJob to reach for either bare repository.findAll()
+# (silent cross-tenant read) or TenantContext.set(SYSTEM_TENANT_UUID)
+# (the GAP-R3-3 sentinel anti-pattern in a new disguise).
+run_guard "scheduled_task_tenant_scope/live" 0 \
+    bash "$SCRIPT_DIR/scheduled_task_tenant_scope_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[24f] scheduled_task_tenant_scope_guard.sh --fixtures"
+    run_guard "scheduled_task_tenant_scope/fixtures" 0 \
+        bash "$SCRIPT_DIR/scheduled_task_tenant_scope_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
