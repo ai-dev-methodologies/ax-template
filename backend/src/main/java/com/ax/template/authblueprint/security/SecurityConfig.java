@@ -37,6 +37,13 @@ public class SecurityConfig {
                 // an adversary pollute the ledger and metric stream without audit.
                 // P5 security-review finding (US-014, HIGH): tightened from permitAll.
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                // R20 feature-flags domain (specs/feature-flags-l0.yaml):
+                // FF-AUTHZ-001 — public eval endpoint (permitAll) MUST precede the
+                // admin matcher so anonymous callers reach the controller, not a
+                // 401 from Spring Security.
+                // FF-AUTHZ-002 — admin CRUD surface requires ROLE_ADMIN.
+                .requestMatchers(HttpMethod.GET, "/api/v1/feature-flags/*/active").permitAll()
+                .requestMatchers("/api/v1/admin/feature-flags/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/api/items/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
