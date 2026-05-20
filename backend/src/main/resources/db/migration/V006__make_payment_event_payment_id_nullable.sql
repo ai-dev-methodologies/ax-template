@@ -1,0 +1,42 @@
+-- V006__make_payment_event_payment_id_nullable.sql
+-- dogfood-11 R11 GAP-B closure.
+--
+-- Spec anchor: specs/payment-l0.yaml#PAYMENT-CALLBACK-001
+--   "audit ledger row tagged source=callback, outcome=signature_fail"
+--
+-- Why this migration:
+-- A redirect-style PG callback that fails signature verification may arrive
+-- with an inbound orderId that does NOT resolve to any Payment row (lookup
+-- miss). PAYMENT-CALLBACK-001 still requires an audit ledger row for the
+-- failed verification — but payment_events.payment_id was NOT NULL (V003),
+-- forcing the dogfood-10 stopgap that routed lookup-miss rows to a sentinel
+-- UUID(0,0). The sentinel created a fake "audit chain" inside payment_events
+-- whose prev_hash linkage polluted the PAYMENT-RECON-001 hash chain semantics.
+--
+-- This migration relaxes the NOT NULL constraint on payment_events.payment_id
+-- so orphan audit rows can persist with NULL. The application-level invariant
+-- (PaymentEventLedger.append) is: when paymentId is NULL the prev_hash is also
+-- NULL and the serialized payload omits the paymentId key, so orphan audit
+-- rows do NOT chain with each other and do NOT contaminate any payment's
+-- hash chain.
+--
+-- Production safety:
+--   * H2 (reference workload): ddl-auto=create-drop regenerates schema from
+--     JPA entities every boot. This file is purely documentary for H2 but
+--     binding for Postgres deployments that adopt Flyway.
+--   * Postgres: ALTER TABLE ... ALTER COLUMN ... DROP NOT NULL is
+--     non-locking on PG 9.6+ (metadata-only change). Existing rows are
+--     unaffected. Concurrent INSERT/SELECT continue.
+--   * The PAYMENT-RECON-001 immutability trigger (raise_immutable from V003)
+--     is unaffected — it fires on UPDATE/DELETE, not on column-nullability
+--     metadata changes.
+--
+-- Rollback: if a fork-receiver chooses to instead route audit-only rows to a
+-- separate audit_events table (the design alternative considered in the R11
+-- verdict), they should revert this migration AND re-introduce a NOT NULL
+-- constraint AFTER backfilling any existing NULL rows. The
+-- ledger_audit_nullability_guard.sh mechanical guard exists to keep the SQL
+-- nullability and the JPA entity column nullability in lockstep regardless
+-- of which direction a fork-receiver evolves.
+
+ALTER TABLE payment_events ALTER COLUMN payment_id DROP NOT NULL;
