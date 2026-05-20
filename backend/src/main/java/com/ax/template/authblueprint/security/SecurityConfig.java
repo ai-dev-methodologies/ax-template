@@ -52,6 +52,12 @@ public class SecurityConfig {
                 // LIST / GET — any authenticated user (blueprints/audit-log-manifest.yaml#rbac).
                 // EXPORT — method-level @PreAuthorize on AuditLogExportController enforces ADMIN/AUDITOR.
                 .requestMatchers("/api/audit-logs/**").authenticated()
+                // R15 notification domain (specs/notification-l0.yaml):
+                // NOTIF-AUTHZ-001 — every endpoint requires a valid JWT.
+                // Owner-only access (NOTIF-AUTHZ-002/003) is enforced in the
+                // service layer via the caller's userId from Authentication,
+                // never from a path parameter.
+                .requestMatchers("/api/notifications/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per
@@ -108,7 +114,7 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-CSRF-TOKEN"));
         configuration.setAllowCredentials(true);
 
