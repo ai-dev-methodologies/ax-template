@@ -2559,11 +2559,308 @@ kafka-streams-tenant-scope:
         pass.
 
   open_questions_remaining:
-    - "Kafka Streams interactive queries (HTTP endpoint that exposes the state store via store.range(prefix, prefix + '\\uFFFF')) for tenant-scoped reads — the read-side filter is the OBVERSE of the write-side prefix. Not yet anchored; opens the read-side counterpart of R10."
     - "Kafka Streams Global KTables (cross-partition replicated tables) — global KTable replicates the entire topic to every StreamThread; tenant prefix in the key is still required for namespacing but the per-StreamThread copy creates a per-node RocksDB store of all tenants' data. Capacity/cost question, not correctness."
     - "Kafka transactional producer + Streams EOS_V2 (exactly-once semantics) — already staked at #kafka-consumer-tenant-scope.open_questions_remaining[0]; EOS_V2 transactions span the consumer-side input + state store + downstream producer; the X-Tenant-Id header propagation across this transactional span is not yet anchored."
 
   cost_estimate_eng_days: 1.0
+
+# ─────────────────────────────────────────────────────────────────────
+# kafka-streams-interactive-queries-tenant-scope — R11 closure
+# (kafka-streams open question — read-side OBVERSE)
+# ─────────────────────────────────────────────────────────────────────
+kafka-streams-interactive-queries-tenant-scope:
+  description: >
+    Tenant resolution policy for Kafka Streams Interactive
+    Queries (IQ) — the HTTP-exposed read surface that lets
+    application services query the state stores materialised
+    by #kafka-streams-tenant-scope. R10 closed the WRITE side
+    (selectKey tenant-prefix + punctuator key-decode set/clear
+    + tenant-namespaced join keys); R11 closes the OBVERSE
+    READ side. The two sides MUST agree on one composite key
+    convention (`tenantId#originalKey`) so the read can scope
+    its scan to a single tenant's contiguous key range without
+    leaking across the prefix boundary.
+    The four failure surfaces R11 anchors:
+      (a) path_tenant_id_as_prefix: the controller's
+          @PathVariable / @RequestParam tenantId is passed
+          DIRECTLY into the store.range() prefix without
+          consulting TenantContext.current(). The result is
+          a classic IDOR — an attacker who can call the URL
+          with any tenantId reads that tenant's metrics
+          because the prefix is attacker-controlled.
+      (b) unscoped_store_all_scan: the service uses
+          store.all() and post-filters in application code.
+          store.all() scans every tenant's RocksDB state;
+          the post-filter is the single thing standing
+          between this call and a full multi-tenant dump.
+          One refactor that drops the filter leaks every
+          tenant's data.
+      (c) access_denied_existence_leak: tenant mismatch
+          returns HTTP 403 (AccessDeniedException or
+          equivalent) instead of HTTP 404. 403 reveals that
+          the cross-tenant resource exists; 404 hides it.
+          Mirrors the existing #aop-guard.http_mapping
+          policy (which also chose 404 for the same
+          existence-leakage reason).
+      (d) cached_store_reference_after_rebalance: the
+          service caches the ReadOnlyKeyValueStore as a
+          field at construction time. Streams rebalance
+          invalidates any cached reference; the stale
+          reference reads from the OLD partition assignment
+          and can surface other tenants' data after the
+          rebalance reassigns partitions across hosts.
+    R11 closes the kafka-streams interactive queries open
+    question that was
+    #kafka-streams-tenant-scope.open_questions_remaining[0]
+    in the R10-committed manifest (item removed on closure;
+    the surviving 2-item list slides up by one index).
+  introduced_at: >
+    R11 — closes the kafka-streams interactive queries open
+    question staked in R10 as the first entry of
+    #kafka-streams-tenant-scope.open_questions_remaining
+    (R10-era index [0]; entry removed at R11 closure):
+    "Kafka Streams interactive queries (HTTP endpoint that
+    exposes the state store via store.range(prefix, prefix +
+    sentinel)) for tenant-scoped reads — the read-side filter
+    is the OBVERSE of the write-side prefix. Not yet anchored;
+    opens the read-side counterpart of R10." Fork-receivers
+    writing a B2B SaaS admin dashboard against the R10 state
+    store would reach for one of four failure modes: (a) bare
+    `@GetMapping("/api/tenants/{tenantId}/metrics")` →
+    `store.range(tenantId, tenantId + sentinel)` with no
+    TenantContext check — attacker substitutes any tenantId
+    in the URL. (b) `store.all()` + application-side
+    `.filter(kv -> kv.key.startsWith(prefix))` — one missed
+    filter call after refactor exfiltrates every tenant. (c)
+    `if (mismatch) throw new AccessDeniedException(...)` →
+    HTTP 403 — leaks the existence of the cross-tenant
+    resource. (d) `private ReadOnlyKeyValueStore<...> store
+    = streams.store(...)` initialised in constructor —
+    stale-after-rebalance.
+  closed_at: >
+    R11 — full closure. Manifest moves from staked-anchor to
+    executable contract: TenantAwareInteractiveQueryService
+    skeleton ships in the multi-tenant fixture (18th
+    canonical file), the (TenantContext.current() prefix +
+    store.range scoped scan + path mismatch →
+    TenantBoundaryViolationException → 404 + fresh store
+    reference per query) chain is concrete, and the 44th
+    hard guard
+    (kafka_streams_interactive_queries_tenant_scope_guard.sh)
+    blocks any of the failure modes from sneaking in via
+    fork-receiver code.
+
+  canonical_pattern: tenant_context_scoped_store_range
+
+  tenant_context_scoped_store_range:
+    description: >
+      Multi-tenant Kafka Streams Interactive Queries service
+      reads from the SAME state store as the R10 write side
+      (METRICS_STORE = "tenant-metrics-by-key"). Reads MUST
+      use the per-request TenantContext.current() tenantId
+      to construct the range prefix; path / query / body
+      tenantId is validated for consistency but NEVER used
+      as the prefix root.
+
+      Four load-bearing properties:
+        (1) TenantContext.current() as SOLE prefix source:
+            the service method opens with
+            UUID contextTenantId = TenantContext.current()
+                .orElseThrow(() -> new TenantContextMissingException(...));
+            and constructs the prefix from `contextTenantId`
+            ONLY. Path tenantId (when present) is compared
+            to contextTenantId — mismatch trips property (3)
+            and throws TenantBoundaryViolationException. The
+            invariant: NO field, method parameter, request
+            header, or query string value EVER flows into
+            the prefix expression except via the verified
+            TenantContext.current() path.
+        (2) store.range(prefix, prefix + sentinel) NOT
+            store.all(): the scan upper bound MUST be
+            `prefix + sentinel` (where sentinel is the
+            maximum UTF-16 code unit U+FFFF) so the scan is structurally
+            tenant-scoped at the RocksDB layer. A bare
+            store.all() with an application-side filter
+            (`it.next().getKey().startsWith(prefix)`) is
+            REJECTED because the filter is one refactor
+            away from being dropped — the canonical pattern
+            puts the scope inside the store API call so
+            "remove the filter" cannot accidentally widen
+            the scan.
+        (3) Path mismatch → TenantBoundaryViolationException
+            → HTTP 404 via MultiTenantProblemDetailAdvice.
+            NEVER throw AccessDeniedException, NEVER return
+            ResponseStatusException(HttpStatus.FORBIDDEN),
+            NEVER annotate the exception with
+            @ResponseStatus(HttpStatus.FORBIDDEN). 403 leaks
+            the existence of the cross-tenant resource (the
+            tenantId in the URL exists, but the current
+            principal cannot access it); 404 hides existence.
+            Mirrors #aop-guard.http_mapping which already
+            chose 404 for the same reason. Symmetry note:
+            the controller MUST be SecurityFilterChain-
+            protected so TenantContext is populated; this
+            property is the LAST line of defence if a
+            misconfigured filter chain ever lets an
+            unauthenticated path tenantId reach the service.
+        (4) Fresh store reference per query: each public
+            service method MUST acquire its store via
+            streams.store(StoreQueryParameters.fromNameAndType(
+                METRICS_STORE, QueryableStoreTypes.keyValueStore()))
+            inside the method body. The store reference MUST
+            NOT be a field (cached at construction time).
+            Streams rebalance — triggered by any consumer
+            group membership change — reassigns partitions
+            across hosts; a cached reference is bound to
+            the OLD partition assignment and reads stale
+            data, which may include data from a tenant the
+            current node no longer hosts (the tenant whose
+            partition moved to another host) AND, after
+            partition movement, the partition that landed
+            on the current node has data from a different
+            tenant. The cached reference would silently
+            read across tenants.
+
+    canonical_skeleton: |
+      package com.<root>.multitenancy;
+
+      import java.util.HashMap;
+      import java.util.Map;
+      import java.util.Optional;
+      import java.util.UUID;
+      import org.apache.kafka.streams.KafkaStreams;
+      import org.apache.kafka.streams.KeyValue;
+      import org.apache.kafka.streams.StoreQueryParameters;
+      import org.apache.kafka.streams.state.KeyValueIterator;
+      import org.apache.kafka.streams.state.QueryableStoreTypes;
+      import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+      import org.springframework.stereotype.Service;
+
+      /**
+       * Generated from blueprints/multi-tenant-manifest.yaml#kafka-streams-interactive-queries-tenant-scope.tenant_context_scoped_store_range.canonical_skeleton
+       * with <root> = acme.
+       *
+       * Read-side OBVERSE of TenantAwareKafkaStreamsTopology
+       * (R10 #kafka-streams-tenant-scope). Four guard-checked
+       * properties:
+       *   (1) TenantContext.current() is the SOLE source of
+       *       the store-range prefix.
+       *   (2) store.range(prefix, prefix + sentinel) — NOT
+       *       store.all() — keeps the scan tenant-scoped at
+       *       the RocksDB layer.
+       *   (3) Path tenantId mismatch with TenantContext throws
+       *       TenantBoundaryViolationException (→ 404), NEVER
+       *       AccessDeniedException (would be 403 and leak
+       *       cross-tenant existence).
+       *   (4) ReadOnlyKeyValueStore is acquired fresh on every
+       *       query — never cached as a field; cached references
+       *       go stale across Streams rebalances.
+       */
+      @Service
+      public class TenantAwareInteractiveQueryService {
+
+          static final String KEY_SEPARATOR = "#";
+          static final String METRICS_STORE = "tenant-metrics-by-key";
+
+          private final KafkaStreams streams;
+
+          public TenantAwareInteractiveQueryService(KafkaStreams streams) {
+              this.streams = streams;
+          }
+
+          public Map<String, Long> metricsForCurrentTenant(UUID pathTenantId) {
+              UUID contextTenantId = TenantContext.current()
+                  .orElseThrow(() -> new TenantContextMissingException(
+                      "Interactive query invoked without TenantContext"));
+
+              if (pathTenantId != null && !pathTenantId.equals(contextTenantId)) {
+                  throw new TenantBoundaryViolationException(
+                      "Path tenantId does not match authenticated tenant");
+              }
+
+              ReadOnlyKeyValueStore<String, Long> store = streams.store(
+                  StoreQueryParameters.fromNameAndType(
+                      METRICS_STORE, QueryableStoreTypes.keyValueStore()));
+
+              String prefix = contextTenantId.toString() + KEY_SEPARATOR;
+              // "\uFFFF" is the maximum UTF-16 code unit — every key in
+              // RocksDB that starts with `prefix` collates below this
+              // upper bound, so range(prefix, upperBound) yields exactly
+              // the current tenant's contiguous key range.
+              String upperBound = prefix + "\uFFFF";
+
+              Map<String, Long> result = new HashMap<>();
+              try (KeyValueIterator<String, Long> it = store.range(prefix, upperBound)) {
+                  while (it.hasNext()) {
+                      KeyValue<String, Long> kv = it.next();
+                      int sep = kv.key.indexOf(KEY_SEPARATOR);
+                      if (sep <= 0) {
+                          continue;
+                      }
+                      result.put(kv.key.substring(sep + 1), kv.value);
+                  }
+              }
+              return result;
+          }
+      }
+
+  forbidden_alternatives:
+    - "Path / query / body tenantId fed directly into the store.range() prefix without consulting TenantContext.current() — path_tenant_id_as_prefix. Classic IDOR. Attacker substitutes any tenantId in the URL and reads that tenant's metrics because the prefix is attacker-controlled."
+    - "store.all() with application-side prefix filter — unscoped_store_all_scan. store.all() scans every tenant's RocksDB state; the post-filter is one refactor away from being dropped. The canonical pattern puts the scope inside the store API call so 'remove the filter' cannot widen the scan."
+    - "AccessDeniedException OR HttpStatus.FORBIDDEN on path mismatch — access_denied_existence_leak. 403 leaks the existence of the cross-tenant resource; 404 hides it. Use TenantBoundaryViolationException → 404 via MultiTenantProblemDetailAdvice."
+    - "Cached ReadOnlyKeyValueStore field initialised in constructor — cached_store_reference_after_rebalance. Streams rebalance invalidates the reference; stale references read from the OLD partition assignment. Acquire fresh in each query method via streams.store(StoreQueryParameters...)."
+
+  failure_modes:
+    path_tenant_id_as_prefix:
+      description: >
+        Controller's @PathVariable / @RequestParam tenantId
+        is passed DIRECTLY into the store.range() prefix
+        without consulting TenantContext.current(). The
+        prefix is attacker-controlled.
+      detection: >
+        44th guard scans the IQ service file. If the file
+        calls store.range( / store.get( / streams.store(
+        but does NOT contain a TenantContext.current()
+        invocation, trip the clause.
+    unscoped_store_all_scan:
+      description: >
+        Service uses store.all() and relies on an
+        application-side prefix filter. store.all() scans
+        every tenant's state in RocksDB; the post-filter
+        is fragile under refactor.
+      detection: >
+        44th guard checks for `.all()` calls in a file that
+        also references ReadOnly*Store or store.range / store.get.
+        Presence trips the clause.
+    access_denied_existence_leak:
+      description: >
+        Tenant mismatch returns HTTP 403 (AccessDeniedException
+        or HttpStatus.FORBIDDEN). 403 leaks existence; 404 hides it.
+      detection: >
+        44th guard scans for AccessDeniedException,
+        HttpStatus.FORBIDDEN, @ResponseStatus(...FORBIDDEN),
+        ResponseStatusException(...FORBIDDEN), or status=403
+        substrings. Presence trips the clause.
+    cached_store_reference_after_rebalance:
+      description: >
+        ReadOnly*Store reference cached as a field at
+        construction time. Streams rebalance invalidates the
+        reference; stale references read from the OLD
+        partition assignment and may surface other tenants'
+        data.
+      detection: >
+        44th guard scans for `private ... ReadOnly*Store<...>
+        <name>;` field declarations. Presence trips the
+        clause. The store MUST be acquired fresh in each
+        query method via streams.store(StoreQueryParameters
+        .fromNameAndType(...)).
+
+  open_questions_remaining:
+    - "Standby replica routing (KafkaStreams.allMetadataForKey + Apache HTTP client RPC fan-out across the Streams cluster) — when the local node does NOT host the partition for a tenant's key range, IQ must HTTP-forward to the host that does. The tenant scope on the forwarded request MUST carry the same X-Tenant-Id header so the receiving node's TenantFilterActivationFilter populates the context. Not yet anchored; opens the cluster-aware IQ counterpart."
+    - "Long-polling / windowed Interactive Queries (windowStore.fetch(key, from, to)) — the temporal axis is orthogonal to the tenant axis but the same prefix-only-from-TenantContext rule applies. Not yet anchored; opens the windowed-store counterpart."
+    - "gRPC / Reactive Interactive Queries surface — same canonical pattern (TenantContext.current() as prefix; fresh store reference per call) but the controller surface is gRPC or WebFlux instead of MVC. Not yet anchored; opens the non-MVC IQ counterpart."
+
+  cost_estimate_eng_days: 0.5
 
 evidence:
   - source_type: external
@@ -2634,14 +2931,27 @@ evidence:
     citation: "Apache Kafka Streams Documentation — KStream-KTable Join. 'Performs a join on the keys of KStream and KTable. Records with null keys are dropped.' Documents that joins are key-equality-based: both sides MUST be keyed identically for matches to occur — confirms the cross_tenant_join_key failure mode in #kafka-streams-tenant-scope (business-key-only joins match across tenants because the join semantic does not consider any tenant context outside the key itself)."
     url: "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#joining"
     quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Apache Kafka Streams Documentation — Interactive Queries. 'Interactive Queries let you get more from streaming than just the processing of data. This feature allows you to treat the stream processing layer as a lightweight embedded database and, more concretely, to directly query the latest state of your stream processing application, without needing to materialize that state to external databases or external storage first.' Establishes that IQ is a READ surface against the same state stores that the topology writes to — confirms the structural basis for the #kafka-streams-interactive-queries-tenant-scope OBVERSE pattern: read-side prefix scoping MUST mirror the write-side prefix from #kafka-streams-tenant-scope.tenant_prefixed_state_store_with_punctuator_key_decode."
+    url: "https://kafka.apache.org/documentation/streams/developer-guide/interactive-queries.html"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Apache Kafka Streams Documentation — ReadOnlyKeyValueStore.range(K from, K to). 'Get an iterator over a given range of keys. This iterator must be closed after use. The returned iterator must be safe from java.util.ConcurrentModificationException and must not return null values.' Documents that range() takes inclusive-from and exclusive-to bounds and yields a structurally tenant-scoped scan when both bounds are tenant-prefixed — confirms the canonical pattern for #kafka-streams-interactive-queries-tenant-scope.tenant_context_scoped_store_range (property 2: store.range(prefix, prefix + sentinel) over store.all() + post-filter)."
+    url: "https://kafka.apache.org/40/javadoc/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.html"
+    quoted_at: "2026-05-20"
+  - source_type: external
+    citation: "Apache Kafka Streams Documentation — KafkaStreams.store(StoreQueryParameters). 'Get a facade wrapping the local KeyValueStore instances with the provided storeName if the Streams instance isRunning. The returned object can be used to query the StateStores. Note that this method must be called on every new query in order to avoid stale state stores after a rebalance.' Establishes that the store reference MUST be acquired fresh on every query because rebalance invalidates prior references — confirms the structural basis for #kafka-streams-interactive-queries-tenant-scope.failure_modes.cached_store_reference_after_rebalance."
+    url: "https://kafka.apache.org/40/javadoc/org/apache/kafka/streams/KafkaStreams.html#store(org.apache.kafka.streams.StoreQueryParameters)"
+    quoted_at: "2026-05-20"
 
 # Total estimated fork-receiver effort to adopt multi-tenant (full pattern):
 # row-level (7) + AOP guard (3) + context resolution (~1) + async propagation (2)
 # + callback tenant resolution (~1.5) + scheduled-task (1) + realtime-connection (1)
-# + broker fan-out (1.5) + kafka-consumer (1.0) + kafka-streams (1.0) = ~20 eng-days.
-# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 + 1.0 + 1.0 = ~25 eng-days.
+# + broker fan-out (1.5) + kafka-consumer (1.0) + kafka-streams (1.0)
+# + kafka-streams-iq (0.5) = ~20.5 eng-days.
+# Schema-per-tenant alternative: 12 + 3 + 1 + 2 + 1.5 + 1 + 1 + 1.5 + 1.0 + 1.0 + 0.5 = ~25.5 eng-days.
 # These match the R16 b2b-admin frontmatter "~10-15 eng-days" estimate plus
-# the R5/R6/R7/R8/R9/R10 successive regime closures (~5.5 eng-days incremental beyond
+# the R5/R6/R7/R8/R9/R10/R11 successive regime closures (~6 eng-days incremental beyond
 # the baseline single-node deployment).
 # Broker fan-out is opt-in: single-node deployments SKIP and never adopt
 # TenantAwareRedisPubSubBridge; the 41st guard recognises this and live-repo
@@ -2653,5 +2963,9 @@ evidence:
 # SKIP and never adopt TenantAwareKafkaStreamsTopology; the 43rd guard
 # recognises this and live-repo SKIPs when no
 # .../multitenancy/TenantAwareKafkaStreamsTopology.java is present.
+# Kafka Streams Interactive Queries is opt-in: deployments without IQ HTTP
+# read endpoints SKIP and never adopt TenantAwareInteractiveQueryService;
+# the 44th guard recognises this and live-repo SKIPs when no
+# .../multitenancy/TenantAwareInteractiveQueryService.java is present.
 
 decided_at: "2026-05-20"
