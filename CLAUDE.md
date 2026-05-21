@@ -143,8 +143,9 @@ skill은 **catalog quality probe만 제공**. fork받은 팀이 자신의 정책
 ### "단일 명령 binary pass/fail" — 정확한 의미
 
 catalog claim **"`./gradlew test{Domain}` — 단일 명령 binary pass/fail"** 은
-**per-domain task** 에 적용된다. 전체 `./gradlew test` 가 항상 GREEN 이라는
-약속이 **아니다**. 도메인별 상태는 아래 매트릭스(R2 baseline, 2026-05-20):
+**per-domain task** 에 적용된다. **R22 baseline (2026-05-21)**: per-domain
+task 전 GREEN + aggregate `./gradlew test` 는 advisory PortabilityCyclic
+한 건을 제외하면 GREEN. 도메인별 상태:
 
 | Per-domain task                | 상태       | 비고 |
 |--------------------------------|----------|---|
@@ -156,22 +157,26 @@ catalog claim **"`./gradlew test{Domain}` — 단일 명령 binary pass/fail"** 
 | `./gradlew testPayment`        | GREEN    | PAYMENT 29 items PASS |
 | `./gradlew testIdentityVerification` | GREEN | IDV-CALLBACK-001/002/003 + IDV-PROVIDER-001 envelope (8/8 PASS). VerifiedIdentity 영속화 / admin 목록 / 감사 publish 는 catalog 계약 surface로 남고 fork-receiver가 구현 (R2 closure) |
 | `./gradlew testBilling`        | GREEN    | 17/17 PASS. R21 backend impl: Subscription/Plan/BillingEvent + SubscriptionStateMachine + SubscriptionController + BillingAdminController + BillingWebhookController + ArchUnit BOUNDARY/STATE checks. SecurityConfig 가 `/api/webhooks/billing` permitAll, `/api/subscriptions/**` authenticated. 마지막 spec-only RED 도메인 closure |
+| `./gradlew testFeatureFlags`   | GREEN    | 11/11 PASS |
+| `./gradlew testWebhook`        | GREEN    | 13/13 PASS |
+| `./gradlew testScheduledTask`  | GREEN    | 5/5 PASS |
+| `./gradlew testAuditLog`       | GREEN    | 11/11 PASS |
+| `./gradlew testFileStorage`    | GREEN    | 12/12 PASS |
+| `./gradlew testSearch`         | GREEN    | 8/8 PASS |
 | `./gradlew testPortability`    | advisory | 외부 fixture (spring-realworld-example-app) 에 cycle 있음. fork-receiver의 코드가 아니라 외부 reference 코드의 결함 |
 
-전체 `./gradlew test`는 위 도메인을 모두 합친 aggregate이므로 RED 도메인이
-하나라도 있으면 RED. **R21 baseline (2026-05-21): per-domain task 모두 GREEN.**
-aggregate `./gradlew test` 상태는 R20 시점 5 fail (4 BillingFlowIT TDD-anchor
-HTTP 404 + 1 Portability REALWORLD) → R21 시점 testBilling RED 4건 closed +
-FeatureFlagFlowIT 11건이 aggregate 모드에서만 Spring TestContext 캐시/공유
-H2 (`DB_CLOSE_DELAY=-1`) 상호작용에 의해 spurious 401 으로 surface (per-domain
-`./gradlew testFeatureFlags` 단독으로는 11/11 GREEN). 이는 **R20 시점부터
-잠재해 있던 test pollution** 으로, R20 baseline 에서는 BillingFlowIT 의 사전
-HTTP 404 fast-fail 이 user/플랜 row 를 만들지 않아 노출되지 않다가 R21 에서
-BillingFlowIT 가 GREEN 으로 turn 되면서 표면화. catalog claim ("per-domain
-`./gradlew test{Domain}` 단일 binary pass/fail") 은 모든 도메인에 대해 유지.
-aggregate suite 의 ApplicationContext 캐시 격리는 fork-receiver 가 자신의 CI
-에서 `@DirtiesContext` 또는 별도 forkEvery 정책으로 조정 가능 (catalog 가
-강제하지 않는 정책 surface).
+전체 `./gradlew test` aggregate 도 **PortabilityCyclic advisory 1건을 제외하면
+GREEN.** R20–R21 에서 표면화됐던 aggregate-only failure (FeatureFlagFlowIT
+11건 spurious 401) 의 root cause 는 Spring TestContext `ContextCache` 의 기본
+용량 32 한계였다 — 전체 71개 `@SpringBootTest` 클래스가 LRU 회전을 일으켜
+`auth.signup.auto-verify=true` 라는 동일한 properties cache key 를 공유하던
+BillingFlowIT context 가 후속 IT 들 사이에서 evict 되었고, FF 가 stale
+cache miss 로 재진입할 때 `@LocalServerPort` 의 port 값이 죽은 Tomcat 의
+포트를 가리키게 되어 모든 요청이 401 로 응답되었다. **R22 fix**:
+BillingFlowIT + FeatureFlagFlowIT 두 클래스에 `@DirtiesContext(BEFORE_CLASS)`
+를 적용해 매 클래스 시작 전 fresh context boot 을 강제 — 가장 surgical 한
+선택. catalog scope 안 의 root-cause closure 이고 fork-receiver 가 자신의 CI
+에서 강제할 의무가 없는 ApplicationContext 캐시 정책에는 손대지 않는다.
 
 ```bash
 # Backend

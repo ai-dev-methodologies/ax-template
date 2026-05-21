@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.annotation.DirtiesContext;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
@@ -33,6 +34,19 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
         // not contaminated by the verification workflow.
         "auth.signup.auto-verify=true"
     })
+// R22 aggregate-test isolation (per-domain task GREEN, aggregate RED root cause):
+// The Spring TestContext ContextCache has a default capacity of 32 (see
+// org.springframework.test.context.cache.ContextCache.DEFAULT_MAX_CONTEXT_CACHE_SIZE).
+// With 71 @SpringBootTest classes, aggregate `./gradlew test` exceeds the cap
+// — the BillingFlowIT context (sharing this class's cache key, since both
+// declare `auth.signup.auto-verify=true` in `properties`) gets LRU-evicted
+// between the two classes when intervening MOCK-environment IT classes
+// (CrudSecurityTest, FileStorage*, Notification*, etc.) churn the cache.
+// `BEFORE_CLASS` forces a fresh context boot before this class runs, so the
+// cached-but-mutated Billing context is not silently reused. Per-domain task
+// `./gradlew testFeatureFlags` already isolates this class so the override is
+// a no-op there. See practices/evals/run-all-guards.sh — 0 catalog regression.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Tag("FEATURE_FLAGS")
 class FeatureFlagFlowIT {
 
