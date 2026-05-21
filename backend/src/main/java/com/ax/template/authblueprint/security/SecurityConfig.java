@@ -9,7 +9,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import com.ax.template.authblueprint.apikey.ApiKeyAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -21,6 +23,12 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
+
+    public SecurityConfig(ApiKeyAuthenticationFilter apiKeyAuthenticationFilter) {
+        this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
+    }
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -100,6 +108,12 @@ public class SecurityConfig {
                 // (EXPORT-AUTHZ-001). Owner-only access is then enforced inside
                 // ReportExportService.
                 .requestMatchers("/api/exports/**").authenticated()
+                // R30 api-key domain (specs/api-key-l0.yaml):
+                // KEY-AUTHZ-001 — management surface is JWT-only (the
+                // ApiKeyAuthenticationFilter explicitly skips these paths
+                // via shouldNotFilter). The scope-probe endpoint under the
+                // same prefix is reachable via X-API-Key.
+                .requestMatchers("/api/api-keys/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per
@@ -137,7 +151,12 @@ public class SecurityConfig {
                     // terminate TLS; the header documents the requires-secure policy.
                     .requestMatcher(req -> true))
             )
-            .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter())));
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter())))
+            // R30 api-key domain: X-API-Key processing happens AFTER the JWT filter
+            // so a JWT-bearing request shortcircuits before we look at the header
+            // (manifest authentication.jwt_takes_precedence). The filter itself
+            // skips the management-path surface for KEY-AUTHZ-001.
+            .addFilterAfter(apiKeyAuthenticationFilter, BearerTokenAuthenticationFilter.class);
 
         return http.build();
     }

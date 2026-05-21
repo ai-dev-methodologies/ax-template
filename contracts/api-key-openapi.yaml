@@ -1,0 +1,273 @@
+openapi: 3.0.3
+info:
+  title: "ax-template API Key API"
+  version: "0.1.0"
+  description: >
+    B2B integration auth. Plaintext key value is returned only on creation
+    (and on rotation); subsequent lookups expose metadata only. Authentication
+    is via X-API-Key header on protected endpoints OTHER THAN this management
+    surface, which is JWT-only (KEY-AUTHZ-001) to avoid the chicken-and-egg
+    of a leaked key being able to rotate itself.
+servers:
+  - url: /api
+paths:
+  /api-keys:
+    post:
+      summary: "Create a new API key (returns plaintext ONCE)"
+      operationId: createApiKey
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+      responses:
+        '201':
+          description: Created — body includes the plaintext key value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApiKeyResponse'
+        '400':
+          description: Validation error or per-user quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required (JWT)
+    get:
+      summary: "List the caller's API keys (metadata only — no plaintext)"
+      operationId: listApiKeys
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of keys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyListResponse'
+        '401':
+          description: Authentication required
+
+  /api-keys/{id}:
+    get:
+      summary: "Get metadata for a specific API key"
+      operationId: getApiKey
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Key metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyResponse'
+        '401':
+          description: Authentication required
+        '404':
+          description: Not found OR not owned by caller (IDOR-safe)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: "Revoke an API key (status → REVOKED; subsequent X-API-Key returns 401)"
+      operationId: revokeApiKey
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Revoked
+        '401':
+          description: Authentication required
+        '404':
+          description: Not found OR not owned by caller
+
+  /api-keys/{id}/rotate:
+    post:
+      summary: "Atomically issue a new key and revoke the old one"
+      operationId: rotateApiKey
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Rotated — body includes the new plaintext value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApiKeyResponse'
+        '401':
+          description: Authentication required
+        '404':
+          description: Not found OR not owned by caller
+
+  /api-keys/scope-probe:
+    get:
+      summary: "Demo endpoint for KEY-AUTHZ-003 — requires ROLE_API_READ"
+      operationId: probeRead
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Authentication required
+        '403':
+          description: Authority missing
+    post:
+      summary: "Demo endpoint for KEY-AUTHZ-003 — requires ROLE_API_WRITE"
+      operationId: probeWrite
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Authentication required
+        '403':
+          description: Authority missing
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    CreateApiKeyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 128
+          description: "Human-readable label (e.g. 'analytics-pipeline')"
+        scopes:
+          type: array
+          items:
+            type: string
+            enum: [READ, WRITE]
+          default: [READ]
+        expiresInDays:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          description: "Optional. Defaults to manifest issuance.default_expires_in_days."
+
+    CreateApiKeyResponse:
+      type: object
+      required: [id, value, prefix, scopes, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        value:
+          type: string
+          description: "Plaintext key. ONLY exposed here (and on rotate). Store immediately; cannot be retrieved later."
+        prefix:
+          type: string
+          description: "First 8 chars of the plaintext (e.g. 'ak_a1b2c'). Safe to log and display."
+        name:
+          type: string
+          nullable: true
+        scopes:
+          type: array
+          items:
+            type: string
+            enum: [READ, WRITE]
+        status:
+          type: string
+          enum: [ACTIVE, REVOKED]
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ApiKeyResponse:
+      type: object
+      required: [id, prefix, scopes, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        prefix:
+          type: string
+        name:
+          type: string
+          nullable: true
+        scopes:
+          type: array
+          items:
+            type: string
+            enum: [READ, WRITE]
+        status:
+          type: string
+          enum: [ACTIVE, REVOKED]
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ApiKeyListResponse:
+      type: object
+      required: [items, totalElements]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKeyResponse'
+        totalElements:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        timestamp:
+          type: string
+          format: date-time

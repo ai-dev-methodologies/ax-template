@@ -211,6 +211,15 @@ tasks.register<Test>("testReportExport") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testApiKey") {
+    useJUnitPlatform {
+        includeTags("API_KEY")
+    }
+    description = "Run api-key domain compliance tests (R30: 12 items / 4 families — AUTHN, STORAGE, LIFECYCLE, AUTHZ)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

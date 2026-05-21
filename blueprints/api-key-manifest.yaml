@@ -1,0 +1,89 @@
+template_id: "api-key-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "B2B integration auth — partner / server-to-server clients that hold a long-lived credential and do not run an OAuth flow"
+  - "CLI tools / CI pipelines that authenticate as a specific human user but cannot interactively refresh a JWT"
+  - "Per-key scope or rate-limit policies — e.g. read-only keys for analytics consumers, write-enabled keys for ingestion services"
+
+not_for:
+  - "End-user browser sessions — use the JWT issued by /api/auth/email/login instead"
+  - "Highly sensitive single-shot operations (payment confirmation, account deletion) — require an interactive JWT, not an offline key"
+  - "Sharing one key between many integrations — each integration MUST hold its own key so revocation is targeted"
+
+# ─── issuance ──────────────────────────────────────────────────────────────
+issuance:
+  plaintext_format: "ak_<43 base64url chars>"          # 256 bits of entropy
+  plaintext_returned_once: true                        # KEY-AUTHN-001
+  plaintext_storage_after_issuance: forbidden          # never logged, never persisted
+  prefix_chars: 8                                      # ak_abcde — used for display + fast lookup index
+  max_keys_per_user: 50                                # soft cap; rejected with 400 TOO_MANY_KEYS
+  default_expires_in_days: 365                         # null is allowed (no expiration) but discouraged
+
+# ─── authentication ────────────────────────────────────────────────────────
+authentication:
+  request_header: "X-API-Key"                          # KEY-AUTHN-002
+  invalid_response_status: 401                          # KEY-AUTHN-003 — never 403 from the filter
+  jwt_takes_precedence: true                            # if both JWT and X-API-Key arrive, JWT wins
+  filter_skips_management_paths: true                   # KEY-AUTHZ-001 — JWT-only on /api/api-keys/**
+
+# ─── storage ───────────────────────────────────────────────────────────────
+storage:
+  digest_algorithm: "SHA-256"                          # KEY-STORAGE-001
+  digest_encoding: "lowercase hex"                     # 64 hex chars
+  comparison: "MessageDigest.isEqual"                  # constant-time
+  hash_column_nullable: false                          # KEY-STORAGE-003
+  hash_column_updatable: false                         # rotation = REVOKE + new INSERT
+  hash_exposed_via_dto: never                          # KEY-STORAGE-002
+
+# ─── lifecycle ─────────────────────────────────────────────────────────────
+lifecycle:
+  states: [ACTIVE, REVOKED]
+  transitions:
+    - from: ACTIVE
+      to: [REVOKED]
+    - from: REVOKED
+      to: []
+  expiration_check: per_request                         # KEY-LIFECYCLE-003 — checked in the filter
+  rotation_atomic: true                                 # KEY-LIFECYCLE-002
+
+# ─── authz ─────────────────────────────────────────────────────────────────
+authz:
+  management_requires_jwt: true                         # KEY-AUTHZ-001
+  cross_user_response: 404_not_403                      # KEY-AUTHZ-002
+  scopes: [READ, WRITE]                                 # KEY-AUTHZ-003
+  scope_to_authority:
+    READ:  "ROLE_API_READ"
+    WRITE: "ROLE_API_WRITE"
+
+testing_baseline:
+  unit: "JUnit 5 + AssertJ — ApiKeyHasher constant-time + reflective JPA column inspection"
+  integration: "RestAssured black-box HTTP against @SpringBootTest RANDOM_PORT"
+
+verification_checkpoints:
+  - "POST returns plaintext exactly once (KEY-AUTHN-001)"
+  - "GET endpoints never include plaintext or hash (KEY-AUTHN-001, KEY-STORAGE-002)"
+  - "X-API-Key authenticates as owner (KEY-AUTHN-002)"
+  - "Invalid / revoked / expired keys yield 401 (KEY-AUTHN-003, KEY-LIFECYCLE-001, KEY-LIFECYCLE-003)"
+  - "Hash storage uses SHA-256 + constant-time compare (KEY-STORAGE-001)"
+  - "Management endpoints reject API-key auth (KEY-AUTHZ-001)"
+  - "Cross-user lookup returns 404 (KEY-AUTHZ-002)"
+  - "READ-scope key cannot WRITE (KEY-AUTHZ-003)"
+
+must_not:
+  - "Log the plaintext value (even at DEBUG level)"
+  - "Return the plaintext on any endpoint other than creation/rotation"
+  - "Compare hashes with String.equals — must use MessageDigest.isEqual"
+  - "Allow X-API-Key on /api/api-keys/** (management surface is JWT-only)"
+  - "Mutate hashedValue after insert"
+
+reject_if:
+  - "POST /api/api-keys would exceed max_keys_per_user → 400 TOO_MANY_KEYS"
+  - "X-API-Key plaintext does not match any active, non-expired key → 401"
+  - "Status transition not in the allowed table → IllegalStateException (never persisted)"
+
+source_precedence:
+  - "OWASP ASVS V2.10 — API authentication"
+  - "Stripe API key practice — prefix + plaintext-once + revocation surface"
+  - "GitHub Personal Access Token practice — scope hierarchy + expiry"
+  - "RFC 6750 (Bearer Token) — header semantics referenced; we deliberately use X-API-Key instead of Authorization to avoid clobbering JWT clients"

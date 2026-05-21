@@ -1,0 +1,134 @@
+version: "1.0.0"
+scope: "api-key-domain"
+stack: "Spring Boot 3.2.x + JPA + SHA-256 (hex) + constant-time comparison + Spring Security OncePerRequestFilter"
+standard: "OWASP ASVS V2.10 (API Authentication) + CWE-321 (Hard-coded Cryptographic Key) + CWE-200 (Exposure of Sensitive Info) + Stripe / GitHub API-key practice patterns"
+items:
+  # ─── AUTHN family (3 items) ────────────────────────────────────────────────
+  - id: "KEY-AUTHN-001"
+    chapter: "AUTHN"
+    requirement: "Plaintext key value is returned ONCE on creation (and on rotation); subsequent GET endpoints MUST NOT expose the plaintext under any condition."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/api-keys → 201 response includes plaintext field 'value' (format ak_<base64 43 chars>).
+      GET /api/api-keys/{id} → 200 response has no 'value' field; only metadata (id, prefix, lastUsedAt, ...).
+      Implementation: CreateApiKeyResponse exposes 'value'; ApiKeyResponse (used by list/get) does NOT.
+    policy_ref: "blueprints/api-key-manifest.yaml#issuance"
+
+  - id: "KEY-AUTHN-002"
+    chapter: "AUTHN"
+    requirement: "A valid plaintext key supplied in the X-API-Key request header authenticates the request as the key's owner; downstream code observes the same userId as a JWT for that user would."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: Create key as UserA → call GET /api/auth/me with header X-API-Key: ak_<plaintext>; assert response.userId == UserA's userId. Implementation: ApiKeyAuthenticationFilter extends OncePerRequestFilter — when X-API-Key header present and SecurityContext empty, looks up key by hashPrefix, performs constant-time hash comparison, and populates a JwtAuthenticationToken-compatible Authentication.
+    policy_ref: "blueprints/api-key-manifest.yaml#authentication"
+
+  - id: "KEY-AUTHN-003"
+    chapter: "AUTHN"
+    requirement: "Invalid, revoked, or expired key values supplied via X-API-Key MUST be rejected with HTTP 401 (not 403); SecurityContext stays empty so the catch-all denyAll fires."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Three cases must all yield 401 on a protected endpoint (e.g. GET /api/auth/me):
+      (a) header X-API-Key: ak_invalid → 401
+      (b) revoked key (status=REVOKED) → 401
+      (c) expired key (expiresAt < now) → 401
+      Implementation: filter does not throw; it simply does not authenticate, leaving the chain to emit the standard 401.
+    policy_ref: "blueprints/api-key-manifest.yaml#authentication"
+
+  # ─── STORAGE family (3 items) ──────────────────────────────────────────────
+  - id: "KEY-STORAGE-001"
+    chapter: "STORAGE"
+    requirement: "Persisted key material is the SHA-256 hex digest of the plaintext; verification uses constant-time byte-array comparison (MessageDigest.isEqual) to defeat timing oracles."
+    test_method: "Unit test against ApiKeyHasher"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: ApiKeyHasher.hash("ak_abc") returns 64-char lowercase hex equal to SHA-256("ak_abc"). ApiKeyHasher.matches(plaintext, storedHash) uses MessageDigest.isEqual on UTF-8 byte arrays. CWE-208 (Information Exposure Through Discrepancy of Service Response Time).
+    policy_ref: "blueprints/api-key-manifest.yaml#storage"
+
+  - id: "KEY-STORAGE-002"
+    chapter: "STORAGE"
+    requirement: "Listing and detail endpoints never serialize the stored hash; only the prefix (first 8 chars of the plaintext, e.g. 'ak_abcde') is exposed for display/audit."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: GET /api/api-keys → response items have 'prefix' field but no 'hash' / 'hashedValue' / 'value' field. Implementation: ApiKey entity carries the hash but DTOs do not surface it. The hash field is also @JsonIgnore on the entity for defense in depth.
+    policy_ref: "blueprints/api-key-manifest.yaml#storage"
+
+  - id: "KEY-STORAGE-003"
+    chapter: "STORAGE"
+    requirement: "ApiKey.hashedValue column is NOT NULL and is immutable after insert; updating an existing row's hash is structurally impossible at the JPA layer."
+    test_method: "Unit test asserting JPA column annotation + service-layer behavior"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: Reflect on ApiKey class; assert hashedValue field's @Column(nullable=false, updatable=false). Rotation is implemented as REVOKE + NEW INSERT, not UPDATE of an existing row's hash.
+    policy_ref: "blueprints/api-key-manifest.yaml#storage"
+
+  # ─── LIFECYCLE family (3 items) ────────────────────────────────────────────
+  - id: "KEY-LIFECYCLE-001"
+    chapter: "LIFECYCLE"
+    requirement: "DELETE /api/api-keys/{id} sets status=REVOKED; subsequent X-API-Key requests with the revoked plaintext return 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: create key, exercise it successfully, DELETE it, then re-call with the same plaintext → 401. Implementation: ApiKeyService.revoke() flips status; ApiKeyAuthenticationFilter only authenticates keys with status=ACTIVE.
+    policy_ref: "blueprints/api-key-manifest.yaml#lifecycle"
+
+  - id: "KEY-LIFECYCLE-002"
+    chapter: "LIFECYCLE"
+    requirement: "POST /api/api-keys/{id}/rotate atomically (a) creates a NEW row with a new plaintext and (b) marks the old row REVOKED; both effects MUST be visible together or not at all."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create key → POST rotate → response carries new plaintext; old key plaintext → 401, new plaintext → 200. Implementation: ApiKeyService.rotate() runs in a single @Transactional method; if either save fails, both roll back.
+    policy_ref: "blueprints/api-key-manifest.yaml#lifecycle"
+
+  - id: "KEY-LIFECYCLE-003"
+    chapter: "LIFECYCLE"
+    requirement: "Keys with expiresAt < now MUST be rejected with HTTP 401, even if status is still ACTIVE in the DB (clock-based expiration is checked at every authentication, not via a sweep job)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: create key with expiresAt = now - 1m (test seam in properties) → X-API-Key request → 401. Implementation: ApiKeyAuthenticationFilter checks expiresAt against the injected Clock before populating SecurityContext. No background job is required.
+    policy_ref: "blueprints/api-key-manifest.yaml#lifecycle"
+
+  # ─── AUTHZ family (3 items) ────────────────────────────────────────────────
+  - id: "KEY-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "Management endpoints (POST/GET/DELETE/POST rotate) require a JWT — they cannot be performed using an API key. Avoids the chicken-and-egg of a leaked key being able to rotate itself silently."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: create a key. Use that key (X-API-Key) to call POST /api/api-keys → 401. Use the same key to call DELETE /api/api-keys/{otherId} → 401. Implementation: ApiKeyAuthenticationFilter explicitly skips authentication for /api/api-keys/** paths so the JWT-only chain is the only way in.
+    policy_ref: "blueprints/api-key-manifest.yaml#authz"
+
+  - id: "KEY-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Cross-user IDOR is denied: requesting another user's key by id returns HTTP 404 (not 403) so attackers cannot enumerate valid ids."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates a key. UserB (different JWT) GET /api/api-keys/{userA_key_id} → 404. Same shape as file-storage FILE-AUTHZ-002.
+    policy_ref: "blueprints/api-key-manifest.yaml#authz"
+
+  - id: "KEY-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "A key carrying scope=READ MUST NOT successfully authenticate write-style requests on scope-aware endpoints; the filter populates Authentication.authorities from the key's scopes and downstream @PreAuthorize / requestMatchers enforce the boundary."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: create key with scopes=[READ]. Exercise GET /api/api-keys/scope-probe → 200 (READ allowed). POST /api/api-keys/scope-probe → 403 (WRITE required). Implementation: ApiKeyAuthenticationFilter maps key scopes to ROLE_API_READ / ROLE_API_WRITE authorities. A small ScopeProbeController hosts the demo endpoint pair so the test surface is self-contained.
+    policy_ref: "blueprints/api-key-manifest.yaml#authz"
