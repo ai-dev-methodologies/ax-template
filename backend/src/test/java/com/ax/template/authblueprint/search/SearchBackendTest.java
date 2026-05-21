@@ -30,7 +30,7 @@ class SearchBackendTest {
     @Autowired SearchBackend searchBackend;
 
     @Test
-    @Tag("search")
+    @Tag("SEARCH")
     @Tag("SEARCH-BACKEND-001")
     @SuppressWarnings("unchecked")
     void backend_001_defaultIsPostgresFts() throws IOException {
