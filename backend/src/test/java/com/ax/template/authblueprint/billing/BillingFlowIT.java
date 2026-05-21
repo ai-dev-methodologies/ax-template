@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.annotation.DirtiesContext;
 
 import java.util.UUID;
 
@@ -43,6 +44,12 @@ import static org.assertj.core.api.Assertions.assertThat;
             // so auto-verify on signup keeps the AUTHZ/IDEMP/CUR assertions binary.
             "auth.signup.auto-verify=true"
         })
+// R22 aggregate-test isolation: see FeatureFlagFlowIT for the LRU eviction
+// root cause. `BEFORE_CLASS` ensures this class also boots a fresh context
+// regardless of any cached-but-mutated entry from earlier `auto-verify=true`
+// IT classes, so the WEBHOOK-001 signature-rejection path is not contaminated
+// by stale BillingWebhookController state.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Tag("BILLING")
 class BillingFlowIT {
 
