@@ -246,6 +246,57 @@ class ApprovalComplianceTest {
 
     // WF-STEP-003 covered by ApprovalStepStateMachineTest.nullActor_isRejectedBeforeAnyMutation
 
+    // ─── PAYLOAD family (R31-iter1 closure) ──────────────────────────────────
+
+    @Test
+    @Tag("WF-PAYLOAD-001")
+    void payload_001_jpaColumnIsNonUpdatable() throws Exception {
+        java.lang.reflect.Field f = ApprovalRequest.class.getDeclaredField("payloadJson");
+        jakarta.persistence.Column column = f.getAnnotation(jakarta.persistence.Column.class);
+        assertThat(column).as("@Column annotation present on payloadJson").isNotNull();
+        assertThat(column.updatable())
+            .as("payloadJson MUST be non-updatable so mid-flight tampering is structurally blocked")
+            .isFalse();
+    }
+
+    // ─── STEP-VALIDATION family (R31-iter1 closure) ──────────────────────────
+
+    @Test
+    @Tag("WF-STEP-004")
+    void step_004_duplicateApproverReturns400() {
+        String requesterToken = ApprovalWorkflowTestSupport.obtainToken(
+            ApprovalWorkflowTestSupport.freshEmail("wfS4-req"), "MEMBER");
+        String app1Token = ApprovalWorkflowTestSupport.obtainToken(
+            ApprovalWorkflowTestSupport.freshEmail("wfS4-a1"), "MEMBER");
+        String app1Id = ApprovalWorkflowTestSupport.resolveUserId(app1Token);
+
+        given()
+            .header("Authorization", "Bearer " + requesterToken)
+            .contentType(ContentType.JSON)
+            .body("{\"type\":\"budget\",\"approverUserIds\":[\"" + app1Id + "\",\"" + app1Id + "\"]}")
+        .when().post("/api/approvals")
+        .then()
+            .statusCode(400)
+            .body("code", Matchers.equalTo("DUPLICATE_APPROVER"));
+    }
+
+    @Test
+    @Tag("WF-STEP-005")
+    void step_005_selfApproveReturns400() {
+        String requesterToken = ApprovalWorkflowTestSupport.obtainToken(
+            ApprovalWorkflowTestSupport.freshEmail("wfS5-req"), "MEMBER");
+        String requesterId = ApprovalWorkflowTestSupport.resolveUserId(requesterToken);
+
+        given()
+            .header("Authorization", "Bearer " + requesterToken)
+            .contentType(ContentType.JSON)
+            .body("{\"type\":\"budget\",\"approverUserIds\":[\"" + requesterId + "\"]}")
+        .when().post("/api/approvals")
+        .then()
+            .statusCode(400)
+            .body("code", Matchers.equalTo("SELF_APPROVE_FORBIDDEN"));
+    }
+
     // ─── QUERY family ────────────────────────────────────────────────────────
 
     @Test

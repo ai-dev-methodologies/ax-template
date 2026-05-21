@@ -6,8 +6,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -29,20 +31,24 @@ public class ApprovalService {
     private final ApprovalRequestRepository requestRepository;
     private final ApprovalRequestStateMachine requestStateMachine;
     private final ApprovalStepStateMachine stepStateMachine;
+    private final ApprovalWorkflowProperties properties;
     private final ObjectMapper objectMapper;
 
     public ApprovalService(ApprovalRequestRepository requestRepository,
                            ApprovalRequestStateMachine requestStateMachine,
                            ApprovalStepStateMachine stepStateMachine,
+                           ApprovalWorkflowProperties properties,
                            ObjectMapper objectMapper) {
         this.requestRepository = requestRepository;
         this.requestStateMachine = requestStateMachine;
         this.stepStateMachine = stepStateMachine;
+        this.properties = properties;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
     public ApprovalRequestResponse create(String requesterUserId, CreateApprovalRequest body) {
+        validateApprovers(requesterUserId, body.approverUserIds());
         ApprovalRequest request = ApprovalRequest.builder()
             .requesterUserId(requesterUserId)
             .type(body.type())
@@ -177,6 +183,29 @@ public class ApprovalService {
             throw new ApprovalRequestNotFoundException(id);  // 404 — IDOR-safe
         }
         return req;
+    }
+
+    /**
+     * WF-STEP-004 + WF-STEP-005 — closes two P1/P2 dogfood findings on R31-iter1:
+     * <ul>
+     *   <li>Duplicate approver in the list → DUPLICATE_APPROVER 400.</li>
+     *   <li>Requester appears in their own approver list → SELF_APPROVE_FORBIDDEN 400
+     *       (unless {@code approval-workflow.allow-self-approve=true}).</li>
+     * </ul>
+     */
+    private void validateApprovers(String requesterUserId, List<String> approverUserIds) {
+        Set<String> seen = new HashSet<>();
+        for (String id : approverUserIds) {
+            if (!seen.add(id)) {
+                throw new DuplicateApproverException(
+                    "approver '" + id + "' appears more than once in the approver list");
+            }
+            if (!properties.isAllowSelfApprove() && id.equals(requesterUserId)) {
+                throw new SelfApproveForbiddenException(
+                    "requester '" + requesterUserId + "' cannot appear in their own approver list "
+                    + "(set approval-workflow.allow-self-approve=true to override)");
+            }
+        }
     }
 
     private String serializePayload(Map<String, Object> payload) {

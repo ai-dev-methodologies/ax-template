@@ -128,6 +128,47 @@ items:
       a state where status changed but actedByUserId is null.
     policy_ref: "blueprints/approval-workflow-manifest.yaml#step_audit"
 
+  # ─── PAYLOAD family (1 item) ───────────────────────────────────────────────
+  - id: "WF-PAYLOAD-001"
+    chapter: "PAYLOAD"
+    requirement: "The request payload (the JSON blob captured at creation) is IMMUTABLE after the request transitions to SUBMITTED. A leaked write-side path that mutates payload mid-flight would let a requester change the substance under approvers between their reviews."
+    test_method: "Reflective JPA-shape test + state-machine unit assertion"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test (reflective): ApprovalRequest.payloadJson field's @Column.updatable() == false.
+      Test (behavioral): Hibernate-level UPDATE on payload_json after submit is rejected — JPA simply
+      ignores the change since the column is non-updatable. Implementation: @Column(updatable=false)
+      on ApprovalRequest.payloadJson. Defense-in-depth posture, not just convention.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#payload_immutability"
+
+  # ─── STEP-VALIDATION family (2 items) ──────────────────────────────────────
+  - id: "WF-STEP-004"
+    chapter: "STEP"
+    requirement: "Duplicate approverUserIds across steps are rejected at creation with HTTP 400 DUPLICATE_APPROVER. Sequential approval chains assume each approver appears at most once."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/approvals with approverUserIds=[A, B, A] → 400 with errorCode DUPLICATE_APPROVER.
+      Implementation: ApprovalService.create() asserts approver list set-size matches list-size before
+      building entities. Catches the common mistake of pasting the wrong userId twice when copying
+      a previous request.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#step_validation"
+
+  - id: "WF-STEP-005"
+    chapter: "STEP"
+    requirement: "The requester MUST NOT appear in their own approver list — self-approve is rejected with HTTP 400 SELF_APPROVE_FORBIDDEN."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates request with approverUserIds=[A's own userId] → 400 SELF_APPROVE_FORBIDDEN.
+      Korean enterprise 결재 default policy: 본인 결재 금지 (자기 자신 결재 불가). Implementation:
+      ApprovalService.create() compares each approverUserId to the authenticated caller before persist.
+      Fork-receivers needing self-approve flip the policy via {@code approval-workflow.allow-self-approve=true}.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#step_validation"
+
   # ─── QUERY family (2 items) ────────────────────────────────────────────────
   - id: "WF-QUERY-001"
     chapter: "QUERY"

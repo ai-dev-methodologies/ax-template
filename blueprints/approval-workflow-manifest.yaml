@@ -11,6 +11,20 @@ not_for:
   - "Dynamic approver routing based on request content (manager-of-requester lookup, etc.) — fork-receiver decides the resolver but this blueprint takes static approver list"
   - "Long-running multi-day workflows requiring reminders / escalation — escalation is out of scope for v1"
   - "Public-facing approval (customer review submissions) — this is an INTERNAL operations blueprint"
+  # ── R31-iter2 dogfood closures (explicit scope guards) ───────────────────
+  - "대결 / 위임 (delegate, reassign mid-flight) — a step's approverUserId is updatable=false at the JPA layer. Fork-receivers needing delegation should add a DelegationLink side table that maps original-approver → delegate-approver at the filter boundary, not by mutating this blueprint."
+  - "Multi-approver per step (요구사항: 한 단계에 N명 모두 승인) — one approverUserId per step row. Use multiple sequential steps for N-of-N 결재 (N개 row), or fork the state machine to PENDING_PARTIAL → APPROVED for true any-of-N / all-of-N semantics."
+  - "Event publication to external systems on transition — completion / rejection events do NOT auto-publish to notification / audit-log / webhook domains. Fork-receivers compose those domains via a domain event listener at the controller boundary."
+  - "Multi-tenant tenant scoping — v1 assumes single-tenant. Fork-receivers adopting multi-tenant SaaS MUST add a tenant_id column to approval_requests + approval_steps, an AOP guard against cross-tenant query leakage, and update SecurityConfig to derive the tenant from the authenticated principal. See specs/multi-tenant-l0.yaml#ISOLATION-001/002/003."
+
+# ─── deferred to v2 (R31-iter2 dogfood explicit deferrals) ─────────────────
+deferred_to_v2:
+  - id: "list_pagination"
+    reason: "GET /api/approvals + /inbox return the full set. Acceptable for v1 (request_limit_per_user soft cap = 200). v2 should add page/size + Cursor for tenants with >200 requests."
+  - id: "list_status_filter"
+    reason: "GET /api/approvals returns all of caller's own requests regardless of status. v2 should add ?status=APPROVED,REJECTED,SUBMITTED query parameter so 'show my completed approvals' is a single call."
+  - id: "explicit_cancel_actor_column"
+    reason: "ApprovalRequest currently relies on the invariant 'only requester can cancel' to infer the cancel actor. v2 should add cancelled_by_user_id + cancel_reason for true delegated cancel (admin override) scenarios."
 
 # ─── lifecycle ─────────────────────────────────────────────────────────────
 state_machines:
@@ -46,6 +60,29 @@ lifecycle:
 step_ordering:
   rule: "Steps act in strict ascending orderIndex. Acting on step N requires every step with orderIndex < N to be APPROVED."
   enforcement: "ApprovalService.approve() / reject() loads all sibling steps; out-of-order action returns 409 STEP_OUT_OF_ORDER."
+
+# ─── step validation (R31-iter1 dogfood closure) ───────────────────────────
+step_validation:
+  duplicate_approvers_rejected: true
+  duplicate_approver_response:
+    status: 400
+    error_code: DUPLICATE_APPROVER
+  self_approve_rejected: true
+  self_approve_response:
+    status: 400
+    error_code: SELF_APPROVE_FORBIDDEN
+  self_approve_policy_note: >
+    Korean enterprise 결재 default — 본인 결재 금지. Fork-receivers needing self-approve
+    (e.g. test fixtures, single-person small-team workflows) override via
+    {@code approval-workflow.allow-self-approve=true} in application.yml.
+
+# ─── payload immutability (R31-iter1 dogfood closure) ──────────────────────
+payload_immutability:
+  rule: "payload_json column is @Column(updatable=false). Hibernate ignores any update attempt."
+  motivation: >
+    P1 (KG이니시스 fintech) dogfood — a writer-side path that mutated payload mid-flight
+    would let a requester swap the substance under approvers between their reviews
+    (tampering risk on insurance claims, expense reports, vendor contracts).
 
 # ─── step audit ────────────────────────────────────────────────────────────
 step_audit:

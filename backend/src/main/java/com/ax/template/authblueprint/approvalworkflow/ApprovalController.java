@@ -119,6 +119,16 @@ public class ApprovalController {
         return problem(HttpStatus.CONFLICT, "ILLEGAL_TRANSITION", ex.getMessage());
     }
 
+    @ExceptionHandler(DuplicateApproverException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicate(DuplicateApproverException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "DUPLICATE_APPROVER", ex.getMessage());
+    }
+
+    @ExceptionHandler(SelfApproveForbiddenException.class)
+    public ResponseEntity<ProblemDetail> handleSelfApprove(SelfApproveForbiddenException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "SELF_APPROVE_FORBIDDEN", ex.getMessage());
+    }
+
     private static ResponseEntity<ProblemDetail> problem(HttpStatus status, String code, String detail) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, detail);
         pd.setProperty("code", code);

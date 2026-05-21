@@ -53,7 +53,12 @@ public class ApprovalRequest {
     @Column(name = "title", length = 128)
     private String title;
 
-    @Column(name = "payload_json", length = 16384)
+    /**
+     * Payload JSON captured at creation. {@code updatable=false} closes WF-PAYLOAD-001 —
+     * the request body that approvers see at submit time CANNOT be silently swapped under
+     * them mid-flight. Hibernate ignores any update attempt at the persistence layer.
+     */
+    @Column(name = "payload_json", length = 16384, updatable = false)
     private String payloadJson;
 
     @Enumerated(EnumType.STRING)
