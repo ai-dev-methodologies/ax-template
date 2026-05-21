@@ -44,6 +44,11 @@ dependencies {
     // CSV import — PRACTICES-INTEG-002 (chunked-import-required-when-rowcount-gt-1000)
     implementation("com.opencsv:opencsv:5.9")
 
+    // XLSX generation — report-export domain (EXPORT-FORMAT-001 / EXPORT-INJECT-002).
+    // SXSSF streaming workbook keeps memory bounded for large exports (manifest:
+    // blueprints/report-export-manifest.yaml#xlsx.window_size).
+    implementation("org.apache.poi:poi-ooxml:5.2.5")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.testcontainers:junit-jupiter")
@@ -193,6 +198,15 @@ tasks.register<Test>("testEcommerce") {
         includeTags("ECOMMERCE")
     }
     description = "Run e-commerce capstone end-to-end tests (R23: recipes/e-commerce/RECIPE.md — composes crud + payment + notification + audit-log + search)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testReportExport") {
+    useJUnitPlatform {
+        includeTags("REPORT_EXPORT")
+    }
+    description = "Run report-export domain compliance tests (R29: 11 items / 4 families — AUTHZ, LIFECYCLE, INJECT (CWE-1236), FORMAT)"
     group = "verification"
     shouldRunAfter("test")
 }

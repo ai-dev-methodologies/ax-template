@@ -1,0 +1,278 @@
+openapi: 3.0.3
+info:
+  title: "ax-template Report Export API"
+  version: "0.1.0"
+  description: >
+    Async report generation domain. POST creates a PENDING job, a background worker
+    transitions PENDING → RUNNING → COMPLETED|FAILED, and the COMPLETED file is
+    streamed via the download endpoint. CSV and XLSX formats are supported; both
+    apply formula-injection neutralization (OWASP CSV Injection / CWE-1236).
+servers:
+  - url: /api
+paths:
+  /exports:
+    post:
+      summary: "Create a new export job"
+      operationId: createExportJob
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExportRequest'
+      responses:
+        '202':
+          description: Accepted — job created in PENDING status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '400':
+          description: Bad request (unsupported format, too many rows, validation error)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: "List the caller's export jobs"
+      operationId: listExportJobs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobListResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /exports/{jobId}:
+    get:
+      summary: "Get current status of an export job"
+      operationId: getExportJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '401':
+          description: Authentication required
+        '404':
+          description: Job not found OR not owned by caller (IDOR-safe response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: "Cancel a PENDING job or remove a COMPLETED/FAILED record"
+      operationId: deleteExportJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Authentication required
+        '404':
+          description: Job not found OR not owned by caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /exports/{jobId}/download:
+    get:
+      summary: "Download the generated report file"
+      operationId: downloadExportJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: File stream — Content-Type matches the requested format
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Authentication required
+        '404':
+          description: Job not found OR not owned by caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Job is not yet COMPLETED — try again after polling status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateExportRequest:
+      type: object
+      required: [format]
+      properties:
+        format:
+          type: string
+          enum: [csv, xlsx]
+          description: "Output format. Only values declared in blueprints/report-export-manifest.yaml#formats are accepted."
+        name:
+          type: string
+          maxLength: 128
+          description: "Optional human-readable name for the export"
+        query:
+          type: object
+          additionalProperties: true
+          description: "Optional query parameters; shape is application-defined and validated server-side"
+
+    ExportJobResponse:
+      type: object
+      required: [jobId, status, format, createdAt]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, RUNNING, COMPLETED, FAILED, CANCELLED]
+        format:
+          type: string
+          enum: [csv, xlsx]
+        name:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        rowCount:
+          type: integer
+          nullable: true
+        sizeBytes:
+          type: integer
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        downloadAvailable:
+          type: boolean
+          description: "True iff status=COMPLETED and the underlying file is still present"
+
+    ExportJobListResponse:
+      type: object
+      required: [items, page, size, totalElements]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExportJobResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationErrorResponse:
+      type: object
+      required: [message, errors]
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field:
+                type: string
+              message:
+                type: string

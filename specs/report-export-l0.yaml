@@ -1,0 +1,139 @@
+version: "1.0.0"
+scope: "report-export-domain"
+stack: "Spring Boot 3.2.x + JPA + @Async worker + Apache POI (XLSX) + UTF-8-BOM CSV"
+standard: "RFC 4180 (CSV) + ECMA-376 (Office Open XML) + OWASP CSV Injection Prevention + CWE-1236 (Improper Neutralization of Formula Elements in CSV)"
+items:
+  # ─── AUTHZ family (3 items) ────────────────────────────────────────────────
+  - id: "EXPORT-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All report-export endpoints require a valid authenticated session; unauthenticated requests are rejected with HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: call each of POST /api/exports, GET /api/exports, GET /api/exports/{id},
+      GET /api/exports/{id}/download, DELETE /api/exports/{id} without a JWT → 401.
+      Implementation: SecurityConfig maps /api/exports/** to authenticated().
+      Aligns with FILE-AUTHZ-001 pattern (no endpoint accidentally exposed).
+    policy_ref: "blueprints/report-export-manifest.yaml#authz"
+
+  - id: "EXPORT-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Cross-user IDOR is denied: a request for another user's export job returns HTTP 404 to avoid information leakage about job existence."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates an export job. UserB calls GET /api/exports/{userA_job_id} → 404 (not 403).
+      404 prevents enumeration of valid job IDs. Implementation: service filters by ownerUserId = caller;
+      no match → EntityNotFoundException → 404. Reference: OWASP ASVS V4.2.1.
+    policy_ref: "blueprints/report-export-manifest.yaml#authz"
+
+  - id: "EXPORT-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "Download of an export file is restricted to the job owner; download by a different authenticated user returns HTTP 404."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates and completes a job. UserB (different JWT) GET /api/exports/{id}/download → 404.
+      Service layer checks ownership before streaming. Aligns with FILE-AUTHZ-003 (404 over 403 for downloads).
+    policy_ref: "blueprints/report-export-manifest.yaml#authz"
+
+  # ─── LIFECYCLE family (4 items) ────────────────────────────────────────────
+  - id: "EXPORT-LIFECYCLE-001"
+    chapter: "LIFECYCLE"
+    requirement: "POST /api/exports creates a job in PENDING status and returns 202 Accepted with the assigned jobId."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST /api/exports {format:csv, query:{}} → 202 with body {jobId:UUID, status:'PENDING'}.
+      Implementation: ReportExportService.createJob() persists ExportJob with status=PENDING and returns immediately.
+      The actual report generation is performed by ExportWorker in a separate thread (@Async).
+    policy_ref: "blueprints/report-export-manifest.yaml#lifecycle"
+
+  - id: "EXPORT-LIFECYCLE-002"
+    chapter: "LIFECYCLE"
+    requirement: "GET /api/exports/{id} returns the current job status — one of PENDING, RUNNING, COMPLETED, FAILED, CANCELLED."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create job, poll GET /api/exports/{id} → status field is one of the 5 enum values.
+      Implementation: ExportJobResponse.status mirrors ExportJobStatus enum. Polling consumers use this.
+    policy_ref: "blueprints/report-export-manifest.yaml#lifecycle"
+
+  - id: "EXPORT-LIFECYCLE-003"
+    chapter: "LIFECYCLE"
+    requirement: "Download is only allowed when job status=COMPLETED; downloads against non-COMPLETED jobs return HTTP 409 Conflict."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: create job (PENDING) → GET /api/exports/{id}/download → 409 with errorCode JOB_NOT_READY.
+      Implementation: ReportExportService.download() throws JobNotReadyException unless status=COMPLETED.
+    policy_ref: "blueprints/report-export-manifest.yaml#lifecycle"
+
+  - id: "EXPORT-LIFECYCLE-004"
+    chapter: "LIFECYCLE"
+    requirement: "Job state transitions follow the documented state machine; illegal transitions throw IllegalStateException and are not persisted."
+    test_method: "Unit test against ExportJobStateMachine"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      State machine: PENDING → RUNNING → COMPLETED | FAILED; PENDING → CANCELLED.
+      Test: attempt RUNNING → PENDING or COMPLETED → RUNNING → IllegalStateException.
+      Implementation: ExportJobStateMachine is the sole mutator of ExportJob.status (Payment pattern reuse).
+    policy_ref: "blueprints/report-export-manifest.yaml#lifecycle"
+
+  # ─── INJECT family (2 items) — CSV / XLSX formula injection prevention ──
+  - id: "EXPORT-INJECT-001"
+    chapter: "INJECT"
+    requirement: "CSV cell values starting with formula-trigger characters (=, +, -, @, tab, CR) MUST be neutralized with a leading single-quote so that spreadsheet apps do not evaluate them as formulas (CWE-1236)."
+    test_method: "Unit test against CsvWriter + integration test downloading generated CSV"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: CsvWriter.escapeCell("=cmd|' /C calc'!A0") → "'=cmd|' /C calc'!A0".
+      Integration test: seed a row whose value starts with '=', complete the job, download CSV,
+      assert the byte sequence on disk begins with "'=" (single-quote prefix).
+      Reference: OWASP CSV Injection Prevention Cheat Sheet.
+    policy_ref: "blueprints/report-export-manifest.yaml#security"
+
+  - id: "EXPORT-INJECT-002"
+    chapter: "INJECT"
+    requirement: "XLSX cell values starting with formula-trigger characters MUST be written as inline strings (not formulas) with a leading single-quote, matching the CSV neutralization rule for cross-format consistency."
+    test_method: "Unit test against XlsxWriter + integration test downloading generated XLSX"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: XlsxWriter writes a row containing "=HYPERLINK(...)". Open the resulting .xlsx with Apache POI
+      and assert the cell type is STRING and the value starts with "'=".
+      Implementation: Apache POI Cell.setCellType(STRING) + setCellValue with neutralized string.
+      The XlsxWriter uses the same neutralization helper as CsvWriter.
+    policy_ref: "blueprints/report-export-manifest.yaml#security"
+
+  # ─── FORMAT family (2 items) ───────────────────────────────────────────────
+  - id: "EXPORT-FORMAT-001"
+    chapter: "FORMAT"
+    requirement: "format=csv produces an RFC 4180 compliant file served with Content-Type text/csv; charset UTF-8 with BOM so that Microsoft Excel auto-detects encoding."
+    test_method: "RestAssured integration test downloading generated CSV"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create+complete a CSV job, GET /api/exports/{id}/download → Content-Type text/csv;
+      assert first 3 bytes of body == EF BB BF (UTF-8 BOM); fields are CRLF separated.
+      Implementation: CsvWriter writes BOM then RFC 4180 records (CRLF line endings, double-quote escaping).
+    policy_ref: "blueprints/report-export-manifest.yaml#csv"
+
+  - id: "EXPORT-FORMAT-002"
+    chapter: "FORMAT"
+    requirement: "Unsupported format values are rejected at job creation with HTTP 400 and errorCode UNSUPPORTED_FORMAT; only formats declared in the manifest are accepted."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/exports {format:'pdf'} → 400 (manifest only declares [csv, xlsx]).
+      Implementation: ExportFormat enum parsing rejects unknown values; GlobalExceptionHandler maps to 400.
+    policy_ref: "blueprints/report-export-manifest.yaml#formats"

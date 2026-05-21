@@ -96,6 +96,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/ecommerce/products").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/ecommerce/products/*").permitAll()
                 .requestMatchers("/api/ecommerce/**").authenticated()
+                // Report-export domain — every endpoint requires a valid JWT
+                // (EXPORT-AUTHZ-001). Owner-only access is then enforced inside
+                // ReportExportService.
+                .requestMatchers("/api/exports/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per

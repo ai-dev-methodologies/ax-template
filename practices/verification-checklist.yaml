@@ -56,7 +56,7 @@ checklist:
 
   # ── 2. Per-domain test tasks (the catalog's binary pass/fail surface) ───────
   - id: per-domain-tests
-    title: "Per-domain ./gradlew test{Domain} suite (17 domains)"
+    title: "Per-domain ./gradlew test{Domain} suite (18 domains)"
     parallel: false  # gradle daemon serializes anyway; keep stderr deterministic
     commands:
       - command: "./gradlew testAsvs"
@@ -102,6 +102,9 @@ checklist:
         working_directory: "backend"
         expected_exit: 0
       - command: "./gradlew testEcommerce"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testReportExport"
         working_directory: "backend"
         expected_exit: 0
       - command: "./gradlew testIntegration"

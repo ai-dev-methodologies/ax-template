@@ -191,6 +191,7 @@ task 전 GREEN + aggregate `./gradlew test` 는 advisory PortabilityCyclic
 | `./gradlew testAuditLog`       | GREEN    | 11/11 PASS |
 | `./gradlew testFileStorage`    | GREEN    | 12/12 PASS |
 | `./gradlew testSearch`         | GREEN    | 8/8 PASS |
+| `./gradlew testReportExport`   | GREEN    | 23/23 PASS. R29 backend impl: ExportJob/Status/Format + ExportJobStateMachine (sole mutator) + ExportWorker (@Scheduled poller + processOne for synchronous test path) + CsvWriter (RFC 4180 + UTF-8 BOM) + XlsxWriter (Apache POI SXSSF streaming) + FormulaInjectionGuard (shared CWE-1236 neutralizer for CSV + XLSX). 11 spec items / 4 families (AUTHZ, LIFECYCLE, INJECT, FORMAT). 의존성 추가: org.apache.poi:poi-ooxml:5.2.5 |
 | `./gradlew testPortability`    | advisory | 외부 fixture (spring-realworld-example-app) 에 cycle 있음. fork-receiver의 코드가 아니라 외부 reference 코드의 결함 |
 
 전체 `./gradlew test` aggregate 도 **PortabilityCyclic advisory 1건을 제외하면

@@ -1,0 +1,140 @@
+template_id: "report-export-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "Generate downloadable reports (CSV/XLSX) from existing entity data — admin dashboards, audit exports, customer-facing data exports"
+  - "Long-running export jobs (>3 seconds) that should not block the HTTP request thread"
+  - "Per-user authorization on exported data; the requesting user only sees their own rows by default"
+
+not_for:
+  - "Real-time streaming analytics (use a dedicated streaming pipeline / SSE / WebSocket instead)"
+  - "PDF generation with complex page layout (out of scope for v1 — manifest does not declare PDF format)"
+  - "Server-side rendered HTML reports (use a templating engine + browser print, not this domain)"
+  - "Exports >100k rows in a single job (advisory limit — split into multiple jobs or build a dedicated bulk pipeline)"
+
+# ─── authz ─────────────────────────────────────────────────────────────────
+authz:
+  endpoint_pattern: "/api/exports/**"
+  authentication_required: true
+  ownership_check:
+    enabled: true
+    cross_user_response: 404_not_403
+    note: "Returning 404 instead of 403 prevents enumeration of valid jobIds. Same convention as file-storage domain."
+
+# ─── lifecycle ─────────────────────────────────────────────────────────────
+lifecycle:
+  state_machine:
+    description: "Sole mutator pattern — only ExportJobStateMachine mutates ExportJob.status."
+    transitions:
+      - from: PENDING
+        to: [RUNNING, CANCELLED]
+      - from: RUNNING
+        to: [COMPLETED, FAILED]
+      - from: COMPLETED
+        to: []
+      - from: FAILED
+        to: []
+      - from: CANCELLED
+        to: []
+  download_requires_status: COMPLETED
+  download_unavailable_status_code: 409
+  download_unavailable_error_code: JOB_NOT_READY
+  ttl_after_complete_hours: 24
+  ttl_note: >
+    Completed jobs and their stored files are eligible for purge after 24h.
+    Purge is performed by the scheduled-task domain (separate concern); this domain
+    only marks the boundary. Fork-receivers can adjust based on retention requirements.
+
+# ─── formats ───────────────────────────────────────────────────────────────
+formats:
+  allowed: [csv, xlsx]
+  default: csv
+  rejected_response:
+    status: 400
+    error_code: UNSUPPORTED_FORMAT
+
+# ─── csv ───────────────────────────────────────────────────────────────────
+csv:
+  delimiter: ","
+  line_ending: "\r\n"                   # RFC 4180 §2.1
+  encoding: "UTF-8"
+  byte_order_mark: true                 # EF BB BF prefix for Excel auto-detection
+  quote_character: '"'
+  escape_double_quote_by_doubling: true # RFC 4180 §2.7 — quote → ""
+  content_type: "text/csv"
+
+# ─── xlsx ──────────────────────────────────────────────────────────────────
+xlsx:
+  apache_poi_streaming: true            # SXSSF — bounded memory for large exports
+  window_size: 1000                     # rows kept in memory before flushing to temp file
+  content_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  sheet_name: "data"
+
+# ─── security ──────────────────────────────────────────────────────────────
+security:
+  formula_injection_prevention:
+    enabled: true
+    description: >
+      Cells whose first character is in the formula-trigger set (=, +, -, @, TAB, CR)
+      are prefixed with a single-quote so that spreadsheet applications treat them
+      as literal text. Applies to BOTH CSV and XLSX writers via a shared helper.
+    trigger_characters: ["=", "+", "-", "@", "\t", "\r"]
+    neutralization: "Prefix with apostrophe ' (U+0027)"
+    references:
+      - "OWASP CSV Injection Prevention Cheat Sheet"
+      - "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+  max_rows_per_job: 100000
+  max_rows_response:
+    status: 400
+    error_code: TOO_MANY_ROWS
+
+# ─── worker ────────────────────────────────────────────────────────────────
+worker:
+  execution_model: "@Async + @Scheduled poller"
+  concurrency: 4                        # Spring TaskExecutor pool size
+  poll_interval_ms: 1000
+  pickup_strategy: "PENDING with oldest createdAt first; pessimistic lock to avoid double-pickup"
+  failure_handling:
+    transition_to: FAILED
+    record_error_message: true
+    no_automatic_retry: true            # explicit re-submission by user instead of opaque retry storms
+
+# Test baseline
+testing_baseline:
+  unit: "JUnit 5 + AssertJ + Mockito"
+  integration: "RestAssured black-box HTTP against @SpringBootTest RANDOM_PORT"
+  e2e: "Composed implicitly via ./gradlew test (aggregate)"
+
+# Verification checkpoints
+verification_checkpoints:
+  - "POST /api/exports creates PENDING job (EXPORT-LIFECYCLE-001)"
+  - "Worker picks up PENDING and transitions to COMPLETED (EXPORT-LIFECYCLE-002)"
+  - "Download blocked while not COMPLETED (EXPORT-LIFECYCLE-003)"
+  - "State machine rejects illegal transitions (EXPORT-LIFECYCLE-004)"
+  - "CSV / XLSX formula injection neutralized (EXPORT-INJECT-001, EXPORT-INJECT-002)"
+  - "CSV has UTF-8 BOM (EXPORT-FORMAT-001)"
+  - "Unsupported format → 400 (EXPORT-FORMAT-002)"
+  - "Cross-user IDOR → 404 (EXPORT-AUTHZ-002, EXPORT-AUTHZ-003)"
+
+# Forbidden patterns
+must_not:
+  - "Mutate ExportJob.status outside ExportJobStateMachine"
+  - "Stream raw user input into CSV/XLSX without the injection-neutralization helper"
+  - "Return 403 for cross-user job access — must return 404"
+  - "Perform export work on the HTTP request thread (always @Async worker)"
+  - "Hold a file > max_rows_per_job in memory before writing — use SXSSF streaming for XLSX"
+
+# Rejection triggers
+reject_if:
+  - "format not in [csv, xlsx]"
+  - "row count for the requested query > max_rows_per_job"
+  - "downloading a job that is not COMPLETED (returns 409 JOB_NOT_READY)"
+  - "downloading a job that does not belong to the caller (returns 404)"
+
+# Reference precedence
+source_precedence:
+  - "RFC 4180 (CSV format)"
+  - "ECMA-376 Part 1 (Office Open XML — XLSX)"
+  - "OWASP CSV Injection Prevention Cheat Sheet"
+  - "CWE-1236 (Formula Elements in CSV)"
+  - "Apache POI documentation (XLSX writer implementation guidance)"
