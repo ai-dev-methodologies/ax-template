@@ -33,7 +33,7 @@ class SearchIndexTest {
     }
 
     @Test
-    @Tag("search")
+    @Tag("SEARCH")
     @Tag("SEARCH-INDEX-001")
     void index_001_indexedDocumentIsFindable() {
         String token = SearchTestSupport.obtainToken(
@@ -62,7 +62,7 @@ class SearchIndexTest {
     }
 
     @Test
-    @Tag("search")
+    @Tag("SEARCH")
     @Tag("SEARCH-INDEX-002")
     void index_002_deletedDocumentIsNotFindable() {
         String token = SearchTestSupport.obtainToken(

@@ -32,7 +32,7 @@ class SearchAuthZTest {
     }
 
     @Test
-    @Tag("search")
+    @Tag("SEARCH")
     @Tag("SEARCH-AUTHZ-001")
     void authz_001_unauthenticatedRequestsAre401() {
         given().contentType(ContentType.JSON).body("{\"query\":\"hi\"}")
@@ -50,7 +50,7 @@ class SearchAuthZTest {
     }
 
     @Test
-    @Tag("search")
+    @Tag("SEARCH")
     @Tag("SEARCH-AUTHZ-002")
     void authz_002_crossTenantResultsAreEmpty() {
         String tokenA = SearchTestSupport.obtainToken(

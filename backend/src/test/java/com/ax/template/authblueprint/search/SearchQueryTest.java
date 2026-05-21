@@ -32,7 +32,7 @@ class SearchQueryTest {
     }
 
     @Test
-    @Tag("search")
+    @Tag("SEARCH")
     @Tag("SEARCH-QUERY-001")
     void query_001_returnsPaginatedResultPage() {
         String token = SearchTestSupport.obtainToken(
@@ -64,7 +64,7 @@ class SearchQueryTest {
     }
 
     @Test
-    @Tag("search")
+    @Tag("SEARCH")
     @Tag("SEARCH-QUERY-002")
     void query_002_koreanSubstringMatches() {
         String token = SearchTestSupport.obtainToken(
@@ -97,7 +97,7 @@ class SearchQueryTest {
     }
 
     @Test
-    @Tag("search")
+    @Tag("SEARCH")
     @Tag("SEARCH-QUERY-003")
     void query_003_blankQueryReturns400WithProblemDetail() {
         String token = SearchTestSupport.obtainToken(

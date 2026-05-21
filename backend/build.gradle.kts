@@ -118,7 +118,7 @@ tasks.register<Test>("testIntegration") {
 
 tasks.register<Test>("testSearch") {
     useJUnitPlatform {
-        includeTags("search")
+        includeTags("SEARCH")
     }
     description = "Run SP26 search domain compliance tests (SEARCH-AUTHZ, SEARCH-QUERY, SEARCH-INDEX, SEARCH-BACKEND)"
     group = "verification"

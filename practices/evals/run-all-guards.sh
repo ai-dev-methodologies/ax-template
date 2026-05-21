@@ -696,6 +696,56 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/webclient_async_tenant_scope_guard.sh" --fixtures
 fi
 
+# ── 32. recipe_invariant_spec_normalization_guard
+#       (R24 — enforcement-loop-closure, 47th guard) ─────────────────────────
+echo ""
+echo "[32] recipe_invariant_spec_normalization_guard.sh (live repo + passing fixture)"
+# R24 35th-new hard guard (catalog total: 47).
+# Closes the catalog enforcement-loop gap surfaced in R24 root-cause-fix mode:
+# every business invariant ID prefixed with a recipe's own UPPERCASE prefix
+# (e.g. ECOM-INV-001 in recipes/e-commerce/RECIPE.md, B2B-ADMIN-INV-003 in
+# recipes/b2b-admin/RECIPE.md) MUST appear in the matching recipe spec
+# (specs/recipes/<slug>-recipe-l0.yaml#business_invariants[].id). RECIPE.md is
+# narrative; the spec yaml is the surface that downstream guards (substance,
+# cross_recipe_inv_uniqueness, recipe_spec_referential_integrity,
+# spec_policy_ref) actually read. Before this guard a maintainer could add an
+# INV-XYZ paragraph to RECIPE.md without normalizing it to the spec and every
+# mechanical check would silently skip it — catalog vision "규칙 밖 AI output
+# BLOCKED" leaked at the recipe-narrative-to-spec boundary.
+run_guard "recipe_invariant_spec_normalization/live" 0 \
+    bash "$SCRIPT_DIR/recipe_invariant_spec_normalization_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[32f] recipe_invariant_spec_normalization_guard.sh --fixtures"
+    run_guard "recipe_invariant_spec_normalization/fixtures" 0 \
+        bash "$SCRIPT_DIR/recipe_invariant_spec_normalization_guard.sh" --fixtures
+fi
+
+# ── 33. test_tag_naming_convention_guard
+#       (R24 — enforcement-loop-closure, 48th guard) ─────────────────────────
+echo ""
+echo "[33] test_tag_naming_convention_guard.sh (live repo + passing fixture)"
+# R24 36th-new hard guard (catalog total: 48).
+# Closes the catalog enforcement-loop gap surfaced in R24 root-cause-fix mode:
+# every backend JUnit @Tag("...") value MUST follow the catalog UPPERCASE
+# convention — pattern ^[A-Z][A-Z0-9_.-]*$ . The per-domain test tasks in
+# backend/build.gradle.kts (testAsvs/testPayment/testCrud/testSearch/...)
+# pivot on these tag values via includeTags("UPPERCASE"); tag drift silently
+# excludes tests from `./gradlew test{Domain}` runs and breaks the catalog
+# promise of "single command binary pass/fail". R24 surfaced 8 lowercase
+# @Tag("search") drifts in backend/src/test/.../search/*.java that this
+# guard catches mechanically + retroactively (and at PR time going forward).
+run_guard "test_tag_naming_convention/live" 0 \
+    bash "$SCRIPT_DIR/test_tag_naming_convention_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[33f] test_tag_naming_convention_guard.sh --fixtures"
+    run_guard "test_tag_naming_convention/fixtures" 0 \
+        bash "$SCRIPT_DIR/test_tag_naming_convention_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
