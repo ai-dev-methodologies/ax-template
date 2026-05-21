@@ -7,6 +7,13 @@
 # Exit 0 if all expected exits match.
 # Exit 1 with summary if any mismatch.
 #
+# NOTE (R25): completion_checklist_recency_guard.sh (49th hard guard) is
+# intentionally NOT invoked from this script. It audits the audit log that
+# verify-completion.sh writes — including it here would create a self-
+# referential cycle (verify-completion → this script → 49th guard → log
+# that does not yet exist for the current run). The 49th guard runs from
+# `.githooks/pre-push` and can be invoked standalone. See HOOKS-GUIDE.md.
+#
 # Usage:
 #   bash practices/evals/run-all-guards.sh
 #   bash practices/evals/run-all-guards.sh --include-fixtures
