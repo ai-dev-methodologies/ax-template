@@ -1,0 +1,158 @@
+version: "1.0.0"
+scope: "tag-categorization-domain"
+stack: "Spring Boot 3.2.x + JPA + polymorphic TagAttachment (entity-agnostic via entity_type/entity_id pair)"
+standard: "Standard taxonomic tagging pattern — parent/child hierarchy + entity-agnostic attachment + slug-based stable identifier (cf. WordPress taxonomy, Strapi categories, Korean enterprise CMS 분류 체계)"
+items:
+  # ─── CRUD family (4 items) ────────────────────────────────────────────────
+  - id: "TAG-CRUD-001"
+    chapter: "CRUD"
+    requirement: "POST /api/tags creates a tag and auto-generates a URL-safe slug from the name (lowercase, ASCII, hyphenated, Korean transliterated to romanization). The slug is unique and IMMUTABLE after creation."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST {name: 'New Product Line'} → 201 with slug='new-product-line'. POST {name: '신상품'}
+      → slug starts with 'tag-' fallback because basic ASCII slugifier strips non-ASCII (Korean).
+      Implementation: TagSlugger lowercase + ASCII filter + hyphenate; fallback to 'tag-<uuid8>' when
+      no ASCII chars remain. Duplicate slug → 400 DUPLICATE_SLUG. Subsequent PUT cannot change slug.
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#crud"
+
+  - id: "TAG-CRUD-002"
+    chapter: "CRUD"
+    requirement: "GET /api/tags lists tags. The optional {@code ?parent=<id>} query parameter scopes the list to immediate children of the given parent; without it the response is top-level tags only (parentTagId IS NULL)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create 3 top-level tags + 2 children of one of them.
+      GET /api/tags → 3 items (top-level only).
+      GET /api/tags?parent=<id> → 2 items (children only). Implementation: repository finder
+      findByParentTagIdIsNull / findByParentTagId.
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#crud"
+
+  - id: "TAG-CRUD-003"
+    chapter: "CRUD"
+    requirement: "PUT /api/tags/{id} updates name and color. Slug is immutable; parentTagId is immutable (TAG-HIER-001 cycle prevention)."
+    test_method: "RestAssured integration test + reflective JPA assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test (behavioral): PUT {name: 'Renamed'} → 200, slug unchanged.
+      Test (reflective): Tag.slug field @Column.updatable() == false; Tag.parentTagId @Column.updatable() == false.
+      Implementation: TagService.update() only writes name + color; the JPA layer would ignore other
+      mutations anyway. Reflective test is defense-in-depth.
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#crud"
+
+  - id: "TAG-CRUD-004"
+    chapter: "CRUD"
+    requirement: "DELETE /api/tags/{id} removes the tag and CASCADE-removes all TagAttachment rows that reference it. The FK is declared with ON DELETE CASCADE; deletion never strands an orphan attachment."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create tag, attach to 2 entities, DELETE tag → 204. GET by-entity for both entities now
+      returns empty arrays (attachments cleaned). Implementation: TagAttachmentRepository deleteByTagId
+      in @Transactional + JPA cascade on the OneToMany. Note: TAG-HIER-003 covers the parent-with-children
+      case separately (requires ?cascade=true).
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#crud"
+
+  # ─── ATTACHMENT family (3 items) ──────────────────────────────────────────
+  - id: "TAG-ATTACH-001"
+    chapter: "ATTACHMENT"
+    requirement: "POST /api/tags/{tagId}/attach {entityType, entityId} creates a TagAttachment. The operation is idempotent — a second call with the same (tagId, entityType, entityId) returns 200 OK referencing the existing attachment, not 409 Conflict."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST attach → 201. Same POST again → 200 (idempotent). DB has exactly 1 attachment row.
+      Implementation: TagService.attach() runs findByTagIdAndEntity first; if present, returns existing;
+      else inserts. Unique constraint (tag_id, entity_type, entity_id) is the structural backstop.
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#attachment"
+
+  - id: "TAG-ATTACH-002"
+    chapter: "ATTACHMENT"
+    requirement: "DELETE /api/tags/{tagId}/attach/{entityType}/{entityId} removes the attachment. Detaching a non-existent attachment returns 204 (idempotent — matches DELETE semantics of HTTP RFC 9110 §9.3.5)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: attach → DELETE → 204. Second DELETE → 204 (idempotent — no error on missing).
+      Implementation: TagService.detach() — repository.deleteByTagIdAndEntity returns row count
+      but service ignores it. CONSISTENT with the HTTP DELETE idempotency contract.
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#attachment"
+
+  - id: "TAG-ATTACH-003"
+    chapter: "ATTACHMENT"
+    requirement: "GET /api/tags/by-entity/{entityType}/{entityId} returns all tags currently attached to the given entity, ordered by Tag.name ASC. Entity types not present in the system (no rows) return an empty list, NOT 404."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: attach 2 tags to entity, GET by-entity → 2 tags ordered by name.
+      GET by-entity for a freshly-invented entityType → empty array, status 200.
+      Implementation: repository finder joins TagAttachment with Tag, filters on entity pair.
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#attachment"
+
+  # ─── HIERARCHY family (3 items) ───────────────────────────────────────────
+  - id: "TAG-HIER-001"
+    chapter: "HIERARCHY"
+    requirement: "Cycle prevention: parentTagId is settable only at creation. It is JPA @Column(updatable=false), making mid-life cycle introductions structurally impossible at the persistence layer."
+    test_method: "Reflective JPA assertion + unit test of TagService.create rejecting self-parent"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test (reflective): Tag.parentTagId @Column.updatable() == false.
+      Test (behavioral): TagService.create with parentTagId = own id (synthetic) → IllegalArgumentException.
+      Catalog stance: forbidding parent reassignment is the cheapest cycle defense; fork-receivers
+      needing reassignment must layer a topological-sort check on top.
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#hierarchy"
+
+  - id: "TAG-HIER-002"
+    chapter: "HIERARCHY"
+    requirement: "Creating a child tag (parentTagId set) requires the parent to exist; missing parent → 400 PARENT_NOT_FOUND."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST {name: 'orphan child', parentTagId: <random uuid>} → 400 PARENT_NOT_FOUND.
+      Implementation: TagService.create() loads parent first if parentTagId non-null.
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#hierarchy"
+
+  - id: "TAG-HIER-003"
+    chapter: "HIERARCHY"
+    requirement: "Deleting a tag that has children is rejected with HTTP 409 TAG_HAS_CHILDREN unless the caller passes ?cascade=true, in which case the entire subtree is deleted (children, their children, etc.) along with all attachments."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: create parent + child. DELETE parent → 409 TAG_HAS_CHILDREN.
+      DELETE parent?cascade=true → 204; both parent + child are gone, both attachment sets are gone.
+      Implementation: TagService.delete(id, cascade) loads children; without cascade, throws; with cascade,
+      recursively deletes (small fan-outs assumed; v2 could replace with CTE).
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#hierarchy"
+
+  # ─── AUTHZ family (2 items) ───────────────────────────────────────────────
+  - id: "TAG-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All tag-categorization endpoints require a valid JWT; unauthenticated callers receive HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/tags, GET /api/tags, GET /api/tags/{id}, PUT /api/tags/{id}, DELETE /api/tags/{id},
+      POST .../attach, DELETE .../attach/..., GET .../by-entity/... all → 401 without Authorization.
+      Implementation: SecurityConfig matcher /api/tags/** authenticated().
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#authz"
+
+  - id: "TAG-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Tag DEFINITION mutations (POST /api/tags, PUT /api/tags/{id}, DELETE /api/tags/{id}) require ROLE_ADMIN. Tag ATTACHMENT (attach/detach) requires authenticated only — any user can apply a tag from the taxonomy to entities they own. Cross-user attach authz is the fork-receiver's responsibility (delegated to the EntityType-specific service)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: MEMBER token → POST /api/tags → 403. ADMIN token → POST /api/tags → 201.
+      MEMBER token → POST .../attach → 200 (attach is not admin-gated).
+      Implementation: @PreAuthorize on TagController write methods; attach endpoint uses
+      default authenticated() via SecurityConfig only.
+    policy_ref: "blueprints/tag-categorization-manifest.yaml#authz"

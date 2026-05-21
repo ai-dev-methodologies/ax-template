@@ -229,6 +229,15 @@ tasks.register<Test>("testApprovalWorkflow") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testTagCategorization") {
+    useJUnitPlatform {
+        includeTags("TAGGING")
+    }
+    description = "Run tag-categorization domain compliance tests (R32: 12 items / 4 families — CRUD, ATTACHMENT, HIERARCHY, AUTHZ)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

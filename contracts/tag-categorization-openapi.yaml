@@ -1,0 +1,204 @@
+openapi: 3.0.3
+info:
+  title: "ax-template Tag Categorization API"
+  version: "0.1.0"
+  description: >
+    Entity-agnostic tag system — admin-curated taxonomy + per-user attachment
+    against any (entityType, entityId) pair. Parent/child hierarchy with cycle
+    defense via immutable parentTagId after creation.
+servers:
+  - url: /api
+paths:
+  /tags:
+    post:
+      summary: "Create a tag (admin only)"
+      operationId: createTag
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTagRequest' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/TagResponse' } } }
+        '400':
+          description: Duplicate slug or missing parent
+        '401':
+          description: Authentication required
+        '403':
+          description: ROLE_ADMIN required
+    get:
+      summary: "List tags (top-level or under a parent)"
+      operationId: listTags
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: parent
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: List
+          content: { application/json: { schema: { $ref: '#/components/schemas/TagListResponse' } } }
+        '401':
+          description: Authentication required
+
+  /tags/{id}:
+    get:
+      summary: "Get a single tag"
+      operationId: getTag
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Tag
+          content: { application/json: { schema: { $ref: '#/components/schemas/TagResponse' } } }
+        '404':
+          description: Not found
+    put:
+      summary: "Update tag (name + color only; slug and parent are immutable)"
+      operationId: updateTag
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTagRequest' }
+      responses:
+        '200':
+          description: Updated
+          content: { application/json: { schema: { $ref: '#/components/schemas/TagResponse' } } }
+        '403':
+          description: ROLE_ADMIN required
+        '404':
+          description: Not found
+    delete:
+      summary: "Delete tag (optionally cascade to children + attachments)"
+      operationId: deleteTag
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: cascade, in: query, required: false, schema: { type: boolean, default: false } }
+      responses:
+        '204':
+          description: Deleted
+        '403':
+          description: ROLE_ADMIN required
+        '404':
+          description: Not found
+        '409':
+          description: Tag has children and cascade=false
+
+  /tags/{id}/attach:
+    post:
+      summary: "Attach the tag to an entity (idempotent)"
+      operationId: attachTag
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttachTagRequest' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/TagAttachmentResponse' } } }
+        '200':
+          description: Already attached (idempotent return)
+          content: { application/json: { schema: { $ref: '#/components/schemas/TagAttachmentResponse' } } }
+        '404':
+          description: Tag not found
+
+  /tags/{id}/attach/{entityType}/{entityId}:
+    delete:
+      summary: "Detach the tag from the entity (idempotent — 204 even if missing)"
+      operationId: detachTag
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: entityType, in: path, required: true, schema: { type: string } }
+        - { name: entityId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204':
+          description: Detached (or was already absent)
+
+  /tags/by-entity/{entityType}/{entityId}:
+    get:
+      summary: "List all tags currently attached to an entity"
+      operationId: tagsByEntity
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: entityType, in: path, required: true, schema: { type: string } }
+        - { name: entityId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: List
+          content: { application/json: { schema: { $ref: '#/components/schemas/TagListResponse' } } }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateTagRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 64 }
+        parentTagId: { type: string, format: uuid, nullable: true }
+        color: { type: string, maxLength: 16, nullable: true }
+
+    UpdateTagRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 64 }
+        color: { type: string, maxLength: 16, nullable: true }
+
+    AttachTagRequest:
+      type: object
+      required: [entityType, entityId]
+      properties:
+        entityType: { type: string, maxLength: 64 }
+        entityId: { type: string, maxLength: 255 }
+
+    TagResponse:
+      type: object
+      required: [id, name, slug, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        parentTagId: { type: string, format: uuid, nullable: true }
+        color: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        createdByUserId: { type: string, nullable: true }
+
+    TagListResponse:
+      type: object
+      required: [items, totalElements]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TagResponse' }
+        totalElements: { type: integer }
+
+    TagAttachmentResponse:
+      type: object
+      required: [id, tagId, entityType, entityId, attachedAt]
+      properties:
+        id: { type: string, format: uuid }
+        tagId: { type: string, format: uuid }
+        entityType: { type: string }
+        entityId: { type: string }
+        attachedAt: { type: string, format: date-time }
+        attachedByUserId: { type: string, nullable: true }

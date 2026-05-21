@@ -1,0 +1,110 @@
+template_id: "tag-categorization-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "Cross-entity classification — e-commerce products, CRM contacts, audit-log events all need shared tags"
+  - "Admin-curated taxonomy + user-applied attachment — typical CMS / 분류 체계 pattern"
+  - "Hierarchical categories (parent → child) where shape is mostly stable (rare re-parenting)"
+
+not_for:
+  - "User-generated tags / folksonomy (each user creates their own arbitrary tags) — current design assumes a centrally-curated taxonomy. Folksonomy would need per-user namespacing and different uniqueness semantics."
+  - "High-volume tagging with millions of attachments — TagAttachment is a JPA-managed row; bulk loads >10k should use JDBC batch import outside this domain"
+  - "Tag relationships beyond parent/child (graph-like: many-to-many tag-of-tag) — out of v1 scope"
+  - "Multi-tenant tenant scoping — v1 assumes single-tenant. Fork-receivers MUST add tenant_id and AOP guard before adoption (see specs/multi-tenant-l0.yaml)."
+  - "Soft delete / archival of tags — DELETE is hard; v2 could add deleted_at if audit trail matters"
+
+# ─── crud ──────────────────────────────────────────────────────────────────
+crud:
+  slug_generation:
+    rule: "lowercase + ASCII filter + hyphenate + truncate to 64 chars"
+    korean_fallback: "tag-<uuid8>"
+    immutable_after_creation: true
+  duplicate_slug_response:
+    status: 400
+    error_code: DUPLICATE_SLUG
+  update_writable_fields:
+    - name
+    - color
+  update_immutable_fields:
+    - slug
+    - parentTagId
+    - createdAt
+    - createdByUserId
+
+# ─── attachment ────────────────────────────────────────────────────────────
+attachment:
+  entity_pair: "(entity_type, entity_id)"
+  entity_type_max_length: 64
+  entity_id_max_length: 255
+  uniqueness: "(tag_id, entity_type, entity_id) DB unique constraint"
+  attach_idempotent: true
+  detach_idempotent: true
+  detach_missing_response: 204
+  entity_existence_validation: "OUT OF SCOPE for v1 — fork-receivers either register a TaggedEntityResolver SPI OR live with phantom attachments. Catalog will not enforce entity existence by default."
+  ordering_on_by_entity_response: "Tag.name ASC"
+
+# ─── hierarchy ─────────────────────────────────────────────────────────────
+hierarchy:
+  parent_immutable_after_creation: true     # TAG-HIER-001 cycle defense
+  parent_missing_response:
+    status: 400
+    error_code: PARENT_NOT_FOUND
+  delete_with_children_default: 409          # TAG-HIER-003
+  delete_with_children_error_code: TAG_HAS_CHILDREN
+  cascade_query_parameter: "?cascade=true"
+  cascade_recursion_strategy: "depth-first; small fan-out assumed (<100 children/level)"
+
+# ─── authz ─────────────────────────────────────────────────────────────────
+authz:
+  endpoint_pattern: "/api/tags/**"
+  authentication_required: true
+  definition_mutations_require: ROLE_ADMIN     # TAG-AUTHZ-002
+  definition_mutation_methods:
+    - "POST /api/tags"
+    - "PUT /api/tags/{id}"
+    - "DELETE /api/tags/{id}"
+  attachment_methods_require: authenticated    # TAG-AUTHZ-002 (no role)
+  attachment_methods:
+    - "POST /api/tags/{id}/attach"
+    - "DELETE /api/tags/{id}/attach/{entityType}/{entityId}"
+    - "GET /api/tags/by-entity/{entityType}/{entityId}"
+
+# ─── limits ────────────────────────────────────────────────────────────────
+limits:
+  max_name_length: 64
+  max_color_length: 16              # e.g. "#FF8C42" or "red-500"
+  max_slug_length: 64
+
+testing_baseline:
+  unit: "JUnit 5 + AssertJ — TagSlugger + reflective JPA shape on Tag entity"
+  integration: "RestAssured black-box HTTP against @SpringBootTest RANDOM_PORT"
+
+verification_checkpoints:
+  - "Auto-slug from name (TAG-CRUD-001)"
+  - "Parent / child listing (TAG-CRUD-002)"
+  - "Slug + parent immutable on PUT (TAG-CRUD-003)"
+  - "CASCADE removes attachments (TAG-CRUD-004)"
+  - "Attach / detach idempotent (TAG-ATTACH-001, TAG-ATTACH-002)"
+  - "by-entity returns ordered list, empty list on no rows (TAG-ATTACH-003)"
+  - "Parent immutable + missing-parent rejected (TAG-HIER-001, TAG-HIER-002)"
+  - "Delete-with-children gated by ?cascade=true (TAG-HIER-003)"
+  - "ROLE_ADMIN required for definition mutations (TAG-AUTHZ-002)"
+
+must_not:
+  - "Mutate Tag.slug after creation"
+  - "Mutate Tag.parentTagId after creation (cycle defense)"
+  - "Strand orphan TagAttachment rows after Tag deletion"
+  - "Return 409 / 404 on a second identical attach call — must be idempotent"
+  - "Allow non-ADMIN users to mutate tag definitions"
+
+reject_if:
+  - "POST /api/tags with name that produces a duplicate slug → 400 DUPLICATE_SLUG"
+  - "POST /api/tags with parentTagId that does not exist → 400 PARENT_NOT_FOUND"
+  - "POST /api/tags with parentTagId equal to a fabricated self-id → IllegalArgumentException"
+  - "DELETE /api/tags/{id} while children exist and ?cascade=true is not set → 409 TAG_HAS_CHILDREN"
+
+source_precedence:
+  - "WordPress taxonomy schema (term_taxonomy + term_relationships)"
+  - "Strapi categories API (slug + parent + locale)"
+  - "Korean enterprise CMS 분류 체계 — admin-curated taxonomy + user attachment"
+  - "RFC 9110 §9.3.5 (HTTP DELETE idempotency)"

@@ -118,6 +118,11 @@ public class SecurityConfig {
                 // WF-AUTHZ-001 — every endpoint requires JWT. Visibility scoping
                 // (requester vs approver) is enforced inside ApprovalService.
                 .requestMatchers("/api/approvals/**").authenticated()
+                // R32 tag-categorization domain (specs/tag-categorization-l0.yaml):
+                // TAG-AUTHZ-001 — every endpoint requires JWT. Definition mutations
+                // (POST/PUT/DELETE on /api/tags/{id}) additionally require ROLE_ADMIN
+                // via @PreAuthorize on TagController. Attach/detach is authenticated-only.
+                .requestMatchers("/api/tags/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per
