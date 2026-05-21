@@ -1,0 +1,116 @@
+template_id: "approval-workflow-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "Multi-step approval chains for internal business actions — budget requests, document publishing, vendor onboarding, access provisioning"
+  - "Korean enterprise 결재 surfaces — requester → 1차 결재 → 2차 결재 → ... → 최종 결재"
+  - "Ordered approval where step N+1 should not be reachable until step N is APPROVED (sequential, not parallel)"
+
+not_for:
+  - "Parallel approval (any-of-N) — extend the state machine before adopting"
+  - "Dynamic approver routing based on request content (manager-of-requester lookup, etc.) — fork-receiver decides the resolver but this blueprint takes static approver list"
+  - "Long-running multi-day workflows requiring reminders / escalation — escalation is out of scope for v1"
+  - "Public-facing approval (customer review submissions) — this is an INTERNAL operations blueprint"
+
+# ─── lifecycle ─────────────────────────────────────────────────────────────
+state_machines:
+  request:
+    description: "Sole mutator: ApprovalRequestStateMachine"
+    transitions:
+      - from: DRAFT
+        to: [SUBMITTED, CANCELLED]
+      - from: SUBMITTED
+        to: [APPROVED, REJECTED, CANCELLED]
+      - from: APPROVED
+        to: []
+      - from: REJECTED
+        to: []
+      - from: CANCELLED
+        to: []
+  step:
+    description: "Sole mutator: ApprovalStepStateMachine"
+    transitions:
+      - from: PENDING
+        to: [APPROVED, REJECTED]
+      - from: APPROVED
+        to: []
+      - from: REJECTED
+        to: []
+
+lifecycle:
+  cascade_on_step_approval: "When the last step transitions PENDING→APPROVED, the request transitions SUBMITTED→APPROVED in the SAME transaction. Partial state never observable."
+  cascade_on_step_rejection: "Single step REJECTED → request immediately REJECTED. Remaining PENDING steps are no longer actionable (request is terminal)."
+  cancellation_window: "DRAFT or SUBMITTED — requester only. Terminal states are not cancellable."
+
+# ─── step ordering ─────────────────────────────────────────────────────────
+step_ordering:
+  rule: "Steps act in strict ascending orderIndex. Acting on step N requires every step with orderIndex < N to be APPROVED."
+  enforcement: "ApprovalService.approve() / reject() loads all sibling steps; out-of-order action returns 409 STEP_OUT_OF_ORDER."
+
+# ─── step audit ────────────────────────────────────────────────────────────
+step_audit:
+  capture:
+    - actedByUserId
+    - actedAt
+    - comment (optional, <= 1024 chars)
+  immutability: "Once a step's status is APPROVED or REJECTED, actedBy / actedAt / comment cannot be mutated. The step entity's setters for these fields are package-private and called only by the state machine."
+
+# ─── authz ─────────────────────────────────────────────────────────────────
+authz:
+  endpoint_pattern: "/api/approvals/**"
+  authentication_required: true
+  cross_user_response: 404_not_403
+  step_action_response_on_wrong_actor: 403
+  visibility_rule: >
+    A request is visible to (a) its requester always, (b) its approvers ONLY when the
+    request is in status SUBMITTED. DRAFT requests are hidden from approvers so that
+    work-in-progress isn't leaked.
+
+# ─── query ─────────────────────────────────────────────────────────────────
+query:
+  endpoints:
+    list_my_requests: "GET /api/approvals — returns rows where requesterUserId = caller, newest first"
+    inbox: "GET /api/approvals/inbox — returns PENDING steps where step.approverUserId = caller AND request.status = SUBMITTED, oldest request first"
+  pagination: "v1 returns the full set (defaults bounded by request_limit_per_user). v2 should add page/size."
+
+# ─── limits ────────────────────────────────────────────────────────────────
+limits:
+  max_steps_per_request: 10
+  max_payload_bytes: 16384
+  request_limit_per_user: 200    # soft cap; not enforced in v1, surfaced for fork-receivers
+
+testing_baseline:
+  unit: "JUnit 5 + AssertJ — both state machines"
+  integration: "RestAssured black-box HTTP against @SpringBootTest RANDOM_PORT"
+
+verification_checkpoints:
+  - "DRAFT creation is invisible to approvers (WF-LIFECYCLE-001)"
+  - "Last step approve cascades request to APPROVED atomically (WF-LIFECYCLE-002)"
+  - "Single step reject cascades request to REJECTED immediately (WF-LIFECYCLE-003)"
+  - "Illegal state transitions throw (WF-LIFECYCLE-004)"
+  - "Cross-user IDOR returns 404 (WF-AUTHZ-002)"
+  - "Wrong approver returns 403 (WF-AUTHZ-003)"
+  - "Out-of-order step action returns 409 (WF-STEP-001)"
+  - "Comment + actor + timestamp persisted atomically with status (WF-STEP-002, WF-STEP-003)"
+  - "Inbox returns oldest-first pending steps (WF-QUERY-001)"
+  - "List returns only the caller's own requests (WF-QUERY-002)"
+
+must_not:
+  - "Mutate ApprovalRequest.status outside ApprovalRequestStateMachine"
+  - "Mutate ApprovalStep.status / actedByUserId / actedAt outside ApprovalStepStateMachine"
+  - "Allow an approver to act out of order"
+  - "Allow a step action without recording the actor"
+  - "Return 403 for cross-user request access (must be 404 — IDOR enumeration defense)"
+  - "Allow request transitions out of terminal states"
+
+reject_if:
+  - "POST /api/approvals with > max_steps_per_request → 400 TOO_MANY_STEPS"
+  - "POST /api/approvals with empty approvers list → 400 NO_APPROVERS"
+  - "step action on a terminal request → 409 REQUEST_TERMINAL"
+  - "step action by non-approver → 403 NOT_APPROVER"
+  - "step action out of order → 409 STEP_OUT_OF_ORDER"
+
+source_precedence:
+  - "ITIL v4 change-management approval workflow (multi-step, ordered)"
+  - "Korean enterprise 결재 workflow practice (sequential approval, 결재선)"
+  - "OWASP ASVS V4 — authorization (visibility per role, IDOR-safe responses)"

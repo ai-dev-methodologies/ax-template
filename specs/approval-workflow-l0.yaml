@@ -1,0 +1,154 @@
+version: "1.0.0"
+scope: "approval-workflow-domain"
+stack: "Spring Boot 3.2.x + JPA + sole-mutator state machines (request + step) + RestAssured black-box"
+standard: "ITIL change-management approval pattern + Korean enterprise 결재 (단계별 승인) practice + OWASP ASVS V4.2 (authorization)"
+items:
+  # ─── LIFECYCLE family (4 items) ────────────────────────────────────────────
+  - id: "WF-LIFECYCLE-001"
+    chapter: "LIFECYCLE"
+    requirement: "POST /api/approvals creates a request in status=DRAFT with all steps in status=PENDING; the request is not visible to approvers until the requester explicitly submits."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST /api/approvals with 2 steps → 201 with body.status=DRAFT.
+      Approver lists their inbox → empty (request not yet submitted).
+      Implementation: ApprovalService.create() persists ApprovalRequest(status=DRAFT)
+      and ApprovalStep rows (orderIndex 0..N-1, status=PENDING); the inbox query
+      filters on request.status=SUBMITTED.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#lifecycle"
+
+  - id: "WF-LIFECYCLE-002"
+    chapter: "LIFECYCLE"
+    requirement: "When the last PENDING step is approved, the parent request transitions to APPROVED in the same transaction; partial state (last step APPROVED + request still SUBMITTED) is never observable."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: 2-step request → submit → approve step 0 → request remains SUBMITTED.
+      Approve step 1 → request becomes APPROVED in the same response that records the step transition.
+      Implementation: ApprovalService.approve() is @Transactional; on the final step the
+      ApprovalRequestStateMachine.markApproved() runs before commit.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#lifecycle"
+
+  - id: "WF-LIFECYCLE-003"
+    chapter: "LIFECYCLE"
+    requirement: "When any step is rejected, the parent request transitions to REJECTED immediately; subsequent steps stay PENDING but are no longer actionable (terminal request blocks further step actions)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: 3-step request, submit, reject step 1 → request immediately REJECTED.
+      Attempt to approve step 2 → 409 REQUEST_TERMINAL. Implementation: rejection cascades
+      to request status; the step-action endpoint short-circuits when request is terminal.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#lifecycle"
+
+  - id: "WF-LIFECYCLE-004"
+    chapter: "LIFECYCLE"
+    requirement: "State machine rejects illegal transitions; submitting a non-DRAFT request, approving a non-PENDING step, or cancelling a terminal request throw IllegalStateException and are never persisted."
+    test_method: "Unit test against ApprovalRequestStateMachine + ApprovalStepStateMachine"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: ApprovalRequestStateMachine.markSubmitted() on already-SUBMITTED request → IllegalStateException.
+      ApprovalStepStateMachine.markApproved() on already-APPROVED step → IllegalStateException.
+      Both machines are the sole mutator of their respective .status fields.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#state_machines"
+
+  # ─── AUTHZ family (3 items) ────────────────────────────────────────────────
+  - id: "WF-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All approval-workflow endpoints require a valid JWT; unauthenticated callers receive HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/approvals, GET /api/approvals, GET /api/approvals/inbox,
+      POST .../steps/{stepId}/approve all → 401 without Authorization header.
+      Implementation: SecurityConfig matcher /api/approvals/** authenticated().
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#authz"
+
+  - id: "WF-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Only the requester can submit or cancel their own request; another user attempting to act on a request they did not create receives HTTP 404 (not 403 — IDOR-safe response shape)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates request. UserB (not approver, not requester) GET /api/approvals/{id}
+      → 404. UserB POST .../submit → 404. Implementation: ApprovalService.loadVisibleTo() filters
+      on requesterUserId = caller OR (caller in approver list AND request is SUBMITTED).
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#authz"
+
+  - id: "WF-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "Only the designated approver for a step can act on that step; another authenticated user attempting to approve/reject the step receives HTTP 403."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA requests with approvers [B, C]. UserC tries to approve step 0 (assigned to B) → 403.
+      Implementation: ApprovalService.approve() checks step.approverUserId == caller before invoking
+      the state machine.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#authz"
+
+  # ─── STEP family (3 items) ─────────────────────────────────────────────────
+  - id: "WF-STEP-001"
+    chapter: "STEP"
+    requirement: "Steps are processed in strict order; attempting to act on step N+1 while step N is still PENDING returns HTTP 409 STEP_OUT_OF_ORDER."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: 3-step request, submit, immediately try to approve step 1 (skipping step 0) → 409.
+      Implementation: ApprovalService.approve() loads all steps for the request, asserts every
+      step with orderIndex < target is APPROVED before acting.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#step_ordering"
+
+  - id: "WF-STEP-002"
+    chapter: "STEP"
+    requirement: "Approver actions accept an optional comment (<= 1024 chars); the comment is persisted on the step alongside the actor and timestamp."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: approve with body {comment: 'looks good'} → 200; GET step → comment field populated,
+      actedAt non-null, actedByUserId = caller. Implementation: ApprovalStep.markApproved(actor, comment, now).
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#step_audit"
+
+  - id: "WF-STEP-003"
+    chapter: "STEP"
+    requirement: "Every step action records the actor (caller's userId) and timestamp atomically with the status change; an approver action with a missing or mismatched actor MUST fail before any persistence."
+    test_method: "Unit test against ApprovalStepStateMachine"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: ApprovalStepStateMachine.markApproved(step, actorId=null, ...) → throws.
+      Implementation: state-machine method asserts non-null actor; the persistence layer cannot reach
+      a state where status changed but actedByUserId is null.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#step_audit"
+
+  # ─── QUERY family (2 items) ────────────────────────────────────────────────
+  - id: "WF-QUERY-001"
+    chapter: "QUERY"
+    requirement: "GET /api/approvals/inbox returns the caller's PENDING steps across all SUBMITTED requests, ordered by request createdAt asc (oldest first)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: As approver, create-and-submit 3 requests over time → inbox lists 3 entries, oldest first.
+      Approve one entry → it disappears from the inbox (status no longer PENDING). Implementation:
+      ApprovalRequestRepository / ApprovalStepRepository join query filtered by step.approverUserId =
+      caller AND step.status = PENDING AND request.status = SUBMITTED.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#query"
+
+  - id: "WF-QUERY-002"
+    chapter: "QUERY"
+    requirement: "GET /api/approvals (without filter) returns the caller's own requests (requesterUserId = caller) ordered by createdAt desc; an approver is NOT auto-shown other people's requests via this endpoint (the inbox is the dedicated surface)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: UserA creates 2 requests. UserB (approver on A's request) GET /api/approvals → empty list
+      (B has not requested anything). UserA GET /api/approvals → 2 items.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#query"

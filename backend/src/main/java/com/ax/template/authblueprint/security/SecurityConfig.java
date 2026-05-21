@@ -114,6 +114,10 @@ public class SecurityConfig {
                 // via shouldNotFilter). The scope-probe endpoint under the
                 // same prefix is reachable via X-API-Key.
                 .requestMatchers("/api/api-keys/**").authenticated()
+                // R31 approval-workflow domain (specs/approval-workflow-l0.yaml):
+                // WF-AUTHZ-001 — every endpoint requires JWT. Visibility scoping
+                // (requester vs approver) is enforced inside ApprovalService.
+                .requestMatchers("/api/approvals/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per

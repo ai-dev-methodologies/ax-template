@@ -220,6 +220,15 @@ tasks.register<Test>("testApiKey") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testApprovalWorkflow") {
+    useJUnitPlatform {
+        includeTags("WORKFLOW")
+    }
+    description = "Run approval-workflow domain compliance tests (R31: 12 items / 4 families — LIFECYCLE, AUTHZ, STEP, QUERY)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")
