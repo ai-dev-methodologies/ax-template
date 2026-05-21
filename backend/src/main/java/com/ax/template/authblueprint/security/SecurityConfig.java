@@ -87,6 +87,15 @@ public class SecurityConfig {
                 // BILLING-AUTHZ-001 — every subscription endpoint requires JWT.
                 // BILLING-AUTHZ-002 — owner-scoped lookups in BillingService.
                 .requestMatchers("/api/subscriptions/**").authenticated()
+                // R23 e-commerce capstone (recipes/e-commerce/RECIPE.md):
+                // Product list / detail are PUBLIC so anonymous shoppers can
+                // browse before signing up (ECOM common pattern). Mutations
+                // (POST/PUT/DELETE on /api/ecommerce/products) and all cart /
+                // order endpoints require a JWT — owner scoping is enforced in
+                // the service layer.
+                .requestMatchers(HttpMethod.GET, "/api/ecommerce/products").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/ecommerce/products/*").permitAll()
+                .requestMatchers("/api/ecommerce/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per

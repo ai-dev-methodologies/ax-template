@@ -188,6 +188,15 @@ tasks.register<Test>("testWebhook") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testEcommerce") {
+    useJUnitPlatform {
+        includeTags("ECOMMERCE")
+    }
+    description = "Run e-commerce capstone end-to-end tests (R23: recipes/e-commerce/RECIPE.md — composes crud + payment + notification + audit-log + search)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")
