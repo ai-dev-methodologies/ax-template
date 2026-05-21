@@ -50,5 +50,18 @@ if ! (cd backend && ./gradlew -q testPractices testAsvs testCrud); then
     echo "[practices]   cd backend && ./gradlew testPractices testAsvs testCrud"
     exit 1
 fi
-echo "[practices] ✓ full regression PASS — push proceeds"
+echo "[practices] ✓ full regression PASS"
+
+# R25 — 49th hard guard: audit that verify-completion.sh ran for current HEAD.
+# Without this stage a clone could push commits without ever running the
+# catalog's binary completion contract.
+echo "[practices] R25 — completion checklist recency check"
+if ! bash practices/evals/completion_checklist_recency_guard.sh; then
+    echo "[practices] ✗ completion_checklist_recency_guard FAILED — push BLOCKED"
+    echo "[practices] Run the completion contract on HEAD:"
+    echo "[practices]   bash practices/scripts/verify-completion.sh"
+    echo "[practices] then re-attempt the push."
+    exit 1
+fi
+echo "[practices] ✓ completion checklist recency PASS — push proceeds"
 exit 0

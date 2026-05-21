@@ -48,7 +48,7 @@ join_cs() { awk 'NR>1{printf ", "} {printf "%s", $0} END{if (NR>0) print ""}'; }
 {
   # frontmatter sentinel (covers rule concat ONLY; TD-024 sha-input)
   printf -- '---\nsentinel:\n  source_concat_sha256: "%s"\n  rule_count: %s\n  generated_by: "practices/generate_agents.sh"\n---\n\n' "$SHA" "$COUNT"
-  printf '# Practices — AGENTS.md (auto-generated)\n\nThis file is auto-generated from `practices/rules/*.md` in lexical order.\nDo not edit by hand — re-run `practices/generate_agents.sh` after rule changes.\n\nSentinel sha covers rule concat ONLY (TD-024 sha-input clause).\nTOC section below is observability outside the fingerprint (TD-033 R13).\n\n'
+  printf '# Practices — AGENTS.md (auto-generated)\n\nThis file is auto-generated from `practices/rules/*.md` in lexical order.\nDo not edit by hand — re-run `practices/generate_agents.sh` after rule changes.\n\nSentinel sha covers rule concat ONLY (TD-024 sha-input clause).\nTOC section below is observability outside the fingerprint (TD-033 R13).\n\n## MANDATORY (R25) before declaring any task done\n\nAI agents MUST run `bash practices/scripts/verify-completion.sh` and confirm\nexit 0 before stating the task is complete. The 49th hard guard\n(`completion_checklist_recency_guard.sh`) audits the resulting log and\nBLOCKS push when no entry matches HEAD. There is no opt-out flag.\n\n'
 
   # rule concat body (UNCHANGED from R12)
   for f in "${SORTED[@]}"; do

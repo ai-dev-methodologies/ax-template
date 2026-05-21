@@ -13,6 +13,13 @@ Do not edit by hand — re-run `practices/generate_agents.sh` after rule changes
 Sentinel sha covers rule concat ONLY (TD-024 sha-input clause).
 TOC section below is observability outside the fingerprint (TD-033 R13).
 
+## MANDATORY (R25) before declaring any task done
+
+AI agents MUST run `bash practices/scripts/verify-completion.sh` and confirm
+exit 0 before stating the task is complete. The 49th hard guard
+(`completion_checklist_recency_guard.sh`) audits the resulting log and
+BLOCKS push when no entry matches HEAD. There is no opt-out flag.
+
 <!-- @source rules/actuator-build-info.md -->
 
 ---

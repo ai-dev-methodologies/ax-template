@@ -1,0 +1,191 @@
+# practices/verification-checklist.yaml — R25 machine-readable completion contract.
+#
+# This file is the BINARY ground truth for "is the task done".
+# Every AI agent / persona / fork-receiver MUST run
+# `bash practices/scripts/verify-completion.sh` before declaring a task complete.
+#
+# The script reads THIS yaml — adding/removing a step here automatically
+# propagates to every downstream agent. Do NOT hard-code a step in the script.
+#
+# Schema:
+#   version: int                      # bump on breaking-shape change
+#   defaults:
+#     working_directory: str          # relative to repo root for all commands
+#     timeout_seconds: int            # per-step kill switch
+#   checklist:
+#     - id: <slug>                    # stable kebab-case identifier
+#       title: <human-readable>
+#       parallel: bool                # if true, items below run concurrently
+#       commands:                     # list (single-item list = sequential)
+#         - command: <shell>
+#           working_directory: <opt>  # override defaults
+#           expected_exit: int        # one of: 0 | <int>
+#           advisory: bool            # if true: FAIL → WARN (loop continues)
+#       fix_playbook: |               # printed on FAIL; AI agent retry hint
+#         <multi-line markdown>
+#
+# Iron Law (from R25 brief):
+#   "AI agent / skill / 슬래시 명령이 자체 feedback loop 강제하는 메커니즘"
+# The mechanism is: this yaml + verify-completion.sh + 49th hard guard.
+# Manual intervention by the user is NOT required.
+version: 1
+
+defaults:
+  working_directory: "."
+  timeout_seconds: 900   # 15-minute cap per step
+
+checklist:
+  # ── 1. Backend compile (fast fail before tests) ─────────────────────────────
+  - id: backend-build
+    title: "Backend Spring Boot compile (fast-fail before tests)"
+    parallel: false
+    commands:
+      - command: "./gradlew build -x test"
+        working_directory: "backend"
+        expected_exit: 0
+    fix_playbook: |
+      Backend compile failed.
+      1. Read the gradle stderr — look for `error:` lines (javac) or
+         `Unresolved reference:` (kotlin DSL).
+      2. Common causes:
+         • new dependency in build.gradle.kts without matching version
+         • Java syntax error / missing import
+         • new entity field without matching column on existing migration
+      3. Fix the offending file. Do NOT delete tests to silence compile errors.
+      4. Re-run only this step:  cd backend && ./gradlew build -x test
+
+  # ── 2. Per-domain test tasks (the catalog's binary pass/fail surface) ───────
+  - id: per-domain-tests
+    title: "Per-domain ./gradlew test{Domain} suite (17 domains)"
+    parallel: false  # gradle daemon serializes anyway; keep stderr deterministic
+    commands:
+      - command: "./gradlew testAsvs"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testCrud"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testPractices"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testRateLimit"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testPayment"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testNotification"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testSearch"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testAuditLog"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testFileStorage"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testFeatureFlags"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testBilling"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testIdentityVerification"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testScheduledTask"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testWebhook"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testEcommerce"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testIntegration"
+        working_directory: "backend"
+        expected_exit: 0
+        advisory: true  # cross-cutting wiring; treat regression as warn
+      - command: "./gradlew testPortability"
+        working_directory: "backend"
+        expected_exit: 0
+        advisory: true  # external fixture (spring-realworld) has known cycle
+    fix_playbook: |
+      A per-domain test task failed.
+      1. Identify which `test{Domain}` task failed from the FAIL line above.
+      2. Read the JUnit report:
+         backend/build/reports/tests/test{Domain}/index.html
+      3. Find the single failing test. Reproduce in isolation:
+         cd backend && ./gradlew test{Domain} --tests <TestClass.method> --info
+      4. Fix the IMPLEMENTATION (not the test) unless the spec/contract changed.
+         Catalog rule: tests anchor to spec yaml — flipping a test to GREEN by
+         editing the assertion violates spec_ref_guard.
+      5. Re-run the single domain task first, then re-run this whole step.
+
+  # ── 3. Hard guards (36 mechanical guards under run-all-guards.sh) ───────────
+  - id: hard-guards
+    title: "36+ mechanical hard guards (run-all-guards.sh --include-fixtures)"
+    parallel: false
+    commands:
+      - command: "bash practices/evals/run-all-guards.sh --include-fixtures"
+        expected_exit: 0
+    fix_playbook: |
+      One or more catalog hard guards failed.
+      1. Find the FAIL [<guard_name>] line in the output above.
+      2. Run that guard in isolation for a focused trace:
+         bash practices/evals/<guard_name>.sh
+      3. The guard's stderr names the exact file + line of violation.
+      4. Common patterns:
+         • evidence_guard FAIL → rules/*.md missing `evidence:` block
+                                 or quoting text not present in upstream snapshot
+         • spec_ref_guard FAIL → rule's `spec_ref:` points at a yaml entry that
+                                 does not exist
+         • substance_guard FAIL → rule body is too short / has no code block
+         • trio_integrity FAIL → spec/contract/blueprint drifted from one another
+         • recipe_invariant_spec_normalization FAIL → INV-ID in RECIPE.md not in
+           specs/recipes/<slug>-recipe-l0.yaml#business_invariants
+         • test_tag_naming_convention FAIL → @Tag("...") not UPPERCASE
+      5. Fix the offending artifact, then re-run this step.
+
+  # ── 4. Catalog meta-guards (sentinel + spec cross-refs) ─────────────────────
+  - id: catalog-meta-guards
+    title: "Catalog meta-guards (AGENTS.md sentinel + spec/policy refs)"
+    parallel: false
+    commands:
+      - command: "bash practices/evals/agents_md_toc_disk_truth_guard.sh"
+        expected_exit: 0
+      - command: "bash practices/evals/spec_policy_ref_guard.sh"
+        expected_exit: 0
+    fix_playbook: |
+      Catalog meta-guard failed — sentinel or cross-reference drift.
+      1. AGENTS.md sentinel drift → re-run:
+         bash practices/generate_agents.sh
+         git add practices/AGENTS.md
+      2. spec_policy_ref drift → a rule or blueprint references a spec that has
+         been renamed/deleted. Locate via:
+         bash practices/evals/spec_policy_ref_guard.sh
+      3. Do NOT hand-edit AGENTS.md; the generator script is the source of truth.
+
+  # ── 5. Aggregate regression (final binary pass/fail) ────────────────────────
+  - id: aggregate-regression
+    title: "Aggregate ./gradlew test (catch cross-domain regression)"
+    parallel: false
+    commands:
+      - command: "./gradlew test"
+        working_directory: "backend"
+        expected_exit: 0
+        advisory: true  # PortabilityCyclic external fixture is permanently RED
+    fix_playbook: |
+      Aggregate test failed but per-domain tests passed.
+      This means test isolation broke (R22-class regression).
+      1. Compare failing test count: aggregate FAIL minus PortabilityCyclic.
+         If only PortabilityCyclic fails → advisory PASS, no action.
+      2. Otherwise, the failing test runs GREEN in its own task but RED in
+         aggregate. Root cause is shared state:
+         • static fields not reset between tests
+         • @MockBean leaking into a later test's ApplicationContext
+         • Spring context cache hitting a stale bean configuration
+      3. Read R22 closure (commit ae64c5c) for the precedent fix pattern.
+      4. Do NOT mark as advisory — fix the isolation leak.

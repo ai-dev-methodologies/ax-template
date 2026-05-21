@@ -85,6 +85,14 @@ Copy this checklist and check off as you progress:
 - [ ] Step 6: Implement to GREEN — `./gradlew test{Domain}` exits 0
 - [ ] Step 7: Run 6 guards — `bash practices/evals/run-all-guards.sh` exits 0
 - [ ] Step 8: Invoke `/ax-verify` — Tier-1 recursive check exits 0
+- [ ] **Step 9 (MANDATORY — R25)**: `bash practices/scripts/verify-completion.sh` exits 0
+
+> Step 9 is the catalog's binary completion contract. It reads
+> `practices/verification-checklist.yaml` and chains: backend-build →
+> per-domain-tests (17) → hard-guards → catalog-meta-guards → aggregate-regression.
+> No agent may declare "task done" until Step 9 exits 0. The 49th hard guard
+> (`completion_checklist_recency_guard.sh`) audits the resulting log and BLOCKS
+> `git push` if no entry matches HEAD.
 
 ## Steps detail
 
@@ -108,6 +116,18 @@ artifact that owns that error code, then re-run the guard in isolation before
 re-running the full suite.
 Halt threshold: if 3 consecutive guard runs fail on the same error code, escalate
 to `docs/superpowers/escape/` — do NOT attempt further variations without human review.
+
+### Mechanical feedback loop (R25 enforcement)
+For autonomous agents, the loop is bundled in `verify-and-fix-loop.sh`:
+```bash
+bash practices/scripts/verify-and-fix-loop.sh
+```
+This runs `verify-completion.sh`, prints the `fix_playbook` for the failing
+step, pauses for a fix, and retries — up to 3 attempts. After 3 failed
+attempts it exits 1 and demands human review. Headless / CI variant:
+```bash
+bash practices/scripts/verify-and-fix-loop.sh --non-interactive
+```
 
 ## Invocation graph
 - Calls (Tier-2): delegates to `/ax-verify` for end-to-end verification

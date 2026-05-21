@@ -1,5 +1,33 @@
 # ax-template — `/ax-transform` Skill Package Source
 
+## 🔒 MANDATORY before declaring any task done (R25 — NON-NEGOTIABLE)
+
+Before any AI agent / persona / slash command / fork-receiver may state
+"task complete", they MUST run:
+
+```bash
+bash practices/scripts/verify-completion.sh
+```
+
+Exit 0 ⇒ task may be declared done.
+Exit 1 ⇒ task is NOT done; apply the printed `fix_playbook` and re-run.
+
+This is enforced mechanically by:
+- `practices/verification-checklist.yaml` (machine-readable contract)
+- `practices/scripts/verify-completion.sh` (executor + audit log writer)
+- `practices/evals/completion_checklist_recency_guard.sh` (49th hard guard;
+  pre-push hook BLOCKS the push if no recent audit log entry matches HEAD)
+
+No `--skip` flags. No "I'll run it later." The catalog enforces the loop.
+
+Optional retry orchestrator for AI agents:
+```bash
+bash practices/scripts/verify-and-fix-loop.sh         # interactive, 3 attempts
+bash practices/scripts/verify-and-fix-loop.sh --non-interactive   # CI/headless
+```
+
+---
+
 ## ⭐ Project Vision (READ FIRST — 절대 잊지 말 것)
 
 **ax-template은 React (front) + Spring Boot (backend) full-stack 개발의
