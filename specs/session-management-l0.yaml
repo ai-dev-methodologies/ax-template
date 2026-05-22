@@ -1,0 +1,177 @@
+version: "1.0.0"
+scope: "session-management-domain"
+stack: "Spring Boot 3.2.x + JPA + SessionRevocationCheck SPI for the JWT auth filter to consult"
+standard: "OWASP ASVS V3 (Session Management) + Korean enterprise 다중 로그인 정책 + RFC 7519 JWT jti claim"
+items:
+  # ─── LIFECYCLE family (3 items) ───────────────────────────────────────────
+  - id: "SESS-LIFECYCLE-001"
+    chapter: "LIFECYCLE"
+    requirement: "POST /api/sessions registers a new session record bound to a JWT (jti claim) immediately after login. Caller supplies jti + deviceLabel + expiresAt; userId is derived from the authenticated principal. The call is idempotent — re-registering the same (userId, jti) returns 200 OK with the existing record."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: login → call POST /api/sessions {jti:'jwt-jti-1', deviceLabel:'iPhone'} → 201
+      with status=ACTIVE. Second call same body → 200 idempotent.
+      Implementation: SessionService.register() finds-by-(userId,jti) first; returns existing
+      or inserts new. UNIQUE(user_id, jti) is the DB-level backstop.
+    policy_ref: "blueprints/session-management-manifest.yaml#lifecycle"
+
+  - id: "SESS-LIFECYCLE-002"
+    chapter: "LIFECYCLE"
+    requirement: "Session expiration is a clock-based predicate, NOT a stored status — checked at every revocation-check call. Sessions with expiresAt < now report isExpired()=true regardless of status field."
+    test_method: "Unit test against SessionRecord entity"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: SessionRecord built with expiresAt = now - 1min and status=ACTIVE → isExpired(clock)=true.
+      Same builder with future expiresAt → isExpired(clock)=false. Implementation: SessionRecord
+      exposes isExpired(Instant now) returning expiresAt.isBefore(now). No background job needed.
+    policy_ref: "blueprints/session-management-manifest.yaml#lifecycle"
+
+  - id: "SESS-LIFECYCLE-003"
+    chapter: "LIFECYCLE"
+    requirement: "Explicit logout via DELETE /api/sessions/{id} flips status to REVOKED + stamps revokedAt. The record is NOT hard-deleted so audit trail of past sessions is preserved."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: register session, DELETE /api/sessions/{id} → 204. GET /api/sessions/{id} → 200 with
+      status=REVOKED + revokedAt non-null. Implementation: SessionRecordStateMachine.markRevoked();
+      hard delete is forbidden by the catalog (audit trail).
+    policy_ref: "blueprints/session-management-manifest.yaml#lifecycle"
+
+  - id: "SESS-LIFECYCLE-004"
+    chapter: "LIFECYCLE"
+    requirement: "POST /api/sessions rejects expiresAt values in the past with HTTP 400 EXPIRES_AT_IN_PAST. A past expiresAt would produce a born-revoked session (ACTIVE status but isExpired=true at creation), confusing the UI and the SessionRevocationCheck SPI."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/sessions with expiresAt = now - 5min → 400 EXPIRES_AT_IN_PAST.
+      Implementation: SessionService.register() asserts request.expiresAt().isAfter(now) before
+      any DB write. (R33 iter1 dogfood closure — P1 finding.)
+    policy_ref: "blueprints/session-management-manifest.yaml#lifecycle"
+
+  - id: "SESS-LIFECYCLE-005"
+    chapter: "LIFECYCLE"
+    requirement: "When a user already has {@code max_active_sessions_per_user} ACTIVE sessions and registers a new one, the oldest ACTIVE session is auto-revoked to make room. The new register call still returns 201; the response does NOT enumerate the auto-revoked ids."
+    test_method: "RestAssured integration test with custom property override"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: lower the cap via @TestPropertySource(properties = 'session-management.max-active-sessions-per-user=2').
+      Register 3 sessions → 3 calls all 201. GET /api/sessions → 3 rows total; oldest 1 is REVOKED.
+      Implementation: SessionService.enforceMaxActiveSessions() drops the oldest ACTIVE rows before
+      inserting the new one. (R33 iter1 dogfood closure — P1 finding; manifest already named the limit
+      but the code did not enforce it.)
+    policy_ref: "blueprints/session-management-manifest.yaml#limits"
+
+  # ─── REVOCATION family (3 items) ──────────────────────────────────────────
+  - id: "SESS-REVOKE-001"
+    chapter: "REVOCATION"
+    requirement: "User-initiated revocation: a caller can DELETE their own session. Status transitions ACTIVE → REVOKED. Double-revoke is idempotent (returns 204 even on already-REVOKED — REVOKE flow does not throw)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: register session, DELETE twice → both 204; status remains REVOKED with the original
+      revokedAt timestamp (not overwritten on the second DELETE).
+    policy_ref: "blueprints/session-management-manifest.yaml#revocation"
+
+  - id: "SESS-REVOKE-002"
+    chapter: "REVOCATION"
+    requirement: "POST /api/sessions/revoke-others?keep={currentSessionId} revokes all of the caller's ACTIVE sessions EXCEPT the keep session. Used for 'log out all other devices' after a password change or suspicious activity."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: register 3 sessions for the same user (jti-1, jti-2, jti-3). POST revoke-others?keep=<id1>
+      → 200 with body {revoked:2, kept:1}. GET /api/sessions → 3 items: 1 ACTIVE + 2 REVOKED.
+      Implementation: bulk UPDATE WHERE user_id = caller AND id != keep AND status = ACTIVE.
+    policy_ref: "blueprints/session-management-manifest.yaml#revocation"
+
+  - id: "SESS-REVOKE-003"
+    chapter: "REVOCATION"
+    requirement: "SessionRevocationCheck SPI exposes isRevoked(jti) returning true for any session whose status is REVOKED OR whose expiresAt is in the past. This is the integration hook for fork-receivers to wire into their JWT auth filter so a revoked session's JWT no longer authenticates."
+    test_method: "Unit test against SessionRevocationCheck implementation"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: REVOKED session → isRevoked(jti)=true. EXPIRED session (expiresAt past) with status=ACTIVE
+      → isRevoked(jti)=true. Unknown jti → isRevoked(jti)=true (deny by default — better fail-closed).
+      ACTIVE + future expiresAt → isRevoked(jti)=false.
+    policy_ref: "blueprints/session-management-manifest.yaml#revocation"
+
+  # ─── INTROSPECTION family (3 items) ───────────────────────────────────────
+  - id: "SESS-INTROSPECT-001"
+    chapter: "INTROSPECTION"
+    requirement: "GET /api/sessions returns ALL of the caller's sessions (ACTIVE + REVOKED) ordered by createdAt desc (most recent first). Includes revoked sessions so users can audit historic logins."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: register 2 sessions; revoke one; GET /api/sessions → 2 items, newest first.
+      Both items include status field.
+    policy_ref: "blueprints/session-management-manifest.yaml#introspection"
+
+  - id: "SESS-INTROSPECT-002"
+    chapter: "INTROSPECTION"
+    requirement: "Response includes deviceLabel, ipAddressMasked (last octet of IPv4 / last 64 bits of IPv6 redacted with 'xxx'), userAgentSummary, createdAt, lastSeenAt, expiresAt, status, revokedAt. The raw IP and User-Agent strings are NEVER returned to the caller — only the masked / summarized forms."
+    test_method: "RestAssured integration test + unit test on the masking helpers"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test (behavioral): register with ipAddress='192.168.1.42' → GET response shows
+      ipAddressMasked='192.168.1.xxx'. Raw 'ipAddress' key MUST NOT appear.
+      Test (unit): IpAddressMasker.mask('192.168.1.42') == '192.168.1.xxx';
+      mask('2001:db8::1') ends with ':xxx:xxx:xxx:xxx'.
+    policy_ref: "blueprints/session-management-manifest.yaml#introspection"
+
+  - id: "SESS-INTROSPECT-003"
+    chapter: "INTROSPECTION"
+    requirement: "POST /api/sessions/{id}/heartbeat updates lastSeenAt to the current clock value. Designed to be called by the JWT auth filter (or a periodic ping from the client) so 'last active' tracking stays fresh."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: register session, capture initial lastSeenAt (null on fresh register), wait,
+      POST heartbeat → lastSeenAt advances. Implementation: SessionService.heartbeat() — single
+      UPDATE on last_seen_at.
+    policy_ref: "blueprints/session-management-manifest.yaml#introspection"
+
+  # ─── AUTHZ family (3 items) ───────────────────────────────────────────────
+  - id: "SESS-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All session-management endpoints require a valid JWT; unauthenticated callers receive HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/sessions, GET /api/sessions, GET /api/sessions/{id},
+      DELETE /api/sessions/{id}, POST /api/sessions/revoke-others, POST .../heartbeat
+      all → 401 without Authorization. Implementation: SecurityConfig /api/sessions/** authenticated.
+    policy_ref: "blueprints/session-management-manifest.yaml#authz"
+
+  - id: "SESS-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Cross-user IDOR is denied: requesting / revoking another user's session returns HTTP 404 to avoid information leakage about session ids."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA registers a session, UserB GET /api/sessions/{userA_session_id} → 404.
+      UserB DELETE → 404. Implementation: SessionService loads-by-(id, userId).
+    policy_ref: "blueprints/session-management-manifest.yaml#authz"
+
+  - id: "SESS-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "Admin force-logout: DELETE /api/admin/sessions/{id} requires ROLE_ADMIN and revokes ANY user's session. The caller's userId is recorded in revokedByUserId. Non-admin callers receive HTTP 403."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA registers session. UserB (MEMBER) → DELETE /api/admin/sessions/{id} → 403.
+      Admin (ROLE_ADMIN) → 204; session.status = REVOKED, revokedByUserId = admin's userId.
+      Implementation: @PreAuthorize on admin endpoint; service records actor.
+    policy_ref: "blueprints/session-management-manifest.yaml#authz"

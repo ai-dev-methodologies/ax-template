@@ -123,6 +123,12 @@ public class SecurityConfig {
                 // (POST/PUT/DELETE on /api/tags/{id}) additionally require ROLE_ADMIN
                 // via @PreAuthorize on TagController. Attach/detach is authenticated-only.
                 .requestMatchers("/api/tags/**").authenticated()
+                // R33 session-management domain (specs/session-management-l0.yaml):
+                // SESS-AUTHZ-001 — /api/sessions/** requires JWT.
+                // SESS-AUTHZ-003 — admin force-logout under /api/admin/sessions/**
+                // is gated by the upstream "/api/admin/**" hasAuthority("ROLE_ADMIN")
+                // matcher; the @PreAuthorize on AdminSessionController is defense-in-depth.
+                .requestMatchers("/api/sessions/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per

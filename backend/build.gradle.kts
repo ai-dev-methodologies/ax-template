@@ -238,6 +238,15 @@ tasks.register<Test>("testTagCategorization") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testSessionManagement") {
+    useJUnitPlatform {
+        includeTags("SESSION")
+    }
+    description = "Run session-management domain compliance tests (R33: 12 items / 4 families — LIFECYCLE, REVOCATION, INTROSPECTION, AUTHZ)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

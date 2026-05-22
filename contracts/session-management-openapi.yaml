@@ -1,0 +1,134 @@
+openapi: 3.0.3
+info:
+  title: "ax-template Session Management API"
+  version: "0.1.0"
+  description: >
+    Explicit session records bound to JWT jti claims. Provides the user-facing
+    "active sessions" UI surface + admin force-logout + a SessionRevocationCheck
+    SPI the JWT auth filter can consult on every request.
+servers:
+  - url: /api
+paths:
+  /sessions:
+    post:
+      summary: "Register a new session (call right after login)"
+      operationId: registerSession
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterSessionRequest' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/SessionResponse' } } } }
+        '200': { description: Already registered (idempotent), content: { application/json: { schema: { $ref: '#/components/schemas/SessionResponse' } } } }
+        '401': { description: Authentication required }
+    get:
+      summary: "List the caller's sessions (ACTIVE + REVOKED, newest first)"
+      operationId: listSessions
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: List, content: { application/json: { schema: { $ref: '#/components/schemas/SessionListResponse' } } } }
+        '401': { description: Authentication required }
+
+  /sessions/{id}:
+    get:
+      summary: "Get a single session"
+      operationId: getSession
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Session, content: { application/json: { schema: { $ref: '#/components/schemas/SessionResponse' } } } }
+        '404': { description: Not found OR owned by a different user }
+    delete:
+      summary: "Revoke the session (self only)"
+      operationId: revokeSession
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Revoked }
+        '404': { description: Not found OR owned by a different user }
+
+  /sessions/revoke-others:
+    post:
+      summary: "Revoke all of the caller's ACTIVE sessions except the kept one"
+      operationId: revokeOtherSessions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: keep, in: query, required: true, schema: { type: string, format: uuid }, description: "The session id to KEEP active" }
+      responses:
+        '200':
+          description: Counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revoked, kept]
+                properties:
+                  revoked: { type: integer }
+                  kept: { type: integer }
+
+  /sessions/{id}/heartbeat:
+    post:
+      summary: "Update lastSeenAt (self only)"
+      operationId: heartbeat
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Heartbeat recorded }
+        '404': { description: Not found OR owned by a different user }
+
+  /admin/sessions/{id}:
+    delete:
+      summary: "Admin force-logout of any user's session"
+      operationId: adminRevokeSession
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Revoked }
+        '403': { description: ROLE_ADMIN required }
+        '404': { description: Not found }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    RegisterSessionRequest:
+      type: object
+      required: [jti, expiresAt]
+      properties:
+        jti: { type: string, maxLength: 128 }
+        deviceLabel: { type: string, maxLength: 64 }
+        ipAddress: { type: string, description: "Server stores raw + responds masked" }
+        userAgent: { type: string, maxLength: 512 }
+        expiresAt: { type: string, format: date-time }
+
+    SessionResponse:
+      type: object
+      required: [id, status, jti, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [ACTIVE, REVOKED] }
+        jti: { type: string }
+        deviceLabel: { type: string, nullable: true }
+        ipAddressMasked: { type: string, nullable: true }
+        userAgentSummary: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        revokedByUserId: { type: string, nullable: true }
+        expired: { type: boolean, description: "Derived from expiresAt < now at response time" }
+
+    SessionListResponse:
+      type: object
+      required: [items, totalElements]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SessionResponse' }
+        totalElements: { type: integer }

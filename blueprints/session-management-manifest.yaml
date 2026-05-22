@@ -1,0 +1,116 @@
+template_id: "session-management-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "Multi-device login surfaces — users want a 'manage active sessions' UI to see and revoke their logins (보안 설정 > 활성 세션)"
+  - "Forced logout flows — password change, role change, suspicious activity must invalidate all OTHER sessions immediately"
+  - "Audit trail for compliance — 'who logged in from where when' must persist beyond JWT expiration (PIPA / GDPR support)"
+  - "B2B operator override — admin force-logout when a user's account is compromised or terminated"
+
+not_for:
+  - "Pure stateless JWT-only services where every JWT is interchangeable until expiration — adopting this domain adds a per-request DB lookup; if forced revocation is not a requirement, skip it"
+  - "Server-side session storage replacing JWT (e.g. classic JSESSIONID) — this blueprint COMPLEMENTS JWT, it does not replace it"
+  - "Cross-domain SSO session federation — out of scope for v1"
+  - "Multi-tenant tenant scoping — v1 assumes single-tenant. Fork-receivers adopting multi-tenant SaaS MUST add tenant_id column + AOP guard (see specs/multi-tenant-l0.yaml)."
+  - "Storing raw IP address or full User-Agent in the response — privacy posture forbids this; only masked / summarized forms are exposed via DTO"
+
+# ─── lifecycle ─────────────────────────────────────────────────────────────
+state_machine:
+  states: [ACTIVE, REVOKED]
+  transitions:
+    - from: ACTIVE
+      to: [REVOKED]
+    - from: REVOKED
+      to: []
+  expiration: "Clock-based predicate; NOT a stored status. SessionRecord.isExpired(now) returns expiresAt.isBefore(now). Checked at every isRevoked() / list / introspection call."
+
+lifecycle:
+  register_idempotent: true                    # SESS-LIFECYCLE-001
+  register_uniqueness: "(user_id, jti)"        # DB UNIQUE constraint
+  logout_response_status: 204                  # SESS-LIFECYCLE-003
+  hard_delete_forbidden: true                  # audit trail preserved
+
+# ─── revocation ────────────────────────────────────────────────────────────
+revocation:
+  user_self_revoke_endpoint: "DELETE /api/sessions/{id}"
+  revoke_others_endpoint: "POST /api/sessions/revoke-others?keep={currentSessionId}"
+  admin_force_revoke_endpoint: "DELETE /api/admin/sessions/{id}"
+  double_revoke_response: 204                  # idempotent — does not throw
+  spi_interface: "com.ax.template.authblueprint.sessionmanagement.SessionRevocationCheck"
+  spi_default_behavior: "isRevoked(jti) returns true for REVOKED OR expired OR unknown jti (fail-closed)"
+  spi_integration_hint: >
+    Fork-receivers wire this into their JwtAuthenticationConverter (or equivalent) so a request
+    carrying a JWT whose jti is in the SessionRecord REVOKED set produces 401. The catalog
+    PROVIDES the SPI; the JWT chain hookup is the fork-receiver's call.
+
+# ─── introspection ─────────────────────────────────────────────────────────
+introspection:
+  list_endpoint: "GET /api/sessions"
+  list_includes_revoked: true                  # SESS-INTROSPECT-001 — historical audit
+  list_order: "createdAt DESC"
+  detail_endpoint: "GET /api/sessions/{id}"
+  heartbeat_endpoint: "POST /api/sessions/{id}/heartbeat"
+  privacy:
+    ip_address: "MASKED — last octet (IPv4) / last 64 bits (IPv6) replaced with 'xxx'"
+    user_agent: "SUMMARIZED — extract browser / OS family only, never the raw header"
+    raw_fields_in_dto: forbidden
+
+# ─── authz ─────────────────────────────────────────────────────────────────
+authz:
+  endpoint_pattern: "/api/sessions/**"
+  authentication_required: true
+  cross_user_response: 404_not_403
+  admin_endpoint_pattern: "/api/admin/sessions/**"
+  admin_endpoint_required_authority: ROLE_ADMIN
+  admin_revoke_records_actor: revokedByUserId  # SESS-AUTHZ-003
+
+# ─── deferred to v2 ────────────────────────────────────────────────────────
+deferred_to_v2:
+  - id: "automatic_jwt_chain_integration"
+    reason: "Catalog ships the SessionRevocationCheck SPI but does NOT automatically wire it into the OAuth2 resource-server chain. Fork-receivers decide whether to consult the SPI on every request (extra DB lookup) or only periodically (refresh interval)."
+  - id: "geo_ip_enrichment"
+    reason: "ipAddressMasked is plain string. v2 could add geoCountry + geoCity using a MaxMind / IP-API lookup so the UI shows 'Seoul, KR' alongside the masked IP."
+  - id: "suspicious_login_detection"
+    reason: "v1 stores raw signal (ip + ua) but does not flag anomalies. v2 should compare new sessions against the historical set (new country / new device fingerprint) and surface a 'suspicious' flag."
+  - id: "session_pagination"
+    reason: "GET /api/sessions returns the full set. Bounded by max-sessions-per-user soft cap; v2 should add page/size."
+
+# ─── limits ────────────────────────────────────────────────────────────────
+limits:
+  max_active_sessions_per_user: 25             # soft cap; new register beyond auto-revokes oldest
+  max_device_label_length: 64
+  max_user_agent_length: 512                   # stored at full length on the entity for forensics
+  jti_max_length: 128
+
+testing_baseline:
+  unit: "JUnit 5 + AssertJ — state machine + IpAddressMasker + SessionRevocationCheck"
+  integration: "RestAssured black-box HTTP against @SpringBootTest RANDOM_PORT"
+
+verification_checkpoints:
+  - "Register is idempotent on (userId, jti) (SESS-LIFECYCLE-001)"
+  - "Expiration is a clock predicate, not a status (SESS-LIFECYCLE-002)"
+  - "Logout flips status to REVOKED + stamps revokedAt (SESS-LIFECYCLE-003)"
+  - "User self-revoke + revoke-others (SESS-REVOKE-001, SESS-REVOKE-002)"
+  - "SPI fails closed on unknown jti (SESS-REVOKE-003)"
+  - "List returns historical sessions ordered newest first (SESS-INTROSPECT-001)"
+  - "Raw IP and User-Agent NEVER in response DTO (SESS-INTROSPECT-002)"
+  - "Cross-user IDOR returns 404 (SESS-AUTHZ-002)"
+  - "Admin force-logout requires ROLE_ADMIN (SESS-AUTHZ-003)"
+
+must_not:
+  - "Hard-delete a SessionRecord — audit trail must persist"
+  - "Return raw ipAddress or raw userAgent in any response DTO"
+  - "Mutate SessionRecord.status outside SessionRecordStateMachine"
+  - "Return 403 for cross-user session access (must be 404 — IDOR enumeration defense)"
+  - "Fail-open on unknown jti in the SPI (must be true / revoked)"
+
+reject_if:
+  - "POST /api/sessions with duplicate (userId, jti) past the idempotency check → DataIntegrityViolation rethrown as 409 SESSION_ALREADY_REGISTERED"
+  - "DELETE /api/sessions/{id} where id is owned by a different user → 404 SESSION_NOT_FOUND"
+  - "DELETE /api/admin/sessions/{id} without ROLE_ADMIN → 403"
+
+source_precedence:
+  - "OWASP ASVS V3 — Session Management"
+  - "RFC 7519 §4.1.7 — JWT jti claim"
+  - "Stripe API session list pattern — historical visibility + per-device labels"
+  - "GitHub 'active sessions' UI — masked IP + UA summary + 'sign out other sessions'"
