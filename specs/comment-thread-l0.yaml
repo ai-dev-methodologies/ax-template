@@ -1,0 +1,143 @@
+version: "1.0.0"
+scope: "comment-thread-domain"
+stack: "Spring Boot 3.2.x + JPA + polymorphic Comment (entity_type/entity_id pair) + reply via parentCommentId + soft-delete + edit history via CommentEdit"
+standard: "Standard threaded comment pattern (Disqus/Reddit/Discourse) + RFC 9110 §9.3.5 (DELETE idempotency on soft delete) + GDPR Article 17 (right to erasure — preserved as soft-delete with body redaction)"
+items:
+  # ─── CRUD family (3 items) ────────────────────────────────────────────────
+  - id: "COMMENT-CRUD-001"
+    chapter: "CRUD"
+    requirement: "POST /api/comments creates a comment bound to (entityType, entityId). authorUserId is derived from Authentication; body, entityType, entityId are required; parentCommentId is optional (null = root)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST {entityType:'post', entityId:'p-1', body:'first comment'} → 201
+      with status=ACTIVE + authorUserId = caller. Root comment has parentCommentId=null.
+      Implementation: CommentService.create() stamps authorUserId server-side.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#crud"
+
+  - id: "COMMENT-CRUD-002"
+    chapter: "CRUD"
+    requirement: "PUT /api/comments/{id} updates the body. The previous body is preserved on a CommentEdit row. updatedAt advances on each edit; createdAt stays put."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create → PUT {body:'edited'} → 200 with body='edited' and updatedAt > createdAt.
+      CommentEdit row exists with previousBody='original'. Implementation: edit history is
+      captured BEFORE the update so the old text is preserved even on multiple edits.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#crud"
+
+  - id: "COMMENT-CRUD-003"
+    chapter: "CRUD"
+    requirement: "DELETE /api/comments/{id} soft-deletes. status flips ACTIVE → DELETED; the DTO body becomes '[deleted]'; deletedAt is stamped. Replies and edit history are preserved so the thread structure stays intact."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create + reply → DELETE root → 204. GET on root → status=DELETED, body='[deleted]'.
+      Reply still readable. Implementation: CommentService.delete() sets status + deletedAt + clears
+      body to NULL on the entity; DTO masks NULL body as '[deleted]'.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#crud"
+
+  # ─── THREAD family (3 items) ──────────────────────────────────────────────
+  - id: "COMMENT-THREAD-001"
+    chapter: "THREAD"
+    requirement: "POST with a non-null parentCommentId requires the parent to exist; missing parent → HTTP 400 PARENT_COMMENT_NOT_FOUND."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST {parentCommentId: <random uuid>} → 400 PARENT_COMMENT_NOT_FOUND.
+      Implementation: CommentService.create() loads the parent if parentCommentId != null.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#thread"
+
+  - id: "COMMENT-THREAD-002"
+    chapter: "THREAD"
+    requirement: "GET /api/comments/by-entity/{entityType}/{entityId} returns ALL comments (including soft-deleted) bound to that entity, flat list ordered by createdAt ASC. Each item carries parentCommentId so the client can rebuild the tree."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create root + 2 replies on the same entity. GET by-entity returns 3 items in
+      createdAt ASC order, each with the correct parentCommentId.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#thread"
+
+  - id: "COMMENT-THREAD-003"
+    chapter: "THREAD"
+    requirement: "A reply's (entityType, entityId) MUST match the parent comment's. Replying across entities is rejected with HTTP 400 CROSS_ENTITY_REPLY."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: create root on (post, p-1). POST reply with parentCommentId=<root_id> but
+      entityType=article → 400 CROSS_ENTITY_REPLY. Implementation: CommentService.create()
+      checks parent.entityType + parent.entityId match.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#thread"
+
+  # ─── AUTHZ family (3 items) ───────────────────────────────────────────────
+  - id: "COMMENT-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All comment endpoints require a valid JWT; unauthenticated callers receive HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: every endpoint without Authorization → 401. SecurityConfig /api/comments/** authenticated.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#authz"
+
+  - id: "COMMENT-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Only the comment's author can PUT (edit). Other users — including ADMIN — get HTTP 403 EDIT_FORBIDDEN. Editing is an audit-sensitive operation; admin cannot rewrite a user's text."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates comment. UserB PUT → 403 EDIT_FORBIDDEN. Admin PUT → 403 EDIT_FORBIDDEN.
+      Catalog stance: admin can MODERATE (delete) but cannot REWRITE history.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#authz"
+
+  - id: "COMMENT-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "DELETE allowed for (a) the comment's author OR (b) ROLE_ADMIN. Other authenticated users get HTTP 403. The deletion records who acted in deletedByUserId."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA creates. UserB DELETE → 403. Admin DELETE → 204 + deletedByUserId = admin.
+      UserA DELETE (own) → 204 + deletedByUserId = UserA.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#authz"
+
+  # ─── HISTORY family (3 items) ─────────────────────────────────────────────
+  - id: "COMMENT-HISTORY-001"
+    chapter: "HISTORY"
+    requirement: "Every edit appends a CommentEdit row with previousBody, editedAt, editedByUserId. Edit history rows are NEVER mutated or deleted (audit-grade)."
+    test_method: "RestAssured integration test + reflective JPA assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test (behavioral): edit twice → GET history returns 2 entries (original + first edit).
+      Test (reflective): CommentEdit fields are @Column(updatable=false).
+    policy_ref: "blueprints/comment-thread-manifest.yaml#history"
+
+  - id: "COMMENT-HISTORY-002"
+    chapter: "HISTORY"
+    requirement: "GET /api/comments/{id}/history is visible to (a) the comment's author OR (b) ROLE_ADMIN. Other users get HTTP 404 to avoid leaking the existence of edits."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA edits comment. UserB GET history → 404. Admin GET history → 200.
+      404 (not 403) — IDOR-safe; non-authors learn nothing about whether the comment was edited.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#history"
+
+  - id: "COMMENT-HISTORY-003"
+    chapter: "HISTORY"
+    requirement: "Soft-deleting a comment PRESERVES its CommentEdit rows. The history endpoint still returns them for the author / admin — audit trail outlasts the comment's visible body."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: edit → delete → GET history (as author) → still returns the edit row. The
+      comment's body is '[deleted]' but its edit history persists.
+    policy_ref: "blueprints/comment-thread-manifest.yaml#history"

@@ -265,6 +265,15 @@ tasks.register<Test>("testActivityFeed") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testCommentThread") {
+    useJUnitPlatform {
+        includeTags("COMMENT")
+    }
+    description = "Run comment-thread domain compliance tests (R36: 12 items / 4 families — CRUD, THREAD, AUTHZ, HISTORY)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

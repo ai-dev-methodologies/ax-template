@@ -1,0 +1,108 @@
+template_id: "comment-thread-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "User-generated comments on any entity — posts, products, articles, support tickets, audit-log events"
+  - "Threaded discussion (parent/child reply) where the tree shape stays modest (<1000 comments/entity, <5 levels deep)"
+  - "Audit-grade edit history — every edit captured immutably so user-visible text changes can be reconstructed for moderation / compliance"
+
+not_for:
+  - "Anonymous comments — v1 requires JWT; author identity is the audit anchor"
+  - "Realtime collaborative editing (Google Docs style) — out of scope; CommentEdit captures discrete snapshots, not OT/CRDT operations"
+  - "Massive comment volumes (>1M per entity, Reddit-scale) — current design uses flat list + client-side tree rebuild; massive trees need materialized path or nested set"
+  - "Public moderation queues — v1 has soft-delete by author/admin but no review/approval workflow. Compose with approval-workflow domain (R31) if pre-publish moderation is required."
+  - "Multi-tenant tenant scoping — v1 assumes single-tenant; multi-tenant fork-receivers MUST add tenant_id + AOP guard."
+
+# ─── crud ──────────────────────────────────────────────────────────────────
+crud:
+  required_fields: [entityType, entityId, body]
+  author_derived_from: "Authentication"
+  edit_endpoint: "PUT /api/comments/{id}"
+  edit_writable_fields: [body]
+  delete_endpoint: "DELETE /api/comments/{id}"
+  delete_kind: "soft"                       # COMMENT-CRUD-003 — status flip + body→NULL
+  deleted_body_mask: "[deleted]"
+
+# ─── thread ────────────────────────────────────────────────────────────────
+thread:
+  parent_required_response:
+    status: 400
+    error_code: PARENT_COMMENT_NOT_FOUND
+  cross_entity_reply_response:
+    status: 400
+    error_code: CROSS_ENTITY_REPLY
+  list_endpoint: "GET /api/comments/by-entity/{entityType}/{entityId}"
+  list_includes_deleted: true               # COMMENT-THREAD-002 — preserve thread shape
+  list_order: "createdAt ASC"
+  tree_rebuilding: "client-side from parentCommentId"
+
+# ─── authz ─────────────────────────────────────────────────────────────────
+authz:
+  endpoint_pattern: "/api/comments/**"
+  authentication_required: true
+  edit_allowed_to: author_only              # COMMENT-AUTHZ-002 — admin cannot rewrite
+  delete_allowed_to: author_or_admin        # COMMENT-AUTHZ-003
+  history_visibility: author_or_admin       # COMMENT-HISTORY-002
+  history_response_on_unauthorized: 404     # IDOR-safe — non-authors cannot detect edits
+
+# ─── history ───────────────────────────────────────────────────────────────
+history:
+  capture_on: edit
+  immutable: true                           # CommentEdit rows are @Column(updatable=false)
+  preserved_on_delete: true                 # COMMENT-HISTORY-003
+  endpoint: "GET /api/comments/{id}/history"
+
+# ─── limits ────────────────────────────────────────────────────────────────
+limits:
+  body_max_length: 4000
+  entity_type_max_length: 64
+  entity_id_max_length: 255
+  max_depth: 10                             # advisory; not enforced in v1
+
+# ─── deferred to v2 ────────────────────────────────────────────────────────
+deferred_to_v2:
+  - id: "max_depth_enforcement"
+    reason: "v1 accepts arbitrary reply depth. v2 should reject parentCommentId chains > max_depth to prevent runaway tree growth."
+  - id: "moderation_queue"
+    reason: "v1 is publish-immediate. v2 could compose with approval-workflow (R31) for a pre-publish review queue per entityType."
+  - id: "mention_resolution"
+    reason: "v1 stores body verbatim. v2 could parse @username mentions and produce activity-feed events (R35) for the mentioned users."
+  - id: "pagination_on_by_entity"
+    reason: "v1 returns the full thread per entity. v2 should add cursor-based pagination for entities with hundreds of comments."
+  - id: "vote_aggregation"
+    reason: "Composition with favorites-bookmarks (R34) gives per-comment counts. v2 could ship a 'top comments' query that ORDER BY favorites_count."
+  - id: "redacted_for_others_view"
+    reason: "v1 returns '[deleted]' to every viewer. v2 could keep the original visible to the author + admin for X days before final redaction."
+
+testing_baseline:
+  unit: "JUnit 5 + AssertJ — reflective JPA shape on Comment + CommentEdit"
+  integration: "RestAssured black-box HTTP against @SpringBootTest RANDOM_PORT"
+
+verification_checkpoints:
+  - "POST stamps author server-side (COMMENT-CRUD-001)"
+  - "PUT captures previousBody on CommentEdit + advances updatedAt (COMMENT-CRUD-002)"
+  - "DELETE soft-deletes; body masked as '[deleted]' (COMMENT-CRUD-003)"
+  - "Missing parent → 400; cross-entity reply → 400 (COMMENT-THREAD-001, 003)"
+  - "List by entity is flat + ordered, includes deleted (COMMENT-THREAD-002)"
+  - "Edit is author-only (admin cannot rewrite) (COMMENT-AUTHZ-002)"
+  - "Delete by author OR admin (COMMENT-AUTHZ-003)"
+  - "Edit history immutable + author-or-admin-only + survives delete (COMMENT-HISTORY-001/002/003)"
+
+must_not:
+  - "Allow ROLE_ADMIN to PUT a comment they did not author — rewriting another user's text breaks audit invariants"
+  - "Hard-delete a comment or its CommentEdit rows in v1"
+  - "Return the comment's body when status=DELETED — DTO must mask as '[deleted]'"
+  - "Expose history to non-author non-admin callers — must be 404 (IDOR-safe)"
+  - "Mutate CommentEdit row fields after insert"
+
+reject_if:
+  - "POST with blank entityType / entityId / body → 400 (Bean Validation)"
+  - "POST with parentCommentId pointing to non-existent comment → 400 PARENT_COMMENT_NOT_FOUND"
+  - "POST with parentCommentId whose (entityType, entityId) != requested → 400 CROSS_ENTITY_REPLY"
+  - "PUT by non-author → 403 EDIT_FORBIDDEN"
+  - "DELETE by non-author non-admin → 403"
+
+source_precedence:
+  - "Disqus/Discourse threaded comment patterns (parentId + flat list + client tree rebuild)"
+  - "GDPR Article 17 — right to erasure (soft-delete with body redaction satisfies for most jurisdictions)"
+  - "RFC 9110 §9.3.5 — HTTP DELETE idempotency (soft-delete is idempotent against repeated calls)"

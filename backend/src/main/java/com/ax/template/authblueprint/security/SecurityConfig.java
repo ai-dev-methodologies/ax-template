@@ -137,6 +137,11 @@ public class SecurityConfig {
                 // ACT-AUTHZ-001 — every endpoint requires JWT. Visibility scoping
                 // (actor OR audience contains caller) enforced inside ActivityService.
                 .requestMatchers("/api/activities/**").authenticated()
+                // R36 comment-thread domain (specs/comment-thread-l0.yaml):
+                // COMMENT-AUTHZ-001 — every endpoint requires JWT. Author + admin
+                // scoping (edit author-only; delete author-or-admin; history scoped)
+                // enforced inside CommentService.
+                .requestMatchers("/api/comments/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per

@@ -1,0 +1,148 @@
+openapi: 3.0.3
+info:
+  title: "ax-template Comment Thread API"
+  version: "0.1.0"
+  description: >
+    Entity-agnostic threaded comments with reply hierarchy, soft-delete,
+    and immutable edit history. Author-only edit (admin cannot rewrite);
+    author-or-admin delete. History visibility scoped to author + admin only.
+servers:
+  - url: /api
+paths:
+  /comments:
+    post:
+      summary: "Create a comment or reply"
+      operationId: createComment
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCommentRequest' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/CommentResponse' } } } }
+        '400': { description: Validation, missing parent, or cross-entity reply }
+        '401': { description: Authentication required }
+
+  /comments/{id}:
+    get:
+      summary: "Get a single comment"
+      operationId: getComment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Comment, content: { application/json: { schema: { $ref: '#/components/schemas/CommentResponse' } } } }
+        '404': { description: Not found }
+    put:
+      summary: "Edit a comment (author only; admin cannot rewrite)"
+      operationId: editComment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCommentRequest' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/CommentResponse' } } } }
+        '403': { description: Not author }
+        '404': { description: Not found }
+    delete:
+      summary: "Soft-delete the comment (author or ROLE_ADMIN)"
+      operationId: deleteComment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Soft-deleted (status flipped to DELETED) }
+        '403': { description: Not author and not ROLE_ADMIN }
+        '404': { description: Not found }
+
+  /comments/by-entity/{entityType}/{entityId}:
+    get:
+      summary: "List all comments on an entity (flat, includes deleted, createdAt ASC)"
+      operationId: commentsByEntity
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: entityType, in: path, required: true, schema: { type: string } }
+        - { name: entityId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: List
+          content: { application/json: { schema: { $ref: '#/components/schemas/CommentListResponse' } } }
+        '401': { description: Authentication required }
+
+  /comments/{id}/history:
+    get:
+      summary: "Edit history (author or ROLE_ADMIN only)"
+      operationId: commentHistory
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: History, content: { application/json: { schema: { $ref: '#/components/schemas/CommentHistoryResponse' } } } }
+        '404': { description: Not visible to caller (IDOR-safe) }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    CreateCommentRequest:
+      type: object
+      required: [entityType, entityId, body]
+      properties:
+        entityType: { type: string, maxLength: 64 }
+        entityId: { type: string, maxLength: 255 }
+        body: { type: string, maxLength: 4000 }
+        parentCommentId: { type: string, format: uuid, nullable: true }
+
+    UpdateCommentRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, maxLength: 4000 }
+
+    CommentResponse:
+      type: object
+      required: [id, authorUserId, entityType, entityId, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        authorUserId: { type: string }
+        entityType: { type: string }
+        entityId: { type: string }
+        parentCommentId: { type: string, format: uuid, nullable: true }
+        body: { type: string, description: "'[deleted]' when status=DELETED" }
+        status: { type: string, enum: [ACTIVE, DELETED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time, nullable: true }
+        deletedAt: { type: string, format: date-time, nullable: true }
+        deletedByUserId: { type: string, nullable: true }
+
+    CommentListResponse:
+      type: object
+      required: [items, totalElements]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CommentResponse' }
+        totalElements: { type: integer }
+
+    CommentEditResponse:
+      type: object
+      required: [id, editedAt, editedByUserId, previousBody]
+      properties:
+        id: { type: string, format: uuid }
+        editedAt: { type: string, format: date-time }
+        editedByUserId: { type: string }
+        previousBody: { type: string }
+
+    CommentHistoryResponse:
+      type: object
+      required: [commentId, edits]
+      properties:
+        commentId: { type: string, format: uuid }
+        edits:
+          type: array
+          items: { $ref: '#/components/schemas/CommentEditResponse' }
