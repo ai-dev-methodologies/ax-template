@@ -10,11 +10,16 @@ enabled_l4_domains:
   - crud
   - feature-flags
   - search
-  # R29–R36 domains (api-key, approval-workflow, session-management,
-  # activity-feed, comment-thread, tag-categorization, favorites-bookmarks)
-  # are NOT listed here yet — they lack templates/L4/<domain>/ stubs and
-  # would fail recipe_spec_referential_integrity. They integrate with b2b-admin
-  # via MULTI-TENANT-INTEGRATION-001..005 below as cross-domain invariants.
+  # R39 (2026-05-23): R29–R36 domains absorbed via backend-only L4 stubs.
+  # Each templates/L4/<domain>/README.md carries the tenant_model declaration;
+  # the full Next.js tree is deferred to per-domain follow-up PRs.
+  - api-key
+  - approval-workflow
+  - session-management
+  - activity-feed
+  - comment-thread
+  - tag-categorization
+  - favorites-bookmarks
 l2_blocks_used:
   - bulk-actions-bar
   - bulk-export
@@ -51,19 +56,32 @@ tenant_model: multi   # R16: explicit declaration per MULTI-TENANT-ISOLATION-DEF
 
 > See [`docs/IMPLEMENTATION-STATUS.md`](../../docs/IMPLEMENTATION-STATUS.md) for the full 12-L4 status taxonomy and fork-receiver expectation alignment (R15+ mandatory section).
 
-| L4 domain | Status | Effort if not impl |
-|---|---|---|
-| `audit-log` | **impl** ✅ | — (ready; `./gradlew testAuditLog` GREEN) |
-| `auth` | **impl** ✅ | — (ready) |
-| `crud` | **impl** ✅ | — (ready) |
-| `feature-flags` | **impl** ✅ | — (ready; `./gradlew testFeatureFlags` GREEN) |
-| `search` | **impl** ✅ | — (ready; `./gradlew testSearch` GREEN) |
+| L4 domain | Status | Frontend stub | Effort if not impl |
+|---|---|---|---|
+| `audit-log` | **impl** ✅ | full-trio | — (ready; `./gradlew testAuditLog` GREEN) |
+| `auth` | **impl** ✅ | full-trio | — (ready) |
+| `crud` | **impl** ✅ | full-trio | — (ready) |
+| `feature-flags` | **impl** ✅ | full-trio | — (ready; `./gradlew testFeatureFlags` GREEN) |
+| `search` | **impl** ✅ | full-trio | — (ready; `./gradlew testSearch` GREEN) |
+| `api-key` *(R30 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testApiKey` GREEN); Next.js tree deferred |
+| `approval-workflow` *(R31 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testApprovalWorkflow` GREEN); Next.js tree deferred |
+| `session-management` *(R33 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testSessionManagement` GREEN); Next.js tree deferred |
+| `activity-feed` *(R35 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testActivityFeed` GREEN); Next.js tree deferred |
+| `comment-thread` *(R36 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testCommentThread` GREEN); Next.js tree deferred |
+| `tag-categorization` *(R34 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testTagCategorization` GREEN); Next.js tree deferred |
+| `favorites-bookmarks` *(R35a / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testFavorites` GREEN); Next.js tree deferred |
 
-**Summary**: 5 impl ready · 0 spec-only · 0 skeleton · est. 0 eng-days for the recipe gap. Multi-tenant infra (row-level filter + AOP guard + tenant propagation) remains fork-receiver responsibility per `tenant_model: multi` declaration above.
+**Summary**: 12 impl ready · 0 spec-only · 0 skeleton · est. 0 eng-days for the recipe backend gap. 5 full-trio L4s + 7 backend-only L4 stubs (R39, each `templates/L4/<domain>/README.md` only) totaling 12 in `enabled_l4_domains`. Multi-tenant infra (row-level filter + AOP guard + tenant propagation) remains fork-receiver responsibility per `tenant_model: multi` declaration above.
 
-### R29–R36 cross-domain integration (backend GREEN, frontend L4 stubs pending)
+### Backend-only L4 stub convention (R39)
 
-Backend GREEN for: `api-key` (R30), `approval-workflow` (R31), `session-management` (R33), `tag-categorization` (R34), `activity-feed` (R35), `favorites-bookmarks` (R35a), `comment-thread` (R36) — each via its own `./gradlew test{Domain}` task. They integrate with b2b-admin via the MULTI-TENANT-INTEGRATION-001..005 cross-domain invariants below. Next PR (R39+): ship `templates/L4/<domain>/` frontend stubs and promote them into `enabled_l4_domains`.
+For the 7 R29–R36 domains, `templates/L4/<domain>/` contains only a `README.md` carrying:
+
+- the canonical `**Tenant model**: single … MULTI-TENANT-ISOLATION-DEFAULT-001` declaration (`l4_readme_tenant_model_declaration_guard` requirement),
+- a backend reference block pointing at the Java package + spec YAML + `./gradlew test<Domain>` task + violation-proof test,
+- a "why backend-only at this stage" note explaining the deferral.
+
+The full Next.js tree (app/, next.config.ts, providers) is intentionally not shipped — fork-receivers wanting a UI should clone `templates/L4/audit-log/` (or `feature-flags/`) and adapt to this domain's REST surface. The MULTI-TENANT-INTEGRATION-001..005 cross-domain invariants below define the contract surface that any future frontend tree MUST respect.
 
 **Reading guide**: `impl` = backend Java reference workload ready in `backend/src/main/java/com/ax/template/authblueprint/<domain>/`. `spec-only` = Spec Trio + Next.js stub only; backend NOT included. `skeleton` = `.skeleton` file present; flesh out controller/service yourself. Sealed verdict PASS validates catalog self-discoverability, NOT runnable backend code.
 

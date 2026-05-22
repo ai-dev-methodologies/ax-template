@@ -7024,10 +7024,15 @@ Reference: [RFC 2104 — HMAC: Keyed-Hashing for Message Authentication](https:/
 
 ## L4 domains
 
+- **activity-feed** — applied by: (none)
+- **api-key** — applied by: (none)
+- **approval-workflow** — applied by: (none)
 - **audit-log** — applied by: api-gateway-relay, b2b-admin, booking, cms, community, crm, e-commerce, internal-it, lms, marketplace, saas-subscription
 - **auth** — applied by: api-gateway-relay, b2b-admin, cms, community, internal-it, lms, saas-subscription
 - **billing** — applied by: (none)
+- **comment-thread** — applied by: (none)
 - **crud** — applied by: api-gateway-relay, b2b-admin, booking, cms, community, crm, e-commerce, internal-it, lms, marketplace
+- **favorites-bookmarks** — applied by: (none)
 - **feature-flags** — applied by: api-gateway-relay, b2b-admin, booking, lms, marketplace, saas-subscription
 - **file-storage** — applied by: (none)
 - **notification** — applied by: api-gateway-relay, booking, cms, community, crm, e-commerce, internal-it, lms, marketplace, saas-subscription
@@ -7035,6 +7040,8 @@ Reference: [RFC 2104 — HMAC: Keyed-Hashing for Message Authentication](https:/
 - **practices** — applied by: (none)
 - **scheduled-task** — applied by: api-gateway-relay, cms, internal-it, lms
 - **search** — applied by: b2b-admin, cms, community, crm, e-commerce, marketplace
+- **session-management** — applied by: (none)
+- **tag-categorization** — applied by: (none)
 - **webhook** — applied by: api-gateway-relay, internal-it
 
 ## Active recipes

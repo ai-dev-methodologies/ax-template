@@ -57,11 +57,16 @@ $defs:
     # (SELECTABLE + FUTURE_ADD tiers); the 35th hard guard
     # practices/evals/l4_domain_enum_sync_guard.sh enforces I1..I6 coherence.
     enum:
+      - activity-feed
+      - api-key
+      - approval-workflow
       - audit-log
       - auth
       - billing
+      - comment-thread
       - crud
       - email-outbox
+      - favorites-bookmarks
       - feature-flags
       - file-storage
       - i18n-policy
@@ -73,6 +78,8 @@ $defs:
       - realtime-policy
       - scheduled-task
       - search
+      - session-management
+      - tag-categorization
       - webhook
 
   l4_domain_list:

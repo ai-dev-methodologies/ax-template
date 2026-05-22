@@ -126,6 +126,24 @@ tiers:
                          "marketplace"]
       - name: "webhook"
         active_recipes: ["api-gateway-relay", "internal-it"]
+      # R39 (2026-05-23): R29–R36 backend-only L4 stubs absorbed into b2b-admin.
+      # Each ships templates/L4/<domain>/README.md (tenant_model declaration);
+      # full Next.js tree deferred to per-domain follow-up PRs. See RECIPE.md
+      # "Backend-only L4 stub convention (R39)" for the contract.
+      - name: "api-key"
+        active_recipes: ["b2b-admin"]
+      - name: "approval-workflow"
+        active_recipes: ["b2b-admin"]
+      - name: "session-management"
+        active_recipes: ["b2b-admin"]
+      - name: "activity-feed"
+        active_recipes: ["b2b-admin"]
+      - name: "comment-thread"
+        active_recipes: ["b2b-admin"]
+      - name: "tag-categorization"
+        active_recipes: ["b2b-admin"]
+      - name: "favorites-bookmarks"
+        active_recipes: ["b2b-admin"]
 
   future_add:
     description: >

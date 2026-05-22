@@ -82,11 +82,11 @@ join_cs() { awk 'NR>1{printf ", "} {printf "%s", $0} END{if (NR>0) print ""}'; }
   printf '\n'
 } > "$OUT"
 
-# Inline disk-truth assertions (proof of 12 / 11 / 13)
+# Inline disk-truth assertions (R39: 19 L4 = 12 full-trio + 7 backend-only stubs / 11 recipes / 13 verdicts)
 L4_COUNT=$(ls -d ../templates/L4/*/ 2>/dev/null | wc -l | tr -d ' ')
 REC_COUNT=$(printf '%s\n' "$MANIFEST_ROWS" | grep -c '|' || true)
 VER_COUNT=$(ls ../skills/_tests/sealed-verdict/*.md 2>/dev/null | grep -v README | wc -l | tr -d ' ')
-[[ "$L4_COUNT"  == "12" ]] || { echo "ASSERT FAIL: L4 $L4_COUNT != 12"  >&2; exit 1; }
+[[ "$L4_COUNT"  == "19" ]] || { echo "ASSERT FAIL: L4 $L4_COUNT != 19"  >&2; exit 1; }
 [[ "$REC_COUNT" == "11" ]] || { echo "ASSERT FAIL: recipes $REC_COUNT != 11" >&2; exit 1; }
 [[ "$VER_COUNT" == "13" ]] || { echo "ASSERT FAIL: verdicts $VER_COUNT != 13" >&2; exit 1; }
 echo "wrote $OUT — $COUNT rules, sha=$SHA, TOC: $L4_COUNT L4 / $REC_COUNT recipes / $VER_COUNT verdicts"
