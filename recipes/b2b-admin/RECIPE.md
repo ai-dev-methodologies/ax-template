@@ -1,15 +1,20 @@
 ---
 pattern: b2b-admin
-display_name: "B2B Admin (Multi-tenant Ops + Analytics + Audit + Impersonation)"
+display_name: "B2B Admin (Multi-tenant Ops + Analytics + Audit + Impersonation + R29–R36 admin surface)"
 schema_version: 1
 compatible_with_catalog_version: "v1.3.0-business-patterns"
-last_verified_at: "2026-05-18"
+last_verified_at: "2026-05-22"
 enabled_l4_domains:
   - audit-log
   - auth
   - crud
   - feature-flags
   - search
+  # R29–R36 domains (api-key, approval-workflow, session-management,
+  # activity-feed, comment-thread, tag-categorization, favorites-bookmarks)
+  # are NOT listed here yet — they lack templates/L4/<domain>/ stubs and
+  # would fail recipe_spec_referential_integrity. They integrate with b2b-admin
+  # via MULTI-TENANT-INTEGRATION-001..005 below as cross-domain invariants.
 l2_blocks_used:
   - bulk-actions-bar
   - bulk-export
@@ -48,13 +53,17 @@ tenant_model: multi   # R16: explicit declaration per MULTI-TENANT-ISOLATION-DEF
 
 | L4 domain | Status | Effort if not impl |
 |---|---|---|
-| `audit-log` | **spec-only** 📋 | ~5-10 eng-days (implement backend) |
+| `audit-log` | **impl** ✅ | — (ready; `./gradlew testAuditLog` GREEN) |
 | `auth` | **impl** ✅ | — (ready) |
 | `crud` | **impl** ✅ | — (ready) |
-| `feature-flags` | **spec-only** 📋 | ~5-10 eng-days (implement backend) |
-| `search` | **spec-only** 📋 | ~5-10 eng-days (implement backend) |
+| `feature-flags` | **impl** ✅ | — (ready; `./gradlew testFeatureFlags` GREEN) |
+| `search` | **impl** ✅ | — (ready; `./gradlew testSearch` GREEN) |
 
-**Summary**: 2 impl ready · 3 spec-only (implement) · 0 skeleton (flesh out) · est. ~19-26 engineering days for the gap.
+**Summary**: 5 impl ready · 0 spec-only · 0 skeleton · est. 0 eng-days for the recipe gap. Multi-tenant infra (row-level filter + AOP guard + tenant propagation) remains fork-receiver responsibility per `tenant_model: multi` declaration above.
+
+### R29–R36 cross-domain integration (backend GREEN, frontend L4 stubs pending)
+
+Backend GREEN for: `api-key` (R30), `approval-workflow` (R31), `session-management` (R33), `tag-categorization` (R34), `activity-feed` (R35), `favorites-bookmarks` (R35a), `comment-thread` (R36) — each via its own `./gradlew test{Domain}` task. They integrate with b2b-admin via the MULTI-TENANT-INTEGRATION-001..005 cross-domain invariants below. Next PR (R39+): ship `templates/L4/<domain>/` frontend stubs and promote them into `enabled_l4_domains`.
 
 **Reading guide**: `impl` = backend Java reference workload ready in `backend/src/main/java/com/ax/template/authblueprint/<domain>/`. `spec-only` = Spec Trio + Next.js stub only; backend NOT included. `skeleton` = `.skeleton` file present; flesh out controller/service yourself. Sealed verdict PASS validates catalog self-discoverability, NOT runnable backend code.
 
@@ -74,6 +83,13 @@ feature-flag administration.
 | `audit-log` | Immutable impersonation events, feature-flag change history |
 | `feature-flags` | Tenant-scoped flag management, per-tenant rollouts |
 | `search` | Cross-tenant search (ADMIN only), per-tenant entity search |
+| `api-key` *(R30)* | Admin manages B2B integration credentials per tenant; bcrypt-hashed secrets + last-used telemetry |
+| `approval-workflow` *(R31)* | Multi-step admin operations (cross-tenant moves, plan upgrades, dangerous deletes) with two-person review |
+| `session-management` *(R33)* | Admin force-logout, per-user device inventory, masked IP/UA for forensics |
+| `activity-feed` *(R35)* | Admin operations stream; polymorphic (object_type, object_id) fan-in |
+| `comment-thread` *(R36)* | Internal admin notes on tenants/users/approval-requests with soft-delete audit trail |
+| `tag-categorization` *(R34)* | Tenant-scoped tag library applied to any (entity_type, entity_id) admin object |
+| `favorites-bookmarks` *(R35a)* | Per-admin saved filters/tenants/dashboards; IDOR-safe caller-only access |
 
 ## Business Invariants
 
@@ -82,6 +98,11 @@ feature-flag administration.
 | B2BADMIN-INV-001 | Impersonation events always emit audit-log row with `impersonator_id`, `impersonated_id`, `started_at`, `ended_at` | `spec_ref: specs/audit-log-l0.yaml#AUDIT-RECORD-001` + `spec_ref: specs/audit-log-l0.yaml#AUDIT-RECORD-002` |
 | B2BADMIN-INV-002 | Tenant-scoped feature-flag changes are immutable history (no destructive delete) | `spec_ref: specs/feature-flags-l0.yaml#FF-CRUD-003` + `spec_ref: specs/audit-log-l0.yaml#AUDIT-RETENTION-001` |
 | B2BADMIN-INV-003 | KPI aggregation respects tenant boundary (no cross-tenant leakage) | `spec_ref: specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-001` + `spec_ref: specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-003` + `spec_ref: specs/multi-tenant-l0.yaml#MULTI-TENANT-PROPAGATION-001` (R16 re-anchored — see disambiguation below) |
+| MULTI-TENANT-INTEGRATION-001 | Every R29–R36 entity adopted above MUST carry `tenant_id` and be filtered by AOP `@TenantScoped` guard before any business read | `spec_ref: specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-001` + `spec_ref: specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-003` |
+| MULTI-TENANT-INTEGRATION-002 | Caller-authentication-only authorization (no `?userId=` parameters) applies to every absorbed domain's IDOR-sensitive endpoints (favorites, sessions own-only, comments author-only edit) | `practices/rules/caller-authentication-only-no-userid-param.md` + `spec_ref: specs/favorites-bookmarks-l0.yaml#FAV-AUTHZ-002` + `spec_ref: specs/session-management-l0.yaml#SESS-AUTHZ-001` + `spec_ref: specs/comment-thread-l0.yaml#COMMENT-AUTHZ-002` |
+| MULTI-TENANT-INTEGRATION-003 | PII at DTO boundary (IP masked, UA summarized, plaintext credentials NEVER returned) for session-management + api-key admin surfaces | `practices/rules/pii-masked-at-dto-boundary.md` + `spec_ref: specs/session-management-l0.yaml#SESS-INTROSPECT-002` + `spec_ref: specs/api-key-l0.yaml#APIKEY-CRUD-002` |
+| MULTI-TENANT-INTEGRATION-004 | Soft-delete with body→NULL preserves audit trail across tenant boundary for comment-thread; admin cannot rewrite user content even with elevated tenant role | `practices/rules/soft-delete-audit-trail.md` + `practices/rules/admin-cannot-rewrite-user-content.md` + `spec_ref: specs/comment-thread-l0.yaml#COMMENT-CRUD-003` + `spec_ref: specs/comment-thread-l0.yaml#COMMENT-AUTHZ-002` |
+| MULTI-TENANT-INTEGRATION-005 | HTTP DELETE on absorbed domains returns 204 even when target row is absent (RFC 9110 §9.3.5 idempotency), but tenant-scope check still applies before the 204 | `practices/rules/http-delete-idempotency-rfc9110.md` + `spec_ref: specs/favorites-bookmarks-l0.yaml#FAV-CRUD-002` + `spec_ref: specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-003` |
 
 ## Business Observability (advisory — no emitter test enforced this cycle)
 

@@ -1,10 +1,19 @@
 # specs/recipes/b2b-admin-recipe-l0.yaml — Recipe-level spec (SP39)
 schema_version: 1
 pattern: b2b-admin
-display_name: "B2B Admin (Multi-tenant Ops + Analytics + Audit + Impersonation)"
+display_name: "B2B Admin (Multi-tenant Ops + Analytics + Audit + Impersonation + R29–R36 admin surface)"
 compatible_with_catalog_version: "v1.3.0-business-patterns"
-last_verified_at: "2026-05-18"
+last_verified_at: "2026-05-22"
 
+# Note (R38, 2026-05-22): R29–R36 domains (api-key / approval-workflow /
+# session-management / activity-feed / comment-thread / tag-categorization /
+# favorites-bookmarks) are NOT enabled here — they have no Next.js L4
+# template under templates/L4/ yet, and the recipe_spec_referential_integrity
+# guard rejects entries that lack a template directory. Their backend
+# impl is GREEN (./gradlew test{Domain}) and they integrate with b2b-admin
+# via the MULTI-TENANT-INTEGRATION-001..005 cross-domain invariants
+# documented in RECIPE.md. Future PR (R39+): ship templates/L4/<domain>/
+# stubs and migrate them into enabled_l4_domains here.
 enabled_l4_domains:
   - audit-log
   - auth

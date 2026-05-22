@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "329bf03a2dc18a2e5db7ce823d214230e3c33c3d682e504fba6435b10121ad3c"
-  rule_count: 87
+  source_concat_sha256: "dc0eb5f86227f4b2bea28168cdd3c327cb75c8732e00e23457356421eada3173"
+  rule_count: 92
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -208,6 +208,97 @@ management:
 Verification: `./gradlew testPractices --tests "*RestrictExposure*"` reads `application.yml`, finds the `include:` line, rejects `*` wildcards, and rejects any of `env`, `beans`, `heapdump`, `threaddump`, `loggers`, `configprops`, `metrics`, `shutdown`.
 
 Reference: [Spring Boot — Exposing Endpoints](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.exposing)
+
+
+<!-- @source rules/admin-cannot-rewrite-user-content.md -->
+
+---
+title: ROLE_ADMIN may MODERATE (delete) but MUST NOT rewrite user-authored content
+impact: HIGH
+impactDescription: "Admin-edit-of-user-content destroys audit trail trust — the strongest counter-evidence against the platform's good faith"
+tags:
+  - authz
+  - audit
+  - moderation
+  - trust
+spec_ref: "specs/comment-thread-l0.yaml#COMMENT-AUTHZ-002"
+verification:
+  gradle_task: testCommentThread
+  tag: COMMENT-AUTHZ-002
+upstream:
+  - "https://gdpr-info.eu/art-5-gdpr/"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+evidence:
+  - source_type: external
+    citation: "GDPR Article 5(1)(a) — Lawfulness, fairness and transparency"
+    url: "https://gdpr-info.eu/art-5-gdpr/"
+    quote: "Personal data shall be processed lawfully, fairly and in a transparent manner in relation to the data subject."
+    quoted_at: "2026-05-22"
+  - source_type: external
+    citation: "OWASP ASVS V8.3.4 — Verify that sensitive personal information is subject to data retention classification"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quote: "Verify that sensitive personal information is subject to data retention classification, such that old or out of date data is deleted automatically, on a schedule, or as the situation requires."
+    quoted_at: "2026-05-22"
+---
+
+## ROLE_ADMIN may MODERATE (delete) but MUST NOT rewrite user-authored content
+
+**Impact: HIGH — Admin-edit-of-user-content destroys audit trust**
+
+The split between moderation (delete) and rewriting (edit) is the hinge of any audit-grade content system. A platform whose admins can silently rewrite user posts cannot credibly claim to preserve the user's voice. The user has no way to prove the published text was their own. This is also the precise failure mode that destroys long-lived comment systems: a single staff "fix" of someone's typo erodes the contract that the published text is the user's own words.
+
+The catalog rule: `ROLE_ADMIN` is permitted on DELETE (moderation outcome) but rejected on PUT/edit. The author is the only principal allowed to mutate text. The author can edit their own text; the audit trail (CommentEdit row) captures the pre-image. If the platform needs the offending text removed for legal reasons, the path is delete (status flip to DELETED, body masked) — not rewrite.
+
+Catalog evidence (R36 comment-thread, COMMENT-AUTHZ-002): `CommentService.edit()` checks `comment.getAuthorUserId().equals(auth.getName())` regardless of authority. Admin attempts return 403 EDIT_FORBIDDEN. The dedicated admin endpoint (under `/api/admin/comments`) accepts only DELETE, not PUT.
+
+**Incorrect — admin can edit any user's content:**
+
+```java
+@PutMapping("/api/comments/{id}")
+public CommentResponse edit(Authentication auth, @PathVariable UUID id, @RequestBody UpdateRequest body) {
+    Comment c = repo.findById(id).orElseThrow();
+    // Anti-pattern: admin override allowed
+    if (!c.getAuthorUserId().equals(auth.getName()) && !isAdmin(auth)) {
+        throw new AccessDeniedException();
+    }
+    c.editBody(body.body(), Instant.now());
+    return CommentResponse.from(c);
+}
+```
+
+A leaked admin token now silently rewrites any comment. Even with no leak: this code asks the platform's staff to be trusted with rewriting any user's words. The audit invariant is broken by design.
+
+**Correct — author-only edit, admin can only moderate (delete):**
+
+```java
+@PutMapping("/api/comments/{id}")
+public CommentResponse edit(Authentication auth, @PathVariable UUID id, @RequestBody UpdateRequest body) {
+    Comment c = repo.findById(id).orElseThrow(() -> new CommentNotFoundException(id));
+    if (!c.getAuthorUserId().equals(auth.getName())) {
+        // No `|| isAdmin(auth)` here — even admin cannot rewrite
+        throw new EditForbiddenException("only the author may edit comment " + id);
+    }
+    // captures pre-image to CommentEdit BEFORE mutating
+    editHistory.save(new CommentEdit(c.getId(), Instant.now(), auth.getName(), c.getBody()));
+    c.editBody(body.body(), Instant.now());
+    return CommentResponse.from(c);
+}
+
+@DeleteMapping("/api/admin/comments/{id}")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+public ResponseEntity<Void> moderate(Authentication auth, @PathVariable UUID id) {
+    service.softDelete(id, auth.getName());           // status flip + body→NULL + audit row
+    return ResponseEntity.noContent().build();
+}
+```
+
+The admin path is delete-only. The author path is the only edit path. The audit trail (`actedByUserId` + `CommentEdit`) is honest because the operation it records is the only operation that ever happened.
+
+**This rule applies anywhere user-authored text is subject to revision history**: comments, reviews, posts, change logs, journal entries, ticket descriptions. It does NOT apply to admin-curated metadata (tag names, category labels, feature-flag descriptions) where the admin IS the authoring party.
+
+Reference: [GDPR Article 5 — Lawfulness, fairness and transparency](https://gdpr-info.eu/art-5-gdpr/)
+
+Reference: [OWASP ASVS V8 — Data Protection](https://owasp.org/www-project-application-security-verification-standard/)
 
 
 <!-- @source rules/api-idempotency-key-required.md -->
@@ -1315,6 +1406,77 @@ Verification: `./gradlew testPractices --tests "*CacheableTtl*"` asserts that ev
 Reference: [Caffeine Wiki — Eviction](https://github.com/ben-manes/caffeine/wiki/Eviction) | [Spring Cache Abstraction](https://docs.spring.io/spring-framework/reference/integration/cache.html)
 
 
+<!-- @source rules/caller-authentication-only-no-userid-param.md -->
+
+---
+title: Caller identity derives from Authentication only — never accept userId via path or query
+impact: HIGH
+impactDescription: "Accepting userId via path/query opens structural IDOR — a bug-free check is harder than removing the parameter"
+tags:
+  - api
+  - authz
+  - idor
+  - owner-scoped
+spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-AUTHZ-002"
+verification:
+  gradle_task: testFavorites
+  tag: FAV-AUTHZ-002
+upstream:
+  - "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+evidence:
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2023) — API1:2023 Broken Object Level Authorization (BOLA)"
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+    quote: "Object level authorization is an access control mechanism that is usually implemented at the code level to validate that one user can only access objects that they should have access to."
+    quoted_at: "2026-05-22"
+  - source_type: external
+    citation: "OWASP ASVS V4.2.1 — Verify that the application uses a single vetted access control mechanism for accessing protected data and resources"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quote: "Verify that the application uses a single vetted access control mechanism for accessing protected data and resources."
+    quoted_at: "2026-05-22"
+---
+
+## Caller identity derives from Authentication only — never accept userId via path or query
+
+**Impact: HIGH — Accepting userId via path/query opens structural IDOR**
+
+The canonical Broken Object Level Authorization (BOLA / IDOR) pattern — OWASP API Top 10's #1 risk — is endpoints that take a userId-shaped parameter and check it against the caller's authority. The check works when it works. The check fails open the moment a developer forgets to add it, mis-orders the filter chain, or accepts the parameter as a hint and trusts it elsewhere in the request flow.
+
+The structural defense is simpler: **do not accept a userId parameter at all**. Derive the caller from `Authentication.getName()` server-side. There is no parameter for an attacker to enumerate. There is no "did we remember to check it" question because there is no input to check. This pattern is uniform across favorites (R34), activity-feed (R35), comment-thread (R36), session-management (R33), api-key management (R30), file-storage, and approval-workflow — every owner-scoped surface in the catalog.
+
+**Incorrect — accepts userId in path, then "checks" it:**
+
+```java
+@GetMapping("/api/favorites/by-user/{userId}")
+public List<Favorite> myFavorites(Authentication auth, @PathVariable String userId) {
+    if (!auth.getName().equals(userId)) {
+        throw new AccessDeniedException("not your favorites");
+    }
+    return service.list(userId);
+}
+```
+
+The check is correct, but the *structure* invites failure. A second endpoint forgets the check; a code reviewer misses it; a refactor moves the path variable into the service layer where the check no longer applies.
+
+**Correct — derive caller from Authentication, no userId parameter:**
+
+```java
+@GetMapping("/api/favorites")
+public List<Favorite> myFavorites(Authentication auth) {
+    return service.list(auth.getName());
+}
+```
+
+There is nothing for an attacker to flip. The userId is server-side, end-to-end. Cross-user enumeration is *structurally impossible*, not just *currently checked*.
+
+This rule applies to read endpoints, mutation endpoints, and aggregation endpoints alike. For admin endpoints that legitimately need to act on arbitrary users, use a dedicated `/api/admin/...` path gated by `hasAuthority("ROLE_ADMIN")` AND record the actor in the resource's `actedByUserId` column for audit — the admin path is the only place where another user's identifier appears.
+
+Reference: [OWASP API Security Top 10 (2023) — API1:2023 BOLA](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)
+
+Reference: [OWASP ASVS V4 — Access Control](https://owasp.org/www-project-application-security-verification-standard/)
+
+
 <!-- @source rules/chunked-import-required-when-rowcount-gt-1000.md -->
 
 ---
@@ -2110,6 +2272,81 @@ public ResponseEntity<ProblemDetail> badArg(IllegalArgumentException ex) {
 Verification: `./gradlew testPractices --tests "*Rfc7807ProblemDetail*"` asserts the response carries `Content-Type: application/problem+json` and a body with `type / title / status / detail`.
 
 Reference: [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) · [Spring `@ExceptionHandler` + `ProblemDetail`](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-exceptionhandler.html)
+
+
+<!-- @source rules/http-delete-idempotency-rfc9110.md -->
+
+---
+title: DELETE endpoints MUST be idempotent — second call on absent target returns 204, not 404
+impact: MEDIUM
+impactDescription: "Non-idempotent DELETE causes client retry loops on network failures + breaks RFC 9110 contract"
+tags:
+  - api
+  - http
+  - idempotency
+  - retry-safety
+spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-CRUD-002"
+verification:
+  gradle_task: testFavorites
+  tag: FAV-CRUD-002
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc9110.html#name-delete"
+evidence:
+  - source_type: external
+    citation: "RFC 9110 §9.3.5 — HTTP DELETE method idempotency"
+    url: "https://www.rfc-editor.org/rfc/rfc9110.html#name-delete"
+    quote: "The DELETE method requests that the origin server remove the association between the target resource and its current functionality. ... The methods defined as idempotent are PUT, DELETE, and the safe request methods."
+    quoted_at: "2026-05-22"
+  - source_type: external
+    citation: "RFC 9110 §9.2.2 — Idempotent Methods"
+    url: "https://www.rfc-editor.org/rfc/rfc9110.html#name-idempotent-methods"
+    quote: "A request method is considered idempotent if the intended effect on the server of multiple identical requests with that method is the same as the effect for a single such request."
+    quoted_at: "2026-05-22"
+---
+
+## DELETE endpoints MUST be idempotent — second call on absent target returns 204, not 404
+
+**Impact: MEDIUM — Non-idempotent DELETE causes client retry loops and breaks the HTTP contract**
+
+RFC 9110 §9.2.2 specifies DELETE as one of three idempotent methods. The contract: "the intended effect on the server of multiple identical requests with that method is the same as the effect for a single such request." A DELETE that returns 404 on a second call has *observably different* server effects between calls — the client sees success then failure — which is the literal definition of non-idempotency.
+
+Practically: every production network retries on connection reset, 502, gateway timeout. If the first DELETE succeeded but the response was lost, the client retries. If the server returns 404 on the retry, the client thinks the operation failed and either errors loudly or surfaces a confusing "already gone" state. The catalog pattern (tag-categorization R32, favorites R34, session-management R33 revoke, comment-thread R36 soft-delete) returns 204 unconditionally — the resource is gone, whether the first call did the work or not.
+
+**Incorrect — DELETE returns 404 on second call:**
+
+```java
+@DeleteMapping("/api/favorites/{id}")
+public ResponseEntity<Void> remove(@PathVariable UUID id) {
+    Favorite f = repo.findById(id)
+        .orElseThrow(() -> new EntityNotFoundException(id));   // ← 404 on retry
+    repo.delete(f);
+    return ResponseEntity.noContent().build();
+}
+```
+
+A client whose first response was lost will retry, get 404, and think the operation failed.
+
+**Correct — DELETE returns 204 whether the row existed or not:**
+
+```java
+@DeleteMapping("/api/favorites/{entityType}/{entityId}")
+public ResponseEntity<Void> remove(Authentication auth,
+                                    @PathVariable String entityType,
+                                    @PathVariable String entityId) {
+    service.remove(auth.getName(), entityType, entityId);  // matches 0 or 1 rows; both → 204
+    return ResponseEntity.noContent().build();
+}
+```
+
+The service issues a `DELETE WHERE …` and discards the row-count. RFC 9110's idempotency contract is satisfied: client retries do not change the observable result.
+
+**Exception — when 404 is semantically required**: hard-delete on a resource the caller is expected to own (e.g. revoke API key — the caller is acting on a specific id they presumably know exists). In these cases the second call STILL returns 204 if you treat the deletion as idempotent. If the resource was never the caller's, return 404 once (IDOR-safe). The principle: *idempotency is about the server effect*, not about whether the caller is allowed to know the row's history.
+
+**Soft-delete corollary**: when DELETE is implemented as status-flip (e.g. comment-thread soft-delete), the second call observes status already DELETED, leaves `deletedAt` unchanged, and returns 204. The state is identical to the post-first-call state — the definition of idempotent.
+
+Reference: [RFC 9110 §9.3.5 — HTTP DELETE](https://www.rfc-editor.org/rfc/rfc9110.html#name-delete)
+
+Reference: [RFC 9110 §9.2.2 — Idempotent Methods](https://www.rfc-editor.org/rfc/rfc9110.html#name-idempotent-methods)
 
 
 <!-- @source rules/http-explicit-timeouts.md -->
@@ -4481,6 +4718,105 @@ Reference: [Spring Data JPA — Locking](https://docs.spring.io/spring-data/jpa/
 Reference: [Hibernate User Guide — Optimistic Locking](https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#locking-optimistic)
 
 
+<!-- @source rules/pii-masked-at-dto-boundary.md -->
+
+---
+title: Raw PII (IP, User-Agent, credentials) stored on entity for forensics but masked at DTO boundary
+impact: HIGH
+impactDescription: "Excessive Data Exposure (OWASP API3) is leaking what was collected for forensics directly into client responses"
+tags:
+  - privacy
+  - dto
+  - data-exposure
+  - audit
+spec_ref: "specs/session-management-l0.yaml#SESS-INTROSPECT-002"
+verification:
+  gradle_task: testSessionManagement
+  tag: SESS-INTROSPECT-002
+upstream:
+  - "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
+  - "https://gdpr-info.eu/art-25-gdpr/"
+evidence:
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2023) — API3:2023 Broken Object Property Level Authorization (replaces 2019's Excessive Data Exposure)"
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
+    quote: "Lack of or improper authorization validation at the object property level. This leads to information exposure or manipulation by unauthorized parties."
+    quoted_at: "2026-05-22"
+  - source_type: external
+    citation: "GDPR Article 25 — Data protection by design and by default"
+    url: "https://gdpr-info.eu/art-25-gdpr/"
+    quote: "The controller shall, both at the time of the determination of the means for processing and at the time of the processing itself, implement appropriate technical and organisational measures, such as pseudonymisation."
+    quoted_at: "2026-05-22"
+---
+
+## Raw PII stored on entity for forensics but masked at DTO boundary
+
+**Impact: HIGH — OWASP API3 Excessive Data Exposure is leaking what forensics needed**
+
+The honest forensic posture often requires storing more than the API should ever return: the full IP, the full User-Agent string, the storage key for a file blob, the hashed API key digest. These belong on the entity row for after-the-fact investigation. They MUST NOT belong on the DTO that a client sees. The catalog convention: the raw column carries `@JsonIgnore` so accidental entity serialization cannot leak it; the DTO carries only a masked or summarized form (`ipAddressMasked`, `userAgentSummary`, `prefix`, never the storage key).
+
+Examples in the catalog:
+- **session-management (R33)**: `SessionRecord.ipAddress` and `SessionRecord.userAgent` are `@JsonIgnore`; `SessionResponse` carries `ipAddressMasked` (last octet → "xxx") and `userAgentSummary` ("Chrome on Windows"). The full UA never leaves the server.
+- **api-key (R30)**: `ApiKey.hashedValue` is `@JsonIgnore`; `ApiKeyResponse` carries `prefix` (first 8 chars of the plaintext) for display, never the hash. Plaintext is returned exactly once at creation.
+- **file-storage**: `StoredFile.storageKey` is `@JsonIgnore` (the opaque internal UUID); the DTO uses only `id` for client references.
+
+**Incorrect — raw fields reach DTO directly:**
+
+```java
+@Entity
+public class SessionRecord {
+    private String ipAddress;       // 203.0.113.42 — full IP visible in any response
+    private String userAgent;       // full UA string — fingerprinting vector
+
+    // Jackson serializes both fields verbatim
+}
+```
+
+A single endpoint returning the entity, or a list endpoint forgetting to map to a DTO, leaks the full PII. The 2019 OWASP "Excessive Data Exposure" entry was renamed in 2023 to "Broken Object Property Level Authorization" — the root cause is the same: per-property authorization was skipped because the developer trusted that *some* entity-level check would catch it.
+
+**Correct — entity carries raw + @JsonIgnore, DTO carries masked:**
+
+```java
+@Entity
+public class SessionRecord {
+    @JsonIgnore                                       // never serialized verbatim
+    @Column(name = "ip_address", updatable = false)
+    private String ipAddress;
+
+    @JsonIgnore
+    @Column(name = "user_agent", updatable = false)
+    private String userAgent;
+
+    @JsonIgnore public String getIpAddress() { return ipAddress; }
+    @JsonIgnore public String getUserAgent() { return userAgent; }
+}
+
+public record SessionResponse(
+    UUID id,
+    String ipAddressMasked,       // "203.0.113.xxx" — last octet redacted
+    String userAgentSummary,      // "Chrome on Windows"
+    // …
+) {
+    public static SessionResponse from(SessionRecord s, Clock clock) {
+        return new SessionResponse(
+            s.getId(),
+            IpAddressMasker.mask(s.getIpAddress()),
+            UserAgentSummarizer.summarize(s.getUserAgent()),
+            // …
+        );
+    }
+}
+```
+
+The structural defense — `@JsonIgnore` plus a separate DTO — means a developer cannot accidentally serialize the entity directly without first being forced to acknowledge the missing fields. The masker / summarizer encapsulates the redaction policy, so consistency across endpoints is mechanical rather than reviewer-dependent.
+
+**Apply this pattern when**: storing IP / User-Agent / device fingerprint / credential digest / opaque internal key on an entity that may also produce read-side DTOs. The forensic value justifies keeping the raw column; the privacy posture forbids returning it.
+
+Reference: [OWASP API Security Top 10 (2023) — API3:2023 Broken Object Property Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/)
+
+Reference: [GDPR Article 25 — Data protection by design and by default](https://gdpr-info.eu/art-25-gdpr/)
+
+
 <!-- @source rules/prefer-recipe-composition-over-l4-cross-import.md -->
 
 ---
@@ -5192,6 +5528,102 @@ SecurityFilterChain filter(HttpSecurity http) throws Exception {
 Verification: `./gradlew testPractices --tests "*StatelessSession*"` reads `SecurityConfig.java` and asserts it contains the literal `SessionCreationPolicy.STATELESS`.
 
 Reference: [Spring Security — Session Management](https://docs.spring.io/spring-security/reference/servlet/authentication/session-management.html)
+
+
+<!-- @source rules/soft-delete-audit-trail.md -->
+
+---
+title: Soft-delete via status flip preserves audit trail — hard-delete forbidden when audit matters
+impact: HIGH
+impactDescription: "Hard-delete on audit-grade entities loses the why/when/who; the right-to-erasure mandate is satisfied by body redaction, not row removal"
+tags:
+  - audit
+  - soft-delete
+  - gdpr
+  - data-retention
+spec_ref: "specs/comment-thread-l0.yaml#COMMENT-CRUD-003"
+verification:
+  gradle_task: testCommentThread
+  tag: COMMENT-CRUD-003
+upstream:
+  - "https://gdpr-info.eu/art-17-gdpr/"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+evidence:
+  - source_type: external
+    citation: "GDPR Article 17 — Right to erasure ('right to be forgotten')"
+    url: "https://gdpr-info.eu/art-17-gdpr/"
+    quote: "The data subject shall have the right to obtain from the controller the erasure of personal data concerning him or her without undue delay. ... [The controller shall] take account of available technology and the cost of implementation."
+    quoted_at: "2026-05-22"
+  - source_type: external
+    citation: "OWASP ASVS V8.3.5 — Verify that sensitive information is sanitized or removed when no longer required"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quote: "Verify that sensitive information is sanitized or removed when no longer required (e.g., data retention)."
+    quoted_at: "2026-05-22"
+---
+
+## Soft-delete via status flip preserves audit trail — hard-delete forbidden when audit matters
+
+**Impact: HIGH — Hard-delete on audit-grade entities loses the who/when/why**
+
+The right-to-erasure mandate (GDPR Article 17) does NOT require row removal. It requires that personal data "concerning the data subject" be erased. The catalog soft-delete pattern satisfies this by clearing the data (body → NULL, DTO mask `[deleted]`) while preserving the audit metadata (`deletedAt`, `deletedByUserId`, the original `createdAt`, and any edit history). The personal data is gone; the act of deletion is recorded.
+
+Hard-delete loses what compliance needs (who deleted what when) and what threading needs (a reply's parent still must resolve). Audit-grade entities — comments, sessions, file uploads, approval requests, payment events, audit logs themselves — should never hard-delete in their domain code. The catalog pattern (R33 session-management, R36 comment-thread) uses status flip + content nulling.
+
+Catalog evidence:
+- **R33 session-management (SESS-LIFECYCLE-003)**: logout flips `status` ACTIVE → REVOKED, sets `revokedAt`, stamps `revokedByUserId`. The row stays for historical session audit.
+- **R36 comment-thread (COMMENT-CRUD-003)**: delete flips `status` ACTIVE → DELETED, clears `body` to NULL, stamps `deletedAt` + `deletedByUserId`. The DTO masks the missing body as `'[deleted]'`. Replies remain readable; thread structure is preserved.
+
+**Incorrect — hard-delete loses audit metadata:**
+
+```java
+@DeleteMapping("/api/comments/{id}")
+public ResponseEntity<Void> delete(@PathVariable UUID id) {
+    repo.deleteById(id);                              // row gone forever
+    return ResponseEntity.noContent().build();
+}
+```
+
+Replies to this comment now reference a missing parent. The audit log cannot answer "who deleted comment X". GDPR erasure is over-satisfied — the metadata about *the act of erasure* is lost too.
+
+**Correct — soft-delete with status flip + content clearing:**
+
+```java
+@DeleteMapping("/api/comments/{id}")
+public ResponseEntity<Void> delete(Authentication auth, @PathVariable UUID id) {
+    Comment c = repo.findById(id).orElseThrow(() -> new CommentNotFoundException(id));
+    // Authorization check elided — author OR admin per admin-cannot-rewrite-user-content rule
+    c.softDelete(auth.getName(), Instant.now(clock));  // status flip + body→NULL + deletedAt + deletedByUserId
+    repo.save(c);
+    return ResponseEntity.noContent().build();
+}
+
+// Entity:
+void softDelete(String actorUserId, Instant now) {
+    if (this.status == CommentStatus.DELETED) return;  // idempotent
+    this.status = CommentStatus.DELETED;
+    this.body = null;                                  // personal data cleared
+    this.deletedAt = now;
+    this.deletedByUserId = actorUserId;
+}
+
+// DTO masks for read side:
+public static CommentResponse from(Comment c) {
+    String visibleBody = (c.getStatus() == CommentStatus.DELETED || c.getBody() == null)
+        ? "[deleted]"
+        : c.getBody();
+    // … rest of mapping
+}
+```
+
+The body is gone (GDPR erasure satisfied); the audit (deletedAt + deletedByUserId) survives; replies still resolve their parent. Edit history rows (`CommentEdit`) are preserved across the delete so a moderator can still reconstruct what the comment said and when it was edited — without the body itself.
+
+**Apply this pattern when**: the entity participates in an audit trail or a thread / chain / graph where its absence would break adjacent rows. Apply hard-delete only for entities with no audit value (transient session caches, ephemeral computation outputs).
+
+**Anti-cascade**: soft-delete should NOT cascade to dependent rows. Comment's replies remain ACTIVE even when the parent comment is DELETED. Session's `ActivityRead` rows remain. The user can still see *that* something happened; the body is what's gone.
+
+Reference: [GDPR Article 17 — Right to erasure](https://gdpr-info.eu/art-17-gdpr/)
+
+Reference: [OWASP ASVS V8.3.5 — Data retention sanitization](https://owasp.org/www-project-application-security-verification-standard/)
 
 
 <!-- @source rules/soft-delete-only-on-base-entity.md -->
