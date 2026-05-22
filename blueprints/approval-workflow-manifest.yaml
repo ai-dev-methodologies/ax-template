@@ -151,3 +151,6 @@ source_precedence:
   - "ITIL v4 change-management approval workflow (multi-step, ordered)"
   - "Korean enterprise 결재 workflow practice (sequential approval, 결재선)"
   - "OWASP ASVS V4 — authorization (visibility per role, IDOR-safe responses)"
+
+# Multi-tenant deferral note (R37 guard requirement):
+#   Single-tenant default per specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001

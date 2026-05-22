@@ -114,3 +114,6 @@ source_precedence:
   - "RFC 7519 §4.1.7 — JWT jti claim"
   - "Stripe API session list pattern — historical visibility + per-device labels"
   - "GitHub 'active sessions' UI — masked IP + UA summary + 'sign out other sessions'"
+
+# Multi-tenant deferral note (R37 guard requirement):
+#   Single-tenant default per specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001

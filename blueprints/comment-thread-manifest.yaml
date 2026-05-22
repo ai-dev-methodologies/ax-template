@@ -106,3 +106,6 @@ source_precedence:
   - "Disqus/Discourse threaded comment patterns (parentId + flat list + client tree rebuild)"
   - "GDPR Article 17 — right to erasure (soft-delete with body redaction satisfies for most jurisdictions)"
   - "RFC 9110 §9.3.5 — HTTP DELETE idempotency (soft-delete is idempotent against repeated calls)"
+
+# Multi-tenant deferral note (R37 guard requirement):
+#   Single-tenant default per specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001

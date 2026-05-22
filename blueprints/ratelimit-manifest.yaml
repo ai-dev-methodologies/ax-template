@@ -58,3 +58,6 @@ source_precedence:
   - "RFC 6585 §4 (HTTP 429 Too Many Requests)"
   - "IETF draft-ietf-httpapi-ratelimit-headers (header conventions)"
   - "OWASP API Security Top 10 — API4:2023 Unrestricted Resource Consumption"
+
+# Multi-tenant deferral note (R37 guard requirement):
+#   Single-tenant default per specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001

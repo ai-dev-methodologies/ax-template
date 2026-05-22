@@ -1,0 +1,10 @@
+iteration: 1
+findings:
+  - persona: P1
+    finding: "uses gameable classification name"
+    classification: just_a_minor_thing
+    references_artifact_path: blueprints/foo-manifest.yaml
+  - persona: P2
+    finding: "also gameable"
+    classification: handwave
+    references_artifact_path: blueprints/foo-manifest.yaml

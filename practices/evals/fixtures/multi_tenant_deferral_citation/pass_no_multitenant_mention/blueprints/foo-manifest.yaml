@@ -1,0 +1,3 @@
+template_id: "foo"
+not_for:
+  - "Some other deferral; no tenant talk here"

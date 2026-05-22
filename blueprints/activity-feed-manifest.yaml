@@ -106,3 +106,6 @@ source_precedence:
   - "ActivityStreams 2.0 spec — actor/verb/object/target vocabulary"
   - "Mastodon timelines API — fan-out-read at modest scale"
   - "Facebook News Feed paper (Hoffman 2010) — fan-out trade-offs at scale (informs deferred_to_v2 fan-out-write rationale)"
+
+# Multi-tenant deferral note (R37 guard requirement):
+#   Single-tenant default per specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001

@@ -1,0 +1,6 @@
+iteration: 1
+findings:
+  - persona: P1
+    finding: "missing classification field"
+  - persona: P2
+    finding: "also missing"

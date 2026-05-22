@@ -1,0 +1,10 @@
+iteration: 1
+findings:
+  - persona: P1
+    finding: "payload tampering possible mid-flight"
+    classification: real_bug
+    references_artifact_path: backend/src/main/java/com/example/Foo.java
+  - persona: P2
+    finding: "VIOLATION proof test missing"
+    classification: methodology_gap
+    references_artifact_path: backend/src/test/java/com/example/FooViolationProofTest.java

@@ -753,6 +753,45 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/test_tag_naming_convention_guard.sh" --fixtures
 fi
 
+# ── R37 ralplan retrofit guards ───────────────────────────────────────────────
+# Added at R37 per integrated review (architect + critic + codex consensus).
+# Closes: methodology theater, dogfood ledger drift, multi-tenant traceability,
+# L4 reachability, composition completeness.
+
+echo ""
+echo "[34] dogfood_ledger_guard.sh (live repo + passing fixture)"
+run_guard "dogfood_ledger/live" 0 \
+    bash "$SCRIPT_DIR/dogfood_ledger_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[34f] dogfood_ledger_guard.sh --fixtures"
+    run_guard "dogfood_ledger/fixtures" 0 \
+        bash "$SCRIPT_DIR/dogfood_ledger_guard.sh" --fixtures
+fi
+
+echo ""
+echo "[35] multi_tenant_deferral_citation_guard.sh (live repo + passing fixture)"
+run_guard "multi_tenant_deferral_citation/live" 0 \
+    bash "$SCRIPT_DIR/multi_tenant_deferral_citation_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[35f] multi_tenant_deferral_citation_guard.sh --fixtures"
+    run_guard "multi_tenant_deferral_citation/fixtures" 0 \
+        bash "$SCRIPT_DIR/multi_tenant_deferral_citation_guard.sh" --fixtures
+fi
+
+echo ""
+echo "[36] l4_domain_reachability_guard.sh (live repo)"
+run_guard "l4_domain_reachability/live" 0 \
+    bash "$SCRIPT_DIR/l4_domain_reachability_guard.sh"
+
+echo ""
+echo "[37] composition_completeness_guard.sh (live repo, WARN-level v1)"
+run_guard "composition_completeness/live" 0 \
+    bash "$SCRIPT_DIR/composition_completeness_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

@@ -1,0 +1,3 @@
+template_id: "foo"
+not_for:
+  - "Multi-tenant scoping — defer per MULTI-TENANT-ISOLATION-DEFAULT-001 (single-tenant default per spec)"

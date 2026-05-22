@@ -1,0 +1,10 @@
+iteration: 1
+findings:
+  - persona: P1
+    finding: "feature X deferred"
+    classification: scope_deferral
+    references_artifact_path: blueprints/foo-manifest.yaml
+  - persona: P2
+    finding: "feature Y deferred"
+    classification: scope_deferral
+    references_artifact_path: blueprints/foo-manifest.yaml

@@ -1,0 +1,10 @@
+iteration: 1
+findings:
+  - persona: P1
+    finding: "feature X considered out of scope"
+    classification: scope_deferral
+    references_artifact_path: blueprints/foo-manifest.yaml
+  - persona: P2
+    finding: "guard not exhaustive on edge case"
+    classification: real_bug
+    references_artifact_path: practices/evals/foo_guard.sh

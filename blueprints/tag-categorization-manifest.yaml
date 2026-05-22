@@ -119,3 +119,6 @@ source_precedence:
   - "Strapi categories API (slug + parent + locale)"
   - "Korean enterprise CMS 분류 체계 — admin-curated taxonomy + user attachment"
   - "RFC 9110 §9.3.5 (HTTP DELETE idempotency)"
+
+# Multi-tenant deferral note (R37 guard requirement):
+#   Single-tenant default per specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001

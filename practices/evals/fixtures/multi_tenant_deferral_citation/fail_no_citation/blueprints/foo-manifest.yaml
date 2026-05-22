@@ -1,0 +1,3 @@
+template_id: "foo"
+not_for:
+  - "Multi-tenant tenant scoping — out of scope for v1"
