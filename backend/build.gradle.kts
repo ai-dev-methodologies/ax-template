@@ -247,6 +247,15 @@ tasks.register<Test>("testSessionManagement") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testFavorites") {
+    useJUnitPlatform {
+        includeTags("FAVORITES")
+    }
+    description = "Run favorites-bookmarks domain compliance tests (R34: 12 items / 4 families — CRUD, QUERY, AUTHZ, VALIDATION)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

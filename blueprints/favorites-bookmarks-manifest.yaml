@@ -1,0 +1,98 @@
+template_id: "favorites-bookmarks-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "Per-user toggle marker on any entity — like / save / bookmark / star / favorite UX"
+  - "Entity-agnostic — same domain backs 'favorited products', 'saved articles', 'starred reports' without bespoke columns on each entity"
+  - "Light social signal — 'X people favorited this' counter; cheap COUNT(*) by entity"
+
+not_for:
+  - "Heavy social graph — followers/following with timeline materialization, edge weights, recommendation scoring. Use a dedicated social-graph domain."
+  - "Multi-state reactions (👍 / ❤️ / 😂) — favorites is single-state on/off. For multi-state, use an emoji-reactions domain with a reaction_type column."
+  - "Public bookmark sharing (Pinterest-style boards) — current design is strictly private to the caller; public bookmark sharing requires a separate visibility column + audit trail"
+  - "Multi-tenant tenant scoping — v1 assumes single-tenant. Fork-receivers MUST add tenant_id + AOP guard (see specs/multi-tenant-l0.yaml)"
+  - "Entity-existence validation — catalog will NOT verify that the referenced (entityType, entityId) actually exists. Fork-receivers either register a TaggedEntityResolver-style SPI OR live with phantom favorites of since-deleted entities."
+
+# ─── crud ──────────────────────────────────────────────────────────────────
+crud:
+  uniqueness: "(user_id, entity_type, entity_id)"  # DB UNIQUE constraint backs idempotent add
+  add_idempotent: true
+  delete_idempotent: true
+  delete_response_on_missing: 204
+  list_order: "favoritedAt DESC"
+
+# ─── query ─────────────────────────────────────────────────────────────────
+query:
+  check_endpoint: "GET /api/favorites/check/{entityType}/{entityId}"
+  check_response: "{favorited: boolean}"
+  count_endpoint: "GET /api/favorites/count/{entityType}/{entityId}"
+  count_response: "{count: long}"
+  count_authentication: required                 # FAV-AUTHZ-001 — no anonymous scraping
+  list_filter_param: "?entityType=<X>"
+
+# ─── authz ─────────────────────────────────────────────────────────────────
+authz:
+  endpoint_pattern: "/api/favorites/**"
+  authentication_required: true
+  caller_derived_from: "Authentication (no userId path/query param)"
+  cross_user_delete_behavior: "No-op (each row scoped by user_id; another user's DELETE matches 0 rows)"
+
+# ─── validation ────────────────────────────────────────────────────────────
+validation:
+  required_fields: [entityType, entityId]
+  entity_type_max_length: 64
+  entity_id_max_length: 255
+  note_max_length: 256
+  quota_exceeded_response:
+    status: 400
+    error_code: FAVORITES_QUOTA_EXCEEDED
+
+# ─── limits ────────────────────────────────────────────────────────────────
+limits:
+  max_favorites_per_user: 1000               # configurable via favorites-bookmarks.max-favorites-per-user
+
+# ─── deferred to v2 ────────────────────────────────────────────────────────
+deferred_to_v2:
+  - id: "popularity_index"
+    reason: "Count queries scan tag_attachments-style filtered rows. v2 should add a denormalized usage_count maintained by trigger / event for tenants with millions of favorites."
+  - id: "list_pagination"
+    reason: "GET /api/favorites returns the full set bounded by max-favorites-per-user (1000). v2 should add page/size for tenants raising that cap."
+  - id: "bulk_check"
+    reason: "/check is single-entity. v2 should add POST /check {entityType, entityIds[]} returning a map so feed pages don't make N calls."
+  - id: "list_sort_options"
+    reason: "v1 list is favoritedAt DESC only. v2 could add ?sort=name|popularity for richer UIs."
+  - id: "public_count_endpoint"
+    reason: "v1 keeps /count behind JWT to discourage scraping. v2 could add a Bucket4j-rate-limited public /api/public/favorites/count for SEO surfaces."
+
+testing_baseline:
+  unit: "JUnit 5 + AssertJ — reflective JPA shape on Favorite entity"
+  integration: "RestAssured black-box HTTP against @SpringBootTest RANDOM_PORT"
+
+verification_checkpoints:
+  - "Add is idempotent on (user, entity) (FAV-CRUD-001)"
+  - "Delete is idempotent (FAV-CRUD-002)"
+  - "List ordered by favoritedAt DESC (FAV-CRUD-003)"
+  - "Check returns {favorited:bool} without 404 (FAV-QUERY-001)"
+  - "Count is global per entity (FAV-QUERY-002)"
+  - "List filterable by entityType (FAV-QUERY-003)"
+  - "All endpoints JWT-required (FAV-AUTHZ-001)"
+  - "Caller derived from Authentication only (FAV-AUTHZ-002)"
+  - "Cross-user DELETE is no-op (FAV-AUTHZ-003)"
+  - "Quota exceeded → 400 FAVORITES_QUOTA_EXCEEDED (FAV-VALID-002)"
+
+must_not:
+  - "Accept a userId path or query parameter — caller MUST be Authentication-derived"
+  - "Return 409 / 404 on a second identical add — must be idempotent 200"
+  - "Return 404 on /check for an entity with no favorite — must be 200 {favorited:false}"
+  - "Expose a public /count without authentication (manifest policy v1)"
+  - "Hard-delete-cascade past the user's own favorites (DELETE only matches rows scoped by user_id)"
+
+reject_if:
+  - "POST with blank entityType or entityId → 400 (Bean Validation)"
+  - "POST when user is at quota → 400 FAVORITES_QUOTA_EXCEEDED"
+  - "POST with note length > 256 → 400 (Bean Validation)"
+
+source_precedence:
+  - "Twitter favorites API — single-state toggle, idempotent endpoints"
+  - "WordPress 'meta' subsystems — polymorphic key by (object_type, object_id)"
+  - "RFC 9110 §9.3.5 — HTTP DELETE idempotency"

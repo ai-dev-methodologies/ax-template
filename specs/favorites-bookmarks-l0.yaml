@@ -1,0 +1,141 @@
+version: "1.0.0"
+scope: "favorites-bookmarks-domain"
+stack: "Spring Boot 3.2.x + JPA + polymorphic attachment (entity_type/entity_id pair)"
+standard: "Standard social favorite/bookmark pattern — Stripe Customer.metadata bookmarks + Twitter favorites + WordPress 'meta' subsystems. Idempotent toggle is the canonical UX."
+items:
+  # ─── CRUD family (3 items) ────────────────────────────────────────────────
+  - id: "FAV-CRUD-001"
+    chapter: "CRUD"
+    requirement: "POST /api/favorites adds a favorite. Idempotent — a second call with the same (callerUserId, entityType, entityId) returns 200 OK referencing the existing record, not 409 Conflict. UNIQUE constraint is the DB-level backstop against race conditions."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST → 201. Same POST → 200. DB count = 1.
+      Implementation: FavoriteService.add() — findByUserEntity → existing or insert.
+      UNIQUE(user_id, entity_type, entity_id) constraint catches concurrent races.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#crud"
+
+  - id: "FAV-CRUD-002"
+    chapter: "CRUD"
+    requirement: "DELETE /api/favorites/{entityType}/{entityId} removes the favorite. Idempotent — calling DELETE on a non-existent favorite returns 204, matching HTTP RFC 9110 §9.3.5 DELETE semantics."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: add → DELETE → 204. Second DELETE → still 204 (no 404).
+      Implementation: bulk DELETE WHERE user_id = caller AND entity matches; row-count ignored.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#crud"
+
+  - id: "FAV-CRUD-003"
+    chapter: "CRUD"
+    requirement: "GET /api/favorites returns the caller's favorites ordered by favoritedAt DESC (newest first). Response includes (id, entityType, entityId, note, favoritedAt)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: add 3 favorites with small sleeps between — GET returns 3 items in reverse-creation order.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#crud"
+
+  # ─── QUERY family (3 items) ───────────────────────────────────────────────
+  - id: "FAV-QUERY-001"
+    chapter: "QUERY"
+    requirement: "GET /api/favorites/check/{entityType}/{entityId} returns {favorited: boolean} indicating whether the caller has favorited the given entity. Single DB existence check; never returns 404 (an unmarked entity is just {favorited: false})."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: check before add → {favorited:false}. After add → {favorited:true}.
+      After delete → {favorited:false} again.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#query"
+
+  - id: "FAV-QUERY-002"
+    chapter: "QUERY"
+    requirement: "GET /api/favorites/count/{entityType}/{entityId} returns {count: long} — the GLOBAL number of users who have favorited this entity. Used for 'X people liked this' UI. Authenticated only (no anonymous count endpoint to avoid scraping)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: 2 different users favorite the same entity → count = 2.
+      One revokes → count = 1. Implementation: COUNT(*) WHERE entity matches.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#query"
+
+  - id: "FAV-QUERY-003"
+    chapter: "QUERY"
+    requirement: "GET /api/favorites?entityType=<X> filters the caller's favorites to a single entityType. Useful for 'show my favorited products' vs 'show my favorited articles'."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: add 2 product favorites + 1 article favorite. GET ?entityType=product → 2 items.
+      GET (no filter) → 3 items.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#query"
+
+  # ─── AUTHZ family (3 items) ───────────────────────────────────────────────
+  - id: "FAV-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All favorites endpoints require a valid JWT; unauthenticated callers receive HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/favorites, GET /api/favorites, DELETE, check, count all → 401 without
+      Authorization. Implementation: SecurityConfig /api/favorites/** authenticated.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#authz"
+
+  - id: "FAV-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "GET /api/favorites returns ONLY the caller's own favorites. Cross-user enumeration is structurally impossible — there is no path or query parameter that accepts a userId; the caller is derived from Authentication."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA adds 2 favorites. UserB GET /api/favorites → 0 items. UserB cannot supply
+      A's userId anywhere. Implementation: FavoriteService.listMine() uses Authentication.getName().
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#authz"
+
+  - id: "FAV-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "DELETE /api/favorites/{entityType}/{entityId} can only remove the CALLER's favorite. UserB calling DELETE for an entity UserA favorited has no effect on A's row (each row is scoped by user_id at the DB filter)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: UserA favorites a product. UserB DELETE same entity → 204. UserA's row still present
+      (GET /api/favorites returns the original row). Confirms cross-user DELETE is a no-op, not
+      a stealth deletion of someone else's favorite.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#authz"
+
+  # ─── VALIDATION family (3 items) ──────────────────────────────────────────
+  - id: "FAV-VALID-001"
+    chapter: "VALIDATION"
+    requirement: "POST /api/favorites with missing or blank entityType or entityId is rejected at the validation layer with HTTP 400. Both fields are @NotBlank."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST with empty entityType → 400. POST with null entityId → 400. Spring Bean
+      Validation handles the rejection before reaching the service layer.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#validation"
+
+  - id: "FAV-VALID-002"
+    chapter: "VALIDATION"
+    requirement: "Per-user soft cap on total favorites (default 1000). Adding the (cap + 1)th favorite is rejected with HTTP 400 FAVORITES_QUOTA_EXCEEDED. Prevents single-user storage blow-up."
+    test_method: "RestAssured integration test with property override"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: @TestPropertySource(properties = 'favorites-bookmarks.max-favorites-per-user=2').
+      Add 2 favorites → OK. Add 3rd → 400 FAVORITES_QUOTA_EXCEEDED.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#validation"
+
+  - id: "FAV-VALID-003"
+    chapter: "VALIDATION"
+    requirement: "Optional {@code note} field on POST is capped at 256 chars. Longer notes are rejected with HTTP 400."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST with note of 257 chars → 400. POST with note of 256 chars → 201.
+      Implementation: @Size(max=256) on the DTO field.
+    policy_ref: "blueprints/favorites-bookmarks-manifest.yaml#validation"

@@ -1,0 +1,121 @@
+openapi: 3.0.3
+info:
+  title: "ax-template Favorites / Bookmarks API"
+  version: "0.1.0"
+  description: >
+    Per-user single-state toggle attached to any entity via the
+    (entityType, entityId) pair. Idempotent add / delete; global count per entity
+    behind JWT (no anonymous scraping); list scoped to the authenticated caller.
+servers:
+  - url: /api
+paths:
+  /favorites:
+    post:
+      summary: "Add a favorite (idempotent)"
+      operationId: addFavorite
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddFavoriteRequest' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/FavoriteResponse' } } } }
+        '200': { description: Already favorited (idempotent), content: { application/json: { schema: { $ref: '#/components/schemas/FavoriteResponse' } } } }
+        '400': { description: Validation or quota }
+        '401': { description: Authentication required }
+    get:
+      summary: "List the caller's favorites (optional entityType filter)"
+      operationId: listFavorites
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: entityType
+          in: query
+          required: false
+          schema: { type: string, maxLength: 64 }
+      responses:
+        '200': { description: List, content: { application/json: { schema: { $ref: '#/components/schemas/FavoriteListResponse' } } } }
+        '401': { description: Authentication required }
+
+  /favorites/{entityType}/{entityId}:
+    delete:
+      summary: "Remove a favorite (idempotent)"
+      operationId: removeFavorite
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: entityType, in: path, required: true, schema: { type: string } }
+        - { name: entityId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Removed (or was already absent) }
+        '401': { description: Authentication required }
+
+  /favorites/check/{entityType}/{entityId}:
+    get:
+      summary: "Check if the caller has favorited this entity"
+      operationId: checkFavorite
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: entityType, in: path, required: true, schema: { type: string } }
+        - { name: entityId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Boolean
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [favorited]
+                properties:
+                  favorited: { type: boolean }
+        '401': { description: Authentication required }
+
+  /favorites/count/{entityType}/{entityId}:
+    get:
+      summary: "Global count of users who have favorited this entity"
+      operationId: countFavorites
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: entityType, in: path, required: true, schema: { type: string } }
+        - { name: entityId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count: { type: integer }
+        '401': { description: Authentication required }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    AddFavoriteRequest:
+      type: object
+      required: [entityType, entityId]
+      properties:
+        entityType: { type: string, maxLength: 64 }
+        entityId: { type: string, maxLength: 255 }
+        note: { type: string, maxLength: 256, nullable: true }
+
+    FavoriteResponse:
+      type: object
+      required: [id, entityType, entityId, favoritedAt]
+      properties:
+        id: { type: string, format: uuid }
+        entityType: { type: string }
+        entityId: { type: string }
+        note: { type: string, nullable: true }
+        favoritedAt: { type: string, format: date-time }
+
+    FavoriteListResponse:
+      type: object
+      required: [items, totalElements]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/FavoriteResponse' }
+        totalElements: { type: integer }

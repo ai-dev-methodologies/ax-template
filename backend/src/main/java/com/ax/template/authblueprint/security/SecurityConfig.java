@@ -129,6 +129,10 @@ public class SecurityConfig {
                 // is gated by the upstream "/api/admin/**" hasAuthority("ROLE_ADMIN")
                 // matcher; the @PreAuthorize on AdminSessionController is defense-in-depth.
                 .requestMatchers("/api/sessions/**").authenticated()
+                // R34 favorites-bookmarks domain (specs/favorites-bookmarks-l0.yaml):
+                // FAV-AUTHZ-001 — every endpoint requires JWT. Owner scoping is
+                // structural (Authentication.getName() only; no userId path param).
+                .requestMatchers("/api/favorites/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per
