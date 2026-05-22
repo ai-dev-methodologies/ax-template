@@ -133,6 +133,10 @@ public class SecurityConfig {
                 // FAV-AUTHZ-001 — every endpoint requires JWT. Owner scoping is
                 // structural (Authentication.getName() only; no userId path param).
                 .requestMatchers("/api/favorites/**").authenticated()
+                // R35 activity-feed domain (specs/activity-feed-l0.yaml):
+                // ACT-AUTHZ-001 — every endpoint requires JWT. Visibility scoping
+                // (actor OR audience contains caller) enforced inside ActivityService.
+                .requestMatchers("/api/activities/**").authenticated()
                 // Identity verification callbacks (PASS / KCB) follow the same
                 // pattern: authentication is the provider HMAC signature
                 // verified inside IdentityVerificationCallbackController per

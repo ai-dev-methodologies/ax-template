@@ -1,0 +1,141 @@
+version: "1.0.0"
+scope: "activity-feed-domain"
+stack: "Spring Boot 3.2.x + JPA + @ElementCollection audience + per-(event,user) ActivityRead row"
+standard: "ActivityStreams 2.0 vocabulary (actor/verb/object) + Twitter/Facebook fan-out-read inbox + per-user read state"
+items:
+  # ─── PUBLISH family (3 items) ─────────────────────────────────────────────
+  - id: "ACT-PUBLISH-001"
+    chapter: "PUBLISH"
+    requirement: "POST /api/activities publishes a new ActivityEvent. Server stamps actorUserId from Authentication; client supplies verb + objectType + objectId + optional audience + optional metadata + optional idempotencyKey. Returns 201."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST {verb:'liked', objectType:'post', objectId:'p-1'} → 201 with body
+      including id + createdAt + actorUserId = caller. Implementation: ActivityService.publish().
+    policy_ref: "blueprints/activity-feed-manifest.yaml#publish"
+
+  - id: "ACT-PUBLISH-002"
+    chapter: "PUBLISH"
+    requirement: "When the request body's audienceUserIds is empty, the actor IS the audience by default — i.e., the event is visible to the actor on their own feed via GET /api/activities."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: actor publishes event with no audienceUserIds → GET /api/activities returns the event
+      as the actor's own. Implementation: feed query filters on (actorUserId = caller OR caller IN audience).
+    policy_ref: "blueprints/activity-feed-manifest.yaml#publish"
+
+  - id: "ACT-PUBLISH-003"
+    chapter: "PUBLISH"
+    requirement: "Optional idempotencyKey on POST: when the same (actorUserId, idempotencyKey) is supplied twice within the dedup window, the second call returns 200 with the existing event (no duplicate row). Without an idempotencyKey, every POST creates a new event."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST with idempotencyKey='evt-x' → 201. Same POST → 200 with the same id.
+      POST without idempotencyKey twice → 2 separate events. Implementation: UNIQUE(actor_user_id, idempotency_key)
+      partial constraint; service findFirst → existing or insert.
+    policy_ref: "blueprints/activity-feed-manifest.yaml#publish"
+
+  # ─── READ family (3 items) ────────────────────────────────────────────────
+  - id: "ACT-READ-001"
+    chapter: "READ"
+    requirement: "GET /api/activities returns the caller's feed — events where the caller is the actor OR is listed in the audience. Cross-user feed access is structurally impossible (no userId path/query)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: actor A publishes 2 events (one targeting B in audience, one without). B's GET returns
+      1 event. C (not actor, not audience) GET returns 0.
+    policy_ref: "blueprints/activity-feed-manifest.yaml#read"
+
+  - id: "ACT-READ-002"
+    chapter: "READ"
+    requirement: "Feed is ordered by createdAt DESC (newest first)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: publish 3 events with small sleeps, GET → newest event first.
+    policy_ref: "blueprints/activity-feed-manifest.yaml#read"
+
+  - id: "ACT-READ-003"
+    chapter: "READ"
+    requirement: "GET /api/activities supports page/size pagination (default page=0, size=20, max size=100). Response includes totalElements, page, size."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: publish 5 events, GET ?page=0&size=2 → 2 items + totalElements=5 + page=0 + size=2.
+      GET ?size=500 → clamped to 100.
+    policy_ref: "blueprints/activity-feed-manifest.yaml#read"
+
+  # ─── MARK family (3 items) ────────────────────────────────────────────────
+  - id: "ACT-MARK-001"
+    chapter: "MARK"
+    requirement: "POST /api/activities/{id}/read records the caller's read state for the given event. Idempotent — second call preserves the original readAt timestamp. Marking an event the caller cannot see (not actor, not audience) returns 404."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: B sees event from A. B POST /read → 204. Second POST /read → still 204; GET shows
+      readAt unchanged. C (not audience) POST /read → 404. Implementation: ActivityReadRepository
+      findByEventAndUser → existing or insert. UNIQUE(event_id, user_id).
+    policy_ref: "blueprints/activity-feed-manifest.yaml#mark"
+
+  - id: "ACT-MARK-002"
+    chapter: "MARK"
+    requirement: "GET /api/activities?unreadOnly=true returns only events the caller has NOT marked read. Without the flag (default), the response contains ALL events visible to the caller (read + unread)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: 3 events visible to B. B marks 1 as read. GET ?unreadOnly=true → 2 items. GET (no flag) → 3.
+    policy_ref: "blueprints/activity-feed-manifest.yaml#mark"
+
+  - id: "ACT-MARK-003"
+    chapter: "MARK"
+    requirement: "POST /api/activities/mark-all-read marks every event currently visible to the caller as read. Returns {markedCount: long}. Idempotent — second call returns {markedCount: 0}."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: 3 events visible to B (all unread). POST mark-all-read → {markedCount:3}.
+      Second call → {markedCount:0}. Implementation: bulk INSERT into ActivityRead WHERE NOT EXISTS.
+    policy_ref: "blueprints/activity-feed-manifest.yaml#mark"
+
+  # ─── AUTHZ family (3 items) ───────────────────────────────────────────────
+  - id: "ACT-AUTHZ-001"
+    chapter: "AUTHZ"
+    requirement: "All activity-feed endpoints require a valid JWT; unauthenticated callers receive HTTP 401."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/activities, GET /api/activities, POST .../read, POST mark-all-read all → 401 without
+      Authorization. Implementation: SecurityConfig /api/activities/** authenticated.
+    policy_ref: "blueprints/activity-feed-manifest.yaml#authz"
+
+  - id: "ACT-AUTHZ-002"
+    chapter: "AUTHZ"
+    requirement: "Events the caller is NOT entitled to see (not actor AND not in audience) are invisible — GET single returns 404. There is no admin endpoint that exposes all events."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: A publishes private event (audience=[A only]). B GET /api/activities/{id} → 404.
+      Implementation: ActivityService.getVisible() filters audience first.
+    policy_ref: "blueprints/activity-feed-manifest.yaml#authz"
+
+  - id: "ACT-AUTHZ-003"
+    chapter: "AUTHZ"
+    requirement: "Publish auto-includes the actor in the visibility set even if not in audienceUserIds — the actor can always see their own events. Removing the actor from audienceUserIds does not hide the event from them."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: A publishes with audienceUserIds=[B only] (no A). GET /api/activities by A → event visible.
+      GET by B → event visible. GET by C → 404. Implementation: feed query includes
+      (actorUserId = caller OR caller IN audience).
+    policy_ref: "blueprints/activity-feed-manifest.yaml#authz"

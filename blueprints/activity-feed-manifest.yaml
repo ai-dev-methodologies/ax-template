@@ -1,0 +1,108 @@
+template_id: "activity-feed-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "Per-user activity inbox — 'who did what when on which entity' rendered as a feed in the UI"
+  - "Cross-domain audit lite — composition kit hosts publish from payment, order, comment, etc. all in one place"
+  - "Notification source-of-truth — feed entries are the canonical record; the notification domain (email/SMS) can be wired to consume new ActivityEvents"
+
+not_for:
+  - "Materialized timelines for millions of followers (Twitter-scale fan-out write) — current design is fan-out-read with @ElementCollection audience; works to ~100 recipients per event, not millions"
+  - "Cross-domain audit-of-record — use the audit-log domain for tamper-evident immutable logs; activity-feed is for user-facing 'recent activity', not compliance"
+  - "Realtime push — v1 is poll-based via GET. WebSocket / SSE delivery is a fork-receiver concern (compose with notification domain)"
+  - "Multi-tenant tenant scoping — v1 assumes single-tenant. Fork-receivers MUST add tenant_id + AOP guard (specs/multi-tenant-l0.yaml)"
+  - "Verb taxonomy enforcement — v1 accepts any non-blank string for verb (no enum). Fork-receivers needing a closed verb set should add validation at their controller layer."
+
+# ─── publish ───────────────────────────────────────────────────────────────
+publish:
+  endpoint: "POST /api/activities"
+  required_fields: [verb, objectType, objectId]
+  optional_fields: [subjectType, subjectId, metadata, audienceUserIds, idempotencyKey]
+  actor_derived_from: "Authentication (server-side)"
+  audience_default: "actor only"
+  idempotency:
+    key_field: idempotencyKey
+    uniqueness: "(actor_user_id, idempotency_key) when idempotency_key is non-null"
+    response_on_duplicate: 200
+    response_on_first: 201
+
+# ─── read ──────────────────────────────────────────────────────────────────
+read:
+  feed_endpoint: "GET /api/activities"
+  single_endpoint: "GET /api/activities/{id}"
+  visibility: "actorUserId = caller OR caller IN audienceUserIds"
+  order: "createdAt DESC"
+  pagination:
+    page_default: 0
+    size_default: 20
+    size_max: 100
+
+# ─── mark ──────────────────────────────────────────────────────────────────
+mark:
+  per_user_read_state: true              # separate ActivityRead row per (event, user)
+  uniqueness: "(event_id, user_id)"
+  mark_single_endpoint: "POST /api/activities/{id}/read"
+  mark_all_endpoint: "POST /api/activities/mark-all-read"
+  unread_only_filter: "?unreadOnly=true"
+  cross_user_mark_response: 404           # ACT-MARK-001 — cannot mark an event you can't see
+
+# ─── authz ─────────────────────────────────────────────────────────────────
+authz:
+  endpoint_pattern: "/api/activities/**"
+  authentication_required: true
+  cross_user_invisible_response: 404
+  actor_always_visible: true              # ACT-AUTHZ-003
+
+# ─── limits ────────────────────────────────────────────────────────────────
+limits:
+  audience_max_size: 100                  # per event
+  metadata_max_bytes: 4096                # JSON string length cap
+  verb_max_length: 64
+  object_type_max_length: 64
+  object_id_max_length: 255
+  idempotency_key_max_length: 128
+
+# ─── deferred to v2 ────────────────────────────────────────────────────────
+deferred_to_v2:
+  - id: "fan_out_write_for_scale"
+    reason: "v1 is fan-out-read with @ElementCollection audience. At ~100 recipients/event the join is cheap; beyond that, materialize per-recipient ActivityFeedEntry rows in a write pipeline."
+  - id: "realtime_push"
+    reason: "v1 is poll. v2 should compose with a notification / WebSocket domain to push new events to connected clients."
+  - id: "verb_taxonomy_enforcement"
+    reason: "v1 accepts any non-blank verb. v2 could ship a default enum (ActivityVerb) with a fork-receiver override SPI for domain-specific verbs."
+  - id: "follower_graph_integration"
+    reason: "v1 audience is an explicit list. v2 could compute audience from a follower graph (POST publish → expand actor's followers into audienceUserIds at publish time)."
+  - id: "soft_delete_or_redaction"
+    reason: "DELETE on activity-feed events is forbidden in v1 (audit trail). v2 could add a redact endpoint that sets metadata to '[redacted]' while preserving the row."
+
+testing_baseline:
+  unit: "JUnit 5 + AssertJ — reflective JPA shape"
+  integration: "RestAssured black-box HTTP against @SpringBootTest RANDOM_PORT"
+
+verification_checkpoints:
+  - "Publish stamps actor + defaults audience to actor (ACT-PUBLISH-001, 002)"
+  - "Idempotent publish via (actor, idempotencyKey) (ACT-PUBLISH-003)"
+  - "Feed scoped to caller as actor or audience member (ACT-READ-001, ACT-AUTHZ-002)"
+  - "Order newest first (ACT-READ-002)"
+  - "Pagination with size clamp (ACT-READ-003)"
+  - "Mark single + mark-all-read + unreadOnly filter (ACT-MARK-001, 002, 003)"
+  - "Cross-user mark → 404 (ACT-MARK-001)"
+  - "Actor always sees own event even when not in audience (ACT-AUTHZ-003)"
+
+must_not:
+  - "Allow a userId path / query parameter — caller MUST be Authentication-derived"
+  - "Return events to a caller who is neither actor nor in audience"
+  - "Hard-delete events in v1 (audit posture; deferred_to_v2 has the redact alternative)"
+  - "Mutate ActivityEvent.actorUserId or ActivityEvent.createdAt after insert"
+  - "Insert duplicate ActivityRead rows for the same (event, user)"
+
+reject_if:
+  - "POST with blank verb / objectType / objectId → 400 (Bean Validation)"
+  - "POST with audience > 100 users → 400 AUDIENCE_TOO_LARGE"
+  - "POST with metadata JSON > 4096 chars → 400 METADATA_TOO_LARGE"
+  - "POST mark-read on an event the caller cannot see → 404"
+
+source_precedence:
+  - "ActivityStreams 2.0 spec — actor/verb/object/target vocabulary"
+  - "Mastodon timelines API — fan-out-read at modest scale"
+  - "Facebook News Feed paper (Hoffman 2010) — fan-out trade-offs at scale (informs deferred_to_v2 fan-out-write rationale)"

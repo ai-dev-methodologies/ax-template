@@ -1,0 +1,128 @@
+openapi: 3.0.3
+info:
+  title: "ax-template Activity Feed API"
+  version: "0.1.0"
+  description: >
+    Per-user activity inbox. Publish ActivityEvent (actor/verb/object/audience);
+    GET feed returns events where caller is actor or audience member; per-user
+    read state via ActivityRead.
+servers:
+  - url: /api
+paths:
+  /activities:
+    post:
+      summary: "Publish a new activity event (idempotent on actor + idempotencyKey)"
+      operationId: publishActivity
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublishActivityRequest' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/ActivityEventResponse' } } } }
+        '200': { description: Idempotent replay (existing event by actor + idempotencyKey), content: { application/json: { schema: { $ref: '#/components/schemas/ActivityEventResponse' } } } }
+        '400': { description: Validation error }
+        '401': { description: Authentication required }
+    get:
+      summary: "Get the caller's feed (paginated, optional unreadOnly filter)"
+      operationId: listActivities
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: unreadOnly, in: query, required: false, schema: { type: boolean, default: false } }
+      responses:
+        '200': { description: Feed, content: { application/json: { schema: { $ref: '#/components/schemas/ActivityFeedResponse' } } } }
+        '401': { description: Authentication required }
+
+  /activities/{id}:
+    get:
+      summary: "Get a single event (visible iff caller is actor or in audience)"
+      operationId: getActivity
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Event, content: { application/json: { schema: { $ref: '#/components/schemas/ActivityEventResponse' } } } }
+        '404': { description: Not found OR not visible to caller }
+
+  /activities/{id}/read:
+    post:
+      summary: "Mark a single event as read (idempotent)"
+      operationId: markActivityRead
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Marked }
+        '404': { description: Event not visible to caller }
+
+  /activities/mark-all-read:
+    post:
+      summary: "Mark every event currently visible to the caller as read"
+      operationId: markAllActivitiesRead
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [markedCount]
+                properties:
+                  markedCount: { type: integer }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    PublishActivityRequest:
+      type: object
+      required: [verb, objectType, objectId]
+      properties:
+        verb: { type: string, maxLength: 64 }
+        objectType: { type: string, maxLength: 64 }
+        objectId: { type: string, maxLength: 255 }
+        subjectType: { type: string, maxLength: 64, nullable: true }
+        subjectId: { type: string, maxLength: 255, nullable: true }
+        audienceUserIds:
+          type: array
+          maxItems: 100
+          items: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+        idempotencyKey: { type: string, maxLength: 128, nullable: true }
+
+    ActivityEventResponse:
+      type: object
+      required: [id, actorUserId, verb, objectType, objectId, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        actorUserId: { type: string }
+        verb: { type: string }
+        objectType: { type: string }
+        objectId: { type: string }
+        subjectType: { type: string, nullable: true }
+        subjectId: { type: string, nullable: true }
+        metadata:
+          type: object
+          additionalProperties: true
+        audienceUserIds:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: string, format: date-time, nullable: true, description: "Caller's read timestamp; null if unread" }
+
+    ActivityFeedResponse:
+      type: object
+      required: [items, page, size, totalElements]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ActivityEventResponse' }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer }

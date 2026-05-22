@@ -256,6 +256,15 @@ tasks.register<Test>("testFavorites") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testActivityFeed") {
+    useJUnitPlatform {
+        includeTags("ACTIVITY")
+    }
+    description = "Run activity-feed domain compliance tests (R35: 12 items / 4 families — PUBLISH, READ, MARK, AUTHZ)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")
