@@ -13,6 +13,17 @@ not_for:
   - "Multi-tenant tenant scoping — v1 assumes single-tenant. Fork-receivers MUST add tenant_id and AOP guard before adoption (see specs/multi-tenant-l0.yaml)."
   - "Soft delete / archival of tags — DELETE is hard; v2 could add deleted_at if audit trail matters"
 
+# ─── deferred to v2 (R32 dogfood explicit deferrals) ───────────────────────
+deferred_to_v2:
+  - id: "tag_search_by_name_substring"
+    reason: "GET /api/tags returns top-level / by-parent lists; no name substring search. v2 should add ?q=<text> ILIKE-style filter for admin UI 'find a tag by name'."
+  - id: "tag_usage_statistics"
+    reason: "No 'how many entities reference this tag' counter on TagResponse. v2 should add either an aggregate field (computed at read time) or a denormalized usage_count maintained by trigger / event."
+  - id: "list_pagination_on_tags"
+    reason: "GET /api/tags returns the full set under a parent (defaults bounded by max children per level <100). v2 should add page/size when taxonomies routinely have >100 siblings."
+  - id: "korean_slug_transliteration"
+    reason: "TagSlugger falls back to 'tag-<uuid8>' for pure non-Latin input. v2 should accept a TagSluggerStrategy SPI so fork-receivers can plug in a Korean→Romanization library (e.g. lib-hangul-romanizer) without forking this domain."
+
 # ─── crud ──────────────────────────────────────────────────────────────────
 crud:
   slug_generation:
