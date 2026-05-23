@@ -67,7 +67,7 @@ tenant_model: multi   # R16: explicit declaration per MULTI-TENANT-ISOLATION-DEF
 | `approval-workflow` *(R31 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testApprovalWorkflow` GREEN); Next.js tree deferred |
 | `session-management` *(R33 / R41)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testSessionManagement` GREEN); R41 promoted from backend-only stub (PII-at-DTO UI demonstration) |
 | `activity-feed` *(R35 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testActivityFeed` GREEN); Next.js tree deferred |
-| `comment-thread` *(R36 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testCommentThread` GREEN); Next.js tree deferred |
+| `comment-thread` *(R36 / R42)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testCommentThread` GREEN); R42 promoted from backend-only stub (soft-delete + admin-cannot-rewrite UI demonstration) |
 | `tag-categorization` *(R34 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testTagCategorization` GREEN); Next.js tree deferred |
 | `favorites-bookmarks` *(R35a / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testFavorites` GREEN); Next.js tree deferred |
 
