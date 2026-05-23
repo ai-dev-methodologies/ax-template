@@ -66,7 +66,7 @@ tenant_model: multi   # R16: explicit declaration per MULTI-TENANT-ISOLATION-DEF
 | `api-key` *(R30 / R40)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testApiKey` GREEN); R40 promoted from backend-only stub |
 | `approval-workflow` *(R31 / R43)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testApprovalWorkflow` GREEN); R43 promoted from backend-only stub through 7-iter 2-persona dogfood (sales-mgr + CFO) to GREEN |
 | `session-management` *(R33 / R41)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testSessionManagement` GREEN); R41 promoted from backend-only stub (PII-at-DTO UI demonstration) |
-| `activity-feed` *(R35 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testActivityFeed` GREEN); Next.js tree deferred |
+| `activity-feed` *(R35 / R44)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testActivityFeed` GREEN); R44 promoted via 4-iter 2-persona dogfood (heavy-user + compliance officer); closes 2 critical (mark-all UI lie + fabricated readAt audit-timeline tampering) |
 | `comment-thread` *(R36 / R42)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testCommentThread` GREEN); R42 promoted from backend-only stub (soft-delete + admin-cannot-rewrite UI demonstration) |
 | `tag-categorization` *(R34 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testTagCategorization` GREEN); Next.js tree deferred |
 | `favorites-bookmarks` *(R35a / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testFavorites` GREEN); Next.js tree deferred |
