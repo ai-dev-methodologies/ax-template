@@ -68,7 +68,7 @@ tenant_model: multi   # R16: explicit declaration per MULTI-TENANT-ISOLATION-DEF
 | `session-management` *(R33 / R41)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testSessionManagement` GREEN); R41 promoted from backend-only stub (PII-at-DTO UI demonstration) |
 | `activity-feed` *(R35 / R44)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testActivityFeed` GREEN); R44 promoted via 4-iter 2-persona dogfood (heavy-user + compliance officer); closes 2 critical (mark-all UI lie + fabricated readAt audit-timeline tampering) |
 | `comment-thread` *(R36 / R42)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testCommentThread` GREEN); R42 promoted from backend-only stub (soft-delete + admin-cannot-rewrite UI demonstration) |
-| `tag-categorization` *(R34 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testTagCategorization` GREEN); Next.js tree deferred |
+| `tag-categorization` *(R34 / R45)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testTagCategorization` GREEN); R45 promoted via 2-persona dogfood w/ role-gated CRUD + slug preview + hierarchy tree |
 | `favorites-bookmarks` *(R35a / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testFavorites` GREEN); Next.js tree deferred |
 
 **Summary**: 12 impl ready · 0 spec-only · 0 skeleton · est. 0 eng-days for the recipe backend gap. 5 full-trio L4s + 7 backend-only L4 stubs (R39, each `templates/L4/<domain>/README.md` only) totaling 12 in `enabled_l4_domains`. Multi-tenant infra (row-level filter + AOP guard + tenant propagation) remains fork-receiver responsibility per `tenant_model: multi` declaration above.
