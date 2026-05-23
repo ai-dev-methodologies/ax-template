@@ -63,7 +63,7 @@ tenant_model: multi   # R16: explicit declaration per MULTI-TENANT-ISOLATION-DEF
 | `crud` | **impl** ✅ | full-trio | — (ready) |
 | `feature-flags` | **impl** ✅ | full-trio | — (ready; `./gradlew testFeatureFlags` GREEN) |
 | `search` | **impl** ✅ | full-trio | — (ready; `./gradlew testSearch` GREEN) |
-| `api-key` *(R30 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testApiKey` GREEN); Next.js tree deferred |
+| `api-key` *(R30 / R40)* | **impl** ✅ | **full-trio** | — (ready; `./gradlew testApiKey` GREEN); R40 promoted from backend-only stub |
 | `approval-workflow` *(R31 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testApprovalWorkflow` GREEN); Next.js tree deferred |
 | `session-management` *(R33 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testSessionManagement` GREEN); Next.js tree deferred |
 | `activity-feed` *(R35 / R39)* | **impl** ✅ | **backend-only stub** | — (ready; `./gradlew testActivityFeed` GREEN); Next.js tree deferred |
