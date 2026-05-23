@@ -2,7 +2,7 @@
 
 **Tenant model**: `single` — per [`specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001`](../../../specs/multi-tenant-l0.yaml). This L4 reference workload ships as **single-tenant**. Recipes composing this domain into a multi-tenant SaaS (e.g. `b2b-admin` with `tenant_model: multi`) MUST adopt one of `MULTI-TENANT-ISOLATION-001` (Hibernate filter row-level) / `MULTI-TENANT-ISOLATION-002` (schema-per-tenant) / `MULTI-TENANT-ISOLATION-003` (AOP guard) plus `MULTI-TENANT-PROPAGATION-001` (request-scoped TenantContext) + `MULTI-TENANT-PROPAGATION-002` (async propagation) before production. fork-receivers MUST NOT assume cross-tenant data isolation in this L4 as-shipped.
 
-This is a **backend-only L4 stub** (R39, 2026-05-23). The Next.js frontend tree is intentionally deferred — see "Why backend-only at this stage" below.
+**Status**: full-trio (R41 promoted, 2026-05-24). R39 shipped this domain as a backend-only stub; R41 added the Next.js admin tree under `app/(sessions)/`. This is the second R39 stub upgraded after `api-key` (R40), and it specifically demonstrates the PII-at-DTO-boundary handling at the UI layer.
 
 ## Domain summary
 
@@ -17,13 +17,31 @@ Explicit per-login session record with forensic metadata (raw IP/UA stored as `@
   - [`practices/rules/pii-masked-at-dto-boundary.md`](../../../practices/rules/pii-masked-at-dto-boundary.md) — IP masked + UA summarized at DTO layer
   - [`practices/rules/soft-delete-audit-trail.md`](../../../practices/rules/soft-delete-audit-trail.md) — status-flip preserves who-revoked-what-when
 
-## Why backend-only at this stage
+## Frontend (R41 full-trio)
 
-The R29–R36 catalog wave landed the backend impl first (each `./gradlew test<Domain>` GREEN) to validate the spec → TDD → GREEN loop without the additional surface area of a Next.js stub. R39 adds this README so `b2b-admin`'s `enabled_l4_domains` can reference the domain via `recipe_spec_referential_integrity_guard.sh` without manufacturing scaffolding that would later need to be discarded.
+| File | Purpose |
+|------|---------|
+| `app/layout.tsx` | Root Next.js layout with `Providers` |
+| `app/page.tsx` | Root redirect to `/sessions` |
+| `app/providers.tsx` | `QueryClientProvider` (TanStack Query v5, 10s staleTime — sessions need fresh status) |
+| `app/(sessions)/layout.tsx` | Route-group layout: AppShell + Sidebar (My / Admin tabs) |
+| `app/(sessions)/page.tsx` | **Caller-only inventory** — own sessions with masked IP + summarized UA, per-row Revoke + global Revoke-others |
+| `next.config.ts` | Minimal Next.js config with API proxy + security headers |
+
+PII contract at the UI layer (anchors `practices/rules/pii-masked-at-dto-boundary.md`):
+
+- The `SessionSummary` DTO carries `ipAddressMasked` (last octet stripped) and `userAgentSummary` (e.g. `"Chrome 124 on macOS"`).
+- The raw IP and User-Agent strings exist on the backend entity (`SessionRecord`) as `@JsonIgnore` columns — they are stored for forensics but **never reach the wire**.
+- The list page derives the caller's id from the request session, NEVER from a query parameter (anchors `practices/rules/caller-authentication-only-no-userid-param.md`).
+- `revokeSession()` treats HTTP 204 as success regardless of prior state (anchors `practices/rules/http-delete-idempotency-rfc9110.md`).
+
+The `/sessions/admin` admin force-logout view is intentionally NOT yet shipped — the caller-only inventory is the load-bearing PII demonstration; the admin view (`AdminSessionController` already exists server-side) is a follow-up PR.
 
 ## How to fork into your project
 
 1. Copy the Java package `com.ax.template.authblueprint.sessionmanagement` to your project's `<base>.sessionmanagement`.
-2. Copy `specs/session-management-l0.yaml` for the contract surface.
-3. Wire the `SessionRevocationCheck` SPI into your JWT filter — fail-closed default MUST be preserved.
-4. Adopt a `tenant_model: multi` isolation mode before production if your composition declares one.
+2. Copy the `app/` tree above into your Next.js project's `src/app/` (preserving the `(sessions)` route group).
+3. Copy `specs/session-management-l0.yaml` for the contract surface.
+4. Wire the `SessionRevocationCheck` SPI into your JWT filter — fail-closed default MUST be preserved.
+5. The masked IP / summarized UA contract is part of the audit posture; DO NOT widen the DTO to include raw values.
+6. If your composition declares `tenant_model: multi`, adopt one of the `MULTI-TENANT-ISOLATION-00{1,2,3}` modes before production.
