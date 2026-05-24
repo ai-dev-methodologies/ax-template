@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "dc0eb5f86227f4b2bea28168cdd3c327cb75c8732e00e23457356421eada3173"
-  rule_count: 92
+  source_concat_sha256: "c2a5e046ad3c7f6dbaead6e9f78e86bd14d1ef3b739e33801e57b1f4ebe21c6b"
+  rule_count: 99
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -1567,6 +1567,106 @@ Reference: [Apache POI SXSSF — Streaming API for large Excel files](https://po
 Reference: [Spring Batch — Chunk-Oriented Processing](https://docs.spring.io/spring-batch/reference/step/chunk-oriented-processing.html)
 
 
+<!-- @source rules/client-must-not-fabricate-audit-timestamps.md -->
+
+---
+title: Client must NOT fabricate audit timestamps — server is the source of truth
+impact: HIGH
+impactDescription: "A UI that shows a wall-clock time the server did not record creates an audit-truth mismatch that erodes incident-timeline reconstruction"
+tags:
+  - audit
+  - forensic
+  - timestamp
+  - optimistic-update
+spec_ref: "specs/activity-feed-l0.yaml#ACT-READ-001"
+verification:
+  source: "templates/L4/activity-feed/app/(activities)/page.tsx"
+  pattern: "pendingReadIds Set<string> in component state — cache only ever carries backend's readAt or null; no `new Date().toISOString()` written into cache"
+upstream:
+  - "https://gdpr-info.eu/art-5-gdpr/"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+evidence:
+  - source_type: external
+    citation: "GDPR Article 5(1)(d) — Personal data shall be accurate"
+    url: "https://gdpr-info.eu/art-5-gdpr/"
+    quote: "Personal data shall be: accurate and, where necessary, kept up to date; every reasonable step must be taken to ensure that personal data that are inaccurate, having regard to the purposes for which they are processed, are erased or rectified without delay (accuracy)."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "OWASP ASVS V8 — Data Protection (logging accuracy + integrity)"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quote: "Verify that authentication and session events are logged including admin login, user login, password change, and other security-relevant events."
+    quoted_at: "2026-05-25"
+---
+
+## Client must NOT fabricate audit timestamps — server is the source of truth
+
+**Impact: HIGH — a UI that lies about *when* eats into incident timeline integrity**
+
+When the client optimistically updates state for a mutation that has an audit timestamp (`readAt`, `actedAt`, `deletedAt`, `revokedAt`, `acknowledgedAt`), it is tempting to immediately set `field = new Date().toISOString()` so the row reflects the action without waiting for the server response. **Do not do this.** The server's actual timestamp will differ — by the network round-trip, by clock skew if the client's wall clock is off, by intentional client tampering. The audit log holds the server's timestamp; the screenshot the user takes shows the client's. When those diverge in an incident-response review, the system's trust posture collapses: *the UI showed me one time, the log shows another, which is the real evidence?*
+
+Two narrow classes of timestamp can be client-rendered safely:
+1. **"as-of" relative labels with no absolute claim** — e.g. `"just now"`, `"a moment ago"` rendered from a `pending: boolean` flag. These do not claim to be the audit time.
+2. **Display-only formatting of a server-returned timestamp** — once the server has responded with the canonical value, the client may format it (`new Date(serverIso).toLocaleString(...)`).
+
+**The forbidden pattern: write `new Date()` into the cache as if it were the server's authoritative timestamp.**
+
+**Incorrect — fabricated optimistic timestamp:**
+
+```ts
+// ❌ Fabricated readAt — client clock, not server truth.
+const read = useMutation({
+  mutationFn: markRead,
+  onSuccess: (_void, id) => {
+    qc.setQueryData(['activity-feed'], (old) => ({
+      ...old,
+      items: old.items.map((e) =>
+        e.id === id ? { ...e, readAt: new Date().toISOString() } : e,
+      ),
+    }))
+  },
+})
+
+// Renderer displays a time the server may never have stored:
+<span>read {timeAgo(event.readAt, now)}</span>
+```
+
+**Correct — typed pending set in component state, cache only ever holds backend truth:**
+
+```ts
+const [pendingReadIds, setPendingReadIds] = React.useState<Set<string>>(() => new Set())
+
+const read = useMutation({
+  mutationFn: markRead,             // returns the backend's authoritative readAt
+  onMutate: (id) => {
+    setPendingReadIds((prev) => new Set(prev).add(id))
+  },
+  onSettled: (_data, _err, id) => {
+    setPendingReadIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  },
+  onSuccess: () => {
+    // Family-key invalidate so the next refetch carries the server's readAt.
+    qc.invalidateQueries({ queryKey: ['activity-feed'] })
+  },
+})
+
+// Renderer: "marking read…" while pending, then the server's real timestamp:
+const isPendingRead = isUnread && pendingReadIds.has(event.id)
+{isPendingRead
+  ? '· marking read…'
+  : event.readAt && `· read ${timeAgo(event.readAt, now)}`}
+```
+
+Apply this rule to any timestamp field that ends up in an audit query or a compliance export: `readAt`, `actedAt`, `submittedAt`, `cancelledAt`, `revokedAt`, `approvedAt`, `rejectedAt`, `acknowledgedAt`, `verifiedAt`. The bias toward "show something instantly" is real and important — solve it with a pending sentinel and a `"…ing"` label, not with `new Date()`.
+
+Reference: [GDPR Article 5 — Lawfulness, fairness, accuracy](https://gdpr-info.eu/art-5-gdpr/)
+
+Reference: [OWASP ASVS V8 — Data Protection & Logging](https://owasp.org/www-project-application-security-verification-standard/)
+
+
 <!-- @source rules/config-no-secret-in-yaml.md -->
 
 ---
@@ -2149,6 +2249,98 @@ Verification: `./gradlew testPractices --tests "*ErrorControllerAdvice*"` hits t
 Reference: [Spring Framework Reference — Controller Advice](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-advice.html)
 
 
+<!-- @source rules/error-message-not-in-native-title-attribute.md -->
+
+---
+title: Mutation error messages MUST NOT render in the native `title` tooltip
+impact: MEDIUM
+impactDescription: "Native title tooltips appear in screenshots, screencasts, and over-the-shoulder views — server prose surfaced there can leak incidental PII or internal product names"
+tags:
+  - error-handling
+  - a11y
+  - pii-side-channel
+  - aria-live
+spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-CRUD-001"
+verification:
+  source: "templates/L4/favorites-bookmarks/app/favorite-toggle.tsx"
+  pattern: "title={ariaLabel} only; error.message rendered in a separate role='alert' aria-live span next to the button"
+upstream:
+  - "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+evidence:
+  - source_type: external
+    citation: "WCAG 2.2 — Success Criterion 4.1.3 Status Messages (Level AA)"
+    url: "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
+    quote: "In content implemented using markup languages, status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "OWASP ASVS V8.3 — Sensitive Private Data"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quote: "Verify that sensitive information is not transmitted via URL parameters or hidden form fields and is sanitized or removed when no longer required."
+    quoted_at: "2026-05-25"
+---
+
+## Mutation error messages MUST NOT render in the native `title` tooltip
+
+**Impact: MEDIUM — native tooltips are a quiet side-channel for incidental information leaks**
+
+The native `title` attribute on a button or link renders on hover, persists in the DOM, appears in screenshots and screencasts, and shows over-the-shoulder during screenshare. It is also non-dismissable — once it appears the user has no way to clear it short of moving the mouse. When the value is a server-emitted error message, that message reaches every surface that re-captures the page.
+
+Server error messages often carry information the catalog's PII deny-list cannot fully scrub: internal product names (`Subscription tier "enterprise"`), billing URLs, role / tenant / subscription identifiers, partial stack-trace excerpts, queue identifiers, vendor product codes. The catalog's `parse-error.ts` deny-list catches the most-dangerous PII shapes (email, IP, JWT, PEM headers, internal hostnames, Korean RRN + mobile) but cannot enumerate every operator's product vocabulary. The right answer is to keep error prose out of the `title` slot entirely.
+
+The replacement surface is an inline `role="alert"` span (an ARIA live region). Sighted users see the error next to the action that produced it; screen-reader users hear it announced via aria-live without taking focus; the native tooltip retains a stable, public-safe value (the button's `aria-label`).
+
+**Incorrect — mutation error falls back into `title`, leaks via every screenshot and screenshare:**
+
+```tsx
+<button
+  type="button"
+  aria-label={ariaLabel}
+  title={
+    toggle.error
+      ? toggle.error.message              // ❌ server prose lands in the native tooltip
+      : ariaLabel
+  }
+  onClick={() => toggle.mutate()}
+>
+  ★
+</button>
+```
+
+**Correct — title carries the aria-label only; errors render in a separate role='alert' span:**
+
+```tsx
+<>
+  <button
+    type="button"
+    aria-label={ariaLabel}
+    title={ariaLabel}                     // ✅ Public-safe stable value
+    aria-busy={toggle.isPending || undefined}
+    aria-disabled={busy || undefined}
+    onClick={() => {
+      if (busy) return
+      toggle.mutate(...)
+    }}
+  >
+    ★
+  </button>
+  {(toggle.error || error) && (
+    <span role="alert" className="ml-1 text-xs text-red-700">
+      {(toggle.error ?? (error as Error)).message}
+    </span>
+  )}
+</>
+```
+
+Two follow-on patterns travel with this rule:
+- Use `aria-busy` + `aria-disabled` instead of native `disabled` while a mutation is in flight (separate rule). Native `disabled` removes the element from the tab order mid-flight; `aria-busy` preserves focus and lets the screen reader announce the busy state.
+- Allow the user to dismiss a sticky error banner. TanStack Query mutation errors do NOT auto-clear when the next `mutate()` succeeds — they require an explicit `mutation.reset()`. Pair the alert with a Dismiss button that calls `.reset()`.
+
+Reference: [WCAG 2.2 SC 4.1.3 — Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)
+
+Reference: [OWASP ASVS V8 — Sensitive Private Data](https://owasp.org/www-project-application-security-verification-standard/)
+
+
 <!-- @source rules/error-no-stacktrace-leak.md -->
 
 ---
@@ -2272,6 +2464,99 @@ public ResponseEntity<ProblemDetail> badArg(IllegalArgumentException ex) {
 Verification: `./gradlew testPractices --tests "*Rfc7807ProblemDetail*"` asserts the response carries `Content-Type: application/problem+json` and a body with `type / title / status / detail`.
 
 Reference: [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) · [Spring `@ExceptionHandler` + `ProblemDetail`](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-exceptionhandler.html)
+
+
+<!-- @source rules/hooks-before-conditional-return.md -->
+
+---
+title: React hooks MUST be called before any conditional early return — Rules of Hooks
+impact: HIGH
+impactDescription: "Hooks placed after early returns mount into different slots between renders and crash the component with 'Rendered fewer hooks than during the previous render'"
+tags:
+  - react
+  - hooks
+  - rules-of-hooks
+  - render-correctness
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-001"
+verification:
+  source: "templates/L4/approval-workflow/app/(approvals)/[id]/page.tsx"
+  pattern: "all useQuery / useMutation / useState / useMemo calls above the `if (isLoading) return …` / `if (error) return …` / `if (!data) return …` block"
+upstream:
+  - "https://react.dev/reference/rules/rules-of-hooks"
+  - "https://react.dev/learn/state-as-a-snapshot"
+evidence:
+  - source_type: external
+    citation: "React — Rules of Hooks (Only call Hooks at the top level)"
+    url: "https://react.dev/reference/rules/rules-of-hooks"
+    quote: "Don't call Hooks inside loops, conditions, or nested functions. Instead, always use Hooks at the top level of your React function, before any early returns."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "React — State as a Snapshot"
+    url: "https://react.dev/learn/state-as-a-snapshot"
+    quote: "A state variable's value never changes within a render, even if its event handler's code is asynchronous."
+    quoted_at: "2026-05-25"
+---
+
+## React hooks MUST be called before any conditional early return — Rules of Hooks
+
+**Impact: HIGH — every render must call hooks in the same order**
+
+React tracks hook state by call order. A hook placed after a conditional early return is sometimes called and sometimes not, depending on the early-return condition. On the first render where the early-return fires, the hook is skipped; on the next render where data arrives and execution continues past the early returns, the hook is called for the first time. React's internal slot counter sees a different shape than the prior render and throws `'Rendered fewer hooks than during the previous render'`. In production builds the failure mode is silent state corruption between slots (the "second hook" gets state belonging to the "first hook").
+
+This is the most common AI-generated React bug. The pattern looks correct — guard against null data, then use it. But the guard must come AFTER all hooks, not before.
+
+Apply this rule to: `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`, `useQuery`, `useMutation`, custom hooks (`useFoo`). Anything starting with `use*` follows the same rule.
+
+**Incorrect — hook placed after the data guard:**
+
+```tsx
+export default function DetailPage() {
+  const { data, isLoading, error } = useQuery(...)
+  const [comment, setComment] = useState('')
+
+  if (isLoading) return <Spinner />
+  if (error) return <ErrorPanel />
+  if (!data) return <NotFound />
+
+  // ❌ This memo is sometimes called, sometimes not.
+  // First render: data === undefined → early return at line above → memo NEVER runs.
+  // Second render after data arrives → memo runs for the first time.
+  // React: 'Rendered more hooks than during the previous render'.
+  const summary = React.useMemo(() => buildSummary(data), [data])
+
+  return <Page summary={summary} />
+}
+```
+
+**Correct — every hook lives above the early returns; guard nullable inputs INSIDE the memo body:**
+
+```tsx
+export default function DetailPage() {
+  const { data, isLoading, error } = useQuery(...)
+  const [comment, setComment] = useState('')
+
+  // ✅ Hook called unconditionally on every render.
+  // The nullable input is handled inside the memo, not by a structural guard around it.
+  const summary = React.useMemo(
+    () => (data ? buildSummary(data) : null),
+    [data],
+  )
+
+  if (isLoading) return <Spinner />
+  if (error) return <ErrorPanel />
+  if (!data) return <NotFound />
+
+  return <Page summary={summary!} />
+}
+```
+
+The `data!` non-null assertion at the use-site is safe because the `!data` early return already established `data` is non-null at that point. TypeScript's narrowing tracks that.
+
+**A note on `chainPreview` / `chain` patterns**: when a derived value depends on the not-yet-loaded data, do **not** double-derive (`chainPreview = data ? compute() : null; … chain = chainPreview ?? compute()`) — the second derivation is provably unreachable after the `!data` guard, and the duplication invites drift. Compute once inside a memo whose deps include the data, then assert non-null at the use-site.
+
+Reference: [React — Rules of Hooks](https://react.dev/reference/rules/rules-of-hooks)
+
+Reference: [React — State as a Snapshot](https://react.dev/learn/state-as-a-snapshot)
 
 
 <!-- @source rules/http-delete-idempotency-rfc9110.md -->
@@ -3694,6 +3979,90 @@ See `practices/evals/fixtures/multi-tenant-aop-guard-skeleton/` (deferred to nex
 Reference: https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#multitenacy
 
 
+<!-- @source rules/mutation-in-flight-uses-aria-busy.md -->
+
+---
+title: In-flight mutations MUST use aria-busy + aria-disabled, not native `disabled`
+impact: MEDIUM
+impactDescription: "Native `disabled` removes the element from the tab order mid-flight — keyboard users lose focus context and screen readers miss the busy announcement"
+tags:
+  - a11y
+  - aria
+  - keyboard-nav
+  - mutation
+spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-CRUD-001"
+verification:
+  source: "templates/L4/favorites-bookmarks/app/favorite-toggle.tsx"
+  pattern: "aria-busy + aria-disabled set during isPending; onClick guards with `if (busy) return`; native `disabled` attribute NOT used for in-flight state"
+upstream:
+  - "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
+  - "https://www.w3.org/TR/wai-aria-1.2/#aria-busy"
+evidence:
+  - source_type: external
+    citation: "WAI-ARIA 1.2 — aria-busy property"
+    url: "https://www.w3.org/TR/wai-aria-1.2/#aria-busy"
+    quote: "Indicates an element is being modified and that assistive technologies MAY want to wait until the modifications are complete before exposing them to the user."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "WCAG 2.2 — Success Criterion 4.1.3 Status Messages (Level AA)"
+    url: "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
+    quote: "Status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus."
+    quoted_at: "2026-05-25"
+---
+
+## In-flight mutations MUST use aria-busy + aria-disabled, not native `disabled`
+
+**Impact: MEDIUM — native `disabled` is the wrong tool for transient busy state**
+
+The HTML `disabled` attribute is for elements that are *currently not interactive*. A button that is in the middle of dispatching a mutation is conceptually busy, not disabled — the user wants it back as soon as the network round-trip completes, focus should stay on it, and assistive tech should announce "busy, please wait" rather than silently removing the element from interaction.
+
+Native `disabled` does three problematic things during the in-flight window:
+1. Removes the element from the tab order, so a keyboard user pressing Tab after the click finds focus suddenly elsewhere when the page re-renders with `disabled=true`.
+2. Suppresses click + focus events entirely, so a screen reader has no way to announce status.
+3. Gets re-enabled on the next render with no signal about why, so a sighted user who clicked once and saw nothing happen has no model for "should I click again or wait?"
+
+The ARIA replacement is `aria-busy` + `aria-disabled`. Both are properties, not interactivity blockers — the element stays in the tab order, focus is preserved, and the screen reader announces the busy state via the page's aria-live mechanism. To prevent double-fire on rapid clicks, guard inside the click handler: `if (busy) return`.
+
+**Incorrect — native `disabled` mid-mutation:**
+
+```tsx
+<button
+  type="button"
+  disabled={toggle.isPending}         // ❌ removed from tab order, no busy announcement
+  onClick={() => toggle.mutate(...)}
+>
+  Save
+</button>
+```
+
+**Correct — aria-busy + aria-disabled + click guard:**
+
+```tsx
+const busy = isLoading || toggle.isPending
+
+<button
+  type="button"
+  aria-busy={toggle.isPending || undefined}
+  aria-disabled={busy || undefined}
+  className="… aria-busy:opacity-60 aria-disabled:opacity-50"
+  onClick={() => {
+    if (busy) return                 // ✅ double-click guard, focus preserved
+    toggle.mutate(...)
+  }}
+>
+  Save
+</button>
+```
+
+Use `undefined` (not `false`) for the aria props when the state is not active — `aria-busy="false"` is technically valid but tooling-noisy. The `aria-busy:` and `aria-disabled:` Tailwind variants pair cleanly for the visual cue without depending on the native `disabled` style.
+
+This rule pairs with **error-message-not-in-native-title-attribute** — together they keep the button's a11y surface clean during failure modes too.
+
+Reference: [WAI-ARIA 1.2 — aria-busy](https://www.w3.org/TR/wai-aria-1.2/#aria-busy)
+
+Reference: [WCAG 2.2 SC 4.1.3 — Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)
+
+
 <!-- @source rules/no-billing-cross-import-from-payment.md -->
 
 ---
@@ -4294,6 +4663,124 @@ Verification: `./gradlew testPractices --tests "*StructuredLogging*"` attaches a
 Reference: [SLF4J Fluent API](https://www.slf4j.org/manual.html#fluent) · [Logback Layouts](https://logback.qos.ch/manual/layouts.html)
 
 
+<!-- @source rules/optimistic-update-snapshot-rollback.md -->
+
+---
+title: Optimistic update MUST snapshot-and-rollback — never invalidate-only
+impact: MEDIUM
+impactDescription: "Invalidate-only patterns leave UI lagging one network round-trip behind every action; without rollback, transient failures leave the cache stuck in the wrong state"
+tags:
+  - tanstack-query
+  - optimistic-update
+  - mutation
+  - cache-coherence
+spec_ref: "specs/activity-feed-l0.yaml#ACT-MARK-001"
+verification:
+  source: "templates/L4/favorites-bookmarks/app/favorite-toggle.tsx, templates/L4/favorites-bookmarks/app/(favorites)/page.tsx"
+  pattern: "onMutate snapshot + setQueryData optimistic write + onError ctx.previous rollback + onSettled invalidate"
+upstream:
+  - "https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates"
+  - "https://tanstack.com/query/latest/docs/framework/react/guides/mutations"
+evidence:
+  - source_type: external
+    citation: "TanStack Query v5 — Optimistic Updates via the Cache"
+    url: "https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates"
+    quote: "When we want to optimistically update some state before the mutation is completed, we can use the onMutate option. ... The data returned from onMutate is passed to the onError handler so it can be used to undo the optimistic update."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "TanStack Query v5 — useMutation API"
+    url: "https://tanstack.com/query/latest/docs/framework/react/guides/mutations"
+    quote: "onError, retry, retryDelay, scope: { id }, onMutate(variables): ... — A function that fires before the mutation function is fired. Useful to perform optimistic updates to a resource in hopes that the mutation succeeds."
+    quoted_at: "2026-05-25"
+---
+
+## Optimistic update MUST snapshot-and-rollback — never invalidate-only
+
+**Impact: MEDIUM — invalidate-only is a lie about latency; un-rolled-back failure is a worse lie about state**
+
+The simplest pattern for a mutation in TanStack Query is `onSuccess: () => qc.invalidateQueries(queryKey)`. It is correct but slow: the UI does not change until the invalidated query refetches over the network. For mutations whose user-perceived correctness depends on immediate visual feedback (toggles, removes, marks-as-read), this latency is unacceptable — and the in-flight window introduces a fresh race:
+
+> Click 1 fires. Cache still says `favorited: false`. UI shows ☆. Mutation in flight.
+> Click 2 within the RTT reads cache `{ favorited: false }` and fires *another* add. Duplicate-key on add, or harmless redundant DELETE on remove.
+
+The correct pattern has four parts, all required, in this order:
+1. **onMutate** — cancel any in-flight refetch of the affected key; snapshot the current cache value as a return context; write the optimistic new value into the cache.
+2. **The mutation reads its decision from variables, not the cache.** Either the caller passes the direction explicitly (`mutate({ direction: 'add' })`) or onMutate captures it into the returned context before flipping. Do *not* re-read `data?.favorited` inside mutationFn — that read is what the snapshot was meant to replace.
+3. **onError** — restore the snapshot from the context. Cache returns to backend truth.
+4. **onSettled** — invalidate the affected key (and any cross-query family that mirrors the same state) so the next refetch reconciles against the backend.
+
+This pattern combines latency reduction (cache flips at onMutate) with truth preservation (snapshot restoration on failure) and cross-query coherence (family-key invalidation at onSettled).
+
+**Incorrect — invalidate-only with cache read inside mutationFn:**
+
+```tsx
+const toggle = useMutation({
+  mutationFn: async () => {
+    // ❌ reads cache mid-mutation — second rapid click re-reads stale value
+    if (data?.favorited) await removeFavorite(...)
+    else await addFavorite(...)
+  },
+  onSuccess: () => qc.invalidateQueries({ queryKey }),
+})
+```
+
+**Correct — onMutate snapshot + direction variables + onError rollback + onSettled invalidate:**
+
+```tsx
+type Direction = 'add' | 'remove'
+
+const toggle = useMutation({
+  mutationFn: async (direction: Direction) => {
+    if (direction === 'remove') await removeFavorite(...)
+    else await addFavorite(...)
+  },
+  onMutate: async (direction) => {
+    await qc.cancelQueries({ queryKey })
+    const previous = qc.getQueryData<CheckResponse>(queryKey)
+    qc.setQueryData<CheckResponse>(queryKey, { favorited: direction === 'add' })
+    return { previous }
+  },
+  onError: (_err, _direction, ctx) => {
+    if (ctx?.previous) qc.setQueryData(queryKey, ctx.previous)
+    qc.invalidateQueries({ queryKey: ['related-list'] })  // cross-query coherence on error
+  },
+  onSettled: () => {
+    qc.invalidateQueries({ queryKey })
+    qc.invalidateQueries({ queryKey: ['related-list'] })  // family-key invalidate
+  },
+})
+
+// At the click site: snapshot direction from current cache, pass into mutate:
+<button onClick={() => {
+  if (busy) return
+  toggle.mutate(favorited ? 'remove' : 'add')
+}} />
+```
+
+For a list-removal pattern (remove a row from a paginated list), the snapshot+rollback target is the list query data, and the optimistic write is a `filter()` over `items`:
+
+```tsx
+onMutate: async ({ entityType, entityId }) => {
+  await qc.cancelQueries({ queryKey: ['list'] })
+  const previous = qc.getQueryData<ListResponse>(['list'])
+  qc.setQueryData<ListResponse>(['list'], (old) =>
+    old ? { ...old, items: old.items.filter((it) => !(it.entityType === entityType && it.entityId === entityId)) } : old
+  )
+  return { previous }
+},
+onError: (_err, _vars, ctx) => {
+  if (ctx?.previous) qc.setQueryData(['list'], ctx.previous)
+},
+onSettled: () => qc.invalidateQueries({ queryKey: ['list'] }),
+```
+
+The "no fabricated timestamps" rule (`client-must-not-fabricate-audit-timestamps`) pairs with this one: when the optimistic state includes an audit timestamp, hold the pending state in a component-local typed Set rather than writing a synthetic timestamp into the cache. The cache should only ever carry backend truth or null.
+
+Reference: [TanStack Query v5 — Optimistic Updates](https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates)
+
+Reference: [TanStack Query v5 — Mutations](https://tanstack.com/query/latest/docs/framework/react/guides/mutations)
+
+
 <!-- @source rules/payment-iso-4217-currency.md -->
 
 ---
@@ -4817,6 +5304,110 @@ Reference: [OWASP API Security Top 10 (2023) — API3:2023 Broken Object Propert
 Reference: [GDPR Article 25 — Data protection by design and by default](https://gdpr-info.eu/art-25-gdpr/)
 
 
+<!-- @source rules/polymorphic-entity-ref-path-segment-guard.md -->
+
+---
+title: Polymorphic (entityType, entityId) refs MUST be path-segment guarded client-side
+impact: MEDIUM
+impactDescription: "encodeURIComponent masks injection on the wire but Spring re-decodes before PathVariable matching — a client guard refuses the request before it leaves the browser"
+tags:
+  - bola
+  - defense-in-depth
+  - path-injection
+  - polymorphic-entity
+spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-VALID-001"
+verification:
+  source: "templates/L4/favorites-bookmarks/app/entity-key.ts"
+  pattern: "assertSafeEntityRef(entityType, entityId) rejects values containing '/', '?', '#', '\\0', '\\', or a leading '.' — called by every fetch that emits the pair as a path segment"
+upstream:
+  - "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+  - "https://cwe.mitre.org/data/definitions/22.html"
+evidence:
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2023) — API1:2023 Broken Object Level Authorization"
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+    quote: "Object level authorization is an access control mechanism that is usually implemented at the code level to validate that one user can only access objects that they should have access to."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "CWE-22 — Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+    url: "https://cwe.mitre.org/data/definitions/22.html"
+    quote: "The product uses external input to construct a pathname that is intended to identify a file or directory that is located underneath a restricted parent directory, but the product does not properly neutralize special elements within the pathname that can cause the pathname to resolve to a location that is outside of the restricted directory."
+    quoted_at: "2026-05-25"
+---
+
+## Polymorphic (entityType, entityId) refs MUST be path-segment guarded client-side
+
+**Impact: MEDIUM — encodeURIComponent is not enough on its own**
+
+When a catalog domain models a polymorphic relationship via an `(entityType, entityId)` pair (favorites-bookmarks, tag-categorization attachments, comment-thread, activity-feed objects), those two strings often end up encoded as path segments in REST URLs:
+
+```
+DELETE /api/favorites/{entityType}/{entityId}
+GET    /api/comments/by-entity/{entityType}/{entityId}
+GET    /api/tags/by-entity/{entityType}/{entityId}
+```
+
+`encodeURIComponent(entityType)` correctly percent-encodes `/`, `?`, `#`, and other path-separators on the wire. But Spring MVC (and most web frameworks) decode the URL-encoded path **before** `PathVariable` matching — that's the whole point of percent-encoding. A `entityType` of `'../admin/users'` arrives at the controller as the raw string `../admin/users`. If the controller's spec yaml only enforces `@Size(max = 64)` without a charset constraint (which is the default in the catalog as shipped), the backend has no first-line defense.
+
+The cleanest defense-in-depth pattern is to validate the pair client-side **before** the fetch leaves the browser. The validator is a one-shot helper that throws on any character likely to confuse path resolution:
+
+- `/` (forward slash) — direct path-segment break
+- `?` (query) — bumps the value into the query string
+- `#` (fragment) — strips the value at the URL parser
+- `\0` (NUL) — historic terminator-truncation hazard
+- `\` (backslash) — Windows-style separator some frameworks treat as `/`
+- leading `.` — combined with `.` makes `..`, the traversal prefix
+
+This is *purely defense-in-depth*. The backend SHOULD constrain charset on the spec yaml field via a regex pattern (`@Pattern(regexp = "[a-zA-Z0-9_-]+")`), and the catalog tracks that as a deferred backend-contract item. But the client guard is free to ship today and closes the attack surface from the only side of the contract a fork-receiver controls.
+
+**Incorrect — only encodeURIComponent, no client-side charset guard:**
+
+```ts
+async function removeFavorite(entityType: string, entityId: string) {
+  // ❌ encodeURIComponent encodes the path-injection characters on the wire,
+  // but Spring decodes them before @PathVariable matching.
+  const res = await fetch(
+    `/api/favorites/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+    { method: 'DELETE' },
+  )
+  if (!res.ok) throw new Error('Failed to remove favorite')
+}
+```
+
+**Correct — client-side assertSafeEntityRef gates the fetch:**
+
+```ts
+// app/entity-key.ts
+export function assertSafeEntityRef(entityType: string, entityId: string): void {
+  for (const [name, value, max] of [
+    ['entityType', entityType, 64],
+    ['entityId', entityId, 255],
+  ] as const) {
+    if (!value || value.length === 0) throw new Error(`Invalid ${name}: empty`)
+    if (value.length > max) throw new Error(`Invalid ${name}: longer than ${max} characters`)
+    if (/[\\/?#\0]/.test(value)) throw new Error(`Invalid ${name}: contains forbidden characters`)
+    if (value.startsWith('.')) throw new Error(`Invalid ${name}: cannot start with '.'`)
+  }
+}
+
+// fetch site:
+async function removeFavorite(entityType: string, entityId: string) {
+  assertSafeEntityRef(entityType, entityId)
+  const res = await fetch(
+    `/api/favorites/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+    { method: 'DELETE' },
+  )
+  if (!res.ok) throw await parseError(res, 'Failed to remove favorite')
+}
+```
+
+The guard belongs in a shared module (one per catalog domain or one shared across the polymorphic-entity-using L4 set) so a fork-receiver replacing a single fetch helper inherits the validation by import, not by copy-paste.
+
+Reference: [OWASP API Security Top 10 (2023) — API1:2023 BOLA](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)
+
+Reference: [CWE-22 — Path Traversal](https://cwe.mitre.org/data/definitions/22.html)
+
+
 <!-- @source rules/prefer-recipe-composition-over-l4-cross-import.md -->
 
 ---
@@ -5242,6 +5833,87 @@ public final class PiiRedactor {
 Verification: `./gradlew testPractices --tests "*UtilityClassShape*"` reflects on `PiiRedactor` and asserts the class is final, has exactly one declared constructor, that constructor takes no arguments, and is private.
 
 Reference: Effective Java Item 4 · [JLS §8.8.10](https://docs.oracle.com/javase/specs/jls/se21/html/jls-8.html)
+
+
+<!-- @source rules/rbac-stub-default-fail-closed.md -->
+
+---
+title: RBAC role stub MUST default to least-privilege role — never 'admin' in dev
+impact: HIGH
+impactDescription: "A stub returning 'admin' by default exposes admin UI on every staging/preview deployment where the fork-receiver forgot to wire the real role source"
+tags:
+  - rbac
+  - authz
+  - bfla
+  - least-privilege
+  - dev-stub
+spec_ref: "specs/tag-categorization-l0.yaml#TAG-AUTHZ-001"
+verification:
+  source: "templates/L4/tag-categorization/app/use-caller-id.ts"
+  pattern: "useCallerRole() returns 'user' in dev by default; admin path requires explicit `NEXT_PUBLIC_DEV_AS_ADMIN=1` env opt-in"
+upstream:
+  - "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+evidence:
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization"
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
+    quote: "Authorization checks for a function or resource are usually managed via configuration, and sometimes at the code level. Implementing proper checks can be a confusing task, since modern applications can contain many types of roles or groups and complex user hierarchy (e.g., sub-users, users with more than one role)."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "OWASP ASVS V4 — Access Control (least privilege principle)"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quote: "Verify that the principle of least privilege exists — users should only be able to access functions, data files, URLs, controllers, services, and other resources, for which they possess specific authorization."
+    quoted_at: "2026-05-25"
+---
+
+## RBAC role stub MUST default to least-privilege role — never 'admin' in dev
+
+**Impact: HIGH — fail-OPEN defaults travel further than fork-receivers realize**
+
+When a catalog template ships a stub for the calling user's role (or any other authorization claim), the dev default decides what every fork-receiver sees on day one. If that default is `'admin'`, every staging deployment, every Vercel preview, every QA environment, every demo to a stakeholder presents admin UI to whoever is viewing — including users who *should* be locked out. The server's `@PreAuthorize` / RBAC gate eventually rejects the request, but the UI has already lied about availability.
+
+The principle of least privilege says: when in doubt, default to the most restricted role and require explicit opt-in to widen. The dev stub follows the same rule. Default to `'user'` (or whatever your least-privileged role is). Provide an explicit env-var opt-in (e.g. `NEXT_PUBLIC_DEV_AS_ADMIN=1`) that catalog devs flip when they need to exercise the admin path. Emit a one-shot `console.warn` on first call so the stub is visible to a fork-receiver inspecting their devtools.
+
+The production hard-stop is a separate rule (a stub that ships to production should `throw new Error('Identity provider not configured')` so a missed integration cannot ship silently). The least-privilege default protects everything *between* dev and production — staging, preview, QA — where the stub is still active and a wrong default exposes admin UI to non-admin viewers.
+
+**Incorrect — admin by default; staging deploys with stub still wired silently expose admin UI:**
+
+```ts
+export function useCallerRole(): 'admin' | 'user' {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Identity provider not configured')
+  }
+  return 'admin'                       // ❌ Every preview / staging / QA env shows admin UI to everyone
+}
+```
+
+**Correct — user by default; admin requires explicit env opt-in; one-shot dev warning:**
+
+```ts
+let warnedCallerRole = false
+
+export function useCallerRole(): 'admin' | 'user' {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('useCallerRole: Identity provider not configured')
+  }
+  if (!warnedCallerRole) {
+    warnedCallerRole = true
+    console.warn(
+      '[ax-template] useCallerRole stub active. Wire your real RBAC source. ' +
+        'Set NEXT_PUBLIC_DEV_AS_ADMIN=1 to exercise the admin path locally.',
+    )
+  }
+  const devAsAdmin = process.env.NEXT_PUBLIC_DEV_AS_ADMIN === '1'
+  return devAsAdmin ? 'admin' : 'user'      // ✅ Least privilege by default
+}
+```
+
+This applies symmetrically to **any** authorization-related stub a catalog template ships: role, permissions array, feature-flag boolean, tenant id, team membership. A stub that returns "yes" by default is the wrong default. Return "no" by default; require explicit dev opt-in.
+
+Reference: [OWASP API Security Top 10 (2023) — API5:2023 BFLA](https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/)
+
+Reference: [OWASP ASVS V4 — Access Control Design](https://owasp.org/www-project-application-security-verification-standard/)
 
 
 <!-- @source rules/recipe-invariants-must-resolve.md -->
