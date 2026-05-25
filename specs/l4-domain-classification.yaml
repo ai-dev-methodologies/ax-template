@@ -144,6 +144,15 @@ tiers:
         active_recipes: ["b2b-admin"]
       - name: "favorites-bookmarks"
         active_recipes: ["b2b-admin"]
+      # R51 (2026-05-26): email-outbox promoted future_add → selectable.
+      # Backend impl (EmailOutbox + EmailOutboxService + EmailTemplateService
+      # + EmailOutboxAdminController) + frontend full-trio + 8 spec items
+      # tested via ./gradlew testEmailOutbox. R50/R52 lessons preempted
+      # day-one. Active recipes pending — fork-receivers compose via
+      # override_allowed.add.
+      - name: "email-outbox"
+        recipe_orphan: true
+        active_recipes: []
 
   future_add:
     description: >
@@ -153,8 +162,7 @@ tiers:
       (c) re-run l4_domain_enum_sync_guard.sh. The schema enum already
       authorises the name so no schema patch is required by the fork.
     items:
-      - name: "email-outbox"
-        intended_use: "Transactional email outbox pattern with retry + dead-letter."
+      # email-outbox promoted to selectable in R51 (see selectable tier above).
       - name: "i18n-policy"
         intended_use: "Locale + currency + RTL policy enforcement."
       - name: "identity-verification"

@@ -274,6 +274,15 @@ tasks.register<Test>("testCommentThread") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testEmailOutbox") {
+    useJUnitPlatform {
+        includeTags("EMAIL")
+    }
+    description = "Run email-outbox domain compliance tests (R51: 8 items / 4 families — QUEUE, SEND, RETRY, TEMPLATE, ADMIN)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")
