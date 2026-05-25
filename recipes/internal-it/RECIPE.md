@@ -57,7 +57,7 @@ override_allowed:
 | `auth` | **impl** ✅ | — (ready) |
 | `crud` | **impl** ✅ | — (ready) |
 | `notification` | **spec-only** 📋 | ~5-10 eng-days (implement backend) |
-| `scheduled-task` | **skeleton** ⚠️ | ~3-7 eng-days (flesh out .skeleton) |
+| `scheduled-task` | **impl** ✅ | — (R49: backend GREEN + admin Next.js surface — task list w/ enable·disable·trigger + per-task history) |
 | `webhook` | **impl** ✅ | — (R48: backend GREEN + admin Next.js surface — register w/ one-time secret reveal + delivery monitor + replay) |
 
 **Summary**: 2 impl ready · 2 spec-only (implement) · 2 skeleton (flesh out) · est. ~22-29 engineering days for the gap.

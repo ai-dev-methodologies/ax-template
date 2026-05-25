@@ -8,9 +8,7 @@ landed R7).
 
 ## Domain Mode
 
-`backend_only` — distributed-lock cron jobs + job history + manual admin trigger;
-no frontend UI in scope. R7 introduces the L4 README + scaffold. R8 LMS/CMS recipes
-will be the first downstream consumers of this primitive.
+**Status**: full-trio (R49 promoted, 2026-05-25). R7 originally shipped this domain as `backend_only`. R49 added the admin Next.js surface — task list (enable/disable + manual trigger with confirm) + per-task execution history (10s background poll + Refresh button + PII-scrubbed errorMessage). The 2-persona dogfood protocol (P1 운영 admin + P2 SRE / on-call) ran to GREEN. **Last of the 19 L4 templates to reach full-trio — every L4 in the catalog is now Next.js-ready.**
 
 ## Overview
 
