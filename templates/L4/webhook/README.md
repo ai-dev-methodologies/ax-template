@@ -8,10 +8,7 @@ billing R5). 12th L4 domain.
 
 ## Domain Mode
 
-`backend_only` — outbound system-to-system event delivery with HMAC-SHA256
-signing, idempotent retry, dead-letter queue, and per-endpoint circuit breaker;
-no frontend UI in scope. SP45 introduces the L4 README + scaffold. SP45b
-internal-it recipe will be the **first downstream consumer** of this primitive.
+**Status**: full-trio (R48 promoted, 2026-05-25). SP45 originally shipped this domain as `backend_only`. R48 added the admin Next.js surface — endpoint registration (with one-time signing-secret reveal) + delivery monitor with replay. The 2-persona dogfood protocol (P1 운영 admin + P2 SRE / incident responder) ran to GREEN. 8th post-R39-sequence L4 promotion; one of the last two stub-only L4s closed.
 
 ## Overview
 
@@ -195,3 +192,29 @@ Controller) is deferred to a future webhook backend-expansion cycle, triggered
 by fork-receiver demand or recipe needs (independent of any specific recipe).
 SP45b internal-it recipe consumes these stubs for INV-003 (signed + retried
 outbound to ITSM systems).
+
+## Frontend admin surface (R48 full-trio)
+
+| File | Purpose |
+|------|---------|
+| `app/layout.tsx` | Root Next.js layout with `Providers` |
+| `app/page.tsx` | Redirect to `/admin/webhooks` |
+| `app/providers.tsx` | `QueryClientProvider` (TanStack v5, staleTime 15s) |
+| `app/(admin)/layout.tsx` | Route-group layout: AppShell + Sidebar (Endpoints / Deliveries) |
+| `app/(admin)/webhooks/page.tsx` | **Endpoints list** — admin-gated register + delete + **one-time signing-secret reveal panel** |
+| `app/(admin)/webhooks/deliveries/page.tsx` | **Delivery monitor** — status filter, 10s background poll, replay for FAILED / DEAD_LETTER rows |
+| `app/use-caller-id.ts` | Shared session hook + `useCallerRole()` for the ROLE_ADMIN gate (R47 rbac-stub-default-fail-closed) |
+| `app/parse-error.ts` | Shared RFC 9457 ProblemDetail unwrap + text/html fallback + Korean PII deny-list |
+| `next.config.ts` | API proxy + security headers |
+
+**One-time signing-secret reveal**: the entire `signingSecret` field exists in client state ONLY inside `SecretRevealPanel`. The list page never re-fetches it (the backend `EndpointResponse` does not carry it). Acknowledging the panel clears the secret from React state. This mirrors the api-key (R40) catalog pattern for plaintext-shown-once credentials.
+
+**Replay UX**: replay buttons render only on `FAILED` / `DEAD_LETTER` rows. `SUCCEEDED` / `PENDING` / `IN_FLIGHT` rows do not show the button — replaying a successful delivery would create a duplicate; replaying an in-flight one is a no-op race. The action calls `POST /api/admin/webhook-deliveries/{id}/replay` and invalidates the list query.
+
+R47 catalog invariants preempted in this surface:
+- **hooks-before-conditional-return**: all `useQuery` / `useMutation` / `useState` above the role-gate's conditional return.
+- **rbac-stub-default-fail-closed**: `useCallerRole` defaults to `'user'`; admin path requires `NEXT_PUBLIC_DEV_AS_ADMIN=1` env opt-in.
+- **error-message-not-in-native-title-attribute**: errors render in `role='alert'` aria-live spans, not in button titles.
+- **mutation-in-flight-uses-aria-busy**: `aria-busy` + `aria-disabled` + click-guard, not native `disabled`.
+- **optimistic-update-snapshot-rollback**: delete uses `onMutate` snapshot + `onError ctx.previous` restore.
+- **client-must-not-fabricate-audit-timestamps**: `lastAttemptAt` / `nextAttemptAt` rendered as-received; pending-replay state held in a typed Set in component state, never written into the cache as a synthetic timestamp.
