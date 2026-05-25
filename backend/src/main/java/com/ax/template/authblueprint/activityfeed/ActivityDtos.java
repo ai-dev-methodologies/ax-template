@@ -30,6 +30,14 @@ public final class ActivityDtos {
         @Size(max = 128) String idempotencyKey
     ) {}
 
+    /**
+     * R52 — backend-contract wave 1 (closes R44 P2-F7 audience peer leak):
+     * audienceUserIds was previously serialized in the response payload,
+     * exposing every recipient of the event to every other recipient via
+     * DevTools Network tab. The catalog now returns only a boolean
+     * indicating whether the calling user is in the audience — the actual
+     * id set stays server-internal.
+     */
     public record ActivityEventResponse(
         UUID id,
         String actorUserId,
@@ -39,13 +47,18 @@ public final class ActivityDtos {
         String subjectType,
         String subjectId,
         Map<String, Object> metadata,
-        Set<String> audienceUserIds,
+        boolean youAreInAudience,
         Instant createdAt,
         Instant readAt
     ) {
 
-        public static ActivityEventResponse from(ActivityEvent e, Instant readAt, ObjectMapper mapper) {
+        public static ActivityEventResponse from(
+                ActivityEvent e, String callerUserId, Instant readAt, ObjectMapper mapper) {
             Map<String, Object> meta = parseMeta(e.getMetadataJson(), mapper);
+            Set<String> audience = e.getAudienceUserIds();
+            boolean inAudience = callerUserId != null
+                && audience != null
+                && audience.contains(callerUserId);
             return new ActivityEventResponse(
                 e.getId(),
                 e.getActorUserId(),
@@ -55,7 +68,7 @@ public final class ActivityDtos {
                 e.getSubjectType(),
                 e.getSubjectId(),
                 meta,
-                e.getAudienceUserIds(),
+                inAudience,
                 e.getCreatedAt(),
                 readAt
             );

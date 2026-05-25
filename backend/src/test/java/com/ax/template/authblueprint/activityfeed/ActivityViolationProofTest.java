@@ -107,6 +107,39 @@ class ActivityViolationProofTest {
         }
     }
 
+    // ── R52 backend-contract wave 1: audience peer leak DTO scoping ─────────
+
+    @Test
+    @Tag("ACT-AUTHZ-001")
+    void violation_responseDtoMustNotExposeAudienceUserIds() {
+        // R44 P2-F7 (Compliance Officer) caught audienceUserIds being serialized
+        // on every ActivityEventResponse — every recipient could enumerate every
+        // other recipient via DevTools Network tab. R52 closure: the response
+        // DTO returns a boolean (youAreInAudience), not the full id set.
+        // Re-introducing the field would re-open the peer-leak surface.
+        for (var field : ActivityDtos.ActivityEventResponse.class.getDeclaredFields()) {
+            String name = field.getName();
+            assertThat(name)
+                .as("ActivityEventResponse MUST NOT carry an audience id collection — "
+                  + "R52 replaced audienceUserIds with the youAreInAudience boolean to "
+                  + "close R44 P2-F7 peer-leak surface")
+                .isNotEqualTo("audienceUserIds");
+        }
+    }
+
+    @Test
+    @Tag("ACT-AUTHZ-001")
+    void violation_responseDtoMustExposeYouAreInAudienceBoolean() throws Exception {
+        // Companion invariant for R52: the boolean replacement field MUST be
+        // present and be a primitive boolean — null-tristate would re-open
+        // the ambiguity (caller cannot tell membership from missing field).
+        Field f = ActivityDtos.ActivityEventResponse.class.getDeclaredField("youAreInAudience");
+        assertThat(f.getType())
+            .as("ActivityEventResponse.youAreInAudience MUST be primitive boolean — "
+              + "Boolean wrapper would allow null, re-opening tri-state ambiguity")
+            .isEqualTo(boolean.class);
+    }
+
     private static boolean contains(String[] arr, String v) {
         for (String s : arr) if (s.equals(v)) return true;
         return false;

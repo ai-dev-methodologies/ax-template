@@ -2,6 +2,7 @@ package com.ax.template.authblueprint.activityfeed;
 
 import jakarta.validation.Valid;
 
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,13 @@ import com.ax.template.authblueprint.activityfeed.ActivityDtos.PublishActivityRe
 @RequestMapping("/api/activities")
 public class ActivityController {
 
+    // R52 — backend-contract wave 1: per-caller PII responses MUST NOT be
+    // cached by browsers / proxies. Shared workstation scenarios
+    // (enterprise hot-desk, kiosks, screen-share replay) would otherwise
+    // let a subsequent user see the prior caller's feed through the
+    // browser cache or via a back-button navigation.
+    private static final String NO_STORE = "no-store, private";
+
     private final ActivityService service;
 
     public ActivityController(ActivityService service) {
@@ -37,31 +45,41 @@ public class ActivityController {
                                                          @Valid @RequestBody PublishActivityRequest body) {
         ActivityService.PublishResult result = service.publish(auth.getName(), body);
         HttpStatus status = result.created() ? HttpStatus.CREATED : HttpStatus.OK;
-        return ResponseEntity.status(status).body(result.response());
+        return ResponseEntity.status(status)
+            .cacheControl(CacheControl.noStore())
+            .body(result.response());
     }
 
     @GetMapping
-    public ActivityFeedResponse list(Authentication auth,
-                                     @RequestParam(defaultValue = "0") int page,
-                                     @RequestParam(defaultValue = "20") int size,
-                                     @RequestParam(defaultValue = "false") boolean unreadOnly) {
-        return service.list(auth.getName(), page, size, unreadOnly);
+    public ResponseEntity<ActivityFeedResponse> list(Authentication auth,
+                                                     @RequestParam(defaultValue = "0") int page,
+                                                     @RequestParam(defaultValue = "20") int size,
+                                                     @RequestParam(defaultValue = "false") boolean unreadOnly) {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .header("Pragma", "no-cache")
+            .body(service.list(auth.getName(), page, size, unreadOnly));
     }
 
     @GetMapping("/{id}")
-    public ActivityEventResponse get(Authentication auth, @PathVariable UUID id) {
-        return service.get(auth.getName(), id);
+    public ResponseEntity<ActivityEventResponse> get(Authentication auth, @PathVariable UUID id) {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .header("Pragma", "no-cache")
+            .body(service.get(auth.getName(), id));
     }
 
     @PostMapping("/{id}/read")
     public ResponseEntity<Void> markRead(Authentication auth, @PathVariable UUID id) {
         service.markRead(auth.getName(), id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
 
     @PostMapping("/mark-all-read")
-    public MarkAllReadResponse markAllRead(Authentication auth) {
-        return service.markAllRead(auth.getName());
+    public ResponseEntity<MarkAllReadResponse> markAllRead(Authentication auth) {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .body(service.markAllRead(auth.getName()));
     }
 
     @ExceptionHandler(ActivityNotFoundException.class)

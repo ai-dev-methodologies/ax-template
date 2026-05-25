@@ -3,6 +3,8 @@ package com.ax.template.authblueprint.activityfeed;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -24,6 +26,13 @@ import com.ax.template.authblueprint.activityfeed.ActivityDtos.PublishActivityRe
 
 @Service
 public class ActivityService {
+
+    // R52 — backend-contract wave 1: BULK_MARK_READ audit emission distinct
+    // from individual READ. The catalog tracks formal audit-log integration
+    // as a follow-up (R52 keeps the coupling at SLF4J structured-log level
+    // so downstream log pipelines can route by the stable verb token).
+    private static final Logger AUDIT = LoggerFactory.getLogger("audit.activity-feed");
+    private static final String VERB_BULK_MARK_READ = "BULK_MARK_READ";
 
     private final ActivityEventRepository eventRepository;
     private final ActivityReadRepository readRepository;
@@ -107,6 +116,15 @@ public class ActivityService {
         for (UUID eventId : unread) {
             readRepository.save(new ActivityRead(eventId, userId, now));
         }
+        // R52 — backend-contract wave 1: structured BULK_MARK_READ emission
+        // distinct from individual READ. Audit pipelines route on the verb
+        // token. The catalog client (catalog rule client-must-not-fabricate-
+        // audit-timestamps) reads back the per-event readAt from the cache
+        // refetch so the audit timeline never carries a fabricated bulk
+        // timestamp masquerading as per-event read evidence.
+        AUDIT.info(
+            "verb={} caller={} markedCount={} at={}",
+            VERB_BULK_MARK_READ, userId, unread.size(), now);
         return new MarkAllReadResponse(unread.size());
     }
 
@@ -114,7 +132,9 @@ public class ActivityService {
         Instant readAt = readRepository.findByEventIdAndUserId(event.getId(), userId)
             .map(ActivityRead::getReadAt)
             .orElse(null);
-        return ActivityEventResponse.from(event, readAt, objectMapper);
+        // R52: caller is passed so the response can compute youAreInAudience
+        // without leaking the audience id set (R44 P2-F7 closure).
+        return ActivityEventResponse.from(event, userId, readAt, objectMapper);
     }
 
     private String serializeMetadata(Map<String, Object> metadata) {

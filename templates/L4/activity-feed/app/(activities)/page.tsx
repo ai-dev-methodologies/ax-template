@@ -40,8 +40,12 @@ import { parseError } from '../parse-error'
  * The client NEVER sends ?userId= — visibility is server-derived from
  * (actor === caller) OR (audience contains caller).
  *
- * Audience is exposed in the DTO so the UI can disambiguate "I sent
- * this" (actor=caller) from "Someone CC'd me" (caller in audience).
+ * R52 (backend-contract wave 1) closed the R44 P2-F7 audience peer
+ * leak: the response DTO no longer carries the full audience user-id
+ * set. Instead, `youAreInAudience` is a server-computed boolean — the
+ * client can still disambiguate "I sent this" (actor === caller) from
+ * "Someone CC'd me" (youAreInAudience === true), without learning the
+ * other audience members' identities.
  */
 interface ActivityEvent {
   id: string
@@ -52,7 +56,7 @@ interface ActivityEvent {
   subjectType: string | null
   subjectId: string | null
   metadata: Record<string, unknown>
-  audienceUserIds: string[]
+  youAreInAudience: boolean
   createdAt: string
   readAt: string | null
 }
