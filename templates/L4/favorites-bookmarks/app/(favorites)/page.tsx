@@ -26,9 +26,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import EmptyState from 'templates/L2/blocks/empty-state'
 import ErrorBoundary from 'templates/L2/blocks/error-boundary'
 import ConfirmDialog from 'templates/L2/blocks/confirm-dialog'
-import { useCallerId } from '../use-caller-id'
-import { parseError, FavoritesError } from '../parse-error'
-import { assertSafeEntityRef } from '../entity-key'
+import { useCallerId } from 'templates/L0/fork-receiver-kit/use-caller-id'
+import { parseError, CodedError } from 'templates/L0/fork-receiver-kit/parse-error'
+import { assertSafeEntityRef } from 'templates/L0/fork-receiver-kit/entity-key'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ function timeAgo(iso: string, now: Date): string {
 }
 
 function isQuotaExceeded(err: unknown): boolean {
-  return err instanceof FavoritesError && err.code === 'FAVORITES_QUOTA_EXCEEDED'
+  return err instanceof CodedError && err.code === 'FAVORITES_QUOTA_EXCEEDED'
 }
 
 // ─── per-row count widget ────────────────────────────────────────────────────
@@ -241,7 +241,7 @@ export default function FavoritesListPage() {
   // R55 — quota actionable banner. Sticky until the user dismisses or the
   // mutation is reset, because the underlying constraint (1000-cap) needs an
   // action the user must take outside the form (delete some favorites).
-  const quotaError = isQuotaExceeded(add.error) ? (add.error as FavoritesError) : null
+  const quotaError = isQuotaExceeded(add.error) ? (add.error as CodedError) : null
   const addOtherError = add.error && !quotaError ? (add.error as Error) : null
 
   const submitAdd = (e: React.FormEvent<HTMLFormElement>) => {

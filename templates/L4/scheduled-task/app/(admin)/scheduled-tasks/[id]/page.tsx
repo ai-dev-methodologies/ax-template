@@ -26,8 +26,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import EmptyState from 'templates/L2/blocks/empty-state'
 import ErrorBoundary from 'templates/L2/blocks/error-boundary'
-import { useCallerId, useCallerRole } from '../../../use-caller-id'
-import { parseError, sanitizeStoredError } from '../../../parse-error'
+import { useCallerId, useCallerRole } from 'templates/L0/fork-receiver-kit/use-caller-id'
+import { parseError, sanitizeStoredError } from 'templates/L0/fork-receiver-kit/parse-error'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 

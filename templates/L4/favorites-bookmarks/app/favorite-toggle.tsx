@@ -23,8 +23,8 @@ imports_forbidden: [L4/auth, L4/crud, L4/practices, L4/payment]
 
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { parseError, FavoritesError } from './parse-error'
-import { assertSafeEntityRef } from './entity-key'
+import { parseError, CodedError } from 'templates/L0/fork-receiver-kit/parse-error'
+import { assertSafeEntityRef } from 'templates/L0/fork-receiver-kit/entity-key'
 
 interface CheckResponse {
   favorited: boolean
@@ -176,9 +176,9 @@ export function FavoriteToggle({ entityType, entityId, label }: FavoriteTogglePr
            a tooltip. */}
       {(toggle.error || error) && (() => {
         const e = (toggle.error ?? error) as Error
-        // R55 — quota error gets actionable copy. FavoritesError preserves the
-        // backend ProblemDetail.code; non-FavoritesError shows the message as-is.
-        const isQuota = e instanceof FavoritesError && e.code === 'FAVORITES_QUOTA_EXCEEDED'
+        // R55 — quota error gets actionable copy. CodedError preserves the
+        // backend ProblemDetail.code; non-CodedError shows the message as-is.
+        const isQuota = e instanceof CodedError && e.code === 'FAVORITES_QUOTA_EXCEEDED'
         return (
           <span
             role="alert"

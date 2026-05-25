@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import EmptyState from 'templates/L2/blocks/empty-state'
 import ErrorBoundary from 'templates/L2/blocks/error-boundary'
-import { parseError } from '../../parse-error'
+import { parseError } from 'templates/L0/fork-receiver-kit/parse-error'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 

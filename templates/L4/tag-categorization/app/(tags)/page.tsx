@@ -25,8 +25,8 @@ import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import EmptyState from 'templates/L2/blocks/empty-state'
 import ErrorBoundary from 'templates/L2/blocks/error-boundary'
-import { useCallerRole } from '../use-caller-id'
-import { parseError } from '../parse-error'
+import { useCallerRole } from 'templates/L0/fork-receiver-kit/use-caller-id'
+import { parseError } from 'templates/L0/fork-receiver-kit/parse-error'
 import { previewSlug } from '../slug-preview'
 
 // ─── types ───────────────────────────────────────────────────────────────────
