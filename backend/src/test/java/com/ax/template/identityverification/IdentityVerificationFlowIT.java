@@ -1,12 +1,19 @@
 package com.ax.template.identityverification;
 
 import com.ax.template.authblueprint.AuthBlueprintBackendApplication;
+import com.ax.template.authblueprint.auditlog.AuditLog;
+import com.ax.template.authblueprint.auditlog.AuditLogRepository;
+import com.ax.template.authblueprint.identityverification.IdentityVerificationService;
+import com.ax.template.authblueprint.identityverification.VerifiedIdentity;
+import com.ax.template.authblueprint.identityverification.VerifiedIdentityRepository;
+import org.springframework.data.jpa.domain.Specification;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -14,8 +21,11 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Optional;
 
 import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
@@ -51,7 +61,12 @@ import static org.hamcrest.Matchers.notNullValue;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
             "ax.identity-verification.pass.secret=test-pass-secret",
-            "ax.identity-verification.kcb.secret=test-kcb-secret"
+            "ax.identity-verification.kcb.secret=test-kcb-secret",
+            // R54 — admin endpoint tests need a verified user with ADMIN role.
+            // Mirror BillingFlowIT/FeatureFlagFlowIT precedent: auto-verify keeps
+            // the admin/member token issuance binary so AUTHZ assertions are not
+            // contaminated by the verification workflow.
+            "auth.signup.auto-verify=true"
         })
 class IdentityVerificationFlowIT {
 
@@ -77,9 +92,29 @@ class IdentityVerificationFlowIT {
     @LocalServerPort
     private int port;
 
+    @Autowired
+    private VerifiedIdentityRepository verifiedIdentityRepository;
+
+    @Autowired
+    private AuditLogRepository auditLogRepository;
+
+    private long idvAuditBaseline;
+
     @BeforeEach
     void setUp() {
         RestAssured.port = port;
+        // R54 — VerifiedIdentity is per-test bounded; clear so persistence
+        // counts are deterministic.
+        verifiedIdentityRepository.deleteAll();
+        // AuditLogRepository is intentionally append-only (AUDIT-RECORD-002);
+        // capture a baseline count of IDV-tagged audits and assert deltas.
+        idvAuditBaseline = idvAudits().size();
+    }
+
+    private List<AuditLog> idvAudits() {
+        Specification<AuditLog> idvAction = (root, query, cb) ->
+            cb.equal(root.get("action"), IdentityVerificationService.AUDIT_ACTION);
+        return auditLogRepository.findAll(idvAction);
     }
 
     // ─── IDV-CALLBACK-001: Invalid HMAC → 401 ──────────────────────────────
@@ -242,6 +277,165 @@ class IdentityVerificationFlowIT {
         // Both must have the same response shape (IDV-PROVIDER-001)
         assertNoRrnField(passResponse.prettify());
         assertNoRrnField(kcbResponse.prettify());
+    }
+
+    // ─── R54 residual closure — persistence, audit, admin, unknown-provider ───
+
+    @Test
+    @DisplayName("IDV-CALLBACK-002: valid PASS callback persists exactly one VerifiedIdentity row")
+    void passCallback_validHmac_persistsVerifiedIdentity() throws Exception {
+        String body = buildPassPayload();
+        String signature = computeHmacSha256(body, PASS_SECRET);
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("X-Identity-Signature", "sha256=" + signature)
+                .body(body)
+                .when()
+                .post(PASS_CALLBACK_ENDPOINT)
+                .then()
+                .statusCode(200);
+
+        List<VerifiedIdentity> rows = verifiedIdentityRepository.findAll();
+        assertThat(rows).hasSize(1);
+        VerifiedIdentity v = rows.get(0);
+        assertThat(v.getCi()).isEqualTo(VALID_CI);
+        assertThat(v.getDi()).isEqualTo(VALID_DI);
+        assertThat(v.getProviderName()).isEqualTo("pass");
+        assertThat(v.getName()).isEqualTo("홍길동");
+        assertThat(v.getDob()).isEqualTo("19900101");
+        assertThat(v.getVerifiedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("IDV-PROVIDER-002: unknown provider returns 400 with RFC 7807 ProblemDetail")
+    void unknownProvider_returns400() {
+        given()
+                .contentType(ContentType.JSON)
+                .header("X-Identity-Signature", "sha256=irrelevant")
+                .body("{}")
+                .when()
+                .post("/api/identity-verification/callback/unknown_provider_xyz")
+                .then()
+                .statusCode(400);
+    }
+
+    @Test
+    @DisplayName("IDV-AUDIT-001: successful callback publishes audit with SUCCESS outcome")
+    void successfulCallback_publishesAudit() throws Exception {
+        String body = buildPassPayload();
+        String signature = computeHmacSha256(body, PASS_SECRET);
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("X-Identity-Signature", "sha256=" + signature)
+                .body(body)
+                .when()
+                .post(PASS_CALLBACK_ENDPOINT)
+                .then()
+                .statusCode(200);
+
+        List<AuditLog> audits = idvAudits();
+        assertThat(audits).hasSize((int) (idvAuditBaseline + 1));
+        AuditLog entry = audits.get(audits.size() - 1);
+        assertThat(entry.getOutcome().name()).isEqualTo("SUCCESS");
+        assertThat(entry.getResourceType())
+                .isEqualTo(IdentityVerificationService.RESOURCE_TYPE);
+        // IDV-AUDIT-001 + IDV-CALLBACK-003: metadataJson MUST NOT contain RRN.
+        assertNoRrnField(Optional.ofNullable(entry.getMetadataJson()).orElse(""));
+    }
+
+    @Test
+    @DisplayName("IDV-AUDIT-001: HMAC failure publishes audit with FAILURE outcome")
+    void hmacFailure_publishesAudit() {
+        given()
+                .contentType(ContentType.JSON)
+                .header("X-Identity-Signature", "sha256=deadbeef")
+                .body(buildPassPayload())
+                .when()
+                .post(PASS_CALLBACK_ENDPOINT)
+                .then()
+                .statusCode(401);
+
+        List<AuditLog> audits = idvAudits();
+        assertThat(audits).hasSize((int) (idvAuditBaseline + 1));
+        AuditLog entry = audits.get(audits.size() - 1);
+        assertThat(entry.getOutcome().name()).isEqualTo("FAILURE");
+        // IDV-AUDIT-001 distinguishes HMAC_FAIL vs EXTRACTION_FAIL via metadata.
+        assertThat(entry.getMetadataJson()).contains("HMAC_FAIL");
+        assertNoRrnField(Optional.ofNullable(entry.getMetadataJson()).orElse(""));
+    }
+
+    @Test
+    @DisplayName("IDV-ADMIN-001: GET /api/admin/identity-verification without JWT returns 401")
+    void adminList_unauthenticated_returns401() {
+        given()
+                .when()
+                .get(ADMIN_LIST_ENDPOINT)
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
+    @DisplayName("IDV-ADMIN-001: GET /api/admin/identity-verification with non-admin JWT returns 403")
+    void adminList_nonAdmin_returns403() {
+        String memberToken = obtainToken("idv-member@r54.test", "MEMBER");
+        given()
+                .header("Authorization", "Bearer " + memberToken)
+                .when()
+                .get(ADMIN_LIST_ENDPOINT)
+                .then()
+                .statusCode(403);
+    }
+
+    @Test
+    @DisplayName("IDV-ADMIN-001: GET /api/admin/identity-verification with ADMIN JWT returns 200 paginated list")
+    void adminList_admin_returns200() throws Exception {
+        // Seed a row so the list has content.
+        String body = buildPassPayload();
+        String signature = computeHmacSha256(body, PASS_SECRET);
+        given()
+                .contentType(ContentType.JSON)
+                .header("X-Identity-Signature", "sha256=" + signature)
+                .body(body)
+                .when()
+                .post(PASS_CALLBACK_ENDPOINT)
+                .then()
+                .statusCode(200);
+
+        String adminToken = obtainToken("idv-admin@r54.test", "ADMIN");
+        var response = given()
+                .header("Authorization", "Bearer " + adminToken)
+                .when()
+                .get(ADMIN_LIST_ENDPOINT)
+                .then()
+                .statusCode(200)
+                .header("Cache-Control", org.hamcrest.Matchers.containsString("no-store"))
+                .body("totalElements", equalTo(1))
+                .body("content[0].providerName", equalTo("pass"))
+                .extract()
+                .body()
+                .asString();
+
+        // IDV-CALLBACK-003: admin list payload MUST NOT contain RRN.
+        // Catalog also intentionally hides CI/DI from the list view.
+        assertNoRrnField(response);
+        assertThat(response).doesNotContain("\"ci\"");
+        assertThat(response).doesNotContain("\"di\"");
+    }
+
+    private String obtainToken(String email, String role) {
+        given()
+            .header("Content-Type", "application/json")
+            .body("{\"email\":\"" + email
+                  + "\",\"password\":\"securepassword12\",\"role\":\"" + role + "\"}")
+            .when().post("/api/auth/email/signup");
+
+        return given()
+            .header("Content-Type", "application/json")
+            .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
+            .when().post("/api/auth/email/login")
+            .then().extract().path("accessToken");
     }
 
     // ─── Helper methods ─────────────────────────────────────────────────────

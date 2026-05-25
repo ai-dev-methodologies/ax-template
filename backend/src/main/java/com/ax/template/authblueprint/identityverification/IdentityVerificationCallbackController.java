@@ -27,32 +27,24 @@ import java.util.Map;
 /**
  * Identity verification callback receiver (PASS / KCB).
  *
- * <p>Implements the callback surface required by
- * {@code specs/identity-verification-l0.yaml}:
+ * <p>R54 — full surface for {@code specs/identity-verification-l0.yaml}:
  * <ul>
- *   <li>IDV-CALLBACK-001 — HMAC-SHA256 signature verification on
- *       {@code X-Identity-Signature} header; 401 on missing/invalid.</li>
- *   <li>IDV-CALLBACK-002 — valid HMAC returns 200 with
+ *   <li>IDV-CALLBACK-001 — HMAC-SHA256 envelope verification (this layer).</li>
+ *   <li>IDV-CALLBACK-002 — {@link IdentityVerificationService#processCallback}
+ *       persists a {@link VerifiedIdentity}; controller returns
  *       {@code {status:"accepted", provider:"<name>"}}.</li>
- *   <li>IDV-CALLBACK-003 — response body never contains RRN
- *       (개인정보보호법 §24-1).</li>
- *   <li>IDV-PROVIDER-001 — PASS and KCB use the same response shape; per-provider
- *       payload decoding lives in the catalog-defined provider adapters
- *       (R3+ scope — this minimal controller only validates the HMAC envelope).</li>
+ *   <li>IDV-CALLBACK-003 — response body never contains RRN (the body is a
+ *       fixed two-field map; the entity has no rrn column).</li>
+ *   <li>IDV-PROVIDER-001/002 — provider lookup + canonical extraction in service.</li>
+ *   <li>IDV-AUDIT-001 — every callback attempt funnels through the service for
+ *       structured AuditLog publish (SUCCESS / HMAC_FAIL / UNKNOWN_PROVIDER /
+ *       EXTRACTION_FAIL).</li>
  * </ul>
  *
- * <p>Persistence ({@code VerifiedIdentity} entity, repository, audit publisher,
- * admin list endpoint) is intentionally NOT included in this minimal
- * implementation. The catalog ships the contract surface; fork-receivers wire
- * persistence per their data store. The minimal controller exists so
- * {@code ./gradlew testIdentityVerification} is a binary pass/fail signal for
- * the HMAC envelope contract — the foundation every adapter relies on.
- *
- * <p>Security: SecurityConfig permits {@code /api/identity-verification/callback/**}
- * because authentication is via the provider HMAC signature, not a user JWT.
- *
- * @see WebhookReceiver (sibling pattern under integration/)
- * @see PaymentCallbackController (sibling pattern under payment/)
+ * <p>HMAC verification stays at the controller because it needs the raw body
+ * byte-for-byte before any JSON parsing. On verification miss, the controller
+ * notifies the service via {@link IdentityVerificationService#recordHmacFailure}
+ * so the audit hook still fires.
  */
 @RestController
 @RequestMapping("/api/identity-verification/callback")
@@ -66,14 +58,17 @@ public class IdentityVerificationCallbackController {
     private static final String SIGNATURE_HEADER = "X-Identity-Signature";
 
     private final Map<String, byte[]> providerSecrets;
+    private final IdentityVerificationService service;
 
     public IdentityVerificationCallbackController(
             @Value("${ax.identity-verification.pass.secret:}") String passSecret,
-            @Value("${ax.identity-verification.kcb.secret:}") String kcbSecret) {
+            @Value("${ax.identity-verification.kcb.secret:}") String kcbSecret,
+            IdentityVerificationService service) {
         this.providerSecrets = Map.of(
             "pass", passSecret.getBytes(StandardCharsets.UTF_8),
             "kcb",  kcbSecret.getBytes(StandardCharsets.UTF_8)
         );
+        this.service = service;
     }
 
     @PostMapping(value = "/{provider}", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -84,9 +79,10 @@ public class IdentityVerificationCallbackController {
 
         byte[] secret = providerSecrets.get(provider);
         if (secret == null || secret.length == 0) {
-            // Unknown provider — fork-receivers register additional providers via
-            // ax.identity-verification.<provider>.secret. IDV-PROVIDER-002 (R3+):
-            // surface as 400 with RFC 7807 ProblemDetail.
+            // IDV-PROVIDER-002: unknown provider never reaches the service for
+            // parsing, but the audit hook still fires so dashboards see the
+            // rejected attempt.
+            service.recordUnknownProvider(provider);
             ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
             pd.setTitle("Unknown identity verification provider");
             pd.setDetail("provider=" + provider);
@@ -95,12 +91,24 @@ public class IdentityVerificationCallbackController {
 
         if (!verifyHmac(signatureHeader, rawBody, secret)) {
             log.warn("Identity verification callback rejected: HMAC mismatch (provider={})", provider);
+            service.recordHmacFailure(provider);
             ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
             pd.setTitle("Identity verification signature failed");
-            // IDV-CALLBACK-003: error body must NOT echo any payload field; only
-            // a stable failure reason. Avoid leaking provider-specific names.
+            // IDV-CALLBACK-003: error body MUST NOT echo any payload field;
+            // only a stable failure reason.
             pd.setDetail("HMAC verification failed");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(pd);
+        }
+
+        try {
+            service.processCallback(provider, rawBody);
+        } catch (IdentityVerificationException ex) {
+            // EXTRACTION_FAIL etc — service already audited.
+            HttpStatus status = ex.reason().status();
+            ProblemDetail pd = ProblemDetail.forStatus(status);
+            pd.setTitle("Identity verification callback failed");
+            pd.setDetail(ex.reason().name());
+            return ResponseEntity.status(status).body(pd);
         }
 
         // IDV-CALLBACK-002 / IDV-PROVIDER-001: unified response shape across
