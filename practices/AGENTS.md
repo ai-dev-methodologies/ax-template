@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "c2a5e046ad3c7f6dbaead6e9f78e86bd14d1ef3b739e33801e57b1f4ebe21c6b"
-  rule_count: 99
+  source_concat_sha256: "f699b35b3737f3b0ed242031f40aa57c3b97ac4ab438aee9d464fc7de3c44ec8"
+  rule_count: 104
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -2185,6 +2185,101 @@ See: `practices/evals/fixtures/currency-amount-precision/fail_float_amount/Billi
 See: `practices/evals/fixtures/currency-amount-precision/pass_integer_amount/BillingPlanLongAmount.java` — correct `private long amount`.
 
 
+<!-- @source rules/destructive-action-confirm-with-side-effects.md -->
+
+---
+title: Destructive admin actions MUST confirm with explicit side-effect enumeration
+impact: HIGH
+impactDescription: "A bare-onClick destructive action under pager-driven triage produces single-misclick incidents (duplicate deliveries, voided approvals, lost notes) — the confirm copy must spell out which side effects will happen"
+tags:
+  - admin
+  - destructive-action
+  - confirm-dialog
+  - incident-prevention
+spec_ref: "specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001"
+verification:
+  source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L4/scheduled-task/app/(admin)/scheduled-tasks/page.tsx, templates/L4/favorites-bookmarks/app/(favorites)/page.tsx"
+  pattern: "window.confirm with verbatim enumeration of downstream side effects (HTTP POST to partner / db writes / notifications / audit-trail invalidation / quota voided) BEFORE the mutation fires"
+upstream:
+  - "https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+evidence:
+  - source_type: external
+    citation: "WCAG 2.2 — Success Criterion 3.3.4 Error Prevention (Legal, Financial, Data) (Level AA)"
+    url: "https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html"
+    quote: "For Web pages that cause legal commitments or financial transactions for the user to occur, that modify or delete user-controllable data in data storage systems, or that submit user test responses, at least one of the following is true: submissions are reversible, data is checked for input errors, or a mechanism is available for reviewing, confirming, and correcting information before finalizing the submission."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "OWASP ASVS V14.3 — Unintended Security Disclosure / Error Prevention"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quote: "Verify the application has defenses against destructive operations being performed without intent, including but not limited to confirmation prompts for irreversible changes."
+    quoted_at: "2026-05-25"
+---
+
+## Destructive admin actions MUST confirm with explicit side-effect enumeration
+
+**Impact: HIGH — a bare onClick on a destructive admin action turns one misclick into one incident**
+
+Webhook delete / replay, scheduled-task trigger, mark-all-read, favorite-remove-with-note, approval-cancel-with-priors — these all have downstream side effects that are not trivially reversible:
+
+- Webhook **replay** sends another POST to a partner. The partner may not implement idempotency. Duplicate side effects (double charge, double notification, double inventory move) cascade.
+- Scheduled-task **trigger** runs the cron job out of cycle. The job fires its own POST/email/db writes as if scheduled.
+- **Mark-all-read** on a notification surface clears server-side audit fact "did the operator actually read this?" — even when the inbox was wrong.
+- **Delete favorite** with a note destroys the note (often a Korean enterprise 결재 / follow-up context).
+- **Cancel approval** with one or more upstream approvals already granted voids those decisions in the audit trail.
+
+The catalog convention since R43 / R46 / R48 / R49 is: confirm with **verbatim enumeration of the consequences**, not a generic "Are you sure?". The operator needs to read the side effects in the dialog so a 3am-pager-fatigue mind can stop before the click.
+
+**Incorrect — bare onClick with no consequence enumeration:**
+
+```tsx
+<button
+  type="button"
+  aria-busy={replay.isPending || undefined}
+  aria-disabled={replay.isPending || undefined}
+  onClick={() => {
+    if (replay.isPending) return
+    replay.mutate(delivery.id)
+  }}
+>
+  Replay
+</button>
+```
+
+A pager-driven SRE during incident response can misclick this. The aria-busy + click guard prevents double-fire mid-flight (R47 rule), but the operator's intent is not verified before the first click commits. Replay fires immediately. The partner endpoint receives a duplicate delivery. There is no recovery from the partner side.
+
+**Correct — confirm with side-effect enumeration:**
+
+```tsx
+<button
+  onClick={() => {
+    const ok = window.confirm(
+      `Re-enqueue this delivery?\n\n${delivery.eventType} (attempt ${delivery.attemptCount})\nendpoint ${delivery.endpointId}\n\nThis sends another HTTP POST to the partner endpoint. If the original eventually succeeded server-side, the partner receives duplicate side effects.`,
+    )
+    if (!ok) return
+    replay.mutate(delivery.id)
+  }}
+>
+  Replay
+</button>
+```
+
+The dialog text MUST satisfy three properties:
+1. **Name the action** in past tense framing of consequence ("Re-enqueue this delivery?" not "Are you sure?")
+2. **Show identifying context** for the specific object (event type, request id, approver chain, etc.) — so an operator with multiple windows knows which row this refers to
+3. **List the side effects** as plain sentences. Korean enterprise partners frequently lack idempotent receivers; financial side effects (PG, inventory, billing) cascade
+
+`window.confirm` is the catalog baseline — a fork-receiver may replace it with a styled Dialog primitive, but the three properties survive the swap. Native `confirm` is a11y-degraded vs a styled modal (separate rule `mutation-in-flight-uses-aria-busy` covers the in-flight state), but for the one-shot destructive-confirm path it is the lowest-common-denominator that catches misclick.
+
+**When to apply this rule**: any mutation where (a) the server commits an irreversible side effect, (b) the side effect cascades to a third party (partner endpoint, downstream system, audit log), OR (c) reversibility requires multi-party coordination (re-issue a webhook secret + notify all downstream verifiers, re-file a cancelled approval, restore a deleted comment with note). For (a)+(b)+(c) any single condition triggers the rule.
+
+**When NOT to apply**: trivially-reversible actions (toggle favorite, mark single notification read, edit a draft) — confirm there adds friction without preventing meaningful loss.
+
+Reference: [WCAG 2.2 SC 3.3.4 — Error Prevention (Legal, Financial, Data)](https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html)
+
+Reference: [OWASP ASVS V14.3 — Error Prevention](https://owasp.org/www-project-application-security-verification-standard/)
+
+
 <!-- @source rules/error-controller-advice.md -->
 
 ---
@@ -2933,6 +3028,99 @@ See: `practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/P
 Reference: [IETF draft — The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
 
 Reference: [Stripe API Reference — Idempotent requests](https://docs.stripe.com/api/idempotent_requests)
+
+
+<!-- @source rules/incident-dashboard-background-poll-plus-refresh.md -->
+
+---
+title: Incident dashboards MUST poll in background AND expose a manual Refresh control with "last updated" timestamp
+impact: MEDIUM
+impactDescription: "TanStack Query default pauses polling when a tab is backgrounded — SRE second-monitor incident views silently stale, causing mis-assessed urgency during pager response"
+tags:
+  - incident-response
+  - sre
+  - tanstack-query
+  - background-poll
+  - data-freshness
+spec_ref: "specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001"
+verification:
+  source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/page.tsx"
+  pattern: "useQuery with refetchInterval + refetchIntervalInBackground:true + visible dataUpdatedAt timestamp + manual Refresh button"
+upstream:
+  - "https://tanstack.com/query/latest/docs/framework/react/reference/useQuery"
+  - "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API"
+evidence:
+  - source_type: external
+    citation: "TanStack Query v5 — useQuery options (refetchIntervalInBackground)"
+    url: "https://tanstack.com/query/latest/docs/framework/react/reference/useQuery"
+    quote: "refetchIntervalInBackground: boolean — If set to true, queries that are set to continuously refetch with a refetchInterval will continue to refetch while their tab is in the background."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "MDN Web Docs — Page Visibility API"
+    url: "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API"
+    quote: "When the user navigates to a different tab or minimizes the browser containing the tab with the page, the API sends a visibilitychange event to listeners. ... browsers tend to throttle setTimeout and setInterval calls when the page is hidden."
+    quoted_at: "2026-05-25"
+---
+
+## Incident dashboards MUST poll in background AND expose a manual Refresh control with "last updated" timestamp
+
+**Impact: MEDIUM — a stale dashboard during pager response leads to wrong urgency assessment**
+
+Webhook deliveries, scheduled-task history, activity-feed inbox, approval-workflow inbox, file-storage virus-scan queue, billing-event ledger — all incident-bearing surfaces share the same usage pattern: an SRE / on-call leaves the dashboard open on a secondary monitor during pager rotation. When the tab goes to background (browser switches to another window, screen locks, OS suspends inactive tabs), TanStack Query's default behavior pauses `refetchInterval` polling. When the SRE switches back, the data shows the state from when the tab was last focused — not the current state.
+
+Mis-assessed urgency follows. An SRE sees DEAD_LETTER count at 3 (stale), responds at low urgency, while the live count is at 47. The SRE files a low-priority ticket; the actual incident is severe.
+
+The fix has two parts:
+1. **Poll continues in background** — `refetchIntervalInBackground: true` overrides the default-pause behavior. SRE on second monitor or pager-rotating across multiple incident dashboards sees fresh data without needing to refocus each tab.
+2. **Visible "last updated" timestamp + manual Refresh button** — even with (1), network blips, server-side rate-limiting, or query-error retries can leave the data older than the polling cadence. A "Updated 14:32:18" indicator next to a Refresh button lets the SRE confirm staleness explicitly and force a fresh fetch when the auto-poll lags.
+
+**Incorrect — default polling pauses in background; no staleness indicator:**
+
+```tsx
+const { data, error, isLoading } = useQuery({
+  queryKey: ['webhook-deliveries'],
+  queryFn: fetchDeliveries,
+  refetchInterval: 10_000,
+})
+```
+
+The SRE puts this on a second monitor at 14:00. At 14:15 they switch back. The data they see is from 14:01 (the moment of last focus before the browser backgrounded the tab). The DEAD_LETTER count looks normal — but the live count is much worse.
+
+**Correct — background polling continues + Refresh + staleness timestamp:**
+
+```tsx
+const { data, error, isLoading, dataUpdatedAt, refetch } = useQuery({
+  queryKey: ['webhook-deliveries'],
+  queryFn: fetchDeliveries,
+  refetchInterval: 10_000,
+  refetchIntervalInBackground: true,
+})
+
+// In the header, alongside filters:
+<span className="text-xs text-muted-foreground" aria-live="polite">
+  {dataUpdatedAt ? `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : ''}
+</span>
+<button
+  type="button"
+  className="rounded border px-2 py-1 text-xs hover:bg-muted"
+  onClick={() => refetch()}
+>
+  Refresh
+</button>
+```
+
+**Apply this rule to**: any frontend surface that satisfies all three:
+- Status data transitions during expected lifecycle (PENDING → IN_FLIGHT → SUCCEEDED / FAILED, ENABLED → DISABLED, queued → dispatched → ack'd)
+- Used during incident response (failure triage, manual intervention, postmortem)
+- Likely viewed on a second monitor or in a browser tab the operator does not actively focus on every minute
+
+**When NOT to apply**: user-driven CRUD surfaces (a comment thread, a tag library, a favorite list) where the operator's own action is what triggers the next render and staleness does not change incident outcome.
+
+A pair-with rule: when the dashboard surfaces server-supplied error strings (`lastError`, `errorMessage`), apply `stored-server-error-sanitize-at-render-layer` so a screen-shared incident bridge does not leak PII / internal hostnames via the same surface this rule keeps fresh.
+
+Reference: [TanStack Query v5 — useQuery API](https://tanstack.com/query/latest/docs/framework/react/reference/useQuery)
+
+Reference: [MDN — Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API)
 
 
 <!-- @source rules/korean-brn-format.md -->
@@ -4059,6 +4247,121 @@ Use `undefined` (not `false`) for the aria props when the state is not active �
 This rule pairs with **error-message-not-in-native-title-attribute** — together they keep the button's a11y surface clean during failure modes too.
 
 Reference: [WAI-ARIA 1.2 — aria-busy](https://www.w3.org/TR/wai-aria-1.2/#aria-busy)
+
+Reference: [WCAG 2.2 SC 4.1.3 — Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)
+
+
+<!-- @source rules/mutation-skipped-outcome-surfaces-reason.md -->
+
+---
+title: Mutations that may NO-OP (skipped by server invariant) MUST surface the skipped outcome with the server's reason
+impact: MEDIUM
+impactDescription: "A green-toast 'Success' after a server-skipped mutation tells the operator the work happened when it did not — operator moves on assuming side effects landed"
+tags:
+  - mutation
+  - server-skip
+  - outcome-surfacing
+  - distributed-lock
+spec_ref: "specs/scheduled-task-l0.yaml#SCHED-LOCK-001"
+verification:
+  source: "templates/L4/scheduled-task/app/(admin)/scheduled-tasks/page.tsx"
+  pattern: "trigger.onSuccess sets triggerOutcome state; render differentiates executed=true (green) vs executed=false (amber + reason string from server) instead of collapsing both into one success banner"
+upstream:
+  - "https://datatracker.ietf.org/doc/html/rfc9457"
+  - "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
+evidence:
+  - source_type: external
+    citation: "RFC 9457 — Problem Details for HTTP APIs"
+    url: "https://datatracker.ietf.org/doc/html/rfc9457"
+    quote: "The 'detail' member is a JSON string containing a human-readable explanation specific to this occurrence of the problem."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "WCAG 2.2 — Success Criterion 4.1.3 Status Messages (Level AA)"
+    url: "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
+    quote: "In content implemented using markup languages, status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus."
+    quoted_at: "2026-05-25"
+---
+
+## Mutations that may NO-OP (skipped by server invariant) MUST surface the skipped outcome with the server's reason
+
+**Impact: MEDIUM — silent server-skipped mutations train operators to trust outcomes that did not happen**
+
+Some mutations have HTTP 200 success responses that mean "I received your request" — not "I executed the work". The catalog has several:
+
+- **Scheduled-task trigger** — the backend acquires a `DatabaseAdvisoryLock` per task before running. If another instance already holds the lock, the trigger response is `{ executed: false, reason: 'another instance is running this task' }` with HTTP 200. The mutation did not run.
+- **Activity-feed mark-read** on an event the caller cannot see — server returns 204 (RFC 9110 idempotent shape) but the read state did not change.
+- **Webhook replay** when the partner circuit breaker is open — server queues the request but immediately moves it to DEAD_LETTER without sending. HTTP 200 with no actual delivery.
+- **Approval-workflow self-approve attempt** — server-enforced invariant rejects with 409 + reason "requester cannot approve own request" (this one is rejected, not skipped, but the operator-side outcome is the same: "I clicked Approve and nothing happened").
+
+The naive client pattern collapses all `onSuccess` into a single green banner — "Triggered", "Marked read", "Replayed", "Approved". The operator reads the banner and moves on. The mutation did not actually do the work.
+
+The correct pattern requires three properties:
+1. **Read the executed/skipped signal** from the response body (`executed: boolean`, or absence of the side effect's confirmation field)
+2. **Render differentiated outcome** — green for executed, amber/yellow for skipped, with the server's `reason` quoted verbatim
+3. **Don't collapse skipped into error** — a skipped mutation is not a failure (the server enforced an invariant correctly), so it does not belong in the error-alert banner. It belongs in a `role='status'` aria-live region with distinct styling.
+
+**Incorrect — collapse executed/skipped into one success:**
+
+```tsx
+const trigger = useMutation({
+  mutationFn: triggerTask,
+  onSuccess: () => {
+    // ❌ Single banner regardless of executed=true/false
+    toast.success('Triggered')
+  },
+})
+```
+
+The SRE sees "Triggered" green. The work did not happen. They go back to triaging the next item.
+
+**Correct — surface skipped with reason:**
+
+```tsx
+const [triggerOutcome, setTriggerOutcome] = React.useState<{
+  taskId: string
+  executed: boolean
+  reason: string | null
+} | null>(null)
+
+const trigger = useMutation({
+  mutationFn: triggerTask,
+  onMutate: () => setTriggerOutcome(null),
+  onSuccess: (resp, id) => {
+    // Server may return executed: false when DatabaseAdvisoryLock blocks
+    setTriggerOutcome({ taskId: id, executed: resp.executed, reason: resp.reason })
+  },
+})
+
+// In JSX:
+{triggerOutcome && (
+  <div
+    role="status"
+    aria-live="polite"
+    className={`rounded border px-3 py-1.5 text-sm ${
+      triggerOutcome.executed
+        ? 'border-green-300 bg-green-50 text-green-900'
+        : 'border-amber-300 bg-amber-50 text-amber-900'
+    }`}
+  >
+    {triggerOutcome.executed
+      ? 'Trigger accepted — job queued for execution.'
+      : `Trigger skipped — ${triggerOutcome.reason ?? 'another instance is running this task'}`}
+  </div>
+)}
+```
+
+Three properties confirmed:
+- (1) reads `resp.executed`
+- (2) green-vs-amber differentiation with the server's `resp.reason`
+- (3) `role='status'` (not `role='alert'`) because skipped-by-invariant is not an error
+
+**When to apply**: any mutation whose backend documents a "no-op success" path — distributed-lock skip, circuit-breaker skip, idempotent-already-applied skip, invariant-enforced skip. The catalog convention is to give those endpoints a discriminated response (`executed: boolean` plus `reason: string | null`) so the client can render unambiguously.
+
+**When NOT to apply**: mutations where the server's contract guarantees side effects landed on every HTTP 200 (most CRUD). Single green toast / inline confirmation is fine there.
+
+Pairs with `destructive-action-confirm-with-side-effects` — the confirm dialog tells the operator what *will* happen; this rule's outcome banner tells them what *did* happen.
+
+Reference: [RFC 9457 — Problem Details for HTTP APIs](https://datatracker.ietf.org/doc/html/rfc9457)
 
 Reference: [WCAG 2.2 SC 4.1.3 — Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)
 
@@ -6033,6 +6336,110 @@ See: `practices/evals/fixtures/recipe-invariants-must-resolve/pass/recipe.yaml` 
 Reference: https://owasp.org/www-project-application-security-verification-standard/
 
 
+<!-- @source rules/secret-shown-once-uses-beforeunload-guard.md -->
+
+---
+title: One-time-revealed plaintext secrets MUST wire beforeunload guard for the duration of the reveal panel
+impact: HIGH
+impactDescription: "Plaintext secrets shown once (api-key, webhook signing secret) live only in component state — a stray reload / tab close / route navigation destroys them with no server-side recovery path"
+tags:
+  - secret
+  - one-time-reveal
+  - beforeunload
+  - credential-lifecycle
+  - api-key
+  - webhook
+spec_ref: "specs/api-key-l0.yaml#KEY-STORAGE-001"
+verification:
+  source: "templates/L4/webhook/app/(admin)/webhooks/page.tsx (SecretRevealPanel), templates/L4/api-key/app/(api-key)/page.tsx (catalog plaintext-shown-once flow)"
+  pattern: "useEffect(() => { window.addEventListener('beforeunload', handler) ... }, []) inside the panel component that holds the secret in React state, with returnValue assignment to trigger the native prompt"
+upstream:
+  - "https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+evidence:
+  - source_type: external
+    citation: "MDN Web Docs — Window: beforeunload event"
+    url: "https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event"
+    quote: "The beforeunload event is fired when the current window, contained document, and associated resources are about to be unloaded. ... To trigger the dialog, an event handler in the page should call the preventDefault() method on the event."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "OWASP ASVS V2.10 — Service Authentication Requirements"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quote: "Verify that passwords are stored in a form that is resistant to offline attacks. ... Passwords SHALL be salted and hashed using an approved one-way key derivation."
+    quoted_at: "2026-05-25"
+---
+
+## One-time-revealed plaintext secrets MUST wire beforeunload guard for the duration of the reveal panel
+
+**Impact: HIGH — irrecoverable secret loss is a high-friction operational hazard**
+
+The catalog has at least two surfaces where a server-irrecoverable plaintext secret is revealed exactly once to the operator:
+
+- **api-key** — when the admin issues a new API key, the response carries the plaintext key value. The server stores only `SHA-256(key)`. Future GETs never return the plaintext.
+- **webhook** — when the admin registers a new webhook endpoint, the response carries the `signingSecret` used for HMAC-SHA256 over `<timestamp>.<body>`. The server stores only the hash. Future GETs never return it.
+
+Similar patterns will appear in any catalog L4 that follows the "secret stored as hash" pattern — OAuth client secrets, magic-link tokens, recovery codes, signing keys.
+
+In all of these, the plaintext lives in React component state ONLY for the duration of the reveal panel. The moment the panel unmounts (via Acknowledge click, route navigation, tab close, browser crash, or an accidental reload), the plaintext is gone with no server-side recovery. The operator must delete the endpoint and register a new one — which forces every downstream verifier to be reconfigured (multi-party coordination cost, sometimes across organization boundaries).
+
+The catalog convention since R48 is: **wire `beforeunload` for the duration of the reveal panel**. The native browser prompt is the last line of defense against accidental reload/close. Modern browsers ignore the custom message and show a generic "Leave site? Changes you made may not be saved" — but the `returnValue` assignment is what triggers it.
+
+**Incorrect — bare panel; reload destroys secret silently:**
+
+```tsx
+function SecretRevealPanel({ endpoint, onAcknowledge }) {
+  return (
+    <section>
+      <input readOnly value={endpoint.signingSecret} />
+      <button onClick={onAcknowledge}>I have saved the secret</button>
+    </section>
+  )
+}
+```
+
+A pager-driven SRE hits Cmd-R out of muscle memory. The secret is gone forever. The endpoint must be deleted and recreated. Downstream Stripe/PayPal/partner verifier needs reconfiguration.
+
+**Correct — beforeunload guard for the panel's lifetime:**
+
+```tsx
+function SecretRevealPanel({ endpoint, onAcknowledge }) {
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      // Modern browsers ignore custom messages but the returnValue assignment
+      // is what triggers the native prompt.
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
+
+  return (
+    <section role="alert">
+      <h2>Save this signing secret now — shown ONCE.</h2>
+      <input readOnly value={endpoint.signingSecret} />
+      <button onClick={onAcknowledge}>I have saved the secret</button>
+    </section>
+  )
+}
+```
+
+**Pairs with three companion patterns**:
+1. **Acknowledge gated on Copy** — the acknowledge button is `aria-disabled` until the operator clicks Copy at least once (defends against misclick on the acknowledge button itself, which is often visually close to Copy)
+2. **Clipboard failure surfaced** — `navigator.clipboard.writeText` can fail silently in locked-down environments; the operator must see "Copy failed — select manually" rather than assume the copy succeeded
+3. **Sibling create form disabled while reveal pending** — a second registration submitted while the panel is up would overwrite the revealed state with the new response, losing the first secret
+
+`sessionStorage` / `localStorage` persistence is the WRONG fix — it creates a second leak surface (DevTools inspection, browser extension scraping, multi-user shared workstation). The `beforeunload` prompt is the right tradeoff: prevent accidental loss without creating a persistent attack surface.
+
+**When to apply**: any frontend surface that displays a server-irrecoverable plaintext credential. The catalog's R48 webhook SecretRevealPanel is the reference implementation; the api-key L4 plaintext-shown-once flow follows the same pattern.
+
+**When NOT to apply**: re-displayable credentials (OAuth tokens with `/refresh` endpoint, JWTs the server can re-issue, session cookies). The recovery cost is low; the beforeunload prompt becomes friction without benefit.
+
+Reference: [MDN — Window: beforeunload event](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event)
+
+Reference: [OWASP ASVS V2.10 — Service Authentication Requirements](https://owasp.org/www-project-application-security-verification-standard/)
+
+
 <!-- @source rules/security-csrf-scoped-disable.md -->
 
 ---
@@ -6445,6 +6852,103 @@ See `templates/backend/data/migrations/V202605181200__add_soft_delete_columns.sq
 Verification: `./gradlew testPractices --tests "*BaseEntitySoftDelete*"` asserts that every `@Entity` in the base template package that extends `BaseEntity` also carries `@SQLDelete`.
 
 Reference: [Hibernate ORM 6.4 — @SQLDelete](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#soft-delete) | [Hibernate ORM 6.4 — @Where](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#mapping-where)
+
+
+<!-- @source rules/stored-server-error-sanitize-at-render-layer.md -->
+
+---
+title: Server-supplied stored error strings MUST pass a PII / secret deny-list at the render layer
+impact: HIGH
+impactDescription: "errorMessage / lastError fields persisted on entities and rendered to admin views leak PII / internal hostnames / credentials via screen-share + screenshot; render-layer deny-list is defense-in-depth even when backend sanitization is the canonical fix"
+tags:
+  - pii
+  - error-handling
+  - defense-in-depth
+  - admin-surface
+  - screen-share-leak
+spec_ref: "specs/webhook-l0.yaml#WEBHOOK-DEAD-LETTER-002"
+verification:
+  source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L4/scheduled-task/app/parse-error.ts (sanitizeStoredError helper)"
+  pattern: "sanitize helper applied to any server-stored error field (lastError on Delivery, errorMessage on JobHistory) before inline render; regex deny-list includes email / Bearer / JWT / IPv4 / .internal/.local / Korean RRN / Korean mobile / PEM headers / GitHub PAT"
+upstream:
+  - "https://cwe.mitre.org/data/definitions/209.html"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+evidence:
+  - source_type: external
+    citation: "CWE-209 — Generation of Error Message Containing Sensitive Information"
+    url: "https://cwe.mitre.org/data/definitions/209.html"
+    quote: "The product generates an error message that includes sensitive information about its environment, users, or associated data. ... An attacker can use the additional information provided in error messages to mount attacks targeted on the specific environment or configuration."
+    quoted_at: "2026-05-25"
+  - source_type: external
+    citation: "OWASP ASVS V14.3 — Unintended Security Disclosure"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quote: "Verify that the application does not output debug or error messages to console, logs, or HTTP responses that contain sensitive information such as session identifiers, credentials, or PII."
+    quoted_at: "2026-05-25"
+---
+
+## Server-supplied stored error strings MUST pass a PII / secret deny-list at the render layer
+
+**Impact: HIGH — incident-bridge screen-share is a regular leak vector for raw server errors**
+
+There are two classes of server-supplied error string a frontend renders:
+
+1. **Transient (fetch-time)** — the `error.message` returned by a failed mutation or query. Rule `error-message-not-in-native-title-attribute` (R47) covers this: errors render in `role='alert'` aria-live spans, not in native `title` tooltips, and `parse-error.ts` already has a PII deny-list at the fetch boundary.
+
+2. **Stored (persisted on an entity)** — `lastError` on a webhook delivery row, `errorMessage` on a scheduled-task `JobHistory` row, `lastFailureReason` on a billing event, `verificationError` on a KYC attempt. These are server-side strings written into the DB at the moment a job / delivery / verification failed, then surfaced as part of the entity's DTO on every GET.
+
+The second class is the dangerous one. Because the error is *stored*, the same bytes are read back every time an admin page renders. An SRE screen-sharing the deliveries page during an incident bridge replays the leak every time the page repaints. Slack screenshots, recorded incident calls, post-incident video reviews — all replay.
+
+`parseError`'s deny-list covers transient errors. Stored errors need the same deny-list applied at the render boundary, as defense-in-depth even when the backend should be sanitizing on write (the catalog tracks "backend DTO sanitization" as the canonical fix per domain; this rule is the layer the frontend owns regardless).
+
+**Incorrect — stored errorMessage rendered raw:**
+
+```tsx
+{d.lastError && (
+  <div className="rounded border border-red-200 bg-red-50/50 px-2 py-1 text-xs">
+    last error: <code>{d.lastError}</code>
+  </div>
+)}
+```
+
+A stack-trace excerpt, a backend Bearer token leaked into the message, an internal hostname (`db-prod.internal`), a Korean RRN that crept into a logging line — all appear inline. JSX escapes HTML but does NOT sanitize content patterns.
+
+**Correct — sanitize helper applied at render:**
+
+```ts
+// app/parse-error.ts (per-domain or in fork-receiver-kit)
+const STORED_ERROR_MAX = 200
+export function sanitizeStoredError(raw: string | null): string {
+  if (!raw) return ''
+  const looksSensitive =
+    /@[\w.-]+\.[A-Za-z]{2,}/.test(raw) ||
+    /\b(?:sk-|pk-|Bearer\s+|jdbc:|-----BEGIN |ghp_|ghs_)/i.test(raw) ||
+    /\b\d{1,3}(?:\.\d{1,3}){3}\b/.test(raw) ||
+    /\.internal\b|\.local\b/.test(raw) ||
+    /\d{6}-\d{7}/.test(raw) ||                    // Korean RRN
+    /01[016789]-?\d{3,4}-?\d{4}/.test(raw) ||     // Korean mobile
+    /eyJ[A-Za-z0-9._-]{20,}/.test(raw)             // JWT
+  if (looksSensitive) return '[redacted — see server logs]'
+  return raw.length <= STORED_ERROR_MAX ? raw : `${raw.slice(0, STORED_ERROR_MAX)}… [truncated]`
+}
+```
+
+```tsx
+{d.lastError && (
+  <div className="rounded border border-red-200 bg-red-50/50 px-2 py-1 text-xs">
+    last error: <code>{sanitizeStoredError(d.lastError)}</code>
+  </div>
+)}
+```
+
+**Deny-list locale**: the catalog ships Korean enterprise patterns (RRN `XXXXXX-XXXXXXX`, mobile `010-XXXX-XXXX` and other carrier prefixes) by default. Fork-receivers operating in other locales extend the deny-list with locale-specific PII shapes (US SSN, EU national IDs, JP MyNumber) — this is a domain-level extension point, not a one-size-fits-all global rule.
+
+**When to apply**: any entity DTO field that carries server-side error text accessible to admin / SRE views — `lastError`, `errorMessage`, `failureReason`, `verificationError`, `auditNote`, `lastFailureDetail`. Apply at every render site of the field, not just the most-trafficked one (different pages render the same field).
+
+**When NOT to apply**: short structured error codes (`ERR_TIMEOUT`, `RATE_LIMITED`) without free-form server prose. The deny-list's job is to catch free-form text; a structured enum is already safe.
+
+Reference: [CWE-209 — Information Exposure Through Error Messages](https://cwe.mitre.org/data/definitions/209.html)
+
+Reference: [OWASP ASVS V14.3 — Unintended Security Disclosure](https://owasp.org/www-project-application-security-verification-standard/)
 
 
 <!-- @source rules/subscription-state-machine-explicit.md -->
