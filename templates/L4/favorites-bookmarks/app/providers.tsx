@@ -20,6 +20,7 @@ imports_forbidden: [L4/auth, L4/crud, L4/practices, L4/payment]
 
 import React, { useState, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { RateLimitBannerProvider } from 'templates/L2/blocks/rate-limit-banner'
 
 interface ProvidersProps {
   children: React.ReactNode
@@ -56,6 +57,8 @@ export function Providers({ children }: ProvidersProps) {
   }, [])
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <RateLimitBannerProvider>{children}</RateLimitBannerProvider>
+    </QueryClientProvider>
   )
 }
