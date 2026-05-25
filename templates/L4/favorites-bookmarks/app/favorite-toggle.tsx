@@ -23,7 +23,7 @@ imports_forbidden: [L4/auth, L4/crud, L4/practices, L4/payment]
 
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { parseError } from './parse-error'
+import { parseError, FavoritesError } from './parse-error'
 import { assertSafeEntityRef } from './entity-key'
 
 interface CheckResponse {
@@ -174,14 +174,26 @@ export function FavoriteToggle({ entityType, entityId, label }: FavoriteTogglePr
       {/* Error surface: aria-live region next to the button so
            assistive tech announces failures instead of hiding them in
            a tooltip. */}
-      {(toggle.error || error) && (
-        <span
-          role="alert"
-          className="ml-1 text-xs text-red-700"
-        >
-          {(toggle.error ?? (error as Error)).message}
-        </span>
-      )}
+      {(toggle.error || error) && (() => {
+        const e = (toggle.error ?? error) as Error
+        // R55 — quota error gets actionable copy. FavoritesError preserves the
+        // backend ProblemDetail.code; non-FavoritesError shows the message as-is.
+        const isQuota = e instanceof FavoritesError && e.code === 'FAVORITES_QUOTA_EXCEEDED'
+        return (
+          <span
+            role="alert"
+            className={
+              isQuota
+                ? 'ml-1 text-xs text-amber-900'
+                : 'ml-1 text-xs text-red-700'
+            }
+          >
+            {isQuota
+              ? 'Favorite cap reached — remove some favorites first.'
+              : e.message}
+          </span>
+        )
+      })()}
     </>
   )
 }

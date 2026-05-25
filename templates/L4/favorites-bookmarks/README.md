@@ -4,6 +4,13 @@
 
 **Status**: full-trio (R46 promoted, 2026-05-24, dogfood-iterated 2 rounds with two personas — heavy user 윤서아 P1 + Security Engineer 최도윤 P2 — until both reported GREEN). R39 shipped this domain as a backend-only stub; R46 added the Next.js list surface + an embeddable `FavoriteToggle` component for host-entity pages. **Last of the 7 R39 stubs to be promoted** — closes the upgrade sequence that began at R40 (api-key) and continued through R41 (session-management), R42 (comment-thread), R43 (approval-workflow), R44 (activity-feed), R45 (tag-categorization).
 
+**R55 backend-contract residual closure (2026-05-26)**:
+- Add-with-note form — surface for FAV-VALID-003 (256-char note cap). Backend always supported the field; the client now offers a UI to set it.
+- Global count lazy reveal — "X others starred this" via FAV-QUERY-002 `/api/favorites/count/{type}/{id}`. Per-row "Show global count" button avoids an N-fetch render explosion; click reveals + caches.
+- Quota actionable banner — FAV-VALID-002 (1000-cap) returns 400 with `code: "FAVORITES_QUOTA_EXCEEDED"`. `parseError` now preserves the `code` via a new `FavoritesError` subclass; the page shows a sticky amber banner with concrete remediation copy ("remove some first") instead of a generic 400 message.
+- L2 confirm-dialog primitive adoption — replaces `window.confirm` in the list page with `<ConfirmDialog>` from `templates/L2/blocks/confirm-dialog.tsx` (R50 destructive-action-confirm-with-side-effects + WAI-ARIA AlertDialog). Note destruction is the explicit side-effect surfaced in the dialog body.
+- `FavoriteToggle` quota error — uses `FavoritesError.code` to render the actionable amber inline message instead of the raw red error.
+
 ## Dogfood closure
 
 R46 followed the 2-persona dogfood protocol for 2 iter rounds. iter1 inventory: 15 findings (high 1, medium 7, low 7). iter1–iter2 closed:

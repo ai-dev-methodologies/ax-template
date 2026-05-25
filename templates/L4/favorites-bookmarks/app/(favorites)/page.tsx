@@ -7,7 +7,7 @@ domain_mode: full_trio
 backend_operation_id: listMyFavorites
 evidence:
   - source_type: internal
-    rationale: "L4 favorites-bookmarks vertical — caller's favorite list with per-row Remove and inline note. Anchored to R38 caller-authentication-only-no-userid-param (server scopes to Authentication.getName()) and R38 http-delete-idempotency-rfc9110 (DELETE on absent returns 204)."
+    rationale: "L4 favorites-bookmarks vertical — caller's favorite list with per-row Remove, inline note, global-count lazy reveal, and quota-exceeded actionable banner. Anchored to R38 caller-authentication-only-no-userid-param + R38 http-delete-idempotency-rfc9110 + R46 hooks-before-conditional-return + R50 destructive-action-confirm-with-side-effects + L2 confirm-dialog primitive."
   - source_type: external
     citation: "TanStack Query v5 — useQuery + useMutation"
     url: "https://tanstack.com/query/latest/docs/framework/react/reference/useQuery"
@@ -25,20 +25,13 @@ import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import EmptyState from 'templates/L2/blocks/empty-state'
 import ErrorBoundary from 'templates/L2/blocks/error-boundary'
+import ConfirmDialog from 'templates/L2/blocks/confirm-dialog'
 import { useCallerId } from '../use-caller-id'
-import { parseError } from '../parse-error'
+import { parseError, FavoritesError } from '../parse-error'
 import { assertSafeEntityRef } from '../entity-key'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
-/**
- * FavoriteResponse — caller's own favorite row.
- *
- * Anchored to R38 caller-authentication-only-no-userid-param: the list
- * endpoint is server-scoped to `Authentication.getName()`. The client
- * NEVER sends a `?userId=` parameter — the favorites domain is the
- * canonical example for that rule (FAV-AUTHZ-002).
- */
 interface FavoriteResponse {
   id: string
   entityType: string
@@ -52,6 +45,10 @@ interface FavoriteListResponse {
   totalElements: number
 }
 
+interface CountResponse {
+  count: number
+}
+
 // ─── data ─────────────────────────────────────────────────────────────────────
 
 async function fetchFavorites(): Promise<FavoriteListResponse> {
@@ -60,18 +57,43 @@ async function fetchFavorites(): Promise<FavoriteListResponse> {
   return res.json()
 }
 
+interface AddFavoriteInput {
+  entityType: string
+  entityId: string
+  note?: string | null
+}
+
+async function addFavorite(input: AddFavoriteInput): Promise<void> {
+  assertSafeEntityRef(input.entityType, input.entityId)
+  const res = await fetch('/api/favorites', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      entityType: input.entityType,
+      entityId: input.entityId,
+      note: input.note && input.note.trim().length > 0 ? input.note.trim() : null,
+    }),
+  })
+  if (!res.ok) throw await parseError(res, 'Failed to add favorite')
+}
+
 async function removeFavorite(entityType: string, entityId: string): Promise<void> {
-  // R46 iter2 (F6): defense-in-depth path-segment guard.
   assertSafeEntityRef(entityType, entityId)
   const res = await fetch(
     `/api/favorites/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
     { method: 'DELETE' },
   )
-  // R38 http-delete-idempotency-rfc9110: 204 on absent target is
-  // success per RFC 9110 §9.3.5. fetch's res.ok covers 200-299 so we
-  // do NOT add `&& res.status !== 204` — that would be a dead branch
-  // (R44 P1-F17 lesson).
+  // R38 http-delete-idempotency-rfc9110: 204 on absent target is success.
   if (!res.ok) throw await parseError(res, 'Failed to remove favorite')
+}
+
+async function fetchCount(entityType: string, entityId: string): Promise<CountResponse> {
+  assertSafeEntityRef(entityType, entityId)
+  const res = await fetch(
+    `/api/favorites/count/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+  )
+  if (!res.ok) throw await parseError(res, 'Failed to load count')
+  return res.json()
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -88,43 +110,64 @@ function timeAgo(iso: string, now: Date): string {
   return new Date(iso).toLocaleDateString()
 }
 
-// ─── page ────────────────────────────────────────────────────────────────────
+function isQuotaExceeded(err: unknown): boolean {
+  return err instanceof FavoritesError && err.code === 'FAVORITES_QUOTA_EXCEEDED'
+}
+
+// ─── per-row count widget ────────────────────────────────────────────────────
+
+interface RowCountProps {
+  entityType: string
+  entityId: string
+}
 
 /**
- * FavoritesListPage — caller's own favorited entities.
- *
- * Audit posture:
- *   - Server scopes the list to the caller; client never sends
- *     ?userId= (R38 FAV-AUTHZ-002 canonical anchor).
- *   - Per-row Remove is RFC 9110 §9.3.5 idempotent — 204 on already-
- *     absent is treated as success without rolling the optimistic
- *     update back (the row was going away anyway).
- *
- * R44/R45 lessons preempted:
- *   - All hooks above conditional early returns (Rules of Hooks).
- *   - useCallerId production hard-stop with scrubbed message.
- *   - Mutation error banner has Dismiss + .reset() so stale errors do
- *     not stick after a subsequent success.
- *   - Per-row pendingRemoveKeys typed Set, not a cache sentinel — no
- *     fabricated timestamps in the cache.
- *   - parseError surfaces server detail (RFC 9457) + text/html fallback
- *     with PII deny-list.
+ * Lazy count reveal — global "X others starred this" is FAV-QUERY-002 and is
+ * useful but adds a fetch per row when shown eagerly. We render a button that
+ * fires the fetch on click; data caches in TanStack so a re-toggle is free.
  */
-export default function FavoritesListPage() {
-  // R46 iter2 (F10 low): explicit production-hard-stop assertion so a
-  // future refactor that strips the unused `callerId` value cannot
-  // accidentally remove the guard. The hook itself fires the throw
-  // path on production with no wired session.
-  useCallerId()
+function RowCount({ entityType, entityId }: RowCountProps) {
+  const [enabled, setEnabled] = React.useState(false)
+  const { data, error, isFetching } = useQuery({
+    queryKey: ['favorite-count', entityType, entityId],
+    queryFn: () => fetchCount(entityType, entityId),
+    enabled,
+    staleTime: 30_000,
+  })
+  if (!enabled) {
+    return (
+      <button
+        type="button"
+        className="text-xs text-muted-foreground underline hover:text-foreground"
+        onClick={() => setEnabled(true)}
+      >
+        Show global count
+      </button>
+    )
+  }
+  if (isFetching) {
+    return <span className="text-xs text-muted-foreground">Loading count…</span>
+  }
+  if (error) {
+    return (
+      <span className="text-xs text-red-700">Count error: {(error as Error).message}</span>
+    )
+  }
+  return (
+    <span className="text-xs text-muted-foreground">
+      {data?.count ?? 0} others starred this
+    </span>
+  )
+}
 
+// ─── page ────────────────────────────────────────────────────────────────────
+
+export default function FavoritesListPage() {
+  useCallerId()
   const qc = useQueryClient()
 
   // ─── all hooks ABOVE any conditional early return ─────────────────────────
 
-  // R46 iter2 (F15 low): refresh `now` on window focus instead of a
-  // forever-running 60s setInterval. Idle tabs throttle setInterval
-  // already, but a focus listener is the modern idiom and stops the
-  // tab from owning a long-lived timer.
   const [now, setNow] = React.useState(() => new Date())
   React.useEffect(() => {
     const handle = () => setNow(new Date())
@@ -132,16 +175,36 @@ export default function FavoritesListPage() {
     return () => window.removeEventListener('focus', handle)
   }, [])
 
+  // Confirm-dialog state — replaces window.confirm so the side-effect
+  // explanation matches the R50 destructive-action-confirm pattern and the
+  // L2 ConfirmDialog primitive (a11y: role=alertdialog, focus-trap-ready).
+  const [confirmingRemove, setConfirmingRemove] =
+    React.useState<{ entityType: string; entityId: string; note: string | null } | null>(
+      null,
+    )
+
+  // Add-favorite form state — entityType + entityId + optional note (FAV-VALID-003
+  // caps the note at 256 chars). The note is stored verbatim on the row.
+  const [formType, setFormType] = React.useState('')
+  const [formId, setFormId] = React.useState('')
+  const [formNote, setFormNote] = React.useState('')
+
   const { data, error, isLoading } = useQuery({
     queryKey: ['favorites-list'],
     queryFn: fetchFavorites,
   })
 
-  // R46 iter2 (F3 medium): optimistic row removal. iter1 dimmed the
-  // row (opacity-60) and waited for the invalidate refetch to remove
-  // it — heavy users sweeping their favorites saw a 400-1200ms delay.
-  // We now drop the row from the cache immediately and reconcile on
-  // server confirmation. Errors restore the snapshot.
+  const add = useMutation({
+    mutationFn: (input: AddFavoriteInput) => addFavorite(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['favorites-list'] })
+      qc.invalidateQueries({ queryKey: ['favorite-check'] })
+      setFormType('')
+      setFormId('')
+      setFormNote('')
+    },
+  })
+
   const remove = useMutation({
     mutationFn: ({ entityType, entityId }: { entityType: string; entityId: string }) =>
       removeFavorite(entityType, entityId),
@@ -165,18 +228,31 @@ export default function FavoritesListPage() {
       return { previous }
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) {
-        qc.setQueryData(['favorites-list'], ctx.previous)
-      }
+      if (ctx?.previous) qc.setQueryData(['favorites-list'], ctx.previous)
       qc.invalidateQueries({ queryKey: ['favorites-list'] })
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['favorites-list'] })
-      // Per-entity check queries used by FavoriteToggle instances on
-      // host-entity pages need to know about the removal too.
       qc.invalidateQueries({ queryKey: ['favorite-check'] })
+      setConfirmingRemove(null)
     },
   })
+
+  // R55 — quota actionable banner. Sticky until the user dismisses or the
+  // mutation is reset, because the underlying constraint (1000-cap) needs an
+  // action the user must take outside the form (delete some favorites).
+  const quotaError = isQuotaExceeded(add.error) ? (add.error as FavoritesError) : null
+  const addOtherError = add.error && !quotaError ? (add.error as Error) : null
+
+  const submitAdd = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!formType.trim() || !formId.trim()) return
+    add.mutate({
+      entityType: formType.trim(),
+      entityId: formId.trim(),
+      note: formNote.trim() || null,
+    })
+  }
 
   return (
     <ErrorBoundary>
@@ -188,6 +264,44 @@ export default function FavoritesListPage() {
             it never accepts a <code>?userId=</code> parameter.
           </p>
         </header>
+
+        {/* R55 — quota actionable banner. Tells the user precisely what they
+            must do to recover, not just "400 bad request". */}
+        {quotaError && (
+          <div
+            role="alert"
+            className="rounded border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          >
+            <div className="font-semibold">Favorite cap reached</div>
+            <div>
+              You have hit the per-user favorite cap (1000). Remove at least one
+              favorite from the list below before adding new ones.
+            </div>
+            <button
+              type="button"
+              className="mt-1 text-xs underline"
+              onClick={() => add.reset()}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {addOtherError && (
+          <div
+            role="alert"
+            className="flex items-start justify-between gap-3 rounded border border-red-300 bg-red-50 px-3 py-1.5 text-sm text-red-900"
+          >
+            <span>Add failed: {addOtherError.message}</span>
+            <button
+              type="button"
+              className="shrink-0 text-xs underline"
+              onClick={() => add.reset()}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {remove.error && (
           <div
@@ -205,6 +319,59 @@ export default function FavoritesListPage() {
           </div>
         )}
 
+        {/* R55 — add-with-note form. Note is optional, FAV-VALID-003 caps it
+            at 256 chars (server enforces too). Per-row inline edit is NOT in
+            scope — the backend has no PATCH endpoint, so note edits would be
+            delete+re-add and lose the original favoritedAt. */}
+        <form
+          onSubmit={submitAdd}
+          className="rounded border bg-muted/30 px-3 py-2 space-y-2"
+        >
+          <div className="text-xs font-medium uppercase text-muted-foreground">
+            Add favorite
+          </div>
+          <div className="flex flex-wrap items-start gap-2">
+            <input
+              aria-label="Entity type"
+              placeholder="entity type (e.g. product)"
+              className="rounded border px-2 py-1 text-sm"
+              value={formType}
+              onChange={(e) => setFormType(e.target.value)}
+              required
+              maxLength={64}
+            />
+            <input
+              aria-label="Entity id"
+              placeholder="entity id"
+              className="rounded border px-2 py-1 text-sm"
+              value={formId}
+              onChange={(e) => setFormId(e.target.value)}
+              required
+              maxLength={128}
+            />
+            <input
+              aria-label="Optional note (max 256 chars)"
+              placeholder="optional note (max 256)"
+              className="min-w-[14rem] flex-1 rounded border px-2 py-1 text-sm"
+              value={formNote}
+              onChange={(e) => setFormNote(e.target.value)}
+              maxLength={256}
+            />
+            <button
+              type="submit"
+              className="rounded border bg-primary px-3 py-1 text-sm text-primary-foreground hover:opacity-90 aria-busy:opacity-60 aria-disabled:opacity-50"
+              aria-busy={add.isPending || undefined}
+              aria-disabled={add.isPending || !formType.trim() || !formId.trim() || undefined}
+            >
+              {add.isPending ? 'Adding…' : 'Add'}
+            </button>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Note appears in this list and on the entity detail page. Removing a
+            favorite deletes the note (no undo).
+          </div>
+        </form>
+
         {isLoading ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             Loading favorites…
@@ -214,33 +381,26 @@ export default function FavoritesListPage() {
         ) : !data || data.items.length === 0 ? (
           <EmptyState
             title="No favorites yet"
-            description="Star an entity from its detail page to bookmark it here."
+            description="Star an entity from its detail page or use the form above to bookmark one here."
           />
         ) : (
           <ul className="divide-y rounded border">
             {data.items.map((f) => {
               const handleRemove = () => {
-                // R46 iter2 (F4 medium): confirm when the favorite carries
-                // a note. Notes are reversibility-loss surfaces — a Korean
-                // enterprise user often stores 결재/follow-up context
-                // there, and an accidental click during a cleanup sweep
-                // destroys that context with no undo.
-                if (
-                  f.note &&
-                  f.note.trim().length > 0 &&
-                  !window.confirm(
-                    `Remove this favorite? The note will also be deleted:\n\n${f.note}`,
-                  )
-                ) {
+                if (f.note && f.note.trim().length > 0) {
+                  // R50 destructive-action-confirm-with-side-effects — surface
+                  // the side effect (note destruction) via L2 ConfirmDialog.
+                  setConfirmingRemove({
+                    entityType: f.entityType,
+                    entityId: f.entityId,
+                    note: f.note,
+                  })
                   return
                 }
                 remove.mutate({ entityType: f.entityType, entityId: f.entityId })
               }
               return (
-                <li
-                  key={f.id}
-                  className="flex items-start gap-3 px-4 py-3"
-                >
+                <li key={f.id} className="flex items-start gap-3 px-4 py-3">
                   <span aria-hidden className="mt-1 text-amber-500">★</span>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm">
@@ -254,14 +414,17 @@ export default function FavoritesListPage() {
                         {f.note}
                       </div>
                     )}
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      favorited {timeAgo(f.favoritedAt, now)}
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>favorited {timeAgo(f.favoritedAt, now)}</span>
+                      <span aria-hidden>·</span>
+                      <RowCount entityType={f.entityType} entityId={f.entityId} />
                     </div>
                   </div>
                   <button
                     type="button"
-                    className="shrink-0 rounded border px-2 py-1 text-xs hover:bg-muted"
+                    className="shrink-0 rounded border px-2 py-1 text-xs hover:bg-muted aria-busy:opacity-60 aria-disabled:opacity-50"
                     aria-label={`Remove ${f.entityType}/${f.entityId} from favorites`}
+                    aria-busy={remove.isPending || undefined}
                     onClick={handleRemove}
                   >
                     Remove
@@ -271,6 +434,27 @@ export default function FavoritesListPage() {
             })}
           </ul>
         )}
+
+        <ConfirmDialog
+          open={confirmingRemove !== null}
+          title="Remove favorite?"
+          description={
+            confirmingRemove
+              ? `This deletes the note as well — there is no undo.\n\nnote:\n${confirmingRemove.note ?? ''}`
+              : ''
+          }
+          destructive
+          confirmLabel="Remove"
+          isLoading={remove.isPending}
+          onCancel={() => setConfirmingRemove(null)}
+          onConfirm={() => {
+            if (!confirmingRemove) return
+            remove.mutate({
+              entityType: confirmingRemove.entityType,
+              entityId: confirmingRemove.entityId,
+            })
+          }}
+        />
       </div>
     </ErrorBoundary>
   )
