@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.notification;
 
+import com.ax.template.authblueprint.common.AuditPiiHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,8 +31,13 @@ public class NotificationDispatcher {
             try {
                 channel.deliver(notification);
             } catch (Exception ex) {
-                log.warn("notification-channel-failure channel={} notification={} recipient={}",
-                    channel.id(), notification.getId(), notification.getRecipientUserId(), ex);
+                // R72 — anchor R61 audit-log-pii-hash-required. recipientUserId
+                // can be email-shaped (Spring Authentication.getName() is
+                // implementation-defined); hash before logging so the operator
+                // log aggregator never holds the raw value.
+                log.warn("notification-channel-failure channel={} notification={} recipientHash={}",
+                    channel.id(), notification.getId(),
+                    AuditPiiHelper.piiHash(notification.getRecipientUserId()), ex);
             }
         }
     }
