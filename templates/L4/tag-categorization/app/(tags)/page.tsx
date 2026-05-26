@@ -205,8 +205,8 @@ function TagRow({ node, depth, isAdmin, busyId, onEdit, onDelete }: TagRowProps)
 // ─── page ────────────────────────────────────────────────────────────────────
 
 export default function TagLibraryPage() {
-  const role = useCallerRole()
-  const isAdmin = role === 'admin'
+  const callerRole = useCallerRole()
+  const isAdmin = callerRole === 'admin'
   const qc = useQueryClient()
 
   // ─── all hooks ABOVE any conditional early return (Rules of Hooks) ─────────

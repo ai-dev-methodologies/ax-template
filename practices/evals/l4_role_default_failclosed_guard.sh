@@ -4,7 +4,17 @@
 # (R47), found via R75 audit when audit-log/export/page.tsx had `const hasExportRole = true`
 # as a fail-OPEN default.
 #
-# Greps templates/L4/**/*.tsx for inline role/auth flags assigned to true at declaration:
+# R83b (Wave-A US-004 extension, same file) widens the check to ALSO
+# catch dynamic role assignment where the LHS of === is NOT the canonical
+# useCallerRole hook return:
+#
+#   const has<X>Role  = userType === 'admin'        # VIOLATION — userType ≠ callerRole
+#   const isAdmin     = currentUser.role === 'ADMIN' # VIOLATION — member access ≠ callerRole
+#   const hasAuditor  = callerRole === 'auditor'    # OK — callerRole is the canonical hook return
+#   const isOwner     = useCallerRole() === 'owner' # OK — direct hook call
+#
+# Pass 1 (static-true) — Greps templates/L4/**/*.tsx for inline role/auth
+# flags assigned to true at declaration:
 #
 #   const has<X>Role        = true   # canonical fail-OPEN pattern (R75 case)
 #   const isAdmin           = true
@@ -13,6 +23,14 @@
 #   const isOwner           = true
 #   const isManager         = true
 #   const can(Edit|Delete|Create|Update|Approve|Manage)... = true
+#
+# Pass 2 (dynamic-from-non-callerRole) — Same role-flag identifier set,
+# but the RHS is a `=== <something>` comparison whose LHS is NOT
+# `callerRole` (the variable returned by useCallerRole) and NOT a direct
+# `useCallerRole()` invocation. Catches the failure mode where a developer
+# derives a role flag from a non-canonical source (a server-supplied user
+# payload, a query-param, a feature-flag value) and silently bypasses
+# fork-receiver RBAC discipline.
 #
 # Comments and string literals are excluded (the R75 rule body has these
 # patterns inside <pre> blocks; those are legitimate references, not code).
@@ -47,29 +65,55 @@ cd "$REPO_ROOT" || { echo "cannot cd to $REPO_ROOT" >&2; exit 2; }
 L4_DIR="templates/L4"
 [ ! -d "$L4_DIR" ] && exit 0
 
-# Pattern: declaration of a role/permission flag assigned literal `true`.
+# Role-flag identifier alternation, shared by Pass 1 and Pass 2.
+ROLE_IDENT='(has[A-Z][a-zA-Z]*Role|is(Admin|Auditor|Editor|Owner|Manager)|can(Edit|Delete|Create|Update|Approve|Manage)[a-zA-Z]*)'
+
+# Pass 1 — declaration of a role/permission flag assigned literal `true`.
 # Anchored to the start-of-statement (let|const|var) to avoid matching
 # inside strings, comments, or object property values.
-PATTERN='^[[:space:]]*(const|let|var)[[:space:]]+(has[A-Z][a-zA-Z]*Role|is(Admin|Auditor|Editor|Owner|Manager)|can(Edit|Delete|Create|Update|Approve|Manage)[a-zA-Z]*)[[:space:]]*=[[:space:]]*true\b'
+STATIC_TRUE_PATTERN="^[[:space:]]*(const|let|var)[[:space:]]+${ROLE_IDENT}[[:space:]]*=[[:space:]]*true\\b"
+
+# Pass 2 — role-flag assigned to a `=== <something>` expression.
+DYNAMIC_PATTERN="^[[:space:]]*(const|let|var)[[:space:]]+${ROLE_IDENT}[[:space:]]*=.*==="
+
+# Whitelist regex for "the LHS of === is the canonical callerRole source"
+# — applied to each Pass-2 match. Tolerates surrounding whitespace.
+ALLOWED_LHS='(callerRole|useCallerRole\([[:space:]]*\))[[:space:]]*===|===[[:space:]]*(callerRole|useCallerRole\([[:space:]]*\))'
 
 violations=0
 matches=""
 
-# Iterate only .tsx and .ts files under templates/L4/**/app/
+append_violation() {
+    if [ -z "$matches" ]; then
+        matches="$1"
+    else
+        matches="$matches
+$1"
+    fi
+    violations=$((violations + 1))
+}
+
+# Iterate only .tsx and .ts files under templates/L4/.
 while IFS= read -r -d '' file; do
+    # Pass 1 — static true.
     while IFS= read -r line; do
-        violations=$((violations + 1))
-        if [ -z "$matches" ]; then
-            matches="$file: $line"
-        else
-            matches="$matches
-$file: $line"
+        append_violation "$file: $line"
+    done < <(grep -nE "$STATIC_TRUE_PATTERN" "$file" 2>/dev/null || true)
+
+    # Pass 2 — dynamic === with non-callerRole LHS.
+    while IFS= read -r line; do
+        # `line` is "<lineno>:<source>"; check the source half against the
+        # allowed-LHS whitelist. If callerRole / useCallerRole() is on
+        # either side of the ===, skip.
+        if echo "$line" | grep -qE "$ALLOWED_LHS"; then
+            continue
         fi
-    done < <(grep -nE "$PATTERN" "$file" 2>/dev/null || true)
+        append_violation "$file: $line"
+    done < <(grep -nE "$DYNAMIC_PATTERN" "$file" 2>/dev/null || true)
 done < <(find "$L4_DIR" -type f \( -name "*.tsx" -o -name "*.ts" \) -print0 2>/dev/null)
 
 if [ "$violations" -gt 0 ]; then
-    echo "VIOLATION: L4 frontend page declares fail-OPEN role default (R47 rbac-stub-default-fail-closed):" >&2
+    echo "VIOLATION: L4 frontend page declares a fail-OPEN role default OR derives a role flag from a non-canonical source (R47 rbac-stub-default-fail-closed):" >&2
     echo "$matches" >&2
     echo "" >&2
     echo "Apply useCallerRole() from templates/L0/fork-receiver-kit/use-caller-id:" >&2
@@ -79,5 +123,5 @@ if [ "$violations" -gt 0 ]; then
     exit 1
 fi
 
-echo "l4_role_default_failclosed_guard: every L4 role/permission flag uses fail-closed default"
+echo "l4_role_default_failclosed_guard: every L4 role/permission flag uses callerRole as fail-closed source"
 exit 0
