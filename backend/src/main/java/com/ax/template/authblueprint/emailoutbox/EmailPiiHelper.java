@@ -81,7 +81,7 @@ public final class EmailPiiHelper {
      *   <li>{@code *.internal}, {@code *.local} hostnames</li>
      * </ul>
      */
-    static String sanitizeReason(String raw) {
+    public static String sanitizeReason(String raw) {
         if (raw == null) return null;
         String s = raw;
         s = s.replaceAll("\\d{6}-\\d{7}", "[REDACTED]");

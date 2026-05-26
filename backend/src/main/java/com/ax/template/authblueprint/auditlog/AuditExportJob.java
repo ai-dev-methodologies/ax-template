@@ -95,7 +95,12 @@ public class AuditExportJob {
 
     public void markFailed(String errorMessage) {
         this.status = AuditExportStatus.FAILED;
-        this.errorMessage = errorMessage;
+        // R63 — anchors R61 server-side-stored-error-sanitize. AuditExport
+        // failures often reference the actor email / userId being exported
+        // ("user u-12345 has 500 audit rows; export failed at row 273"
+        // type messages). Scrub PII at the entity boundary.
+        this.errorMessage =
+            com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.sanitizeReason(errorMessage);
         this.updatedAt = Instant.now();
     }
 }

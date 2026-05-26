@@ -107,17 +107,24 @@ public class ExportWorker {
             stateMachine.markCompleted(job, bytes, rows.size());
             repository.save(job);
         } catch (RuntimeException ex) {
-            stateMachine.markFailed(job, truncate(ex.getMessage()));
+            // R63 — anchor R61 server-side-stored-error-sanitize. ExportJob's
+            // error_message column is shown to admins via the report-export
+            // admin UI and to fork-receivers via the public GET /api/exports
+            // detail surface. Scrub PII before persist so neither path holds
+            // RRN / mobile / JWT / Bearer / email / internal hostnames.
+            stateMachine.markFailed(job, sanitizeAndTruncate(ex.getMessage()));
             repository.save(job);
-            LOG.info("export-worker: job {} FAILED — {}", job.getId(), ex.getMessage());
+            LOG.info("export-worker: job {} FAILED", job.getId());
         }
     }
 
-    private static String truncate(String s) {
+    private static String sanitizeAndTruncate(String s) {
         if (s == null) {
             return "unknown error";
         }
-        return s.length() <= 1024 ? s : s.substring(0, 1024);
+        String scrubbed =
+            com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.sanitizeReason(s);
+        return scrubbed.length() <= 1024 ? scrubbed : scrubbed.substring(0, 1024);
     }
 
     private Map<String, Object> deserializeQuery(String queryJson) {

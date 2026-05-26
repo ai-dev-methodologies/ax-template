@@ -139,9 +139,19 @@ public class WebhookDelivery {
         this.attemptCount += 1;
     }
 
+    /**
+     * R63 — anchors R61 server-side-stored-error-sanitize. Webhook
+     * provider exceptions routinely carry the destination URL host,
+     * partner tenant ids, signed-headers excerpts, and JWT/Bearer
+     * fragments. Scrub PII at the entity boundary so the column
+     * itself never holds plain values, regardless of which caller
+     * invoked markRetry / markFailedPermanent.
+     */
     private static String truncate(String s) {
         if (s == null) return null;
-        return s.length() > 1024 ? s.substring(0, 1024) : s;
+        String scrubbed =
+            com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.sanitizeReason(s);
+        return scrubbed.length() > 1024 ? scrubbed.substring(0, 1024) : scrubbed;
     }
 
     public UUID getId() { return id; }

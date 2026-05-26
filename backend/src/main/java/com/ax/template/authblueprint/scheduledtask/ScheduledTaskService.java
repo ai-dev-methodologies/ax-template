@@ -138,7 +138,13 @@ public class ScheduledTaskService {
             log.info("scheduled-task: SUCCESS taskName={} durationMs={}",
                 task.getName(), Duration.between(runStart, Instant.now()).toMillis());
         } catch (RuntimeException ex) {
-            String msg = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+            String raw = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+            // R63 — anchor R61 server-side-stored-error-sanitize. The
+            // job-history.error_message column is read by admins via the
+            // scheduled-task admin UI and by SREs via direct SQL. Scrub
+            // PII (RRN / mobile / JWT / Bearer / email / internal hosts)
+            // at storage time so neither path reads raw values.
+            String msg = com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.sanitizeReason(raw);
             history.markFailure(msg);
             log.error("scheduled-task: FAILED taskName={} error={}", task.getName(), msg, ex);
         } finally {
