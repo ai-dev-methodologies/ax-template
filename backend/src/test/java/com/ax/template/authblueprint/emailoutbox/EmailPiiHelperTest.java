@@ -16,26 +16,36 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EmailPiiHelperTest {
 
     @Test
-    void recipientHash_emptyOrNull_returnsPlaceholder() {
-        assertThat(EmailPiiHelper.recipientHash(null)).isEqualTo("(none)");
-        assertThat(EmailPiiHelper.recipientHash("")).isEqualTo("(none)");
-        assertThat(EmailPiiHelper.recipientHash("  ")).isEqualTo("(none)");
+    void piiHash_emptyOrNull_returnsPlaceholder() {
+        assertThat(EmailPiiHelper.piiHash(null)).isEqualTo("(none)");
+        assertThat(EmailPiiHelper.piiHash("")).isEqualTo("(none)");
+        assertThat(EmailPiiHelper.piiHash("  ")).isEqualTo("(none)");
     }
 
     @Test
-    void recipientHash_deterministicLength16Hex() {
-        String h = EmailPiiHelper.recipientHash("user@example.com");
+    void piiHash_deterministicLength16Hex() {
+        String h = EmailPiiHelper.piiHash("user@example.com");
         assertThat(h).hasSize(16);
         assertThat(h).matches("^[0-9a-f]{16}$");
         // determinism: same input → same hash
-        assertThat(EmailPiiHelper.recipientHash("user@example.com")).isEqualTo(h);
+        assertThat(EmailPiiHelper.piiHash("user@example.com")).isEqualTo(h);
     }
 
     @Test
-    void recipientHash_differentInputsDifferentOutputs() {
-        String a = EmailPiiHelper.recipientHash("a@example.com");
-        String b = EmailPiiHelper.recipientHash("b@example.com");
+    void piiHash_differentInputsDifferentOutputs() {
+        String a = EmailPiiHelper.piiHash("a@example.com");
+        String b = EmailPiiHelper.piiHash("b@example.com");
         assertThat(a).isNotEqualTo(b);
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    void recipientHash_deprecatedAlias_delegatesToPiiHash() {
+        // R62 — recipientHash kept as @Deprecated alias for fork-receivers
+        // who already wired it. Pinning the equivalence ensures the alias
+        // doesn't accidentally drift from piiHash.
+        String input = "user@example.com";
+        assertThat(EmailPiiHelper.recipientHash(input)).isEqualTo(EmailPiiHelper.piiHash(input));
     }
 
     @Test

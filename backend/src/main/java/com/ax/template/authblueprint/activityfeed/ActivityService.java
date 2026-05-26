@@ -122,9 +122,15 @@ public class ActivityService {
         // audit-timestamps) reads back the per-event readAt from the cache
         // refetch so the audit timeline never carries a fabricated bulk
         // timestamp masquerading as per-event read evidence.
+        // R62 — anchors R61 audit-log-pii-hash-required. Spring Security
+        // Authentication.getName() can be an email (JWT sub claim is
+        // implementation-defined); hash it before emit so the operator log
+        // aggregator never holds the raw value.
         AUDIT.info(
-            "verb={} caller={} markedCount={} at={}",
-            VERB_BULK_MARK_READ, userId, unread.size(), now);
+            "verb={} callerHash={} markedCount={} at={}",
+            VERB_BULK_MARK_READ,
+            com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.piiHash(userId),
+            unread.size(), now);
         return new MarkAllReadResponse(unread.size());
     }
 

@@ -126,7 +126,7 @@ public class EmailOutboxService {
         // email is PII (개인정보보호법 §24) that the operator log aggregator
         // (ELK / Splunk / CloudWatch) does not need.
         AUDIT.info("verb=ADMIN_RETRY id={} recipientHash={}",
-            id, EmailPiiHelper.recipientHash(row.getRecipient()));
+            id, EmailPiiHelper.piiHash(row.getRecipient()));
         return outboxRepository.save(row);
     }
 
@@ -145,7 +145,7 @@ public class EmailOutboxService {
         }
         outboxRepository.delete(row);
         AUDIT.info("verb=ADMIN_DELETE id={} recipientHash={}",
-            id, EmailPiiHelper.recipientHash(row.getRecipient()));
+            id, EmailPiiHelper.piiHash(row.getRecipient()));
     }
 
     @Transactional(readOnly = true)

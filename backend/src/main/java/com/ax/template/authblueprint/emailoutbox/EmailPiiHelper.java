@@ -25,24 +25,42 @@ import java.util.HexFormat;
  *
  * <p>Both methods are pure / static / no side effects.
  */
-final class EmailPiiHelper {
+public final class EmailPiiHelper {
 
     private EmailPiiHelper() {}
 
     /**
-     * Truncated SHA-256 hex of the recipient. Returns "(none)" for null/blank.
-     * Use in AUDIT log lines: {@code log.info("verb=X recipientHash={}", recipientHash(email))}.
+     * Truncated SHA-256 hex of an arbitrary PII identifier. Returns "(none)"
+     * for null/blank. Use in AUDIT log lines as a stable correlation token
+     * that contains no recoverable PII:
+     *
+     * <pre>
+     * log.info("verb=X recipientHash={}", piiHash(email));
+     * log.info("verb=Y callerHash={}",    piiHash(userId));
+     * log.info("verb=Z phoneHash={}",     piiHash(phone));
+     * </pre>
+     *
+     * <p>Anchors R61 rule {@code audit-log-pii-hash-required}. The helper
+     * works for emails, userIds (whose value may be email-shaped depending
+     * on the JWT sub claim), phone numbers, or any other identifier the
+     * privacy regime classifies as PII.
      */
-    static String recipientHash(String recipient) {
-        if (recipient == null || recipient.isBlank()) return "(none)";
+    public static String piiHash(String value) {
+        if (value == null || value.isBlank()) return "(none)";
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(recipient.getBytes(StandardCharsets.UTF_8));
+            byte[] digest = md.digest(value.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest).substring(0, 16);
         } catch (NoSuchAlgorithmException ex) {
             // SHA-256 is guaranteed by every JVM; this path is unreachable.
             throw new IllegalStateException("SHA-256 not available", ex);
         }
+    }
+
+    /** @deprecated since R62 — use {@link #piiHash} instead. */
+    @Deprecated
+    public static String recipientHash(String recipient) {
+        return piiHash(recipient);
     }
 
     /**

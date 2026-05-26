@@ -41,6 +41,6 @@ class LoggingEmailSenderConfig {
             // dev log — operators relying on this stub already know which
             // template fired via the EmailOutboxService AUDIT line above.
             "[logging-only] would send recipientHash={}",
-            EmailPiiHelper.recipientHash(recipient));
+            EmailPiiHelper.piiHash(recipient));
     }
 }
