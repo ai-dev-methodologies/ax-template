@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "search-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + PostgreSQL FTS (default) / Meilisearch (opt-in)"
 standard: "RFC 7807 + OWASP ASVS V4 + PostgreSQL FTS"
 items:

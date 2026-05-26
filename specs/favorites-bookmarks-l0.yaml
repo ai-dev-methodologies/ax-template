@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "favorites-bookmarks-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + polymorphic attachment (entity_type/entity_id pair)"
 standard: "Standard social favorite/bookmark pattern — Stripe Customer.metadata bookmarks + Twitter favorites + WordPress 'meta' subsystems. Idempotent toggle is the canonical UX."
 items:

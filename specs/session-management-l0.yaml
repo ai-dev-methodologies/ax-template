@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "session-management-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + SessionRevocationCheck SPI for the JWT auth filter to consult"
 standard: "OWASP ASVS V3 (Session Management) + Korean enterprise 다중 로그인 정책 + RFC 7519 JWT jti claim"
 items:

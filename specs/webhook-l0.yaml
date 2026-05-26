@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "webhook-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + HMAC-SHA256 + exponential-backoff retry + DB-row dead-letter queue"
 standard: "RFC 2104 (HMAC) + OWASP ASVS V13.2.6 + RFC 7807"
 items:

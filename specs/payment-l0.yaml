@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "payment-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + Caffeine + JPA + MockProvider"
 standard: "PCI-DSS SAQ-A + ISO 4217 + RFC 7807 + OWASP ASVS V4"
 items:

@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "billing-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + Caffeine + RestAssured"
 standard: "RFC 7807 + ISO 4217 + OWASP ASVS V4 + Stripe Billing API + Toss Payments 정기결제"
 items:

@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "file-storage-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + S3-compatible storage + ClamAV (virus scan hook)"
 standard: "OWASP ASVS V4 + RFC 7807 + CWE-434 (Unrestricted Upload) + CWE-22 (Path Traversal)"
 items:

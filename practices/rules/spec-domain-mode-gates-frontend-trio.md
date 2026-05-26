@@ -100,6 +100,15 @@ else:
   STOP. Unknown domain_mode value — surface to user.
 ```
 
+## Verification surface
+
+Enforced mechanically by the 41st hard guard, R59 — see
+[`practices/evals/l4_frontend_domain_mode_guard.sh`](../evals/l4_frontend_domain_mode_guard.sh).
+The guard refuses to merge any commit where a `templates/L4/<domain>/app/`
+tree exists but the matching `specs/<domain>-l0.yaml#domain_mode` is
+`backend_only`, absent, or unknown. Fallback spec path
+`specs/<domain>-frontend-l0.yaml` is also accepted (auth / crud).
+
 ## Anti-patterns
 
 - "The spec is silent on `domain_mode`, so I assume `full_trio`" — NO. Absent

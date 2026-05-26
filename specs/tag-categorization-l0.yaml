@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "tag-categorization-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + polymorphic TagAttachment (entity-agnostic via entity_type/entity_id pair)"
 standard: "Standard taxonomic tagging pattern — parent/child hierarchy + entity-agnostic attachment + slug-based stable identifier (cf. WordPress taxonomy, Strapi categories, Korean enterprise CMS 분류 체계)"
 items:

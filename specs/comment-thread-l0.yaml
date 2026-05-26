@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "comment-thread-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + polymorphic Comment (entity_type/entity_id pair) + reply via parentCommentId + soft-delete + edit history via CommentEdit"
 standard: "Standard threaded comment pattern (Disqus/Reddit/Discourse) + RFC 9110 §9.3.5 (DELETE idempotency on soft delete) + GDPR Article 17 (right to erasure — preserved as soft-delete with body redaction)"
 items:

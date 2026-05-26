@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "feature-flags-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + PostgreSQL + Caffeine cache"
 standard: "RFC 7807 + OWASP ASVS V4"
 items:

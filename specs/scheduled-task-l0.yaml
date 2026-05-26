@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "scheduled-task-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + @Scheduled + DB-row distributed lock"
 standard: "RFC 7807 + OWASP ASVS V4 + 12-Factor App (Factor XI: Logs)"
 items:

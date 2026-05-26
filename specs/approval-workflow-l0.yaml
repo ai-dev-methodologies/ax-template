@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "approval-workflow-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + sole-mutator state machines (request + step) + RestAssured black-box"
 standard: "ITIL change-management approval pattern + Korean enterprise 결재 (단계별 승인) practice + OWASP ASVS V4.2 (authorization)"
 items:

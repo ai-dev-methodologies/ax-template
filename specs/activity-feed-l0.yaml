@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "activity-feed-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + @ElementCollection audience + per-(event,user) ActivityRead row"
 standard: "ActivityStreams 2.0 vocabulary (actor/verb/object) + Twitter/Facebook fan-out-read inbox + per-user read state"
 items:

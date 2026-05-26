@@ -792,6 +792,11 @@ echo "[37] composition_completeness_guard.sh (live repo, WARN-level v1)"
 run_guard "composition_completeness/live" 0 \
     bash "$SCRIPT_DIR/composition_completeness_guard.sh"
 
+echo ""
+echo "[38] l4_frontend_domain_mode_guard.sh (live repo — R59, 41st guard)"
+run_guard "l4_frontend_domain_mode/live" 0 \
+    bash "$SCRIPT_DIR/l4_frontend_domain_mode_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

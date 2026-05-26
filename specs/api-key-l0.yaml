@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "api-key-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + SHA-256 (hex) + constant-time comparison + Spring Security OncePerRequestFilter"
 standard: "OWASP ASVS V2.10 (API Authentication) + CWE-321 (Hard-coded Cryptographic Key) + CWE-200 (Exposure of Sensitive Info) + Stripe / GitHub API-key practice patterns"
 items:

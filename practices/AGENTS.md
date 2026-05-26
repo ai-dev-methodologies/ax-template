@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "426dca78011fcb311303567d3b83fe6dcdb14e567cec74f43ee33a86713b94a1"
+  source_concat_sha256: "1a37da76887f135391e6ba8804e61c784b5d70a4d6653717a57d67ccf8855657"
   rule_count: 105
   generated_by: "practices/generate_agents.sh"
 ---
@@ -6957,6 +6957,15 @@ elif mode == "full_trio" or mode == "frontend_only":
 else:
   STOP. Unknown domain_mode value — surface to user.
 ```
+
+## Verification surface
+
+Enforced mechanically by the 41st hard guard, R59 — see
+[`practices/evals/l4_frontend_domain_mode_guard.sh`](../evals/l4_frontend_domain_mode_guard.sh).
+The guard refuses to merge any commit where a `templates/L4/<domain>/app/`
+tree exists but the matching `specs/<domain>-l0.yaml#domain_mode` is
+`backend_only`, absent, or unknown. Fallback spec path
+`specs/<domain>-frontend-l0.yaml` is also accepted (auth / crud).
 
 ## Anti-patterns
 

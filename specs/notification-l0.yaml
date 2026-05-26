@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "notification-domain"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + JPA + WebSocket (optional) + SSE"
 standard: "RFC 7807 + OWASP ASVS V4 + W3C Server-Sent Events"
 items:
