@@ -107,7 +107,9 @@ export default function FileDetailPage({ params }: FileDetailPageProps) {
   const { addToast } = useToast()
   const [showDelete, setShowDelete] = React.useState(false)
 
-  const { data: file, isLoading, isError } = useQuery({
+  // R82 — dataUpdatedAt destructured and surfaced beside the
+  // status badge so operators can confirm the scan-poll cadence.
+  const { data: file, isLoading, isError, dataUpdatedAt } = useQuery({
     queryKey: ['files', id],
     queryFn: () => fetchFile(id),
     // FILE-FE-ERROR-002: poll every 3s while status is PENDING
@@ -169,6 +171,16 @@ export default function FileDetailPage({ params }: FileDetailPageProps) {
                   Scanning for viruses...
                 </span>
               )}
+              {/* R82 — visible polling cadence so the operator can
+                  silently confirm freshness during a scan. */}
+              <span
+                className="text-[length:--text-xs] text-[--color-text-muted]"
+                aria-live="polite"
+              >
+                {dataUpdatedAt
+                  ? `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`
+                  : ''}
+              </span>
             </div>
           </div>
           <button

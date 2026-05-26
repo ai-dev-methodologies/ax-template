@@ -807,6 +807,11 @@ echo "[40] stored_error_column_sanitize_guard.sh (live repo — R81, 43rd guard)
 run_guard "stored_error_column_sanitize/live" 0 \
     bash "$SCRIPT_DIR/stored_error_column_sanitize_guard.sh"
 
+echo ""
+echo "[41] background_poll_refresh_state_guard.sh (live repo — R82b, 44th guard)"
+run_guard "background_poll_refresh_state/live" 0 \
+    bash "$SCRIPT_DIR/background_poll_refresh_state_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

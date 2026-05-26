@@ -125,7 +125,10 @@ export default function AuditLogExportPage() {
   })
 
   // ─── Poll export job status ───────────────────────────────────────────────
-  const { data: jobStatus } = useQuery({
+  // R82 — dataUpdatedAt destructured below and surfaced in the job-status
+  // panel so operators can confirm the polling cadence without inferring
+  // from the polling-status hint alone.
+  const { data: jobStatus, dataUpdatedAt: jobStatusUpdatedAt } = useQuery({
     queryKey: ['audit-log-export-job', jobId],
     queryFn: () => pollExportStatus(jobId!),
     enabled: pollEnabled && jobId != null,
@@ -283,6 +286,17 @@ export default function AuditLogExportPage() {
                 }>
                   {jobStatus.status}
                 </span>
+              </p>
+
+              {/* R82 — visible polling-cadence timestamp; aria-live polite
+                  so screen readers announce the freshness silently. */}
+              <p
+                className="text-xs text-muted-foreground"
+                aria-live="polite"
+              >
+                {jobStatusUpdatedAt
+                  ? `Updated ${new Date(jobStatusUpdatedAt).toLocaleTimeString()}`
+                  : ''}
               </p>
 
               {jobStatus.status === 'COMPLETED' && jobStatus.downloadUrl && (
