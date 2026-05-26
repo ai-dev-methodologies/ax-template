@@ -20,6 +20,7 @@ imports_forbidden: [L4/auth, L4/crud, L4/payment, L4/practices]
 
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { RateLimitBannerProvider } from 'templates/L2/blocks/rate-limit-banner'
 
 /**
  * Providers — client-side provider tree for the notification vertical.
@@ -62,7 +63,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getQueryClient()
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <RateLimitBannerProvider>{children}</RateLimitBannerProvider>
     </QueryClientProvider>
   )
 }
