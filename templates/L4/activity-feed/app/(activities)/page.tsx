@@ -215,12 +215,9 @@ export default function ActivityFeedPage() {
     return () => clearInterval(t)
   }, [])
 
-  // R82 — Providers wires a QueryClient default `refetchInterval: 30s`
-  // (see app/providers.tsx). That default applies to every query in this
-  // L4, so the page MUST expose dataUpdatedAt as the visible polling
-  // cadence signal. Without it, an operator viewing the feed on a
-  // second monitor cannot distinguish "polling fresh" from "polling
-  // stuck on a network blip".
+  // R82 — Providers wires a QueryClient default refetchInterval (see
+  // app/providers.tsx), so this page MUST expose dataUpdatedAt as the
+  // visible polling-cadence signal for operators on a second monitor.
   const { data, error, isLoading, dataUpdatedAt } = useQuery({
     queryKey: ['activity-feed', page, unread],
     queryFn: () => fetchFeed(page, unread),

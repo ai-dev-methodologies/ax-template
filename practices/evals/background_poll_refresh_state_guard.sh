@@ -4,7 +4,10 @@
 # (R82). Scans every L4 frontend (.tsx) file for code-level
 # `refetchInterval:` declarations inside useQuery option blocks; for each
 # matching file, requires a sibling reference to `dataUpdatedAt` so the
-# polling cadence is visible to the operator.
+# polling cadence is visible to the operator. If the same file ALSO uses
+# `useMutation`, requires an `aria-busy` reference so screen-reader users
+# track the in-flight mutation state alongside the polled freshness
+# (WCAG SC 4.1.3 Status Messages).
 #
 # Detection is line-anchored (`^[[:space:]]*refetchInterval[[:space:]]*:`)
 # so it skips:
@@ -12,14 +15,18 @@
 #   - the same string inside a JSDoc / TSDoc frontmatter block
 #   - mentions inside template strings or markdown headers
 #
-# A file that uses refetchInterval but does NOT reference dataUpdatedAt is
-# in violation of R82 — operators get a stale view with no freshness
-# signal.
+# Two trigger patterns:
+#   - Direct per-useQuery refetchInterval at the call site (any L4 .tsx).
+#   - QueryClient-default refetchInterval inside an L4 providers.tsx,
+#     which implicitly polls every query in the same L4. In that case the
+#     guard walks every sibling .tsx under templates/L4/<domain>/ and
+#     enforces the same compliance per page.
 #
 # Exit codes:
-#   0 — every refetchInterval-using L4 file also references dataUpdatedAt
-#   1 — at least one file uses refetchInterval without dataUpdatedAt
-#   2 — usage / environment error
+#   0 — every refetchInterval-using L4 surface has dataUpdatedAt (and
+#       aria-busy when useMutation is present).
+#   1 — at least one violation.
+#   2 — usage / environment error.
 #
 # Usage:
 #   bash practices/evals/background_poll_refresh_state_guard.sh
@@ -56,6 +63,34 @@ CODE_PATTERN='^[[:space:]]*refetchInterval[[:space:]]*:'
 violations=0
 violation_lines=""
 
+# Shared R82-compliance probe. Args:
+#   $1 — source file (the page being audited)
+#   $2 — locator string for the violation message ("<lineno>" for direct,
+#        "*" + provider-citation for provider-default branch)
+#   $3 — optional context note appended to the violation message
+check_page_r82() {
+    local f="$1"
+    local locator="$2"
+    local note="$3"
+
+    if ! grep -qE 'useQuery\b' "$f" 2>/dev/null; then
+        return
+    fi
+
+    if ! grep -qE 'dataUpdatedAt' "$f" 2>/dev/null; then
+        violations=$((violations + 1))
+        violation_lines="${violation_lines}
+$f:$locator — refetchInterval${note:+ ($note)} present without dataUpdatedAt"
+    fi
+
+    if grep -qE 'useMutation\b' "$f" 2>/dev/null \
+        && ! grep -qE 'aria-busy' "$f" 2>/dev/null; then
+        violations=$((violations + 1))
+        violation_lines="${violation_lines}
+$f:$locator — refetchInterval + useMutation${note:+ ($note)} present without aria-busy on the mutation trigger (R82 WCAG SC 4.1.3)"
+    fi
+}
+
 while IFS= read -r -d '' file; do
     # Skip *.md and other non-source files; we scan .tsx and .ts only.
     case "$file" in
@@ -67,47 +102,17 @@ while IFS= read -r -d '' file; do
 
     # Branch A: providers.tsx with a QueryClient-default refetchInterval.
     # The default polls every query inside the L4, so every sibling
-    # page.tsx must expose dataUpdatedAt + aria-busy (when the page
-    # has mutations). We scope the sibling walk to ONLY the same L4
-    # domain — the providers.tsx path is templates/L4/<domain>/app/providers.tsx,
-    # so the L4 domain root is two levels up.
+    # page under templates/L4/<domain>/ must satisfy R82. Scope the
+    # walk to the L4 domain root (dirname twice up from providers.tsx).
     if [ "$base" = "providers.tsx" ] || [ "$base" = "providers.ts" ]; then
         if ! grep -qE "$CODE_PATTERN" "$file" 2>/dev/null; then
-            # providers.tsx without a refetchInterval — nothing to check.
             continue
         fi
         l4_domain_dir="$(dirname "$(dirname "$file")")"
         while IFS= read -r -d '' page_file; do
             pb=$(basename "$page_file")
             case "$pb" in providers.tsx|providers.ts|layout.tsx|layout.ts) continue ;; esac
-
-            if ! grep -qE 'useQuery\b' "$page_file" 2>/dev/null; then
-                continue
-            fi
-
-            page_has_data_updated=0
-            if grep -qE 'dataUpdatedAt' "$page_file" 2>/dev/null; then
-                page_has_data_updated=1
-            fi
-            page_has_mutation=0
-            if grep -qE 'useMutation\b' "$page_file" 2>/dev/null; then
-                page_has_mutation=1
-            fi
-            page_has_aria_busy=0
-            if grep -qE 'aria-busy' "$page_file" 2>/dev/null; then
-                page_has_aria_busy=1
-            fi
-
-            if [ "$page_has_data_updated" -eq 0 ]; then
-                violations=$((violations + 1))
-                violation_lines="${violation_lines}
-$page_file:* — QueryClient-default refetchInterval in $file, but page does not expose dataUpdatedAt"
-            fi
-            if [ "$page_has_mutation" -eq 1 ] && [ "$page_has_aria_busy" -eq 0 ]; then
-                violations=$((violations + 1))
-                violation_lines="${violation_lines}
-$page_file:* — QueryClient-default refetchInterval + useMutation present without aria-busy (R82 WCAG SC 4.1.3)"
-            fi
+            check_page_r82 "$page_file" "*" "QueryClient-default in $file"
         done < <(find "$l4_domain_dir" -type f \( -name "*.tsx" -o -name "*.ts" \) -print0 2>/dev/null)
         continue
     fi
@@ -117,47 +122,15 @@ $page_file:* — QueryClient-default refetchInterval + useMutation present witho
         continue
     fi
 
-    # Does this file actually use refetchInterval in code?
+    # Branch C: direct per-useQuery refetchInterval at this call site.
     matches=$(grep -nE "$CODE_PATTERN" "$file" 2>/dev/null || true)
     [ -z "$matches" ] && continue
 
-    # Check 1: file references dataUpdatedAt somewhere (destructure, JSX
-    # usage, helper variable). Match the identifier as a word so a
-    # partial substring inside a comment about `lastDataUpdatedAtSeen`
-    # would still count — that level of strictness is delegated to the
-    # R82 rule's reviewer guidance, not to this mechanical first pass.
-    has_data_updated_at=0
-    if grep -qE 'dataUpdatedAt' "$file" 2>/dev/null; then
-        has_data_updated_at=1
-    fi
-
-    # Check 2: if the file ALSO uses useMutation, R82 requires the
-    # mutation trigger button to expose aria-busy so screen-reader
-    # users see the in-flight signal alongside the polled freshness.
-    # If no useMutation is present, the freshness signal alone
-    # satisfies R82.
-    needs_aria_busy=0
-    if grep -qE 'useMutation\b' "$file" 2>/dev/null; then
-        needs_aria_busy=1
-    fi
-
-    has_aria_busy=0
-    if grep -qE 'aria-busy' "$file" 2>/dev/null; then
-        has_aria_busy=1
-    fi
-
+    # Emit one violation per matching line so the operator sees the
+    # exact useQuery declaration to fix; reuse the same compliance probe.
     while IFS= read -r match_line; do
         line_no="${match_line%%:*}"
-        if [ "$has_data_updated_at" -eq 0 ]; then
-            violations=$((violations + 1))
-            violation_lines="${violation_lines}
-$file:$line_no — refetchInterval used without sibling dataUpdatedAt reference"
-        fi
-        if [ "$needs_aria_busy" -eq 1 ] && [ "$has_aria_busy" -eq 0 ]; then
-            violations=$((violations + 1))
-            violation_lines="${violation_lines}
-$file:$line_no — refetchInterval + useMutation present without aria-busy on the mutation trigger (R82 WCAG SC 4.1.3)"
-        fi
+        check_page_r82 "$file" "$line_no" ""
     done <<EOF
 $matches
 EOF
