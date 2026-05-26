@@ -21,6 +21,7 @@ findings:
   - persona: P1
     finding: "F12: processQueue summary AUDIT.info only fires when processed > 0; on an empty cycle the operator cannot distinguish 'scheduler running, queue empty' from 'scheduler stopped / failed-to-acquire-lock'. iter1 F2 closure shipped the summary line but did not address the empty-cycle heartbeat. Closure: emit AUDIT.debug 'verb=PROCESS_QUEUE_EMPTY total=0' on empty cycles — default INFO log level keeps the heartbeat silent; ops dial up to DEBUG temporarily during incident investigation."
     classification: real_bug
+    closure_commit_sha: b475685
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
   - persona: P1
     finding: "F13: adminDelete audit verb (ADMIN_DELETE) records id + recipientHash but not templateCode; operator cannot reconstruct from the audit log alone what kind of email (password-reset / billing / verification) was deleted. Deferred because the operator can join id back to the row at delete time and the audit verb is for post-hoc forensics, not real-time triage. Expiry trigger: re-opens before any audit-derived dashboard / SIEM rule consumes ADMIN_DELETE events without the source DB available (live monitoring, partner SOC feed, regulator export) — at that point the missing templateCode breaks the consumer's reconstruction."
@@ -29,6 +30,7 @@ findings:
   - persona: P2
     finding: "F14: adminRetry's SENT-row rejection path throws IllegalStateException but writes NO audit log line. A compromised operator credential could probe for SENT vs RETRY/DLQ status by replay-attempts (the 409 vs 200 vs 404 response distinguishes the row state) and leave zero forensic trace. Closure: emit AUDIT.info 'verb=ADMIN_RETRY_REJECTED_SENT id={} recipientHash={}' BEFORE throwing, so the security audit captures every replay attempt including the rejected ones."
     classification: real_bug
+    closure_commit_sha: b475685
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
   - persona: P2
     finding: "F15: adminGet does not emit any audit log line — an operator viewing an outbox row (which includes body, subject, recipient) leaves no read trail. 개인정보보호법 §29 and ISO 27001 A.12.4.1 favor logging access to sensitive data. Deferred because read-trail granularity is fork-receiver-specific (some shops log every admin read, others only log mutations; some require approval-workflow on read access entirely). Catalog refuses to choose the default. Expiry trigger: re-opens before the fork-receiver enters a compliance regime that requires admin-read-trail (개인정보보호법 §29 in-scope deployment, SOC 2 Type II, HIPAA, ISO 27001 certification audit) — at that point the absence of a read-audit verb blocks the certification path."

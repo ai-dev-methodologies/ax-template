@@ -817,6 +817,11 @@ echo "[42] dogfood_finding_expiry_trigger_guard.sh (live repo — R85b, 45th gua
 run_guard "dogfood_finding_expiry_trigger/live" 0 \
     bash "$SCRIPT_DIR/dogfood_finding_expiry_trigger_guard.sh"
 
+echo ""
+echo "[43] dogfood_finding_real_bug_closure_commit_guard.sh (live repo — R86b, 46th guard)"
+run_guard "dogfood_finding_real_bug_closure_commit/live" 0 \
+    bash "$SCRIPT_DIR/dogfood_finding_real_bug_closure_commit_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

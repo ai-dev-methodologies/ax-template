@@ -146,3 +146,11 @@ items:
     verification_type: "review"
     applicable: true
     notes: "dogfood_finding_expiry_trigger_guard.sh (R85b, 45th hard guard) parses every ledger yaml under docs/dogfood-ledger/, iterates findings with classification=scope_deferral, and checks the finding text for any approved marker phrase. real_bug and methodology_gap entries are exempt (closed-in-wave vs methodology-change paths). Anchored to Martin Fowler TechnicalDebtQuadrant (deliberate-prudent debt requires payoff reasoning) + NIST SP 800-53 RA-7 (risk-response acceptance requires recorded justification anchored to organizational risk tolerance)."
+
+  - id: "PRACTICES-DOGFOOD-LEDGER-002"
+    chapter: "Architecture / Dogfood Ledger Discipline"
+    requirement: "Every docs/dogfood-ledger/*.yaml entry whose classification is real_bug MUST carry a closure_commit_sha field whose value is a valid git commit hash (7 to 40 hex chars) resolvable in the local repository. The closure commit is the SHA of the commit that introduced the fix referenced in the finding's 'Closure:' prose. Without the field a future maintainer reading the ledger cannot mechanically verify which git revision actually closed the finding. Rule body: practices/rules/dogfood-finding-real-bug-must-reference-closure-commit.md."
+    test_method: "practices_DOGFOOD_LEDGER_002_realBugReferencesClosureCommit"
+    verification_type: "review"
+    applicable: true
+    notes: "dogfood_finding_real_bug_closure_commit_guard.sh (R86b, 46th hard guard) parses every ledger yaml under docs/dogfood-ledger/, iterates findings with classification=real_bug, requires closure_commit_sha to be present, matching ^[0-9a-f]{7,40}$, and resolvable via `git cat-file -e <sha>^{commit}`. scope_deferral and methodology_gap entries are exempt. Anchored to Linux Kernel SubmittingPatches Fixes: trailer convention + GitHub's closing keywords for PR-issue linking."
