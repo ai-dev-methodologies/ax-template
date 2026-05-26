@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "aa4093b7b95fb794598125da8b2b0d0fa13c83f181e9d4c1272c630696854f6e"
+  source_concat_sha256: "da8f88b2b0c93c539a44c93cebf0b248eabc435c25ad64355347f78c3b81f2a9"
   rule_count: 110
   generated_by: "practices/generate_agents.sh"
 ---
@@ -2531,7 +2531,7 @@ evidence:
     url: "https://martinfowler.com/bliki/TechnicalDebtQuadrant.html"
     quoted_at: "2026-05-26"
   - source_type: external
-    citation: "NIST SP 800-53 Rev. 5 — Control RA-7 Risk Response, control statement: 'Respond to findings from security and privacy assessments, monitoring, and audits in accordance with organizational risk tolerance.' The supplemental guidance notes that response options include acceptance and that accepted risk should be documented through a plan of action and milestones when immediate mitigation is not possible. Applied: a dogfood scope_deferral is an accepted-risk-with-no-immediate-mitigation; the expiry trigger is the catalog's plan-of-action milestone that distinguishes deferred-with-recorded-review-condition from deferred-and-forgotten."
+    citation: "NIST SP 800-53 Rev. 5 — Control RA-7 Risk Response, control statement (verbatim): 'Respond to findings from security and privacy assessments, monitoring, and audits in accordance with organizational risk tolerance.' RA-7 distinguishes two response shapes the catalog should not conflate — (i) mitigation that is deferred generates a Plan of Action and Milestones tracking the future close, and (ii) acceptance requires recorded justification anchored to organizational risk tolerance. Applied to a dogfood scope_deferral, the catalog is choosing the acceptance shape (no mitigation planned at this layer), and the expiry trigger documents the future condition under which the acceptance should be re-assessed against that tolerance posture."
     url: "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"
     quoted_at: "2026-05-26"
 ---
