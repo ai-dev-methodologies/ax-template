@@ -97,6 +97,12 @@ public class EmailOutboxService {
         if (processed > 0) {
             AUDIT.info("verb=PROCESS_QUEUE total={} sent={} retried={} dlqed={}",
                 processed, sent, retried, dlqed);
+        } else {
+            // R77 iter2 F12 closure — emit a debug-level heartbeat on empty
+            // cycles so ops can distinguish "scheduler running, queue empty"
+            // from "scheduler stopped". Default log level is INFO so this is
+            // silent; ops dial up to DEBUG temporarily during an incident.
+            AUDIT.debug("verb=PROCESS_QUEUE_EMPTY total=0");
         }
         return processed;
     }
@@ -119,6 +125,13 @@ public class EmailOutboxService {
         EmailOutbox row = outboxRepository.findById(id)
             .orElseThrow(() -> new EmailOutboxNotFoundException(id));
         if (row.getStatus() == EmailOutboxStatus.SENT) {
+            // R77 iter2 F14 closure — emit a distinct audit verb before
+            // rejecting. A compromised operator probing SENT vs RETRY via
+            // replay attempts would otherwise leave no trace. recipientHash
+            // included so the security audit can correlate across attempts
+            // without exposing PII.
+            AUDIT.info("verb=ADMIN_RETRY_REJECTED_SENT id={} recipientHash={}",
+                id, AuditPiiHelper.piiHash(row.getRecipient()));
             // Cannot replay an already-sent email — would duplicate side effects.
             throw new IllegalStateException("cannot retry SENT email: " + id);
         }

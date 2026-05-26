@@ -1,0 +1,40 @@
+# R77 — email-outbox 2-persona dogfood iter2
+# P1: 정민영 (ops/SRE) — heartbeat / observability / operator queriability
+# P2: 이주형 (security/PII) — audit-trail completeness, read-trail granularity,
+#                            admin-UI PII exposure surface
+#
+# Scope of iter2 — residuals AFTER iter1's R63 PII sweep + R67 helper lift +
+# R71 ledger introduction. Surface re-reviewed end-to-end:
+#   - EmailOutboxService (enqueue / processQueue / adminRetry / adminDelete /
+#     adminGet)
+#   - EmailOutbox entity (R81 @PiiSanitized already applied this wave)
+#   - EmailOutboxAdminController (5 endpoints, all @PreAuthorize ROLE_ADMIN,
+#     all CacheControl.noStore — R52)
+#   - LoggingEmailSenderService default (R47 prod-profile hard-stop intact;
+#     recipientHash logging)
+#   - EmailOutboxDto (OutboxResponse + OutboxPage — page metadata intact)
+#   - templates/L4/email-outbox/app/(admin)/email-outbox/page.tsx
+#     (refetchInterval + dataUpdatedAt visible per R51; sanitizeStoredError
+#     used per R50 render-layer scrub)
+iteration: 2
+findings:
+  - persona: P1
+    finding: "F12: processQueue summary AUDIT.info only fires when processed > 0; on an empty cycle the operator cannot distinguish 'scheduler running, queue empty' from 'scheduler stopped / failed-to-acquire-lock'. iter1 F2 closure shipped the summary line but did not address the empty-cycle heartbeat. Closure: emit AUDIT.debug 'verb=PROCESS_QUEUE_EMPTY total=0' on empty cycles — default INFO log level keeps the heartbeat silent; ops dial up to DEBUG temporarily during incident investigation."
+    classification: real_bug
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
+  - persona: P1
+    finding: "F13: adminDelete audit verb (ADMIN_DELETE) records id + recipientHash but not templateCode; operator cannot reconstruct from the audit log alone what kind of email (password-reset / billing / verification) was deleted. Deferred because the operator can join id back to the row at delete time and the audit verb is for post-hoc forensics, not real-time triage."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
+  - persona: P2
+    finding: "F14: adminRetry's SENT-row rejection path throws IllegalStateException but writes NO audit log line. A compromised operator credential could probe for SENT vs RETRY/DLQ status by replay-attempts (the 409 vs 200 vs 404 response distinguishes the row state) and leave zero forensic trace. Closure: emit AUDIT.info 'verb=ADMIN_RETRY_REJECTED_SENT id={} recipientHash={}' BEFORE throwing, so the security audit captures every replay attempt including the rejected ones."
+    classification: real_bug
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
+  - persona: P2
+    finding: "F15: adminGet does not emit any audit log line — an operator viewing an outbox row (which includes body, subject, recipient) leaves no read trail. 개인정보보호법 §29 and ISO 27001 A.12.4.1 favor logging access to sensitive data. Deferred because read-trail granularity is fork-receiver-specific (some shops log every admin read, others only log mutations; some require approval-workflow on read access entirely). Catalog refuses to choose the default."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxAdminController.java
+  - persona: P2
+    finding: "F16: OutboxResponse DTO exposes raw recipient + subject in the admin GET payload (subject may carry verification codes, password-reset links, billing reference numbers). The admin UI screenshots this in chat / incident bridges, propagating the values out of the catalog's PII boundary. Deferred because actor-IS-admin already has approved access; masking would impede legitimate triage. Fork-receivers add masking + reveal-on-hover per their incident-response policy."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxDto.java
