@@ -886,3 +886,99 @@ bash skills/ax-scaffold/scripts/new-business-recipe.sh <pattern> <project> --dry
 - Recipe D does NOT register patterns in `trio_integrity_allowlist.yaml`.
 - Recipe D does NOT ship business logic — only composition contracts.
 - Patterns are explicitly named; there is no free-text inference (`--analyze` is not supported).
+
+---
+
+## Cross-cutting layers (R53 / R56 / R67 patterns)
+
+The five-step new-domain playbook above covers the dominant case: an L4
+domain with its own Spec Trio + backend + frontend trio. Some helpers
+don't belong to any one L4 — they're shared infrastructure. The catalog
+hosts three cross-cutting layers for these.
+
+### When to add to L0 fork-receiver-kit (frontend)
+
+`templates/L0/fork-receiver-kit/` hosts pure-TS helpers shared by L4
+frontends — `use-caller-id.ts` (caller identity hooks), `parse-error.ts`
+(RFC 9457 ProblemDetail unwrap + CodedError + PII deny-list),
+`entity-key.ts` (polymorphic entity-ref guard).
+
+**Add to L0 when**: a TS helper has been duplicated inline across 3+ L4
+trios (R80 rule of three). Examples from R53:
+
+- `useCallerId` was inline in 7 L4s → lifted to L0
+- `parseError` was inline in 7 L4s → lifted to L0
+- `assertSafeEntityRef` was inline in favorites only → lifted pre-
+  emptively because the pattern was obviously domain-neutral
+
+**Don't add to L0 when**: the helper has UI / JSX surface (that's L1 or
+L2), or when only one L4 uses it (premature abstraction).
+
+### When to add to L2 blocks (frontend widgets)
+
+`templates/L2/blocks/` hosts reusable React widgets with rendering
+surface — `confirm-dialog.tsx`, `rate-limit-banner.tsx`,
+`offline-banner.tsx`, `announce-live.tsx`, plus 25+ others.
+
+**Add to L2 when**: a UX pattern with concrete JSX + a11y attributes
+recurs across L4 trios. Each L2 block ships with:
+- frontmatter (evidence + dependencies + imports_from/forbidden)
+- exported component(s)
+- optional accompanying `templates/L2/_fixtures/<block>.spec.ts` static
+  + runtime assertions (Playwright)
+
+**Don't add to L2 when**: the widget is domain-specific (favorites
+star button stays in `templates/L4/favorites-bookmarks/app/`), or when
+it's just composition of existing L2 blocks without new behavior.
+
+### When to add to backend `common` package (JVM)
+
+`backend/src/main/java/com/ax/template/authblueprint/common/` hosts
+shared Java helpers — `AuditPiiHelper` (PII hash + storage scrub).
+R67 introduced the package after seven backend modules adopted the
+helper inline.
+
+**Add to common when**: a Java utility has been inline-duplicated or
+package-private-shared across 3+ modules (R80 rule of three again).
+The R67 trajectory was:
+- R60: helper born inside emailoutbox package
+- R62/R63/R65/R72: 6 more modules adopted via fully-qualified import
+  through emailoutbox
+- R67: lifted to common; class renamed (EmailPiiHelper → AuditPiiHelper)
+  to reflect the now-cross-cutting scope
+
+**Don't add to common when**: the helper has domain coupling (e.g. a
+logger named for the domain; an entity-specific validator), or when
+it's only a 1-2 module shared concern (defer to one of the existing
+domain packages).
+
+### Cross-layer import discipline (mechanical guards enforce)
+
+| Layer | May import from | Must NOT import from |
+|-------|-----------------|----------------------|
+| L0 fork-receiver-kit | (nothing — pure TS, no deps) | L1, L2, L3, L4, app/, lib/ |
+| L1 primitives | L0 | L2, L3, L4 |
+| L2 blocks | L0, L1 | L3, L4 |
+| L3 page templates | L0, L1, L2 | L4 |
+| L4 domain verticals | L0, L1, L2, L3 | other L4 domains |
+| backend common package | (nothing — leaf utility) | any per-domain package |
+
+The L0 / common boundary is structural: L0 is for the frontend stack;
+common is for the JVM stack. They're sibling concepts, not parent/child.
+
+### Rule of three+ trigger (R80)
+
+When the same helper appears in three modules:
+1. **Lift in the same commit** — create the shared location, move
+   all existing inline copies, delete the duplicates. No transition
+   window where divergence is possible.
+2. **OR explicit deferral with expiry** — commit message records:
+   "Helper X now in three modules; deferring lift because <reason>.
+   Lift trigger: <fourth adoption | dated quarter | named owner>."
+
+Silent deferral is permanent duplication. The rule exists to catch
+helpers BEFORE per-module drift accumulates.
+
+See `practices/rules/promote-on-third-use.md` for the full rule + R80
+canonical Java example, and `practices/MAINTAINER.md` for the detector
+one-liner that scans for missed lifts.
