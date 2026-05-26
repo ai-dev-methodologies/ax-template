@@ -55,6 +55,28 @@ fi
 
 violations=0
 
+# R88 strengthening — item-id matching with grandfathered allow-list.
+# Pre-R88 the guard only verified file existence (spec_file_abs check
+# below); ~52 legacy rules accumulated spec_refs to imagined item-ids.
+# R88 now verifies the item-id is actually present in the spec yaml,
+# with an explicit allow-list for the legacy orphans (see
+# practices/.spec-ref-legacy-orphans.txt).
+LEGACY_ORPHAN_FILE="$REPO_ROOT/$CATALOG/.spec-ref-legacy-orphans.txt"
+
+# Load allow-list into a flat env var (Bash 3.2: no associative array).
+# Newline-separated entries, comments stripped.
+LEGACY_ORPHANS=""
+if [ -f "$LEGACY_ORPHAN_FILE" ]; then
+    LEGACY_ORPHANS=$(grep -vE '^[[:space:]]*(#|$)' "$LEGACY_ORPHAN_FILE" 2>/dev/null || true)
+fi
+
+# Extract item-ids from a spec yaml (matches "- id: \"...\"" form).
+extract_spec_ids() {
+    local file="$1"
+    grep -oE '^[[:space:]]*-[[:space:]]+id:[[:space:]]*"[^"]+"' "$file" 2>/dev/null \
+        | sed -E 's/.*"([^"]+)".*/\1/'
+}
+
 for rule in "${rules[@]}"; do
     name="$(basename "$rule")"
 
@@ -68,13 +90,37 @@ for rule in "${rules[@]}"; do
     fi
 
     # (b) referenced specs/*.yaml file must exist
-    # spec_ref format: specs/{file}.yaml#{ITEM-ID} — extract the file path part
+    # spec_ref format: specs/{file}.yaml#{ITEM-ID} — extract parts
     spec_file_rel="${spec_ref%%#*}"
     spec_file_abs="$REPO_ROOT/$spec_file_rel"
 
     if [ ! -f "$spec_file_abs" ]; then
         echo "VIOLATION [$name]: spec_ref '$spec_ref' → file '$spec_file_rel' does not exist" >&2
         violations=$((violations + 1))
+        continue
+    fi
+
+    # (c) R88 — item-id portion (after the '#') must exist in the spec yaml,
+    # OR the full spec_ref must appear verbatim in the legacy-orphans allow-list.
+    case "$spec_ref" in
+        *"#"*) item_id="${spec_ref#*#}" ;;
+        *) item_id="" ;;
+    esac
+
+    if [ -n "$item_id" ]; then
+        # Whitelist check: full spec_ref present in legacy-orphans file
+        if [ -n "$LEGACY_ORPHANS" ] \
+            && echo "$LEGACY_ORPHANS" | grep -Fxq -- "$spec_ref"; then
+            continue
+        fi
+
+        # Hard check: item-id present in the spec yaml
+        if ! extract_spec_ids "$spec_file_abs" | grep -Fxq -- "$item_id"; then
+            echo "VIOLATION [$name]: spec_ref '$spec_ref' → item-id '$item_id' not found in $spec_file_rel" >&2
+            echo "  (resolve by adding '$item_id' as a real spec item, OR by retargeting spec_ref to an existing id)" >&2
+            echo "  (legacy orphans grandfathered via $CATALOG/.spec-ref-legacy-orphans.txt — new rules must use real ids)" >&2
+            violations=$((violations + 1))
+        fi
     fi
 done
 

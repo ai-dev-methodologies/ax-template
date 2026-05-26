@@ -1,0 +1,18 @@
+# practices-react/.spec-ref-legacy-orphans.txt
+#
+# Grandfathered spec_ref entries whose item-id does NOT exist in the
+# referenced specs/*.yaml. Mirror of practices/.spec-ref-legacy-orphans.txt
+# for the practices-react catalog. Recorded at R88 (item-id matching
+# strengthening).
+#
+# Expiry trigger: re-opens before the catalog ships a v2 minor release OR
+# before the next domain spec yaml is regenerated from rule metadata.
+#
+# Format: one "specs/file.yaml#ITEM-ID" per line. Comments and blank
+# lines are ignored.
+
+specs/feature-flags-frontend-l0.yaml#FF-FE-004
+specs/react-practices-l0.yaml#REACT-PRACTICES-I18N-001
+specs/react-practices-l0.yaml#REACT-PRACTICES-RICH-CONTENT-001
+specs/react-practices-l0.yaml#REACT-PRACTICES-SECURITY-IMPERSONATION-001
+specs/react-practices-l0.yaml#REACT-PRACTICES-URL-STATE-001

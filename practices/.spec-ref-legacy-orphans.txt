@@ -1,0 +1,73 @@
+# practices/.spec-ref-legacy-orphans.txt
+#
+# Grandfathered spec_ref entries whose item-id does NOT exist in the
+# referenced specs/*.yaml. Recorded at R88 (item-id matching strengthening)
+# as legacy debt — pre-R88 the spec_ref_guard only verified file existence,
+# so 52 rules accumulated spec_refs pointing to imagined item-ids.
+#
+# Rules going forward MUST cite a spec_ref whose item-id actually exists
+# in the spec yaml (the guard hard-fails on new orphans). The entries
+# below are exempt from that check.
+#
+# Expiry trigger for THIS allow-list: re-opens before the catalog ships a
+# v2 minor release OR before the next domain spec yaml is regenerated from
+# rule metadata (whichever comes first). At that point every legacy entry
+# below should be seeded into its spec yaml with a proper requirement /
+# test_method / verification_type / notes block, mirroring the format of
+# PRACTICES-ARCH-001..003.
+#
+# Format: one "specs/file.yaml#ITEM-ID" per line. Comments and blank
+# lines are ignored.
+
+specs/identity-verification-l0.yaml#L5
+specs/spring-practices-l0.yaml#PRACTICES-ACTUATOR-001
+specs/spring-practices-l0.yaml#PRACTICES-ACTUATOR-002
+specs/spring-practices-l0.yaml#PRACTICES-ACTUATOR-003
+specs/spring-practices-l0.yaml#PRACTICES-API-001
+specs/spring-practices-l0.yaml#PRACTICES-API-002
+specs/spring-practices-l0.yaml#PRACTICES-API-003
+specs/spring-practices-l0.yaml#PRACTICES-ASYNC-001
+specs/spring-practices-l0.yaml#PRACTICES-ASYNC-002
+specs/spring-practices-l0.yaml#PRACTICES-ASYNC-003
+specs/spring-practices-l0.yaml#PRACTICES-BUILD-001
+specs/spring-practices-l0.yaml#PRACTICES-BUILD-002
+specs/spring-practices-l0.yaml#PRACTICES-BUILD-003
+specs/spring-practices-l0.yaml#PRACTICES-CACHE-001
+specs/spring-practices-l0.yaml#PRACTICES-CACHE-002
+specs/spring-practices-l0.yaml#PRACTICES-CACHE-003
+specs/spring-practices-l0.yaml#PRACTICES-CONFIG-001
+specs/spring-practices-l0.yaml#PRACTICES-CONFIG-002
+specs/spring-practices-l0.yaml#PRACTICES-CONFIG-003
+specs/spring-practices-l0.yaml#PRACTICES-HTTP-001
+specs/spring-practices-l0.yaml#PRACTICES-HTTP-002
+specs/spring-practices-l0.yaml#PRACTICES-HTTP-003
+specs/spring-practices-l0.yaml#PRACTICES-LANG-001
+specs/spring-practices-l0.yaml#PRACTICES-LANG-002
+specs/spring-practices-l0.yaml#PRACTICES-LANG-003
+specs/spring-practices-l0.yaml#PRACTICES-MESSAGING-001
+specs/spring-practices-l0.yaml#PRACTICES-MESSAGING-002
+specs/spring-practices-l0.yaml#PRACTICES-MESSAGING-003
+specs/spring-practices-l0.yaml#PRACTICES-MIGRATION-001
+specs/spring-practices-l0.yaml#PRACTICES-MIGRATION-002
+specs/spring-practices-l0.yaml#PRACTICES-MIGRATION-003
+specs/spring-practices-l0.yaml#PRACTICES-PERS-002
+specs/spring-practices-l0.yaml#PRACTICES-PERS-003
+specs/spring-practices-l0.yaml#PRACTICES-PERS-004
+specs/spring-practices-l0.yaml#PRACTICES-QUALITY-001
+specs/spring-practices-l0.yaml#PRACTICES-QUALITY-002
+specs/spring-practices-l0.yaml#PRACTICES-QUALITY-003
+specs/spring-practices-l0.yaml#PRACTICES-SECURITY-001
+specs/spring-practices-l0.yaml#PRACTICES-SECURITY-002
+specs/spring-practices-l0.yaml#PRACTICES-SECURITY-003
+specs/spring-practices-l0.yaml#PRACTICES-TEST-002
+specs/spring-practices-l0.yaml#PRACTICES-TEST-003
+specs/spring-practices-l0.yaml#PRACTICES-TEST-004
+specs/spring-practices-l0.yaml#PRACTICES-TX-002
+specs/spring-practices-l0.yaml#PRACTICES-TX-003
+specs/spring-practices-l0.yaml#PRACTICES-TX-004
+specs/spring-practices-l0.yaml#PRACTICES-VAL-002
+specs/spring-practices-l0.yaml#PRACTICES-VAL-003
+specs/spring-practices-l0.yaml#PRACTICES-VAL-004
+specs/spring-practices-l0.yaml#PRACTICES-WEB-001
+specs/spring-practices-l0.yaml#PRACTICES-WEB-002
+specs/spring-practices-l0.yaml#PRACTICES-WEB-003

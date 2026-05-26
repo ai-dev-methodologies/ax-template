@@ -138,3 +138,11 @@ items:
     verification_type: "review"
     applicable: true
     notes: "recipe_spec_referential_integrity_guard.sh (SP35) and recipe_governance_guard.sh (SP37) both walk business_invariants and resolve each spec_ref/rule_ref. Failing fixture in practices/evals/fixtures/recipe-invariants-must-resolve/."
+
+  - id: "PRACTICES-DOGFOOD-LEDGER-001"
+    chapter: "Architecture / Dogfood Ledger Discipline"
+    requirement: "Every docs/dogfood-ledger/*.yaml entry whose classification is scope_deferral MUST contain an explicit expiry-trigger marker in its finding text (one of: 'expiry trigger:', 're-opens when/before', 'reopens when/before', 'defer until', 'deferred until', 'expires on', 'sunsets on', 'before the fork-receiver', 'before the first', 'before the cap'). A deferral without a recorded re-open condition becomes inadvertent permanent debt that the catalog cannot self-audit. Rule body: practices/rules/dogfood-finding-must-have-expiry-trigger.md."
+    test_method: "practices_DOGFOOD_LEDGER_001_scopeDeferralHasExpiryTrigger"
+    verification_type: "review"
+    applicable: true
+    notes: "dogfood_finding_expiry_trigger_guard.sh (R85b, 45th hard guard) parses every ledger yaml under docs/dogfood-ledger/, iterates findings with classification=scope_deferral, and checks the finding text for any approved marker phrase. real_bug and methodology_gap entries are exempt (closed-in-wave vs methodology-change paths). Anchored to Martin Fowler TechnicalDebtQuadrant (deliberate-prudent debt requires payoff reasoning) + NIST SP 800-53 RA-7 (risk-response acceptance requires recorded justification anchored to organizational risk tolerance)."
