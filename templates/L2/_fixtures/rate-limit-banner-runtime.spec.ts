@@ -72,10 +72,18 @@ test.beforeAll(() => {
 
 const HARNESS_PATH = process.env.RATE_LIMIT_HARNESS_PATH ?? '/__test__/rate-limit-banner'
 
+/**
+ * Navigate to the harness route and fire one notify429 via the named
+ * trigger button. Default trigger is the 3-second retry-after.
+ */
+async function fireNotify(page: Page, trigger: 'notify-3s' | 'notify-null' = 'notify-3s') {
+  await page.goto(HARNESS_PATH)
+  await page.click(`[data-testid="${trigger}"]`)
+}
+
 test.describe('rate-limit-banner runtime behavior', () => {
   test('notify429(3) shows banner with role=status', async ({ page }: { page: Page }) => {
-    await page.goto(HARNESS_PATH)
-    await page.click('[data-testid="notify-3s"]')
+    await fireNotify(page)
 
     const banner = page.locator('[data-testid="rate-limit-banner"]')
     await expect(banner).toBeVisible()
@@ -84,8 +92,7 @@ test.describe('rate-limit-banner runtime behavior', () => {
   })
 
   test('countdown decrements over time', async ({ page }: { page: Page }) => {
-    await page.goto(HARNESS_PATH)
-    await page.click('[data-testid="notify-3s"]')
+    await fireNotify(page)
 
     const banner = page.locator('[data-testid="rate-limit-banner"]')
     // initial render: "retry in 3s"
@@ -97,8 +104,7 @@ test.describe('rate-limit-banner runtime behavior', () => {
   })
 
   test('auto-dismiss when secondsRemaining → 0', async ({ page }: { page: Page }) => {
-    await page.goto(HARNESS_PATH)
-    await page.click('[data-testid="notify-3s"]')
+    await fireNotify(page)
 
     const banner = page.locator('[data-testid="rate-limit-banner"]')
     await expect(banner).toBeVisible()
@@ -111,8 +117,7 @@ test.describe('rate-limit-banner runtime behavior', () => {
   })
 
   test('Dismiss button removes banner immediately', async ({ page }: { page: Page }) => {
-    await page.goto(HARNESS_PATH)
-    await page.click('[data-testid="notify-3s"]')
+    await fireNotify(page)
 
     const banner = page.locator('[data-testid="rate-limit-banner"]')
     await expect(banner).toBeVisible()
@@ -123,8 +128,7 @@ test.describe('rate-limit-banner runtime behavior', () => {
   test('multiple notify429 calls update same banner (no ticker leak)', async ({
     page,
   }: { page: Page }) => {
-    await page.goto(HARNESS_PATH)
-    await page.click('[data-testid="notify-3s"]')
+    await fireNotify(page)
     // Fire a second notify429 before the first countdown completes.
     await page.waitForTimeout(500)
     await page.click('[data-testid="notify-3s"]')
@@ -137,8 +141,7 @@ test.describe('rate-limit-banner runtime behavior', () => {
   test('notify429(null) uses unknownDurationSec fallback', async ({
     page,
   }: { page: Page }) => {
-    await page.goto(HARNESS_PATH)
-    await page.click('[data-testid="notify-null"]')
+    await fireNotify(page, 'notify-null')
 
     const banner = page.locator('[data-testid="rate-limit-banner"]')
     // Harness sets unknownDurationSec={30}; banner shows "retry in 30s"
