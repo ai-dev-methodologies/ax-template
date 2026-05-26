@@ -16,6 +16,13 @@
 # test_method / verification_type / notes block, mirroring the format of
 # PRACTICES-ARCH-001..003.
 #
+# Audit method: this file is regenerated from a yaml-load pass over every
+# specs/*.yaml. R88-iter2 fix: the initial allow-list was built from a
+# grep-only id extractor that missed unquoted `- id: <value>` (117 such
+# declarations across the catalog). The strict yaml-load pass produces
+# the same set in /practices/ but corrects /practices-react/ by removing
+# the false-orphan FF-FE-004.
+#
 # Format: one "specs/file.yaml#ITEM-ID" per line. Comments and blank
 # lines are ignored.
 

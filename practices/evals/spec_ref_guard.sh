@@ -70,11 +70,30 @@ if [ -f "$LEGACY_ORPHAN_FILE" ]; then
     LEGACY_ORPHANS=$(grep -vE '^[[:space:]]*(#|$)' "$LEGACY_ORPHAN_FILE" 2>/dev/null || true)
 fi
 
-# Extract item-ids from a spec yaml (matches "- id: \"...\"" form).
+# Extract item-ids from a spec yaml. Uses python+yaml so quoted /
+# unquoted / single-quoted forms are all parsed consistently. The
+# previous grep-based extractor only matched `- id: "..."` (double-
+# quoted), missing 117 unquoted IDs across the catalog and producing
+# false grandfather entries in the legacy-orphan allow-list.
 extract_spec_ids() {
     local file="$1"
-    grep -oE '^[[:space:]]*-[[:space:]]+id:[[:space:]]*"[^"]+"' "$file" 2>/dev/null \
-        | sed -E 's/.*"([^"]+)".*/\1/'
+    python3 - "$file" <<'PY'
+import pathlib, sys, yaml
+doc = yaml.safe_load(pathlib.Path(sys.argv[1]).read_text()) or {}
+ids = set()
+def walk(n):
+    if isinstance(n, dict):
+        if isinstance(n.get("id"), str):
+            ids.add(n["id"])
+        for v in n.values():
+            walk(v)
+    elif isinstance(n, list):
+        for v in n:
+            walk(v)
+walk(doc)
+for i in sorted(ids):
+    print(i)
+PY
 }
 
 for rule in "${rules[@]}"; do

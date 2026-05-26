@@ -18,12 +18,12 @@ upstream:
   - "https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue"
 evidence:
   - source_type: external
-    citation: "Linux Kernel — Submitting Patches, Fixes: trailer convention (verbatim): 'If your patch fixes a bug in a specific commit, e.g. you found an issue using git bisect, please use the Fixes: tag with at least the first 12 characters of the SHA-1 ID, and the one line summary.' The kernel community has used this convention for over a decade to make bug-fix commits programmatically linkable to the commits they fix. R86 applies the same intent to the catalog's dogfood ledger: a real_bug finding's closure_commit_sha is the catalog's equivalent of a Fixes: trailer, anchoring the ledger entry to a verifiable git revision."
-    url: "https://www.kernel.org/doc/html/latest/process/submitting-patches.html"
+    citation: "GitHub Docs — Linking a pull request to an issue (verbatim): 'You can also use closing keywords in a commit message. The issue will be closed when you merge the commit into the default branch, but the pull request that contains the commit will not be listed as a linked pull request.' The supported keywords are 'close, closes, closed, fix, fixes, fixed, resolve, resolves, resolved'. This is the direct precedent for R86: a fix lives in a commit, and the issue / finding records the commit that closed it. The traceability direction matches — closure_commit_sha points FROM the ledger entry TO the commit that landed the fix, just as GitHub's closing-keyword binding points FROM the issue TO the merging PR's commit."
+    url: "https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue"
     quoted_at: "2026-05-27"
   - source_type: external
-    citation: "GitHub Docs — Linking a pull request to an issue (verbatim): 'You can also use closing keywords in a commit message. The issue will be closed when you merge the commit into the default branch, but the pull request that contains the commit will not be listed as a linked pull request.' The supported keywords are 'close, closes, closed, fix, fixes, fixed, resolve, resolves, resolved'. The traceability shape is the same one the catalog wants: a fix lives in a commit, and the issue / finding records the commit that closed it."
-    url: "https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue"
+    citation: "Linux Kernel — Submitting Patches, Fixes: trailer convention (verbatim): 'If your patch fixes a bug in a specific commit, e.g. you found an issue using git bisect, please use the Fixes: tag with at least the first 12 characters of the SHA-1 ID, and the one line summary.' This is a supporting precedent for the broader practice of mechanically-linkable commit references, NOT a direct shape match — the kernel Fixes: tag points FROM the fixing commit BACK to the buggy commit, while R86's closure_commit_sha points FROM the ledger entry FORWARD to the fixing commit. The kernel community uses Fixes: trailers + the parallel Tested-by:/Reported-by: trailer family as the documented convention for making commit-graph relationships programmatically auditable; R86 cites that family for precedent, while the actual direction-correct analogy is the GitHub closing-keyword binding above."
+    url: "https://www.kernel.org/doc/html/latest/process/submitting-patches.html"
     quoted_at: "2026-05-27"
 ---
 
@@ -35,7 +35,7 @@ R71 `dogfood_ledger_guard.sh` enforces the classification field on every finding
 
 The prose-only "Closure: …" pattern that the catalog has used so far (e.g., "Closure: caught DataIntegrityViolationException in FavoriteController.handleConcurrentDuplicate") tells the reader WHAT changed but does not tell them WHICH commit landed the change. A future maintainer reading the ledger six months later cannot mechanically confirm the fix shipped — they must search git history by hand, infer from commit messages, and hope no later commit undid the work.
 
-The fix shape mirrors the Linux Kernel's `Fixes:` trailer + GitHub's closing-keywords convention: pin every closure to a specific git revision so the ledger ↔ git boundary is bidirectional.
+The fix shape follows GitHub's closing-keywords convention (the direct precedent — see evidence below): pin every closure to a specific git revision so the ledger ↔ git boundary is bidirectional. The Linux Kernel's `Fixes:` trailer is cited as a supporting precedent for mechanically-linkable commit references but points in the opposite direction (fixing commit → buggy commit) and is not the analogy shape R86 adopts.
 
 **Incorrect — closure described in prose, no SHA:**
 
