@@ -20,8 +20,15 @@ public class EmailNotificationChannel implements NotificationChannel {
 
     @Override
     public void deliver(Notification notification) {
-        log.info("email-notification recipient={} type={} title={}",
-            notification.getRecipientUserId(), notification.getType(), notification.getTitle());
+        // R65 — anchor R61 audit-log-pii-hash-required. recipientUserId can
+        // be email-shaped (Spring Authentication.getName() is implementation
+        // defined); hash before logging so the operator log aggregator never
+        // holds the raw value. title can carry user-supplied content
+        // (notification body excerpts) — omit it entirely from the dev log.
+        log.info("email-notification recipientHash={} type={}",
+            com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.piiHash(
+                notification.getRecipientUserId()),
+            notification.getType());
     }
 
     @Override
