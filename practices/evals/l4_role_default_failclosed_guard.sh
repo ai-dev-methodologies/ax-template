@@ -100,13 +100,27 @@ while IFS= read -r -d '' file; do
         append_violation "$file: $line"
     done < <(grep -nE "$STATIC_TRUE_PATTERN" "$file" 2>/dev/null || true)
 
-    # Pass 2 — dynamic === with non-callerRole LHS.
+    # Pass 2 — dynamic === with non-callerRole LHS. Extract the exact LHS
+    # of `===` (text between the assignment `=` and `===`), trim whitespace
+    # and compare against the canonical normalized forms `callerRole` and
+    # `useCallerRole()`. Substring match is intentionally rejected — a line
+    # like `const isAdmin = !callerRole === 'admin'` must NOT pass.
     while IFS= read -r line; do
-        # `line` is "<lineno>:<source>"; check the source half against the
-        # allowed-LHS whitelist. If callerRole / useCallerRole() is on
-        # either side of the ===, skip.
-        if echo "$line" | grep -qE "$ALLOWED_LHS"; then
-            continue
+        # `line` is "<lineno>:<source>"; strip the line-number prefix.
+        source_part="${line#*:}"
+
+        # Capture everything between the assignment `=` and the `===`.
+        # The leading `[^=]` excludes the assignment from belonging to a
+        # `==` or `===` operator, but the file pattern guarantees the
+        # `===` appears later on the line.
+        if [[ "$source_part" =~ [^=!]=[[:space:]]*([^=]*)=== ]]; then
+            lhs="${BASH_REMATCH[1]}"
+            # Trim leading + trailing whitespace.
+            lhs="${lhs#"${lhs%%[![:space:]]*}"}"
+            lhs="${lhs%"${lhs##*[![:space:]]}"}"
+            if [ "$lhs" = "callerRole" ] || [ "$lhs" = "useCallerRole()" ]; then
+                continue
+            fi
         fi
         append_violation "$file: $line"
     done < <(grep -nE "$DYNAMIC_PATTERN" "$file" 2>/dev/null || true)

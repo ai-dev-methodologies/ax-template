@@ -83,8 +83,16 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isLoading}
+            /* R82 — aria-busy reflects the wrapped mutation lifecycle so
+               screen readers track the in-flight state of any
+               confirm-gated mutation (WCAG SC 4.1.3 Status Messages).
+               The L2 block sits in front of destructive admin actions
+               on background-polled pages (file-storage delete,
+               email-outbox retry/delete, approval revoke) and is the
+               canonical surface where the aria-busy signal must land. */
+            aria-busy={isLoading || undefined}
             className={[
-              'inline-flex items-center rounded-md px-4 py-2 text-sm font-medium shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+              'inline-flex items-center rounded-md px-4 py-2 text-sm font-medium shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 aria-busy:opacity-60',
               destructive
                 ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
                 : 'bg-primary text-primary-foreground hover:bg-primary/90',

@@ -253,7 +253,11 @@ export default function AuditLogExportPage() {
         <button
           type="submit"
           disabled={mutation.isPending}
-          className="bg-primary text-primary-foreground rounded px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+          /* R82 — aria-busy reflects the mutation lifecycle so screen
+             readers track the in-flight state of the polled-page
+             mutation (WCAG SC 4.1.3 Status Messages). */
+          aria-busy={mutation.isPending || undefined}
+          className="bg-primary text-primary-foreground rounded px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 aria-busy:opacity-60"
         >
           {mutation.isPending ? 'Submitting…' : `Export as ${format}`}
         </button>

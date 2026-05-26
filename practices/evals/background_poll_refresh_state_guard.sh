@@ -80,20 +80,43 @@ while IFS= read -r -d '' file; do
     matches=$(grep -nE "$CODE_PATTERN" "$file" 2>/dev/null || true)
     [ -z "$matches" ] && continue
 
-    # Does the same file reference dataUpdatedAt anywhere (destructure,
-    # JSX usage, helper variable)? Match the identifier as a word so a
+    # Check 1: file references dataUpdatedAt somewhere (destructure, JSX
+    # usage, helper variable). Match the identifier as a word so a
     # partial substring inside a comment about `lastDataUpdatedAtSeen`
     # would still count — that level of strictness is delegated to the
     # R82 rule's reviewer guidance, not to this mechanical first pass.
+    has_data_updated_at=0
     if grep -qE 'dataUpdatedAt' "$file" 2>/dev/null; then
-        continue
+        has_data_updated_at=1
+    fi
+
+    # Check 2: if the file ALSO uses useMutation, R82 requires the
+    # mutation trigger button to expose aria-busy so screen-reader
+    # users see the in-flight signal alongside the polled freshness.
+    # If no useMutation is present, the freshness signal alone
+    # satisfies R82.
+    needs_aria_busy=0
+    if grep -qE 'useMutation\b' "$file" 2>/dev/null; then
+        needs_aria_busy=1
+    fi
+
+    has_aria_busy=0
+    if grep -qE 'aria-busy' "$file" 2>/dev/null; then
+        has_aria_busy=1
     fi
 
     while IFS= read -r match_line; do
-        violations=$((violations + 1))
         line_no="${match_line%%:*}"
-        violation_lines="${violation_lines}
+        if [ "$has_data_updated_at" -eq 0 ]; then
+            violations=$((violations + 1))
+            violation_lines="${violation_lines}
 $file:$line_no — refetchInterval used without sibling dataUpdatedAt reference"
+        fi
+        if [ "$needs_aria_busy" -eq 1 ] && [ "$has_aria_busy" -eq 0 ]; then
+            violations=$((violations + 1))
+            violation_lines="${violation_lines}
+$file:$line_no — refetchInterval + useMutation present without aria-busy on the mutation trigger (R82 WCAG SC 4.1.3)"
+        fi
     done <<EOF
 $matches
 EOF

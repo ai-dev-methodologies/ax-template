@@ -263,7 +263,12 @@ export default function FileDetailPage({ params }: FileDetailPageProps) {
 
           <button
             onClick={() => setShowDelete(true)}
-            className="rounded-[--radius-md] border border-[--color-error] px-[--space-4] py-[--space-2] text-[length:--text-sm] font-[number:--weight-medium] text-[--color-error] hover:bg-[--color-error-subtle]"
+            /* R82 — aria-busy reflects the delete-mutation lifecycle so
+               screen readers track the in-flight state of this
+               background-polled page mutation (WCAG SC 4.1.3). */
+            aria-busy={deleteMutation.isPending || undefined}
+            disabled={deleteMutation.isPending}
+            className="rounded-[--radius-md] border border-[--color-error] px-[--space-4] py-[--space-2] text-[length:--text-sm] font-[number:--weight-medium] text-[--color-error] hover:bg-[--color-error-subtle] aria-busy:opacity-60 disabled:opacity-50"
           >
             Delete
           </button>
