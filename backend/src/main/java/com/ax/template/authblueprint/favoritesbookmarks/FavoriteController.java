@@ -2,6 +2,7 @@ package com.ax.template.authblueprint.favoritesbookmarks;
 
 import jakarta.validation.Valid;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -86,5 +87,29 @@ public class FavoriteController {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "validation failed");
         pd.setProperty("code", "VALIDATION_ERROR");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
+    }
+
+    /**
+     * R78 iter1 F3 closure — concurrent same-key {@code add} under default
+     * READ_COMMITTED isolation races past the find-or-create check in
+     * {@link FavoriteService#add} and hits the
+     * {@code uq_favorites_user_entity} UNIQUE constraint at commit. Without
+     * this handler the client receives a 500 — a clear violation of
+     * R38 caller-authentication-only / FAV-IDEMPOTENT-001 idempotency
+     * intent.
+     *
+     * <p>The 409 + {@code FAVORITE_CONCURRENT_DUPLICATE} code signals
+     * "your add may have succeeded; retry or query
+     * {@code GET /api/favorites/check/<entityType>/<entityId>} to
+     * confirm". A simple client retry produces a clean 200 on the
+     * subsequent call because the row now exists.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleConcurrentDuplicate(
+            DataIntegrityViolationException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+            "concurrent favorite add — retry or confirm via GET /api/favorites/check/{entityType}/{entityId}");
+        pd.setProperty("code", "FAVORITE_CONCURRENT_DUPLICATE");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
     }
 }

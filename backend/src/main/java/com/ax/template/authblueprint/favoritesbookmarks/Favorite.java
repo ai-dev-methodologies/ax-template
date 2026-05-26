@@ -46,6 +46,29 @@ public class Favorite {
     @Column(name = "entity_id", nullable = false, updatable = false, length = 255)
     private String entityId;
 
+    /**
+     * R78 iter1 F4 (HIGH) — user-owned free-text annotation on a favorite.
+     * Caller-scoped read (FAV-AUTHZ-002) keeps direct exposure private to
+     * the owner, but the value is stored VERBATIM and treated as PII
+     * territory at every downstream surface:
+     *
+     * <ul>
+     *   <li>Database backups / replicas — note travels with the row.</li>
+     *   <li>BI / analytics extracts — fork-receiver-owned scrubbing.</li>
+     *   <li>Audit-log emission (R61 / R67) — fork-receivers wiring audit
+     *       logs on favorites MUST NOT log the raw note. Use
+     *       {@code AuditPiiHelper.piiHash} for correlation when needed.</li>
+     *   <li>Cross-user features (e.g. "shared favorites", "collaborative
+     *       lists") — note becomes a phishing surface; require redaction
+     *       before fan-out.</li>
+     * </ul>
+     *
+     * <p>A user can paste 주민등록번호 / email / JWT / Bearer fragments
+     * here; the catalog deliberately does NOT redact at storage time
+     * because that would break the legitimate private-annotation UX.
+     * Compliance posture (개인정보보호법 §24) is delegated to the
+     * fork-receiver's privacy program.
+     */
     @Column(name = "note", length = 256)
     private String note;
 
