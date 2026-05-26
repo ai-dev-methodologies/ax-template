@@ -20,6 +20,7 @@ imports_forbidden: [L4/auth, L4/crud, L4/practices, L4/payment]
 
 import * as React from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { useCallerRole } from 'templates/L0/fork-receiver-kit/use-caller-id'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -104,10 +105,15 @@ export default function AuditLogExportPage() {
   const [pollEnabled, setPollEnabled] = React.useState(false)
 
   // ─── Session role check (AUDIT-FE-006) ──────────────────────────────────────
-  // TODO: replace with your auth provider's useSession() hook.
-  // Example with next-auth: const { data: session } = useSession()
-  // const hasExportRole = session?.user?.roles?.includes('ADMIN') || session?.user?.roles?.includes('AUDITOR')
-  const hasExportRole = true  // Fork: replace with real role check
+  // R75 — anchor R47 rbac-stub-default-fail-closed via L0 fork-receiver-kit.
+  // The previous `const hasExportRole = true` default was fail-OPEN — every
+  // dev / staging / preview deploy exposed the audit-log export to any
+  // viewer until the fork-receiver wired their session hook. Now defaults
+  // to 'user' (role !== 'admin' → no access) per R47; the AUDITOR role
+  // gating remains a fork-receiver decision (their RBAC source decides
+  // the AUDITOR / ADMIN partition).
+  const callerRole = useCallerRole()
+  const hasExportRole = callerRole === 'admin'
 
   // ─── Submit mutation ──────────────────────────────────────────────────────
   const mutation = useMutation({
