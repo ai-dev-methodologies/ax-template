@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.emailoutbox;
 
+import com.ax.template.authblueprint.common.AuditPiiHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -62,7 +63,7 @@ public class EmailOutboxService {
      * invocation so ops can see "5 sent, 2 retried, 1 DLQed" at a glance
      * instead of inferring batch shape from per-row events.
      *
-     * <p>R60 dogfood F6 closure — applies {@link EmailPiiHelper#sanitizeReason}
+     * <p>R60 dogfood F6 closure — applies {@link AuditPiiHelper#sanitizeReason}
      * before persisting the exception message. The render-layer scrubber
      * is no longer the sole defense; the column itself never holds plain
      * PII even if a sender adapter throws an exception that embeds an email
@@ -83,7 +84,7 @@ public class EmailOutboxService {
             } catch (EmailSendException ex) {
                 String raw = ex.getMessage() == null ? "unknown error" : ex.getMessage();
                 String trimmed = raw.length() > 1000 ? raw.substring(0, 1000) : raw;
-                String reason = EmailPiiHelper.sanitizeReason(trimmed);
+                String reason = AuditPiiHelper.sanitizeReason(trimmed);
                 row.markFailure(reason, now, delay -> now.plusSeconds(delay));
                 if (row.getStatus() == EmailOutboxStatus.DLQ) {
                     dlqed++;
@@ -126,7 +127,7 @@ public class EmailOutboxService {
         // email is PII (개인정보보호법 §24) that the operator log aggregator
         // (ELK / Splunk / CloudWatch) does not need.
         AUDIT.info("verb=ADMIN_RETRY id={} recipientHash={}",
-            id, EmailPiiHelper.piiHash(row.getRecipient()));
+            id, AuditPiiHelper.piiHash(row.getRecipient()));
         return outboxRepository.save(row);
     }
 
@@ -145,7 +146,7 @@ public class EmailOutboxService {
         }
         outboxRepository.delete(row);
         AUDIT.info("verb=ADMIN_DELETE id={} recipientHash={}",
-            id, EmailPiiHelper.piiHash(row.getRecipient()));
+            id, AuditPiiHelper.piiHash(row.getRecipient()));
     }
 
     @Transactional(readOnly = true)

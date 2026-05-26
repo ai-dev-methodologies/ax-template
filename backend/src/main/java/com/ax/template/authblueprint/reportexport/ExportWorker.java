@@ -123,7 +123,7 @@ public class ExportWorker {
             return "unknown error";
         }
         String scrubbed =
-            com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.sanitizeReason(s);
+            com.ax.template.authblueprint.common.AuditPiiHelper.sanitizeReason(s);
         return scrubbed.length() <= 1024 ? scrubbed : scrubbed.substring(0, 1024);
     }
 

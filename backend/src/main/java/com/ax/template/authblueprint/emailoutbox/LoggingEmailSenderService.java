@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.emailoutbox;
 
+import com.ax.template.authblueprint.common.AuditPiiHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,6 +42,6 @@ class LoggingEmailSenderConfig {
             // dev log — operators relying on this stub already know which
             // template fired via the EmailOutboxService AUDIT line above.
             "[logging-only] would send recipientHash={}",
-            EmailPiiHelper.piiHash(recipient));
+            AuditPiiHelper.piiHash(recipient));
     }
 }

@@ -150,7 +150,7 @@ public class WebhookDelivery {
     private static String truncate(String s) {
         if (s == null) return null;
         String scrubbed =
-            com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.sanitizeReason(s);
+            com.ax.template.authblueprint.common.AuditPiiHelper.sanitizeReason(s);
         return scrubbed.length() > 1024 ? scrubbed.substring(0, 1024) : scrubbed;
     }
 

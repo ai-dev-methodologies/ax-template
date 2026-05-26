@@ -88,9 +88,11 @@ violations=0
 for dpath in "$BACKEND_DOMAINS_DIR"/*/; do
     [ -d "$dpath" ] || continue
     dname_camel="$(basename "$dpath")"
-    # Skip non-domain directories (e.g. configuration packages).
+    # Skip non-domain directories (e.g. configuration packages, cross-
+    # cutting shared utility packages — `common` added by R67 lift of
+    # AuditPiiHelper out of emailoutbox).
     case "$dname_camel" in
-        importer|integration|observability|security|user) continue ;;
+        importer|integration|observability|security|user|common) continue ;;
     esac
 
     # Derive kebab-case domain name candidates for ledger lookup.

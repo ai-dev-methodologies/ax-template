@@ -26,7 +26,7 @@ public class EmailNotificationChannel implements NotificationChannel {
         // holds the raw value. title can carry user-supplied content
         // (notification body excerpts) — omit it entirely from the dev log.
         log.info("email-notification recipientHash={} type={}",
-            com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.piiHash(
+            com.ax.template.authblueprint.common.AuditPiiHelper.piiHash(
                 notification.getRecipientUserId()),
             notification.getType());
     }

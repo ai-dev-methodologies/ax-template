@@ -100,7 +100,7 @@ public class AuditExportJob {
         // ("user u-12345 has 500 audit rows; export failed at row 273"
         // type messages). Scrub PII at the entity boundary.
         this.errorMessage =
-            com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.sanitizeReason(errorMessage);
+            com.ax.template.authblueprint.common.AuditPiiHelper.sanitizeReason(errorMessage);
         this.updatedAt = Instant.now();
     }
 }

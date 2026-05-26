@@ -17,7 +17,7 @@ public final class EmailOutboxDto {
      *
      * <p>R60 dogfood F6 closure (server-side companion): {@code lastError}
      * is now also scrubbed at storage time via
-     * {@link EmailPiiHelper#sanitizeReason}. The render-layer scrub is
+     * {@link AuditPiiHelper#sanitizeReason}. The render-layer scrub is
      * defense-in-depth, not the sole filter.
      */
     public record OutboxResponse(

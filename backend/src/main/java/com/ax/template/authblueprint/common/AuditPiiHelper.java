@@ -1,4 +1,4 @@
-package com.ax.template.authblueprint.emailoutbox;
+package com.ax.template.authblueprint.common;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -6,44 +6,47 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 /**
- * R60 — PII handling helper for email-outbox audit + lastError storage.
+ * Cross-cutting PII handling helper for audit logs and stored-error columns.
  *
- * <p>Two responsibilities:
+ * <p>R67 — promoted from {@code emailoutbox.AuditPiiHelper} to the backend
+ * {@code common} package after the rule of three+ was satisfied: seven
+ * modules (emailoutbox, activityfeed, notification, scheduledtask,
+ * reportexport, webhook, auditlog) all wire through this helper for
+ * R61 enforcement.
+ *
+ * <h2>Two responsibilities</h2>
  * <ul>
- *   <li>{@link #recipientHash} — hash an email address to a short stable
- *       fingerprint suitable for audit logs / metrics labels. Avoids
- *       writing the raw email to log aggregators (ELK, Splunk, CloudWatch).
- *       SHA-256 hex truncated to 16 chars — collision risk is acceptable
- *       for an ops fingerprint; the goal is correlation, not identification.</li>
- *   <li>{@link #sanitizeReason} — scrub provider-thrown error strings
- *       BEFORE persisting them in {@code email_outbox.last_error}. Mirrors
- *       templates/L0/fork-receiver-kit/parse-error.ts#sanitizeStoredError
- *       but at the JVM side. Refuses to store raw RRN / mobile / JWT /
- *       Bearer / email / internal hostname even when the sender adapter
- *       throws an exception whose message embeds them.</li>
+ *   <li>{@link #piiHash} — hash an arbitrary PII identifier (email,
+ *       userId, phone, RRN) to a short stable correlation token suitable
+ *       for audit logs / metrics labels. Avoids writing raw values to
+ *       log aggregators (ELK, Splunk, CloudWatch). SHA-256 hex truncated
+ *       to 16 chars — collision risk is acceptable for an ops
+ *       fingerprint; the goal is correlation, not identification.
+ *       Anchors R61 {@code audit-log-pii-hash-required}.</li>
+ *   <li>{@link #sanitizeReason} — scrub a provider / job / adapter
+ *       exception message BEFORE persisting it in any stored-error
+ *       column. Mirrors
+ *       {@code templates/L0/fork-receiver-kit/parse-error.ts#sanitizeStoredError}
+ *       at the JVM side. Anchors R61
+ *       {@code server-side-stored-error-sanitize}.</li>
  * </ul>
  *
  * <p>Both methods are pure / static / no side effects.
  */
-public final class EmailPiiHelper {
+public final class AuditPiiHelper {
 
-    private EmailPiiHelper() {}
+    private AuditPiiHelper() {}
 
     /**
-     * Truncated SHA-256 hex of an arbitrary PII identifier. Returns "(none)"
-     * for null/blank. Use in AUDIT log lines as a stable correlation token
-     * that contains no recoverable PII:
+     * Truncated SHA-256 hex of an arbitrary PII identifier. Returns
+     * {@code "(none)"} for null/blank. Use in AUDIT log lines as a stable
+     * correlation token that contains no recoverable PII:
      *
      * <pre>
      * log.info("verb=X recipientHash={}", piiHash(email));
      * log.info("verb=Y callerHash={}",    piiHash(userId));
      * log.info("verb=Z phoneHash={}",     piiHash(phone));
      * </pre>
-     *
-     * <p>Anchors R61 rule {@code audit-log-pii-hash-required}. The helper
-     * works for emails, userIds (whose value may be email-shaped depending
-     * on the JWT sub claim), phone numbers, or any other identifier the
-     * privacy regime classifies as PII.
      */
     public static String piiHash(String value) {
         if (value == null || value.isBlank()) return "(none)";
@@ -57,15 +60,10 @@ public final class EmailPiiHelper {
         }
     }
 
-    /** @deprecated since R62 — use {@link #piiHash} instead. */
-    @Deprecated
-    public static String recipientHash(String recipient) {
-        return piiHash(recipient);
-    }
-
     /**
-     * Scrub a sender-adapter exception message before persisting in the
-     * {@code last_error} column. Mirrors the render-layer scrubber but
+     * Scrub a provider / job / adapter exception message before persisting
+     * it in a stored-error column ({@code last_error}, {@code error_message},
+     * {@code failure_reason}). Mirrors the render-layer scrubber but
      * applies at storage so the column itself never holds plain PII.
      *
      * <p>Patterns redacted:

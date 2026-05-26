@@ -129,7 +129,7 @@ public class ActivityService {
         AUDIT.info(
             "verb={} callerHash={} markedCount={} at={}",
             VERB_BULK_MARK_READ,
-            com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.piiHash(userId),
+            com.ax.template.authblueprint.common.AuditPiiHelper.piiHash(userId),
             unread.size(), now);
         return new MarkAllReadResponse(unread.size());
     }

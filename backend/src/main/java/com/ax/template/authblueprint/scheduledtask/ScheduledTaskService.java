@@ -144,7 +144,7 @@ public class ScheduledTaskService {
             // scheduled-task admin UI and by SREs via direct SQL. Scrub
             // PII (RRN / mobile / JWT / Bearer / email / internal hosts)
             // at storage time so neither path reads raw values.
-            String msg = com.ax.template.authblueprint.emailoutbox.EmailPiiHelper.sanitizeReason(raw);
+            String msg = com.ax.template.authblueprint.common.AuditPiiHelper.sanitizeReason(raw);
             history.markFailure(msg);
             log.error("scheduled-task: FAILED taskName={} error={}", task.getName(), msg, ex);
         } finally {
