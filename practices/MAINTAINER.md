@@ -315,3 +315,82 @@ contract as any other rule.
 
 The Spec Trio binary — `./gradlew testPractices` exits 0 — is the only hard gate.
 Everything else is advisory only.
+
+## Shared utility promotion (R67 lesson)
+
+R67 (2026-05-26) lifted `EmailPiiHelper` from the `emailoutbox` package
+to a new `common.AuditPiiHelper` after seven backend modules had
+adopted it. R80 codified the rule that drove the lift:
+[`practices/rules/promote-on-third-use.md`](./rules/promote-on-third-use.md).
+
+### The 3-use threshold
+
+When a utility helper is duplicated across 3+ modules, the third commit
+MUST either:
+
+1. **Lift to a shared package in the same commit** — create the new
+   location, move all existing inline copies, delete the duplicates. No
+   transition window where divergence is possible.
+2. **Explicit deferral with expiry** — commit message records: "Helper X
+   now in three modules; deferring lift to package common/Y because
+   <reason>. Lift trigger: <fourth adoption | dated quarter | named
+   owner>."
+
+Silent deferral is permanent duplication. The rule of three exists to
+catch helpers BEFORE they accumulate per-module drift.
+
+### Canonical examples in the ax-template catalog
+
+| Helper | Inline life | Lifted at | Now at |
+|---|---|---|---|
+| `useCallerId` (TS) | 7 L4 directories (R39-R51) | R53 | `templates/L0/fork-receiver-kit/use-caller-id.ts` |
+| `parseError` (TS) | 7 L4 directories (R39-R51) | R53 | `templates/L0/fork-receiver-kit/parse-error.ts` |
+| `assertSafeEntityRef` (TS) | favorites-bookmarks only | R53 (pre-emptive) | `templates/L0/fork-receiver-kit/entity-key.ts` |
+| `EmailPiiHelper` (JVM) | emailoutbox-private R60 → 7 modules R62/R63/R65/R72 | R67 | `backend/.../common/AuditPiiHelper.java` |
+
+The R53 lift was triggered by 7 simultaneous adopters (R51 email-outbox
+forced the issue at module count 6 + 7). The R67 lift was deferred
+TWICE (R62 + R63) before finally happening at module count 7. **Both
+are above the rule-of-three threshold**, both took longer than they
+should have. Future lifts should fire at module 3, not module 7.
+
+### How to detect a missed lift
+
+Run periodically:
+
+```bash
+# Frontend helpers (TS)
+for helper in useCallerId parseError assertSafeEntityRef; do
+  count=$(grep -rl "$helper" templates/L4 --include="*.tsx" --include="*.ts" 2>/dev/null | wc -l)
+  if [ "$count" -ge 3 ] && ! grep -q "fork-receiver-kit" <(grep -r "$helper" templates/L4 --include="*.tsx" 2>/dev/null | head -1); then
+    echo "LIFT CANDIDATE: $helper used in $count files but no fork-receiver-kit import found"
+  fi
+done
+
+# Backend helpers (JVM)
+for helper in AuditPiiHelper; do
+  count=$(grep -rl "$helper" backend/src/main/java --include="*.java" 2>/dev/null | wc -l)
+  if [ "$count" -ge 3 ] && ! grep -q "common\." <(grep -r "$helper" backend/src/main/java --include="*.java" 2>/dev/null | head -1); then
+    echo "LIFT CANDIDATE: $helper used in $count files but not in common package"
+  fi
+done
+```
+
+The catalog does not (yet) ship a mechanical guard for this; the
+discipline is enforced by maintainer review + the rule prose in R80.
+A future guard could automate the scan.
+
+### When to defer the lift legitimately
+
+- Two of the three adopters use the helper with subtly different
+  semantics. The lift would require choosing the canonical semantics;
+  better to wait for the third adopter to inform the choice.
+- The shared package location is contested (e.g. `common` vs
+  `lib/utils` vs `domain-shared`). Lift after the architecture decision
+  is recorded in `DECISIONS.md`.
+- The fork-receiver impact is non-trivial (e.g. published library with
+  semver) — N/A here because ax-template is source-of-truth catalog,
+  not a published library.
+
+In all deferral cases, **record the deferral in the commit message and
+set a concrete expiry** (next-adopter trigger or dated quarter).
