@@ -212,6 +212,46 @@ Both shapes may coexist on the same rule when multiple sources reinforce the rul
 
 The guard runs in `.github/workflows/practices-sentinel.yml` on every PR / push.
 
+### Advisory pre-flight (R85b)
+
+`practices/scripts/verify-rule-evidence-quotes.sh` is a **maintainer-run advisory tool**
+that goes one layer deeper than `evidence_guard`: it fetches each cited URL and verifies
+that the verbatim `'...'` quote inside the citation actually appears at the URL.
+
+Motivation: R85's iter1 commit fabricated two evidence quotes (Fowler + NIST). The codex
+critic caught them, but only because a separate AI reviewer happened to run. The
+catalog's `evidence_guard` checks shape (URL + citation present), not content. R85b
+closes the content gap when invoked.
+
+This is NOT a hard guard — running WebFetch in CI is fragile (rate limits, transient 5xx,
+network isolation, JS-rendered pages, paywalled archives). Maintainers run it locally as
+a pre-flight before committing a new rule or approving a quote-edit.
+
+```sh
+# Single rule
+bash practices/scripts/verify-rule-evidence-quotes.sh \
+  practices/rules/dogfood-finding-must-have-expiry-trigger.md
+
+# Whole catalog
+bash practices/scripts/verify-rule-evidence-quotes.sh --catalog practices
+
+# Both catalogs
+bash practices/scripts/verify-rule-evidence-quotes.sh --all
+```
+
+Output status:
+- `VERIFIED` — every `source_type: external` evidence URL was fetched and the longest
+  `'...'` quote inside the citation was found in the page text.
+- `UNVERIFIED` — fetch succeeded but the quote was not found. The page may be JS-rendered,
+  paywalled, or behind a redirect chain; manual inspection of the URL is required before
+  treating the citation as auditable.
+- `WARN` — fetch failed (network, 404, no quote candidate of sufficient length in the
+  citation prose).
+
+`upstream_id` evidence entries are skipped (already covered by `evidence_guard`'s
+snapshot check). The tool's exit code is 1 on any `UNVERIFIED`, 0 otherwise — but the
+exit is advisory only and MUST NOT be wired into pre-commit / pre-push.
+
 ### Trail (DECISIONS.md)
 
 Every accepted rule gets one entry in `practices/DECISIONS.md` with:
