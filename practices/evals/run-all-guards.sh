@@ -797,6 +797,11 @@ echo "[38] l4_frontend_domain_mode_guard.sh (live repo — R59, 41st guard)"
 run_guard "l4_frontend_domain_mode/live" 0 \
     bash "$SCRIPT_DIR/l4_frontend_domain_mode_guard.sh"
 
+echo ""
+echo "[39] l4_role_default_failclosed_guard.sh (live repo — R83, 42nd guard)"
+run_guard "l4_role_default_failclosed/live" 0 \
+    bash "$SCRIPT_DIR/l4_role_default_failclosed_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
