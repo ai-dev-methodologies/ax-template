@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "056828d5e9358ebc35b30049f14d01c970f642f82d96b3b144eaab59d3ca192a"
+  source_concat_sha256: "aa4093b7b95fb794598125da8b2b0d0fa13c83f181e9d4c1272c630696854f6e"
   rule_count: 110
   generated_by: "practices/generate_agents.sh"
 ---
@@ -2510,7 +2510,7 @@ Reference: [OWASP ASVS V14.3 — Error Prevention](https://owasp.org/www-project
 ---
 title: Dogfood-ledger scope_deferral findings MUST include an explicit expiry trigger
 impact: MEDIUM
-impactDescription: "A scope_deferral entry without a concrete re-open condition becomes permanent technical debt: the catalog cannot mechanically detect when the underlying constraint changes (cap-bump, new audit emission, new entity domain) and the deferral silently outlives its rationale. Catalog quality regresses one ledger entry at a time."
+impactDescription: "A scope_deferral entry without a concrete re-open condition risks becoming permanent, unreviewable technical debt: the catalog cannot mechanically detect when the underlying constraint changes (cap-bump, new audit emission, new entity domain) and the deferral silently outlives its rationale. Catalog quality regresses one ledger entry at a time."
 tags:
   - dogfood
   - ledger
@@ -2521,17 +2521,17 @@ tags:
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-DOGFOOD-LEDGER-001"
 verification:
   source: "practices/evals/dogfood_finding_expiry_trigger_guard.sh (R85b — 45th hard guard)"
-  pattern: "Every docs/dogfood-ledger/*.yaml entry where classification=scope_deferral MUST contain at least one expiry-trigger marker in its finding text: 'expiry trigger:', 're-opens when', 're-opens before', 'reopens before', 'defer until', or 'before <fork-receiver action>'. Markers are case-insensitive."
+  pattern: "Every docs/dogfood-ledger/*.yaml entry where classification=scope_deferral MUST contain at least one of the anchored expiry-trigger marker phrases in its finding text: 'expiry trigger:', 're-opens when', 're-opens before', 'reopens when', 'reopens before', 'defer until', 'deferred until', 'expires on', 'sunsets on', 'before the fork-receiver', 'before the first', 'before the cap'. Bare 'before a' / 'before any' are intentionally excluded as too lenient (accidental prose can match). Markers are case-insensitive substring matches."
 upstream:
   - "https://martinfowler.com/bliki/TechnicalDebtQuadrant.html"
   - "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"
 evidence:
   - source_type: external
-    citation: "Martin Fowler — TechnicalDebtQuadrant. 'When you decide to take on technical debt, you should always know when you intend to pay it back. Otherwise, the debt becomes permanent.' Applied to dogfood scope_deferrals: a deferral with no recorded re-open condition is the inadvertent-deliberate quadrant — known shortfall, no payback plan."
+    citation: "Martin Fowler — TechnicalDebtQuadrant: 'The prudent debt example is deliberate because the team knows they are taking on a debt, and thus puts some thought as to whether the payoff for an earlier release is greater than the costs of paying it off.' Applied to dogfood scope_deferrals: a deferral is the explicit catalog act of taking on prudent-deliberate debt, so Fowler's 'thought about the payoff' obligation translates directly to a recorded re-open condition. Without it, the entry slides into the inadvertent quadrant — debt the team no longer remembers it is carrying."
     url: "https://martinfowler.com/bliki/TechnicalDebtQuadrant.html"
     quoted_at: "2026-05-26"
   - source_type: external
-    citation: "NIST SP 800-53 Rev. 5 — Control RA-7 (Risk Response) requires that risk-acceptance decisions document the assumptions, the rationale, AND the conditions under which the decision is to be reviewed. The control text: 'Document risk responses for risks the organization decides to mitigate, accept, share, or avoid.' For ax-template scope_deferrals (a risk-acceptance act), the re-review condition is the expiry trigger."
+    citation: "NIST SP 800-53 Rev. 5 — Control RA-7 Risk Response, control statement: 'Respond to findings from security and privacy assessments, monitoring, and audits in accordance with organizational risk tolerance.' The supplemental guidance notes that response options include acceptance and that accepted risk should be documented through a plan of action and milestones when immediate mitigation is not possible. Applied: a dogfood scope_deferral is an accepted-risk-with-no-immediate-mitigation; the expiry trigger is the catalog's plan-of-action milestone that distinguishes deferred-with-recorded-review-condition from deferred-and-forgotten."
     url: "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"
     quoted_at: "2026-05-26"
 ---

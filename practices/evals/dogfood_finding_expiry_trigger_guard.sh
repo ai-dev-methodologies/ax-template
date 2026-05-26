@@ -7,7 +7,12 @@
 # detect when a deferral should re-open.
 #
 # Accepted marker phrases (case-insensitive substring match in the
-# `finding` field):
+# `finding` field). The set is intentionally narrow — every phrase must
+# require a concrete follow-on noun/condition, not arbitrary prose. The
+# previous iteration accepted bare `before a ` and `before any `; codex
+# critic flagged those as too lenient (accidental prose like "we made
+# this before a previous wave" would have matched), so they are
+# removed and replaced with anchored alternatives:
 #   - "expiry trigger:"
 #   - "re-opens when"
 #   - "re-opens before"
@@ -15,11 +20,11 @@
 #   - "reopens when"
 #   - "defer until"
 #   - "deferred until"
+#   - "expires on"
+#   - "sunsets on"
 #   - "before the fork-receiver"
 #   - "before the first"
-#   - "before a "
 #   - "before the cap"
-#   - "before any "
 #
 # Real_bug entries are not checked (they are closed in the same wave).
 # methodology_gap entries are also exempt (those should be addressed
@@ -76,11 +81,11 @@ MARKERS = [
     "reopens when",
     "defer until",
     "deferred until",
+    "expires on",
+    "sunsets on",
     "before the fork-receiver",
     "before the first",
-    "before a ",
     "before the cap",
-    "before any ",
 ]
 
 
@@ -125,9 +130,9 @@ if violations:
     print("", file=sys.stderr)
     print(
         "Accepted markers (any one): 'expiry trigger:', 're-opens when/before', "
-        "'reopens when/before', 'defer until', 'deferred until', "
-        "'before the fork-receiver', 'before the first', 'before a ', "
-        "'before the cap', 'before any '.",
+        "'reopens when/before', 'defer until', 'deferred until', 'expires on', "
+        "'sunsets on', 'before the fork-receiver', 'before the first', "
+        "'before the cap'.",
         file=sys.stderr,
     )
     print(
