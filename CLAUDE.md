@@ -250,15 +250,27 @@ ax-template/
 ├── blueprints/                # 정책 매니페스트 (핵심)
 │   └── auth-manifest.yaml
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
-│   ├── rules/                 # 86룰, 22 categories
+│   ├── rules/                 # 107룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + advisory probes
+│   ├── evals/                 # 4 hard gates + 41 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
 │   └── DECISIONS.md           # rule provenance trail
+├── templates/
+│   ├── L0/fork-receiver-kit/  # R53 — cross-cutting client primitives
+│   │                          # (use-caller-id / parse-error / entity-key)
+│   ├── L2/blocks/             # 30+ reusable widgets (rate-limit-banner R56,
+│   │                          # confirm-dialog, offline-banner, toast 등)
+│   └── L4/                    # 20 domain verticals (full-trio 19 + INFRA 1)
 ├── backend/                   # Spring Boot reference workload (skill의 self-application)
+│   └── src/main/java/com/ax/template/authblueprint/
+│       ├── common/            # R67 — backend cross-cutting helpers (AuditPiiHelper)
+│       └── <domain>/          # 20 domain modules + identity-verification (backend_only)
 ├── frontend/                  # React reference workload
+├── docs/
+│   ├── IMPLEMENTATION-STATUS.md  # 20 L4 status taxonomy (refreshed R66)
+│   └── dogfood-ledger/           # R71 — classified findings per dogfood iteration
 ├── verify/                    # 검증 스크립트 (선택적 — fork받은 팀이 채택 여부 결정)
 └── docs/archive/              # 과거 거버넌스 문서 (참고용)
 ```
