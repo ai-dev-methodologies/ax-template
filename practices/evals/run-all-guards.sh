@@ -802,6 +802,11 @@ echo "[39] l4_role_default_failclosed_guard.sh (live repo — R83, 42nd guard)"
 run_guard "l4_role_default_failclosed/live" 0 \
     bash "$SCRIPT_DIR/l4_role_default_failclosed_guard.sh"
 
+echo ""
+echo "[40] stored_error_column_sanitize_guard.sh (live repo — R81, 43rd guard)"
+run_guard "stored_error_column_sanitize/live" 0 \
+    bash "$SCRIPT_DIR/stored_error_column_sanitize_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

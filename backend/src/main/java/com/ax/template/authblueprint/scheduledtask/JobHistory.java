@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.scheduledtask;
 
+import com.ax.template.authblueprint.common.PiiSanitized;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -51,6 +52,9 @@ public class JobHistory {
     @Column(name = "outcome", nullable = false, length = 16)
     private JobOutcome outcome;
 
+    @PiiSanitized(reason =
+        "ScheduledTaskService.runOne calls AuditPiiHelper.sanitizeReason(raw) "
+        + "before invoking history.markFailure(msg). Entity stores already-scrubbed value.")
     @Column(name = "error_message", length = 2000)
     private String errorMessage;
 

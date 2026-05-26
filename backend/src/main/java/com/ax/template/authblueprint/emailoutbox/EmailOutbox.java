@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.emailoutbox;
 
+import com.ax.template.authblueprint.common.PiiSanitized;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -64,6 +65,9 @@ public class EmailOutbox {
     @Column(name = "next_attempt_at")
     private Instant nextAttemptAt;
 
+    @PiiSanitized(reason =
+        "EmailOutboxService.markFailure calls AuditPiiHelper.sanitizeReason(trimmed) "
+        + "before invoking row.markFailure(reason, ...). Entity stores already-scrubbed value.")
     @Column(name = "last_error", length = 1024)
     private String lastError;
 

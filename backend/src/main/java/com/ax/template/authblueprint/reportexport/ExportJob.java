@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.reportexport;
 
+import com.ax.template.authblueprint.common.PiiSanitized;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.Basic;
@@ -64,6 +65,9 @@ public class ExportJob {
     @Column(name = "size_bytes")
     private Long sizeBytes;
 
+    @PiiSanitized(reason =
+        "ExportWorker.runJob calls AuditPiiHelper.sanitizeReason(s) before "
+        + "invoking job.markFailed(scrubbed). Entity stores already-scrubbed value.")
     @Column(name = "error_message", length = 1024)
     private String errorMessage;
 
