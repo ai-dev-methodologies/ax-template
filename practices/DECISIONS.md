@@ -239,3 +239,109 @@ the trigger event, do not relitigate.
   - **G11 (Korean PG signature evidence anchoring):** `practices/upstream/_MANIFEST.yaml` extended with three new snapshot entries — `kg-inicis-signature-2026-05`, `nice-payments-signature-2026-05`, `kcp-payments-signature-2026-05` — plus three corresponding `practices/upstream/*.snapshot.md` files recording algorithm + canonical signing string + header/param name + key env-var + replay window per vendor. Source URLs documented as `via: "fork-receiver-provided"` because the canonical vendor PDFs are partner-portal-gated; the snapshot bodies mirror the publicly downloadable sample-code READMEs so a fork-receiver authoring a verifier rule has a stable `upstream_id` anchor that passes `evidence_guard.sh`. Snapshot count 58 → 61. AGENTS.md sentinel UNCHANGED (TD-024 sha-input clause preserved — manifest-only edits do not refresh rule-concat sha).
   - **Verification:** `bash practices/evals/run-all-guards.sh` → 23 → 24 PASS (the new 36th guard joins; all 23 previous guards still PASS). Full guard sweep including all previous payment guards: GREEN. `./gradlew test --tests "PaymentProvider007Test" --tests "PaymentProviderMatrixTest" --tests "com.ax.template.authblueprint.payment.*"` — payment package fully GREEN. Full backend `./gradlew test` baseline shows 10–14 pre-existing flaky failures (BillingFlowIT / IdentityVerificationFlowIT / PortabilityCyclicPackageTest / PaymentAuthzTest under shared-context pollution); main HEAD exhibits the same flakiness — R14 changes introduce ZERO new regressions on the payment surface.
   - **Decision:** R14 closes the last two known R10/R13-deferred catalog gaps. If a subsequent sub-agent / dogfood loop discovers no further unclassified gap, this round qualifies as **P1 loop closure** — mirroring the P2 R12 verdict so the full dogfood loop terminates.
+
+# 2026-05-26 Session — R50 through R75 catalog growth (ADRs)
+
+## R50 — 5 frontend rules captured from R47 audit-feed dogfood
+- Status: ACCEPT
+- Date: 2026-05-26
+- Drivers: R47 dogfood surfaced 5 frontend patterns that were repeatedly broken in PRs (destructive action no confirm, dashboard polls without refresh signal, server errors rendered raw, mutation outcomes invisible, secret-show-once with refresh leak).
+- Alternatives considered:
+  - Single mega-rule "frontend safety" — rejected, too vague to enforce, no clear remediation path
+  - Per-rule ESLint plugin extension — deferred to R90 (out of this session's scope)
+  - Documentation-only — rejected, R47 cycle proved discipline drifts without enforceable rule
+- Why chosen: 5 specific rules, each with anchored OWASP/WCAG/React-docs evidence + Incorrect/Correct examples. Each rule's verification pattern is grep-able for a future mechanical guard.
+- Consequences: 99 → 104 rules. Adoption tracked across R51-R55 (preempted day-one in new L4s).
+- Follow-ups: ESLint plugin rules for each (R90, deferred).
+- Commits: d55b96c5d819
+
+## R51 — email-outbox L4 promotion (future_add → selectable, 20th L4)
+- Status: ACCEPT
+- Date: 2026-05-26
+- Drivers: Outbox pattern is standard transactional-email infrastructure; previously a future_add tier reservation. Composition-kit fork-receivers consistently asked for the pattern.
+- Alternatives considered:
+  - Stay as future_add — rejected, deferring forever loses the catalog improvement opportunity
+  - Backend-only (no frontend trio) — rejected, ops monitor is a real surface; admin page is needed
+  - Use existing email modules (NotificationService) — rejected, NotificationService is content-routing; outbox is retry-state machine, different concern
+- Why chosen: Spec Trio (8 spec items / 5 families) + full backend impl + full-trio frontend + R50/R52 lessons preempted day-one (sanitize, hash, confirm, dataUpdatedAt).
+- Consequences: 19 → 20 L4. 1st L4 to ship with R50 rules applied from commit zero.
+- Follow-ups: R60 dogfood iter1; R71 ledger entry; F4/F5/F10 deferreds.
+- Commits: 15a9bf3 (R51), 33ada1e (R86 sanitize tests), 3cbbbff (F4)
+
+## R53 — L0 fork-receiver-kit (frontend cross-cutting layer)
+- Status: ACCEPT
+- Date: 2026-05-26
+- Drivers: Seven L4 trios had drift-prone inline copies of use-caller-id.ts / parse-error.ts / entity-key.ts (R55 was 7th identical copy). Each fix to one had to be hand-mirrored.
+- Alternatives considered:
+  - Keep inline copies + document discipline — rejected, R55 showed copies were already drifting (some had FavoritesError; others didn't)
+  - Lift to a published npm package — rejected, fork-receivers fork source, not consume packages
+  - Lift to L1 primitives layer — rejected, L1 is render primitives; helpers without JSX need a layer below
+- Why chosen: New L0 layer below L1 (`templates/L0/fork-receiver-kit/`) hosts pure-TS helpers. L4 imports via `templates/L0/fork-receiver-kit/<helper>`. R53 deleted all 15 inline copies in one commit (no drift window).
+- Consequences: 15 inline → 3 canonical files. L0 added as new layer. Fork-receiver bundle now includes L0 + per-L4 (small added burden, documented in IMPLEMENTATION-STATUS).
+- Follow-ups: backend `common` package added by R67 mirror.
+- Commits: 1635e5c
+
+## R54 — identity-verification residual closure (8/8 envelope → 19/19 full)
+- Status: ACCEPT
+- Date: 2026-05-26
+- Drivers: ralplan master plan listed "R54: identity-verification frontend full-trio". IDV spec declares `domain_mode: backend_only   # no frontend UI in scope; CI/DI callback is server-to-server`. Strict ralplan interpretation would have created PII-exposing admin pages.
+- Alternatives considered:
+  - Execute ralplan literally (create frontend) — rejected, violates spec's explicit declaration; reopens R2 closure
+  - Skip R54 entirely — rejected, R2 left real backend gaps (VerifiedIdentity persistence, admin GET, audit publish)
+  - Amend spec to remove backend_only declaration — rejected, would override 개인정보보호법 §24 reasoning that closed the spec at backend_only
+- Why chosen: Re-scoped to backend residual closure. Added VerifiedIdentity entity + repository + adapters + service + admin GET + audit. NO frontend trio. Spec.domain_mode preserved.
+- Consequences: 8/8 → 19/19 testIdentityVerification GREEN. Triggered R58 rule + R59 guard to mechanise the lesson.
+- Follow-ups: R58 (rule), R59 (guard).
+- Commits: 48f16bd
+
+## R58 — spec-domain-mode-gates-frontend-trio rule
+- Status: ACCEPT
+- Date: 2026-05-26
+- Drivers: R54 was caught by manual spec inspection. Future AI agents would re-make the same mistake without a rule + guard.
+- Alternatives considered:
+  - Documentation-only addition to METHODOLOGY — rejected, AI agents skip docs under pressure
+  - Manual review checklist — rejected, doesn't scale across L4 count
+  - Inline comment in each spec — rejected, doesn't gate creation of templates/L4/<domain>/app/
+- Why chosen: Catalog rule with evidence (OWASP ASVS V1.2 + RFC 2119 MUST semantics). Documents the pattern + Incorrect/Correct shell examples. Sets up the mechanical companion (R59).
+- Consequences: 104 → 105 rules. Forces every future "frontend trio" decision through spec.domain_mode check.
+- Follow-ups: R59 mechanical guard.
+- Commits: 405d453
+
+## R59 — l4_frontend_domain_mode_guard (R58 mechanical companion, 41st guard)
+- Status: ACCEPT
+- Date: 2026-05-26
+- Drivers: R58 was text discipline; needed mechanical enforcement so it doesn't drift.
+- Alternatives considered:
+  - Single-file guard (current shape) — chosen
+  - CI-only enforcement — rejected, would not gate local development
+  - Hook-based on git commit-msg — rejected, doesn't cover post-commit refactors
+- Why chosen: Standalone bash guard scanning templates/L4/<domain>/app/ vs specs/<domain>-l0.yaml#domain_mode (with fallback to <domain>-frontend-l0.yaml for auth/crud). Refuses backend_only / absent / unknown.
+- Consequences: 40 → 41 hard guards. Also retroactively added `domain_mode: full_trio` to 17 specs that lacked the field (silent grandfather closed).
+- Follow-ups: none; guard is self-enforcing.
+- Commits: 1c717e2
+
+## R60 — email-outbox 2-persona dogfood iter1 (8 closures + EmailPiiHelper)
+- Status: ACCEPT
+- Date: 2026-05-26
+- Drivers: R51 shipped fast; needed independent persona review before declaring catalog-ready. 11 findings (P1 ops: 5; P2 security: 6).
+- Alternatives considered:
+  - Skip dogfood (rely on R47 closure) — rejected, R47 was a different domain; new code surface needs fresh eyes
+  - Single-persona review — rejected, different personas catch different gaps (ops vs security)
+  - Run iter1 with 3+ personas — rejected, marginal gain over 2 for the first iteration
+- Why chosen: Standard 2-persona protocol per CLAUDE.md. iter1 closed 7 real_bug (HIGH/MEDIUM); 4 scope_deferral (LOW); 0 methodology_gap.
+- Consequences: PII discipline tightened (recipient hash + lastError storage scrub). EmailPiiHelper born — later promoted (R67).
+- Follow-ups: R71 ledger; R67 lift trigger.
+- Commits: ab4378e
+
+## R67 — AuditPiiHelper lift to backend common package
+- Status: ACCEPT
+- Date: 2026-05-26
+- Drivers: Seven backend modules (R62 ActivityFeed, R63 ScheduledTask/Webhook/ReportExport/AuditLog, R65 Notification, R72 NotificationDispatcher, plus origin emailoutbox) had adopted EmailPiiHelper. Helper name was email-specific; class was package-private to emailoutbox.
+- Alternatives considered:
+  - Keep package-private + duplicate inline in each module — rejected, defeats DRY; 7 sites would drift
+  - Make EmailPiiHelper public but keep in emailoutbox — rejected, package coupling smell (why does ActivityService import from emailoutbox?)
+  - Lift to a third-party shared lib — rejected, ax-template is monorepo
+- Why chosen: New `com.ax.template.authblueprint.common` package, rename to `AuditPiiHelper` (semantically broader). 9 file touches in one commit (no drift window). l4_domain_reachability_guard updated to skip the new `common` package.
+- Consequences: 1 canonical helper, 7+ adopters import from common. Triggered R80 rule capture.
+- Follow-ups: R80 rule. R83 mechanical detector (deferred — see R88 "How to detect a missed lift").
+- Commits: 7aea95e
