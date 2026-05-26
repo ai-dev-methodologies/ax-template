@@ -23,7 +23,7 @@ findings:
     classification: real_bug
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
   - persona: P1
-    finding: "F13: adminDelete audit verb (ADMIN_DELETE) records id + recipientHash but not templateCode; operator cannot reconstruct from the audit log alone what kind of email (password-reset / billing / verification) was deleted. Deferred because the operator can join id back to the row at delete time and the audit verb is for post-hoc forensics, not real-time triage."
+    finding: "F13: adminDelete audit verb (ADMIN_DELETE) records id + recipientHash but not templateCode; operator cannot reconstruct from the audit log alone what kind of email (password-reset / billing / verification) was deleted. Deferred because the operator can join id back to the row at delete time and the audit verb is for post-hoc forensics, not real-time triage. Expiry trigger: re-opens before any audit-derived dashboard / SIEM rule consumes ADMIN_DELETE events without the source DB available (live monitoring, partner SOC feed, regulator export) — at that point the missing templateCode breaks the consumer's reconstruction."
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
   - persona: P2
@@ -31,10 +31,10 @@ findings:
     classification: real_bug
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
   - persona: P2
-    finding: "F15: adminGet does not emit any audit log line — an operator viewing an outbox row (which includes body, subject, recipient) leaves no read trail. 개인정보보호법 §29 and ISO 27001 A.12.4.1 favor logging access to sensitive data. Deferred because read-trail granularity is fork-receiver-specific (some shops log every admin read, others only log mutations; some require approval-workflow on read access entirely). Catalog refuses to choose the default."
+    finding: "F15: adminGet does not emit any audit log line — an operator viewing an outbox row (which includes body, subject, recipient) leaves no read trail. 개인정보보호법 §29 and ISO 27001 A.12.4.1 favor logging access to sensitive data. Deferred because read-trail granularity is fork-receiver-specific (some shops log every admin read, others only log mutations; some require approval-workflow on read access entirely). Catalog refuses to choose the default. Expiry trigger: re-opens before the fork-receiver enters a compliance regime that requires admin-read-trail (개인정보보호법 §29 in-scope deployment, SOC 2 Type II, HIPAA, ISO 27001 certification audit) — at that point the absence of a read-audit verb blocks the certification path."
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxAdminController.java
   - persona: P2
-    finding: "F16: OutboxResponse DTO exposes raw recipient + subject in the admin GET payload (subject may carry verification codes, password-reset links, billing reference numbers). The admin UI screenshots this in chat / incident bridges, propagating the values out of the catalog's PII boundary. Deferred because actor-IS-admin already has approved access; masking would impede legitimate triage. Fork-receivers add masking + reveal-on-hover per their incident-response policy."
+    finding: "F16: OutboxResponse DTO exposes raw recipient + subject in the admin GET payload (subject may carry verification codes, password-reset links, billing reference numbers). The admin UI screenshots this in chat / incident bridges, propagating the values out of the catalog's PII boundary. Deferred because actor-IS-admin already has approved access; masking would impede legitimate triage. Expiry trigger: re-opens before the fork-receiver normalises any of these workflows — (a) admin screenshares the page on a non-secure channel (sales bridge, partner incident call), (b) admin UI is rendered to a kiosk / hot-desk / shared monitor without an over-the-shoulder gate, or (c) the org's privacy program classifies recipient/subject as a §24 element."
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxDto.java

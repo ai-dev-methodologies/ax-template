@@ -26,7 +26,7 @@ findings:
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/favoritesbookmarks/FavoriteService.java
   - persona: P1
-    finding: "F2 (MEDIUM): Quota TOCTOU. enforceQuota reads the count BEFORE save; two concurrent adds at the 999-row boundary can both pass the check and commit, producing 1001 rows in DB. The 1000-cap is a security control (rate-limit against malicious enumeration) so a silent breach matters. Deferred because the fix-shape (pessimistic row lock on count query / advisory lock / DB trigger / application-level user-scoped lock) is fork-receiver-owned concurrency policy."
+    finding: "F2 (MEDIUM): Quota TOCTOU. enforceQuota reads the count BEFORE save; two concurrent adds at the 999-row boundary can both pass the check and commit, producing 1001 rows in DB. The 1000-cap is a security control (rate-limit against malicious enumeration) so a silent breach matters. Deferred because the fix-shape (pessimistic row lock on count query / advisory lock / DB trigger / application-level user-scoped lock) is fork-receiver-owned concurrency policy. Expiry trigger: re-opens before the fork-receiver bumps favorites-bookmarks.max-favorites-per-user above the catalog default (1000) OR before any high-frequency batch-import / burst-write path is wired to /api/favorites (e.g. a 'one-click migrate' from another bookmark system) — at that point the TOCTOU window becomes routinely reachable."
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/favoritesbookmarks/FavoriteService.java
   - persona: P1
@@ -42,6 +42,6 @@ findings:
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/favoritesbookmarks/FavoriteController.java
   - persona: P2
-    finding: "F6 (LOW): GET /api/favorites returns ALL of the caller's favorites in a single payload with no pagination. The 1000-cap keeps the response bounded (estimated < 1 MB at typical row width) and fork-receivers bumping the cap above 5k MUST add pagination + cursor support. Deferred to the cap-bump path."
+    finding: "F6 (LOW): GET /api/favorites returns ALL of the caller's favorites in a single payload with no pagination. The 1000-cap keeps the response bounded (estimated < 1 MB at typical row width) and fork-receivers bumping the cap above 5k MUST add pagination + cursor support. Expiry trigger: re-opens before the cap is bumped above 5000 OR before the L4 favorites page is composed into a paginated UI surface (virtualized table, infinite scroll) — at that point a single GET payload becomes a UX latency hit."
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/favoritesbookmarks/FavoriteController.java

@@ -16,11 +16,11 @@ findings:
     classification: real_bug
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxAdminController.java
   - persona: P1
-    finding: "F4: DLQ entry has no lastFailureAt transition timestamp; operator infers stale-DLQ from nextAttemptAt=null + retryCount"
+    finding: "F4: DLQ entry has no lastFailureAt transition timestamp; operator infers stale-DLQ from nextAttemptAt=null + retryCount. Expiry trigger: re-opens before the fork-receiver wires DLQ-age alerting (Grafana SLO, PagerDuty rule, or Prometheus alert on age(stale_dlq_rows)) — at that point the absent timestamp blocks the alert and must be added. R84 already closed this in catalog code (EmailOutbox.lastFailureAt field), so this deferral is effectively retired but kept for ledger continuity."
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutbox.java
   - persona: P1
-    finding: "F5: Frontend does not countdown next-retry seconds; pure UX polish without security/correctness implication"
+    finding: "F5: Frontend does not countdown next-retry seconds; pure UX polish without security/correctness implication. Expiry trigger: re-opens before any operator runbook starts depending on tick-by-tick retry visibility (e.g. live incident bridge replays); Wave D1 in docs/ralph/prd-next-session-waves.md tracks the planned closure."
     classification: scope_deferral
     references_artifact_path: templates/L4/email-outbox/app/(admin)/email-outbox/page.tsx
   - persona: P2
@@ -28,7 +28,7 @@ findings:
     classification: real_bug
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
   - persona: P2
-    finding: "F7: body column is TEXT plain; fork-receiver-owned decision (catalog refuses to choose Hibernate @ColumnTransformer / pgcrypto / RDS at-rest)"
+    finding: "F7: body column is TEXT plain; fork-receiver-owned decision (catalog refuses to choose Hibernate @ColumnTransformer / pgcrypto / RDS at-rest). Expiry trigger: re-opens before the fork-receiver renders ANY user-controlled text into the body template (template-engine variable substitution from a user-typed field) — at that point body content crosses into the PII surface that demands at-rest encryption, and the catalog's neutrality stops being safe."
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutbox.java
   - persona: P2
@@ -40,7 +40,7 @@ findings:
     classification: real_bug
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
   - persona: P2
-    finding: "F10: EmailTemplate has no version column; template update silently changes future enqueues. Fork-receivers add versioning per their immutable-history needs"
+    finding: "F10: EmailTemplate has no version column; template update silently changes future enqueues. Fork-receivers add versioning per their immutable-history needs. Expiry trigger: re-opens before the fork-receiver needs forensic audit of WHICH template version produced a specific historical email (post-incident reconstruction, regulatory inspection, legal hold). Wave D2 tracks the planned closure."
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailTemplate.java
   - persona: P2

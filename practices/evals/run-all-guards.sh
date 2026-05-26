@@ -812,6 +812,11 @@ echo "[41] background_poll_refresh_state_guard.sh (live repo — R82b, 44th guar
 run_guard "background_poll_refresh_state/live" 0 \
     bash "$SCRIPT_DIR/background_poll_refresh_state_guard.sh"
 
+echo ""
+echo "[42] dogfood_finding_expiry_trigger_guard.sh (live repo — R85b, 45th guard)"
+run_guard "dogfood_finding_expiry_trigger/live" 0 \
+    bash "$SCRIPT_DIR/dogfood_finding_expiry_trigger_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
