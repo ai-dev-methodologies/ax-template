@@ -215,7 +215,13 @@ export default function ActivityFeedPage() {
     return () => clearInterval(t)
   }, [])
 
-  const { data, error, isLoading } = useQuery({
+  // R82 — Providers wires a QueryClient default `refetchInterval: 30s`
+  // (see app/providers.tsx). That default applies to every query in this
+  // L4, so the page MUST expose dataUpdatedAt as the visible polling
+  // cadence signal. Without it, an operator viewing the feed on a
+  // second monitor cannot distinguish "polling fresh" from "polling
+  // stuck on a network blip".
+  const { data, error, isLoading, dataUpdatedAt } = useQuery({
     queryKey: ['activity-feed', page, unread],
     queryFn: () => fetchFeed(page, unread),
   })
@@ -335,6 +341,17 @@ export default function ActivityFeedPage() {
               Events where you are the actor or are in the audience. Read state
               persists per user.
             </p>
+            {/* R82 — visible polling-cadence timestamp. aria-live polite
+                so screen readers announce the freshness silently without
+                interrupting focus. */}
+            <p
+              className="text-xs text-muted-foreground"
+              aria-live="polite"
+            >
+              {dataUpdatedAt
+                ? `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`
+                : ''}
+            </p>
           </div>
           <div className="flex gap-2">
             <button
@@ -346,8 +363,12 @@ export default function ActivityFeedPage() {
             </button>
             <button
               type="button"
-              className="rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
+              className="rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50 aria-busy:opacity-60"
               disabled={markAll.isPending}
+              /* R82 — aria-busy reflects the mark-all-read mutation
+                 lifecycle on this background-polled page so screen
+                 readers track the in-flight state (WCAG SC 4.1.3). */
+              aria-busy={markAll.isPending || undefined}
               onClick={() => {
                 // R44 iter2 (P1-F3 CRITICAL): the backend marks the
                 // entire account's unread as read, not just the visible
@@ -493,8 +514,12 @@ export default function ActivityFeedPage() {
                     {isUnread && (
                       <button
                         type="button"
-                        className="shrink-0 rounded border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+                        className="shrink-0 rounded border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50 aria-busy:opacity-60"
                         disabled={isPendingRead}
+                        /* R82 — aria-busy reflects the per-row read
+                           mutation lifecycle on this background-polled
+                           page (WCAG SC 4.1.3). */
+                        aria-busy={isPendingRead || undefined}
                         aria-label={`Mark activity ${e.id} as read`}
                         onClick={() => read.mutate(e.id)}
                       >

@@ -63,18 +63,59 @@ while IFS= read -r -d '' file; do
         *) continue ;;
     esac
 
-    # Exclude infrastructure files. R82 governs per-useQuery refetchInterval
-    # at the *call site*. A QueryClient-default refetchInterval inside
-    # providers.tsx (or a top-level layout) is a config pattern: it applies
-    # to every query in the app and there is no single render surface to
-    # attach a dataUpdatedAt timestamp to. Adoption of R82 still requires
-    # the page-level renders to expose dataUpdatedAt, which this guard
-    # checks at the page-level useQuery call site.
     base=$(basename "$file")
-    case "$base" in
-        providers.tsx|providers.ts) continue ;;
-        layout.tsx|layout.ts) continue ;;
-    esac
+
+    # Branch A: providers.tsx with a QueryClient-default refetchInterval.
+    # The default polls every query inside the L4, so every sibling
+    # page.tsx must expose dataUpdatedAt + aria-busy (when the page
+    # has mutations). We scope the sibling walk to ONLY the same L4
+    # domain — the providers.tsx path is templates/L4/<domain>/app/providers.tsx,
+    # so the L4 domain root is two levels up.
+    if [ "$base" = "providers.tsx" ] || [ "$base" = "providers.ts" ]; then
+        if ! grep -qE "$CODE_PATTERN" "$file" 2>/dev/null; then
+            # providers.tsx without a refetchInterval — nothing to check.
+            continue
+        fi
+        l4_domain_dir="$(dirname "$(dirname "$file")")"
+        while IFS= read -r -d '' page_file; do
+            pb=$(basename "$page_file")
+            case "$pb" in providers.tsx|providers.ts|layout.tsx|layout.ts) continue ;; esac
+
+            if ! grep -qE 'useQuery\b' "$page_file" 2>/dev/null; then
+                continue
+            fi
+
+            page_has_data_updated=0
+            if grep -qE 'dataUpdatedAt' "$page_file" 2>/dev/null; then
+                page_has_data_updated=1
+            fi
+            page_has_mutation=0
+            if grep -qE 'useMutation\b' "$page_file" 2>/dev/null; then
+                page_has_mutation=1
+            fi
+            page_has_aria_busy=0
+            if grep -qE 'aria-busy' "$page_file" 2>/dev/null; then
+                page_has_aria_busy=1
+            fi
+
+            if [ "$page_has_data_updated" -eq 0 ]; then
+                violations=$((violations + 1))
+                violation_lines="${violation_lines}
+$page_file:* — QueryClient-default refetchInterval in $file, but page does not expose dataUpdatedAt"
+            fi
+            if [ "$page_has_mutation" -eq 1 ] && [ "$page_has_aria_busy" -eq 0 ]; then
+                violations=$((violations + 1))
+                violation_lines="${violation_lines}
+$page_file:* — QueryClient-default refetchInterval + useMutation present without aria-busy (R82 WCAG SC 4.1.3)"
+            fi
+        done < <(find "$l4_domain_dir" -type f \( -name "*.tsx" -o -name "*.ts" \) -print0 2>/dev/null)
+        continue
+    fi
+
+    # Branch B: layout.tsx is infrastructure; skip.
+    if [ "$base" = "layout.tsx" ] || [ "$base" = "layout.ts" ]; then
+        continue
+    fi
 
     # Does this file actually use refetchInterval in code?
     matches=$(grep -nE "$CODE_PATTERN" "$file" 2>/dev/null || true)
