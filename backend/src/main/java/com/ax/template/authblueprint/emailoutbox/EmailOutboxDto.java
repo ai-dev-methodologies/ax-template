@@ -30,13 +30,15 @@ public final class EmailOutboxDto {
         Instant nextAttemptAt,
         String lastError,
         Instant createdAt,
-        Instant sentAt
+        Instant sentAt,
+        Instant lastFailureAt
     ) {
         public static OutboxResponse from(EmailOutbox e) {
             return new OutboxResponse(
                 e.getId(), e.getRecipient(), e.getTemplateCode(), e.getSubject(),
                 e.getStatus(), e.getRetryCount(), e.getNextAttemptAt(),
-                e.getLastError(), e.getCreatedAt(), e.getSentAt());
+                e.getLastError(), e.getCreatedAt(), e.getSentAt(),
+                e.getLastFailureAt());
         }
     }
 

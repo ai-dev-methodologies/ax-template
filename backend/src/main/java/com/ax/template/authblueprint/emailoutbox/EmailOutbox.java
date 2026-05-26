@@ -73,6 +73,15 @@ public class EmailOutbox {
     @Column(name = "sent_at")
     private Instant sentAt;
 
+    /**
+     * R84 (F4 closure from R60 dogfood iter1) — timestamp of the most recent
+     * markFailure call. Distinct from {@link #nextAttemptAt} (which goes null
+     * once the row enters DLQ) so SREs can answer "how long has this DLQ row
+     * been here" without inferring from retryCount + createdAt.
+     */
+    @Column(name = "last_failure_at")
+    private Instant lastFailureAt;
+
     protected EmailOutbox() {}
 
     private EmailOutbox(UUID id, String recipient, String templateCode,
@@ -88,6 +97,7 @@ public class EmailOutbox {
         this.lastError = null;
         this.createdAt = createdAt;
         this.sentAt = null;
+        this.lastFailureAt = null;
     }
 
     /** EMAIL-QUEUE-001 — factory for a newly enqueued PENDING row. */
@@ -111,6 +121,10 @@ public class EmailOutbox {
     void markFailure(String reason, Instant now, java.util.function.LongFunction<Instant> backoff) {
         this.retryCount = this.retryCount + 1;
         this.lastError = reason;
+        // R84 F4: record the wall-clock moment of the most recent failure so
+        // ops can see DLQ row age directly. Reset on resetForRetry below so
+        // an admin retry restarts the failure clock.
+        this.lastFailureAt = now;
         if (this.retryCount >= MAX_RETRIES) {
             this.status = EmailOutboxStatus.DLQ;
             this.nextAttemptAt = null;
@@ -132,6 +146,7 @@ public class EmailOutbox {
         this.retryCount = 0;
         this.nextAttemptAt = null;
         this.lastError = null;
+        this.lastFailureAt = null;
     }
 
     public UUID getId() { return id; }
@@ -142,6 +157,7 @@ public class EmailOutbox {
     public EmailOutboxStatus getStatus() { return status; }
     public int getRetryCount() { return retryCount; }
     public Instant getNextAttemptAt() { return nextAttemptAt; }
+    public Instant getLastFailureAt() { return lastFailureAt; }
     public String getLastError() { return lastError; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getSentAt() { return sentAt; }

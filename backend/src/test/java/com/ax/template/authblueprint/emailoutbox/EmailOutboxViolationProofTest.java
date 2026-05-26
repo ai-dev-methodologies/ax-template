@@ -78,4 +78,32 @@ class EmailOutboxViolationProofTest {
         row.markFailure("e", base, d -> base.plusSeconds(d));
         assertThat(row.getNextAttemptAt()).isEqualTo(base.plusSeconds(120));  // 2^2 × 30
     }
+
+    @Test
+    @Tag("EMAIL-RETRY-001")
+    void violation_markFailureSetsLastFailureAt_resetForRetryClears() {
+        // R84 (F4 closure) — lastFailureAt MUST track the wall-clock moment
+        // of the most recent failure, and MUST reset to null when an admin
+        // triggers retry (resetForRetry restarts the failure clock).
+        java.time.Instant base = java.time.Instant.parse("2026-05-26T10:00:00Z");
+        EmailOutbox row = EmailOutbox.create("u@x.kr", "c", "s", "b", base);
+        assertThat(row.getLastFailureAt())
+            .as("freshly-enqueued PENDING row has no failure timestamp")
+            .isNull();
+
+        row.markFailure("e", base.plusSeconds(60), d -> base.plusSeconds(d));
+        assertThat(row.getLastFailureAt())
+            .as("markFailure stamps lastFailureAt with the supplied now")
+            .isEqualTo(base.plusSeconds(60));
+
+        row.markFailure("e", base.plusSeconds(120), d -> base.plusSeconds(d));
+        assertThat(row.getLastFailureAt())
+            .as("subsequent markFailure overwrites with the latest moment")
+            .isEqualTo(base.plusSeconds(120));
+
+        row.resetForRetry();
+        assertThat(row.getLastFailureAt())
+            .as("admin retry clears the failure clock so the next failure starts fresh")
+            .isNull();
+    }
 }
