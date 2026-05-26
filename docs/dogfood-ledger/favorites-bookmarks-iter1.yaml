@@ -22,7 +22,7 @@
 iteration: 1
 findings:
   - persona: P1
-    finding: "F1: FavoriteService emits no audit-log lines on add / remove / list / check / count. fork-receiver decides read-trail granularity (개인정보보호법 §29 / ISO 27001 A.12.4.1 favor logging access to user-owned data; cataLog refuses to choose the default)."
+    finding: "F1 (LOW): FavoriteService emits no audit-log lines on add / remove / list / check / count. fork-receiver decides read-trail granularity (개인정보보호법 §29 / ISO 27001 A.12.4.1 favor logging access to user-owned data; catalog refuses to choose the default). Expiry trigger: before the fork-receiver wires the FIRST audit-log emission on any favorites endpoint, this deferral re-opens because raw `note` text MUST NOT reach the log aggregator — apply AuditPiiHelper.piiHash on userId + entity-key, never log the raw note."
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/favoritesbookmarks/FavoriteService.java
   - persona: P1
@@ -38,7 +38,7 @@ findings:
     classification: real_bug
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/favoritesbookmarks/Favorite.java
   - persona: P2
-    finding: "F5 (LOW): GET /api/favorites/count/{entityType}/{entityId} returns the global favorite count for any (type, id) pair without caller-scoping. Authentication is still required (SecurityConfig wires /api/favorites/** as authenticated) but any signed-in user can probe counts on any entity. Global like-count is the intended UX (like Twitter / Instagram), but for fork-receivers wiring favorites to sensitive entities (private documents, PII-linked rows) it becomes an information-disclosure surface. Deferred — entity-side visibility is the fork-receiver's call; document the trade-off."
+    finding: "F5 (LOW): GET /api/favorites/count/{entityType}/{entityId} returns the global favorite count for any (type, id) pair without caller-scoping. Authentication is still required (SecurityConfig wires /api/favorites/** as authenticated) but any signed-in user can probe counts on any entity. Global like-count is the intended UX (like Twitter / Instagram), but for fork-receivers wiring favorites to sensitive entities (private documents, PII-linked rows) it becomes an information-disclosure surface. Expiry trigger: before the fork-receiver wires the FIRST PII-linked or visibility-restricted entity (private document, internal RRN-linked row, gated content) as favoriteable, this deferral re-opens — replace global count with caller-visibility-scoped count or remove the public surface."
     classification: scope_deferral
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/favoritesbookmarks/FavoriteController.java
   - persona: P2
