@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+import com.ax.template.authblueprint.emailoutbox.EmailOutboxDto.OutboxPage;
 import com.ax.template.authblueprint.emailoutbox.EmailOutboxDto.OutboxResponse;
 
 /**
@@ -42,16 +43,21 @@ public class EmailOutboxAdminController {
     }
 
     @GetMapping
-    public ResponseEntity<List<OutboxResponse>> list(
+    public ResponseEntity<OutboxPage> list(
             @RequestParam(required = false) EmailOutboxStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
+        // R60 dogfood F3 closure — return Page metadata so the operator UI
+        // sees totalElements / totalPages and paginates with accurate counts
+        // instead of inferring queue size from a List length.
         Page<EmailOutbox> rows = service.adminList(status, page, size);
         List<OutboxResponse> items = rows.getContent().stream().map(OutboxResponse::from).toList();
+        OutboxPage body = new OutboxPage(items, rows.getNumber(), rows.getSize(),
+            rows.getTotalElements(), rows.getTotalPages());
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
             .header("Pragma", "no-cache")
-            .body(items);
+            .body(body);
     }
 
     @GetMapping("/{id}")

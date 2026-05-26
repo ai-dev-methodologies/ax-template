@@ -45,9 +45,17 @@ interface OutboxResponse {
   sentAt: string | null
 }
 
+interface OutboxPage {
+  content: OutboxResponse[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 // ─── data ─────────────────────────────────────────────────────────────────────
 
-async function fetchOutbox(status: OutboxStatus | ''): Promise<OutboxResponse[]> {
+async function fetchOutbox(status: OutboxStatus | ''): Promise<OutboxPage> {
   const params = new URLSearchParams()
   if (status) params.set('status', status)
   const qs = params.toString()
@@ -253,7 +261,7 @@ export default function EmailOutboxPage() {
           </div>
         ) : error ? (
           <EmptyState title="Failed to load outbox" description={(error as Error).message} />
-        ) : !data || data.length === 0 ? (
+        ) : !data || data.content.length === 0 ? (
           <EmptyState
             title="No outbox rows match the filter"
             description={
@@ -265,8 +273,16 @@ export default function EmailOutboxPage() {
             onAction={statusFilter ? () => setStatusFilter('') : undefined}
           />
         ) : (
+          <>
+            {/* R60 dogfood F3 closure — show the operator the queue size so a
+                5000-row outbox doesn't look like a 50-row outbox. */}
+            <div className="text-xs text-muted-foreground">
+              Showing {data.content.length} of {data.totalElements} row
+              {data.totalElements === 1 ? '' : 's'}
+              {data.totalPages > 1 && ` · page ${data.page + 1} of ${data.totalPages}`}
+            </div>
           <ul className="divide-y rounded border">
-            {data.map((row) => {
+            {data.content.map((row) => {
               const isRetrying = pendingRetryIds.has(row.id)
               const isDeleting = pendingDeleteIds.has(row.id)
               const retryable = canRetry(row.status)
@@ -356,6 +372,7 @@ export default function EmailOutboxPage() {
               )
             })}
           </ul>
+          </>
         )}
       </div>
     </ErrorBoundary>

@@ -57,28 +57,45 @@ public class EmailOutboxService {
      * iterate the due rows (PENDING or RETRY whose nextAttemptAt is past),
      * attempt send each, update outbox row to SENT on success or
      * RETRY/DLQ on failure.
+     *
+     * <p>R60 dogfood F2 closure — emits one structured summary log line per
+     * invocation so ops can see "5 sent, 2 retried, 1 DLQed" at a glance
+     * instead of inferring batch shape from per-row events.
+     *
+     * <p>R60 dogfood F6 closure — applies {@link EmailPiiHelper#sanitizeReason}
+     * before persisting the exception message. The render-layer scrubber
+     * is no longer the sole defense; the column itself never holds plain
+     * PII even if a sender adapter throws an exception that embeds an email
+     * address, JWT, or 주민등록번호.
      */
     @Transactional
     public int processQueue() {
         Instant now = Instant.now(clock);
         List<EmailOutbox> due = outboxRepository.findDueForSending(now);
-        int processed = 0;
+        int sent = 0;
+        int retried = 0;
+        int dlqed = 0;
         for (EmailOutbox row : due) {
             try {
                 senderService.send(row.getRecipient(), row.getSubject(), row.getBody());
                 row.markSent(now);
+                sent++;
             } catch (EmailSendException ex) {
-                // Bounded-length reason; the catalog client applies the
-                // R50 stored-server-error-sanitize-at-render-layer rule
-                // before rendering this on the admin view.
-                String reason = ex.getMessage() == null
-                    ? "unknown error"
-                    : (ex.getMessage().length() > 1000
-                        ? ex.getMessage().substring(0, 1000)
-                        : ex.getMessage());
+                String raw = ex.getMessage() == null ? "unknown error" : ex.getMessage();
+                String trimmed = raw.length() > 1000 ? raw.substring(0, 1000) : raw;
+                String reason = EmailPiiHelper.sanitizeReason(trimmed);
                 row.markFailure(reason, now, delay -> now.plusSeconds(delay));
+                if (row.getStatus() == EmailOutboxStatus.DLQ) {
+                    dlqed++;
+                } else {
+                    retried++;
+                }
             }
-            processed++;
+        }
+        int processed = sent + retried + dlqed;
+        if (processed > 0) {
+            AUDIT.info("verb=PROCESS_QUEUE total={} sent={} retried={} dlqed={}",
+                processed, sent, retried, dlqed);
         }
         return processed;
     }
@@ -105,7 +122,11 @@ public class EmailOutboxService {
             throw new IllegalStateException("cannot retry SENT email: " + id);
         }
         row.resetForRetry();
-        AUDIT.info("verb=ADMIN_RETRY id={} recipient={}", id, row.getRecipient());
+        // R60 dogfood F1/F8 closure — log recipient HASH not raw email; raw
+        // email is PII (개인정보보호법 §24) that the operator log aggregator
+        // (ELK / Splunk / CloudWatch) does not need.
+        AUDIT.info("verb=ADMIN_RETRY id={} recipientHash={}",
+            id, EmailPiiHelper.recipientHash(row.getRecipient()));
         return outboxRepository.save(row);
     }
 
@@ -113,9 +134,18 @@ public class EmailOutboxService {
     @Transactional
     public void adminDelete(UUID id) {
         EmailOutbox row = outboxRepository.findById(id).orElse(null);
-        if (row == null) return; // RFC 9110 §9.3.5 idempotent — 204 on absent target
+        if (row == null) {
+            // R60 dogfood F9 closure — RFC 9110 §9.3.5 idempotent at the HTTP
+            // layer, but log the "absent target" path distinctly so a security
+            // audit can distinguish "operator cleaned up a known row" from
+            // "operator tried to delete something already gone" (which may
+            // indicate compromised-credential cover-tracks behavior).
+            AUDIT.info("verb=ADMIN_DELETE_ABSENT id={}", id);
+            return;
+        }
         outboxRepository.delete(row);
-        AUDIT.info("verb=ADMIN_DELETE id={} recipient={}", id, row.getRecipient());
+        AUDIT.info("verb=ADMIN_DELETE id={} recipientHash={}",
+            id, EmailPiiHelper.recipientHash(row.getRecipient()));
     }
 
     @Transactional(readOnly = true)

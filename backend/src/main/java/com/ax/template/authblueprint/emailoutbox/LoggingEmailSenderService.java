@@ -35,6 +35,12 @@ class LoggingEmailSenderConfig {
               + "response only, set ax.email-outbox.allow-logging-sender-in-prod=true.");
         }
         return (recipient, subject, body) -> LOG.info(
-            "[logging-only] would send to={} subject={}", recipient, subject);
+            // R60 dogfood F11 closure — the catalog's default sender stub also
+            // hashes the recipient. Subject can carry verification codes /
+            // password reset links, so it is intentionally omitted from the
+            // dev log — operators relying on this stub already know which
+            // template fired via the EmailOutboxService AUDIT line above.
+            "[logging-only] would send recipientHash={}",
+            EmailPiiHelper.recipientHash(recipient));
     }
 }
