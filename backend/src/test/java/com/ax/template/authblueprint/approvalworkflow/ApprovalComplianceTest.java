@@ -190,11 +190,13 @@ class ApprovalComplianceTest {
         List<String> stepIds = listStepIds(requesterToken, requestId);
 
         // app2 cannot act on step 0 (assigned to app1).
+        // R83 iter1 F8 — the error response MUST NOT leak the rightful approver's userId.
         given()
             .header("Authorization", "Bearer " + app2Token).contentType(ContentType.JSON).body("{}")
         .when().post("/api/approvals/" + requestId + "/steps/" + stepIds.get(0) + "/approve")
         .then().statusCode(403)
-            .body("code", Matchers.equalTo("NOT_APPROVER"));
+            .body("code", Matchers.equalTo("NOT_APPROVER"))
+            .body("detail", Matchers.not(Matchers.containsString(app1Id)));
     }
 
     // ─── STEP family ─────────────────────────────────────────────────────────
