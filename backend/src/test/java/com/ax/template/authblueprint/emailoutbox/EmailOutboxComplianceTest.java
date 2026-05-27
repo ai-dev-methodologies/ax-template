@@ -42,7 +42,8 @@ class EmailOutboxComplianceTest {
         outboxRepository = mock(EmailOutboxRepository.class);
         templateRepository = mock(EmailTemplateRepository.class);
         senderService = mock(EmailSenderService.class);
-        templateService = new EmailTemplateService(templateRepository);
+        EmailTemplateHistoryRepository historyRepository = mock(EmailTemplateHistoryRepository.class);
+        templateService = new EmailTemplateService(templateRepository, historyRepository, clock);
         service = new EmailOutboxService(outboxRepository, templateService, senderService, clock);
     }
 

@@ -49,8 +49,9 @@ class EmailOutboxAuditHashTest {
         outboxRepository = mock(EmailOutboxRepository.class);
         EmailTemplateRepository templateRepository = mock(EmailTemplateRepository.class);
         EmailSenderService senderService = mock(EmailSenderService.class);
-        EmailTemplateService templateService = new EmailTemplateService(templateRepository);
+        EmailTemplateHistoryRepository historyRepository = mock(EmailTemplateHistoryRepository.class);
         Clock clock = Clock.fixed(FIXED, ZoneOffset.UTC);
+        EmailTemplateService templateService = new EmailTemplateService(templateRepository, historyRepository, clock);
         service = new EmailOutboxService(outboxRepository, templateService, senderService, clock);
 
         auditLogger = (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(AUDIT_LOGGER);
