@@ -27,7 +27,14 @@ import static io.restassured.RestAssured.given;
  * {@link ApiKeyHasherTest}; KEY-STORAGE-003 is in {@link ApiKeyEntityShapeTest}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+// R22 fix pattern — BEFORE_CLASS (not AFTER_CLASS) so this class gets a FRESH
+// ApplicationContext under the collapsed aggregate. Adding new beans to the
+// catalog (e.g. EmailTemplateHistoryRepository in Wave D2) shifted the
+// Spring TestContextCache LRU eviction order, causing this class to inherit
+// a stale context whose Tomcat instance had already shut down — revoke flows
+// then assert 401 but the dead-port HTTP path returns a stale 200. Same
+// root cause as the BillingFlowIT + FeatureFlagFlowIT R22 closure.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Tag("API_KEY")
 class ApiKeyComplianceTest {
 
