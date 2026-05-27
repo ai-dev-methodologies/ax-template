@@ -1,0 +1,205 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "specs/personas/persona-registry.schema.json",
+  "title": "ax-template persona registry",
+  "description": "JSON Schema for docs/dogfood-ledger/persona-registry.yaml — the catalog's governance record of dogfood review personas and their per-wave performance history. Introduced in R93 wave; consumed initially as static reference. A future R-wave MAY introduce persona_registry_schema_guard.sh to mechanically validate the yaml against this schema on every catalog guard run.",
+  "type": "object",
+  "required": ["schema_version", "description", "personas", "review_summary"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Bump when the persona / history / review_summary structure changes incompatibly. Additive field additions do NOT bump schema_version."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 50
+    },
+    "personas": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/persona"
+      }
+    },
+    "review_summary": {
+      "type": "object",
+      "patternProperties": {
+        "^R[0-9]+$": {
+          "$ref": "#/$defs/wave_summary"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Per-wave summary keyed by R-number (e.g. R93). Each wave's iter terminator commit appends an entry."
+    }
+  },
+  "$defs": {
+    "persona": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "age",
+        "seniority",
+        "experience_years",
+        "background",
+        "lens",
+        "history",
+        "verdict",
+        "verdict_reason",
+        "next_review_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^P[0-9]+$",
+          "description": "Sequential P<N> identifier. P1/P2 = original ops+security pair; P3..P12 = R93 expansion."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "description": "Korean display name (e.g. 김민준)."
+        },
+        "age": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 99
+        },
+        "seniority": {
+          "type": "string",
+          "enum": ["Junior", "Senior", "특급시니어"]
+        },
+        "experience_years": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 60
+        },
+        "background": {
+          "type": "string",
+          "minLength": 5,
+          "description": "One-line career background relevant to the lens."
+        },
+        "lens": {
+          "type": "string",
+          "minLength": 10,
+          "description": "One-sentence review focus — what kind of finding only this persona would surface."
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/history_entry"
+          },
+          "description": "Per-wave-iter findings. Empty array means the persona reviewed and reported 'no residual' for every iter they sat on."
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["active", "under_review", "retired"]
+        },
+        "verdict_reason": {
+          "type": "string",
+          "minLength": 20
+        },
+        "next_review_at": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Trigger condition OR future wave at which to re-evaluate the persona. Mirrors R85 expiry-trigger pattern."
+        }
+      }
+    },
+    "history_entry": {
+      "type": "object",
+      "required": [
+        "wave",
+        "iter",
+        "finding_id",
+        "classification",
+        "signal_strength",
+        "unique_to_persona",
+        "notes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "wave": {
+          "type": "string",
+          "pattern": "^R[0-9]+$"
+        },
+        "iter": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "finding_id": {
+          "type": "string",
+          "pattern": "^F[0-9]+$"
+        },
+        "classification": {
+          "type": "string",
+          "enum": ["real_bug", "scope_deferral", "methodology_gap"]
+        },
+        "signal_strength": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "high = contract pin / recursive-symmetric catch; medium = enrichment closure / trigger-anchored deferral; low = future-conditional or methodology observation."
+        },
+        "unique_to_persona": {
+          "type": "boolean",
+          "description": "true if no other persona in the same iter surfaced the same observation. Used to detect lens overlap."
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 20
+        }
+      }
+    },
+    "wave_summary": {
+      "type": "object",
+      "required": [
+        "panel_size",
+        "iterations",
+        "total_findings",
+        "real_bug_closures",
+        "scope_deferrals",
+        "methodology_gaps",
+        "panel_judgment",
+        "next_panel_composition_for_R94"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "panel_size": { "type": "integer", "minimum": 1 },
+        "iterations": { "type": "integer", "minimum": 1 },
+        "total_findings": { "type": "integer", "minimum": 0 },
+        "real_bug_closures": { "type": "integer", "minimum": 0 },
+        "scope_deferrals": { "type": "integer", "minimum": 0 },
+        "methodology_gaps": { "type": "integer", "minimum": 0 },
+        "closure_commits": { "type": "array", "items": { "type": "string" } },
+        "most_productive_persona": { "type": "string" },
+        "least_productive_personas": { "type": "array", "items": { "type": "string" } },
+        "lens_overlap_flagged": { "type": "array" },
+        "saturation_flagged": { "type": "array" },
+        "panel_judgment": {
+          "type": "string",
+          "enum": [
+            "all_active_no_retirement",
+            "rotation_required",
+            "lens_redefinition_required",
+            "panel_under_review"
+          ]
+        },
+        "convergence_proof": { "type": "object" },
+        "next_panel_composition_for_R94": {
+          "type": "object",
+          "required": ["keep", "under_review", "add", "retire"],
+          "additionalProperties": true,
+          "properties": {
+            "keep": { "type": "array", "items": { "type": "string" } },
+            "under_review": { "type": "array", "items": { "type": "string" } },
+            "add": { "type": "array", "items": { "type": "string" } },
+            "retire": { "type": "array", "items": { "type": "string" } },
+            "mandatory_R94_iter1_agenda": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}

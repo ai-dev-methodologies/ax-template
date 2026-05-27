@@ -1,9 +1,12 @@
 schema_version: 1
+schema_file: "specs/personas/persona-registry.schema.json"
 description: >
   Canonical persona definitions + per-wave performance history for the
   ax-template dogfood protocol. Introduced in R93 after the panel
   expanded from P1/P2 (original ops+security pair) to P1..P12 (with
   Junior/Senior/특급시니어 stratification × 20s/30s/40s/50s age bands).
+  Mechanical shape pinned by specs/personas/persona-registry.schema.json
+  (JSON Schema draft-07). R93 iter4 F18 + F21 closures.
 
 # ── File scope ─────────────────────────────────────────────────────────────
 # This file is NOT a dogfood iter ledger — it does not match the
