@@ -153,6 +153,22 @@ tiers:
       - name: "email-outbox"
         recipe_orphan: true
         active_recipes: []
+      # R93 (2026-05-27): multi-tenant promoted future_add → selectable.
+      # Backend-only R39 stub at templates/L4/multi-tenant/README.md
+      # reserves the on-disk slot for cross-cutting tenancy enforcement.
+      # Spec (specs/multi-tenant-l0.yaml) + blueprint
+      # (blueprints/multi-tenant-manifest.yaml) were already in the catalog;
+      # this commit makes the namespace discoverable at the L4 surface.
+      # Runtime primitives (TenantContext + Hibernate @Filter wiring) ship
+      # in a follow-up commit.
+      - name: "multi-tenant"
+        recipe_orphan: true
+        rationale: >
+          Backend-only runtime for tenancy enforcement (the OTHER L4s
+          declare `tenant_model: single` referencing this spec). Listed
+          as recipe_orphan until the b2b-admin recipe's `tenant_model:
+          multi` adopts it via override_allowed.
+        active_recipes: []
 
   future_add:
     description: >
@@ -167,8 +183,7 @@ tiers:
         intended_use: "Locale + currency + RTL policy enforcement."
       - name: "identity-verification"
         intended_use: "KYC / document verification pipeline."
-      - name: "multi-tenant"
-        intended_use: "Row-level / schema-per-tenant isolation runtime (separate from the policy spec at specs/multi-tenant-l0.yaml)."
+      # multi-tenant promoted to selectable in R93 (see selectable tier above).
       - name: "ratelimit"
         intended_use: "API rate-limiting policy + counter store."
       - name: "realtime-policy"

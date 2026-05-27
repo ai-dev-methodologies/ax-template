@@ -9103,6 +9103,7 @@ Reference: [RFC 2104 — HMAC: Keyed-Hashing for Message Authentication](https:/
 - **favorites-bookmarks** — applied by: (none)
 - **feature-flags** — applied by: api-gateway-relay, b2b-admin, booking, lms, marketplace, saas-subscription
 - **file-storage** — applied by: (none)
+- **multi-tenant** — applied by: (none)
 - **notification** — applied by: api-gateway-relay, booking, cms, community, crm, e-commerce, internal-it, lms, marketplace, saas-subscription
 - **payment** — applied by: booking, e-commerce, marketplace
 - **practices** — applied by: (none)
