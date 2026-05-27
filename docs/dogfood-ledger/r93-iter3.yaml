@@ -1,0 +1,36 @@
+# R93 — modular-catalog top-3 wave dogfood iter3 (10-persona terminator)
+#
+# Iter2 (b19e924 ledger + b8da020 closure) produced 1 real_bug closure
+# (F11) and 1 methodology_gap (F12). Iter3 has the same 10-persona panel
+# (P3..P12) re-review iter2 changes one final time.
+#
+# Result: 0 real_bug findings. The user-defined "개선안이 0개 일때까지
+# 반복" mandate is satisfied (개선안 = actionable real_bug closure; the 3
+# entries below are scope_deferral + methodology_gap, neither blocks
+# termination because they record future-conditional or meta-observations
+# rather than immediate fix requirements).
+#
+# Termination summary:
+#   iter1: 10 findings (5 real_bug closed + 5 scope_deferral)
+#   iter2:  2 findings (1 real_bug closed + 1 methodology_gap)
+#   iter3:  3 findings (0 real_bug + 2 scope_deferral + 1 methodology_gap)
+#
+# Total real_bug closures across the wave: 6 (F2/F3/F8/F9/F10/F11).
+# Total active scope_deferrals: 7 (F1/F4/F5/F6/F7/F13/F14) — each with
+# explicit expiry trigger per R85.
+# Total methodology gaps: 2 (F12/F15) — both surfacing the same governance
+# pattern (need R-number anchors for future-rule recommendations).
+iteration: 3
+findings:
+  - persona: P7
+    finding: "F13 (LOW): F11's inbound parsing contract (reject offsetless ISO 8601 with 400 INVALID_DATETIME) implicitly assumes JSON body deserialization via Jackson. The catalog's other inbound binding paths (@PathVariable LocalDate startDate, @RequestParam Instant cutoff) flow through Spring's ConversionService, NOT Jackson. The strict-offset requirement may NOT carry over to URL-bound dates unless explicitly configured. A typed-client engineer (P7 정도윤, 28, 6년차) flags this asymmetry. Expiry trigger: re-opens before any fork-receiver wires a date-typed @PathVariable or @RequestParam — at that point I18N-TIMEZONE-001 needs an additional paragraph covering the ConversionService path (org.springframework.format.datetime.standard.InstantFormatter)."
+    classification: scope_deferral
+    references_artifact_path: specs/i18n-policy-l0.yaml
+  - persona: P10
+    finding: "F14 (LOW): F11 closure makes the server STRICTER on date parsing than the prior implicit-coercion behavior. Existing fork-receivers whose clients send offsetless ISO 8601 (a common pattern in legacy Korean enterprise clients) will see 400 INVALID_DATETIME after the catalog change. A veteran (P10 신경수, 52, 22년차) wants a deprecation / migration note pinned. Expiry trigger: re-opens before any fork-receiver upgrades a deployed catalog from pre-R93 to post-R93 AND has clients in the wild sending offsetless ISO 8601 — at that point I18N-TIMEZONE-001 needs a 'Migration from implicit-UTC behavior' subsection covering: (a) detect in access log, (b) one-cycle deprecation window with warning header, (c) flip strict mode."
+    classification: scope_deferral
+    references_artifact_path: specs/i18n-policy-l0.yaml
+  - persona: P12
+    finding: "F15 (LOW, methodology): iter2 F12 recorded a methodology_gap recommending a future practices/rules/dogfood-ledger-iter-file-strategy.md rule pinning separate-file-per-iter as canonical. That recommendation was NOT given an R-number anchor (e.g. R94) so it risks becoming silent debt — exactly the failure mode F10 flagged for R93 wave itself. The governance lens (P12 한상미, 55, 28년차) makes the symmetric point: methodology_gap entries need their own follow-up R-anchor convention. No immediate closure; this is a meta-meta-observation appropriate to record on iter terminator and consume into the future rule's own design."
+    classification: methodology_gap
+    references_artifact_path: docs/dogfood-ledger/r93-iter2.yaml
