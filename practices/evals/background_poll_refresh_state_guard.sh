@@ -51,6 +51,7 @@ done
 cd "$REPO_ROOT" || { echo "cannot cd to $REPO_ROOT" >&2; exit 2; }
 
 L4_DIR="templates/L4"
+L2_DIR="templates/L2"
 [ ! -d "$L4_DIR" ] && exit 0
 
 # Pattern: start-of-line (after whitespace) `refetchInterval:`. The
@@ -134,7 +135,17 @@ while IFS= read -r -d '' file; do
     done <<EOF
 $matches
 EOF
-done < <(find "$L4_DIR" -type f \( -name "*.tsx" -o -name "*.ts" \) -print0 2>/dev/null)
+# R82-iter4 extension — combine L4 + L2 scan targets. notification-bell /
+# notification-list / future L2 polling blocks compose into L4 pages
+# and must satisfy the same R82 contract or the catalog's L4 audit
+# misses them (codex iter3 outside-scope finding). Build the combined
+# path list outside the process substitution so the heredoc above
+# parses cleanly.
+done < <(
+    { find "$L4_DIR" -type f \( -name "*.tsx" -o -name "*.ts" \) -print0 2>/dev/null;
+      [ -d "$L2_DIR" ] && find "$L2_DIR" -type f \( -name "*.tsx" -o -name "*.ts" \) -print0 2>/dev/null;
+      true; }
+)
 
 if [ "$violations" -gt 0 ]; then
     echo "VIOLATION: L4 frontend uses refetchInterval without visible dataUpdatedAt (R82 background-poll-must-show-refresh-state):" >&2

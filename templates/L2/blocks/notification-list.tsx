@@ -149,7 +149,10 @@ export default function NotificationList({
   const [filter, setFilter] = React.useState<NotificationStatusFilter>(defaultFilter)
   const PAGE_SIZE = 50  // Larger page for virtualized render
 
-  const { data, isLoading, isError } = useQuery({
+  // R82 — dataUpdatedAt destructured so the polled list exposes a
+  // freshness anchor for the operator + screen reader. Without it the
+  // section aria-busy below only signals "loading" not "freshness".
+  const { data, isLoading, isError, dataUpdatedAt } = useQuery({
     queryKey: ['notifications', filter, PAGE_SIZE],
     queryFn: () => fetchNotifications(filter, 0, PAGE_SIZE),
     staleTime: 15_000,
@@ -165,6 +168,13 @@ export default function NotificationList({
     mutationFn: dismissNotification,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   })
+
+  // R82 — combined in-flight signal: list-load OR any per-row mutation
+  // is in flight. AT users hear the section as busy during any state
+  // transition (list refetch + mark-read + dismiss).
+  const anyInFlight = isLoading
+    || markReadMutation.isPending
+    || dismissMutation.isPending
 
   const columns = React.useMemo(
     () =>
@@ -214,8 +224,21 @@ export default function NotificationList({
         }}
       />
 
+      {/* R82 — visible polling-cadence timestamp + aria-live polite
+          announcement of freshness. The section aria-busy below covers
+          list refetch AND in-flight mutations so AT users hear the
+          combined operation state. */}
+      <p
+        className="mt-2 text-xs text-muted-foreground"
+        aria-live="polite"
+      >
+        {dataUpdatedAt
+          ? `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`
+          : ''}
+      </p>
+
       {/* Virtualized notification list */}
-      <section aria-label="Notification list" aria-live="polite" aria-busy={isLoading}>
+      <section aria-label="Notification list" aria-live="polite" aria-busy={anyInFlight}>
         <VirtualizedTable<NotificationItemData>
           columns={columns}
           data={notifications}

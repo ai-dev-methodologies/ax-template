@@ -113,7 +113,10 @@ export default function NotificationBell({
   inboxHref = '/inbox',
   className,
 }: NotificationBellProps) {
-  const { data: unreadCount = 0 } = useQuery<number>({
+  // R82 — dataUpdatedAt destructured so the polled-bell badge has a
+  // freshness anchor that the screen reader live region below can
+  // surface alongside the count.
+  const { data: unreadCount = 0, dataUpdatedAt } = useQuery<number>({
     queryKey: ['notification-bell-unread'],
     queryFn: fetchUnreadCount,
     refetchInterval: pollIntervalMs > 0 ? pollIntervalMs : false,
@@ -150,7 +153,11 @@ export default function NotificationBell({
     >
       <BellIcon className="h-5 w-5" />
       <UnreadBadge count={unreadCount} />
-      {/* Screen reader live region for async count changes */}
+      {/* Screen reader live region for async count changes — R82
+          adoption: dataUpdatedAt joins the announcement so the AT user
+          hears the freshness anchor alongside the count, matching the
+          page-level R82 contract that polled badges expose freshness
+          to operators. */}
       <span
         role="status"
         aria-live="polite"
@@ -158,6 +165,7 @@ export default function NotificationBell({
         className="sr-only"
       >
         {unreadCount > 0 ? `${unreadCount} unread notifications` : 'No unread notifications'}
+        {dataUpdatedAt ? ` (updated ${new Date(dataUpdatedAt).toLocaleTimeString()})` : ''}
       </span>
     </a>
   )

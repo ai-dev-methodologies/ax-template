@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "7ab2c4c3e8304d1178fd07f7b4ca2c8869527ae70608ba637cf8ffa5a70601ca"
+  source_concat_sha256: "69d56e5f912397ad4b931944f27c23c28e4273c680be42c5cd779cb7cff0a313"
   rule_count: 112
   generated_by: "practices/generate_agents.sh"
 ---
@@ -937,7 +937,7 @@ const retryMutation = useMutation({ mutationFn: retryRow })
 </button>
 ```
 
-**Apply this rule to**: any page that uses `useQuery` with a numeric `refetchInterval` AND issues at least one `useMutation` triggered by a user-facing control on the same page. The R51 email-outbox admin page already satisfies the pattern; R55 favorites (no refetchInterval) is out of scope.
+**Apply this rule to**: any page OR composable L2 block that uses `useQuery` with a numeric `refetchInterval` AND issues at least one `useMutation` triggered by a user-facing control on the same surface. The R51 email-outbox admin page already satisfies the pattern; R55 favorites (no refetchInterval) is out of scope. R82-iter4 (2026-05-27) extended the mechanical guard to scan `templates/L2/blocks/*.tsx` for composable polling blocks — notification-bell (read-only) and notification-list (poll + mutate) both adopted under the iter4 extension.
 
 **When NOT to apply**: pages with `useQuery` but no `refetchInterval` (e.g. one-shot loads, manual-refetch surfaces). The freshness signal is the operator's own re-fetch, so a visible timestamp adds noise rather than safety.
 
