@@ -40,16 +40,56 @@ description: >
 #                      trigger pattern (R85) — verdicts decay if not
 #                      explicitly re-affirmed.
 #
+# ── signal_strength rubric (R93 iter4 F16 closure, P4 박지영 lens) ────────
+#   high     The finding pinned a contract, closed a real_bug that other
+#            personas missed, or surfaced a recursive/symmetric gap (e.g.
+#            P11 F11 catching inbound asymmetry of the F9 closure).
+#            Typical evidence: closure_commit_sha + concrete contract /
+#            spec text added to a yaml.
+#   medium   The finding closed a real_bug or recorded a deferral with
+#            a clear trigger, but the closure was an enrichment (doc /
+#            example / cross-ref) rather than a contract pin.
+#            Typical evidence: yaml note block addition; trigger
+#            condition cite-able to a known future event.
+#   low      The finding recorded a future-conditional that the catalog
+#            cannot yet act on, or a methodology observation without a
+#            blocking dependency. The lens still functioned; the finding
+#            simply had no immediate purchase.
+#            Typical evidence: deferral with diffuse trigger; methodology
+#            without code/spec mutation.
+#
 # ── Update protocol ────────────────────────────────────────────────────────
 #   On every iter terminator (the iter where 0 real_bug findings emerge),
-#   the wave owner:
-#     1. appends each persona's contributions to history[]
-#     2. recomputes verdict (active | under_review | retired)
-#     3. recomputes review_summary block for that wave
-#     4. commits this file alongside the iter terminator ledger
-#   No mechanical guard enforces this protocol yet — by deliberate choice
-#   per the R93 'no new catalog rules' completion directive. A future
-#   R-numbered wave MAY introduce a persona_registry_freshness_guard.sh
+#   the wave owner runs ONE of the two procedures below — adding a NEW
+#   persona is structurally different from updating an EXISTING persona's
+#   verdict (R93 iter4 F17 closure, P5 이상호 lens):
+#
+#   PROCEDURE A — adding a new persona (e.g., R94 introduces P13):
+#     1. APPEND a new entry to personas[] with id (next sequential), name,
+#        age, seniority, experience_years, background, lens, EMPTY history.
+#     2. Set verdict: active (new personas start active by default).
+#     3. Set verdict_reason: "newly seated for wave RNN — pending first
+#        finding".
+#     4. Set next_review_at: "R<NN+1> wave end".
+#     5. Do NOT touch other personas' entries in the same commit.
+#
+#   PROCEDURE B — updating an existing persona after a wave terminator:
+#     1. APPEND each finding produced by this persona during the wave's
+#        iters to the existing history[] block (one entry per finding).
+#     2. RECOMPUTE verdict based on the cumulative history pattern:
+#        - active           — produced ≥1 finding in last wave OR
+#                             lens still uniquely valuable
+#        - under_review     — produced 0 findings in last wave AND
+#                             lens-overlap-flagged in review_summary
+#        - retired          — produced 0 findings across last 2 waves
+#                             AND review_summary explicitly retires
+#     3. UPDATE verdict_reason + next_review_at.
+#     4. UPDATE the review_summary block for the wave just terminated.
+#     5. Commit alongside the iter terminator ledger.
+#
+#   No mechanical guard enforces these procedures yet — by deliberate
+#   choice per the R93 'no new catalog rules' completion directive. A
+#   future R-numbered wave MAY introduce persona_registry_freshness_guard.sh
 #   if the protocol is observed to silently drift.
 #
 # ── Maintenance ownership ─────────────────────────────────────────────────
