@@ -9,12 +9,15 @@
 # in the spec yaml (the guard hard-fails on new orphans). The entries
 # below are exempt from that check.
 #
-# Expiry trigger for THIS allow-list: re-opens before the catalog ships a
-# v2 minor release OR before the next domain spec yaml is regenerated from
-# rule metadata (whichever comes first). At that point every legacy entry
-# below should be seeded into its spec yaml with a proper requirement /
-# test_method / verification_type / notes block, mirroring the format of
-# PRACTICES-ARCH-001..003.
+# Expiry trigger for THIS allow-list: re-opens when allow-list drops
+# below 10 entries OR catalog v2 release, whichever first. At that
+# point every legacy entry below should be seeded into its spec yaml
+# with a proper requirement / test_method / verification_type / notes
+# block, mirroring the format of PRACTICES-ARCH-001..003.
+#
+# R89 phase 1 (2026-05-27) — 15 entries backfilled (ACTUATOR-001..003 +
+# API-001..003 + ASYNC-001..003 + BUILD-001..003 + CACHE-001..003).
+# Allow-list reduced from 52 → 37 active entries.
 #
 # Audit method: this file is regenerated from a yaml-load pass over every
 # specs/*.yaml. R88-iter2 fix: the initial allow-list was built from a
@@ -27,21 +30,6 @@
 # lines are ignored.
 
 specs/identity-verification-l0.yaml#L5
-specs/spring-practices-l0.yaml#PRACTICES-ACTUATOR-001
-specs/spring-practices-l0.yaml#PRACTICES-ACTUATOR-002
-specs/spring-practices-l0.yaml#PRACTICES-ACTUATOR-003
-specs/spring-practices-l0.yaml#PRACTICES-API-001
-specs/spring-practices-l0.yaml#PRACTICES-API-002
-specs/spring-practices-l0.yaml#PRACTICES-API-003
-specs/spring-practices-l0.yaml#PRACTICES-ASYNC-001
-specs/spring-practices-l0.yaml#PRACTICES-ASYNC-002
-specs/spring-practices-l0.yaml#PRACTICES-ASYNC-003
-specs/spring-practices-l0.yaml#PRACTICES-BUILD-001
-specs/spring-practices-l0.yaml#PRACTICES-BUILD-002
-specs/spring-practices-l0.yaml#PRACTICES-BUILD-003
-specs/spring-practices-l0.yaml#PRACTICES-CACHE-001
-specs/spring-practices-l0.yaml#PRACTICES-CACHE-002
-specs/spring-practices-l0.yaml#PRACTICES-CACHE-003
 specs/spring-practices-l0.yaml#PRACTICES-CONFIG-001
 specs/spring-practices-l0.yaml#PRACTICES-CONFIG-002
 specs/spring-practices-l0.yaml#PRACTICES-CONFIG-003

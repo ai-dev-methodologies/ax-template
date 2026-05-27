@@ -139,6 +139,126 @@ items:
     applicable: true
     notes: "recipe_spec_referential_integrity_guard.sh (SP35) and recipe_governance_guard.sh (SP37) both walk business_invariants and resolve each spec_ref/rule_ref. Failing fixture in practices/evals/fixtures/recipe-invariants-must-resolve/."
 
+  - id: "PRACTICES-ACTUATOR-001"
+    chapter: "Observability / Actuator"
+    requirement: "Expose /actuator/health/liveness and /actuator/health/readiness as separate Kubernetes probe endpoints. A single /health endpoint cannot distinguish a wedged pod from one still booting; the two probe shapes must be wired distinctly so the orchestrator can react correctly (restart-on-liveness-fail, hold-traffic-on-readiness-fail). Rule body: practices/rules/actuator-kubernetes-probes.md."
+    test_method: "practices_ACTUATOR_001_livenessReadinessProbesExposed"
+    verification_type: "review"
+    applicable: true
+    notes: "Review against application.yml: management.endpoint.health.probes.enabled=true + management.endpoint.health.group.liveness/readiness explicitly defined. Anchored to Spring Boot Reference §Actuator — Kubernetes Probes."
+
+  - id: "PRACTICES-ACTUATOR-002"
+    chapter: "Observability / Actuator"
+    requirement: "management.endpoints.web.exposure.include MUST be an explicit allow-list, never '*' or any wildcard. Wildcard exposure ships env / beans / heapdump endpoints to production where they leak secrets, config drift, and JVM internals. Rule body: practices/rules/actuator-restrict-exposure.md."
+    test_method: "practices_ACTUATOR_002_actuatorExposureIsExplicitAllowlist"
+    verification_type: "review"
+    applicable: true
+    notes: "Review application.yml: management.endpoints.web.exposure.include is a comma-separated allow-list (typically 'health,info,prometheus'). Anchored to Spring Boot Reference §Actuator — Endpoint Exposure."
+
+  - id: "PRACTICES-ACTUATOR-003"
+    chapter: "Observability / Actuator"
+    requirement: "Enable Spring Boot buildInfo() in the Gradle plugin block and surface the resulting properties via /actuator/info. Operators need a machine-readable answer to 'what version is running' for incident triage and rollback automation. Rule body: practices/rules/actuator-build-info.md."
+    test_method: "practices_ACTUATOR_003_actuatorInfoSurfacesBuildInfo"
+    verification_type: "review"
+    applicable: true
+    notes: "Review build.gradle.kts: springBoot { buildInfo() } block present. Verify GET /actuator/info returns build.version + build.time. Anchored to Spring Boot Reference §Info Endpoint."
+
+  - id: "PRACTICES-API-001"
+    chapter: "API / Pagination"
+    requirement: "List endpoints MUST accept a Pageable parameter and clamp the page size at a documented ceiling (default 100). Unbounded list endpoints are a recurring latency + memory hazard at scale and a denial-of-service vector via large page-size requests. Rule body: practices/rules/api-pagination-pageable.md."
+    test_method: "practices_API_001_listEndpointsClampPageable"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "Integration test asserts: (a) Pageable param accepted on list endpoints, (b) size > 100 is clamped to 100, (c) response carries Page metadata (totalElements / totalPages). Anchored to Spring Data — Pageable + R60 email-outbox F3 closure (Page metadata at controller boundary)."
+
+  - id: "PRACTICES-API-002"
+    chapter: "API / Response Boundaries"
+    requirement: "Controllers MUST return DTO records, never JPA entity classes directly. Returning entities leaks association graphs, surfaces lazy fields at unpredictable times, and breaks the API contract on every entity edit (a column rename ripples to every client). Rule body: practices/rules/api-no-entity-leak.md."
+    test_method: "practices_API_002_controllersReturnDtoNotEntity"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every @RestController method return type. No @Entity class appears as a return type or as a generic parameter (List<Entity>, ResponseEntity<Entity>, Page<Entity>). DTO records must be a separate package or inner class. Anchored to Spring MVC Reference + OWASP API3:2023 — Broken Object Property Level Authorization."
+
+  - id: "PRACTICES-API-003"
+    chapter: "API / Versioning"
+    requirement: "Every public API URI MUST include a /v{N}/ segment (e.g., /api/v1/users). URI versioning is cache-friendly, proxy-friendly, and the most-deployed evolution strategy; header versioning and query-param versioning have well-known caching and tooling drawbacks. Rule body: practices/rules/api-versioning-uri-prefix.md."
+    test_method: "practices_API_003_publicApiUriHasVersionPrefix"
+    verification_type: "review"
+    applicable: true
+    notes: "Review @RequestMapping / @GetMapping / @PostMapping path values. Every public path matches ^/api/v[0-9]+/. Internal /actuator/** and /api/admin/** may be exempt with documented rationale. Anchored to Microsoft API Guidelines + Stripe API design literature."
+
+  - id: "PRACTICES-ASYNC-001"
+    chapter: "Async / Concurrency"
+    requirement: "On JDK 21+, blocking-IO workloads (HTTP client calls, DB calls, file IO) MUST be scheduled on a virtual-thread-per-task executor (Executors.newVirtualThreadPerTaskExecutor()), not a fixed-size platform-thread pool. Virtual threads remove the headcount-limited platform-thread bottleneck. Rule body: practices/rules/async-virtual-thread-executor.md."
+    test_method: "practices_ASYNC_001_blockingIoUsesVirtualThreadExecutor"
+    verification_type: "review"
+    applicable: true
+    notes: "Review @Configuration classes wiring TaskExecutor / @Bean Executor / WebClient.Builder.clientConnector for virtual-thread executor usage. Anchored to JEP 444 — Virtual Threads + Spring 6.1 Reference §Virtual Threads."
+
+  - id: "PRACTICES-ASYNC-002"
+    chapter: "Async / Concurrency"
+    requirement: "@Async methods MUST return CompletableFuture<T> (or void only when the caller has NO need to observe completion / failure). void @Async swallows exceptions inside the executor and removes the caller's ability to compose, await, or surface failure. Rule body: practices/rules/async-completablefuture-return-type.md."
+    test_method: "practices_ASYNC_002_asyncMethodsReturnCompletableFuture"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every method annotated @Async. Return type is CompletableFuture<T> for any caller-observable result; void only for fire-and-forget with explicit comment justifying the choice. Anchored to Spring Framework Reference §Asynchronous Execution — Exception Management."
+
+  - id: "PRACTICES-ASYNC-003"
+    chapter: "Async / Scheduling"
+    requirement: "Use @Scheduled(fixedDelay=...) for any task whose execution time is variable or proportional to workload. Reserve @Scheduled(fixedRate=...) for instant heartbeat tasks (publish-only, no I/O). fixedRate on slow tasks piles invocations and exhausts the scheduler pool. Rule body: practices/rules/async-scheduled-fixed-delay-vs-fixed-rate.md."
+    test_method: "practices_ASYNC_003_scheduledUsesFixedDelayForVariableTasks"
+    verification_type: "review"
+    applicable: true
+    notes: "Review @Scheduled annotations: tasks that include any DB / HTTP / file I/O use fixedDelay; only pure-CPU instant publishers use fixedRate, with comment rationale. Anchored to Spring Framework Reference §Scheduling — fixedDelay vs fixedRate."
+
+  - id: "PRACTICES-BUILD-001"
+    chapter: "Build / Dependency Management"
+    requirement: "Apply the Spring Boot dependency-management plugin (io.spring.dependency-management) in build.gradle.kts to pin every starter / framework / driver version to the Spring Boot BOM. Hand-picked starter versions drift and produce class-version mismatches at runtime. Rule body: practices/rules/build-spring-boot-bom.md."
+    test_method: "practices_BUILD_001_springBootDependencyManagementPluginApplied"
+    verification_type: "review"
+    applicable: true
+    notes: "Review build.gradle.kts plugins block: id 'io.spring.dependency-management' version <version> present. No starter or core Spring dependency carries an explicit version() in the dependencies block. Anchored to Spring Boot Reference §Dependency Management."
+
+  - id: "PRACTICES-BUILD-002"
+    chapter: "Build / Dependency Management"
+    requirement: "Production builds MUST NOT depend on -SNAPSHOT artifacts. SNAPSHOT versions mutate between resolutions; reproducibility, bisectability, and rollback all break. Local dev SNAPSHOT use is acceptable in a separate Gradle property toggle. Rule body: practices/rules/build-no-snapshot-dependencies.md."
+    test_method: "practices_BUILD_002_noSnapshotDependenciesInProduction"
+    verification_type: "review"
+    applicable: true
+    notes: "Review build.gradle.kts + every Gradle catalog: no version literal ending in '-SNAPSHOT' is in the production resolution path. CI gate (gradle dependencies) confirms. Anchored to Gradle Userguide §Maven Versions + reproducible-builds.org."
+
+  - id: "PRACTICES-BUILD-003"
+    chapter: "Build / Toolchain"
+    requirement: "Declare an explicit Java toolchain (java { toolchain { languageVersion = JavaLanguageVersion.of(N) } }) in build.gradle.kts. Without it the build silently follows the developer's $PATH and produces class-file-version skew between CI and local. Rule body: practices/rules/build-java-toolchain-explicit.md."
+    test_method: "practices_BUILD_003_javaToolchainExplicitlyDeclared"
+    verification_type: "review"
+    applicable: true
+    notes: "Review build.gradle.kts java block: toolchain { languageVersion = JavaLanguageVersion.of(21) } (or current target). Anchored to Gradle Userguide §Toolchains for JVM Projects."
+
+  - id: "PRACTICES-CACHE-001"
+    chapter: "Caching"
+    requirement: "@Cacheable annotations MUST declare value (cache name), key (SpEL key expression), and sync=true explicitly. Defaulted key on multi-arg methods is unstable (parameter-order-dependent hashing); without sync=true a cold key suffers N-way stampede on bursts. Rule body: practices/rules/cache-explicit-name-key-sync.md."
+    test_method: "practices_CACHE_001_cacheableDeclaresValueKeySync"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every @Cacheable annotation: value, key, sync attributes all present. Stampede regression test exercises N-concurrent calls on a cold key. Anchored to Spring Framework Reference §Cache Abstraction."
+
+  - id: "PRACTICES-CACHE-002"
+    chapter: "Caching"
+    requirement: "Caffeine cache configuration MUST declare explicit expireAfterWrite (or expireAfterAccess) and maximumSize. Without expireAfterWrite, sparse caches keep entries forever — stale data leaks across deploys and secret rotations; without maximumSize, memory pressure builds unbounded. Rule body: practices/rules/cache-caffeine-expiration.md."
+    test_method: "practices_CACHE_002_caffeineHasExpirationAndMaxSize"
+    verification_type: "review"
+    applicable: true
+    notes: "Review CaffeineCacheManager configuration or CacheBuilder usage: .expireAfterWrite(Duration) + .maximumSize(N) both explicit. Anchored to Caffeine Wiki §Eviction + Spring Boot Reference §Caffeine Cache."
+
+  - id: "PRACTICES-CACHE-003"
+    chapter: "Caching"
+    requirement: "@Cacheable / @CachePut / @CacheEvict annotations are FORBIDDEN on @RestController classes and their methods. Controller-layer caching captures request-derived state (Authentication principal, locale, request headers) into the cache key implicitly, causing cross-user response leakage. Move caching to the @Service layer below. Rule body: practices/rules/cache-not-on-controllers.md."
+    test_method: "practices_CACHE_003_cachingNotAnnotatedOnControllers"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every @RestController class: no @Cacheable, @CachePut, @CacheEvict on the class or any of its methods. Anchored to OWASP API1:2023 BOLA + Spring Framework Reference §Cache Abstraction — Best Practices."
+
   - id: "PRACTICES-DOGFOOD-LEDGER-001"
     chapter: "Architecture / Dogfood Ledger Discipline"
     requirement: "Every docs/dogfood-ledger/*.yaml entry whose classification is scope_deferral MUST contain an explicit expiry-trigger marker in its finding text (one of: 'expiry trigger:', 're-opens when/before', 'reopens when/before', 'defer until', 'deferred until', 'expires on', 'sunsets on', 'before the fork-receiver', 'before the first', 'before the cap'). A deferral without a recorded re-open condition becomes inadvertent permanent debt that the catalog cannot self-audit. Rule body: practices/rules/dogfood-finding-must-have-expiry-trigger.md."
