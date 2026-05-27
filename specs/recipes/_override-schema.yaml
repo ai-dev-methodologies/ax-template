@@ -56,6 +56,15 @@ $defs:
     # Enum is kept in lockstep with specs/l4-domain-classification.yaml
     # (SELECTABLE + FUTURE_ADD tiers); the 35th hard guard
     # practices/evals/l4_domain_enum_sync_guard.sh enforces I1..I6 coherence.
+    #
+    # Additive-change contract (R93 iter1 F8 closure, P10 신경수 backward-compat lens):
+    # Enum extensions (e.g. R93 added bulk-import) are STRICTLY ADDITIVE. A
+    # recipe yaml that was valid against the prior enum remains valid against
+    # the extended enum because every prior value is still in the new set.
+    # Fork-receivers deploying against a refreshed catalog need only refresh
+    # their JSON Schema validator cache; no recipe yaml rewrite is required.
+    # Removing or renaming an enum value is a BREAKING change and MUST happen
+    # in a major version bump of this schema, never a point release.
     enum:
       - activity-feed
       - api-key

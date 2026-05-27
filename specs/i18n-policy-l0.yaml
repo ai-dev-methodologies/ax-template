@@ -10,6 +10,30 @@ introduced_at: "R93 phase β — seeded as part of the modular-catalog top-3 wav
 # defines the policy contract; the future templates/L4/i18n-policy/ vertical
 # will define the canonical Spring wiring.
 
+# ── Priority order for fork-receivers (R93 iter1 F2 closure) ─────────────────
+# Adopt items in this order. Earlier items are foundational for the later
+# ones — skipping LOCALE-NEG-001 makes every other item brittle because
+# request Locale resolution is non-deterministic.
+#
+#   1. I18N-LOCALE-NEG-001        — fix non-deterministic locale resolution
+#   2. I18N-MESSAGE-SOURCE-001    — pull user-facing strings out of code
+#   3. I18N-MESSAGE-SOURCE-002    — survive plural/gender forms
+#   4. I18N-TIMEZONE-001          — fix silent offset loss before scale
+#   5. I18N-FORMATTING-001        — locale-aware numbers / currency / dates
+#   6. I18N-DEFAULT-DECL-001      — declare the contract in RECIPE.md
+#
+# Canonical RECIPE.md frontmatter example (I18N-DEFAULT-DECL-001):
+#
+#   ---
+#   recipe: saas-subscription
+#   tenant_model: multi
+#   default_locale: ko-KR
+#   supported_locales: [ko-KR, en-US]
+#   ---
+#
+# Fork-receivers targeting Korean enterprise default (KO+EN) MAY copy the
+# block above verbatim and add other locales (ja-JP, zh-CN) over time.
+
 items:
   # ── LOCALE-NEG family ─────────────────────────────────────────────────────
   - id: "I18N-LOCALE-NEG-001"
@@ -60,6 +84,13 @@ items:
       America/New_York context, asserts the wall-clock display differs by
       14 hours but the underlying Instant is identical. Anchored to JEP 150
       (Date and Time API) + ISO 8601.
+      R93 iter1 F9 (P11 황태완 standards lens): JSON serialization of UTC
+      Instant MUST use the ISO 8601 Z form (`2026-05-27T03:42:18Z`), NOT
+      `+00:00`. The `+HH:MM` form is reserved for explicit non-UTC display
+      values where the offset itself is meaningful (e.g. retail receipt
+      with local store time). Jackson default (`WRITE_DATES_AS_TIMESTAMPS=false`
+      + JavaTimeModule) emits Z-form; recipes that override the date module
+      MUST preserve this distinction.
 
   # ── FORMATTING family ────────────────────────────────────────────────────
   - id: "I18N-FORMATTING-001"

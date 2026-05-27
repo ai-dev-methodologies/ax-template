@@ -185,7 +185,29 @@ tiers:
         intended_use: "KYC / document verification pipeline."
       # multi-tenant promoted to selectable in R93 (see selectable tier above).
       - name: "bulk-import"
-        intended_use: "Bulk CSV/XLSX import with staged validation + partial commit + per-row error report (the bilateral partner of the existing report-export L4)."
+        intended_use: >
+          Bulk CSV/XLSX import with staged validation + partial commit +
+          per-row error report (the bilateral partner of the existing
+          report-export L4).
+
+          Fork-receiver first-commit playbook (R93 iter1 F3 closure,
+          P5 이상호 step-by-step lens):
+            1. Author specs/bulk-import-l0.yaml (mirror specs/multi-tenant-l0.yaml
+               shape: version / scope / stack / standard / items[]). Items
+               minimum: STAGE-VALIDATE-001 (staged validation before commit),
+               PARTIAL-COMMIT-001 (idempotent restart), ERROR-REPORT-001
+               (per-row error CSV/JSON), FORMAT-001 (CSV RFC 4180 +
+               XLSX Apache POI SXSSF streaming — symmetric with report-export).
+            2. Create templates/L4/bulk-import/README.md (R39 stub:
+               `**Tenant model**: single` declaration line, citation to
+               specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001).
+            3. Promote here: move bulk-import entry from future_add → selectable
+               with `recipe_orphan: true`.
+            4. Register in practices/evals/trio_integrity_allowlist.yaml as
+               `backend_only` (or `full_trio` if a Next.js admin page lands
+               in the same commit).
+          Each step has guard implications — re-run
+          `bash practices/evals/run-all-guards.sh` after each.
       - name: "ratelimit"
         intended_use: "API rate-limiting policy + counter store."
       - name: "realtime-policy"
