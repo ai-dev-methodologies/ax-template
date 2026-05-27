@@ -21,8 +21,16 @@
 #
 # R89 phase 2 (2026-05-27) — 15 more entries backfilled (CONFIG-001..003 +
 # HTTP-001..003 + LANG-001..003 + MESSAGING-001..003 + MIGRATION-001..003).
-# Allow-list reduced from 37 → 22 active entries. Next R89 cadence should
-# pick up PERS-002..004, QUALITY-001..003, SECURITY-001..002 in phase 3.
+# Allow-list reduced from 37 → 22 active entries.
+#
+# R89 phase 3 (2026-05-27) — 15 more entries backfilled (PERS-002..004 +
+# QUALITY-001..003 + SECURITY-001..003 + TEST-002..004 + TX-002..004).
+# Allow-list reduced from 22 → 7 active entries. This CROSSES the
+# meta-catalog M1 expiry-trigger threshold ("below 10 entries"); the
+# accompanying ledger commit reclassifies M1 from scope_deferral to
+# real_bug with closure pointing at this commit. Remaining 7:
+# identity-verification#L5 (chapter heading, separate handling) +
+# VAL-002..004 + WEB-001..003 (next R89 cadence's natural slice).
 #
 # R92 (2026-05-27) — this allow-list's debt is now formally tracked at
 # docs/dogfood-ledger/meta-catalog-iter1.yaml (finding M1) as a
@@ -41,21 +49,6 @@
 # lines are ignored.
 
 specs/identity-verification-l0.yaml#L5
-specs/spring-practices-l0.yaml#PRACTICES-PERS-002
-specs/spring-practices-l0.yaml#PRACTICES-PERS-003
-specs/spring-practices-l0.yaml#PRACTICES-PERS-004
-specs/spring-practices-l0.yaml#PRACTICES-QUALITY-001
-specs/spring-practices-l0.yaml#PRACTICES-QUALITY-002
-specs/spring-practices-l0.yaml#PRACTICES-QUALITY-003
-specs/spring-practices-l0.yaml#PRACTICES-SECURITY-001
-specs/spring-practices-l0.yaml#PRACTICES-SECURITY-002
-specs/spring-practices-l0.yaml#PRACTICES-SECURITY-003
-specs/spring-practices-l0.yaml#PRACTICES-TEST-002
-specs/spring-practices-l0.yaml#PRACTICES-TEST-003
-specs/spring-practices-l0.yaml#PRACTICES-TEST-004
-specs/spring-practices-l0.yaml#PRACTICES-TX-002
-specs/spring-practices-l0.yaml#PRACTICES-TX-003
-specs/spring-practices-l0.yaml#PRACTICES-TX-004
 specs/spring-practices-l0.yaml#PRACTICES-VAL-002
 specs/spring-practices-l0.yaml#PRACTICES-VAL-003
 specs/spring-practices-l0.yaml#PRACTICES-VAL-004

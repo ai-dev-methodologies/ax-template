@@ -379,6 +379,128 @@ items:
     applicable: true
     notes: "Review every application*.yml — spring.flyway.baseline-on-migrate is either absent or explicitly false. Anchored to Flyway Reference §Baseline Migrations."
 
+  # ── R89 phase 3 backfill — 15 more orphan spec_refs declared (allow-list 22 → 7) ──
+
+  - id: "PRACTICES-PERS-002"
+    chapter: "Persistence / JPA"
+    requirement: "Prefer @EntityGraph(attributePaths = {...}) over JPQL JOIN FETCH for declarative fetch shape at the repository surface. Same single round-trip remedy for N+1, but keeps JPQL focused on filtering and declares the fetch contract at the method signature. Rule body: practices/rules/persistence-entity-graph.md."
+    test_method: "practices_PERS_002_entityGraphPreventsLazyAccessAfterClose"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "Anchored to Spring Data JPA Reference — Configuring Fetch- and LoadGraphs."
+
+  - id: "PRACTICES-PERS-003"
+    chapter: "Persistence / Bulk Inserts"
+    requirement: "Hibernate batch_size + order_inserts MUST be configured for any persist path that writes more than a handful of rows. Without batching, every persist becomes its own JDBC round-trip — bulk write latency degrades 10× or worse. Rule body: practices/rules/persistence-batch-inserts.md."
+    test_method: "practices_PERS_003_batchInsertReducesRoundTrips"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "Integration test counts Hibernate Statistics.getPrepareStatementCount() before/after enabling batching, asserts >=10x reduction on 50-row insert. Anchored to Hibernate User Guide §Batching."
+
+  - id: "PRACTICES-PERS-004"
+    chapter: "Persistence / Concurrency"
+    requirement: "Any @Entity updated under concurrent traffic MUST carry @Version. Without optimistic locking, concurrent updates silently lose one writer (last-writer-wins) — the catalog refuses to leave that race condition implicit. Rule body: practices/rules/persistence-optimistic-locking.md."
+    test_method: "practices_PERS_004_versionFieldRejectsStaleUpdate"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "Integration test simulates two concurrent updates with the same version and asserts the second one throws OptimisticLockException. Anchored to JPA Specification §Optimistic Locking."
+
+  - id: "PRACTICES-QUALITY-001"
+    chapter: "Quality / API Shape"
+    requirement: "Optional<T> is a return type only. NEVER use Optional as a field type, a method parameter, or a collection element — it adds allocation cost, defeats serialization, and rarely communicates anything the absence of a value would not. Rule body: practices/rules/quality-optional-only-as-return.md."
+    test_method: "practices_QUALITY_001_optionalNotUsedAsFieldOrParameter"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "ArchUnit rule scans @Entity / record / DTO / @RequestMapping classes for Optional fields/parameters. Anchored to JEP 269 + Effective Java 3rd ed. Item 55."
+
+  - id: "PRACTICES-QUALITY-002"
+    chapter: "Quality / Class Shape"
+    requirement: "Utility classes (static-method-only containers) MUST be final and carry a private no-arg constructor. Without final the class is subclassable (instance state creeps in); without private constructor it is instantiable (silently produces a no-op object). Rule body: practices/rules/quality-utility-class-shape.md."
+    test_method: "practices_QUALITY_002_utilityClassIsFinalWithPrivateCtor"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "ArchUnit rule asserts every class whose methods are all static is final and has only a private no-arg ctor. Anchored to Effective Java 3rd ed. Item 4."
+
+  - id: "PRACTICES-QUALITY-003"
+    chapter: "Quality / Logging"
+    requirement: "Production code MUST NOT write to System.out or System.err. Standard streams bypass the logger — no MDC, no structured fields, no appender routing — so observability tooling never sees the message. Rule body: practices/rules/quality-no-system-streams.md."
+    test_method: "practices_QUALITY_003_noSystemOutOrSystemErrInProduction"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "ArchUnit scan of src/main/java forbids any reference to System.out / System.err. Anchored to SLF4J User Manual §Why slf4j."
+
+  - id: "PRACTICES-SECURITY-001"
+    chapter: "Security / Session"
+    requirement: "Spring Security MUST be configured with SessionCreationPolicy.STATELESS for any JWT / bearer-token API. Without STATELESS a successful authentication issues a JSESSIONID cookie that the API never agreed to manage, leaking session state into a token-only contract. Rule body: practices/rules/security-stateless-session-policy.md."
+    test_method: "practices_SECURITY_001_statelessSessionPolicyConfigured"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "Integration test asserts a successful /api/auth/login response carries no Set-Cookie: JSESSIONID. Anchored to Spring Security Reference §SessionCreationPolicy."
+
+  - id: "PRACTICES-SECURITY-002"
+    chapter: "Security / CSRF"
+    requirement: "csrf().disable() MUST be applied per-matcher (bearer-token paths only), never globally. A blanket disable weakens every browser-driven endpoint, including paths added in the future without a CSRF audit. Rule body: practices/rules/security-csrf-scoped-disable.md."
+    test_method: "practices_SECURITY_002_csrfScopedToBearerPathsOnly"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "Inspect SecurityFilterChain bean declaration — csrf disable applied only to /api/** paths, not to .anyRequest(). Anchored to Spring Security Reference §CSRF."
+
+  - id: "PRACTICES-SECURITY-003"
+    chapter: "Security / Response Headers"
+    requirement: "Spring Security's default response headers chain MUST remain enabled. Disabling it removes X-Content-Type-Options + X-Frame-Options + HSTS + Cache-Control defaults, re-opening MIME sniffing, clickjacking, and cleartext-fallback attacks. Rule body: practices/rules/security-default-headers.md."
+    test_method: "practices_SECURITY_003_defaultHeadersRemainEnabled"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "Integration test asserts response carries X-Content-Type-Options + X-Frame-Options + Strict-Transport-Security on the HTTPS profile. Anchored to Spring Security Reference §Default Headers."
+
+  - id: "PRACTICES-TEST-002"
+    chapter: "Testing / ArchUnit"
+    requirement: "Controller -> service -> repository layering MUST be enforced with ArchUnit. Compile-time cannot catch an upward layer reference (repository calling service); the ArchUnit @ArchTest rule fails fast at build time. Rule body: practices/rules/testing-archunit-layer-boundary.md."
+    test_method: "practices_TEST_002_layerBoundaryEnforced"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "ArchUnit rule asserts no class in repository package depends on service package, and no service class depends on controller package. Anchored to ArchUnit User Guide §Layered Architecture."
+
+  - id: "PRACTICES-TEST-003"
+    chapter: "Testing / ArchUnit"
+    requirement: "Cyclic package dependencies MUST be forbidden with ArchUnit's slicing rule. Cycles block isolated testing of any module in the cycle — every test must boot the whole cluster. Rule body: practices/rules/testing-archunit-no-cyclic-packages.md."
+    test_method: "practices_TEST_003_noCyclicPackageDependencies"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "ArchUnit @SliceRule scans all com.ax.template.* packages and asserts no cycles. Anchored to ArchUnit User Guide §Slices."
+
+  - id: "PRACTICES-TEST-004"
+    chapter: "Testing / ArchUnit"
+    requirement: "Classes whose name ends in Repository MUST extend Spring Data's JpaRepository (or a documented interface that does). Hand-rolled 'repository' services bypass the data-access layer's guarantees — auditing the data layer requires it to actually be the data layer. Rule body: practices/rules/testing-archunit-repository-shape.md."
+    test_method: "practices_TEST_004_repositoryShapeExtendsJpaRepository"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "ArchUnit rule asserts every class named *Repository implements org.springframework.data.jpa.repository.JpaRepository or org.springframework.data.repository.Repository. Anchored to Spring Data JPA Reference §Defining Repository Interfaces."
+
+  - id: "PRACTICES-TX-002"
+    chapter: "Transaction Management / Read Path"
+    requirement: "Read-only queries MUST be annotated @Transactional(readOnly = true). It skips dirty-checking on session flush and enables read-replica routing on configurations that support it — a silent perf win when set, silent overhead when forgotten. Rule body: practices/rules/transaction-readonly-queries.md."
+    test_method: "practices_TX_002_readOnlyTransactionSkipsDirtyCheck"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "Integration test asserts Hibernate FlushMode.MANUAL on a @Transactional(readOnly = true) method. Anchored to Spring Framework Reference §Transaction Synchronization with Read-Only."
+
+  - id: "PRACTICES-TX-003"
+    chapter: "Transaction Management / Rollback Policy"
+    requirement: "Methods that throw a checked exception MUST declare @Transactional(rollbackFor = ...). Spring's default rollback policy rolls back on RuntimeException only — a checked exception thrown from a write path leaves the half-done writes committed. Rule body: practices/rules/transaction-rollback-on-checked.md."
+    test_method: "practices_TX_003_checkedExceptionRollbacksWhenDeclared"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "Integration test asserts a method declared 'throws IOException' with rollbackFor=IOException.class actually rolls back vs the default policy which commits. Anchored to Spring Framework Reference §Transaction Rollback Rules."
+
+  - id: "PRACTICES-TX-004"
+    chapter: "Transaction Management / Propagation"
+    requirement: "Audit log / side-effect writes that MUST persist independently of the caller MUST use @Transactional(propagation = Propagation.REQUIRES_NEW). Otherwise a rollback of the caller's outer transaction also rolls back the audit row — the audit trail disappears precisely when it is most needed. Rule body: practices/rules/transaction-propagation-requires-new.md."
+    test_method: "practices_TX_004_requiresNewSurvivesOuterRollback"
+    verification_type: "integration_test"
+    applicable: true
+    notes: "Integration test asserts an audit row written inside REQUIRES_NEW remains after the outer transaction throws and rolls back. Anchored to Spring Framework Reference §Transaction Propagation."
+
   - id: "PRACTICES-DOGFOOD-LEDGER-001"
     chapter: "Architecture / Dogfood Ledger Discipline"
     requirement: "Every docs/dogfood-ledger/*.yaml entry whose classification is scope_deferral MUST contain an explicit expiry-trigger marker in its finding text (one of: 'expiry trigger:', 're-opens when/before', 'reopens when/before', 'defer until', 'deferred until', 'expires on', 'sunsets on', 'before the fork-receiver', 'before the first', 'before the cap'). A deferral without a recorded re-open condition becomes inadvertent permanent debt that the catalog cannot self-audit. Rule body: practices/rules/dogfood-finding-must-have-expiry-trigger.md."
