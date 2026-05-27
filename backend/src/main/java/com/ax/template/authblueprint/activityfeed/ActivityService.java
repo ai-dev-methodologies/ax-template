@@ -49,6 +49,17 @@ public class ActivityService {
         this.clock = clock;
     }
 
+    /**
+     * R79 iter1 F4 (HIGH) — {@code request.metadata()} is JSON-serialised
+     * and stored VERBATIM on the row. See {@link ActivityEvent#metadataJson}
+     * for the full PII disclosure contract; fork-receivers wiring
+     * downstream audit / analytics / cross-tenant features MUST treat the
+     * metadata as a PII surface and apply privacy policy at the publish
+     * boundary (sanitise inputs from the caller) OR at every downstream
+     * consumer (mask before fan-out). The audience model fans the
+     * verbatim metadata out to up-to-100 audience members per
+     * PublishActivityRequest.
+     */
     @Transactional
     public PublishResult publish(String actorUserId, PublishActivityRequest request) {
         // ACT-PUBLISH-003 — idempotent via (actor, idempotencyKey).

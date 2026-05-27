@@ -64,6 +64,33 @@ public class ActivityEvent {
     @Column(name = "subject_id", updatable = false, length = 255)
     private String subjectId;
 
+    /**
+     * R79 iter1 F4 (HIGH) — JSON-serialised publisher-supplied metadata
+     * stored VERBATIM with no PII scrubbing. The audience model amplifies
+     * the PII risk above the comparable Favorite.note (R78 F4) precedent:
+     *
+     * <ul>
+     *   <li>Visibility fan-out — every member of {@code audienceUserIds}
+     *       (up to {@code @Size(max = 100)} per PublishActivityRequest)
+     *       reads the metadata via {@link ActivityDtos.ActivityEventResponse}.</li>
+     *   <li>Backups / replicas — metadata travels with the row across
+     *       backup chains and analytic extracts.</li>
+     *   <li>Future audit-log emission — fork-receivers wiring R61 / R67
+     *       audit logs on activity-feed MUST treat metadata as a PII
+     *       surface and route only through
+     *       {@link com.ax.template.authblueprint.common.AuditPiiHelper#piiHash}.</li>
+     *   <li>Cross-tenant features — if a fork-receiver opens an
+     *       activity-feed across tenants, metadata becomes a phishing /
+     *       data-disclosure surface.</li>
+     * </ul>
+     *
+     * <p>A publisher can paste 주민등록번호 / email / JWT / Bearer tokens
+     * here; the catalog deliberately does NOT redact at storage because
+     * that would break the legitimate structured-event UX. Compliance
+     * posture (개인정보보호법 §24) is delegated to the fork-receiver's
+     * privacy program — apply policy at the publish boundary OR at every
+     * downstream consumer.
+     */
     @Column(name = "metadata_json", updatable = false, length = 4096)
     private String metadataJson;
 
