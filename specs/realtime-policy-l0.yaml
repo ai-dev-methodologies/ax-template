@@ -1,0 +1,108 @@
+version: "0.1.0"
+scope: "realtime-policy-l0 — WebSocket / SSE channel authentication, tenant-scoped fan-out, back-pressure policy, and reconnect-resume contract for fork-receivers that need server-pushed realtime UX (notification dashboards, activity-feed live tail, multi-user collaboration)"
+stack: "Spring WebSocket (STOMP optional) / Spring Reactive WebFlux SSE + Project Reactor backpressure / Jackson JSON over WS frames"
+standard: "RFC 6455 (WebSocket Protocol) + W3C Server-Sent Events + IETF WebSocket Subprotocol Registry + RFC 6750 (Bearer Token usage — same auth as HTTP, applied to WS upgrade handshake)"
+introduced_at: "R94 phase α — seeded as the first modular-catalog addition of R94 wave (10-persona P3-P12 panel from R93 to dogfood-review this spec). future_add tier until templates/L4/realtime-policy/ disk slot lands. Fork-receivers wiring notification / activity-feed live-tail / multi-user collaboration compose against these items even before the L4 stub exists."
+
+# realtime-policy is OPT-IN. ax-template's reference workloads ship with
+# polling (notification + activity-feed use TanStack Query refetchInterval
+# per R82 background-poll rule); recipes that need server-pushed
+# realtime UX MUST adopt items below before production. This spec
+# defines the policy contract; the future templates/L4/realtime-policy/
+# vertical will define the canonical Spring WebSocket / SSE wiring.
+#
+# Composition note: RT-CHANNEL-AUTH-002 cross-references multi-tenant-l0
+# (TenantContext propagation into the WS upgrade handshake) — realtime
+# is one of the surfaces where the multi-tenant runtime MUST already be
+# wired if the recipe has tenant_model: multi.
+
+items:
+  # ── CHANNEL-AUTH family ─────────────────────────────────────────────────
+  - id: "RT-CHANNEL-AUTH-001"
+    chapter: "Channel authentication"
+    requirement: "WebSocket / SSE subscription requests MUST go through the SAME authentication pipeline as HTTP requests — bearer token validation + role check on the upgrade handshake. The catalog forbids a 'WebSocket bypass' pattern (skip auth on /ws/* paths because the protocol is different). RFC 6455 §4 explicitly allows HTTP Authorization headers on the upgrade request; servers MUST verify them and 401 the upgrade before allowing the protocol switch."
+    test_method: "rt_CHANNEL_AUTH_001_websocketUpgradeRequiresBearerToken"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Integration test asserts WebSocket upgrade request without
+      Authorization header returns 401; valid bearer token receives
+      protocol switch + active connection. Anchored to RFC 6455 §4 +
+      Spring WebSocket Reference (Authentication for STOMP/raw WS).
+
+  - id: "RT-CHANNEL-AUTH-002"
+    chapter: "Channel authentication / tenant scoping"
+    requirement: "Channel / topic names MUST be tenant-scoped — every subscription resolves the caller's TenantContext (from MULTI-TENANT-PROPAGATION-001) and rejects subscriptions whose topic spans a different tenant. The catalog refuses 'global channel' patterns (e.g. /topic/all/users) because they leak cross-tenant data the moment the recipe enables tenant_model: multi. Topic naming convention: prefix every topic with the tenant id (e.g. /topic/<tenantId>/notifications) and reject upgrade if the requested topic prefix does not match the caller's tenant."
+    test_method: "rt_CHANNEL_AUTH_002_tenantScopedTopicRejection"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test asserts a caller from tenant A subscribing to /topic/B/* topics
+      receives 403. Anchored to MULTI-TENANT-ISOLATION-DEFAULT-001 +
+      Spring WebSocket SubscribeMapping security.
+
+  # ── FANOUT family ───────────────────────────────────────────────────────
+  - id: "RT-FANOUT-001"
+    chapter: "Audience-filtered fan-out"
+    requirement: "Server-pushed messages MUST be filtered by audience visibility BEFORE fan-out, not delivered to all subscribers and filtered at the client. 'Send to all subscribers' is forbidden because a misbehaving client cannot suppress what the server already sent (browser DevTools, network capture, malicious SDK fork). Activity-feed precedent: ActivityService.publish resolves audience first, then fan-outs only to matching subscribers (R44 + activity-feed-iter1 F4 closure pattern)."
+    test_method: "rt_FANOUT_001_audienceFilteredBeforeBroadcast"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test sets up 3 subscribers (A, B, C) on the same topic; publishes
+      a message with audience=[A, B]; asserts subscriber C does NOT
+      receive the frame at the WebSocket transport layer. Anchored to
+      activity-feed-iter1 F4 closure + OWASP ASVS V13 (API Security).
+
+  # ── BACKPRESSURE family ─────────────────────────────────────────────────
+  - id: "RT-BACKPRESSURE-001"
+    chapter: "Slow consumer policy"
+    requirement: "Servers MUST detect slow consumers and disconnect them per a recipe-declared policy — either a write-queue depth threshold (e.g. queue > 100 frames triggers disconnect) OR a write-timeout threshold (e.g. socket write blocks > 5s triggers disconnect). The catalog refuses 'unbounded queueing' because a slow consumer back-pressures the entire broker thread pool, breaking other subscribers. Reactor's backpressure operators (onBackpressureBuffer with bufferSize + drop policy / onBackpressureDrop / onBackpressureLatest) are the recommended Spring Reactive shape; the recipe declares which policy applies."
+    test_method: "rt_BACKPRESSURE_001_slowConsumerDisconnectedPerRecipePolicy"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test wires a slow consumer (sink that sleeps 100ms between reads)
+      under a 50-frame queue threshold; asserts disconnect at frame 51.
+      Anchored to Project Reactor Reference §Backpressure + Spring
+      WebFlux WebSocket Reference.
+
+  # ── RECONNECT family ───────────────────────────────────────────────────
+  - id: "RT-RECONNECT-001"
+    chapter: "Reconnect-resume"
+    requirement: "Client reconnect MUST resume from a server-issued cursor / Last-Event-ID — no message gap between disconnect and reconnect. SSE has Last-Event-ID built into the spec (W3C SSE §9.2); WebSocket implementations MUST provide an equivalent (e.g. STOMP receipt + server-side replay log, or custom 'resume-from' header on the upgrade request). Recipes MAY choose a retention window (replay last N seconds OR N events) but MUST document it; the catalog refuses 'fire-and-forget' delivery for any user-visible message stream because users notice missed notifications + lose trust."
+    test_method: "rt_RECONNECT_001_lastEventIdResumeWithoutGap"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test disconnects mid-stream; reconnects with Last-Event-ID header;
+      asserts the next frame received has event id > the disconnect
+      point with no intervening gap. Anchored to W3C SSE §9.2 + RFC 6455
+      §7.4 (Closing the Connection) interaction with retention window.
+
+  # ── PROTOCOL family ────────────────────────────────────────────────────
+  - id: "RT-PROTOCOL-001"
+    chapter: "Protocol choice"
+    requirement: "Recipes MUST declare in RECIPE.md frontmatter which realtime protocol they adopt — `realtime_protocol: websocket` OR `realtime_protocol: sse`. Mixing both in the same recipe is NOT catalog-supported (creates a 2x maintenance surface and confuses fork-receiver SDKs). WebSocket suits bidirectional flows (chat, multi-user editing); SSE suits server-push-only flows (notification feed, dashboard tile updates). Catalog ships canonical wiring for both, recipe picks one."
+    test_method: "static analysis"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Manual review of recipes/*.yaml RECIPE.md frontmatter — exactly
+      one of websocket / sse declared if realtime is in scope. A future
+      recipe_realtime_protocol_guard.sh will mechanize this once the
+      L4 runtime ships.
+
+  # ── OBSERVABILITY family ──────────────────────────────────────────────
+  - id: "RT-OBSERVABILITY-001"
+    chapter: "Per-channel observability"
+    requirement: "Every active channel MUST emit three metrics: (a) active_subscribers_count{channel=,tenant=}, (b) messages_sent_total{channel=,tenant=}, (c) disconnect_rate{channel=,tenant=,reason=}. Without these an SRE cannot diagnose silent client drift, fan-out hot spots, or backpressure-induced cascade disconnects. Mirrors the activity-feed iter1 F6 deferral pattern — observability is required BEFORE production deployment, not bolted on after the first incident."
+    test_method: "rt_OBSERVABILITY_001_threeCanonicalMetricsEmitted"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test connects 2 subscribers, sends 5 messages, force-disconnects
+      one with timeout; asserts Micrometer Counter / Gauge surface
+      reflects active_subscribers_count==1 + messages_sent_total==5 +
+      disconnect_rate.timeout==1. Anchored to Micrometer Reference +
+      activity-feed iter1 F6 observability deferral pattern.
