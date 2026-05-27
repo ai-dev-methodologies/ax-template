@@ -133,8 +133,15 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "i18n-policy-l0.yaml 6 item에 priority 부재 + RECIPE.md frontmatter 예제가 notes에 묻힘. Closure: priority order comment + verbatim KO+EN frontmatter block 추가 (commit 183f827)."
+      - wave: R93
+        iter: 4
+        finding_id: F16
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "persona-registry signal_strength: high|medium|low에 객관적 rubric 부재 — 새 fork-receiver 자기 history 작성 시 self-classification 불가. Closure: 3-level rubric + typical-evidence 추가 (commit 550a5ad)."
     verdict: active
-    verdict_reason: "1 real_bug closed clean. P5와 lens 인접하나 differentiation 명확 (priority/example vs sequential playbook)."
+    verdict_reason: "2 real_bug closed clean across iter1 + iter4. learnability lens가 R93 신규 artifact (i18n spec + registry 자체) 모두 sniff out. P5와 lens 인접하나 differentiation 명확."
     next_review_at: "R94 종료 시 P5와 차별성 재평가"
 
   - id: P5
@@ -152,8 +159,15 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "bulk-import의 intended_use가 한 줄 짜리 — fork-receiver 첫 commit 시퀀스 불명. Closure: 4-step playbook 확장 (spec → README → classification promote → trio_integrity_allowlist) commit 183f827."
+      - wave: R93
+        iter: 4
+        finding_id: F17
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "persona-registry update protocol이 add-new vs update-existing 두 시나리오 동일 flow로 conflate. Closure: PROCEDURE A + PROCEDURE B 분리 (commit 550a5ad)."
     verdict: active
-    verdict_reason: "1 real_bug closed clean. P4와 lens 인접 — flag for differentiation review."
+    verdict_reason: "2 real_bug closed clean across iter1 + iter4. sequential lens가 R93 신규 artifact + 그 자체의 protocol 둘 다 검출."
     next_review_at: "R94 종료 시 P4와 차별성 재평가; 같은 wave에서 또 인접 findings 산출 시 P4/P5 합칠 후보."
 
   - id: P6
@@ -197,8 +211,15 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "iter2 F11 closure (Jackson strict-offset)가 @PathVariable/@RequestParam ConversionService 경로에는 자동 적용 안 됨. Closure: trigger (첫 date-typed URL binding 시)."
+      - wave: R93
+        iter: 4
+        finding_id: F18
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "persona-registry.yaml에 schema_version: 1 선언했으나 JSON Schema 파일 없음 — verdict enum / signal_strength enum / history shape mechanical validation 부재. Trigger: 첫 malformed entry OR programmatic consumer."
     verdict: active
-    verdict_reason: "2 deferrals, both anchored. Closure 검증 lens (iter3에서 iter2 closure의 asymmetry 캐치) 입증."
+    verdict_reason: "3 deferrals across iter1 + iter3 + iter4, 모두 anchored trigger. closure 검증 lens (iter2 closure asymmetry + registry validation gap) 입증."
     next_review_at: "유지; 다음 wave에서도 closure 재검토 lens 작동하는지 확인"
 
   - id: P8
@@ -235,8 +256,15 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "multi-tenant L4 stub의 steady-state contract은 있으나 deployed single-tenant DB의 multi 전환 playbook 부재. Closure: trigger (첫 단일→multi DB 마이그레이션 시 MIGRATION.md sibling)."
+      - wave: R93
+        iter: 4
+        finding_id: F19
+        classification: methodology_gap
+        signal_strength: low
+        unique_to_persona: true
+        notes: "persona-registry가 docs/dogfood-ledger/에 위치하나 *-iter*.yaml 아님 — semantic 부정합. 즉시 이동 안 함; methodology_gap으로 차후 wave 논의 reserve."
     verdict: active
-    verdict_reason: "high-signal deferral. architecture lens는 P10 (backward compat)과 다름 — P9는 능동 마이그레이션, P10은 수동 호환성."
+    verdict_reason: "1 deferral + 1 methodology_gap, 모두 architecture lens가 catch한 cross-cutting + placement 문제. P10과 lens 비중첩."
     next_review_at: "유지; lens differentiation with P10 holds — 두 사람 모두 high-signal 산출."
 
   - id: P10
@@ -261,8 +289,15 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "iter2 F11 closure가 stricter — 기존 offsetless client breakage risk + migration note 부재. Closure: trigger (첫 fork-receiver의 access log에 offsetless 검출 시)."
+      - wave: R93
+        iter: 4
+        finding_id: F20
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "기존 P1/P2-era ledger들이 persona-registry에 backfill 안 됨 — 비대칭. Trigger: 다음 도메인 dogfood ledger landing 시 (P1/P2 신규 finding 발생 시점)."
     verdict: active
-    verdict_reason: "1 real_bug + 1 deferral, 둘 다 closure 자체를 재검토하는 메타-vigilance. P9와 lens 비중첩."
+    verdict_reason: "1 real_bug + 2 deferral, 모두 closure / 기존 deployed state에 대한 메타-vigilance. P9와 lens 비중첩."
     next_review_at: "유지"
 
   - id: P11
@@ -287,8 +322,15 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "iter1 F9 closure의 inbound 비대칭 — offsetless ISO 8601 inbound parsing 미정의. Closure: RFC 3339 §5.6 strict-offset 요구, 400 INVALID_DATETIME reject (commit b8da020)."
+      - wave: R93
+        iter: 4
+        finding_id: F21
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "persona-registry가 schema_version: 1 선언하나 schema 파일 부재 — 'promise vs evidence' 표준 정합 결함. Trigger: F18 closure 시 동시 해결 (schema 파일 land + version pin)."
     verdict: active
-    verdict_reason: "**most productive persona in R93** — 2 real_bug closed across 2 iters, each closure spawned by previous closure 재검토. principal-eng symmetric coverage lens가 closure 메타-검증 패턴으로 작동."
+    verdict_reason: "**most productive persona in R93** — 2 real_bug closed across iter1+iter2, 1 deferral on registry self-consistency at iter4. principal-eng symmetric coverage + standards-versioning rigor 둘 다 작동."
     next_review_at: "유지 (high-signal anchor)"
 
   - id: P12
@@ -320,37 +362,56 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "F12 자체에 R-anchor 부재 — methodology_gap이 R-번호 없이 떠다니면 silent debt (F10이 R93 wave에 대해 지적한 실패 모드의 symmetric instance). 자기-recursive 지적."
+      - wave: R93
+        iter: 4
+        finding_id: F22
+        classification: methodology_gap
+        signal_strength: low
+        unique_to_persona: true
+        notes: "persona-registry 자체가 meta-artifact인데 그 자체의 verdict / saturation 추적 부재. 자기 closure 명시: 'R93 cap: stop the recursion here — registry는 maintainer judgment로 자가 관리, 또 다른 tracking artifact 추가 안 함.' 3번째 methodology_gap이라 lens saturation 확정."
     verdict: active
-    verdict_reason: "1 real_bug + 2 methodology_gap. 메타-governance lens 가치 확실하나 methodology_gap이 연속 2회 — saturation 신호. R94에서 또 methodology_gap only 산출하면 lens 재정의 필요 (예: meta-governance를 catalog rule 자체로 흡수)."
+    verdict_reason: "1 real_bug + 3 methodology_gap. 메타-governance lens 가치 확실하나 methodology_gap 3회 연속 — saturation 신호 강화. R94에서 또 methodology_gap only 산출하면 lens 재정의 (예: meta-governance를 catalog rule 자체로 흡수) 또는 panel rotation."
     next_review_at: "R94 wave 종료 시 saturation 판정 — 동일 lens가 또 methodology_gap만 산출하면 lens 재정의 또는 별도 saturation R-anchor 발행"
 
-# ── R93 wave 종합 판정 ────────────────────────────────────────────────────
+# ── R93 wave 종합 판정 (iter5 TRUE 0-convergence 후 최종) ────────────────
 review_summary:
   R93:
     panel_size: 10                            # P3..P12 (P1/P2는 본 wave 미참여)
-    iterations: 3
-    total_findings: 15
-    real_bug_closures: 6                      # F2, F3, F8, F9, F10, F11
-    scope_deferrals: 7                        # F1, F4, F5, F6, F7, F13, F14
-    methodology_gaps: 2                       # F12, F15
+    iterations: 5                             # iter1..iter5 (iter5 = TRUE 0-convergence terminator)
+    total_findings: 22                        # 10 + 2 + 3 + 7 + 0
+    real_bug_closures: 8                      # F2, F3, F8, F9, F10, F11, F16, F17
+    scope_deferrals: 10                       # F1, F4, F5, F6, F7, F13, F14, F18, F20, F21
+    methodology_gaps: 4                       # F12, F15, F19, F22
     closure_commits:                          # R86/R87 coverage
-      - "183f827 (F2/F3/F8/F9/F10)"
-      - "b8da020 (F11)"
+      - "183f827 (F2/F3/F8/F9/F10 — iter1 closures)"
+      - "b8da020 (F11 — iter2 inbound parsing closure)"
+      - "550a5ad (F16/F17 — iter4 registry self-closures)"
       - "32b1673 (iter1 ledger — F10 self-closure)"
       - "b19e924 (iter2 ledger)"
-      - "cde809c (iter3 terminator ledger — 0 real_bug)"
-    most_productive_persona: "P11 황태완 (2 real_bug closed across iter1+iter2)"
+      - "cde809c (iter3 첫 종료 시도 — 0 real_bug)"
+      - "4fd3383 (iter4 ledger — full-scope sweep, 7 findings)"
+      - "1acbbae (iter5 TRUE 0-convergence terminator)"
+    most_productive_persona: "P11 황태완 (2 real_bug closed across iter1+iter2 + 1 deferral at iter4 = 3 findings, 모두 high/medium signal)"
     least_productive_personas:
-      - "tied across single-finding Junior personas (P3/P4/P5/P6) — expected for wave size; not retirement-eligible"
+      - "P3 김민준 / P6 최영숙 / P8 강하늘 — 각자 1 deferral만 iter1에서. iter4 + iter5 full-scope sweep에서 no residual. 자기 lens 영역에 R93 wave가 surface 안 만들었음 (mobile / 한국 규제 / observability 셋 다 future trigger 대기 상태)."
     lens_overlap_flagged:
       - persona_pair: ["P4 박지영", "P5 이상호"]
-        rationale: "둘 다 Junior + onboarding-adjacent. R93에서는 differentiation 유지됐으나 (priority/example vs sequential playbook), 다음 wave에서 또 인접 findings 산출 시 합치는 결정 필요."
+        rationale: "둘 다 Junior + onboarding-adjacent. R93 iter1에서는 differentiation 유지 (priority/example vs sequential playbook); iter4에서도 differentiation 유지 (rubric self-classification vs procedure split). 두 wave 연속 differentiation 유지 시 합치는 결정 보류, 또 인접 findings 산출 시 즉시 panel 정정."
     saturation_flagged:
       - persona: "P12 한상미"
-        rationale: "methodology_gap 2회 연속 산출. lens 가치 명확하나 카탈로그가 메타-governance를 catalog rule로 흡수하면 lens가 무용해지는 risk. R94에서 동일 패턴 반복 시 lens 재정의."
+        rationale: "methodology_gap 3회 연속 산출 (iter2 F12 / iter3 F15 / iter4 F22). R93 iter4 F22에서 본인이 'R93 cap: stop the recursion here' 자기 종료 선언 — saturation 자체-인정. R94에서 lens 재정의 또는 panel rotation 필요."
     panel_judgment: "all_active_no_retirement"
+    convergence_proof:
+      first_termination_attempt: "iter3 (0 real_bug, deferrals + methodology_gap만 산출) — 그러나 iter4 full-scope sweep에서 registry 자체에 2 fresh real_bug 발견됨"
+      true_terminator: "iter5 (0 finding 전 classification) — iter4 closures land 후 ALL 10 페르소나가 no residual 보고"
+      lesson: "신규 catalog artifact가 wave 도중에 land하면 1차 종료 시도가 false negative일 수 있음. 항상 마지막 closure 후 1회 추가 full-scope sweep 필요."
     next_panel_composition_for_R94:
       keep: ["P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"]
-      under_review: ["P4/P5 lens overlap", "P12 saturation"]
+      under_review: ["P4/P5 lens overlap (2 wave 연속 differentiation 유지 확인)", "P12 saturation (3 methodology_gap 연속 — lens 재정의 / rotation 결정 필요)"]
       add: []                                 # 본 wave에서 새 lens 추가 결정 없음
       retire: []
+      mandatory_R94_iter1_agenda:
+        - "P4/P5 differentiation 재검증 — 또 인접 findings 시 합치기 결정 land"
+        - "P12 lens saturation 판정 — 4번째 wave 연속 methodology_gap만 산출하면 lens 재정의 또는 P12 rotation"
+        - "10 R93 scope_deferral expiry trigger 발화 여부 점검"
+        - "4 R93 methodology_gap (F12/F15/F19/F22)에 R-번호 anchor 결정"
