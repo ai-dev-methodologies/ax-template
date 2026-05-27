@@ -1,0 +1,61 @@
+# R83 — approval-workflow 2-persona dogfood iter1
+# P1: 정민영 (ops/SRE) — observability, audit emission, force-override surface,
+#                      time-in-state SLA, stuck-workflow recovery
+# P2: 이주형 (security/PII) — payload fan-out PII, cross-approver visibility,
+#                            anonymous-flow asymmetry, IDOR-disclosure on
+#                            authorization errors
+#
+# Scope of iter1 — first formal 2-persona protocol on approval-workflow
+# (R31 + R31 iter1/2 were narrower targeted reviews — duplicate-approver,
+# self-approve, payload immutability, VIOLATION proof tests — not the full
+# dogfood). Surface reviewed end-to-end:
+#   - ApprovalService (create / submit / cancel / approve / reject / list / get / inbox)
+#   - ApprovalController (8 endpoints + 7 ExceptionHandlers)
+#   - ApprovalRequest entity (requesterUserId, type, title, payload_json
+#     updatable=false, OneToMany steps EAGER, status enum)
+#   - ApprovalStep entity (orderIndex, approverUserId updatable=false,
+#     actedByUserId, actedAt, comment)
+#   - ApprovalRequestRepository (findVisibleTo IDOR-safe, findInboxFor)
+#   - Two state machines (ApprovalRequestStateMachine, ApprovalStepStateMachine)
+iteration: 1
+findings:
+  - persona: P1
+    finding: "F1 (MEDIUM): ApprovalService emits zero audit-log lines for ANY mutation — create / submit / cancel / approve / reject all silent. Compare to email-outbox-iter1 which has audit.email-outbox structured logger covering retry/admin paths. For Korean enterprise 결재 workflows (compensation approvals, HR actions, procurement) the absent audit trail is unusual — SIEM consumers and internal audit cannot replay 'who approved what at what time' from logs (must reconstruct from DB only). Deferred because the catalog refuses to choose the audit-log retention / structured-field schema for fork-receivers. Expiry trigger: re-opens before the fork-receiver wires the FIRST SIEM rule that needs per-action audit emission (e.g. compliance-driven 'all compensation approvals must emit a structured audit row'), OR before any external compliance review (감사) requires log-based reconstruction."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalService.java
+  - persona: P1
+    finding: "F2 (MEDIUM): No admin-override surface — if an approver leaves the company or is on extended leave while a request is in SUBMITTED, the workflow hangs forever. There is no /api/admin/approvals/{id}/force-approve or force-reject endpoint and no delegate/reassign flow. Deferred because the admin override has policy implications (audit trail of the override, notification to other approvers, whether the override counts toward N-of-M approvals) that the catalog cannot opinionate for all fork-receivers. Expiry trigger: re-opens before the fork-receiver expects ANY approver to ever leave / take leave / lose access mid-flight — at that point a force-approve + delegate surface is mandatory."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalController.java
+  - persona: P1
+    finding: "F3 (LOW): No time-in-state SLA / overdue metrics. ApprovalRequest carries submittedAt + completedAt but no scheduled job, no metric, no dashboard reads them. A request stuck at SUBMITTED for 30 days produces no signal — operator notices only when the requester complains. Deferred because the alerting threshold (1d / 3d / 7d / SLA-driven) and the alert sink (Slack / PagerDuty / email) are fork-receiver decisions. Expiry trigger: re-opens before the fork-receiver writes any SLA-bound product requirement (e.g. 'all expense approvals must complete in 5 business days') — at that point the catalog needs a scheduled poll job + metric emission contract."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalRequest.java
+  - persona: P2
+    finding: "F4 (HIGH): ApprovalRequest.payloadJson stores caller-supplied JSON VERBATIM (up to 16384 chars) and fans it out to every visible approver via ApprovalRequestResponse.payload. Korean enterprise 결재 payloads commonly carry 주민등록번호 / 연봉 / 인사 evaluation language / 외주 계약 상대 PII — each step approver in the ladder reads the verbatim content, so a 5-approver ladder fans the PII out 5x. The amplification shape mirrors activity-feed iter1 F4 (audience fan-out) but the payload domain is higher-stakes. Closure: javadoc on ApprovalRequest.payloadJson documenting the PII contract end-to-end (verbatim storage, full-ladder fan-out, R67 AuditPiiHelper.piiHash for audit emission, egress redaction at the trust boundary, 'every approver sees this' mental model)."
+    classification: real_bug
+    closure_commit_sha: a2f06f9
+    closure_verification_ref: "ApprovalRequest.payloadJson javadoc now documents the PII contract end-to-end — verbatim storage, full-ladder fan-out amplification, R67 AuditPiiHelper.piiHash guidance for audit emission, egress redaction at the trust boundary; no behaviour change so no executable regression test exists"
+    closure_verification_reason: doc-only
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalRequest.java
+  - persona: P2
+    finding: "F5 (MEDIUM): ApprovalStep.comment is fanned out verbatim to EVERY visible peer — the requester AND all other approvers on the ladder — via ApprovalStepResponse.comment. A rejecting approver who writes an internal-only critique ('이 사람 이전에 사고 친 이력', competitor intelligence, peer-evaluation language) is publishing that text to the full ladder. There is no 'private to admin' / 'private to next approver' comment surface. Closure: javadoc on ApprovalStep.comment documenting the symmetric-visibility design choice and pointing fork-receivers at a separate private-comment column / sidecar audit row if asymmetric visibility is required."
+    classification: real_bug
+    closure_commit_sha: a2f06f9
+    closure_verification_ref: "ApprovalStep.comment javadoc documents the symmetric-visibility design end-to-end — fan-out to requester + every peer approver, no admin-only surface, fork-receiver guidance for asymmetric visibility; no behaviour change so no executable regression test exists"
+    closure_verification_reason: doc-only
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalStep.java
+  - persona: P2
+    finding: "F6 (LOW): ApprovalRequestResponse.requesterUserId exposes the requester's userId raw to every visible approver. For sequential 결재 this is by design (approvers MUST know who is asking) but the catalog does not document the choice. A fork-receiver wiring anonymous-petition or whistleblower-style review flows cannot tell whether the requester exposure is intentional or an oversight. Expiry trigger: re-opens before the fork-receiver wires anonymous-requester UX (anonymous proposals, whistleblower submissions, blind peer review) — at that point the requesterUserId exposure becomes an information-disclosure surface that breaks the new product requirement."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalRequestResponse.java
+  - persona: P2
+    finding: "F7 (LOW): ApprovalStepResponse.actedByUserId exposes the deciding approver's userId to every other approver + the requester. For sequential ladders this is by design (downstream approvers need to know who already approved, requester needs to know who decided) but the asymmetry between this and the F8 closure (NotApprover error message must NOT leak the assigned approver) is documented nowhere. Expiry trigger: re-opens before the fork-receiver wires anonymous-approval UX (HR-style blind review, peer evaluation where deciders should not be named, 부적격 후보자 anonymous-rejection workflows) — at that point both actedByUserId and approverUserId in the response DTOs become disclosure surfaces."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalStepResponse.java
+  - persona: P2
+    finding: "F8 (HIGH): ApprovalService#actOnStep's NotApproverException message named the rightful approver's userId verbatim ('step <id> can only be acted on by <userId>'). A non-approver who already knew a stepId could enumerate WHO the assigned approver was — cross-user PII leak in a domain where step ownership is policy-sensitive (compensation approvals, HR actions, anonymous review). HTTP status 403 + the NOT_APPROVER code stay identical (no public-contract break); only the human-readable detail string changes to 'step <id> is not assigned to the caller'. Regression assertion (added in commit 7072b4f) locks in the closure: any future refactor that re-introduces the leak fails ApprovalComplianceTest authz_003_wrongApproverReturns403."
+    classification: real_bug
+    closure_commit_sha: a2f06f9
+    closure_test_method: "authz_003_wrongApproverReturns403"
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalService.java
