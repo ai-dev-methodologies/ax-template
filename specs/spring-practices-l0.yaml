@@ -274,3 +274,11 @@ items:
     verification_type: "review"
     applicable: true
     notes: "dogfood_finding_real_bug_closure_commit_guard.sh (R86b, 46th hard guard) parses every ledger yaml under docs/dogfood-ledger/, iterates findings with classification=real_bug, requires closure_commit_sha to be present, matching ^[0-9a-f]{7,40}$, and resolvable via `git cat-file -e <sha>^{commit}`. scope_deferral and methodology_gap entries are exempt. Anchored to Linux Kernel SubmittingPatches Fixes: trailer convention + GitHub's closing keywords for PR-issue linking."
+
+  - id: "PRACTICES-DOGFOOD-LEDGER-003"
+    chapter: "Architecture / Dogfood Ledger Discipline"
+    requirement: "Every docs/dogfood-ledger/*.yaml entry whose classification is real_bug MUST carry test-coverage evidence in one of four shapes: (a) closure_test_method (Java test method name following practices_*_camelCase), (b) closure_test_commit_sha (a distinct git SHA where the regression test landed), (c) closure_test_path (file path to the regression test, for non-Java or fork-receiver tests), or (d) closure_verification_ref + closure_verification_reason (the escape hatch for closures that are doc-only / comment-contract / config-only / external-system / fork-receiver-owned). Executable test fields take precedence — verification_ref is permitted ONLY when no executable regression anchor is available. Rule body: practices/rules/dogfood-finding-real-bug-must-reference-test-coverage.md."
+    test_method: "practices_DOGFOOD_LEDGER_003_realBugReferencesTestCoverage"
+    verification_type: "review"
+    applicable: true
+    notes: "dogfood_finding_real_bug_test_coverage_guard.sh (R87b, 47th hard guard) parses every ledger yaml under docs/dogfood-ledger/, iterates findings with classification=real_bug, requires AT LEAST ONE of the four shapes above. closure_verification_ref requires a non-empty closure_verification_reason whose value is one of {doc-only, comment-contract, config-only, external-system, fork-receiver-owned}. scope_deferral and methodology_gap entries exempt. Anchored to SQLite testing policy (bug not considered fixed until a regression test is added) + Linux kernel kselftest (selftests regression-test bugs across kernel versions)."
