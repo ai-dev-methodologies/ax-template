@@ -16,6 +16,36 @@ introduced_at: "R94 phase α — seeded as the first modular-catalog addition of
 # is one of the surfaces where the multi-tenant runtime MUST already be
 # wired if the recipe has tenant_model: multi.
 
+# ── Priority order for fork-receivers (R94 iter1 F2 closure) ──────────────
+# Adopt items in this order. Earlier items are foundational for the later
+# ones — skipping CHANNEL-AUTH-001 makes every other item irrelevant
+# because an unauthenticated channel can't carry any contract safely.
+#
+#   1. RT-CHANNEL-AUTH-001    — bearer-token auth on upgrade handshake
+#   2. RT-CHANNEL-AUTH-002    — tenant-scoped topic naming
+#   3. RT-FANOUT-001          — audience-filtered fan-out before broadcast
+#   4. RT-BACKPRESSURE-001    — slow consumer disconnect policy
+#   5. RT-RECONNECT-001       — Last-Event-ID resume-without-gap
+#   6. RT-PROTOCOL-001        — declare websocket OR sse in RECIPE.md
+#   7. RT-OBSERVABILITY-001   — 3 canonical metrics per channel
+#
+# Canonical RECIPE.md frontmatter example (RT-PROTOCOL-001, R94 iter1 F3 closure):
+#
+#   ---
+#   recipe: notification-livetail
+#   tenant_model: multi
+#   default_locale: ko-KR
+#   supported_locales: [ko-KR, en-US]
+#   realtime_protocol: sse              # OR: websocket
+#   realtime_retention_window_seconds: 300
+#   ---
+#
+# Fork-receivers picking SSE for notification-style server-push paths
+# MAY copy the block above verbatim. WebSocket recipes (chat, multi-user
+# editing) flip `realtime_protocol: websocket` and MAY add
+# `realtime_subprotocol: v12.stomp` per RFC 6455 §1.9 (see CHANNEL-AUTH-001
+# notes for subprotocol negotiation contract).
+
 items:
   # ── CHANNEL-AUTH family ─────────────────────────────────────────────────
   - id: "RT-CHANNEL-AUTH-001"
@@ -29,6 +59,17 @@ items:
       Authorization header returns 401; valid bearer token receives
       protocol switch + active connection. Anchored to RFC 6455 §4 +
       Spring WebSocket Reference (Authentication for STOMP/raw WS).
+      R94 iter1 F8 (P11 황태완 standards lens): subprotocol negotiation
+      via the Sec-WebSocket-Protocol header (RFC 6455 §1.9 + §4.1) MUST
+      be pinned by the recipe in RECIPE.md frontmatter as
+      `realtime_subprotocol: <name>` (e.g. `v12.stomp` for Spring STOMP,
+      `chat` for app-specific subprotocol). The server's upgrade response
+      MUST echo the chosen subprotocol back, AND reject the upgrade if
+      the client requested a subprotocol the server does not implement.
+      Failure mode if unspecified: client + server fall back to raw frames
+      with no envelope discipline → message versioning + backward-compat
+      become per-app ad-hoc (P7 정도윤's typed-contract concern from F5).
+
 
   - id: "RT-CHANNEL-AUTH-002"
     chapter: "Channel authentication / tenant scoping"
