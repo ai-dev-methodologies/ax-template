@@ -2,8 +2,8 @@
 # practices/evals/dogfood_finding_real_bug_test_coverage_guard.sh
 # R87b (47th hard guard) — mechanises practices/rules/dogfood-finding-real-bug-must-reference-test-coverage.md
 # (R87). Every entry in docs/dogfood-ledger/*.yaml whose classification is
-# real_bug MUST carry test-coverage evidence in EXACTLY ONE of four
-# shapes:
+# real_bug MUST carry test-coverage evidence in AT LEAST ONE of four
+# shapes (matching the rule body and the implementation below):
 #
 #   (a) closure_test_method
 #       — Java test method name; shape ^[A-Za-z_][A-Za-z0-9_]*$
