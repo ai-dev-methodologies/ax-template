@@ -1,0 +1,66 @@
+# R94 — realtime-policy-l0 spec dogfood iter1 (10-persona panel)
+#
+# Wave subject: specs/realtime-policy-l0.yaml (R94 phase α, commit c82a924).
+# 7 items (CHANNEL-AUTH × 2 / FANOUT × 1 / BACKPRESSURE × 1 / RECONNECT × 1
+# / PROTOCOL × 1 / OBSERVABILITY × 1) anchored to RFC 6455 + W3C SSE +
+# Project Reactor + Micrometer. future_add tier — no L4 disk yet.
+#
+# Panel reuse: P3-P12 from R93 (per persona-registry.yaml verdict
+# all_active_no_retirement + next_panel_composition_for_R94.keep).
+# Active wave lenses: P8 강하늘 observability (RT-OBSERVABILITY-001 covers
+# his domain directly); P11 황태완 standards (RFC 6455 / W3C SSE
+# alignment); P6 최영숙 한국 규제 (금융권 WebSocket separation).
+iteration: 1
+findings:
+  - persona: P3
+    finding: "F1 (LOW): RT-RECONNECT-001 specifies Last-Event-ID resume but does not address mobile-specific reconnect scenarios — app suspend/resume (iOS Background App Refresh, Android Doze mode), network change (WiFi → cellular, captive portal), battery cost (keep-alive ping cadence). A bootcamp-grad mobile developer (P3 김민준, 24, 1년차) wiring SSE/WebSocket on iOS would stall on these. Expiry trigger: re-opens before the first mobile fork-receiver adopts realtime — at that point the spec needs a 'Mobile client reconnect' subsection covering reachability + exponential backoff + heartbeat tuning."
+    classification: scope_deferral
+    references_artifact_path: specs/realtime-policy-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): specs/realtime-policy-l0.yaml ships 7 spec items without priority ordering — a fork-receiver picking up realtime cannot tell whether CHANNEL-AUTH-001 or PROTOCOL-001 is the foundational starter. Same lens that flagged R93 i18n F2. Closure: added priority order comment block (1. CHANNEL-AUTH-001 foundation → 7. OBSERVABILITY-001 production-ready) with rationale that skipping auth makes everything else moot."
+    classification: real_bug
+    closure_commit_sha: 03a24fc
+    closure_verification_ref: "specs/realtime-policy-l0.yaml now carries a priority order comment block before items: with explicit ordering rationale. doc-only — registry artifact, no executable regression possible."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/realtime-policy-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): RT-PROTOCOL-001 mandates `realtime_protocol: websocket|sse` declaration in RECIPE.md frontmatter but provided no copy-pasteable example. A step-by-step Junior (P5 이상호, 42, 1년차) stalls at first read. Same lens that flagged R93 i18n DEFAULT-DECL F3 + R93 bulk-import F3. Closure: verbatim RECIPE.md frontmatter example block added (notification-livetail recipe, SSE, ko-KR/en-US, 300s retention) plus WebSocket variant hint."
+    classification: real_bug
+    closure_commit_sha: 03a24fc
+    closure_verification_ref: "specs/realtime-policy-l0.yaml priority block now contains a complete RECIPE.md frontmatter example with both SSE + WebSocket variant guidance."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/realtime-policy-l0.yaml
+  - persona: P6
+    finding: "F4 (MEDIUM): RT-CHANNEL-AUTH-002 specifies tenant-scoped topic naming but provides no mapping to Korean financial regulation. 전자금융감독규정 §13 (이용자정보 분리) requires demonstrable cross-tenant isolation in customer-facing channels; WebSocket fan-out per RT-FANOUT-001 must satisfy this without leaking events across customers. A regulated-industry Junior (P6 최영숙, 53, 1년차) needs the mapping. Expiry trigger: re-opens before any 금융권 SaaS fork-receiver wires realtime on customer-facing channel OR before any KISA ISMS / 전자금융감독규정 audit covers the realtime surface — at that point the spec needs an isolation-mapping table cross-referencing MULTI-TENANT-ISOLATION-001/002/003 ↔ 전자금융감독규정 §13 control points."
+    classification: scope_deferral
+    references_artifact_path: specs/realtime-policy-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): The spec defines protocol negotiation + metric names but never pins the MESSAGE ENVELOPE that flows over the channel. Each frame: what JSON shape? versioned? envelope vs raw payload? A typed-SDK Senior (P7 정도윤, 28, 6년차) generating client codegen cannot type the receive callback. Partial mitigation via F8 closure (subprotocol negotiation → STOMP-vs-raw selection) but the envelope shape within a chosen subprotocol still unspecified. Expiry trigger: re-opens when the first typed SDK consumer (frontend openapi-typescript codegen against an OpenAPI x-realtime extension, OR partner SDK with typed frame deserialization) requires it — at that point the spec needs ENVELOPE-001 pinning JSON shape + version field + backward-compat semantics."
+    classification: scope_deferral
+    references_artifact_path: specs/realtime-policy-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): RT-OBSERVABILITY-001 names the 3 canonical metrics (active_subscribers / messages_sent_total / disconnect_rate) but defines NO SLO threshold and NO alert convention. When does disconnect_rate become an incident — 5% over 5min, 10% spike, 100 disconnects/sec? When does active_subscribers count plateau indicate stuck clients vs natural quiescence? A SaaS SRE (P8 강하늘, 35, 8년차) cannot wire production paging. Expiry trigger: re-opens before any fork-receiver deploys realtime to production where on-call would page on these metrics — at that point realtime-policy-l0 needs an OBSERVABILITY-002 item pinning the canonical SLO + alert threshold catalog (e.g. disconnect_rate.timeout > 5% over 5min → WARN, > 15% over 5min → PAGE)."
+    classification: scope_deferral
+    references_artifact_path: specs/realtime-policy-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): The catalog ships notification + activity-feed using TanStack Query polling (R82 background-poll rule). When a recipe flips to realtime per RT-PROTOCOL-001, there is NO migration playbook — how does the recipe migrate existing polling consumers? Dual-mode (poll fallback + realtime preferred)? Big-bang cutover? Per-feature rollout flag? An architect (P9 윤재호, 44, 14년차) cannot present a migration plan. Expiry trigger: re-opens before any fork-receiver migrates notification OR activity-feed from polling to realtime in production — at that point templates/L4/realtime-policy/ (when L4 slot lands) needs a MIGRATION.md sibling with dual-mode + flag-gated rollout + observability cutover checklist."
+    classification: scope_deferral
+    references_artifact_path: specs/realtime-policy-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): RT-CHANNEL-AUTH-001 cited RFC 6455 §4 correctly but did NOT address subprotocol negotiation per RFC 6455 §1.9 + §4.1 (Sec-WebSocket-Protocol header). Without it, client + server fall back to raw frames with no envelope discipline — exactly P7 정도윤's F5 typed-contract concern downstream. Standards-aligned 특급시니어 (P11 황태완, 45, 18년차) catches this symmetric gap (same pattern as R93 F11 catching inbound asymmetry of F9). Closure: extended RT-CHANNEL-AUTH-001.notes with subprotocol contract — recipe pins `realtime_subprotocol: <name>` in RECIPE.md; server echoes chosen subprotocol; reject upgrade if subprotocol unsupported."
+    classification: real_bug
+    closure_commit_sha: 03a24fc
+    closure_verification_ref: "specs/realtime-policy-l0.yaml#RT-CHANNEL-AUTH-001.notes now carries an RFC 6455 §1.9 + §4.1 subprotocol negotiation paragraph with failure-mode cross-ref to F5 typed-contract concern."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/realtime-policy-l0.yaml
+  - persona: P10
+    finding: "F9 (LOW): RT-PROTOCOL-001 declares 'mixing websocket + sse in same recipe is NOT catalog-supported' but says nothing about deployed-state coexistence — a fork-receiver inherits the catalog with notification in polling mode, then a NEW recipe declares realtime. Can the new recipe coexist with the old polling-mode recipe in the same deployment? A backward-compat veteran (P10 신경수, 52, 22년차) needs the boundary clarified. Expiry trigger: re-opens before any fork-receiver runs BOTH polling-mode AND realtime-mode recipes in the same production deployment — at that point realtime-policy-l0 needs a COEXIST-001 item covering deployment-level (not recipe-level) protocol-mixing semantics."
+    classification: scope_deferral
+    references_artifact_path: specs/realtime-policy-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): R94 phase α (commit c82a924) landed without a dogfood ledger — exact same governance gap R93 phase α/β/γ had (R93 F10). 본 R94 wave가 R93 F10 lesson을 학습했으나 다시 반복 — 'no dogfood ledger at wave kickoff' is the catalog's default failure mode for wave starts. Closure: this very ledger file (r94-iter1.yaml) IS the audit trail, written immediately after iter1 closures landed. The closure_commit_sha 03a24fc carries the 4 real_bug closures iter1 produced (F2/F3/F8 spec edits + F10 self-closure via this ledger). R94 confirms R93's F10 closure is GENERALIZABLE — every wave start should include 'create iter1 ledger as wave kickoff prerequisite' to make this no-ledger gap auto-detectable in future waves."
+    classification: real_bug
+    closure_commit_sha: 03a24fc
+    closure_verification_ref: "docs/dogfood-ledger/r94-iter1.yaml IS the audit trail. R71 dogfood ledger discipline applied to a catalog-meta event for the SECOND time (R93 F10 was first, R94 F10 is second). Lesson cross-references feedback_iter_terminator_may_reopen memory + R93 wave precedent."
+    closure_verification_reason: doc-only
+    references_artifact_path: docs/dogfood-ledger/r94-iter1.yaml
