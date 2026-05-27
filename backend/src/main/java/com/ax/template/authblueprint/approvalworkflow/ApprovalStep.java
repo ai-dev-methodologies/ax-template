@@ -64,6 +64,21 @@ public class ApprovalStep {
     @Column(name = "acted_at")
     private Instant actedAt;
 
+    /**
+     * Free-text comment captured atomically with the step action.
+     *
+     * <p><b>Visibility contract — R83 iter1 F5.</b> The comment is fanned out
+     * verbatim to <em>every</em> visible peer of the request: the requester
+     * and every other approver on the ladder (via
+     * {@link ApprovalStepResponse#comment}). A rejecting approver who writes
+     * an internal-only critique (HR-style "이 사람 사고 친 이력 있음", competitor
+     * intelligence, peer-evaluation language) is publishing that text to the
+     * entire ladder. There is no "private to admin" comment surface here —
+     * the catalog deliberately keeps the contract symmetric so peer audit is
+     * possible. Fork-receivers that need asymmetric comment visibility
+     * (private rejection rationale, anonymous review) MUST add a separate
+     * column or sidecar audit row.
+     */
     @Column(name = "comment", length = 1024)
     private String comment;
 

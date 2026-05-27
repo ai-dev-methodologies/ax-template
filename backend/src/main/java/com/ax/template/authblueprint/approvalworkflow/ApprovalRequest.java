@@ -57,6 +57,23 @@ public class ApprovalRequest {
      * Payload JSON captured at creation. {@code updatable=false} closes WF-PAYLOAD-001 —
      * the request body that approvers see at submit time CANNOT be silently swapped under
      * them mid-flight. Hibernate ignores any update attempt at the persistence layer.
+     *
+     * <p><b>PII contract — R83 iter1 F4.</b> {@code payloadJson} is stored VERBATIM
+     * (up to 16384 chars) and fanned out to every visible approver via
+     * {@link ApprovalRequestResponse#payload}. Korean enterprise 결재 payloads
+     * commonly carry 주민등록번호 / 연봉 / 계약 상대 PII / 인사 evaluation language —
+     * each step approver in the ladder reads the verbatim content. The catalog
+     * deliberately does NOT redact at storage (would break structured-decision UX
+     * and the {@code updatable=false} forensic invariant) but every consumer
+     * MUST apply the privacy policy:
+     * <ul>
+     *   <li>Audit-log emission referencing payload fields → hash via
+     *       {@code common.AuditPiiHelper.piiHash} (R67), do NOT log verbatim.</li>
+     *   <li>SIEM / export / replication crossing the trust boundary → field-level
+     *       redaction at the egress boundary, not at storage.</li>
+     *   <li>Multi-step ladders → assume EVERY approver in the chain sees the
+     *       payload; do not store information that only a subset should see.</li>
+     * </ul>
      */
     @Column(name = "payload_json", length = 16384, updatable = false)
     private String payloadJson;

@@ -146,8 +146,13 @@ public class ApprovalService {
             .orElseThrow(() -> new ApprovalRequestNotFoundException(stepId));
 
         if (!target.getApproverUserId().equals(actorUserId)) {
+            // R83 iter1 F8 — the message MUST NOT name the assigned approver. A
+            // non-approver who can already enumerate stepId would otherwise learn
+            // WHO the rightful approver is, which is a cross-user PII leak in a
+            // domain where step ownership is policy-sensitive (compensation
+            // approvals, HR actions, anonymous-style review flows).
             throw new NotApproverException(
-                "step " + stepId + " can only be acted on by " + target.getApproverUserId());
+                "step " + stepId + " is not assigned to the caller");
         }
 
         // Strict ordering: every step with orderIndex < target.orderIndex must be APPROVED.
