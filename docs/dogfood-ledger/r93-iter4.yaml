@@ -1,0 +1,66 @@
+# R93 — modular-catalog top-3 wave dogfood iter4 (10-persona full-scope sweep)
+#
+# Per user mandate "처음부터 끝까지 모든 페르소나를 통해서 전부 재검토하자",
+# this iter is the COMPREHENSIVE sweep — every persona reviews the entire
+# accumulated R93 scope, not just incremental deltas from iter3.
+#
+# Full scope under review:
+#   1. R93 wave commits: bd2307d (multi-tenant α) + 930ad10 (i18n-policy β)
+#      + 26ee4cb (bulk-import γ)
+#   2. iter1 closures (183f827) + iter1 ledger (32b1673)
+#   3. iter2 closure (b8da020) + iter2 ledger (b19e924)
+#   4. iter3 terminator ledger (cde809c)
+#   5. persona-registry.yaml (97cd2de + 550a5ad self-closures)
+#
+# Findings distribution:
+#   7 findings on the registry artifact itself (NOT on the prior wave
+#   surfaces — those were already re-confirmed clean by iter3).
+#   - 2 real_bug closed in commit 550a5ad (registry header edits)
+#   - 3 scope_deferral with explicit triggers
+#   - 2 methodology_gap
+#
+# Personas with NO residual on full-scope sweep (3 of 10):
+#   P3 김민준 — re-confirmed F1 deferral; no new finding
+#   P6 최영숙 — re-confirmed F4 deferral; no new finding
+#   P8 강하늘 — re-confirmed F6 deferral; no new finding
+#
+# This iter is the FINAL R93 sweep per user "현재 scope 완성" directive.
+# Future R-numbered waves handle: registry JSON Schema (F18), placement
+# decision (F19), legacy ledger backfill (F20), schema_version evidence
+# (F21), meta-artifact self-tracking (F22).
+iteration: 4
+findings:
+  - persona: P4
+    finding: "F16 (MEDIUM): persona-registry.yaml uses signal_strength: high|medium|low but provides no objective rubric — a future wave owner filling in their own history entry cannot decide consistently whether their finding is 'medium' or 'low'. The Junior learnability lens (P4 박지영, 33) flags this: any new fork-receiver running the protocol stalls at the moment they have to self-classify. Closure: added an explicit rubric subsection to the registry header with typical-evidence per level (high = contract pin / recursive-symmetric catch; medium = enrichment-shaped closure or trigger-anchored deferral; low = future-conditional without immediate purchase)."
+    classification: real_bug
+    closure_commit_sha: 550a5ad
+    closure_verification_ref: "docs/dogfood-ledger/persona-registry.yaml header now carries a 'signal_strength rubric' subsection with 3-level evidence patterns + typical example anchors. doc-only — registry is a governance record, no executable regression possible."
+    closure_verification_reason: doc-only
+    references_artifact_path: docs/dogfood-ledger/persona-registry.yaml
+  - persona: P5
+    finding: "F17 (MEDIUM): registry's 'Update protocol' described 4 steps but conflated two structurally different scenarios — adding a NEW persona (next wave introduces P13) vs UPDATING an existing persona's verdict after a wave terminates. A step-by-step Junior (P5 이상호, 42) stumbles on first read because the 4 steps don't apply to the 'add new' case cleanly. Closure: split the protocol into PROCEDURE A (add new — append empty history, default active verdict) and PROCEDURE B (update existing — append per-iter history, recompute verdict + reason + next_review_at + review_summary)."
+    classification: real_bug
+    closure_commit_sha: 550a5ad
+    closure_verification_ref: "docs/dogfood-ledger/persona-registry.yaml header now has 'PROCEDURE A' + 'PROCEDURE B' blocks with explicit ordered steps per scenario."
+    closure_verification_reason: doc-only
+    references_artifact_path: docs/dogfood-ledger/persona-registry.yaml
+  - persona: P7
+    finding: "F18 (LOW): persona-registry.yaml declares schema_version: 1 but ships no JSON Schema definition. The verdict enum (active | under_review | retired), the signal_strength enum, and the per-persona history shape are not mechanically validated — a typo or malformed entry will not be caught at commit time. A typed-client Senior (P7 정도윤, 28) wants the schema pinned. Expiry trigger: re-opens when the registry sees its FIRST malformed entry OR when a fork-receiver wants to consume the registry programmatically (e.g., a CI step that gates panel rotation on verdict thresholds) — at that point ship specs/personas/persona-registry.schema.json + a guard that validates against it."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/persona-registry.yaml
+  - persona: P9
+    finding: "F19 (LOW, methodology): persona-registry.yaml lives at docs/dogfood-ledger/ because that's where related dogfood artifacts congregate, but it is NOT a *-iter*.yaml ledger — dogfood_ledger_guard explicitly globs around it. An architect (P9 윤재호, 44) notes the placement is semantically ambiguous: it shares a directory with files of a different schema shape. No immediate move (avoid churn); the alternatives are docs/personas/ (semantic-pure) or docs/governance/ (broader meta-artifact home). methodology_gap for the next wave's catalog-evolution discussion to consider; not blocking R93 completion."
+    classification: methodology_gap
+    references_artifact_path: docs/dogfood-ledger/persona-registry.yaml
+  - persona: P10
+    finding: "F20 (LOW): Existing P1/P2-era dogfood ledgers (email-outbox-iter1/2, activity-feed-iter1, favorites-bookmarks-iter1, approval-workflow-iter1) reference only P1 정민영 + P2 이주형. The persona-registry.yaml does NOT carry P1/P2 entries — only P3..P12 (R93 expansion). A backward-compat veteran (P10 신경수, 52) flags the asymmetry: P1/P2 history is unrecorded, so a future wave owner running the registry update protocol won't know how P1/P2 have been performing. Expiry trigger: re-opens before the next domain dogfood ledger lands (when the next P1/P2 finding appears) — at that point backfill P1 + P2 entries into personas[] with their accumulated history from the existing ledgers."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/persona-registry.yaml
+  - persona: P11
+    finding: "F21 (LOW): registry declares `schema_version: 1` at the top but no schema definition file exists in the repo to validate against. Standards-aligned (P11 황태완, 45, 18년차) — the version field is a promise of versioning that cannot be kept without the artifact it versions. Expiry trigger: re-opens when F18 closes (JSON Schema lands) — at that point pin schema_version to a release-tagged schema file path."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/persona-registry.yaml
+  - persona: P12
+    finding: "F22 (LOW, methodology): persona-registry.yaml is the catalog's meta-artifact tracking persona performance. But the registry ITSELF has no verdict / saturation tracking — when does the catalog decide the registry's own design has saturated and needs reshape? The governance lens (P12 한상미, 55) flags this self-recursion gap symmetrically to F12/F15 from earlier iters: meta-artifacts need their own meta-meta tracking, or the recursion has to be capped explicitly. methodology_gap — recording the observation without proposing a closure because any proposed mechanism (a meta-registry) inherits the same problem one level up. R93 cap: stop the recursion here, document the meta-artifact as inherently self-managed by maintainer judgment, not by another tracking artifact."
+    classification: methodology_gap
+    references_artifact_path: docs/dogfood-ledger/persona-registry.yaml
