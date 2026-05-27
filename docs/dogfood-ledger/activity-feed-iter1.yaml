@@ -1,0 +1,46 @@
+# R79 — activity-feed 2-persona dogfood iter1
+# P1: 정민영 (ops/SRE) — observability, audit emission cadence,
+#                      bulk-update performance, error-shape ambiguity
+# P2: 이주형 (security/PII) — metadata storage contract, asymmetric
+#                            privacy (actor visible vs audience hidden),
+#                            idempotency-key persistence
+#
+# Scope of iter1 — first formal 2-persona protocol on activity-feed
+# (R44 / R52 / R62 were targeted reviews, not the full dogfood). Surface
+# reviewed end-to-end:
+#   - ActivityService (publish / list / get / markRead / markAllRead)
+#   - ActivityController (5 endpoints, all CacheControl.noStore — R52)
+#   - ActivityEvent entity (audience ElementCollection, metadata_json
+#     varchar(4096), idempotency_key unique-with-actor)
+#   - ActivityEventRepository (visibility query — exact `=` match, no
+#     LIKE injection surface)
+#   - ActivityRead entity (per-(event, user) read-state)
+#   - ActivityDtos (PublishActivityRequest @Size validation,
+#     ActivityEventResponse with youAreInAudience boolean instead of
+#     raw audience id set — R44 P2-F7 closure)
+#   - templates/L4/activity-feed (R82 already adopted Wave A iter3)
+iteration: 1
+findings:
+  - persona: P1
+    finding: "F1 (LOW): ActivityService.publish emits no audit-log line. The catalog has audit.activity-feed logger but it only fires on markAllRead with the BULK_MARK_READ verb. Write operations (publish) leave no trail. Expiry trigger: re-opens before the fork-receiver wires the FIRST per-event audit emission (e.g. SIEM rule that counts publish events per actor) — at that point the absent verb breaks the SIEM consumer."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/activityfeed/ActivityService.java
+  - persona: P1
+    finding: "F2 (MEDIUM): markAllRead loops `readRepository.save(new ActivityRead(...))` per unread event. For a caller with N unread events this is N INSERT statements per request. At 100-1000 unread the latency is acceptable; at 5000+ (multi-month accumulation, batch-import scenario) the round-trip cost is noticeable. Single-INSERT-FROM-SELECT or upsert would be O(1) round trips. Deferred because the catalog refuses to choose JPA-bulk-insert vs native SQL vs Hibernate StatelessSession for fork-receivers. Expiry trigger: re-opens before the fork-receiver expects average unread-per-user above 5000 OR before any batch-import / migration workflow lands 5000+ events to a single user at once."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/activityfeed/ActivityService.java
+  - persona: P1
+    finding: "F3 (LOW): findVisibleSingle returns Optional.empty() for both 'event does not exist' and 'event exists but caller has no visibility'. The controller maps both to 404 (IDOR-safe by design). But the ops log gives no signal which path fired, so a 404 burst from a credential-stuffing probe is indistinguishable from a 404 burst from stale frontend cache replays. Expiry trigger: re-opens before the fork-receiver wires the first SIEM rule that needs to distinguish probe-401 from cache-stale-404 — at that point the catalog should emit a structured AUDIT.debug verb for each case."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/activityfeed/ActivityEventRepository.java
+  - persona: P2
+    finding: "F4 (HIGH): ActivityEvent.metadataJson stores publisher-supplied JSON metadata VERBATIM (up to 4096 chars). Unlike the comparable Favorite.note (R78 F4) where caller-scoped read keeps direct exposure to the owner, ActivityEvent's audience model fans the verbatim metadata out to up-to-100 audience members per request (via ActivityDtos.ActivityEventResponse.metadata field). A publisher pastes 주민등록번호 / email / JWT / Bearer fragments into metadata and 100 readers see it. The catalog deliberately does NOT redact at storage (breaks legitimate structured-event UX) but MUST ship explicit guidance. Closure: javadoc on ActivityEvent.metadataJson + ActivityService.publish documenting the PII contract end-to-end, citing R61/R67/AuditPiiHelper.piiHash for fork-receivers wiring audit logs, and explicitly noting the audience fan-out amplification above Favorite.note's single-owner shape."
+    classification: real_bug
+    closure_commit_sha: 200a5d9
+    closure_verification_ref: "ActivityEvent.metadataJson javadoc + ActivityService.publish javadoc both document the PII contract end-to-end (visibility fan-out / backups-replicas / future audit emission / cross-tenant amplification) with explicit fork-receiver guidance to apply privacy policy at the publish boundary OR every downstream consumer; no behaviour change so no executable regression test exists"
+    closure_verification_reason: doc-only
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/activityfeed/ActivityEvent.java
+  - persona: P2
+    finding: "F5 (MEDIUM): ActivityEventResponse exposes actor_user_id raw to every audience member while audience_user_ids is intentionally hidden (R44 P2-F7 closure — audience peer leak). The asymmetry is by design (audience must NOT see each other, but everyone sees WHO did it) but the catalog does not document the choice. A fork-receiver who reads the DTO record cannot tell whether the actor exposure is intentional or an oversight. Expiry trigger: re-opens before the fork-receiver wires anonymous-publisher UX (e.g. anonymous activity feeds, whistleblower-style submission flows) — at that point the actor exposure becomes an information-disclosure surface that breaks the new product requirement, and the asymmetric design must be revisited."
+    classification: scope_deferral
+    references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/activityfeed/ActivityDtos.java
