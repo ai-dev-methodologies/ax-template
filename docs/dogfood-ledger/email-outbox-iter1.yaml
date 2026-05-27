@@ -54,8 +54,10 @@ findings:
     closure_test_method: "adminDelete_absentTarget_emitsAbsentVerbWithNoRecipientHash"
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java
   - persona: P2
-    finding: "F10: EmailTemplate has no version column; template update silently changes future enqueues. Fork-receivers add versioning per their immutable-history needs. Expiry trigger: re-opens before the fork-receiver needs forensic audit of WHICH template version produced a specific historical email (post-incident reconstruction, regulatory inspection, legal hold). Wave D2 tracks the planned closure."
-    classification: scope_deferral
+    finding: "F10: EmailTemplate had no version column; template update silently changed future enqueues. Closed by Wave D2 — added version INTEGER + immutable EmailTemplateHistory snapshot table. Forensic audit (post-incident reconstruction, regulatory inspection, legal hold) can now resolve WHICH template version produced a specific historical email by joining email_outbox.created_at against email_template_history.captured_at."
+    classification: real_bug
+    closure_commit_sha: ccf5ffa
+    closure_test_method: "upsertTemplate_existing_capturesPreUpdateSnapshotAndIncrementsVersion"
     references_artifact_path: backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailTemplate.java
   - persona: P2
     finding: "F11: LoggingEmailSenderService default writes raw recipient + subject to stdout; subject may carry verification codes / reset links"
