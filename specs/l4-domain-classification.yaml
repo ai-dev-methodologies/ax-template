@@ -184,6 +184,8 @@ tiers:
       - name: "identity-verification"
         intended_use: "KYC / document verification pipeline."
       # multi-tenant promoted to selectable in R93 (see selectable tier above).
+      - name: "bulk-import"
+        intended_use: "Bulk CSV/XLSX import with staged validation + partial commit + per-row error report (the bilateral partner of the existing report-export L4)."
       - name: "ratelimit"
         intended_use: "API rate-limiting policy + counter store."
       - name: "realtime-policy"

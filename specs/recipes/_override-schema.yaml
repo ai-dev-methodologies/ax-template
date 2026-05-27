@@ -63,6 +63,7 @@ $defs:
       - audit-log
       - auth
       - billing
+      - bulk-import
       - comment-thread
       - crud
       - email-outbox
