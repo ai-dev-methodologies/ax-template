@@ -1,0 +1,80 @@
+# R93 — modular-catalog top-3 wave dogfood iter1 (10-persona protocol)
+#
+# Scope under review:
+#   - α (bd2307d) multi-tenant L4 future_add → selectable (R39 stub +
+#     classification + trio_integrity_allowlist)
+#   - β (930ad10) i18n-policy-l0.yaml spec seed (6 items, future_add)
+#   - γ (26ee4cb) bulk-import schema enum reserve + future_add entry
+#
+# Persona expansion (this iter is the FIRST catalog dogfood with > 2 personas).
+# P1 정민영 (ops/SRE) + P2 이주형 (security/PII) remain the domain-default
+# pair; P3-P12 below stratify by seniority × age band per the user request.
+#
+# Personas:
+#   P3  김민준 (24, Junior 1년차 학사 신졸)        — Mobile/SDK consumer
+#   P4  박지영 (33, Junior 2년차 비전공 전환)       — Onboarding learnability
+#   P5  이상호 (42, Junior 1년차 직무 전환)         — Step-by-step docs
+#   P6  최영숙 (53, Junior 1년차 산업 전환)         — 한국 규제 매핑
+#   P7  정도윤 (28, Senior 6년차)                   — Type safety / contract
+#   P8  강하늘 (35, Senior 8년차 한국 SaaS)         — Observability / SRE
+#   P9  윤재호 (44, Senior 14년차 architect)        — Cross-cutting impact
+#   P10 신경수 (52, Senior 22년차 enterprise)       — Backward compat
+#   P11 황태완 (45, 특급시니어 18년차 principal)    — Standards alignment
+#   P12 한상미 (55, 특급시니어 28년차 fellow/CTO)   — Governance / catalog evolution
+iteration: 1
+findings:
+  - persona: P3
+    finding: "F1 (LOW): templates/L4/multi-tenant/README.md describes the composition contract end-to-end from the BACKEND lens (X-Tenant-ID header propagation, Hibernate filter wiring, async-boundary propagation) — but says nothing about how a MOBILE fork-receiver (iOS / Android / React Native) injects X-Tenant-ID into outbound requests. A bootcamp-grad mobile developer (P3 김민준, 24, 1년차) reading this stub cannot answer 'where does the tenant id come from on the device side'. Expiry trigger: re-opens before the first fork-receiver wires a mobile client against a multi-tenant recipe — at that point the README needs a 'Mobile SDK integration' subsection covering token+tenant header pairing + persistence + tenant switch UX."
+    classification: scope_deferral
+    references_artifact_path: templates/L4/multi-tenant/README.md
+  - persona: P4
+    finding: "F2 (MEDIUM): specs/i18n-policy-l0.yaml ships 6 spec items but provides no priority ordering — a fork-receiver picking up i18n cannot tell whether LOCALE-NEG-001 or MESSAGE-SOURCE-001 is the foundational starter. The DEFAULT-DECL-001 item mentions RECIPE.md frontmatter fields (default_locale + supported_locales) but only in note text — no concrete copy-pasteable example block. A 33-year-old Junior (P4 박지영, 비전공 전환 2년차) is lost on first read. Closure: added priority order block (1→6) and verbatim RECIPE.md frontmatter example for the canonical KO+EN baseline."
+    classification: real_bug
+    closure_commit_sha: 183f827
+    closure_verification_ref: "specs/i18n-policy-l0.yaml now carries a priority order comment block before items: + a verbatim RECIPE.md frontmatter example block. The block is doc-only; no executable regression exists because the artefact is fork-receiver documentation, not runtime behavior."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/i18n-policy-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): bulk-import (R93 phase γ) is schema-enum reserved + classified as future_add but the classification entry's intended_use is a single sentence. A late-career-changer Junior (P5 이상호, 42, 1년차) cannot identify the first commit sequence: do I write the spec first? the README first? the L4 dir first? In which order? Closure: expanded intended_use into a numbered 4-step playbook (spec yaml shape → R39 stub README → classification promote → trio_integrity_allowlist registration) with concrete file paths, mirroring the proven multi-tenant promotion sequence."
+    classification: real_bug
+    closure_commit_sha: 183f827
+    closure_verification_ref: "specs/l4-domain-classification.yaml#future_add.items[name=bulk-import].intended_use now carries a 4-step fork-receiver playbook. Each step references a concrete file path + guard implication."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/l4-domain-classification.yaml
+  - persona: P6
+    finding: "F4 (HIGH): specs/multi-tenant-l0.yaml ISOLATION-001/002/003 (Hibernate filter row-level / schema-per-tenant / AOP guard) carry no PIPA(개인정보보호법) / 전자금융감독규정 / 금융사 신용정보 보호 mapping. A 53-year-old Junior from a regulated industry transition (P6 최영숙) needs to know WHICH strategy a Korean financial recipe should adopt to satisfy cross-tenant data-isolation audit. Expiry trigger: re-opens before any fork-receiver enters a PIPA / 전자금융감독규정 / KISA ISMS audit OR before any compliance-driven recipe (e.g. 금융권 SaaS, 의료 정보 시스템) flips tenant_model: multi — at that point the spec needs an ISOLATION ↔ regulation mapping table."
+    classification: scope_deferral
+    references_artifact_path: specs/multi-tenant-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): i18n-policy spec defines locale negotiation + message source contract but the RESULT of negotiation (the server's chosen Locale) is not represented in the API contract. The Content-Language response header / OpenAPI components / typed-SDK codegen has no anchor — a typed client (P7 정도윤, 28, 6년차) consuming this API cannot detect at compile time whether a response was localized to ko-KR or fell back to en-US. Expiry trigger: re-opens when the first typed SDK consumer (frontend openapi-typescript codegen OR partner-issued SDK) needs to consume Locale-bound responses — at that point i18n-policy needs a CONTRACT-001 item pinning Content-Language header semantics + an x-locale OpenAPI extension."
+    classification: scope_deferral
+    references_artifact_path: specs/i18n-policy-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): I18N-MESSAGE-SOURCE-001 says missing keys MUST fail the build, but a locale added after deployment (e.g. new fork-receiver adds ja-JP late) can present runtime missing-key fallback before the next build. The spec does not define what observability surface emits when a runtime fallback fires — what metric name, what log level, what alert threshold. A SaaS SRE (P8 강하늘, 35, 8년차) cannot wire a SIEM rule. Expiry trigger: re-opens before any fork-receiver deploys i18n to production where a runtime missing-key fallback can silently swap a user-facing string for the raw message code — at that point i18n-policy needs an OBSERVABILITY-001 item pinning metric name (e.g. i18n.missing_key.count{locale=,key=}) + log structure + SLO."
+    classification: scope_deferral
+    references_artifact_path: specs/i18n-policy-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): multi-tenant L4 stub describes the steady-state composition contract (single→multi flip in RECIPE.md, ISOLATION + PROPAGATION adoption) but says NOTHING about migrating an EXISTING single-tenant production DB to multi-tenant — backfilling tenant_id on 20+ domain entities, zero-downtime cutover, dual-write/dual-read overlap window, rollback procedure. An architect (P9 윤재호, 44, 14년차) cannot present a migration plan to their VP. Expiry trigger: re-opens before any fork-receiver migrates an existing single-tenant production DB to multi-tenant — at that point templates/L4/multi-tenant/ needs a MIGRATION.md sibling with V<NN> migration template + backfill strategy + zero-downtime checklist."
+    classification: scope_deferral
+    references_artifact_path: templates/L4/multi-tenant/README.md
+  - persona: P10
+    finding: "F8 (MEDIUM): R93 phase γ added bulk-import to specs/recipes/_override-schema.yaml#l4_domain enum without documenting whether the change is additive or breaking. A veteran enterprise engineer (P10 신경수, 52, 22년차) running deployed fork-receivers against stale JSON Schema validator caches wants explicit reassurance that EXISTING recipe yamls remain valid. Closure: added an 'additive-change contract' comment block above the enum stating extensions are strictly additive (every prior value still in set), removals require major version bump."
+    classification: real_bug
+    closure_commit_sha: 183f827
+    closure_verification_ref: "specs/recipes/_override-schema.yaml#l4_domain now carries an explicit additive-change contract comment block above the enum: declaration."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/recipes/_override-schema.yaml
+  - persona: P11
+    finding: "F9 (MEDIUM): I18N-TIMEZONE-001 anchors to ISO 8601 + JEP 150 correctly but doesn't pin the JSON serialization form of a UTC Instant — is it 2026-05-27T03:42:18Z (Z form, Jackson default) or 2026-05-27T03:42:18+00:00 (explicit-offset form)? Both are valid ISO 8601 but downstream clients parsing strict regex break on the unexpected form. A principal engineer (P11 황태완, 45, 18년차) needs the convention pinned, not just the standard cited. Closure: appended notes block to I18N-TIMEZONE-001 — UTC Instant MUST serialize as Z form, +HH:MM reserved for explicit non-UTC display values."
+    classification: real_bug
+    closure_commit_sha: 183f827
+    closure_verification_ref: "specs/i18n-policy-l0.yaml#I18N-TIMEZONE-001.notes now pins ISO 8601 Z form for UTC Instant JSON serialization and reserves +HH:MM for explicit non-UTC display values."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/i18n-policy-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): R93 wave (3 commits bd2307d + 930ad10 + 26ee4cb) landed without a dogfood-ledger audit trail. multi-tenant L4 promotion is a catalog-discovery-surface change that touches fork-receiver visibility — exactly the kind of event R71/R85/R86/R87 ladder was designed to track. The 28-year-fellow lens (P12 한상미, 55) flags this as a meta-governance gap: catalog-meta events should not be exempt from the same audit discipline domain events follow. Closure: this very ledger entry IS the audit trail, written immediately after the R93 wave landed. The closure_commit_sha 183f827 carries the 4 real_bug closures the iter1 protocol produced, and the ledger commit landing this file closes F10 as the meta-bug self-resolution."
+    classification: real_bug
+    closure_commit_sha: 183f827
+    closure_verification_ref: "docs/dogfood-ledger/r93-iter1.yaml itself is the audit trail. R71 dogfood ledger discipline applied to a catalog-meta event for the first time — same R85→R86→R87 ladder mechanics used by R60 iter1 F10 (domain event) + R89 phase 3 M1 (meta-catalog allow-list debt) now applies to R93 (catalog promotion/seeding events)."
+    closure_verification_reason: doc-only
+    references_artifact_path: docs/dogfood-ledger/r93-iter1.yaml
