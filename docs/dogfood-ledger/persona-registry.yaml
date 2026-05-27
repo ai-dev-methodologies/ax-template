@@ -1,0 +1,316 @@
+schema_version: 1
+description: >
+  Canonical persona definitions + per-wave performance history for the
+  ax-template dogfood protocol. Introduced in R93 after the panel
+  expanded from P1/P2 (original ops+security pair) to P1..P12 (with
+  Junior/Senior/특급시니어 stratification × 20s/30s/40s/50s age bands).
+
+# ── File scope ─────────────────────────────────────────────────────────────
+# This file is NOT a dogfood iter ledger — it does not match the
+# *-iter*.yaml glob that dogfood_ledger_guard.sh scans, so guard-side
+# schema requirements (findings[] / classification fields) do not apply.
+# It IS the governance record consumed by future wave owners deciding
+# which personas to seat on the next review panel.
+#
+# ── Field semantics ────────────────────────────────────────────────────────
+#   id                 Sequential P<N> identifier. P1/P2 = original pair;
+#                      P3..P12 = R93 iter1 expansion.
+#   seniority          Junior | Senior | 특급시니어
+#   experience_years   Integer; aligned with the wave the persona was seated.
+#   lens               One-sentence summary of the persona's review focus —
+#                      what kind of finding only THIS persona would surface.
+#   history            Per-wave-iter list of findings produced. Empty
+#                      history blocks (8 of 10 personas in R93 iter2) mean
+#                      the persona reviewed and reported "no residual" —
+#                      no entry suppressed, just no signal.
+#     wave             Catalog R-number (R93) where the iter happened.
+#     iter             1-indexed iteration within the wave.
+#     finding_id       F<N> from the iter's ledger (cross-reference).
+#     classification   real_bug | scope_deferral | methodology_gap
+#     signal_strength  high | medium | low — reviewer's perceived value
+#                      relative to other findings in that iter.
+#     unique_to_persona  true if no other persona in the same iter
+#                      surfaced the same observation. Used to detect
+#                      lens overlap.
+#     notes            Short rationale + closure mechanism reference.
+#   verdict            active | under_review | retired
+#   verdict_reason     Short justification.
+#   next_review_at     Trigger condition or future wave at which to
+#                      re-evaluate. Mirrors the scope_deferral expiry
+#                      trigger pattern (R85) — verdicts decay if not
+#                      explicitly re-affirmed.
+#
+# ── Update protocol ────────────────────────────────────────────────────────
+#   On every iter terminator (the iter where 0 real_bug findings emerge),
+#   the wave owner:
+#     1. appends each persona's contributions to history[]
+#     2. recomputes verdict (active | under_review | retired)
+#     3. recomputes review_summary block for that wave
+#     4. commits this file alongside the iter terminator ledger
+#   No mechanical guard enforces this protocol yet — by deliberate choice
+#   per the R93 'no new catalog rules' completion directive. A future
+#   R-numbered wave MAY introduce a persona_registry_freshness_guard.sh
+#   if the protocol is observed to silently drift.
+#
+# ── Maintenance ownership ─────────────────────────────────────────────────
+#   Owner: the catalog maintainer landing the iter terminator commit.
+#   No single-fork-receiver opinion; this file is shared infrastructure.
+#   Disagreements about a verdict change MUST be recorded as a finding
+#   in the next wave's iter1, not as a unilateral edit.
+
+personas:
+  - id: P3
+    name: 김민준
+    age: 24
+    seniority: Junior
+    experience_years: 1
+    background: "학사 신졸, mobile-first thinking"
+    lens: "Mobile/SDK consumer — UI 통합 + 헤더 주입 + secure storage + tenant 전환 UX"
+    history:
+      - wave: R93
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "templates/L4/multi-tenant/README.md backend-only stub의 모바일 SDK 통합 가이드 부재. Closure: expiry trigger 기록 (첫 모바일 fork-receiver 도입 시 재오픈)."
+    verdict: active
+    verdict_reason: "unique mobile lens — backend stub만으로는 모바일 fork가 막히는 점 즉시 짚음. 1건 deferral with clear trigger."
+    next_review_at: "R96 wave OR first mobile fork-receiver against a multi-tenant recipe"
+
+  - id: P4
+    name: 박지영
+    age: 33
+    seniority: Junior
+    experience_years: 2
+    background: "비전공 → 개발 전환"
+    lens: "Onboarding learnability — 신규 fork-receiver의 'where to start' 명료성"
+    history:
+      - wave: R93
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: high
+        unique_to_persona: true
+        notes: "i18n-policy-l0.yaml 6 item에 priority 부재 + RECIPE.md frontmatter 예제가 notes에 묻힘. Closure: priority order comment + verbatim KO+EN frontmatter block 추가 (commit 183f827)."
+    verdict: active
+    verdict_reason: "1 real_bug closed clean. P5와 lens 인접하나 differentiation 명확 (priority/example vs sequential playbook)."
+    next_review_at: "R94 종료 시 P5와 차별성 재평가"
+
+  - id: P5
+    name: 이상호
+    age: 42
+    seniority: Junior
+    experience_years: 1
+    background: "직무 전환 (이전 비기술), step-by-step 의존"
+    lens: "Sequential playbook — fork-receiver 첫 commit의 단계별 순서 + 각 단계의 guard implication"
+    history:
+      - wave: R93
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: high
+        unique_to_persona: true
+        notes: "bulk-import의 intended_use가 한 줄 짜리 — fork-receiver 첫 commit 시퀀스 불명. Closure: 4-step playbook 확장 (spec → README → classification promote → trio_integrity_allowlist) commit 183f827."
+    verdict: active
+    verdict_reason: "1 real_bug closed clean. P4와 lens 인접 — flag for differentiation review."
+    next_review_at: "R94 종료 시 P4와 차별성 재평가; 같은 wave에서 또 인접 findings 산출 시 P4/P5 합칠 후보."
+
+  - id: P6
+    name: 최영숙
+    age: 53
+    seniority: Junior
+    experience_years: 1
+    background: "산업 전환 (이전 비IT), 한국 규제 시각"
+    lens: "한국 regulatory mapping — PIPA / 전자금융감독규정 / KISA ISMS / 의료정보보호법 정합성"
+    history:
+      - wave: R93
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "multi-tenant ISOLATION 3 strategies 중 PIPA/전자금융감독규정 적합성 매핑 부재. Closure: expiry trigger (첫 규제 audit / 금융권 SaaS recipe 시 ISOLATION ↔ regulation mapping table 추가)."
+    verdict: active
+    verdict_reason: "한국 enterprise 특화 lens — 다른 페르소나 9명 중 누구도 cover 불가. 글로벌 catalog에서 유일하게 한국 규제 vector 제공."
+    next_review_at: "R96 wave OR first PIPA / 전자금융감독규정 audit / 금융권 multi-tenant flip"
+
+  - id: P7
+    name: 정도윤
+    age: 28
+    seniority: Senior
+    experience_years: 6
+    background: "Type safety / contract-first / SDK 생산"
+    lens: "Typed client contract — OpenAPI components / SDK codegen / 컴파일타임 typed boundary"
+    history:
+      - wave: R93
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "Content-Language / Accept-Language 결과가 OpenAPI contract에 anchor 안 됨 — typed SDK가 compile-time에 fallback locale 감지 불가. Closure: trigger (첫 typed SDK consumer 등장 시 CONTRACT-001 추가)."
+      - wave: R93
+        iter: 3
+        finding_id: F13
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "iter2 F11 closure (Jackson strict-offset)가 @PathVariable/@RequestParam ConversionService 경로에는 자동 적용 안 됨. Closure: trigger (첫 date-typed URL binding 시)."
+    verdict: active
+    verdict_reason: "2 deferrals, both anchored. Closure 검증 lens (iter3에서 iter2 closure의 asymmetry 캐치) 입증."
+    next_review_at: "유지; 다음 wave에서도 closure 재검토 lens 작동하는지 확인"
+
+  - id: P8
+    name: 강하늘
+    age: 35
+    seniority: Senior
+    experience_years: 8
+    background: "한국 SaaS / SRE / observability"
+    lens: "Operational observability — metric naming / log structure / SLO / SIEM rule wiring"
+    history:
+      - wave: R93
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "I18N-MESSAGE-SOURCE-001의 build-time fail은 적혀 있으나 runtime missing-key fallback observability surface 부재. Closure: trigger (첫 i18n production deployment 시 OBSERVABILITY-001 추가)."
+    verdict: active
+    verdict_reason: "1 deferral with concrete trigger. observability lens는 SaaS / 한국 SRE 시장에서 standard requirement이라 적용 시점이 빠를 가능성."
+    next_review_at: "유지; 첫 i18n production deploy 시 트리거 발화 확인 + lens validity 재확인"
+
+  - id: P9
+    name: 윤재호
+    age: 44
+    seniority: Senior
+    experience_years: 14
+    background: "System architect / cross-cutting / VP-level briefing"
+    lens: "Cross-cutting migration — 기존 production stack을 새 contract으로 옮기는 단계별 playbook + rollback"
+    history:
+      - wave: R93
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "multi-tenant L4 stub의 steady-state contract은 있으나 deployed single-tenant DB의 multi 전환 playbook 부재. Closure: trigger (첫 단일→multi DB 마이그레이션 시 MIGRATION.md sibling)."
+    verdict: active
+    verdict_reason: "high-signal deferral. architecture lens는 P10 (backward compat)과 다름 — P9는 능동 마이그레이션, P10은 수동 호환성."
+    next_review_at: "유지; lens differentiation with P10 holds — 두 사람 모두 high-signal 산출."
+
+  - id: P10
+    name: 신경수
+    age: 52
+    seniority: Senior
+    experience_years: 22
+    background: "Enterprise veteran / deployed system 운영 / 호환성 본능"
+    lens: "Backward compatibility — 이 변경이 기존 deployed fork-receiver를 깨뜨릴 risk + migration note 충실성"
+    history:
+      - wave: R93
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "schema enum extension의 additive 성격이 명시 안 됨. Closure: contract comment 추가 (commit 183f827)."
+      - wave: R93
+        iter: 3
+        finding_id: F14
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "iter2 F11 closure가 stricter — 기존 offsetless client breakage risk + migration note 부재. Closure: trigger (첫 fork-receiver의 access log에 offsetless 검출 시)."
+    verdict: active
+    verdict_reason: "1 real_bug + 1 deferral, 둘 다 closure 자체를 재검토하는 메타-vigilance. P9와 lens 비중첩."
+    next_review_at: "유지"
+
+  - id: P11
+    name: 황태완
+    age: 45
+    seniority: 특급시니어
+    experience_years: 18
+    background: "Principal engineer / standards body 활동 / RFC 정합성"
+    lens: "Standards alignment — RFC / ISO / IETF 정합 + symmetric inbound/outbound contract 강제"
+    history:
+      - wave: R93
+        iter: 1
+        finding_id: F9
+        classification: real_bug
+        signal_strength: high
+        unique_to_persona: true
+        notes: "ISO 8601 Z form pin 부재. Closure: outbound serialization MUST use Z form, +HH:MM은 explicit non-UTC 용 (commit 183f827)."
+      - wave: R93
+        iter: 2
+        finding_id: F11
+        classification: real_bug
+        signal_strength: high
+        unique_to_persona: true
+        notes: "iter1 F9 closure의 inbound 비대칭 — offsetless ISO 8601 inbound parsing 미정의. Closure: RFC 3339 §5.6 strict-offset 요구, 400 INVALID_DATETIME reject (commit b8da020)."
+    verdict: active
+    verdict_reason: "**most productive persona in R93** — 2 real_bug closed across 2 iters, each closure spawned by previous closure 재검토. principal-eng symmetric coverage lens가 closure 메타-검증 패턴으로 작동."
+    next_review_at: "유지 (high-signal anchor)"
+
+  - id: P12
+    name: 한상미
+    age: 55
+    seniority: 특급시니어
+    experience_years: 28
+    background: "Fellow / CTO-track / catalog governance / self-consistency 강박"
+    lens: "Meta-governance — catalog 자체의 self-consistency + 재귀적 무모순성 + R-anchor 추적"
+    history:
+      - wave: R93
+        iter: 1
+        finding_id: F10
+        classification: real_bug
+        signal_strength: high
+        unique_to_persona: true
+        notes: "R93 wave가 dogfood ledger 없이 land — R71/R85 ladder가 catalog-meta event 자체에 적용 안 됨. Closure: r93-iter1.yaml 자체 생성이 closure (commit 183f827 + ledger 32b1673)."
+      - wave: R93
+        iter: 2
+        finding_id: F12
+        classification: methodology_gap
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "iter ledger continuity 전략 미정의. methodology_gap으로 기록 — 카탈로그 rule 권고 (separate-file-per-iter 컨벤션 pin)."
+      - wave: R93
+        iter: 3
+        finding_id: F15
+        classification: methodology_gap
+        signal_strength: low
+        unique_to_persona: true
+        notes: "F12 자체에 R-anchor 부재 — methodology_gap이 R-번호 없이 떠다니면 silent debt (F10이 R93 wave에 대해 지적한 실패 모드의 symmetric instance). 자기-recursive 지적."
+    verdict: active
+    verdict_reason: "1 real_bug + 2 methodology_gap. 메타-governance lens 가치 확실하나 methodology_gap이 연속 2회 — saturation 신호. R94에서 또 methodology_gap only 산출하면 lens 재정의 필요 (예: meta-governance를 catalog rule 자체로 흡수)."
+    next_review_at: "R94 wave 종료 시 saturation 판정 — 동일 lens가 또 methodology_gap만 산출하면 lens 재정의 또는 별도 saturation R-anchor 발행"
+
+# ── R93 wave 종합 판정 ────────────────────────────────────────────────────
+review_summary:
+  R93:
+    panel_size: 10                            # P3..P12 (P1/P2는 본 wave 미참여)
+    iterations: 3
+    total_findings: 15
+    real_bug_closures: 6                      # F2, F3, F8, F9, F10, F11
+    scope_deferrals: 7                        # F1, F4, F5, F6, F7, F13, F14
+    methodology_gaps: 2                       # F12, F15
+    closure_commits:                          # R86/R87 coverage
+      - "183f827 (F2/F3/F8/F9/F10)"
+      - "b8da020 (F11)"
+      - "32b1673 (iter1 ledger — F10 self-closure)"
+      - "b19e924 (iter2 ledger)"
+      - "cde809c (iter3 terminator ledger — 0 real_bug)"
+    most_productive_persona: "P11 황태완 (2 real_bug closed across iter1+iter2)"
+    least_productive_personas:
+      - "tied across single-finding Junior personas (P3/P4/P5/P6) — expected for wave size; not retirement-eligible"
+    lens_overlap_flagged:
+      - persona_pair: ["P4 박지영", "P5 이상호"]
+        rationale: "둘 다 Junior + onboarding-adjacent. R93에서는 differentiation 유지됐으나 (priority/example vs sequential playbook), 다음 wave에서 또 인접 findings 산출 시 합치는 결정 필요."
+    saturation_flagged:
+      - persona: "P12 한상미"
+        rationale: "methodology_gap 2회 연속 산출. lens 가치 명확하나 카탈로그가 메타-governance를 catalog rule로 흡수하면 lens가 무용해지는 risk. R94에서 동일 패턴 반복 시 lens 재정의."
+    panel_judgment: "all_active_no_retirement"
+    next_panel_composition_for_R94:
+      keep: ["P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"]
+      under_review: ["P4/P5 lens overlap", "P12 saturation"]
+      add: []                                 # 본 wave에서 새 lens 추가 결정 없음
+      retire: []
