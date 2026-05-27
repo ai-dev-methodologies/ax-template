@@ -259,6 +259,126 @@ items:
     applicable: true
     notes: "Review every @RestController class: no @Cacheable, @CachePut, @CacheEvict on the class or any of its methods. Anchored to OWASP API1:2023 BOLA + Spring Framework Reference §Cache Abstraction — Best Practices."
 
+  - id: "PRACTICES-CONFIG-001"
+    chapter: "Configuration"
+    requirement: "Application configuration must be bound through @ConfigurationProperties record types, not scattered @Value('${...}') injections. A typed contract concentrates the application-yml-vs-code coupling in one place, gives the IDE rename-safety, and lets Spring's relaxed-binding rules apply uniformly. Rule body: practices/rules/config-typed-properties.md."
+    test_method: "practices_CONFIG_001_configurationPropertiesUsedNotValue"
+    verification_type: "review"
+    applicable: true
+    notes: "Review @Value(\"${...}\") usages outside test fixtures — every production-path config injection should resolve to a @ConfigurationProperties record. Anchored to Spring Boot Reference §Type-safe Configuration Properties."
+
+  - id: "PRACTICES-CONFIG-002"
+    chapter: "Configuration / Secrets"
+    requirement: "Secrets in application.yml MUST use the ${ENV[:default]} placeholder shape, never a hardcoded literal. A hardcoded secret in committed yaml is one git-log search away from credential leak; the placeholder shape forces ops/CI to inject the live value via environment / secret-manager. Rule body: practices/rules/config-no-secret-in-yaml.md."
+    test_method: "practices_CONFIG_002_secretsResolveFromEnvNotLiteral"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every key matching (password|secret|token|api[_-]?key|credential) in application*.yml — value MUST start with '${' (env placeholder). Anchored to Spring Boot Reference §Externalized Configuration + OWASP A02:2021 Cryptographic Failures."
+
+  - id: "PRACTICES-CONFIG-003"
+    chapter: "Configuration / Profiles"
+    requirement: "Profile-specific configuration belongs in application-{profile}.yml, not in '---' profile-gated blocks of application.yml. Profile blocks in one big file are unauditable per environment (a dev override silently changes prod when the dev block toggles spring.profiles.active). Per-profile files mirror the deployment topology. Rule body: practices/rules/config-profile-isolation.md."
+    test_method: "practices_CONFIG_003_profileSpecificConfigInOwnFile"
+    verification_type: "review"
+    applicable: true
+    notes: "Review application.yml for any '---'-delimited profile blocks or 'spring.config.activate.on-profile' inside the main document — flag and move into application-{profile}.yml. Anchored to Spring Boot Reference §Profile-Specific Files."
+
+  - id: "PRACTICES-HTTP-001"
+    chapter: "HTTP Client"
+    requirement: "Outbound HTTP MUST use Spring 6.1+ RestClient (synchronous) or WebClient (reactive), not the deprecated RestTemplate. RestTemplate has been maintenance-mode since Spring 6.1; new patterns (interceptors, request factories, header-builders) ship to RestClient first. Rule body: practices/rules/http-restclient-over-resttemplate.md."
+    test_method: "practices_HTTP_001_outboundUsesRestClientNotRestTemplate"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every new RestTemplate() / @Bean RestTemplate — none should exist outside legacy adapter code that has a tracked migration ticket. Anchored to Spring Framework 6.1 Reference §REST Client."
+
+  - id: "PRACTICES-HTTP-002"
+    chapter: "HTTP Client / Resilience"
+    requirement: "Every HTTP client MUST declare finite connect and read timeouts. Default null means infinite — a stalled downstream pinning every thread on the caller is the canonical outage shape. Rule body: practices/rules/http-explicit-timeouts.md."
+    test_method: "practices_HTTP_002_httpClientHasFiniteTimeouts"
+    verification_type: "review"
+    applicable: true
+    notes: "Review @Bean RestClient / WebClient builder chains — both .requestFactory(SimpleClientHttpRequestFactory with connectTimeout/readTimeout) AND the equivalent reactive ConnectionProvider settings must be set finite. Anchored to Apache HttpClient + Reactor Netty timeout documentation."
+
+  - id: "PRACTICES-HTTP-003"
+    chapter: "HTTP Client / Lifecycle"
+    requirement: "HTTP clients MUST be declared as @Bean singletons, not constructed per-call (new RestClient() inside a service method). Per-call construction discards the connection pool, ignores configured timeouts and interceptors, and adds steady GC pressure. Rule body: practices/rules/http-shared-client-singleton.md."
+    test_method: "practices_HTTP_003_httpClientIsSingletonNotPerCall"
+    verification_type: "review"
+    applicable: true
+    notes: "Review service methods for inline RestClient.create() / new WebClient() — none should exist; the client comes from constructor injection of a @Bean. Anchored to Spring Reference §Bean Scopes + Java HttpClient pooling guidance."
+
+  - id: "PRACTICES-LANG-001"
+    chapter: "Language / Records"
+    requirement: "Transport DTOs (*Request / *Response classes at API boundaries) MUST be Java records, not classes with @Data / @Getter setters. Records give immutability + equals/hashCode/toString + one-line field contract for free; the catalog ships them as the boundary type for every controller. Rule body: practices/rules/lang-records-for-dtos.md."
+    test_method: "practices_LANG_001_transportDtosAreRecords"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every class matching .*(Request|Response)$ at controller / service boundary — must be a `record`, not a `class` with mutable accessors. Anchored to JEP 395 — Records (final) + Spring Reference §RequestBody / @RestController."
+
+  - id: "PRACTICES-LANG-002"
+    chapter: "Language / Sealed Types"
+    requirement: "Closed result hierarchies (e.g., PaymentResult { Success | Insufficient | DuplicateCharge | UnknownProvider }) MUST be modeled as `sealed interface T permits ...` with record subtypes. The compiler enforces exhaustive switch handling — every new outcome forces every caller's switch to add the case. Rule body: practices/rules/lang-sealed-result-hierarchies.md."
+    test_method: "practices_LANG_002_closedHierarchyIsSealedNotEnum"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every domain result-type with a known finite outcome set — modelled as sealed interface + record permits, switch over the type uses pattern-matching with -> arms. Anchored to JEP 409 — Sealed Classes (final) + JEP 441 — Pattern Matching for switch."
+
+  - id: "PRACTICES-LANG-003"
+    chapter: "Language / Immutability"
+    requirement: "Public, non-static, non-final instance fields are FORBIDDEN outside record canonical components. Public mutable fields bypass encapsulation, defeat JPA dirty checking, and break every dependent on the next refactor. Rule body: practices/rules/lang-no-public-mutable-fields.md."
+    test_method: "practices_LANG_003_noPublicMutableInstanceFields"
+    verification_type: "review"
+    applicable: true
+    notes: "ArchUnit / static review: every non-record `class` has no `public` non-`final` instance field. Anchored to Effective Java Item 16 (Use accessor methods, not public fields)."
+
+  - id: "PRACTICES-MESSAGING-001"
+    chapter: "Messaging / Publisher"
+    requirement: "Service-layer publishers MUST depend on an abstract MessagePublisher interface, not a concrete broker SDK type (KafkaTemplate / RabbitTemplate / SnsClient directly). A concrete-typed field couples the domain to one broker; swapping brokers becomes a refactor of every caller. Rule body: practices/rules/messaging-publisher-interface.md."
+    test_method: "practices_MESSAGING_001_publisherDependsOnInterface"
+    verification_type: "review"
+    applicable: true
+    notes: "Review service classes for fields of type KafkaTemplate / RabbitTemplate / SnsClient — must be a domain interface (e.g., OrderEventPublisher) backed by a broker-specific @Component adapter. Anchored to Hexagonal Architecture / Ports-and-Adapters pattern."
+
+  - id: "PRACTICES-MESSAGING-002"
+    chapter: "Messaging / Payload"
+    requirement: "Message and event payload types MUST be Java records (immutable by construction). Mutable payloads can be modified after publish — the in-flight copy and the delivered copy disagree, leading to non-reproducible bug reports. Rule body: practices/rules/messaging-payload-record.md."
+    test_method: "practices_MESSAGING_002_payloadTypeIsRecord"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every message-payload class — must be a `record` with primitive / immutable component types. Anchored to JEP 395 — Records + 'immutable events' pattern from event-sourcing literature."
+
+  - id: "PRACTICES-MESSAGING-003"
+    chapter: "Messaging / Topic"
+    requirement: "Topic / routing-key names MUST be public-static-final constants on a shared types module, not inline string literals at publisher and consumer sites. Inline literals diverge silently between producer and consumer (typo at the consumer, queue goes empty in prod, no compile-time signal). Rule body: practices/rules/messaging-topic-name-constant.md."
+    test_method: "practices_MESSAGING_003_topicNamesAreConstants"
+    verification_type: "review"
+    applicable: true
+    notes: "grep for kafkaTemplate.send(\"...\") / rabbitTemplate.convertAndSend(\"...\") with string literal first-arg — must reference a shared constant (e.g., Topics.ORDER_PLACED). Anchored to common Kafka/RabbitMQ deployment incident postmortems."
+
+  - id: "PRACTICES-MIGRATION-001"
+    chapter: "Migration / Naming"
+    requirement: "SQL migrations MUST follow Flyway V{version}__{snake_case_description}.sql naming. Misnamed migrations (V01_init.sql with single-underscore, init.sql without prefix) are silently skipped by Flyway — schema drift across environments goes unnoticed. Rule body: practices/rules/migration-versioned-naming.md."
+    test_method: "practices_MIGRATION_001_migrationFilesFollowVNumberNaming"
+    verification_type: "review"
+    applicable: true
+    notes: "Review src/main/resources/db/migration/*.sql — every file matches V[0-9]+__.+\\.sql. Anchored to Flyway Reference §Migration Naming."
+
+  - id: "PRACTICES-MIGRATION-002"
+    chapter: "Migration / Forward-only"
+    requirement: "Migration versions are unique and monotonic — once V025__add_column.sql is applied to ANY environment, it MUST NOT be renumbered or rewritten. Renaming an applied migration breaks Flyway's checksum on every downstream environment, requiring manual schema_history surgery. Rule body: practices/rules/migration-forward-only.md."
+    test_method: "practices_MIGRATION_002_migrationsAreForwardOnly"
+    verification_type: "review"
+    applicable: true
+    notes: "PR review check: git log src/main/resources/db/migration/V*.sql — any rename of an already-applied version triggers human review. Anchored to Flyway Reference §Migration Lifecycle / Checksums."
+
+  - id: "PRACTICES-MIGRATION-003"
+    chapter: "Migration / Baseline"
+    requirement: "spring.flyway.baseline-on-migrate MUST NOT be enabled in base config (application.yml / -default.yml). Silent baseline on a missing history table makes every prior migration unaudited — a fresh environment skips all V001..VNN runs and starts with the current schema as 'baseline'. Rule body: practices/rules/migration-no-baseline-on-migrate.md."
+    test_method: "practices_MIGRATION_003_baselineOnMigrateNotEnabled"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every application*.yml — spring.flyway.baseline-on-migrate is either absent or explicitly false. Anchored to Flyway Reference §Baseline Migrations."
+
   - id: "PRACTICES-DOGFOOD-LEDGER-001"
     chapter: "Architecture / Dogfood Ledger Discipline"
     requirement: "Every docs/dogfood-ledger/*.yaml entry whose classification is scope_deferral MUST contain an explicit expiry-trigger marker in its finding text (one of: 'expiry trigger:', 're-opens when/before', 'reopens when/before', 'defer until', 'deferred until', 'expires on', 'sunsets on', 'before the fork-receiver', 'before the first', 'before the cap'). A deferral without a recorded re-open condition becomes inadvertent permanent debt that the catalog cannot self-audit. Rule body: practices/rules/dogfood-finding-must-have-expiry-trigger.md."

@@ -19,6 +19,11 @@
 # API-001..003 + ASYNC-001..003 + BUILD-001..003 + CACHE-001..003).
 # Allow-list reduced from 52 → 37 active entries.
 #
+# R89 phase 2 (2026-05-27) — 15 more entries backfilled (CONFIG-001..003 +
+# HTTP-001..003 + LANG-001..003 + MESSAGING-001..003 + MIGRATION-001..003).
+# Allow-list reduced from 37 → 22 active entries. Next R89 cadence should
+# pick up PERS-002..004, QUALITY-001..003, SECURITY-001..002 in phase 3.
+#
 # R92 (2026-05-27) — this allow-list's debt is now formally tracked at
 # docs/dogfood-ledger/meta-catalog-iter1.yaml (finding M1) as a
 # scope_deferral with the expiry trigger above. The ledger is the
@@ -36,21 +41,6 @@
 # lines are ignored.
 
 specs/identity-verification-l0.yaml#L5
-specs/spring-practices-l0.yaml#PRACTICES-CONFIG-001
-specs/spring-practices-l0.yaml#PRACTICES-CONFIG-002
-specs/spring-practices-l0.yaml#PRACTICES-CONFIG-003
-specs/spring-practices-l0.yaml#PRACTICES-HTTP-001
-specs/spring-practices-l0.yaml#PRACTICES-HTTP-002
-specs/spring-practices-l0.yaml#PRACTICES-HTTP-003
-specs/spring-practices-l0.yaml#PRACTICES-LANG-001
-specs/spring-practices-l0.yaml#PRACTICES-LANG-002
-specs/spring-practices-l0.yaml#PRACTICES-LANG-003
-specs/spring-practices-l0.yaml#PRACTICES-MESSAGING-001
-specs/spring-practices-l0.yaml#PRACTICES-MESSAGING-002
-specs/spring-practices-l0.yaml#PRACTICES-MESSAGING-003
-specs/spring-practices-l0.yaml#PRACTICES-MIGRATION-001
-specs/spring-practices-l0.yaml#PRACTICES-MIGRATION-002
-specs/spring-practices-l0.yaml#PRACTICES-MIGRATION-003
 specs/spring-practices-l0.yaml#PRACTICES-PERS-002
 specs/spring-practices-l0.yaml#PRACTICES-PERS-003
 specs/spring-practices-l0.yaml#PRACTICES-PERS-004
