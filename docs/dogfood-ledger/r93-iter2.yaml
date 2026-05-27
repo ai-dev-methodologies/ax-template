@@ -1,0 +1,26 @@
+# R93 — modular-catalog top-3 wave dogfood iter2 (10-persona re-review)
+#
+# Iter1 (32b1673 ledger + 183f827 closures) produced 5 real_bug closures
+# (F2/F3/F8/F9/F10) and 5 scope_deferrals (F1/F4/F5/F6/F7). Iter2 has
+# the same 10-persona panel (P3..P12 — see r93-iter1.yaml header) re-review
+# the iter1 closures looking for residuals.
+#
+# Result: 8 of 10 personas reported "no residual on my iter1 entry" and
+# produce no iter2 entry. Two personas surfaced residuals:
+#
+#   P11 황태완 (특급시니어, standards) — F11 iter2 residual on F9 closure
+#   P12 한상미 (특급시니어, governance) — F12 iter2 methodology_gap on the
+#                                          ledger-continuity question
+iteration: 2
+findings:
+  - persona: P11
+    finding: "F11 (MEDIUM): iter1 F9 (P11 황태완) pinned the ISO 8601 Z form for OUTBOUND serialization of UTC Instant. Re-reviewing the closure, the SYMMETRIC inbound parsing case was unspecified — what does the server do with caller-supplied `2026-05-27T03:42:18` (no Z, no ±HH:MM)? Silent coercion to UTC corrupts caller intent (Seoul-local? New-York-local? UTC-meant-but-forgot?). RFC 3339 §5.6 mandates a time-offset on every date-time. Closure: appended a second paragraph to I18N-TIMEZONE-001.notes — the server MUST reject offsetless ISO 8601 strings with 400 INVALID_DATETIME rather than silently coerce. Jackson's Instant deserializer enforces this by default; recipes customizing the date module MUST preserve the strict-offset requirement."
+    classification: real_bug
+    closure_commit_sha: b8da020
+    closure_verification_ref: "specs/i18n-policy-l0.yaml#I18N-TIMEZONE-001.notes now carries an inbound parsing paragraph mandating 400 INVALID_DATETIME on offsetless ISO 8601 strings + an RFC 3339 §5.6 citation."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/i18n-policy-l0.yaml
+  - persona: P12
+    finding: "F12 (LOW, methodology): iter ledger continuity strategy undefined. R93 iter1 lives at docs/dogfood-ledger/r93-iter1.yaml and iter2 lives at r93-iter2.yaml. After iter3..iterN this produces N-file proliferation. Should later iters be: (a) separate files (current implicit default — preserves per-iter audit clarity), (b) rolled into iter1.yaml as new entries (compact but loses iter boundary), or (c) merged into a single r93.yaml with an iteration_history block (compromise)? The catalog has no rule pinning the convention. No immediate closure — this is methodology, not a code/spec defect. A future practices/rules/dogfood-ledger-iter-file-strategy.md rule should pin (a) as canonical since the existing email-outbox / favorites / activity-feed precedents all use separate-file-per-iter."
+    classification: methodology_gap
+    references_artifact_path: docs/dogfood-ledger/
