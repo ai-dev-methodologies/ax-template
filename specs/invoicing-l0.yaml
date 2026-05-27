@@ -1,0 +1,115 @@
+version: "0.1.0"
+scope: "invoicing-l0 — Korean 전자세금계산서 (e-tax invoice) issuance, 국세청 NTS submission, PKI signature, modification + retention contract for B2B fork-receivers operating under 부가가치세법 §32 + 국세기본법 §85의3"
+stack: "Spring Boot 3.2.x + 국세청 NTS API client + KISA-issued 공동인증서 (PKCS#11) + Apache Santuario (XML Digital Signature) + PostgreSQL immutable storage"
+standard: "부가가치세법 §32 (전자세금계산서 의무 발행) + 국세기본법 §85의3 (5년 보관 의무) + 전자거래기본법 (전자문서 효력) + 국세청 NTS API 사양 (XML schema + 발급일자 24시간 내 전송) + KS X ISO/IEC 19792 (전자세금계산서 표준)"
+introduced_at: "R95 phase α — seeded as the 3rd modular-catalog candidate from R93 probability table (60% adoption rate, P6 최영숙 한국 규제 lens active wave). future_add tier until templates/L4/invoicing/ disk slot lands. Fork-receivers operating Korean B2B SaaS (any recipe whose 1년 매출 exceeds 1억원 in B2B) MUST adopt these items before production — failure to issue 전자세금계산서 is a tax law violation (가산세 부과)."
+
+# invoicing is OPT-IN. ax-template's reference workloads ship without
+# tax-invoice issuance (catalog refuses to embed 사업자등록번호 / 공인인증서
+# secret material in defaults); recipes targeting Korean B2B (saas-
+# subscription, e-commerce with corporate customers, marketplace B2B
+# tier) MUST adopt items below before production. This spec defines the
+# policy contract; the future templates/L4/invoicing/ vertical will
+# define the canonical Spring + NTS-client wiring.
+#
+# Composition note: INV-IDENTIFIER-001 cross-references multi-tenant-l0
+# (사업자등록번호 + 종사업장 식별이 tenant-scope의 자연 키) — multi-tenant
+# 운영 시 tenant 경계와 세금계산서 발행 사업자 경계가 일치해야 함.
+
+items:
+  # ── FORMAT family ──────────────────────────────────────────────────────
+  - id: "INV-FORMAT-001"
+    chapter: "전자세금계산서 표준 형식"
+    requirement: "전자세금계산서는 국세청 NTS가 정의한 XML schema (KS X ISO/IEC 19792 기반)를 따라야 한다. 임의 JSON / 사내 포맷 / PDF만으로의 발행은 법적 효력이 없으며 부가가치세법 §32 위반이다. 발행 시점에 XML schema validation을 통과해야 NTS API 전송 자격이 부여된다."
+    test_method: "inv_FORMAT_001_xmlValidatesAgainstNtsSchema"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test serializes a sample invoice via the catalog's XmlInvoiceWriter
+      and validates against the NTS-published XSD; rejection of any
+      schema-noncompliant field is asserted. Anchored to KS X ISO/IEC
+      19792 + 국세청 NTS Invoice XML Specification (v3.x).
+
+  # ── IDENTIFIER family ─────────────────────────────────────────────────
+  - id: "INV-IDENTIFIER-001"
+    chapter: "사업자 식별 + PII 분리 저장"
+    requirement: "발행자 + 공급받는자의 사업자등록번호 + (개인사업자 경우) 주민등록번호 + 종사업장 일련번호는 분리 저장 + 별도 권한 컬럼으로 보호한다. 일반 발행/조회 surface는 마스킹된 ID만 (e.g. 123-45-***** / RRN 마지막 7자리 *)를 반환; 정확한 ID는 회계감사 / 국세청 audit 용도 전용 endpoint에서 권한자(역할: TAX_AUDITOR)만 접근. 개인정보보호법 §23 + §24의2 (고유식별정보 처리 제한) 정합."
+    test_method: "inv_IDENTIFIER_001_rrnMaskedInDefaultResponse"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Integration test asserts default GET /api/invoices/{id} returns
+      RRN masked (e.g. 123456-*******); only GET /api/admin/audit/invoices/{id}
+      with ROLE_TAX_AUDITOR returns raw RRN. Anchored to 개인정보보호법
+      §23 (고유식별정보) + §24의2 (주민등록번호 처리 제한) + R83
+      iter1 F8 NotApprover message-leak precedent.
+
+  # ── AMOUNT family ────────────────────────────────────────────────────
+  - id: "INV-AMOUNT-001"
+    chapter: "VAT 정합성"
+    requirement: "공급가액 + 세액 (10% VAT for 일반 / 0% for 영세율 / 세액=null for 면세) + 합계금액이 산술 정합. 부가가치세법 시행령 §62 (반올림 규칙: 1원 단위로 반올림)을 따른다. 금액 컬럼은 BigDecimal (precision=15, scale=0)로 저장하여 double 부동소수점 오차를 차단; 표시 시점에만 천 단위 콤마 적용."
+    test_method: "inv_AMOUNT_001_vatRoundingMatchesEnforcementDecree"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test feeds 100,003원 공급가액 → asserts 세액 = 10,000원 (1원 미만
+      반올림), 합계 = 110,003원. 영세율(수출): 세액 = 0. 면세(의료/교육):
+      세액 컬럼 NULL + 면세사유코드 필수. Anchored to 부가가치세법 §29
+      (과세표준) + 시행령 §62.
+
+  # ── NTS family ───────────────────────────────────────────────────────
+  - id: "INV-NTS-001"
+    chapter: "국세청 NTS 전송 의무"
+    requirement: "전자세금계산서는 발급일자 기준 24시간 내 국세청 NTS API로 전송 + 접수증 (승인번호 24자리) 보관 의무. 전송 실패 시 지수 재시도 (e.g. 1m / 5m / 30m / 6h / 24h backoff) + DLQ + audit alert. 24시간 초과 미전송은 가산세 부과 대상 (공급가액의 0.5%)이므로 catalog는 'fire-and-forget' 전송을 거부하고 R51 email-outbox 동일 패턴 (idempotent retry + DLQ + lastFailureAt) 채택."
+    test_method: "inv_NTS_001_submitWithin24HoursElseDlq"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test simulates NTS API 503 errors; asserts 4번 backoff 후 DLQ +
+      audit log emission + 24h boundary alert. 성공 시 NTS 접수증
+      (승인번호 24자리)이 invoice.nts_approval_no 컬럼에 저장됨을 확인.
+      Mirrors R51 email-outbox retry/DLQ pattern; anchored to 부가가치세법
+      §32의2 (전송 의무) + NTS API 응답 코드 명세.
+
+  # ── SIGN family ──────────────────────────────────────────────────────
+  - id: "INV-SIGN-001"
+    chapter: "PKI 서명 무결성"
+    requirement: "전자세금계산서 XML은 발행자의 공동인증서 (구 공인인증서) OR KISA-인증 PKI로 XML Digital Signature (XMLDSig) 서명 + 검증 가능. 서명 무결성 검증 실패 시 발행 거부. 인증서 만료 / 폐기 (CRL/OCSP) 시 사전 알림 (만료 30일 전부터 daily reminder)."
+    test_method: "inv_SIGN_001_xmldsigVerifiesAndCrlChecked"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test signs a sample invoice with KISA test cert, asserts XMLDSig
+      verification passes; flips one byte in <SupplyAmount>, asserts
+      verification fails + invoice rejected. CRL/OCSP integration
+      uses Apache Santuario default trust store. Anchored to KS X
+      ISO/IEC 19792 §7 (서명) + KISA 공인인증서 발급기관 인증서 정책.
+
+  # ── CORRECT family ──────────────────────────────────────────────────
+  - id: "INV-CORRECT-001"
+    chapter: "수정세금계산서"
+    requirement: "수정세금계산서 (감액 / 추가 / 취소 / 환입 / 계약해제 / 내국신용장 사후개설 등 6개 사유코드)는 원본 invoice ID를 통한 chain 추적이 가능해야 한다. 수정 횟수에 제한은 없으나 매 수정 발행마다 사유코드 + 변경내역 + 발행자 확인이 immutable history 행으로 기록된다 (R31 approval-workflow audit pattern + R51 email-outbox EmailTemplateHistory pattern 합성)."
+    test_method: "inv_CORRECT_001_modificationChainTrackedImmutable"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test issues original invoice + 감액 수정세금계산서 + 취소 수정세금
+      계산서; asserts modification_chain[] 3건이 immutable history table에
+      append-only로 기록됨. 사유코드 enum: AMOUNT_DECREASE / AMOUNT_INCREASE
+      / CANCELLATION / RETURN / CONTRACT_TERMINATION / INTERNAL_LC.
+      Anchored to 부가가치세법 시행령 §70 (수정세금계산서 발행 사유).
+
+  # ── RETENTION family ────────────────────────────────────────────────
+  - id: "INV-RETENTION-001"
+    chapter: "5년 보관 의무"
+    requirement: "전자세금계산서는 발행일자 기준 5년간 보관 의무 (국세기본법 §85의3). immutable storage (append-only, no UPDATE/DELETE) + 매년 백업 + 보관기간 만료 자동 삭제 (5년 + 1일) 정책. Soft-delete 금지 — 법령 의무 vs PIPA 개인정보 최소수집 사이 균형에서 세법이 우선; 5년 경과 후 hard-delete + audit log entry 남김."
+    test_method: "inv_RETENTION_001_immutableStorageEnforcedByJpaAndDb"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test attempts UPDATE / DELETE on invoice row; asserts DB-level
+      trigger rejects (PostgreSQL ON UPDATE/DELETE rule that raises
+      exception). JPA entity columns all carry @Column(updatable=false).
+      5년 만료 row의 hard-delete는 BatchPurge service + audit log.
+      Anchored to 국세기본법 §85의3 (5년 보관) + 부가가치세법 §32의5
+      (전자세금계산서 보관).
