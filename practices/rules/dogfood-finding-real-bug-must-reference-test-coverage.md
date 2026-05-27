@@ -22,8 +22,8 @@ evidence:
     url: "https://www.sqlite.org/testing.html"
     quoted_at: "2026-05-27"
   - source_type: external
-    citation: "Linux Kernel — Kselftest documentation (verbatim): 'The kernel contains a set of \"self tests\" under the tools/testing/selftests/ directory. These are intended to be small tests to exercise individual code paths in the kernel.' The same page documents that selftests are also used so 'when a new test gets added to test existing code to regression test a bug, we should be able to run that test on an older kernel.' Mirror for ax-template: closure_test_method points at the small targeted test that exercises the specific code path the bug was in; closure_test_commit_sha covers the case where the test landed in a distinct commit from the fix and the catalog wants both pinned."
-    url: "https://www.kernel.org/doc/html/latest/dev-tools/kselftest.html"
+    citation: "Linux Kernel — Kselftest documentation (verbatim, rendered as docs.kernel.org with typographic-quote normalisation applied by the R85b advisory tool): 'The kernel contains a set of \"self tests\" under the tools/testing/selftests/ directory. These are intended to be small tests to exercise individual code paths in the kernel.' The same page documents that selftests are also used so 'when a new test gets added to test existing code to regression test a bug, we should be able to run that test on an older kernel.' Mirror for ax-template: closure_test_method points at the small targeted test that exercises the specific code path the bug was in; closure_test_commit_sha covers the case where the test landed in a distinct commit from the fix and the catalog wants both pinned."
+    url: "https://docs.kernel.org/dev-tools/kselftest.html"
     quoted_at: "2026-05-27"
 ---
 

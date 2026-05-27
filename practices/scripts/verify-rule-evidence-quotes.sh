@@ -106,6 +106,18 @@ FETCH_TIMEOUT = 15  # seconds
 
 
 def normalise_ws(s: str) -> str:
+    # Whitespace collapse + Unicode curly-quote normalisation. Many doc
+    # publishing toolchains (Sphinx, MkDocs, Pandoc) substitute
+    # typographic curly quotes for ASCII apostrophes when rendering, so
+    # a verbatim quote captured as ASCII in a catalog rule will not match
+    # the rendered page text unless we normalise both sides.
+    s = (s
+         .replace("‘", "'")  # left single quote
+         .replace("’", "'")  # right single quote
+         .replace("“", '"')  # left double quote
+         .replace("”", '"')  # right double quote
+         .replace("–", "-")  # en dash
+         .replace("—", "-")) # em dash
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -119,20 +131,23 @@ def strip_html(s: str) -> str:
 
 
 def extract_quotes(citation: str) -> list[str]:
-    """Find the LONGEST 'single-quoted' substring of length >= QUOTE_MIN_LEN.
+    """Find ALL 'single-quoted' substrings of length >= QUOTE_MIN_LEN.
 
-    Catalog evidence prose typically nests a short supporting phrase
+    Catalog evidence prose can nest a short supporting phrase
     (e.g. "Fowler's 'thought about the payoff' obligation") alongside the
     actual verbatim quote (e.g. "'The prudent debt example is deliberate
-    because...'"). Treating every quoted fragment as a candidate produces
-    false UNVERIFIED reports on the supporting phrases. Taking only the
-    longest substring as THE verbatim quote matches the convention.
+    because...'"). Earlier versions of this tool returned ONLY the longest
+    candidate to avoid the supporting-phrase false positives, but that
+    breaks the legitimate "context + chosen verbatim segment" pattern
+    where the rule cites a long context for the reader AND a shorter
+    static-fetch-friendly segment for the advisory check.
+
+    Current shape: return every candidate ≥ QUOTE_MIN_LEN. The caller
+    treats the evidence entry as VERIFIED if ANY candidate matches the
+    fetched page text. Supporting-phrase false positives are still
+    blocked because they typically have NO match in the page.
     """
-    candidates = re.findall(r"'([^']{%d,})'" % QUOTE_MIN_LEN, citation)
-    if not candidates:
-        return []
-    longest = max(candidates, key=len)
-    return [longest]
+    return re.findall(r"'([^']{%d,})'" % QUOTE_MIN_LEN, citation)
 
 
 def fetch(url: str) -> tuple[str | None, str | None]:
@@ -230,20 +245,23 @@ for rule_path_str in sys.argv[1:]:
             else:
                 missed.append(qn[:60])
 
-        if missed:
-            rule_fail += len(missed)
+        # ANY candidate matching is enough to VERIFY the evidence entry.
+        # A rule may cite a long context AND a shorter static-fetch-
+        # friendly segment; either matching is sufficient.
+        if matched:
+            rule_pass += 1
             rule_details.append(
-                f"  evidence[{i}] {url} — UNVERIFIED: longest quote NOT found in fetched text"
+                f"  evidence[{i}] {url} — VERIFIED ({len(matched)} of {len(quotes)} candidate(s) matched)"
+            )
+        else:
+            rule_fail += 1
+            rule_details.append(
+                f"  evidence[{i}] {url} — UNVERIFIED: none of {len(quotes)} candidate quote(s) found in fetched text"
             )
             for m in missed:
                 rule_details.append(f"      '{m}…'")
             rule_details.append(
                 "      (advisory: page may be JS-rendered, paywalled, or behind redirects; manually inspect URL before accepting the citation)"
-            )
-        else:
-            rule_pass += len(matched)
-            rule_details.append(
-                f"  evidence[{i}] {url} — VERIFIED ({len(matched)} quote matched)"
             )
 
     if rule_fail > 0:

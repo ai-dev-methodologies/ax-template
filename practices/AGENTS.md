@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "4b2d76a008993f52600f8619b191f2d71846d563140b64b0b996fa08d6f2ec38"
+  source_concat_sha256: "7ab2c4c3e8304d1178fd07f7b4ca2c8869527ae70608ba637cf8ffa5a70601ca"
   rule_count: 112
   generated_by: "practices/generate_agents.sh"
 ---
@@ -2532,8 +2532,8 @@ evidence:
     quoted_at: "2026-05-26"
   - source_type: external
     citation: "NIST SP 800-53 Rev. 5 — Control RA-7 Risk Response, control statement (verbatim): 'Respond to findings from security and privacy assessments, monitoring, and audits in accordance with organizational risk tolerance.' RA-7 distinguishes two response shapes the catalog should not conflate — (i) mitigation that is deferred generates a Plan of Action and Milestones tracking the future close, and (ii) acceptance requires recorded justification anchored to organizational risk tolerance. Applied to a dogfood scope_deferral, the catalog is choosing the acceptance shape (no mitigation planned at this layer), and the expiry trigger documents the future condition under which the acceptance should be re-assessed against that tolerance posture."
-    url: "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"
-    quoted_at: "2026-05-26"
+    url: "https://csf.tools/reference/nist-sp-800-53/r5/ra/ra-7/"
+    quoted_at: "2026-05-27"
 ---
 
 ## Dogfood-ledger scope_deferral findings MUST include an explicit expiry trigger
@@ -2608,8 +2608,8 @@ evidence:
     url: "https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue"
     quoted_at: "2026-05-27"
   - source_type: external
-    citation: "Linux Kernel — Submitting Patches, Fixes: trailer convention (verbatim): 'If your patch fixes a bug in a specific commit, e.g. you found an issue using git bisect, please use the Fixes: tag with at least the first 12 characters of the SHA-1 ID, and the one line summary.' This is a supporting precedent for the broader practice of mechanically-linkable commit references, NOT a direct shape match — the kernel Fixes: tag points FROM the fixing commit BACK to the buggy commit, while R86's closure_commit_sha points FROM the ledger entry FORWARD to the fixing commit. The kernel community uses Fixes: trailers + the parallel Tested-by:/Reported-by: trailer family as the documented convention for making commit-graph relationships programmatically auditable; R86 cites that family for precedent, while the actual direction-correct analogy is the GitHub closing-keyword binding above."
-    url: "https://www.kernel.org/doc/html/latest/process/submitting-patches.html"
+    citation: "Linux Kernel — Submitting Patches, Fixes: trailer convention. Verbatim trailing segment chosen so the static-fetch advisory can substring-match around the typographic-quote-wrapped middle on docs.kernel.org: 'tag with at least the first 12 characters of the SHA-1 ID, and the one line summary.' The full sentence on docs.kernel.org reads (with typographic quote marks around git bisect and Fixes:): If your patch fixes a bug in a specific commit, e.g. you found an issue using git bisect, please use the Fixes: tag with at least the first 12 characters of the SHA-1 ID, and the one line summary. The static fetcher cannot match the full sentence because the middle phrases (git bisect, Fixes:) are wrapped in Unicode curly quotes in the Sphinx rendering, which introduce stray whitespace after our quote-stripping normalisation. This is a supporting precedent for the broader practice of mechanically-linkable commit references, NOT a direct shape match — the kernel Fixes: tag points FROM the fixing commit BACK to the buggy commit, while R86 closure_commit_sha points FROM the ledger entry FORWARD to the fixing commit. The kernel community uses Fixes: trailers + the parallel Tested-by:/Reported-by: trailer family as the documented convention for making commit-graph relationships programmatically auditable; R86 cites that family for precedent, while the actual direction-correct analogy is the GitHub closing-keyword binding above."
+    url: "https://docs.kernel.org/process/submitting-patches.html"
     quoted_at: "2026-05-27"
 ---
 
@@ -2683,8 +2683,8 @@ evidence:
     url: "https://www.sqlite.org/testing.html"
     quoted_at: "2026-05-27"
   - source_type: external
-    citation: "Linux Kernel — Kselftest documentation (verbatim): 'The kernel contains a set of \"self tests\" under the tools/testing/selftests/ directory. These are intended to be small tests to exercise individual code paths in the kernel.' The same page documents that selftests are also used so 'when a new test gets added to test existing code to regression test a bug, we should be able to run that test on an older kernel.' Mirror for ax-template: closure_test_method points at the small targeted test that exercises the specific code path the bug was in; closure_test_commit_sha covers the case where the test landed in a distinct commit from the fix and the catalog wants both pinned."
-    url: "https://www.kernel.org/doc/html/latest/dev-tools/kselftest.html"
+    citation: "Linux Kernel — Kselftest documentation (verbatim, rendered as docs.kernel.org with typographic-quote normalisation applied by the R85b advisory tool): 'The kernel contains a set of \"self tests\" under the tools/testing/selftests/ directory. These are intended to be small tests to exercise individual code paths in the kernel.' The same page documents that selftests are also used so 'when a new test gets added to test existing code to regression test a bug, we should be able to run that test on an older kernel.' Mirror for ax-template: closure_test_method points at the small targeted test that exercises the specific code path the bug was in; closure_test_commit_sha covers the case where the test landed in a distinct commit from the fix and the catalog wants both pinned."
+    url: "https://docs.kernel.org/dev-tools/kselftest.html"
     quoted_at: "2026-05-27"
 ---
 

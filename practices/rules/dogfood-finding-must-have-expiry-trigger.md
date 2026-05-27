@@ -23,8 +23,8 @@ evidence:
     quoted_at: "2026-05-26"
   - source_type: external
     citation: "NIST SP 800-53 Rev. 5 — Control RA-7 Risk Response, control statement (verbatim): 'Respond to findings from security and privacy assessments, monitoring, and audits in accordance with organizational risk tolerance.' RA-7 distinguishes two response shapes the catalog should not conflate — (i) mitigation that is deferred generates a Plan of Action and Milestones tracking the future close, and (ii) acceptance requires recorded justification anchored to organizational risk tolerance. Applied to a dogfood scope_deferral, the catalog is choosing the acceptance shape (no mitigation planned at this layer), and the expiry trigger documents the future condition under which the acceptance should be re-assessed against that tolerance posture."
-    url: "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"
-    quoted_at: "2026-05-26"
+    url: "https://csf.tools/reference/nist-sp-800-53/r5/ra/ra-7/"
+    quoted_at: "2026-05-27"
 ---
 
 ## Dogfood-ledger scope_deferral findings MUST include an explicit expiry trigger
