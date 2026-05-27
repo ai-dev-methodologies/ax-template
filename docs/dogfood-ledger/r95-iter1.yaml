@@ -1,0 +1,74 @@
+# R95 — invoicing-l0 spec dogfood iter1 (10-persona panel, 3rd wave)
+#
+# Wave subject: specs/invoicing-l0.yaml (R95 phase α, commit 425585b).
+# 7 items (FORMAT × 1 / IDENTIFIER × 1 / AMOUNT × 1 / NTS × 1 / SIGN × 1
+# / CORRECT × 1 / RETENTION × 1) anchored to 부가가치세법 §32 + 국세기본법
+# §85의3 + 국세청 NTS API spec + KS X ISO/IEC 19792.
+#
+# Panel reuse: P3-P12 from R94 (per persona-registry.yaml R94
+# next_panel_composition_for_R95.keep). 3rd wave application of the
+# 10-persona protocol. Active wave lens: P6 최영숙 한국 규제 — invoicing
+# is her direct domain.
+#
+# 3rd-wave cross-wave consistency evidence (3 consecutive occurrences):
+#   P4 priority order      : R93 i18n F2 → R94 realtime F2 → R95 invoicing F2
+#   P5 RECIPE example      : R93 i18n F3 → R94 realtime F3 → R95 invoicing F3
+#   P8 SLO / alert wiring  : R93 i18n F6 → R94 realtime F6 → R95 invoicing F6
+#   P11 standards symmetric: R93 F9/F11 → R94 F8 → R95 F8
+#   P12 no ledger at kickoff: R93 F10 → R94 F10 → R95 F10 (mechanical
+#                            anchor가 필요한 lesson 확정 — 단순 기록은 자체-
+#                            학습 mechanism으로 불충분)
+iteration: 1
+findings:
+  - persona: P3
+    finding: "F1 (LOW): invoicing-l0 spec covers backend issuance / submission flow but does not address mobile-side invoice access — mobile users want to view + share + download their own 세금계산서 PDF on iOS / Android. A mobile-first Junior (P3 김민준, 24, 1년차) needs a mobile viewer / share-sheet scenario in the spec or its future L4. Expiry trigger: re-opens before any mobile fork-receiver exposes invoice download to end users — at that point the spec needs a MOBILE-001 item covering mobile PDF generation + share-sheet + offline cache TTL."
+    classification: scope_deferral
+    references_artifact_path: specs/invoicing-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): invoicing-l0 ships 7 spec items without priority ordering — **3rd wave occurrence** (R93 i18n F2 + R94 realtime F2 pattern). Closure: priority order comment block (1. FORMAT-001 legal precondition → 7. RETENTION-001) with rationale that non-validating XML cannot legally be issued, blocking everything downstream."
+    classification: real_bug
+    closure_commit_sha: bf9494f
+    closure_verification_ref: "specs/invoicing-l0.yaml now carries a priority order block before items: with explicit legal-precondition rationale."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/invoicing-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): invoicing-l0 declares config fields (사업자등록번호 / NTS endpoint / 공동인증서 alias / retention years) but ships no copy-pasteable RECIPE.md frontmatter example — **3rd wave occurrence** (R93 i18n F3 + R94 realtime F3 pattern). Closure: verbatim b2b-saas-subscription-kr frontmatter block; retention years pinned to 5 with 국세기본법 §85의3 citation enforcing the lower bound."
+    classification: real_bug
+    closure_commit_sha: bf9494f
+    closure_verification_ref: "specs/invoicing-l0.yaml priority block now contains a complete RECIPE.md frontmatter example with sample 사업자번호 + NTS endpoint + cert alias + retention=5."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/invoicing-l0.yaml
+  - persona: P6
+    finding: "F4 (MEDIUM): invoicing-l0 covers the canonical 일반 발행 flow but does NOT address Korean B2B corner cases that compliance lens (P6 최영숙, 53, 1년차 산업 전환) immediately recognizes: (a) 면세사업자 (의료 / 교육 / 금융 — VAT 면세) issues 계산서 not 세금계산서, separate format; (b) 매입자 발행 세금계산서 (역발행) — when 발행자 fails to issue, 매입자 may unilaterally issue under 부가가치세법 시행령 §70(1)(11); (c) 종이세금계산서 병행 (소규모 사업자 — 1년 매출 < 8천만원 / 2024 기준) optional opt-out. Expiry trigger: re-opens before any fork-receiver supports a 면세 vertical (의료 SaaS, 교육 platform) OR before 매입자 발행 + paper-parallel scenarios materialize — at that point the spec needs FAMILY items INV-FORMAT-002 (계산서) + INV-CORRECT-002 (역발행) + INV-FORMAT-003 (paper-parallel opt-out)."
+    classification: scope_deferral
+    references_artifact_path: specs/invoicing-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): INV-FORMAT-001 specifies XML schema validation but provides no typed-client binding pattern — TypeScript codegen from XSD (xsd-ts), JAXB binding (Spring-side), partner SDK consumption all uncovered. A typed-SDK Senior (P7 정도윤, 28, 6년차) needs the binding contract. Expiry trigger: re-opens when the first typed client (frontend xsd-ts codegen OR partner-issued JAXB SDK) needs to consume the XML envelope programmatically — at that point spec needs a BINDING-001 item pinning the canonical JAXB version + TypeScript codegen tool + namespace handling."
+    classification: scope_deferral
+    references_artifact_path: specs/invoicing-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): INV-NTS-001 names the 24h boundary alert + DLQ contract but defines NO SLO threshold / metric naming / alert convention — exactly the **3rd wave occurrence** of the metric-defined-but-alert-wiring-undefined gap (R93 i18n F6 + R94 realtime F6 pattern). When does NTS submission failure rate become a P1 incident (10% over 1h → PAGE)? Expiry trigger: re-opens before any fork-receiver deploys invoicing to production — at that point invoicing-l0 needs an OBSERVABILITY-001 item pinning canonical SLO + alert thresholds (e.g. nts_submission_failure_rate > 5% over 1h → WARN, > 15% over 1h → PAGE; nts_24h_breach_count > 0 → PAGE immediately due to 가산세 risk)."
+    classification: scope_deferral
+    references_artifact_path: specs/invoicing-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): Korean B2B fork-receivers currently using paper-only OR proprietary EDI invoice issuance need a migration playbook to e-invoice (전자세금계산서) — backfill historical 발행이력, dual-issue overlap period, NTS approval-no reconciliation. An architect (P9 윤재호, 44, 14년차) cannot present a migration plan. Expiry trigger: re-opens before any fork-receiver migrates from paper / proprietary EDI to e-invoicing — at that point templates/L4/invoicing/ (when L4 slot lands) needs a MIGRATION.md sibling with paper-to-e cutover + dual-issue period + reconciliation checklist."
+    classification: scope_deferral
+    references_artifact_path: specs/invoicing-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): INV-RETENTION-001 mandates immutable storage (DB UPDATE/DELETE 거부 trigger + JPA @Column updatable=false). But a fork-receiver with an existing invoice table that supports edits will see existing UPDATE flows break at migration. A backward-compat veteran (P10 신경수, 52, 22년차) flags the upgrade impact. Expiry trigger: re-opens before any fork-receiver migrates an existing mutable invoice table to the immutable-enforced shape — at that point the spec needs a MIGRATION-RETENTION-001 item covering: (a) read-only snapshot of historical rows, (b) cutoff timestamp, (c) trigger installation in same migration as JPA annotation change."
+    classification: scope_deferral
+    references_artifact_path: specs/invoicing-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): INV-FORMAT-001 cites KS X ISO/IEC 19792 + NTS XML Specification (v3.x) but the **XML root namespace URI is not pinned** — a recipe rolling out invoice issuance has no canonical namespace string to declare. **3rd wave occurrence** of the standards-cite-without-symmetric-pin pattern (R93 F9/F11 ISO 8601 Z form + R94 F8 RFC 6455 §1.9 subprotocol). Closure: extended INV-FORMAT-001.notes with namespace pin contract — recipe declares `invoicing_xml_namespace: '<uri>'` in RECIPE.md; XmlInvoiceWriter MUST emit + assert; legacy v2.x opt-out via `invoicing_legacy_v2: true`."
+    classification: real_bug
+    closure_commit_sha: bf9494f
+    closure_verification_ref: "specs/invoicing-l0.yaml#INV-FORMAT-001.notes now carries an XML namespace pin contract with legacy v2.x opt-out flag + assertion requirement on XmlInvoiceWriter."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/invoicing-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): R95 phase α (commit 425585b) landed without a dogfood ledger — **3rd consecutive occurrence** (R93 F10 + R94 F10 + R95 F10). The lesson 'every wave start should auto-create iter1 ledger' was explicitly recorded in R94 F10 closure notes but R95 didn't apply it. This is **empirical evidence that lesson-as-text in a closure block is not a self-learning mechanism**; the lesson needs an R-numbered rule + guard that mechanically refuses wave-kickoff commits without a ledger sibling. R95 F10 is the 3rd data point confirming the catalog cannot self-learn from text alone. Closure: this very ledger file IS the audit trail. R96 mandatory_iter1_agenda MUST include 'introduce wave_kickoff_ledger_guard.sh' decision — either mechanically enforce OR explicitly accept silent 3-wave drift."
+    classification: real_bug
+    closure_commit_sha: bf9494f
+    closure_verification_ref: "docs/dogfood-ledger/r95-iter1.yaml IS the audit trail. 3rd consecutive F10 occurrence makes the lesson load-bearing — R96 must promote it to mechanical rule or accept the gap explicitly."
+    closure_verification_reason: doc-only
+    references_artifact_path: docs/dogfood-ledger/r95-iter1.yaml
