@@ -91,6 +91,16 @@ items:
       with local store time). Jackson default (`WRITE_DATES_AS_TIMESTAMPS=false`
       + JavaTimeModule) emits Z-form; recipes that override the date module
       MUST preserve this distinction.
+      R93 iter2 F11 (P11 황태완 re-review): inbound parsing contract. The
+      server MUST reject caller-supplied ISO 8601 date-time strings that
+      have NO timezone designator (no trailing `Z` and no `±HH:MM` offset).
+      RFC 3339 §5.6 requires date-time to carry a time-offset; a naive
+      string like `2026-05-27T03:42:18` MUST trigger 400 INVALID_DATETIME,
+      not silent coercion to UTC. Silent coercion masks caller intent
+      (was it local Seoul time? local New York time?) and corrupts the
+      Instant on the way in. Jackson's Instant deserializer enforces this
+      by default; recipes that customize the date module MUST preserve
+      the strict-offset requirement.
 
   # ── FORMATTING family ────────────────────────────────────────────────────
   - id: "I18N-FORMATTING-001"
