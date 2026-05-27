@@ -1,0 +1,27 @@
+# R92 — meta-catalog (catalog-on-catalog) dogfood iter1
+# Persona: maintainer-meta (the catalog reviewing its own conformance to
+# the catalog's own R85 spirit — defer-with-trigger MUST live in the
+# ledger, not in a sidecar file).
+#
+# Motivation: R88 introduced spec_ref item-id matching but inherited 52
+# legacy orphans via an allow-list file (practices/.spec-ref-legacy-orphans.txt
+# + 5 in practices-react/). R89 phase 1 closed 15 of them. The remaining
+# 37 (catalog) + 4 (react) live in allow-list files with header-comment
+# trigger language — useful for the spec_ref_guard's lookup but
+# inconsistent with R85's "every scope_deferral lives in the ledger".
+#
+# R92 formalises the allow-list debt as ledger entries so R85's
+# mechanical expiry-trigger guard covers it AND so the catalog audit
+# trail records a single source of truth for "what the catalog is
+# deferring and why". The .txt files become the operational lookup
+# table (read by the guard); the ledger is the governance authority.
+iteration: 1
+findings:
+  - persona: maintainer-meta
+    finding: "M1: 37 catalog rules in practices/rules/ cite spec_refs whose item-id does not exist in the referenced specs/*.yaml. R88 introduced strict item-id matching in spec_ref_guard.sh and inherited these 37 as a transitional allow-list. R89 phase 1 (2026-05-27) closed 15 of the original 52 by adding real spec items for ACTUATOR / API / ASYNC / BUILD / CACHE categories. The remaining 37 span CONFIG / HTTP / LANG / MESSAGING / MIGRATION / PERS / QUALITY / SECURITY / TEST / TX / VAL / WEB. Each needs a real PRACTICES-<CAT>-NNN spec item with chapter / requirement / test_method / verification_type / notes following the seeded shape. Expiry trigger: re-opens when allow-list drops below 10 entries OR catalog v2 release, whichever first. The allow-list file practices/.spec-ref-legacy-orphans.txt remains the operational lookup table for spec_ref_guard.sh; this ledger entry is the governance authority and the audit trail."
+    classification: scope_deferral
+    references_artifact_path: practices/.spec-ref-legacy-orphans.txt
+  - persona: maintainer-meta
+    finding: "M2: 4 catalog rules in practices-react/rules/ cite spec_refs whose item-id does not exist in the referenced specs/*.yaml — REACT-PRACTICES-I18N-001, REACT-PRACTICES-RICH-CONTENT-001, REACT-PRACTICES-SECURITY-IMPERSONATION-001, REACT-PRACTICES-URL-STATE-001. Same shape as M1 above but on the practices-react catalog. Expiry trigger: re-opens when practices-react allow-list drops below 2 entries OR catalog v2 release, whichever first. The companion allow-list practices-react/.spec-ref-legacy-orphans.txt remains the operational lookup table; this entry is the governance authority."
+    classification: scope_deferral
+    references_artifact_path: practices-react/.spec-ref-legacy-orphans.txt

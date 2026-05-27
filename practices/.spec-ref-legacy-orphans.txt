@@ -19,6 +19,12 @@
 # API-001..003 + ASYNC-001..003 + BUILD-001..003 + CACHE-001..003).
 # Allow-list reduced from 52 → 37 active entries.
 #
+# R92 (2026-05-27) — this allow-list's debt is now formally tracked at
+# docs/dogfood-ledger/meta-catalog-iter1.yaml (finding M1) as a
+# scope_deferral with the expiry trigger above. The ledger is the
+# governance authority; this file is the operational lookup table that
+# spec_ref_guard.sh reads at every commit.
+#
 # Audit method: this file is regenerated from a yaml-load pass over every
 # specs/*.yaml. R88-iter2 fix: the initial allow-list was built from a
 # grep-only id extractor that missed unquoted `- id: <value>` (117 such

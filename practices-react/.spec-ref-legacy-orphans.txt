@@ -7,8 +7,14 @@
 # grandfathered FF-FE-004 (which IS a real spec item declared with
 # unquoted yaml syntax).
 #
-# Expiry trigger: re-opens before the catalog ships a v2 minor release OR
-# before the next domain spec yaml is regenerated from rule metadata.
+# Expiry trigger: re-opens when this practices-react allow-list drops
+# below 2 entries OR catalog v2 release, whichever first.
+#
+# R92 (2026-05-27) — this allow-list's debt is now formally tracked at
+# docs/dogfood-ledger/meta-catalog-iter1.yaml (finding M2) as a
+# scope_deferral with the expiry trigger above. The ledger is the
+# governance authority; this file is the operational lookup table that
+# spec_ref_guard.sh reads at every commit.
 #
 # Format: one "specs/file.yaml#ITEM-ID" per line. Comments and blank
 # lines are ignored.
