@@ -100,6 +100,60 @@ description: >
 #   No single-fork-receiver opinion; this file is shared infrastructure.
 #   Disagreements about a verdict change MUST be recorded as a finding
 #   in the next wave's iter1, not as a unilateral edit.
+#
+# ── B2 — 4 methodology_gap closures ───────────────────────────────────────
+#   F12 (P12 한상미, iter2 — iter ledger continuity strategy):
+#     RESOLUTION: separate-file-per-iter is the canonical convention.
+#     Evidence: every existing ledger uses this pattern —
+#     docs/dogfood-ledger/email-outbox-iter1.yaml + email-outbox-iter2.yaml
+#       + activity-feed-iter1.yaml + favorites-bookmarks-iter1.yaml
+#       + approval-workflow-iter1.yaml + meta-catalog-iter1.yaml
+#       + r93-iter1.yaml + r93-iter2.yaml + r93-iter3.yaml + r93-iter4.yaml
+#       + r93-iter5.yaml (11 files, 100% consistent).
+#     The pattern preserves per-iter audit clarity + each file matches
+#     dogfood_ledger_guard's *-iter*.yaml glob. Roll-up alternatives
+#     (single r93.yaml with iteration_history) lose the per-iter boundary
+#     and would require schema migration. Convention pinned here; no
+#     new catalog rule needed — precedent is the enforcement mechanism.
+#
+#   F15 (P12 한상미, iter3 — methodology_gap R-anchor convention):
+#     RESOLUTION: methodology_gap entries do NOT require R-number
+#     anchors. They are OBSERVATIONS recorded for governance audit
+#     trail, not COMMITMENTS requiring catalog-rule-level tracking.
+#     The ledger entry itself IS the audit anchor. A future R-wave
+#     MAY consume a methodology_gap as inspiration for a new rule
+#     (e.g., R93 F12 → this very resolution), but the promotion is
+#     human-judgment-driven, not automatic. silent debt risk
+#     mitigated by R85→R86→R87 ladder applying ONLY to real_bug +
+#     scope_deferral classifications; methodology_gap is the explicit
+#     "no immediate action required" lane.
+#
+#   F19 (P9 윤재호, iter4 — registry placement docs/dogfood-ledger vs
+#         docs/personas):
+#     RESOLUTION: persona-registry.yaml STAYS at docs/dogfood-ledger/.
+#     Rationale: (a) co-location with the *-iter*.yaml ledgers it
+#     summarizes — single directory to read for full dogfood audit;
+#     (b) dogfood_ledger_guard's glob explicitly handles the
+#     non-iter pattern (skips persona-registry.yaml because filename
+#     does not match *-iter*.yaml); (c) moving the file would force
+#     git rename + churn every cross-reference for no semantic gain.
+#     Alternative docs/personas/ remains valid for fork-receivers
+#     who diverge their tree; ax-template canonical keeps unified.
+#
+#   F22 (P12 한상미, iter4 — meta-artifact self-recursion cap):
+#     RESOLUTION: P12 herself recorded the cap inline in F22 ("R93 cap:
+#     stop the recursion here — document the meta-artifact as inherently
+#     self-managed by maintainer judgment, not by another tracking
+#     artifact"). Cap formally pinned: persona-registry.yaml is
+#     self-managed by the maintainer of the iter terminator commit.
+#     No meta-meta-registry will be created. Saturation / verdict
+#     drift is detected by HUMAN review at each wave terminator
+#     (PROCEDURE B step 2 — "RECOMPUTE verdict based on the cumulative
+#     history pattern"), not by a mechanical guard.
+#
+#   All 4 closures land in commit B2; finding entries in iter2/iter3/iter4
+#   ledgers remain as the original audit trail; this block is the
+#   resolution record consulted at future-wave start.
 
 personas:
   - id: P3
