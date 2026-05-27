@@ -1,0 +1,88 @@
+version: "0.1.0"
+scope: "i18n-policy-l0 — locale negotiation, message-source contract, timezone/number/currency formatting policy for fork-receivers that ship in more than one language"
+stack: "Spring Boot 3.2.x MessageSource / LocaleResolver + Java 21 java.time + ICU MessageFormat (optional escape hatch)"
+standard: "IETF BCP 47 (RFC 5646 — language tag syntax) + RFC 7231 §5.3.5 (Accept-Language) + Unicode CLDR (locale data) + JEP 252 (Use CLDR Locale Data by Default)"
+introduced_at: "R93 phase β — seeded as part of the modular-catalog top-3 wave (multi-tenant / i18n-policy / bulk-import). future_add tier until templates/L4/i18n-policy/ disk slot lands. Fork-receivers wiring KO/EN baseline (Korean enterprise default) compose against these items even before the L4 stub exists."
+
+# i18n-policy is OPT-IN. ax-template's reference workloads ship with
+# `Accept-Language: en` as the de-facto default; recipes that need bilingual
+# (KO/EN) baselines MUST adopt items below before production. This spec
+# defines the policy contract; the future templates/L4/i18n-policy/ vertical
+# will define the canonical Spring wiring.
+
+items:
+  # ── LOCALE-NEG family ─────────────────────────────────────────────────────
+  - id: "I18N-LOCALE-NEG-001"
+    chapter: "Locale negotiation"
+    requirement: "HTTP requests MUST resolve a Locale via Accept-Language header (RFC 7231 §5.3.5 quality-value chain) with an explicit fallback locale declared by the recipe. The application's default locale MUST NOT be implicit (System.getDefault) — implicit defaults vary per host JVM and produce non-deterministic responses across replicas. Spring's LocaleResolver bean MUST be configured with a non-null fallback."
+    test_method: "i18n_LOCALE_NEG_001_acceptLanguageNegotiationWithFallback"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Integration test asserts a request with `Accept-Language: ko-KR,en;q=0.8`
+      resolves Locale("ko","KR"); request with no header resolves the declared
+      fallback (not System.getDefault). Anchored to Spring Framework Reference
+      §LocaleResolver + RFC 7231 §5.3.5.
+
+  # ── MESSAGE-SOURCE family ─────────────────────────────────────────────────
+  - id: "I18N-MESSAGE-SOURCE-001"
+    chapter: "User-facing strings"
+    requirement: "User-facing strings (error messages, email subjects, UI labels surfaced via API) MUST come from a Spring MessageSource bundle (`messages_<locale>.properties`), NOT inline string literals in controllers / services / DTOs. The bundle MUST cover every locale enumerated in the recipe's `supported_locales` list — missing keys MUST fail the build, not silently fall back to the message code."
+    test_method: "i18n_MESSAGE_SOURCE_001_userFacingStringsFromBundle"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      ArchUnit / convention test scans controllers + services for string
+      literals matching user-facing-message patterns. A separate build-time
+      check loads every messages_*.properties and asserts key set parity
+      across locales. Anchored to Spring Framework Reference §Internationalization.
+
+  - id: "I18N-MESSAGE-SOURCE-002"
+    chapter: "Message format"
+    requirement: "Messages with parameter substitution MUST use ICU MessageFormat (or Spring's MessageSource named-argument syntax) — never String.format / String.concat over locale-sensitive values. Plural rules and gender variants are locale-dependent (Korean uses 1 form, English uses 2, Arabic uses 6); String.format ignores all of them. ICU MessageFormat resolves per-locale."
+    test_method: "i18n_MESSAGE_SOURCE_002_pluralAndGenderUseIcuMessageFormat"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test feeds a plural-bearing key to the MessageSource for KO + EN + AR
+      locales and asserts each produces the correct grammatical form.
+      Anchored to ICU User Guide §MessageFormat + Unicode CLDR Plural Rules.
+
+  # ── TIMEZONE family ───────────────────────────────────────────────────────
+  - id: "I18N-TIMEZONE-001"
+    chapter: "Time storage + display"
+    requirement: "Persistent time values MUST be stored as UTC Instant (java.time.Instant) — never LocalDateTime + a separate timezone column. Display layer converts to caller's ZoneId at the API boundary. JPA columns MUST use TIMESTAMP WITH TIME ZONE (or equivalent driver mapping) — bare TIMESTAMP loses offset information silently."
+    test_method: "i18n_TIMEZONE_001_persistAsInstantConvertAtBoundary"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Integration test persists an Instant from Asia/Seoul, reads it from
+      America/New_York context, asserts the wall-clock display differs by
+      14 hours but the underlying Instant is identical. Anchored to JEP 150
+      (Date and Time API) + ISO 8601.
+
+  # ── FORMATTING family ────────────────────────────────────────────────────
+  - id: "I18N-FORMATTING-001"
+    chapter: "Numbers + currency + dates"
+    requirement: "Numeric / currency / date formatting in API responses MUST use NumberFormat.getCurrencyInstance(locale) / DateTimeFormatter.ofLocalizedDate(FormatStyle.<X>).withLocale(locale) — never hard-coded format strings. ko-KR uses a 4-digit (만/억/조) cognitive grouping vs en-US 3-digit grouping; even where the JDK still uses 3-digit thousands separator in raw NumberFormat, the locale-aware path keeps the door open for fork-receivers overriding CLDR data."
+    test_method: "i18n_FORMATTING_001_currencyAndGroupingPerLocale"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Integration test formats 12_345_678 won under ko-KR (asserts `₩` symbol
+      placement) and 12,345,678 USD under en-US (asserts `$` prefix), and
+      verifies dates render in locale-canonical order (yyyy. M. d. for
+      ko-KR vs M/d/yyyy for en-US). Anchored to Unicode CLDR Number Format
+      + JDK NumberFormat docs.
+
+  # ── DEFAULT-DECL family ──────────────────────────────────────────────────
+  - id: "I18N-DEFAULT-DECL-001"
+    chapter: "Recipe policy declaration"
+    requirement: "Every recipe whose target audience is multilingual MUST declare two fields in its RECIPE.md frontmatter: `default_locale: <BCP-47-tag>` (the fallback Locale when negotiation finds no match) and `supported_locales: [<tag>, ...]` (the exhaustive list — every messages_*.properties must cover this set). Recipes targeting a single audience MAY omit both; absence is treated as `supported_locales: [<default_locale or en>]`."
+    test_method: "static analysis"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Manual review of recipes/*-recipe-l0.yaml + RECIPE.md — a future
+      recipe_locale_policy_guard.sh will mechanize this check once the
+      runtime L4 (templates/L4/i18n-policy/) ships. Anchored to IETF BCP 47.
