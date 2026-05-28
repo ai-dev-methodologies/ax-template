@@ -1,0 +1,97 @@
+# R95 — invoicing-l0 spec dogfood iter2 (TRUE 0-convergence terminator)
+#
+# Wave subject: specs/invoicing-l0.yaml + iter1 closures (commit bf9494f)
+# + iter1 ledger (commit 3d233ba).
+#
+# iter1 closed 4 real_bug (F2 priority + F3 RECIPE example + F8 XML
+# namespace pin + F10 ledger self-creation) and deferred 6 scope_deferral
+# (F1/F4/F5/F6/F7/F9) with explicit Expiry triggers.
+#
+# iter2 sweep — same 10-persona panel (P3-P12) re-reviews iter1 closures
+# + iter1 ledger.
+#
+# Result: 0 findings. TRUE 0-convergence at iter2 — same pattern as R94
+# (no new artifact introduced in iter1, only doc-only edits to existing
+# spec → first 0-real_bug iter IS the true terminator).
+#
+# Per-persona iter2 verdict (all "no residual on iter1 closures"):
+#
+#   P3 김민준  iter1 closures don't touch mobile surface. F1 deferral
+#              unchanged.
+#   P4 박지영  F2 priority closure structurally identical to R93 i18n F2
+#              + R94 realtime F2 closures that previously satisfied P4.
+#              3rd successful application of the same pattern.
+#   P5 이상호  F3 RECIPE closure ships verbatim b2b-saas-subscription-kr
+#              frontmatter with retention pinned. Copy-pasteable.
+#              3rd successful application of the pattern.
+#   P6 최영숙  iter1 closures don't touch the 면세사업자 / 매입자 발행 /
+#              종이 병행 deferrals — those remain trigger-anchored.
+#              本 wave가 P6 직접 domain이었으나 closure scope는 catalog
+#              standard surfaces (priority, example, namespace, ledger);
+#              한국 corner case는 deferral lane으로 처리.
+#   P7 정도윤  F5 typed-binding deferral unchanged. F8 namespace pin closure
+#              partially addresses XML-side typing but TypeScript / JAXB
+#              codegen lens still open.
+#   P8 강하늘  F6 SLO/alert deferral unchanged. iter1 closures introduce no
+#              new metric surface. 3rd-wave repeat of metric-without-alert
+#              pattern — observability lens stable.
+#   P9 윤재호  F7 paper/EDI → e-invoice migration deferral unchanged.
+#              iter1 closures spec-internal.
+#   P10 신경수 F9 immutable retention upgrade deferral unchanged. iter1
+#              closures additive doc, no breaking risk.
+#   P11 황태완 Own F8 closure (XML namespace pin) is comprehensive — recipe
+#              declaration + XmlInvoiceWriter assertion + legacy v2 opt-out.
+#              Standards-aligned. 3rd-wave repeat of standards-symmetric
+#              coverage pattern.
+#   P12 한상미 F10 closure (r95-iter1.yaml itself) explicitly records the
+#              **3rd consecutive occurrence** of 'no ledger at wave kickoff'
+#              + flags R96 mandatory_iter1_agenda to introduce
+#              wave_kickoff_ledger_guard.sh OR explicitly accept silent
+#              drift. The methodology suggestion is embedded in the audit
+#              trail per B2 resolution. No new finding.
+#
+# Wave totals after iter2:
+#   iter1: 10 findings — 4 real_bug closed + 6 scope_deferral
+#   iter2:  0 findings — TRUE convergence
+#   ──────────────────────────────────────────────────────────────────────
+#   TOTAL: 10 findings produced
+#           4 real_bug closed (closure_commit_sha bf9494f all 4)
+#           6 scope_deferral with Expiry triggers (R85)
+#           0 methodology_gap
+#
+# 4 commits land the R95 wave end-to-end:
+#   425585b  R95 phase α (invoicing-l0.yaml spec seed)
+#   bf9494f  R95 iter1 closures (F2/F3/F8)
+#   3d233ba  R95 iter1 ledger (10 findings + F10 self-closure)
+#   this     R95 iter2 terminator (0 findings)
+#
+# **3-wave aggregate evidence** (R93 + R94 + R95 = 3 modular catalog
+# waves through the 10-persona protocol):
+#
+#   Stabilized finding patterns (3-consecutive cross-wave hits):
+#     P4 priority ordering    : R93 F2 / R94 F2 / R95 F2 → real_bug × 3
+#     P5 RECIPE example       : R93 F3 / R94 F3 / R95 F3 → real_bug × 3
+#     P8 SLO/alert wiring     : R93 F6 / R94 F6 / R95 F6 → scope_deferral × 3
+#     P11 standards-symmetric : R93 F9/F11 / R94 F8 / R95 F8 → real_bug × 4
+#     P12 no-ledger-at-kickoff: R93 F10 / R94 F10 / R95 F10 → real_bug × 3
+#
+#   Lens overlap (P4/P5): 3-wave differentiation MAINTAINED.
+#     R93: priority (P4) vs sequential playbook (P5)
+#     R94: priority+rubric (P4) vs procedure split (P5)
+#     R95: priority (P4) vs RECIPE example (P5)
+#     → Different surfaces every wave; merge decision can be retired
+#       as permanently-not-needed. Both lenses produce unique signal.
+#
+#   P12 saturation flag: 2nd-wave (R94) NEGATED; 3rd-wave (R95) confirms
+#     governance lens is HIGH-signal not methodology-only. 3-wave running
+#     average: 2 real_bug (R93+R94) + 3 methodology_gap (R93) + 1 real_bug
+#     (R95) = 4 real_bug + 3 methodology_gap. Saturation flag retired.
+#
+#   Convergence speed pattern:
+#     R93 reached TRUE 0 at iter5 (new artifact mid-wave)
+#     R94 reached TRUE 0 at iter2 (no new artifact)
+#     R95 reached TRUE 0 at iter2 (no new artifact)
+#     → Rule confirmed: iter terminator = iter1 + 1 IF no new artifact,
+#       else +N for each new artifact iter cycle.
+iteration: 2
+findings: []
