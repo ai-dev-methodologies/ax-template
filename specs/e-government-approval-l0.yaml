@@ -1,0 +1,168 @@
+version: "0.1.0"
+scope: "e-government-approval-l0 — 행정업무용 전자결재 시스템 (전자결재 효력 부여 / GPKI·NPKI 인증서 / 결재선 위임 / 사후결재 / 보안등급 / 30년 보존 / 관측) contract for fork-receivers building 공공기관 또는 행정업무 vertical (공공기관 결재 시스템 / 산하기관 전자결재 / 정부지원사업 결재 + 정산 / 공기업 표준 결재 프레임워크). Differentiated from existing approval-workflow-l0 (R31, private ITIL pattern) — collision-free novel scope per R98 mandatory_R99_iter1_agenda."
+stack: "Spring Boot 3.2.x + JPA + GPKI / NPKI adapter (정부공개키기반구조 / 개인공개키기반구조) + document-signing-l0 (R97 catalog reference) + identity-verification (R54) + Micrometer metrics"
+standard: "행정업무의 운영 및 혁신에 관한 규정 (대통령령) §10 (전자결재) + 행정업무용 전자문서법 §5 (효력 부여) §16 (전자결재 시스템 요건) + 전자정부법 §29 (전자결재) §30 (전자결재 안전성) + GPKI 정부공개키기반구조 시행계획 (행정안전부) + 공공기록물 관리에 관한 법률 §27 (보존기간 — 일반 5년·중요 30년·영구) + 보안업무 규정 §3 (대외비 / 비밀 / 극비 분류) + 전자서명법 §3 (전자서명 효력)"
+domain_mode: full_trio
+introduced_at: "R99 phase α — seeded as the 7th modular-catalog candidate. Collision-free novel scope replacing R97 A5 결재 (collided with existing approval-workflow-l0.yaml R31 private ITIL). 공공기관 행정업무 vertical 대상 — GPKI/NPKI + 결재선 위임 + 사후결재 + 보안등급은 private enterprise approval-workflow와 구조적으로 다른 요건. P6 최영숙 한국 규제 lens 직접 domain (행정업무용 전자문서법 + 보안업무 규정) + P11 황태완 standards lens (GPKI 시행계획) + P10 신경수 backward-compat lens (기존 종이결재 또는 단순 e-결재에서 GPKI 전자결재로 전환). **Third mechanical wave** application — R97 (48th wave_kickoff) + R98 (49th registry_backfill) + R99 (pre-commit-fast-guards helper) 3-cycle mechanical-anchor pattern. R99 P12 NEW finding TBD at iter1."
+
+# e-government-approval is OPT-IN. ax-template's reference workloads do
+# NOT require government-grade approval (R30 ASVS L1 + R31 approval-workflow
+# private ITIL are baseline). Recipes building 공공기관 또는 정부 vertical
+# (공공기관 결재 시스템 / 산하기관 전자결재 / 정부지원사업 정산 결재 /
+# 공기업 표준 프레임워크) MUST adopt items below before deployment to
+# government environments. This spec defines the policy contract; the
+# future templates/L4/e-government-approval/ vertical will define
+# canonical Spring + GPKI adapter + document-signing wiring.
+#
+# Composition note (depends on existing catalog domains):
+# - EGA-PKI-001 cross-references document-signing-l0 (R97) for X.509
+#   certificate validation + RFC 5280 path validation. GPKI/NPKI
+#   certificates plug into the same DOC-CERT-001 trust-anchor framework
+#   (extended with GPKI root CA whitelist).
+# - EGA-LINE-001 / EGA-POSTAPPROVAL-001 cross-reference approval-workflow
+#   -l0 (R31) for ApprovalRequest + ApprovalStep state machines —
+#   e-government-approval EXTENDS R31 with delegation + post-facto +
+#   classification rather than replacing. Recipes using both wire
+#   ApprovalRequest sub-types per scope (private R31 vs government R99).
+# - EGA-PKI-001 + EGA-AUDIT-001 cross-reference identity-verification
+#   -l0 (R54) for GPKI/NPKI 본인확인 + audit trail PII handling
+#   (R67 AuditPiiHelper recipient_hash pattern).
+# - EGA-OBSERVABILITY-001 will adopt OBSERVABILITY-002 표준 item (R99
+#   mandatory_R99_iter1_agenda item #2) when that lands across the 6+
+#   affected specs (multi-tenant + realtime + invoicing + 2FA + document-
+#   signing + chat-messaging + e-government-approval = 7 adopters).
+
+items:
+  # ── FRAMEWORK family ────────────────────────────────────────────────────
+  - id: "EGA-FRAMEWORK-001"
+    chapter: "전자결재 효력 부여"
+    requirement: "행정업무용 전자결재 시스템은 행정업무의 운영 및 혁신에 관한 규정 §10 + 행정업무용 전자문서법 §5 의 효력 부여 조건을 충족해야 한다: (1) 결재권자 본인확인 (GPKI/NPKI 전자서명 — EGA-PKI-001) (2) 결재 시점 timestamp (RFC 3161 TSA + document-signing-l0 R97 DOC-TIMESTAMP-001) (3) 결재 내용 무결성 (XAdES-A 또는 PAdES-B-LTA — R97 DOC-RETENTION-001) (4) 결재선 추적 (EGA-LINE-001) (5) 보존 (EGA-AUDIT-001). 위 5조건 중 하나라도 미충족 시 행정업무용 전자결재로서 법적 효력 없음 (전자정부법 §30 안전성 요건 위반). 일반 ITIL 결재 (approval-workflow-l0 R31)는 본 조건 미충족 — recipes는 vertical 따라 명시적 분기 필요."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: POST /api/e-gov-approval/requests with missing GPKI signature
+      → 422 EGA_INVALID_PKI. POST without TSA timestamp → 422
+      EGA_MISSING_TIMESTAMP. Approval marked APPROVED but signing chain
+      breaks XAdES-A archival timestamp → audit log captures defect +
+      legal validity flag flipped to invalid. Anchored to 행정업무의 운영
+      및 혁신에 관한 규정 (대통령령 제32523호) §10 (전자결재) + 행정업무용
+      전자문서법 §5 (효력 부여) + 전자정부법 §30 (전자결재 안전성).
+      Quote anchor (전자정부법 §30①): "행정기관등의 장은 전자결재의
+      안전성과 신뢰성을 확보하기 위하여 다음 각 호의 조치를 하여야 한다.
+      1. 전자결재 시스템의 인증 및 안전성 확보 2. 전자결재의 무결성
+      및 부인방지 3. 전자결재 결과의 보존."
+
+  # ── PKI family ──────────────────────────────────────────────────────────
+  - id: "EGA-PKI-001"
+    chapter: "GPKI / NPKI 인증서 신뢰체계"
+    requirement: "결재권자의 전자서명 인증서는 GPKI (정부공개키기반구조 — 행정기관 공무원 직무 인증서) 또는 NPKI (개인공개키기반구조 — 일반인 본인확인용) 중 하나여야 한다. GPKI는 행정안전부 GPKI 인증관리센터가 발급한 인증서로 한정 (사설 인증서 거부). NPKI는 공공기관과의 거래 시 KISA 등록된 본인확인기관 발급 인증서로 한정. 인증서 경로 검증은 document-signing-l0 (R97) DOC-CERT-001 + RFC 5280 §6 알고리즘 따름. 추가 요건: 인증서의 OID extension에 직무 정보 (보안등급 처리 권한 / 부서 코드) 포함 — 결재선 자동 라우팅에 사용 (EGA-LINE-001 + EGA-CLASSIFICATION-001)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: java.security.cert.CertPathValidator with PKIXParameters
+      + custom GpkiTrustAnchorProvider (행정안전부 GPKI root CA fingerprint
+      whitelist 하드코딩 + 분기별 갱신 mechanism). 사설 인증서 (Naver / Kakao
+      certificates) → reject with 422 EGA_PKI_TYPE_INVALID. Anchored to
+      GPKI 정부공개키기반구조 시행계획 (행정안전부) §4 (인증서 발급 절차)
+      + 전자서명법 §8 (전자서명 인증서 효력) + RFC 5280 §6 (path validation).
+      Quote anchor (GPKI 시행계획 §4): "정부공개키기반구조 인증서는 행정
+      안전부 GPKI 인증관리센터에서만 발급하며, 행정기관 공무원의 직무수행
+      목적으로만 사용한다."
+
+  # ── LINE family ─────────────────────────────────────────────────────────
+  - id: "EGA-LINE-001"
+    chapter: "결재선 (sequential + delegation)"
+    requirement: "결재선은 sequential ordered (순차 결재 — R31 ApprovalRequest 패턴) 또는 parallel ordered (병결 — 동급 결재권자 다수 동시 검토) 또는 두 유형 mixed 허용. 위임 처리 2종: (1) 사전 위임 — 결재권자가 부재 시 위임받을 자 사전 지정 (위임 기간 + 위임 사유 보존); (2) 자동 위임 — 결재 도착 후 72h 미처리 시 차상위 결재권자에게 자동 escalation (운영 규정 §12 시행세칙). 위임 처리도 전체 audit trail (EGA-AUDIT-001) 기록. 결재선 변경 (위임 발동 / 결재선 추가 / 결재선 삭제)은 보안등급 (EGA-CLASSIFICATION-001) 변동 시 자동 재구성."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: ApprovalLine entity (R31 ApprovalRequest extension)
+      with steps[] + delegation_window + auto_escalate_hours fields.
+      ApprovalLineService.delegateStep(stepId, fromUserId, toUserId,
+      reason, validUntil) + scheduled task가 72h timeout 후 차상위
+      auto-escalate. Anchored to 행정업무의 운영 및 혁신에 관한 규정 §11
+      (결재) + §12 (시행세칙 — 위임 처리) + approval-workflow-l0 R31
+      ApprovalRequest 패턴.
+      Quote anchor (운영 규정 §11①): "결재는 행정기관의 의사를 결정하는
+      절차로서, 결재선은 사안의 중요도와 보안등급에 따라 적절히 구성하여야
+      한다."
+
+  # ── POSTAPPROVAL family ────────────────────────────────────────────────
+  - id: "EGA-POSTAPPROVAL-001"
+    chapter: "사후결재 (post-facto approval)"
+    requirement: "긴급한 사유 (재해 / 보안 사고 / 긴급 예산 집행 등) 발생 시 결재 완료 전 의사결정 실행 후 24h 이내 사후결재 수행 가능. 사후결재 요건: (1) 긴급 사유 기록 (자유 텍스트 + 사전 정의된 enum 코드 — DISASTER / SECURITY_INCIDENT / EMERGENCY_BUDGET / OTHER); (2) 24h timer (실행 시점부터 — 시스템이 자동 측정); (3) 결재선 사후 보강 (정상 결재선 절차 진행 — 단계 생략 불가); (4) 24h 경과 시 사후결재 무효 (행정업무용 전자문서법 §16②에 따라 사후결재 시한 강행규정). 사후결재 빈도 높은 결재권자는 audit log 검토 대상 (EGA-AUDIT-001)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: PostApprovalService.execute(emergencyReason,
+      enumCode, executionTimestamp) → 실행 즉시 효력 + scheduled task가
+      24h 후 결재선 미완료 시 status=INVALIDATED. Test: POST /api/e-gov-
+      approval/post-approval with emergencyReason=null → 422. Execution
+      에서 25h 경과 후 결재 완료 시도 → 422 EGA_POSTAPPROVAL_EXPIRED.
+      Anchored to 행정업무용 전자문서법 §16 (전자결재 시스템 요건 — 사후
+      결재 24h 시한) + 운영 규정 §13 (긴급 사유) + 보안업무 규정 §17
+      (긴급 보안조치).
+      Quote anchor (행정업무용 전자문서법 §16②): "긴급한 사유로 사전
+      결재가 곤란한 경우에는 사후에 결재를 받을 수 있되, 그 시한은
+      대통령령으로 정한다." (시행령은 24h 명시)
+
+  # ── CLASSIFICATION family ──────────────────────────────────────────────
+  - id: "EGA-CLASSIFICATION-001"
+    chapter: "보안등급 + 결재선 자동 escalation"
+    requirement: "결재 요청은 보안등급 enum 필수: {일반(general), 대외비(restricted), 비밀(secret), 극비(top_secret)}. 보안등급별 결재선 자동 escalation: 일반은 부서장 레벨, 대외비는 본부장+1 추가, 비밀은 차관급+1 추가, 극비는 장관급+1 추가 (운영 규정 §14 시행세칙 ratification). 보안등급 변경 시 (예: 일반 → 대외비 elevate) 결재선 자동 재구성 + 기존 결재 단계 무효 + 재시작. 보안등급 처리 권한은 결재권자의 GPKI 인증서 OID extension (EGA-PKI-001)에서 추출. 권한 없는 결재권자 routing 시도 시 → 결재선에서 제거 + audit log emit."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: SecurityClassificationService.classifyAndRoute(
+      requestId, classification) → ApprovalLineService.rebuildLine(...)
+      + GpkiCertificateOidParser.extractAuthorityLevel(cert). Test:
+      classify=general request elevated to restricted → 결재선 재구성
+      + 기존 PENDING 단계 INVALIDATED + 신규 단계 PENDING. 권한 없는
+      결재권자 추가 시도 → 422 EGA_AUTHORITY_INSUFFICIENT.
+      Anchored to 보안업무 규정 §3 (보안등급 분류) + §10 (보안등급 처리
+      권한) + 운영 규정 §14 시행세칙.
+      Quote anchor (보안업무 규정 §3①): "보안업무에서 보호하여야 할
+      비밀은 그 중요성과 가치에 따라 극비, 비밀, 대외비로 분류한다."
+
+  # ── AUDIT family ────────────────────────────────────────────────────────
+  - id: "EGA-AUDIT-001"
+    chapter: "30년 보존 + 무결성 + 결재 흐름"
+    requirement: "행정업무용 전자결재 audit trail은 공공기록물 관리에 관한 법률 §27 에 따라 보존기간 차등: 일반 결재 5년, 중요 결재 30년 (보안업무 규정 적용 결재), 영구 보존 결재 (대통령 보고 / 입법 / 행정조치 결과). 보존 형식은 document-signing-l0 (R97) DOC-RETENTION-001 PAdES-B-LTA 또는 XAdES-A로 archive timestamp 갱신 의무 (5년마다 TSA archive token 재발급). 무결성 보장: hash chain (Merkle log) — 매 결재 단계가 직전 단계 hash 포함. 결재 흐름은 변경 불가 (append-only) — 위임 발동 + 결재선 변경도 새 이벤트로 추가 (이전 이벤트 수정 금지). PII 처리는 R54/R67 AuditPiiHelper recipient_hash 패턴 적용 (RRN raw 절대 미저장)."
+    test_method: "RestAssured + integrity probe test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: EgaAuditEvent entity (append-only — @Column updatable
+      =false on all fields) + GpkiMerkleHasher (SHA-256 chain). Scheduled
+      ArchiveTimestampRefreshJob runs quarterly to refresh archive tokens
+      90 days before TSA cert expiry. Test: tamper any prior event → hash
+      chain break detected. 보존기간 차등 적용 — classification=restricted
+      는 30년 retain, general은 5년 retain (per 공공기록물법 §27 시행령).
+      Anchored to 공공기록물 관리에 관한 법률 §27 (보존기간) + 행정업무용
+      전자문서법 §6 (전자문서 무결성) + R67 AuditPiiHelper precedent.
+      Quote anchor (공공기록물법 §27①): "공공기관은 기록물의 보존기간을
+      정하여 보존하여야 하며, 그 기간은 영구·30년·10년·5년·3년·1년으로
+      구분한다."
+
+  # ── OBSERVABILITY family ───────────────────────────────────────────────
+  - id: "EGA-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "행정업무용 전자결재 구현은 정확히 3개의 canonical Micrometer metric 노출 + bounded cardinality labels: (1) `ega_approvals_submitted_total{tenant, classification}` — 결재 제출 (counter; classification ∈ {general/restricted/secret/top_secret}); (2) `ega_postapproval_invalidation_rate{tenant, reason}` — 사후결재 무효율 (counter; reason ∈ {timeout_24h_exceeded / approval_line_incomplete / authority_revoked}); (3) `ega_archive_timestamp_refresh_warning_days{tenant}` — 다음 archive timestamp 만료까지 (gauge). Labels 제외: requester_user_id / approval_request_id / classification_detail (low-cardinality only). SLO/alert wiring은 fork-receiver concern (scope_deferral; R93/R94/R95/R96/R97/R98 F6 패턴 — 7th-wave consecutive)."
+    test_method: "Micrometer registry assertion test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: Micrometer MeterRegistry with @ConditionalOnClass
+      Counter.builder() / Gauge.builder() + MeterFilter denylist for
+      requester_user_id / approval_request_id labels. Anchored to
+      OpenTelemetry Semantic Conventions §metric naming + 7-wave canonical
+      "3 metric" pattern. R99 mandatory_R99_iter1_agenda item #2 lands
+      OBSERVABILITY-002 표준 item 7-spec batch — e-government-approval은
+      7th adopter.
+      Quote anchor (OpenTelemetry semconv stability): "Label cardinality
+      SHOULD be bounded to prevent metric explosion."

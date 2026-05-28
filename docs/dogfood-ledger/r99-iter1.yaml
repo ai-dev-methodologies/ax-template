@@ -1,0 +1,46 @@
+# R99 — e-government-approval-l0 spec dogfood iter1 (10-persona, 7th wave)
+#
+# Wave subject: specs/e-government-approval-l0.yaml (R99 phase α).
+# 7 items (FRAMEWORK / PKI / LINE / POSTAPPROVAL / CLASSIFICATION / AUDIT
+# / OBSERVABILITY) anchored to 행정업무의 운영 및 혁신에 관한 규정 + 행정
+# 업무용 전자문서법 + 전자정부법 §29/§30 + GPKI 시행계획 + 공공기록물법
+# §27 + 보안업무 규정 §3 + 전자서명법 §3.
+#
+# Panel reuse: P3-P12 per persona-registry R98 next_panel_composition_for_R99.
+# 7th wave application of the 10-persona protocol.
+#
+# **Third mechanical wave guard application** (R99 pre-commit-fast-guards.sh
+# helper script, commit fb8a5de — completes 3-cycle anchor pattern):
+#   R97 48th wave_kickoff_ledger_guard       (commit-1 phase α atomic)
+#   R98 49th registry_backfill_completeness  (commit-5 backfill enforcement)
+#   R99 pre-commit-fast-guards (catalog helper) (3-gate timing model: <10s pre-commit subset)
+# Each guard's first application caught a real bug:
+#   48th: R97 phase α atomic land (931afc9) demonstrated spec-only would block
+#   49th: R97 P3 missing R97 history (bb5f4db hotfix race detection)
+#   R99 helper: 13s elapsed within 15s budget at standalone test
+#
+# **R99 wave initiation pattern**: same R98 pre-wave + 5-commit wave shape.
+# Pre-wave fb8a5de (R98 F10 close — pre-commit-fast-guards helper) + 5-commit
+# wave proper begins with this phase α. Collision-free novel scope replacing
+# R98 A5 결재 collision (approval-workflow-l0 R31 already covers private
+# enterprise 결재; e-government-approval extends with GPKI/NPKI + 위임 +
+# 사후결재 + 보안등급 + 30년 보존 — government-grade only).
+#
+# **7-wave cross-wave consistency expected** (7 consecutive occurrences):
+#   P4 priority order        : R93/R94/R95/R96/R97/R98/R99 F2 → real_bug × 7 (R99 closure expected)
+#   P5 RECIPE example        : R93/R94/R95/R96/R97/R98/R99 F3 → real_bug × 7 (R99 closure expected)
+#   P8 SLO/alert wiring      : R93/R94/R95/R96/R97/R98/R99 F6 → scope_deferral × 7
+#   P11 standards-symmetric  : R93/R94/R95/R96/R97/R98/R99 F8 → real_bug × 7+ (R99 closure expected;
+#                              GPKI OID extension format default / TSA archive refresh interval 등 standards lens)
+#   P12 mechanical-anchor    : R97 48th + R98 49th + R99 helper = 3 consecutive mechanical anchors
+#                              empirically validated cycle. R99 NEW finding TBD at iter1.
+#
+# Distribution post-F10-retirement (R97 onward): 3+7 baseline stable.
+# R99 expected to maintain 3 real_bug + 7 scope_deferral.
+#
+# P6 한국 규제 lens direct domain: e-government-approval is heaviest Korean
+# enterprise law domain to date — 행정업무 운영 규정 + 행정업무용 전자문서법
+# + 전자정부법 + 공공기록물법 + 보안업무 규정 6 laws cross-cited.
+
+iteration: 1
+findings: []
