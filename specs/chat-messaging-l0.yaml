@@ -30,6 +30,51 @@ introduced_at: "R98 phase α — seeded as the 6th modular-catalog candidate fro
 #   specs (multi-tenant + realtime + invoicing + 2FA + document-signing).
 #   chat-messaging will be the 6th adopter.
 
+# ── Priority order for fork-receivers (R98 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt items in this order. Earlier items are foundational for later
+# ones — skipping CHAT-MESSAGE-001 (envelope schema) makes everything
+# else moot because un-declared envelope cannot be canonically routed
+# OR persisted. 6-wave pattern (R93/R94/R95/R96/R97/R98 F2): Junior
+# priority lens consistently flags missing adoption order — closure
+# adds explicit foundation rationale to spec body.
+#
+#   1. CHAT-MESSAGE-001       — envelope schema (foundation; everything else references envelope)
+#   2. CHAT-ROOM-001          — room lifecycle (dm idempotent / group ADMIN / broadcast write-only)
+#   3. CHAT-DELIVERY-001      — at-least-once outbox + receipts (depends on envelope persistence)
+#   4. CHAT-PRESENCE-001      — presence + typing (UX layer; ephemeral)
+#   5. CHAT-HISTORY-001       — cursor pagination + offline catchup
+#   6. CHAT-MODERATION-001    — moderation + 신고 (depends on stable envelope + history tombstones)
+#   7. CHAT-OBSERVABILITY-001 — 3 canonical metrics
+
+# ── RECIPE.md frontmatter example (R98 iter1 F3 closure — P5 이상호 lens) ──
+# Canonical opt-in shape. 6-wave pattern (R93/R94/R95/R96/R97/R98 F3): Senior
+# docs lens consistently flags missing copy-pasteable recipe block — closure
+# adds verbatim saas-customer-support-chat frontmatter example.
+#
+#   ---
+#   recipe: saas-customer-support-chat
+#   tenant_model: multi
+#   default_locale: ko-KR
+#   supported_locales: [ko-KR, en-US]
+#   chat_enabled: true
+#   chat_message_id_format: ulid                  # R98 F8 default — lexicographic sort + 128-bit + millisecond timestamp
+#   chat_default_room_retention_days: 90          # CHAT-HISTORY-001 default
+#   chat_realtime_subprotocol: stomp-v12          # R94 RT-SUBPROTOCOL-001 reference (Spring WebSocket default)
+#   chat_moderation_report_sla_hours: 24          # 정보통신망법 §44의2 1차 처리 SLA
+#   chat_moderation_final_response_days: 7        # 정보통신망법 §44의2 최종 통보 SLA
+#   chat_min_age_filter_enabled: true             # 청소년보호법 §16의2 가입 시 미성년자 보호 layer
+#   chat_e2e_encryption: false                    # default at-rest only; vertical-flip for healthcare/legal
+#   chat_broker: rabbitmq                         # OR kafka (fan-out vs partition semantics)
+#   chat_presence_grace_seconds: 30               # CHAT-PRESENCE-001 default
+#   chat_typing_inactivity_seconds: 5             # CHAT-PRESENCE-001 ephemeral expiry
+#   ---
+#
+# Fork-receivers building 의료 / 금융 / 법률 verticals SHOULD flip
+# chat_e2e_encryption=true (Signal Protocol / Megolm) per
+# 개인정보보호법 §29 안전성 확보 조치 + 의료법 §21 환자정보 보호.
+# 청소년 vertical (게임 + 교육) MUST enable chat_min_age_filter_enabled
+# per 청소년보호법 §16의2.
+
 items:
   # ── MESSAGE family ─────────────────────────────────────────────────────
   - id: "CHAT-MESSAGE-001"
@@ -48,6 +93,22 @@ items:
       Quote anchor (RFC 6120 §8.1.1): "The 'id' attribute is REQUIRED
       for the IQ stanza, RECOMMENDED for the message stanza, and
       OPTIONAL for the presence stanza."
+      R98 iter1 F8 closure (P11 황태완 standards lens): message id
+      format MUST be pinned per RFC 4122 (UUID) vs ULID spec
+      (https://github.com/ulid/spec) vs Snowflake — recipe declares
+      `chat_message_id_format` in RECIPE.md frontmatter where value
+      ∈ {uuid-v4, ulid, snowflake}. Default catalog opinion: `ulid`
+      (lexicographic sort order compatible with CHAT-HISTORY-001
+      cursor pagination; 128-bit collision-free; embeds millisecond
+      timestamp prefix for natural temporal ordering). `uuid-v4`
+      acceptable but breaks cursor lexsort assumption — recipe must
+      maintain separate sort field. `snowflake` requires central id
+      allocator (operational complexity; only for high-scale verticals
+      requiring sub-millisecond resolution). 6-wave streak: R93 ISO
+      8601 Z + R94 subprotocol + R95 XML namespace + R96 WebAuthn
+      attestation + R97 c14n+PAdES baseline + R98 message id format.
+      P11 standards lens consistently catches default-pinning gap
+      at phase α — closure adds default catalog opinion to spec body.
 
   # ── ROOM family ─────────────────────────────────────────────────────────
   - id: "CHAT-ROOM-001"
