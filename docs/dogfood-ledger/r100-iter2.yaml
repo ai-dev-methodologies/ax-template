@@ -1,0 +1,117 @@
+# R100 — referral-program-l0 spec dogfood iter2 (TRUE 0-convergence terminator)
+#
+# Wave subject: specs/referral-program-l0.yaml + iter1 closures (commit d221d7d)
+# + iter1 ledger (commits 689d414 + fix 9163ce5 expiry-trigger markers).
+#
+# iter1 closed 3 real_bug (F2 priority + F3 RECIPE + F8 fingerprint/IP anon
+# pin) and deferred 7 scope_deferral (F1/F4/F5/F6/F7/F9/F10) with explicit
+# Expiry triggers (R85 compliance fix). Distribution matches R97/R98/R99
+# (3+7) — post-F10-retirement baseline stable; R100 P12 surfaces NEW finding
+# (4th anchor class candidate + retirement review, R101+ agenda).
+#
+# iter2 sweep — same 10-persona panel (P3-P12) re-reviews iter1 closures
+# (d221d7d) + iter1 ledger (689d414+9163ce5) + phase α (5046897) + R100
+# pre-wave DATA artifact (aa4b855).
+#
+# Result: 0 findings. TRUE 0-convergence at iter2.
+# A2 P1 inline termination assertion + escalation clause carried forward.
+
+iteration: 2
+termination_status: TARGET_NOT_GUARANTEED
+real_bug_count: 0
+scope_deferral_count: 7
+no_new_artifacts_mid_stream: true
+escalation:
+  condition: real_bug_count >= 1
+  action: iter3 MANDATORY (not terminator)
+  reference: feedback_iter_terminator_may_reopen.md
+  rationale: |
+    R93 lesson — iter that surfaces 0 real_bug is NOT the terminator if
+    a new artifact landed mid-stream. R100 introduces NO new artifact in
+    iter1 (only doc-only spec edits + ledger population + R85 expiry-
+    trigger fix). Pre-conditions satisfied (no_new_artifacts_mid_stream:
+    true). R100 pre-wave (DATA artifact aa4b855 korean_law_reference_
+    index.yaml) landed BEFORE iter1 — counted as pre-wave NOT mid-stream.
+    R97/R98/R99/R100 all 4-wave anchor cycle follow same pre-wave-
+    before-iter1 pattern.
+
+findings: []
+
+# Per-persona iter2 verdict (all "no residual"):
+#   P3 김민준  mobile native share sheet / Universal Links / App Links 미커버.
+#              F1 deferral unchanged. iter1 closures touched code/attribution
+#              /fingerprint surfaces only.
+#   P4 박지영  F2 priority closure structurally identical to R93~R99. 8th
+#              successful application — adoption order foundation rationale
+#              + 7 items mapped.
+#   P5 이상호  F3 RECIPE closure ships verbatim consumer-saas-referral-kr
+#              frontmatter (14 fields) + 금융 / 청소년 / privacy-first
+#              vertical guidance. 8th successful application.
+#   P6 최영숙  iter1 closures touched standards (fingerprint + IP anon) not
+#              한국 규제 surfaces. F4 deferral (공정거래위원회 시행세칙 +
+#              2024 개정 + 가구 단위 + 영업비밀 conflict) unchanged. 본 wave
+#              가 본인 직접 domain (공정거래법 §23 + 추천·보증 심사지침)
+#              였으나 phase α에서 이미 1-pass closure (REFERRAL-REWARD +
+#              REFERRAL-DISCLOSURE inline contract); 시행세칙 detail은
+#              deferral lane. R100 pre-wave (korean_law_reference_index)
+#              에 공정거래법 §23 + 공정거래위원회 고시 cross-cite 추가
+#              등록은 R101 agenda (build_law_index.sh 자동화 후).
+#   P7 정도윤  F5 typed-binding deferral unchanged. REFERRAL-CODE +
+#              ATTRIBUTION는 TypeScript ReferralShareKit + iOS/Android
+#              typed schemas 별도 R101+ work.
+#   P8 강하늘  F6 SLO/alert deferral unchanged. 8th-wave repeat. R101
+#              mandatory_R101_iter1_agenda 후보 (OBSERVABILITY-002 표준
+#              item 8-spec batch 적용).
+#   P9 윤재호  F7 organic → referral-tracked migration deferral unchanged.
+#              cohort + 기존 사용자 backfill + promotional code conflict
+#              은 첫 referral fork-receiver의 cutover 시 trigger.
+#   P10 신경수 F9 cookieless attribution (3rd-party cookie deprecation +
+#              ITP 2.3 + ETP) deferral unchanged. server-side fallback +
+#              first-party scoping matrix는 첫 Chrome 3rd-party 폐기 후
+#              attribution 정확도 저하 시 trigger.
+#   P11 황태완 Own F8 closure (fingerprint method + IP anon scheme pin)
+#              comprehensive — 4/3 enum + per-context defaults (ua_screen
+#              _hash + last_octet_zero baseline / fingerprintjs / canvas +
+#              IPv6 /64 prefix) + RFC 4291 cite. 8th-wave repeat.
+#   P12 한상미 F10 NEW finding (4th anchor class candidate + retirement
+#              review, scope_deferral) records the 3-class taxonomy
+#              completion at R100 + 4th class hypothesis (auto-data =
+#              DATA + generator script). R101 mandatory_R101_iter1_agenda
+#              candidate. Meta-meta-governance: 3-class taxonomy now risks
+#              proliferation — anchor lifecycle (영구 vs obsolete vs
+#              refresh) 명문화 R102+ candidate.
+#
+# Wave totals after iter2:
+#   iter1: 10 findings — 3 real_bug closed + 7 scope_deferral + 1 R85 fix
+#   iter2:  0 findings — TRUE convergence
+#
+# 7 commits land the R100 wave end-to-end (pre-wave + 5-commit + 1 fix):
+#   aa4b855  R100 pre-wave (korean_law_reference_index.yaml — R99 F10 close)
+#   5046897  R100 phase α (referral-program-l0.yaml + r100-iter1.yaml atomic)
+#   d221d7d  R100 iter1 closures (F2/F3/F8)
+#   689d414  R100 iter1 ledger (10 findings + F10 NEW scope_deferral)
+#   9163ce5  fix: R85 expiry-trigger markers (caught by R99 fast-7 helper —
+#            first NON-trivial empirical validation of HELPER class)
+#   this     R100 iter2 terminator (0 findings)
+#   <next>   R100 persona-registry backfill (49th guard enforces)
+#
+# **8-wave aggregate cross-wave evidence** (R93~R100):
+#   P4 priority ordering      : R93~R100 F2 → real_bug × 8
+#   P5 RECIPE example         : R93~R100 F3 → real_bug × 8
+#   P8 SLO/alert wiring       : R93~R100 F6 → scope_deferral × 8
+#   P11 standards-symmetric   : R93/F9+F11 + R94~R100 F8 → real_bug × 9
+#   P12 mechanical-anchor     : R97 + R98 + R99 + R100 = 4 anchors across
+#                                3 classes (hard_guard / catalog_helper /
+#                                data_artifact). Pattern adaptation across
+#                                4 consecutive waves empirically validated.
+#
+# **3-class taxonomy COMPLETED at R100** (taxonomy reference in
+# practices/korean_law_reference_index.yaml.mechanical_anchor_classes):
+#   hard_guard      mandatory (run-all-guards.sh registered)
+#   catalog_helper  fork-receiver opt-in
+#   data_artifact   structured reference (humans + future tools)
+#   (auto_data_artifact future candidate at R101)
+#
+# Cross-wave distribution stable: R96 (4+6) → R97/R98/R99/R100 (3+7) for
+# 4 consecutive cycles post-F10-retirement. 8-wave cumulative: 29+3=32
+# real_bug + 49+7=56 scope_deferral catalog maturity index.
