@@ -23,6 +23,39 @@ introduced_at: "R96 phase α — seeded as the 4th modular-catalog candidate fro
 # R96 mandatory_iter1_agenda decision to defer the guard, opting for
 # explicit drift acceptance + manual PROCEDURE application).
 
+# ── Priority order for fork-receivers (R96 iter1 F2 closure) ──────────────
+# Adopt items in this order. Earlier items are foundational for the later
+# ones — skipping FACTOR-001 (declaration) makes everything else moot
+# because un-declared factor types cannot be wired safely.
+#
+#   1. TFA-FACTOR-001         — RECIPE.md factor declaration (foundation)
+#   2. TFA-ENROLL-001         — registration ceremony (QR alone is NOT enrolled)
+#   3. TFA-VERIFY-001         — per-session MFA verification (bearer alone → 403)
+#   4. TFA-RECOVERY-001       — one-time recovery codes + bcrypt + immutable history
+#   5. TFA-RATE-LIMIT-001     — brute-force lockout (5/15min → 30min)
+#   6. TFA-SESSION-BIND-001   — session ↔ factor 결속 (revoke on factor change)
+#   7. TFA-OBSERVABILITY-001  — 3 canonical metrics + per-tenant labels
+#
+# Canonical RECIPE.md frontmatter example (R96 iter1 F3 closure):
+#
+#   ---
+#   recipe: financial-saas-kr
+#   tenant_model: multi
+#   default_locale: ko-KR
+#   supported_locales: [ko-KR, en-US]
+#   mfa_enabled: true
+#   mfa_factor_types: [totp, webauthn, recovery-code]   # AAL2-eligible primary + WebAuthn + recovery
+#   mfa_sms_otp_allowed: false                          # 금융권 SMS-OTP 단독 금지
+#   mfa_session_reauthentication_minutes: 30            # NIST SP 800-63B §6.1.2 idle threshold
+#   mfa_webauthn_attestation: "indirect"                # R96 F8 closure default
+#   mfa_recovery_codes_count: 10
+#   ---
+#
+# Fork-receivers targeting 금융권 (전자금융거래법 §6 의무) MAY copy verbatim;
+# healthcare (개인정보보호법 §23의2) MAY flip mfa_sms_otp_allowed=true if
+# their compliance officer signs off. WebAuthn-only recipes flip
+# mfa_factor_types=[webauthn, recovery-code] for passwordless flows.
+
 items:
   # ── FACTOR family ─────────────────────────────────────────────────────
   - id: "TFA-FACTOR-001"
@@ -37,6 +70,19 @@ items:
       recipe. sms-otp-only / email-otp-only는 AAL1-restartable로 명시
       되어야 함. Anchored to NIST SP 800-63B §5 (Authenticator Types)
       + OWASP ASVS V2.7 + 전자금융거래법 §6.
+      R96 iter1 F8 (P11 황태완 standards lens): WebAuthn attestation type
+      MUST be pinned per W3C WebAuthn Level 3 §5.4.7 — recipe declares
+      `mfa_webauthn_attestation: "<value>"` in RECIPE.md frontmatter
+      where value ∈ {none, indirect, direct, enterprise}. Default
+      catalog opinion: `indirect` (privacy-preserving — RP receives
+      anonymized attestation that still validates authenticator
+      provenance via FIDO MDS). `direct` for compliance-driven recipes
+      (financial sector requiring authenticator vendor verification).
+      `enterprise` reserved for managed-device deployments. `none`
+      acceptable only for development/test profiles (production
+      validation refuses). Without this pin, RP server's
+      authenticator selection logic becomes vendor-dependent and
+      cross-fork-receiver inconsistent.
 
   # ── ENROLL family ─────────────────────────────────────────────────────
   - id: "TFA-ENROLL-001"
