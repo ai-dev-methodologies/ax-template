@@ -1,0 +1,148 @@
+# R98 — chat-messaging-l0 spec dogfood iter2 (TRUE 0-convergence terminator)
+#
+# Wave subject: specs/chat-messaging-l0.yaml + iter1 closures (commit a1d8eae)
+# + iter1 ledger (commit ee60740).
+#
+# iter1 closed 3 real_bug (F2 priority + F3 RECIPE example + F8 message_id
+# format pin) and deferred 7 scope_deferral (F1/F4/F5/F6/F7/F9/F10) with
+# explicit Expiry triggers. Distribution matches R97 (3+7) — F10 historical
+# pattern remains retired; R98 P12 surfaces NEW finding (pre-commit guard
+# timing gap, R99 agenda).
+#
+# iter2 sweep — same 10-persona panel (P3-P12) re-reviews iter1 closures
+# (a1d8eae spec edits) + iter1 ledger (ee60740 10 findings) + phase α spec
+# (7985d04 base) + R98 pre-wave 49th guard (c1ea7f1).
+#
+# Result: 0 findings. TRUE 0-convergence at iter2 — matches R94/R95/R96/R97
+# pattern (no new artifact introduced in iter1; doc-only edits to existing
+# spec; pre-wave guard introduced BEFORE iter1 not during).
+# A2 P1 inline termination assertion below + escalation clause if any future
+# wave surfaces real_bug_count >= 1 at iter2.
+#
+# Per-persona iter2 verdict (all "no residual"):
+#
+#   P3 김민준  iter1 closures touched priority/RECIPE/message_id surfaces only;
+#              mobile-OS push integration (APNs/FCM/badge sync/잠금화면 privacy)
+#              untouched. F1 deferral unchanged.
+#   P4 박지영  F2 priority closure structurally identical to R93/R94/R95/R96/R97
+#              priority closures. 6th successful application — adoption order
+#              foundation rationale + 7 items mapped (envelope → observability).
+#   P5 이상호  F3 RECIPE closure ships verbatim saas-customer-support-chat
+#              frontmatter with 11 fields + 의료/금융/법률 E2E flip 가이드 +
+#              청소년 vertical min_age filter 의무 pinned per 청소년보호법
+#              §16의2. 6th successful application.
+#   P6 최영숙  iter1 closures touched standards (message_id format) not 한국
+#              규제 surfaces. F4 deferral (deepfake 처벌법 / 통신비밀보호법 /
+#              의료법 §21 / 디지털의료기기법 §22 vertical-specific 의무 매핑)
+#              unchanged. 본 wave가 P6 직접 domain (정보통신망법 §44의2 신고
+#              SLA + 청소년보호법 §16의2)였으나 phase α에서 이미 1-pass
+#              closure (CHAT-MODERATION-001 inline contract); 추가 corner
+#              case는 deferral lane.
+#   P7 정도윤  F5 typed-binding deferral unchanged. CHAT-MESSAGE-001 envelope
+#              schema는 JSON 명시하나 XMPP stanza ↔ JSON projection /
+#              Matrix m.room.message typed shape는 별도 R99+ work.
+#   P8 강하늘  F6 SLO/alert deferral unchanged. 6th-wave repeat. R98 mandatory_
+#              R99_iter1_agenda 후보: OBSERVABILITY-002 표준 item 6-spec batch
+#              (R97 5-spec → R98 +1 chat-messaging = 6 affected).
+#   P9 윤재호  F7 polling-to-realtime migration deferral unchanged. 4-track
+#              matrix (notification backfill / hybrid mode / version-gated
+#              rollout / forced upgrade) waits for first fork-receiver migration.
+#   P10 신경수 F9 broker outage degraded mode deferral unchanged. fail-closed
+#              vs long-poll fallback per vertical waits for first fork-receiver
+#              deploy with broker dependency.
+#   P11 황태완 Own F8 closure (chat_message_id_format pin) comprehensive —
+#              3 enum values (uuid-v4 / ulid / snowflake) + per-context defaults
+#              (ulid for cursor sort; snowflake for high-scale; uuid-v4 acceptable
+#              with separate sort field) + RFC 4122 + ULID spec + Snowflake refs.
+#              6th-wave repeat of standards-symmetric coverage pattern.
+#   P12 한상미 F10 NEW finding (pre-commit guard timing gap, scope_deferral)
+#              records the **3-gate timing observation** — verify-completion
+#              catches policy_ref orphan POST-commit; pre-commit could catch
+#              EARLIER. **Two mechanical anchors empirically validated** at R98
+#              (48th wave_kickoff + 49th registry_backfill). NEW gap: guard
+#              ordering across pre-commit / pre-push / verify-completion stages.
+#              R99 mandatory_iter1_agenda candidate. P12 lens continues to find
+#              meta-governance gaps after F10 mechanical retirement at R97.
+#
+# Wave totals after iter2:
+#   iter1: 10 findings — 3 real_bug closed + 7 scope_deferral
+#   iter2:  0 findings — TRUE convergence
+#   ──────────────────────────────────────────────────────────────────────
+#   TOTAL: 10 findings produced
+#           3 real_bug closed (closure_commit_sha a1d8eae all 3)
+#           7 scope_deferral with Expiry triggers (R85)
+#           0 methodology_gap
+#
+# 6 commits land the R98 wave end-to-end (4-wave + R97 precedent fidelity):
+#   bb5f4db  R97 P3 hotfix (caught by R98 49th guard — empirical first-app proof)
+#   c1ea7f1  R98 pre-wave 49th guard (registry_backfill_completeness_guard.sh)
+#   7985d04  R98 phase α (chat-messaging-l0.yaml + r98-iter1.yaml atomic)
+#   a1d8eae  R98 iter1 closures (F2/F3/F8)
+#   ee60740  R98 iter1 ledger (10 findings + F10 NEW scope_deferral)
+#   this     R98 iter2 terminator (0 findings)
+#
+# Wave commits proper (5-commit shape per Principle 3): 7985d04 → a1d8eae →
+# ee60740 → this → commit 5 (registry backfill). bb5f4db + c1ea7f1 are
+# pre-wave (R97 hotfix + R98 49th guard intro) — same role as R97 pre-wave
+# commit 6db3710 (48th guard intro).
+#
+# **6-wave aggregate cross-wave evidence** (R93 + R94 + R95 + R96 + R97 + R98):
+#
+#   Stabilized signatures (6-consecutive cross-wave hits):
+#     P4 priority ordering      : R93+R94+R95+R96+R97+R98 F2 → real_bug × 6
+#     P5 RECIPE example         : R93+R94+R95+R96+R97+R98 F3 → real_bug × 6
+#     P8 SLO/alert wiring       : R93+R94+R95+R96+R97+R98 F6 → scope_deferral × 6
+#     P11 standards-symmetric   : R93/F9+F11 + R94/F8 + R95/F8 + R96/F8 + R97/F8 + R98/F8 → real_bug × 7
+#     P12 mechanical-anchor cycle: R97 wave_kickoff_ledger_guard 첫 적용 + R98
+#                                  registry_backfill_completeness_guard 둘째 적용
+#                                  → 2 consecutive mechanical anchors, each
+#                                    catching real bug at first application
+#                                    (R97: P12 F10 4-data-point cycle close;
+#                                     R98: R97 P3 history backfill race bug)
+#
+#   Lens overlap retirement (R95/R96/R97 결정 재확인): P4/P5 6-wave differentiation
+#     MAINTAINED. R98에서도 다른 surfaces (envelope priority vs 11-field RECIPE).
+#     영구-not-needed로 retire 재확정 (3rd cycle of confirmation).
+#
+#   Saturation retirement (R95/R96/R97 결정 재확인): P12 historical F10 cycle
+#     PERMANENTLY RETIRED at R97. R97 + R98 P12 R97/R98 findings = consecutive
+#     NEW gaps (registry omission → mechanical close at R98; pre-commit timing
+#     gap → R99 agenda). cyclical close-and-discover signature 2-cycle validated.
+#
+#   Convergence speed (6-wave validated): iter terminator = iter1 + 1 IF no
+#     new artifact introduced; +N for each new artifact iter cycle. R93
+#     (iter5) vs R94/R95/R96/R97/R98 (iter2 each) — 6-wave validated (5/6
+#     no-new-artifact cases).
+#
+#   **R98 P12 NEW gap signal** (pre-commit guard timing):
+#     spec_policy_ref_guard (existing 47th guard, R85 era) caught chat-messaging
+#     -l0 7 policy_ref orphans at verify-completion stage — i.e., AFTER commit.
+#     Pre-commit hook does not currently run catalog-meta guards (only some
+#     core gates). 3-gate model: pre-commit + pre-push + verify-completion
+#     have distinct timing + coverage. R99 candidate: define pre-commit guard
+#     subset (speed-budgeted — full 49 too slow). 0 wave evidence yet for
+#     this specific guard's pre-commit absence, so R98 records observation
+#     as scope_deferral; R99 may decide on mechanical extension.
+#
+#   **Cross-wave distribution stable** (post-F10-retirement baseline):
+#     R96 (4+6) → R97 (3+7 — F10 mechanically retired) → R98 (3+7 —
+#     pattern continued). 6-wave cumulative: 23+3 = 26 real_bug + 35+7 = 42
+#     scope_deferral catalog maturity index.
+
+iteration: 2
+termination_status: TARGET_NOT_GUARANTEED
+real_bug_count: 0
+scope_deferral_count: 7
+no_new_artifacts_mid_stream: true
+escalation:
+  condition: real_bug_count >= 1
+  action: iter3 MANDATORY (not terminator)
+  reference: feedback_iter_terminator_may_reopen.md
+  rationale: |
+    R93 lesson — iter that surfaces 0 real_bug is NOT the terminator if a
+    new artifact landed mid-stream. R98 introduces NO new artifact in iter1
+    (only doc-only spec edits to specs/chat-messaging-l0.yaml + ledger
+    population). Pre-conditions for safe iter2 termination satisfied
+    (no_new_artifacts_mid_stream: true). R98 pre-wave (49th guard) landed
+    BEFORE iter1 not during — counted as pre-wave NOT mid-stream artifact.
+findings: []
