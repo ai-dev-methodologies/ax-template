@@ -1,0 +1,122 @@
+version: "0.1.0"
+scope: "two-factor-auth-l0 — multi-factor authentication (TOTP / SMS-OTP / Email-OTP / FIDO2 WebAuthn / recovery codes) enrollment, verification, session binding, rate limiting + observability contract for fork-receivers requiring AAL2-grade auth (전자금융거래법 §6, NIST SP 800-63B AAL2, financial / healthcare verticals)"
+stack: "Spring Security 6 + Spring Authorization Server + WebAuthn4J (FIDO2) + Twilio/Naver/Kakao SMS gateway + Caffeine/Redis rate-limit + Micrometer metrics"
+standard: "RFC 6238 (TOTP) + RFC 4226 (HOTP base) + W3C WebAuthn Level 3 (FIDO2) + NIST SP 800-63B Digital Identity Guidelines AAL2 + OWASP ASVS V2.7 (multi-factor) + 전자금융거래법 §6 (한국 금융권 2단계 인증 의무화) + 개인정보보호법 §23의2 (본인확인 수단)"
+introduced_at: "R96 phase α — seeded as the 4th modular-catalog candidate from R93 probability table (55% adoption — A3 2FA). P11 황태완 standards lens active wave (RFC 6238 + W3C WebAuthn) + P6 최영숙 한국 규제 lens (전자금융거래법 §6 금융권 의무화) + P10 신경수 backward-compat (기존 auth flow ↔ 2FA enrollment 전환). future_add tier until templates/L4/two-factor-auth/ disk slot lands."
+
+# two-factor-auth is OPT-IN. ax-template's reference workloads ship with
+# single-factor bearer-token auth (R30 ASVS L1 baseline); recipes requiring
+# AAL2 (financial: 전자금융거래법 §6 mandatory; healthcare: PIPA §23의2
+# 본인확인) MUST adopt items below before production. This spec defines
+# the policy contract; the future templates/L4/two-factor-auth/ vertical
+# will define the canonical Spring Security wiring.
+#
+# Composition note: TFA-SESSION-BIND-001 cross-references the existing
+# session-management L4 — 2FA verification result MUST be bound to the
+# session record's mfa_verified_at timestamp + factor_type column;
+# session rotation rules from session-management apply on factor change.
+#
+# **P12 F10 lesson applied manually (R96 PROCEDURE)**: phase α commit
+# author acknowledges r96-iter1.yaml dogfood ledger MUST be created in
+# the same session as this spec landing — treated as a PROCEDURE step
+# rather than a mechanical wave_kickoff_ledger_guard.sh (per registry
+# R96 mandatory_iter1_agenda decision to defer the guard, opting for
+# explicit drift acceptance + manual PROCEDURE application).
+
+items:
+  # ── FACTOR family ─────────────────────────────────────────────────────
+  - id: "TFA-FACTOR-001"
+    chapter: "지원되는 인증 수단"
+    requirement: "Recipes MUST declare which factor types they accept in RECIPE.md frontmatter: any non-empty subset of {totp, sms-otp, email-otp, webauthn, recovery-code}. totp + webauthn은 NIST AAL2 단독 충족; sms-otp + email-otp는 single-factor-restartable (NIST AAL1 only — phone porting / 이메일 takeover 공격 surface) → 단독 사용은 권장하지 않으며 totp/webauthn과 병행 시에만 보조 수단으로 허용. recovery-code는 항상 보조 수단 (단독 사용 금지)."
+    test_method: "tfa_FACTOR_001_recipeDeclaresValidFactorSubset"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      RECIPE.md frontmatter validation: factor_types list must intersect
+      with the AAL2-eligible set ({totp, webauthn}) for any production
+      recipe. sms-otp-only / email-otp-only는 AAL1-restartable로 명시
+      되어야 함. Anchored to NIST SP 800-63B §5 (Authenticator Types)
+      + OWASP ASVS V2.7 + 전자금융거래법 §6.
+
+  # ── ENROLL family ─────────────────────────────────────────────────────
+  - id: "TFA-ENROLL-001"
+    chapter: "Factor 등록 ceremony"
+    requirement: "TOTP / WebAuthn 등록은 반드시 first OTP / WebAuthn attestation 검증 후 binding이 완료된다. QR / challenge 표시만으로 enrolled 상태가 되지 않으며 (caller가 QR을 스캔만 하고 OTP 입력 실패 시 unenrolled rollback). 등록 ceremony는 idempotent — 동일 user의 재-등록은 기존 factor 폐기 + 신규 등록 + audit log emit. Recovery-code 발급은 enrollment의 일부로 동시 생성 (10 codes)."
+    test_method: "tfa_ENROLL_001_qrAloneIsNotEnrolled"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test displays QR (calls POST /api/2fa/enroll/totp), asserts user
+      record still has mfa_enrolled=false; then submits valid OTP via
+      POST /api/2fa/enroll/totp/verify, asserts mfa_enrolled=true +
+      audit log entry. Anchored to RFC 6238 §4.2 + WebAuthn Level 3
+      §7.1 (Registration Ceremony).
+
+  # ── VERIFY family ─────────────────────────────────────────────────────
+  - id: "TFA-VERIFY-001"
+    chapter: "Per-session verification"
+    requirement: "MFA-enrolled user의 모든 fresh session은 bearer token 외 추가로 factor verification을 요구한다. bearer token 단독으로는 session 시작 불가 — mfa_verified_at이 session record에 null이면 모든 protected endpoint가 403 MFA_REQUIRED. mfa_verified_at은 factor 검증 성공 시점 timestamp; session TTL (recipe 결정) 경과 시 재검증 필요."
+    test_method: "tfa_VERIFY_001_bearerWithoutMfaReturns403"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Integration test logs in with valid bearer, accesses
+      /api/protected → 403 MFA_REQUIRED + sets mfa_required=true on
+      response. Submits valid TOTP via POST /api/2fa/verify, retries
+      protected → 200. Anchored to NIST SP 800-63B §6.1.2 (AAL2 session
+      reauthentication every 12 hours OR 30 minutes idle).
+
+  # ── RECOVERY family ──────────────────────────────────────────────────
+  - id: "TFA-RECOVERY-001"
+    chapter: "Recovery codes"
+    requirement: "Recovery code는 enrollment 시 10 codes 발급 + one-time use 강제 (사용 즉시 폐기). 저장은 plaintext 금지 — bcrypt OR scrypt hash (cost factor >= 12) + immutable history table (사용 record audit trail). 재발급은 기존 codes 전체 폐기 후 신규 10 codes 발급 + audit log. Recovery code 사용은 TOTP/WebAuthn factor가 분실/도난 시점에만 허용되며 사용 후 새 factor 재등록 강제."
+    test_method: "tfa_RECOVERY_001_codeUsedOnceThenInvalid"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test enrolls + receives 10 recovery codes; uses code #1
+      successfully, asserts code #1 second use returns 401
+      RECOVERY_CODE_USED + audit log entry. Anchored to OWASP ASVS
+      V2.7.5 + NIST SP 800-63B §5.1.7.
+
+  # ── RATE-LIMIT family ───────────────────────────────────────────────
+  - id: "TFA-RATE-LIMIT-001"
+    chapter: "Brute-force 방지 rate limit"
+    requirement: "Factor verification 실패는 identifier (userId + factor_type) 별 sliding window rate limit — 15분 내 5회 실패 시 lockout 30분 + 비동기 audit alert (P0 이벤트). Lockout 중에는 valid factor도 거부 (lockout TTL 만료 후 재시도). SMS-OTP는 추가로 IP+phone 조합 1시간 내 3회 시도 cap (SMS 비용 polynomial 방어)."
+    test_method: "tfa_RATE_LIMIT_001_5failuresIn15minLockout30min"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Integration test fires 5 invalid TOTP attempts within 15 minutes,
+      asserts 6th attempt returns 429 LOCKED_OUT + lockout_until
+      timestamp; advances clock 30 min, asserts valid TOTP succeeds.
+      Anchored to OWASP ASVS V11.1.4 (rate limit) + NIST SP 800-63B
+      §5.2.2 (throttling).
+
+  # ── SESSION-BIND family ─────────────────────────────────────────────
+  - id: "TFA-SESSION-BIND-001"
+    chapter: "Session ↔ Factor 결속"
+    requirement: "Session record (기존 session-management L4의 SessionRecord 확장)는 mfa_verified_at + factor_type_used 컬럼 보유 + 결속. 등록된 factor가 변경 (재등록 / 폐기)되면 영향 받는 모든 active session이 자동 revoke + 재인증 요구. Cross-device factor change (휴대전화 새로 등록)는 모든 기기 session revoke (admin 본인 device 제외)."
+    test_method: "tfa_SESSION_BIND_001_factorChangeRevokesAllSessions"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Integration test logs in from 2 devices → 2 sessions; user
+      re-enrolls TOTP from device A; asserts device B session 401
+      + audit log session-revoked-by-factor-change. Anchored to
+      session-management L4 SessionRevocationCheck + NIST SP 800-63B
+      §7.1 (Session Management).
+
+  # ── OBSERVABILITY family ───────────────────────────────────────────
+  - id: "TFA-OBSERVABILITY-001"
+    chapter: "Per-tenant 관측성"
+    requirement: "3 canonical metrics per tenant: (a) enrollment_count{tenant=,factor_type=}, (b) verify_failure_rate{tenant=,factor_type=}, (c) lockout_count{tenant=,reason=}. Without these SRE cannot diagnose brute-force attacks, silent factor abandonment, mass SMS-OTP failure (gateway outage). 3-wave 누적 pattern (R93/R94/R95 P8 강하늘 F6) 따라 SLO threshold + alert convention은 별도 OBSERVABILITY-002 항목으로 산출 예상 (iter1 P8 catch 후 closure 또는 deferral)."
+    test_method: "tfa_OBSERVABILITY_001_threeCanonicalMetricsEmitted"
+    verification_type: "integration_test"
+    applicable: true
+    notes: >
+      Test enrolls 2 users + 3 failed verifies + 1 lockout, asserts
+      Micrometer surface emits enrollment_count=2 +
+      verify_failure_rate.totp ~ 0.6 (3/5) + lockout_count=1.
+      Anchored to Micrometer Reference + R94 RT-OBSERVABILITY-001
+      pattern (same 3-metric shape).
