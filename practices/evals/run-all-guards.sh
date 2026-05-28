@@ -827,6 +827,11 @@ echo "[44] dogfood_finding_real_bug_test_coverage_guard.sh (live repo — R87b, 
 run_guard "dogfood_finding_real_bug_test_coverage/live" 0 \
     bash "$SCRIPT_DIR/dogfood_finding_real_bug_test_coverage_guard.sh"
 
+echo ""
+echo "[45] wave_kickoff_ledger_guard.sh (live repo — R97, 48th guard)"
+run_guard "wave_kickoff_ledger/live" 0 \
+    bash "$SCRIPT_DIR/wave_kickoff_ledger_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
