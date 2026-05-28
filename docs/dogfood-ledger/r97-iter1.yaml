@@ -1,34 +1,83 @@
 # R97 — document-signing-l0 spec dogfood iter1 (10-persona, 5th wave)
 #
-# Wave subject: specs/document-signing-l0.yaml (R97 phase α).
+# Wave subject: specs/document-signing-l0.yaml (R97 phase α, commit 931afc9).
 # 7 items (FORMAT / CERT / IDENTITY / TIMESTAMP / VERIFY / RETENTION /
 # OBSERVABILITY) anchored to W3C XMLDSig 1.1 + ETSI EN 319 142-1 PAdES +
 # RFC 3161 TSA + RFC 5280 CRL + RFC 6960 OCSP + 전자서명법 + 공인전자문서법
-# §31의2 + KS X 6101 한국 전자서명 표준 + 개인정보보호법 §24 (고유식별정보).
+# §31의2 + KS X 6101 + 개인정보보호법 §24 (고유식별정보).
 #
 # Panel reuse: P3-P12 per persona-registry R96 next_panel_composition_for_R97.
 # 5th wave application of the 10-persona protocol.
 #
 # **First mechanical wave_kickoff_ledger_guard application** (R97 commit
-# 6db3710, 48th hard guard). Spec-only commit is BLOCKED by pre-push hook;
-# phase α requires this placeholder ledger to land atomically with the
-# spec. P12 F10 4-wave cycle (R93/R94/R95/R96 PROCEDURE-as-text) is now
-# mechanically closed — this is the first commit shape that empirically
-# proves the guard is active in steady state.
+# 6db3710, 48th hard guard). Spec-only commit would have been BLOCKED;
+# phase α 931afc9 landed atomically with this placeholder. P12 F10 4-wave
+# PROCEDURE-as-text cycle (R93/R94/R95/R96) is now mechanically closed —
+# **F10 historical pattern PERMANENTLY RETIRED**; P12 lens surfaces a
+# DIFFERENT meta-governance gap for R97 (commit 5 omission, no guard yet).
 #
-# **5-wave cross-wave consistency expected** (5 consecutive occurrences):
-#   P4 priority order      : R93/R94/R95/R96 F2 → real_bug × 4 (R97 F2 closure expected)
-#   P5 RECIPE example      : R93/R94/R95/R96 F3 → real_bug × 4 (R97 F3 closure expected)
-#   P8 SLO/alert wiring    : R93/R94/R95/R96 F6 → scope_deferral × 4 (R97 F6 expected)
-#   P11 standards-symmetric: R93 F9/F11 + R94 F8 + R95 F8 + R96 F8 → real_bug × 5 (R97 F8 expected)
-#   P12 mechanical guard   : R93/R94/R95/R96 F10 → R97에서 mechanical guard 첫 적용 → F10 절대 재발 안 됨
+# **5-wave cross-wave consistency observed** (5 consecutive occurrences):
+#   P4 priority order      : R93/R94/R95/R96/R97 F2 → real_bug × 5 (R97 closure 7164b54)
+#   P5 RECIPE example      : R93/R94/R95/R96/R97 F3 → real_bug × 5 (R97 closure 7164b54)
+#   P8 SLO/alert wiring    : R93/R94/R95/R96/R97 F6 → scope_deferral × 5
+#   P11 standards-symmetric: R93 F9/F11 + R94 F8 + R95 F8 + R96 F8 + R97 F8 → real_bug × 5+ (R97 closure 7164b54)
+#   P12 meta-governance    : R93/R94/R95/R96 F10 PROCEDURE-as-text × 4 → R97 mechanical guard active
+#                            R97 F10 NEW gap surfaces (commit-5 registry omission has no guard yet)
 #
-# Lens overlap status (R96 review_summary): permanently retired (P4/P5
-# overlap on priority+RECIPE is by-design 5-wave cross-evidence, not
-# noise). Saturation review: P12 한상미 4-wave methodology_gap streak
-# now mechanically closed via guard introduction — P12 R97 lens
-# expected to surface NEW finding outside F10 cycle (or scope_deferral
-# on a new meta-governance gap).
+# Distribution shift from R96 (4 real_bug + 6 scope_deferral) to R97
+# (3 real_bug + 7 scope_deferral) — F10 historical pattern mechanically
+# retired; P12 R97 finding is scope_deferral (R98 mandatory_iter1_agenda).
+# Lens overlap (P4/P5 priority+RECIPE): by-design 5-wave cross-evidence,
+# permanently retired as noise (per R96 review_summary).
 
 iteration: 1
-findings: []
+findings:
+  - persona: P3
+    finding: "F1 (LOW): document-signing-l0 covers desktop/server XMLDSig + PAdES generation/verification flow but does not address mobile-specific scenarios — KakaoTalk-embedded signature requests (메시지 서명 deep link), 모바일 OS 인증서 (iOS Keychain · Android KeyStore) integration, 카메라 OCR 자필서명 + biometric witness (지문 + 얼굴 capture), 모바일 WebAuthn platform credential for document signing ceremony (PAdES with FIDO2 attestation). A mobile-first Junior (P3 김민준, 24) needs these covered. Expiry trigger: re-opens before any mobile fork-receiver wires document signing — at that point spec needs DOC-MOBILE-001 covering platform-native signing flows + biometric witness."
+    classification: scope_deferral
+    references_artifact_path: specs/document-signing-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): document-signing-l0 7 items no priority ordering — **5th consecutive wave** (R93+R94+R95+R96+R97). A pragmatic Junior (P4 이도현, 27) cannot tell whether DOC-FORMAT-001 or DOC-CERT-001 is foundational. Closure: priority order block (DOC-FORMAT-001 foundation → DOC-OBSERVABILITY-001) commit 7164b54."
+    classification: real_bug
+    closure_commit_sha: 7164b54
+    closure_verification_ref: "specs/document-signing-l0.yaml now carries priority order block before items: with foundation rationale (un-declared signature format makes downstream items moot)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/document-signing-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): document-signing-l0 declares 11 config fields (format / c14n / PAdES baseline / cert providers / TSA URL / revocation / retention / signer identity storage / masking) but ships no copy-pasteable RECIPE.md example — **5th consecutive wave** (R93+R94+R95+R96+R97). A docs-Senior (P5 김지원, 36) cannot demo the recipe to her team in <1min. Closure: verbatim financial-document-signing-kr frontmatter block; 금융권 KISA PKI + 본인확인기관 화이트리스트 + 10년 보관 + PAdES-B-LTA pinned (commit 7164b54)."
+    classification: real_bug
+    closure_commit_sha: 7164b54
+    closure_verification_ref: "specs/document-signing-l0.yaml priority block now contains complete RECIPE.md frontmatter example with 11 fields + 금융권-appropriate defaults."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/document-signing-l0.yaml
+  - persona: P6
+    finding: "F4 (HIGH): DOC-IDENTITY-001 cites 개인정보보호법 §23의2 + §24 (고유식별정보) but does NOT map the 2024 마이데이터 (개인정보 이동권 §35의2) implications — when a 본인확인기관-issued cert is used to sign documents, the signer's CI (Connecting Information) becomes embedded indirectly via cert serial mapping. Data subject can request a portable export of all signed documents (마이데이터 §35의2). The spec has no contract for handling consent revocation (개인정보 이용·제공 정지 §37) — does revoking consent invalidate past signatures (legal effect concerns 전자서명법 §3 효력)? 한국 규제 lens (P6 최영숙, 53) flags this fork-receiver-context gap. Expiry trigger: re-opens before any 금융권 / 의료 SaaS fork-receiver implements 마이데이터 + signing — at that point spec needs DOC-IDENTITY-002 covering 마이데이터 export + consent revocation handling matrix (signatures stay valid, but VerifiedIdentity row deletion required separately)."
+    classification: scope_deferral
+    references_artifact_path: specs/document-signing-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): DOC-FORMAT-001 + DOC-VERIFY-001 mention XMLDSig + PAdES but provide no TypeScript binding pattern for signed document handling (XMLDSig <Signature> envelope parsing in browser, PAdES /Sig dictionary JSON shape for SignerInfo / CMSEnvelopedData). XMLDSig + PAdES JSON serialization is non-trivial (Base64 / ASN.1 DER → JSON, certificate chain ↔ X509Certificate[]). A typed-SDK Senior (P7 정도윤, 28) needs the binding contract. Expiry trigger: re-opens when first frontend signature-verification integration lands — at that point spec needs DOC-BINDING-001 pinning the document-signature JSON shape per W3C XMLDSig 1.1 + ETSI EN 319 142-1 §B (PAdES JSON profile draft)."
+    classification: scope_deferral
+    references_artifact_path: specs/document-signing-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): DOC-OBSERVABILITY-001 names 3 canonical metrics (document_signing_sign_total / verify_failure_rate / cert_expiry_warning_days) but defines NO SLO threshold / alert convention — **5th wave occurrence** of the metric-without-alert-wiring pattern (R93 i18n + R94 realtime + R95 invoicing + R96 2FA + R97 document-signing F6). When does verify_failure_rate become a P0 incident (cert chain trust break — system-wide impact)? When does cert_expiry_warning_days < N trigger PAGE (signer cert expires before document is retrieved → all post-expiry verifications fail)? An SRE Senior (P8, 41) flags ops-readiness gap. Expiry trigger: re-opens before any fork-receiver deploys signing to production — at that point spec needs DOC-OBSERVABILITY-002 pinning canonical SLO (e.g. verify_failure_rate > 30% over 10min → PAGE; cert_expiry_warning_days < 30 → ALERT; cert_expiry_warning_days < 7 → PAGE)."
+    classification: scope_deferral
+    references_artifact_path: specs/document-signing-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): No migration playbook for fork-receivers introducing signing on existing documents — what happens to documents created BEFORE document-signing was enabled? Retroactive sign (forge timestamps?) is legally forbidden. Re-sign on next access (UI prompt + 본인확인 ceremony per access)? Mark old docs as legacy + new docs only signed? An architect (P9 윤재호, 44) cannot present a rollout plan to the CTO. Expiry trigger: re-opens before any fork-receiver enables document_signing_enabled=true on an existing deployment — at that point templates/L4/document-signing/ needs MIGRATION.md with legacy-doc handling matrix (legacy / retro-sign-on-access / immutable-archive / dual-track)."
+    classification: scope_deferral
+    references_artifact_path: specs/document-signing-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): DOC-RETENTION-001 requires PAdES-B-LTA / XAdES-A archive timestamps refreshed before CA/TSA cert expiry, but spec doesn't address mid-life recipe migration — what if a fork-receiver already has 5-year-old PAdES-B-T documents (no archive timestamp) and wants to enable B-LTA going forward? Backfill archive timestamps retroactively (B-T → B-LTA upgrade ceremony) is non-trivial (requires TSA-issued archive token for each historical doc; storage 2x). A backward-compat veteran (P10 신경수, 52) flags the deployed-state impact. Expiry trigger: re-opens before any fork-receiver flips document_signing_long_term_archival=b-t → b-lta on existing archive — at that point spec needs DOC-CUTOVER-001 with B-T-to-B-LTA upgrade matrix + storage budget guidance."
+    classification: scope_deferral
+    references_artifact_path: specs/document-signing-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): DOC-FORMAT-001 cites W3C XMLDSig 1.1 §4.3 + ETSI EN 319 142-1 §5 but the canonicalization algorithm + PAdES baseline defaults are unspecified — recipe can pass any value or none, producing vendor-dependent + cross-fork-receiver inconsistent verification behavior. **5th consecutive wave** of standards-cite-without-symmetric-pin pattern (R93 F9/F11 ISO 8601 Z + R94 F8 subprotocol + R95 F8 XML namespace + R96 F8 WebAuthn attestation + R97 F8 c14n + PAdES baseline). Closure: DOC-FORMAT-001.notes extended — recipe declares `document_signing_xmldsig_c14n_algorithm` (default c14n11) + `document_signing_pades_baseline` (default b-lta for compliance, b-t for short-term) in RECIPE.md per W3C XMLDSig 1.1 §4.3 + ETSI EN 319 142-1 §5 (commit 7164b54)."
+    classification: real_bug
+    closure_commit_sha: 7164b54
+    closure_verification_ref: "specs/document-signing-l0.yaml#DOC-FORMAT-001.notes now carries XMLDSig c14n + PAdES baseline pin contract with 2 enum + per-context defaults + 5-wave streak acknowledgment."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/document-signing-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): R97 phase α (commit 931afc9) landed atomically with docs/dogfood-ledger/r97-iter1.yaml via wave_kickoff_ledger_guard.sh — **the historical F10 pattern (no-ledger-at-kickoff) is PERMANENTLY RETIRED** (R93/R94/R95/R96 PROCEDURE-as-text cycle mechanically closed at R97). **Meta-governance lens surfaces a DIFFERENT R97 gap**: commit 5 (persona-registry.yaml backfill) has NO mechanical guard equivalent — fork-receiver could land commits 1-4 (phase α + iter1 closures + iter1 ledger + iter2 terminator) and skip commit 5, leaving the registry stale. The wave_kickoff_ledger_guard model proved mechanical enforcement works; the same pattern should extend to commit-5 omission detection. R98 mandatory_iter1_agenda escalation: introduce registry_backfill_completeness_guard.sh (scans for R<N> entries in persona-registry.yaml that match recent r<N>-iter<M>.yaml ledgers but lack review_summary.R<N>; FAILs if mismatched). 4-data-point PROCEDURE-as-text evidence was sufficient to mechanize F10; commit-5 omission has 0 wave evidence yet, so deferring to R98 active agenda (not R97 scope creep). Expiry trigger: re-opens when R98 wave initiates registry_backfill_completeness_guard.sh implementation OR when first fork-receiver lands commits 1-4 of a future wave without commit 5 (whichever comes first) — at that point R98 agenda becomes mechanical guard."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/r97-iter1.yaml
