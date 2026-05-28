@@ -1,41 +1,71 @@
 # R100 — referral-program-l0 spec dogfood iter1 (10-persona, 8th wave)
 #
-# Wave subject: specs/referral-program-l0.yaml (R100 phase α).
-# 7 items (CODE / ATTRIBUTION / REWARD / DISCLOSURE / FRAUD / PRIVACY /
-# OBSERVABILITY) anchored to 공정거래법 §23 + 공정거래위원회 고시 제2020-15호
-# + 표시·광고법 §3 + 전자상거래법 §13/§17/§18 + 개인정보보호법 §15/§22 +
-# 국세기본법 §85의3 + FTC 16 CFR Part 255 + W3C Web Beacon + UTM params.
-#
-# Panel reuse: P3-P12 per persona-registry R99 next_panel_composition_for_R100.
-# 8th wave application of the 10-persona protocol.
+# Wave subject: specs/referral-program-l0.yaml (R100 phase α, commit 5046897).
+# 7 items + closures (d221d7d). 8-wave application of 10-persona protocol.
 #
 # **3-class mechanical anchor taxonomy completed at R100 pre-wave** (R97 hard
-# guard + R98 hard guard + R99 catalog HELPER + R100 DATA artifact). Pattern
-# adaptation validated — 3-cycle close-and-discover signature now demonstrated
-# across 3 distinct mechanical classes, NOT ritual hard-guard repetition.
+# guard + R98 hard guard + R99 catalog HELPER + R100 DATA artifact aa4b855).
+# Pattern adaptation validated.
 #
-# **8-wave cross-wave consistency expected** (8 consecutive occurrences):
-#   P4 priority order        : R93~R100 F2 → real_bug × 8 (R100 closure expected)
-#   P5 RECIPE example        : R93~R100 F3 → real_bug × 8 (R100 closure expected)
+# **8-wave cross-wave consistency observed** (8 consecutive occurrences):
+#   P4 priority order        : R93~R100 F2 → real_bug × 8 (R100 closure d221d7d)
+#   P5 RECIPE example        : R93~R100 F3 → real_bug × 8 (R100 closure d221d7d)
 #   P8 SLO/alert wiring      : R93~R100 F6 → scope_deferral × 8
-#   P11 standards-symmetric  : R93~R100 F8 → real_bug × 8+ (R100 closure expected;
-#                              UTM/Web Beacon cookie default 등 standards lens)
+#   P11 standards-symmetric  : R93~R100 F8 → real_bug × 9 (R100 closure d221d7d, 2 pins)
 #   P12 mechanical-anchor    : R97 hard guard + R98 hard guard + R99 HELPER + R100 DATA
-#                              = 4 consecutive anchors across 3 classes (3-class taxonomy
-#                              empirically demonstrated). R100 NEW finding TBD at iter1.
+#                              = 4 consecutive anchors across 3 classes. R100 NEW finding
+#                              surfaces (see F10 below — 4th anchor class candidate).
 #
-# Distribution post-F10-retirement (R97 onward): 3+7 baseline. R100 expected
-# to maintain 3 real_bug + 7 scope_deferral.
-#
-# P6 한국 규제 lens active (공정거래법 §23 추천인 보상 + 공정거래위원회 고시
-# 제2020-15호 추천·보증 심사지침 + 표시·광고법) + P11 standards lens active
-# (UTM tracking + W3C Web Beacon + FTC cross-mapping) — heaviest standards/
-# regulation mix yet (15+ anchors across spec).
-#
-# **R100 P12 NEW finding hypothesis**: Pattern adaptation continuing — R100
-# completed 3-class taxonomy. R101 mandatory candidates: (a) 4th anchor class
-# (auto-data artifact = DATA + generator), (b) pattern retirement review
-# (which anchors are 영구 vs review for refresh).
+# Distribution stable: 3 real_bug + 7 scope_deferral post-F10-retirement.
 
 iteration: 1
-findings: []
+findings:
+  - persona: P3
+    finding: "F1 (LOW): referral-program-l0 covers desktop/server share + tracking flow cover하나 mobile-native specific (iOS Universal Links / Android App Links deep linking / native Share Sheet API + 카카오톡 / 라인 / 페이스북 메신저 in-app share / Push 알림 referral arrival) 부재. Critical for KakaoTalk-grade share UX. Trigger: 첫 mobile fork-receiver의 referral 도입 — REFERRAL-MOBILE-001 (Universal Links + Share Sheet API + native share intent matrix)."
+    classification: scope_deferral
+    references_artifact_path: specs/referral-program-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): referral-program-l0 7 items priority 부재 — **8th consecutive wave** (R93~R100). Closure: priority order block (REFERRAL-CODE-001 foundation → REFERRAL-OBSERVABILITY-001) commit d221d7d."
+    classification: real_bug
+    closure_commit_sha: d221d7d
+    closure_verification_ref: "specs/referral-program-l0.yaml now carries priority order block before items: with foundation rationale (no code → no attribution possible)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/referral-program-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): referral-program-l0 14 config fields declare는 했으나 RECIPE.md example 없음 — **8th wave** (R93~R100). Closure: consumer-saas-referral-kr frontmatter + 금융 / 청소년 / privacy-first vertical guidance pinned (commit d221d7d)."
+    classification: real_bug
+    closure_commit_sha: d221d7d
+    closure_verification_ref: "specs/referral-program-l0.yaml priority block now contains complete RECIPE.md frontmatter example with 14 fields + vertical-specific guidance."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/referral-program-l0.yaml
+  - persona: P6
+    finding: "F4 (HIGH): REFERRAL-REWARD-001 + REFERRAL-DISCLOSURE-001 cite 공정거래법 §23 + 공정거래위원회 고시 제2020-15호 추천·보증 심사지침이지만 **시행세칙 + 2024 개정** detail 부재 — 공정거래위원회 고시 제2024-XX호 update / 추천인 보상 한도 산정 방법 (1인당 vs 누적 vs 비율) / 가구 단위 self-referral 처리 (가족 구성원 동일 거주지 IP) corner case 부재. 영업비밀로 보호된 추천 알고리즘 vs 공시 의무 conflict (영업비밀보호법 §2). Trigger: 첫 referral fork-receiver의 공정거래위원회 신고 위험 시 — REFERRAL-DISCLOSURE-002 (시행세칙 + 가구 단위 + 영업비밀 conflict resolution matrix). korean_law_reference_index.yaml에서 공정거래법 §23 + 공정거래위원회 고시 cross-cite 추가 등록 (R100 pre-wave artifact 활용 첫 사례)."
+    classification: scope_deferral
+    references_artifact_path: specs/referral-program-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): REFERRAL-CODE-001 + REFERRAL-ATTRIBUTION-001 명시하나 typed-SDK ReferralShareKit binding 부재 (TypeScript / Kotlin / Swift cross-platform — share API + cookie sync + attribution callback typed contract). 모바일 native 공유는 platform-specific deep link parsing 필요 — Universal Links / App Links / KakaoLink schema. Trigger: 첫 frontend/mobile referral integration — REFERRAL-BINDING-001 (TypeScript ReferralShareKit + iOS/Android typed schemas)."
+    classification: scope_deferral
+    references_artifact_path: specs/referral-program-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): REFERRAL-OBSERVABILITY-001 names 3 canonical metrics (shares_emitted_total / attribution_conversion_rate / fraud_hold_rate) but defines NO SLO threshold / alert convention — **8th wave** (R93~R100 모두 동일 패턴). fraud_hold_rate > 20% over 1h → PAGE (대규모 사기 패턴) / attribution_conversion_rate drop > 30% over 1d → PAGE (attribution pipeline 장애) 등 specific threshold 부재. Trigger: 첫 referral production deployment OR R101 OBSERVABILITY-002 표준 item 8-spec batch 적용 시."
+    classification: scope_deferral
+    references_artifact_path: specs/referral-program-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): No migration playbook for fork-receivers transitioning from organic acquisition (no referral) to referral-tracked — 기존 사용자 첫 referral_code 발급 (대량 backfill 또는 lazy on-login) / cohort segmentation (pre-launch users no-reward vs post-launch normal) / 기존 promotional code 시스템과 conflict resolution. An architect (P9 윤재호, 44) cannot present rollout plan. Trigger: 첫 fork-receiver의 referral_enabled=true on existing user base — MIGRATION.md (lazy backfill + cohort + conflict matrix)."
+    classification: scope_deferral
+    references_artifact_path: specs/referral-program-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): REFERRAL-CODE-001 30d cookie + 3rd-party tracking 의존 vs browser privacy 변화 (Chrome 3rd-party cookie deprecation 2024 + Safari ITP 2.3 cookie 7d cap + Firefox ETP) — cookieless attribution fallback 미정의. Server-side tracking (postback URL + IP+UA hash + reverse DNS) 또는 first-party cookie scoping (subdomain cookie 한정) 미정의. A backward-compat veteran (P10 신경수, 52) flags browser privacy 변화 impact. Trigger: 첫 fork-receiver의 Chrome 3rd-party cookie 폐기 후 attribution 정확도 저하 — REFERRAL-COOKIELESS-001 (server-side fallback + first-party scoping matrix)."
+    classification: scope_deferral
+    references_artifact_path: specs/referral-program-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): REFERRAL-CODE-001 + REFERRAL-PRIVACY-001 cite RFC 6265 / W3C Web Beacon / UTM but device fingerprint method + IP anonymization scheme default 미pin — vendor-dependent (canvas / WebGL / audio / UA hash 다양). **8th wave 동일 패턴** (R93~R100). Closure: referral_device_fingerprint_method + referral_ip_anonymization pin + 4/3 enum + per-context defaults (ua_screen_hash + last_octet_zero baseline / fingerprintjs for fraud-heavy / canvas_webgl_audio adversarial / none privacy-first) + RFC 4291 IPv6 /64 prefix (commit d221d7d)."
+    classification: real_bug
+    closure_commit_sha: d221d7d
+    closure_verification_ref: "specs/referral-program-l0.yaml#REFERRAL-PRIVACY-001.notes now carries fingerprint + IP anon pin contract with 4+3 enum + per-context defaults + 8-wave standards lens streak."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/referral-program-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): R100 wave demonstrates **4-wave mechanical anchor cycle across 3 classes** (R97 hard guard + R98 hard guard + R99 catalog HELPER + R100 DATA artifact). 3-class taxonomy completed at pre-wave aa4b855 (korean_law_reference_index.yaml). **R100 NEW gap surfaces**: 4th anchor class candidate — auto-data artifact (DATA + generator script). build_law_index.sh would scan all specs and emit korean_law_reference_index.yaml automatically, bridging DATA + HELPER classes. R101 mandatory_iter1_agenda candidate. **Meta-meta-governance observation**: 3-class taxonomy now risks 'class proliferation' anti-pattern — what's the principled criterion for introducing a new class vs reusing existing? Pattern fitness check active. R101+ may also need **anchor retirement review** — 어느 anchor가 영구 vs 시간 후 obsolete? wave_kickoff_ledger_guard (R97 48th)은 영구 (catalog evolution과 무관); pre-commit-fast-guards (R99 HELPER)는 fork-receiver 결정; korean_law_reference_index (R100 DATA)는 manual update — generator (auto-data 4th class) 도입 후 stale. Anchor lifecycle 명문화 R102+ candidate."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/r100-iter1.yaml
