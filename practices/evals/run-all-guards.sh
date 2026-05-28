@@ -832,6 +832,11 @@ echo "[45] wave_kickoff_ledger_guard.sh (live repo — R97, 48th guard)"
 run_guard "wave_kickoff_ledger/live" 0 \
     bash "$SCRIPT_DIR/wave_kickoff_ledger_guard.sh"
 
+echo ""
+echo "[46] registry_backfill_completeness_guard.sh (live repo — R98, 49th guard)"
+run_guard "registry_backfill_completeness/live" 0 \
+    bash "$SCRIPT_DIR/registry_backfill_completeness_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
