@@ -1,0 +1,72 @@
+# R96 — two-factor-auth-l0 spec dogfood iter1 (10-persona, 4th wave)
+#
+# Wave subject: specs/two-factor-auth-l0.yaml (R96 phase α, commit bf50cab).
+# 7 items (FACTOR / ENROLL / VERIFY / RECOVERY / RATE-LIMIT / SESSION-BIND
+# / OBSERVABILITY) anchored to RFC 6238 + W3C WebAuthn L3 + NIST SP 800-63B
+# + OWASP ASVS V2.7 + 전자금융거래법 §6 + 개인정보보호법 §23의2.
+#
+# Panel reuse: P3-P12 per persona-registry R95 next_panel_composition_for_R96.
+# 4th wave application of the 10-persona protocol.
+#
+# **4-wave cross-wave consistency evidence** (4 consecutive occurrences):
+#   P4 priority order      : R93/R94/R95/R96 F2 → real_bug × 4
+#   P5 RECIPE example      : R93/R94/R95/R96 F3 → real_bug × 4
+#   P8 SLO/alert wiring    : R93/R94/R95/R96 F6 → scope_deferral × 4
+#   P11 standards-symmetric: R93 F9/F11 + R94 F8 + R95 F8 + R96 F8 → real_bug × 5
+#   P12 no-ledger-at-kickoff: R93/R94/R95/R96 F10 → real_bug × 4
+#                            (4-data-point: PROCEDURE-as-text도 lesson-as-text와
+#                            동일 — mechanical guard 도입 강제 R97 agenda)
+iteration: 1
+findings:
+  - persona: P3
+    finding: "F1 (LOW): two-factor-auth-l0 covers desktop/server 2FA flow but does not address mobile-specific scenarios — TOTP authenticator app handoff (1Password / Google Authenticator deep link), WebAuthn platform credential (iOS Touch/Face ID, Android BiometricPrompt), SMS-OTP autofill (iOS oneTimeCode hint, Android SMS Retriever API), Push notification approval flows. A mobile-first Junior (P3 김민준, 24) needs these covered. Expiry trigger: re-opens before any mobile fork-receiver wires MFA — at that point spec needs MOBILE-001 covering platform-native factor flows."
+    classification: scope_deferral
+    references_artifact_path: specs/two-factor-auth-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): two-factor-auth-l0 7 items no priority ordering — **4th consecutive wave** (R93+R94+R95+R96). Closure: priority order block (FACTOR-001 foundation → OBSERVABILITY-001) commit 9fbaf6a."
+    classification: real_bug
+    closure_commit_sha: 9fbaf6a
+    closure_verification_ref: "specs/two-factor-auth-l0.yaml now carries priority order block before items: with foundation rationale."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/two-factor-auth-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): 2FA spec declares config fields (factor types / SMS allow / session reauthentication / WebAuthn attestation / recovery codes count) but ships no copy-pasteable RECIPE.md example — **4th consecutive wave** (R93+R94+R95+R96). Closure: verbatim financial-saas-kr frontmatter block; 금융권 SMS-OTP 단독 금지 pinned per 전자금융거래법 §6 (commit 9fbaf6a)."
+    classification: real_bug
+    closure_commit_sha: 9fbaf6a
+    closure_verification_ref: "specs/two-factor-auth-l0.yaml priority block now contains complete RECIPE.md frontmatter example with 5 MFA fields + AAL2-compatible defaults."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/two-factor-auth-l0.yaml
+  - persona: P6
+    finding: "F4 (HIGH): TFA-FACTOR-001 mentions 전자금융거래법 §6 in general but does NOT map SMS-OTP restrictions in 금융권 context. 전자금융감독규정 §13의5는 SMS-OTP 단독 사용을 명시적으로 금지하고 본인확인기관 인증서 OR ARS 콜백 + 추가 인증을 요구. healthcare 의료기관도 PIPA §23의2 본인확인 기준에서 SMS 단독 거부 (휴대전화 분실 위험). 한국 규제 lens (P6 최영숙, 53) flags. Expiry trigger: re-opens before any 금융권 / 의료 SaaS fork-receiver wires MFA — at that point TFA-FACTOR-002 (regulatory factor restrictions table) needed mapping SMS / 본인확인기관 / ARS / FIDO2 ↔ 금융권 / 의료 / 일반."
+    classification: scope_deferral
+    references_artifact_path: specs/two-factor-auth-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): TFA-ENROLL-001 + TFA-VERIFY-001 mention WebAuthn but provide no TypeScript binding pattern for PublicKeyCredentialCreationOptions / PublicKeyCredentialRequestOptions / AuthenticatorAttestationResponse JSON envelopes. WebAuthn JSON serialization is non-trivial (ArrayBuffer ↔ base64url encoding, COSE-encoded public keys). A typed-SDK Senior (P7 정도윤, 28) needs the binding contract. Expiry trigger: re-opens when first frontend WebAuthn integration lands — at that point spec needs BINDING-001 pinning the WebAuthn JSON shape per W3C WebAuthn-JSON proposal (draft-jcs-webauthn-json)."
+    classification: scope_deferral
+    references_artifact_path: specs/two-factor-auth-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): TFA-OBSERVABILITY-001 names 3 canonical metrics (enrollment_count / verify_failure_rate / lockout_count) but defines NO SLO threshold / alert convention — **4th wave occurrence** of the metric-without-alert-wiring pattern (R93 i18n + R94 realtime + R95 invoicing + R96 2FA F6). When does verify_failure_rate become a P0 incident (suggesting brute-force underway)? Expiry trigger: re-opens before any fork-receiver deploys MFA to production — at that point spec needs OBSERVABILITY-002 pinning canonical SLO (e.g. verify_failure_rate.totp > 30% over 10min → PAGE; lockout_count.brute-force > 5 over 1h → PAGE)."
+    classification: scope_deferral
+    references_artifact_path: specs/two-factor-auth-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): No migration playbook for fork-receivers transitioning from single-factor (R30 ASVS L1 baseline) to MFA-enforced — staged enrollment (opt-in window → soft-enforce → hard-enforce), user education, customer support escalation handling. An architect (P9 윤재호, 44) cannot present a rollout plan. Expiry trigger: re-opens before any fork-receiver enables mfa_enabled=true on existing user base — at that point templates/L4/two-factor-auth/ needs MIGRATION.md with phased rollout + grace period + audit trail."
+    classification: scope_deferral
+    references_artifact_path: specs/two-factor-auth-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): TFA-VERIFY-001 enforces bearer-alone → 403 MFA_REQUIRED but spec doesn't address cutover semantics — what happens to ACTIVE sessions of existing users on the flip day? Big-bang (immediate force-relogin) vs grace (existing sessions remain bearer-only until expiry)? A backward-compat veteran (P10 신경수, 52) flags the deployed-state impact. Expiry trigger: re-opens before any fork-receiver flips mfa_enabled=false → true on existing deployment — at that point spec needs CUTOVER-001 with session-handling matrix."
+    classification: scope_deferral
+    references_artifact_path: specs/two-factor-auth-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): TFA-FACTOR-001 cites W3C WebAuthn Level 3 + RFC 6238 but the WebAuthn `attestation` parameter (§5.4.7 PublicKeyCredentialCreationOptions) default is unspecified — recipe can pass any value or none, producing vendor-dependent + cross-fork-receiver inconsistent behavior. **4th consecutive wave** of standards-cite-without-symmetric-pin pattern (R93 F9/F11 ISO 8601 Z + R94 F8 subprotocol + R95 F8 XML namespace + R96 F8 WebAuthn attestation). Closure: TFA-FACTOR-001.notes extended — recipe declares `mfa_webauthn_attestation: '<value>'` in RECIPE.md; defaults indirect (privacy via FIDO MDS); direct for compliance; enterprise managed-device; none test-only (commit 9fbaf6a)."
+    classification: real_bug
+    closure_commit_sha: 9fbaf6a
+    closure_verification_ref: "specs/two-factor-auth-l0.yaml#TFA-FACTOR-001.notes now carries WebAuthn attestation pin contract with 4 enum values + per-context defaults + production-no-none assertion."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/two-factor-auth-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): R96 phase α (commit bf50cab) landed without a dogfood ledger — **4th consecutive occurrence** (R93 + R94 + R95 + R96). The R96 wave attempted PROCEDURE application (phase α file header comments saying 'ledger MUST be created') — but the procedural acknowledgment did not produce a ledger file at the phase α commit moment. **Empirical evidence (4-data-point): PROCEDURE-as-text is functionally identical to lesson-as-text — neither produces self-learning**. The remedy demonstrated insufficient — R97 MUST commit to one of: (a) introduce wave_kickoff_ledger_guard.sh mechanically, OR (b) formally accept 4+ consecutive drift as a permanent catalog property + remove the lesson from registry agenda (no point recording a lesson the catalog cannot learn from). Closure: this ledger file IS the audit trail. R97 mandatory_iter1_agenda escalated to demand binary decision."
+    classification: real_bug
+    closure_commit_sha: 9fbaf6a
+    closure_verification_ref: "docs/dogfood-ledger/r96-iter1.yaml IS the audit trail. 4-data-point evidence that text-based learning mechanisms (lesson OR procedure) don't propagate. R97 mandatory binary decision required."
+    closure_verification_reason: doc-only
+    references_artifact_path: docs/dogfood-ledger/r96-iter1.yaml
