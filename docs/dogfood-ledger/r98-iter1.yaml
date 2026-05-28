@@ -1,6 +1,6 @@
 # R98 — chat-messaging-l0 spec dogfood iter1 (10-persona, 6th wave)
 #
-# Wave subject: specs/chat-messaging-l0.yaml (R98 phase α).
+# Wave subject: specs/chat-messaging-l0.yaml (R98 phase α, commit 7985d04).
 # 7 items (MESSAGE / ROOM / DELIVERY / PRESENCE / HISTORY / MODERATION /
 # OBSERVABILITY) anchored to XMPP RFC 6120 + RFC 6121 + Matrix.org Client-
 # Server API + RFC 8259 JSON + RFC 3339 timestamps + XEP-0184/0085/0313 +
@@ -9,35 +9,83 @@
 # Panel reuse: P3-P12 per persona-registry R97 next_panel_composition_for_R98.
 # 6th wave application of the 10-persona protocol.
 #
-# **Second mechanical wave guard application** (R98 49th hard guard
-# registry_backfill_completeness_guard.sh, commit c1ea7f1 — symmetric
-# pair with R97 48th wave_kickoff_ledger_guard 6db3710). Phase α atomic
-# commit landed via 48th guard; commit 5 registry backfill enforced by
-# 49th guard at wave end.
+# **Second mechanical wave guard application** — R97 wave_kickoff_ledger_guard
+# (48th, 6db3710) + R98 registry_backfill_completeness_guard (49th, c1ea7f1)
+# symmetric pair empirically active. Phase α atomic via 48th; commit 5
+# backfill enforced by 49th at wave end.
 #
 # **R98 wave initiation pivot**: R97 mandatory_R98_iter1_agenda item #5
 # originally listed "A5 결재 OR A6 chat OR A7 referral" but A5 결재
-# collides with existing approval-workflow-l0.yaml (R31 active workload,
-# 26/26 tests PASS, Korean enterprise 결재 already covered). User
-# selected A6 chat pivot — chat-messaging-l0 has NO existing domain
-# collision. Probability per R93 table: 40% adoption (3rd-most-likely
-# remaining vertical after A4 document-signing 50% + A5 결재 45%
-# scrubbed for collision).
+# collides with existing approval-workflow-l0.yaml (R31 active workload).
+# User selected A6 chat pivot via AskUserQuestion at R98 kickoff.
 #
-# **6-wave cross-wave consistency expected** (6 consecutive occurrences):
-#   P4 priority order        : R93/R94/R95/R96/R97/R98 F2 → real_bug × 6 (R98 closure expected)
-#   P5 RECIPE example        : R93/R94/R95/R96/R97/R98 F3 → real_bug × 6 (R98 closure expected)
+# **6-wave cross-wave consistency observed** (6 consecutive occurrences):
+#   P4 priority order        : R93/R94/R95/R96/R97/R98 F2 → real_bug × 6 (R98 closure a1d8eae)
+#   P5 RECIPE example        : R93/R94/R95/R96/R97/R98 F3 → real_bug × 6 (R98 closure a1d8eae)
 #   P8 SLO/alert wiring      : R93/R94/R95/R96/R97/R98 F6 → scope_deferral × 6
-#   P11 standards-symmetric  : R93/R94/R95/R96/R97/R98 F8 → real_bug × 6+ (R98 closure expected;
-#                              XMPP/Matrix default 등 standards lens 활성)
-#   P12 mechanical anchor    : R97 wave_kickoff_ledger_guard 첫 적용 → R98 registry_backfill_completeness
-#                              둘째 적용 → 5 / 6 wave cycle 영구 retired (4-data-point evidence pattern)
+#   P11 standards-symmetric  : R93/R94/R95/R96/R97/R98 F8 → real_bug × 6+ (R98 closure a1d8eae)
+#   P12 mechanical anchor    : R97 wave_kickoff_ledger_guard 첫 적용 + R98 registry_backfill_completeness
+#                              둘째 적용 → 6-wave cycle 패턴 (4-data-point evidence → mechanical anchor →
+#                              empirical first-application catch → NEXT gap surface)
 #
-# Lens overlap status: P4/P5 5-wave retired confirmed at R97; R98는 6-wave
-# confirmation. P3 mobile lens 다시 active (chat is mobile-first by default;
-# KakaoTalk-grade UX expectations) — R97 (document-signing) deferred mobile
-# scenarios, R98 (chat-messaging) likely surfaces explicit DOC-MOBILE / CHAT-MOBILE
-# parallel items.
+# Distribution shift continued from R97: R97 (3 real_bug + 7 scope_deferral)
+# established the new 3+7 baseline post-F10-retirement. R98 expected to
+# maintain 3+7 unless P12 surfaces NEW finding that closes inline (rare).
+#
+# P3 mobile lens reactivation: chat-messaging is mobile-first by default
+# (KakaoTalk-grade UX expectations), but spec doesn't explicitly call out
+# mobile OS push integration (APNs / FCM badge counts / silent push for
+# background sync / 잠금화면 미리보기 with privacy hashing). P3 produces
+# scope_deferral with expiry trigger.
 
 iteration: 1
-findings: []
+findings:
+  - persona: P3
+    finding: "F1 (LOW): chat-messaging-l0 covers WebSocket + HTTP REST surfaces but does not address mobile-OS push notification integration — APNs (Apple Push Notification service) + FCM (Firebase Cloud Messaging) badge counts + silent push for background sync (앱 백그라운드 상태일 때 새 메시지 fetch) + 잠금화면 미리보기 privacy (메시지 본문 hashing or 'New message' generic). Critical for KakaoTalk-grade UX expectations. A mobile-first Junior (P3 김민준, 24) needs CHAT-MOBILE-001 covering platform-native push integration. Expiry trigger: re-opens before any mobile fork-receiver wires chat — at that point spec needs CHAT-MOBILE-001 mapping APNs/FCM topic structure + badge sync via silent push + 잠금화면 privacy mode."
+    classification: scope_deferral
+    references_artifact_path: specs/chat-messaging-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): chat-messaging-l0 7 items no priority ordering — **6th consecutive wave** (R93+R94+R95+R96+R97+R98). A pragmatic Junior (P4 박지영, 33) cannot tell whether CHAT-MESSAGE-001 envelope or CHAT-ROOM-001 lifecycle is foundational. Closure: priority order block (CHAT-MESSAGE-001 envelope foundation → CHAT-OBSERVABILITY-001) commit a1d8eae."
+    classification: real_bug
+    closure_commit_sha: a1d8eae
+    closure_verification_ref: "specs/chat-messaging-l0.yaml now carries priority order block before items: with foundation rationale (un-declared envelope cannot be canonically routed/persisted)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/chat-messaging-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): chat-messaging-l0 11 config fields (message id format / retention / subprotocol / moderation SLA / 청소년보호 filter / E2E encryption / broker / presence grace + typing inactivity) declare는 했으나 RECIPE.md example 없음 — **6th wave** (R93+R94+R95+R96+R97+R98). A docs-Senior (P5 이상호, ~36) cannot demo the recipe to teammates in <1min. Closure: saas-customer-support-chat frontmatter + 의료/금융/법률 E2E flip 가이드 + 청소년 vertical min_age filter 의무 pinned per 청소년보호법 §16의2 (commit a1d8eae)."
+    classification: real_bug
+    closure_commit_sha: a1d8eae
+    closure_verification_ref: "specs/chat-messaging-l0.yaml priority block now contains complete RECIPE.md frontmatter example with 11 fields + vertical-specific guidance (E2E + min_age filter)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/chat-messaging-l0.yaml
+  - persona: P6
+    finding: "F4 (HIGH): CHAT-MODERATION-001 cites 정보통신망법 §44의2 (이용자 신고 처리 의무 24h/7d SLA) + §44의7 (불법정보 유통 금지) + 청소년보호법 §16의2 (청소년 유해정보 차단) but does NOT map the 2024 deepfake 처벌법 (성폭력처벌법 §14의3 — 허위영상물 유포) + 통신비밀보호법 §3 (감청 금지 — chat 메시지가 통신비밀로 보호되는지 vs 일반 디지털 콘텐츠로 다뤄지는지 corner case). 의료 vertical 추가 의무: 의료법 §21 환자정보 보호 + 디지털의료기기법 §22 (telemedicine chat case). 한국 규제 lens (P6 최영숙, 53) flags. Expiry trigger: re-opens before any 의료 / 미디어 / 청소년 vertical fork-receiver wires chat — at that point spec needs CHAT-MODERATION-002 covering deepfake takedown + 통신비밀 분류 + vertical-specific 의무 매핑 (의료법 §21 / 디지털의료기기법 §22 / 청소년보호법 시행령)."
+    classification: scope_deferral
+    references_artifact_path: specs/chat-messaging-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): CHAT-MESSAGE-001 + CHAT-DELIVERY-001 명시하나 typed-SDK XMPP/Matrix JSON envelope TypeScript binding 부재 (RFC 6120 stanza ↔ JSON 변환 / Matrix m.room.message event JSON shape / XEP-0184 <received/> ACK 응답 typed handler / WebSocket STOMP frame headers). A typed-SDK Senior (P7 정도윤, 28) needs CHAT-BINDING-001 covering typed envelope contracts. Expiry trigger: re-opens when first frontend chat client typed-binding lands — at that point spec needs CHAT-BINDING-001 per RFC 6120 §8 JSON projection draft + Matrix JS SDK reference types."
+    classification: scope_deferral
+    references_artifact_path: specs/chat-messaging-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): CHAT-OBSERVABILITY-001 names 3 canonical metrics (messages_sent_total / delivery_failure_rate / active_room_count) but defines NO SLO threshold / alert convention — **6th wave occurrence** of the metric-without-alert-wiring pattern (R93 i18n + R94 realtime + R95 invoicing + R96 2FA + R97 document-signing + R98 chat F6). When does delivery_failure_rate become a P0 incident (broker_unavailable spike → all rooms degraded)? When does active_room_count drop suddenly (mass disconnect — networking issue)? An SRE Senior (P8 강하늘, 41) flags ops-readiness gap. Expiry trigger: re-opens before any chat fork-receiver deploys to production OR when R98 mandatory_R98_iter1_agenda item #2 (OBSERVABILITY-002 표준 item 5-spec batch) implementation lands — at that point chat becomes 6th adopter with canonical SLO threshold (e.g. delivery_failure_rate.broker_unavailable > 5% over 1min → PAGE; active_room_count drop > 50% in 5min → PAGE)."
+    classification: scope_deferral
+    references_artifact_path: specs/chat-messaging-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): No migration playbook for fork-receivers transitioning from polling-based notification systems (long-poll / REST refresh / email digest) to realtime chat-messaging — what happens to existing notification queue items? Backfill into chat history (CHAT-HISTORY-001) for continuity? Hybrid mode (notification + chat) during cutover? Forced realtime upgrade requires WebSocket capability on client side (older mobile apps may not support STOMP). An architect (P9 윤재호, 44) cannot present a rollout plan. Expiry trigger: re-opens before any fork-receiver flips chat_enabled=false → true on existing user base with notification history — at that point templates/L4/chat-messaging/ needs MIGRATION.md with polling-to-realtime upgrade matrix (notification backfill / hybrid mode / version-gated rollout)."
+    classification: scope_deferral
+    references_artifact_path: specs/chat-messaging-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): CHAT-DELIVERY-001 requires WebSocket + outbox pattern but spec doesn't address broker outage degraded mode — what happens when RabbitMQ/Kafka is unreachable? Recipe could degrade to long-poll fallback (HTTP-only) OR fail closed (no chat until broker recovers). For 의료 / 금융 verticals fail-closed may be safer (no message ambiguity); for 일반 SaaS long-poll degraded mode preserves UX. A backward-compat veteran (P10 신경수, 52) flags missing degraded-mode contract. Expiry trigger: re-opens before any fork-receiver deploys chat with broker dependency — at that point spec needs CHAT-DEGRADED-001 with broker outage handling matrix (fail-closed vs long-poll fallback per vertical)."
+    classification: scope_deferral
+    references_artifact_path: specs/chat-messaging-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): CHAT-MESSAGE-001 cites XMPP RFC 6120 + Matrix.org + RFC 8259 but message id format default 미pin — recipe can pass any value or none (UUID v4 / ULID / Snowflake / nanoid). **6th wave 동일 패턴** (R93 ISO 8601 + R94 subprotocol + R95 XML namespace + R96 WebAuthn attestation + R97 c14n+PAdES baseline + R98 message id format). Closure: chat_message_id_format pin contract + 3 enum values (uuid-v4 / ulid / snowflake) + per-context defaults (ulid for cursor-sort compatibility; snowflake for high-scale; uuid-v4 acceptable but requires separate sort field) (commit a1d8eae)."
+    classification: real_bug
+    closure_commit_sha: a1d8eae
+    closure_verification_ref: "specs/chat-messaging-l0.yaml#CHAT-MESSAGE-001.notes now carries message id format pin contract with 3 enum + per-context defaults + 6-wave standards lens streak acknowledgment."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/chat-messaging-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): R98 phase α (7985d04) landed atomically via R97's wave_kickoff_ledger_guard.sh (6db3710) — second mechanical first-application validation. R98 pre-wave (c1ea7f1) introduced the 49th guard (registry_backfill_completeness_guard.sh) which mechanically caught a R97 hotfix bug (P3 missing R97 history entry, parallel edit race) before R98 wave proper started — first-application empirical proof. **TWO consecutive mechanical anchors empirically active**. Meta-governance lens surfaces NEW R98 gap: spec_policy_ref_guard (existing 47th guard, not new) caught the chat-messaging-l0 7 policy_ref orphan references at verify-completion stage AFTER phase α commit landed locally — this means the guard runs in verify-completion but NOT in pre-commit hook. Pre-commit + pre-push + verify-completion are 3 different gates with different timing — R98 finding: spec_policy_ref_guard timing gap. Currently verify-completion runs guards post-commit; pre-commit hook could catch earlier. R99 mandatory_iter1_agenda candidate: extend pre-commit hook to run spec_policy_ref_guard + spec_ref_guard + a subset of catalog-meta guards (NOT the full 49 — too slow for pre-commit). Expiry trigger: re-opens when next wave's phase α encounters similar orphan policy_ref / spec ref issue OR when R99 audits pre-commit hook coverage explicitly."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/r98-iter1.yaml
