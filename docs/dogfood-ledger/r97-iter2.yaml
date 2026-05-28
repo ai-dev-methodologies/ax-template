@@ -1,0 +1,139 @@
+# R97 — document-signing-l0 spec dogfood iter2 (TRUE 0-convergence terminator)
+#
+# Wave subject: specs/document-signing-l0.yaml + iter1 closures (commit 7164b54)
+# + iter1 ledger (commit 20a0efe).
+#
+# iter1 closed 3 real_bug (F2 priority + F3 RECIPE example + F8 c14n + PAdES
+# baseline pin) and deferred 7 scope_deferral (F1/F4/F5/F6/F7/F9/F10) with
+# explicit Expiry triggers (R85). Distribution differs from R96 (4+6) because
+# **F10 historical PROCEDURE-as-text pattern is PERMANENTLY RETIRED** by
+# wave_kickoff_ledger_guard.sh (R97 48th hard guard, commit 6db3710). P12
+# R97 lens instead surfaces a DIFFERENT meta-governance gap (commit-5
+# registry omission, scope_deferral, deferred to R98 mandatory_iter1_agenda).
+#
+# iter2 sweep — same 10-persona panel (P3-P12) re-reviews iter1 closures
+# (7164b54 spec edits) + iter1 ledger (20a0efe 10 findings) + phase α spec
+# (931afc9 base).
+#
+# Result: 0 findings. TRUE 0-convergence at iter2 — same pattern as R94/R95/R96
+# (no new artifact introduced in iter1; doc-only edits to existing spec).
+# A2 P1 inline termination assertion below + escalation clause if any future
+# wave surfaces real_bug_count >= 1 at iter2.
+#
+# Per-persona iter2 verdict (all "no residual"):
+#
+#   P3 김민준  iter1 closures touched priority/RECIPE/c14n+PAdES surfaces only;
+#              mobile-specific signing flows (KakaoTalk deep link, iOS/Android
+#              biometric witness, OCR 자필) untouched. F1 deferral unchanged.
+#   P4 박지영  F2 priority closure structurally identical to R93/R94/R95/R96
+#              priority closures. 5th successful application — adoption order
+#              foundation rationale + 7 items mapped.
+#   P5 이상호  F3 RECIPE closure ships verbatim financial-document-signing-kr
+#              frontmatter with 11 fields (format / c14n / PAdES baseline /
+#              cert providers / TSA / revocation / retention / signer identity
+#              storage / masking) + 금융권 본인확인기관 화이트리스트 pinned.
+#              5th successful application.
+#   P6 최영숙  iter1 closures touched standards (c14n + PAdES baseline)
+#              not 한국 규제 surfaces. F4 deferral (마이데이터 §35의2 +
+#              consent revocation §37 matrix) unchanged. 본 wave가 P6 직접
+#              domain (RRN PII)였으나 spec phase α에서 이미 R54 ElementCollection
+#              + R67 AuditPiiHelper pii_pattern으로 1-pass closure; 마이데이터
+#              corner case는 deferral lane (R98 trigger 대기).
+#   P7 정도윤  F5 typed-binding deferral unchanged. F8 c14n + PAdES baseline
+#              closure는 verifier-side default 고정으로 partial mitigation
+#              이지만 XMLDSig + PAdES JSON envelope shape는 별도 R98+ work.
+#   P8 강하늘  F6 SLO/alert deferral unchanged. 5th-wave repeat of metric-
+#              without-alert pattern stable. R98+ catalog work on canonical
+#              SLO threshold rule (across all 5 waves) candidate.
+#   P9 윤재호  F7 pre-signing-era document handling deferral unchanged. 4-track
+#              matrix (legacy / retro-sign-on-access / immutable-archive /
+#              dual-track) waits for first fork-receiver migration trigger.
+#   P10 신경수 F9 B-T → B-LTA upgrade deferral unchanged. Storage budget
+#              guidance + TSA archive-token re-issuance 비용 documented
+#              when first fork-receiver requests migration ceremony.
+#   P11 황태완 Own F8 closure (XMLDSig c14n + PAdES baseline pin) comprehensive —
+#              2 enum values + per-context defaults (compliance vs short-term)
+#              + W3C XMLDSig 1.1 §4.3 MUST-support floor + ETSI EN 319 142-1
+#              §5 baseline profiles cited. 5th-wave repeat of standards-
+#              symmetric coverage pattern.
+#   P12 한상미 F10 NEW finding (commit-5 registry omission, scope_deferral)
+#              records the **commit-5-omission-no-guard gap** + R98 mandatory_
+#              iter1_agenda escalation. **F10 historical pattern PERMANENTLY
+#              RETIRED** — wave_kickoff_ledger_guard.sh empirically active
+#              (R97 phase α 931afc9 atomically landed spec + r97-iter1.yaml
+#              placeholder; spec-only commit would have BLOCKED). Meta-
+#              governance lens now points forward (commit 5 next).
+#
+# Wave totals after iter2:
+#   iter1: 10 findings — 3 real_bug closed + 7 scope_deferral
+#   iter2:  0 findings — TRUE convergence
+#   ──────────────────────────────────────────────────────────────────────
+#   TOTAL: 10 findings produced
+#           3 real_bug closed (closure_commit_sha 7164b54 all 3)
+#           7 scope_deferral with Expiry triggers (R85)
+#           0 methodology_gap
+#
+# 5 commits land the R97 wave end-to-end (4-wave precedent fidelity):
+#   6db3710  R97 wave_kickoff_ledger_guard.sh (pre-wave 48th hard guard)
+#   931afc9  R97 phase α (document-signing-l0.yaml spec seed + ledger atomically)
+#   7164b54  R97 iter1 closures (F2/F3/F8)
+#   20a0efe  R97 iter1 ledger (10 findings + F10 NEW scope_deferral)
+#   this     R97 iter2 terminator (0 findings)
+#
+# **5-wave aggregate cross-wave evidence** (R93 + R94 + R95 + R96 + R97):
+#
+#   Stabilized signatures (5-consecutive cross-wave hits):
+#     P4 priority ordering    : R93+R94+R95+R96+R97 F2 → real_bug × 5
+#     P5 RECIPE example       : R93+R94+R95+R96+R97 F3 → real_bug × 5
+#     P8 SLO/alert wiring     : R93+R94+R95+R96+R97 F6 → scope_deferral × 5
+#     P11 standards-symmetric : R93 F9/F11 + R94 F8 + R95 F8 + R96 F8 + R97 F8 → real_bug × 5+
+#     P12 F10 PROCEDURE-as-text: R93+R94+R95+R96 F10 → R97 mechanical guard active → PERMANENTLY RETIRED
+#
+#   Lens overlap retirement (R95/R96 결정 재확인): P4/P5 5-wave differentiation
+#     MAINTAINED. R97에서도 다른 surfaces (priority block vs 11-field RECIPE).
+#     영구-not-needed로 retire 확정.
+#
+#   Saturation retirement (R95/R96 결정 재확인): P12 saturation flag 영구
+#     retire confirmed. 5-wave 누적: P12 historical F10 closed mechanically;
+#     R97 P12 surfaces NEW finding (commit-5 omission) — saturation는 deprecated.
+#
+#   Convergence speed (5-wave validated): iter terminator = iter1 + 1 IF no
+#     new artifact (R94 + R95 + R96 + R97 = 4/4 cases); +N for each new
+#     artifact iter cycle (R93 single case).
+#
+#   **P12 F10 mechanical closure validation** (R97 empirical):
+#     R97 phase α 931afc9 atomically landed BOTH spec yaml AND r97-iter1.yaml
+#     placeholder. wave_kickoff_ledger_guard.sh PASS (5 phase-tagged specs,
+#     covered waves R93/R94/R95/R96/R97). The guard's stderr message lines
+#     96-97 self-explanatory — no procedure-as-text scaffolding added to
+#     this wave's prompt (P2-1 R97 ralplan iter 2.1 amendment respected).
+#     4-data-point evidence escalation (R96 binary decision) → mechanical
+#     anchor (R97 option (a)) → empirical proof at R97 phase α → PERMANENT.
+#
+#   **R97 P12 NEW gap signal** (commit-5 registry omission):
+#     wave_kickoff_ledger_guard covers phase α atomic (commits 1-2 boundary).
+#     iter ledger guard (R85 dogfood_finding_expiry_trigger_guard) covers
+#     commit-3 ledger schema. iter2 terminator has no specific guard.
+#     persona-registry.yaml backfill (commit 5) has no completeness guard —
+#     fork-receiver could land commits 1-4 of a wave and skip commit 5,
+#     leaving review_summary.R<N> + 10 persona history + next_panel_composition
+#     entries stale. Same mechanical-anchor pattern needed; R98 mandatory_
+#     iter1_agenda becomes registry_backfill_completeness_guard.sh
+#     implementation.
+
+iteration: 2
+termination_status: TARGET_NOT_GUARANTEED
+real_bug_count: 0
+scope_deferral_count: 7
+no_new_artifacts_mid_stream: true
+escalation:
+  condition: real_bug_count >= 1
+  action: iter3 MANDATORY (not terminator)
+  reference: feedback_iter_terminator_may_reopen.md
+  rationale: |
+    R93 lesson — iter that surfaces 0 real_bug is NOT the terminator if a
+    new artifact landed mid-stream. R97 introduces NO new artifact in iter1
+    (only doc-only spec edits to specs/document-signing-l0.yaml + ledger
+    population). Pre-conditions for safe iter2 termination satisfied
+    (no_new_artifacts_mid_stream: true).
+findings: []
