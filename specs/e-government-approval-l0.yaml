@@ -32,6 +32,50 @@ introduced_at: "R99 phase α — seeded as the 7th modular-catalog candidate. Co
 #   affected specs (multi-tenant + realtime + invoicing + 2FA + document-
 #   signing + chat-messaging + e-government-approval = 7 adopters).
 
+# ── Priority order for fork-receivers (R99 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt items in this order. Earlier items are foundational for later
+# ones — skipping EGA-FRAMEWORK-001 (효력 부여 5조건) makes everything
+# else moot because un-declared 효력 조건 → 모든 결재가 법적으로 무효.
+# 7-wave pattern (R93/R94/R95/R96/R97/R98/R99 F2): Junior priority lens
+# consistently flags missing adoption order — closure adds explicit
+# foundation rationale to spec body.
+#
+#   1. EGA-FRAMEWORK-001       — 효력 부여 5조건 (foundation; everything else implements 1 of 5)
+#   2. EGA-PKI-001             — GPKI/NPKI 인증서 신뢰체계 (효력 조건 #1)
+#   3. EGA-LINE-001            — 결재선 + 위임 (효력 조건 #4)
+#   4. EGA-POSTAPPROVAL-001    — 사후결재 24h 시한 (긴급 사유 처리)
+#   5. EGA-CLASSIFICATION-001  — 보안등급 + 결재선 escalation (LINE 위에 layer)
+#   6. EGA-AUDIT-001           — 30년 보존 + 무결성 (효력 조건 #5)
+#   7. EGA-OBSERVABILITY-001   — 3 canonical metrics
+
+# ── RECIPE.md frontmatter example (R99 iter1 F3 closure — P5 이상호 lens) ──
+# Canonical opt-in shape. 7-wave pattern (R93/R94/R95/R96/R97/R98/R99 F3):
+# Senior docs lens consistently flags missing copy-pasteable recipe block.
+#
+#   ---
+#   recipe: public-agency-approval-kr
+#   tenant_model: multi
+#   default_locale: ko-KR
+#   supported_locales: [ko-KR, en-US]
+#   ega_enabled: true
+#   ega_pki_types: [gpki, npki]                       # 사설 cert (Naver/Kakao) 거부 — 공공기관 default
+#   ega_gpki_root_ca_whitelist: ["행정안전부 GPKI Root CA G2"]   # 행정안전부 갱신 시 분기별 동기화
+#   ega_auto_escalate_hours: 72                       # 운영 규정 §12 시행세칙
+#   ega_postapproval_window_hours: 24                 # 행정업무용 전자문서법 §16② 강행규정
+#   ega_classification_authority_source: gpki_cert_oid  # OID extension에서 권한 추출
+#   ega_audit_hash_algorithm: sha-256                 # R99 F8 default — FIPS 180-4 + 광범위 지원
+#   ega_audit_retention_general_years: 5              # 공공기록물법 §27 일반 결재
+#   ega_audit_retention_restricted_years: 30          # 공공기록물법 §27 중요 결재 (보안등급 적용)
+#   ega_archive_timestamp_refresh_days: 90            # TSA cert 만료 90일 전 갱신
+#   ega_document_signing_format: pades-b-lta          # R97 DOC-RETENTION-001 reference (PAdES-B-LTA 의무)
+#   ---
+#
+# Fork-receivers targeting 중앙행정기관 (장관급) → ega_audit_retention_*
+# 모두 30년 minimum + ega_pki_types=[gpki] only (NPKI 제외 — 공무원 직무
+# 인증서만). 지방자치단체 / 산하기관 → npki 허용 (외부 거래 본인확인 필요).
+# 비밀급 분류 처리 시 → ega_classification_authority_source=gpki_cert_oid
+# 강제 (RBAC 외부 source 거부).
+
 items:
   # ── FRAMEWORK family ────────────────────────────────────────────────────
   - id: "EGA-FRAMEWORK-001"
@@ -148,6 +192,21 @@ items:
       Quote anchor (공공기록물법 §27①): "공공기관은 기록물의 보존기간을
       정하여 보존하여야 하며, 그 기간은 영구·30년·10년·5년·3년·1년으로
       구분한다."
+      R99 iter1 F8 closure (P11 황태완 standards lens): hash chain
+      algorithm MUST be pinned per FIPS 180-4 (SHA-256/-512) vs FIPS
+      202 (SHA-3-256) vs KS X ISO/IEC 10118-3 (Korean hash standards)
+      — recipe declares `ega_audit_hash_algorithm` in RECIPE.md
+      frontmatter where value ∈ {sha-256, sha-3-256, sha-512}. Default
+      catalog opinion: `sha-256` (FIPS 180-4 — broad library support,
+      ample 128-bit collision resistance, 32-byte digest manageable
+      for 30년 archive). `sha-3-256` for high-security recipes
+      requiring distinct hash family separation from SHA-2 lineage
+      (post-quantum hedging or 비밀급 audit). `sha-512` acceptable
+      but 2x storage cost over 30년 retention — only when 64-byte
+      digest preferred. 7-wave streak: R93 ISO 8601 + R94 subprotocol
+      + R95 XML namespace + R96 WebAuthn attestation + R97 c14n+PAdES
+      + R98 message id format + R99 hash chain algorithm. P11 standards
+      lens 7-wave consistent default-pinning gap catch.
 
   # ── OBSERVABILITY family ───────────────────────────────────────────────
   - id: "EGA-OBSERVABILITY-001"
