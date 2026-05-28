@@ -1,0 +1,543 @@
+schema_version: 1
+description: |
+  Aggregated index of 한국법 (Korean law) citations across the ax-template
+  catalog. Built as the R100 pre-wave artifact closing R99 P12 F10 NEW
+  finding — **3rd mechanical anchor class** (DATA artifact) after R97/R98
+  hard guards + R99 catalog HELPER. Demonstrates pattern adaptation
+  beyond hard-guard-only mechanical anchors.
+
+  Primary consumer: P6 한국 규제 lens compliance audit. Secondary consumer:
+  standards lens (P11) for ratification of Korean standards against
+  international counterparts.
+
+  Scope: R94-R99 modular catalog specs (6 specs) + selected L4 workload
+  references found in spec headers / standard fields / items[].notes.
+  L4 backfill (auth / payment / billing / etc. internal law cites) is
+  R101+ extension agenda (see future_work below).
+
+  Generator: MANUAL update at each wave end. R101 mandatory_iter1_agenda
+  candidate: build_law_index.sh script to keep index synced. Pattern
+  fitness check (per R99 P12 observation): 3rd anchor class adaptation
+  validates the pattern is NOT ritualistic — DATA artifact class is
+  distinct from hard guard / HELPER classes.
+
+last_updated_at: "R100 pre-wave (catalog snapshot post R99 commit 8b1a21a)"
+catalog_revision_seen: "R94-R99 modular catalog 6 specs + L4 partial"
+
+# Schema:
+# laws[].id              short canonical Korean law name
+# laws[].full_name       official Korean law full name
+# laws[].domain          lens grouping (privacy / commerce / public_sector / industry_specific / tax)
+# laws[].citations[].section    §-prefix section reference
+# laws[].citations[].topic      human-readable topic
+# laws[].citations[].references[].spec     spec file path
+# laws[].citations[].references[].item     spec item id (or 'standard:' field for top-level cite)
+# laws[].citations[].references[].wave     catalog wave (R94-R99)
+# laws[].citations[].references[].context  brief description of how the law applies
+
+laws:
+  # ── PRIVACY domain ─────────────────────────────────────────────────────
+  - id: "개인정보보호법"
+    full_name: "개인정보보호법 (PIPA — Personal Information Protection Act)"
+    domain: privacy
+    citations:
+      - section: "§23"
+        topic: "민감정보 처리 제한"
+        references:
+          - spec: "specs/two-factor-auth-l0.yaml"
+            item: "standard: field"
+            wave: R96
+            context: "본인확인 수단 anchor (PIPA §23의2 broader inclusion)"
+      - section: "§23의2"
+        topic: "본인확인 수단 — RRN/SMS factor restriction"
+        references:
+          - spec: "specs/two-factor-auth-l0.yaml"
+            item: "TFA-FACTOR-001"
+            wave: R96
+            context: "healthcare PIPA §23의2 본인확인 기준에서 SMS 단독 거부 (휴대전화 분실 위험)"
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-IDENTITY-001"
+            wave: R97
+            context: "RRN 처리 제한 anchored — RRN PII handling 기본 anchor"
+      - section: "§24"
+        topic: "고유식별정보 처리 제한 (RRN 등)"
+        references:
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-IDENTITY-001"
+            wave: R97
+            context: "주민등록번호 처리 제한 — pii_pattern block의 핵심 anchor (Quote anchor 인용)"
+      - section: "§29"
+        topic: "안전성 확보 조치"
+        references:
+          - spec: "specs/chat-messaging-l0.yaml"
+            item: "standard: field"
+            wave: R98
+            context: "chat 메시지 암호화 의무 (E2E 또는 at-rest)"
+      - section: "§35의2"
+        topic: "개인정보 이동권 (마이데이터)"
+        references:
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-IDENTITY-001 (P6 F4 deferral)"
+            wave: R97
+            context: "scope_deferral — DOC-IDENTITY-002 (마이데이터 export matrix) R100+ trigger"
+      - section: "§37"
+        topic: "개인정보 이용·제공 정지 (consent revocation)"
+        references:
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-IDENTITY-001 (P6 F4 deferral)"
+            wave: R97
+            context: "consent 철회 시 past signatures 효력 vs VerifiedIdentity 삭제 matrix"
+
+  - id: "정보통신망법"
+    full_name: "정보통신망 이용촉진 및 정보보호 등에 관한 법률"
+    domain: privacy
+    citations:
+      - section: "§44의2"
+        topic: "이용자 신고 처리 의무 (24h SLA)"
+        references:
+          - spec: "specs/chat-messaging-l0.yaml"
+            item: "CHAT-MODERATION-001"
+            wave: R98
+            context: "신고 접수 24h 내 1차 처리 + 7d 내 최종 통보 SLA mandatory (Quote anchor 인용)"
+      - section: "§44의7"
+        topic: "불법정보 유통 금지"
+        references:
+          - spec: "specs/chat-messaging-l0.yaml"
+            item: "CHAT-MODERATION-001"
+            wave: R98
+            context: "청소년 유해정보 자동 필터링 prerequisite"
+
+  - id: "청소년보호법"
+    full_name: "청소년 보호법"
+    domain: privacy
+    citations:
+      - section: "§16의2"
+        topic: "청소년 유해정보 차단"
+        references:
+          - spec: "specs/chat-messaging-l0.yaml"
+            item: "CHAT-MODERATION-001"
+            wave: R98
+            context: "min_age filter 의무 — 청소년 vertical (게임 + 교육) mandatory"
+
+  - id: "통신비밀보호법"
+    full_name: "통신비밀보호법"
+    domain: privacy
+    citations:
+      - section: "§3"
+        topic: "감청 금지 — chat 메시지 통신비밀 분류"
+        references:
+          - spec: "specs/chat-messaging-l0.yaml"
+            item: "CHAT-MODERATION-001 (P6 F4 deferral)"
+            wave: R98
+            context: "chat 메시지가 통신비밀 vs 디지털 콘텐츠 corner case (의료/미디어 vertical)"
+
+  - id: "성폭력처벌법"
+    full_name: "성폭력 범죄의 처벌 등에 관한 특례법"
+    domain: privacy
+    citations:
+      - section: "§14의3"
+        topic: "허위영상물 유포 (deepfake)"
+        references:
+          - spec: "specs/chat-messaging-l0.yaml"
+            item: "CHAT-MODERATION-001 (P6 F4 deferral)"
+            wave: R98
+            context: "deepfake takedown 의무 — 의료/미디어/청소년 vertical mandatory"
+
+  # ── COMMERCE domain ────────────────────────────────────────────────────
+  - id: "전자거래기본법"
+    full_name: "전자거래기본법"
+    domain: commerce
+    citations:
+      - section: "§6"
+        topic: "전자서명 효력"
+        references:
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-FORMAT-001 + standard: field"
+            wave: R97
+            context: "전자서명 법적 효력 부여 — XMLDSig/PAdES baseline"
+          - spec: "specs/invoicing-l0.yaml"
+            item: "standard: field"
+            wave: R95
+            context: "전자문서 효력 — 전자세금계산서 inheritance"
+      - section: "§16"
+        topic: "전자문서 보관"
+        references:
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-RETENTION-001"
+            wave: R97
+            context: "전자문서 보관 의무 — 10년 retention floor"
+
+  - id: "전자서명법"
+    full_name: "전자서명법 (2020 개정)"
+    domain: commerce
+    citations:
+      - section: "§3"
+        topic: "전자서명 효력 inheritance"
+        references:
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-TIMESTAMP-001"
+            wave: R97
+            context: "timestamp authority 인정에서 효력 inherit"
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-FRAMEWORK-001 (standard: field)"
+            wave: R99
+            context: "전자서명 효력 기반"
+      - section: "§8"
+        topic: "전자서명 인증서 효력"
+        references:
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-CERT-001"
+            wave: R97
+            context: "KISA 본인확인기관 인증서 효력 anchored"
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-PKI-001"
+            wave: R99
+            context: "GPKI/NPKI 효력 ratification"
+
+  - id: "공인전자문서법"
+    full_name: "공인전자문서법 (전자문서 및 전자거래 기본법 일부)"
+    domain: commerce
+    citations:
+      - section: "§31의2"
+        topic: "공인전자문서센터 보관기간 (10년)"
+        references:
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-RETENTION-001"
+            wave: R97
+            context: "10년 보관 의무 — PAdES-B-LTA / XAdES-A archival profile (Quote anchor 인용)"
+
+  # ── TAX domain ─────────────────────────────────────────────────────────
+  - id: "부가가치세법"
+    full_name: "부가가치세법"
+    domain: tax
+    citations:
+      - section: "§32"
+        topic: "전자세금계산서 의무 발행"
+        references:
+          - spec: "specs/invoicing-l0.yaml"
+            item: "INV-FORMAT-001 + scope field"
+            wave: R95
+            context: "B2B 매출 1억원 초과 시 mandatory; 가산세 부과 위반"
+      - section: "시행령 §70(1)(11)"
+        topic: "매입자 발행 세금계산서 (역발행)"
+        references:
+          - spec: "specs/invoicing-l0.yaml"
+            item: "INV-CORNER-001 (P6 F4 deferral)"
+            wave: R95
+            context: "역발행 corner case — R96+ trigger"
+
+  - id: "국세기본법"
+    full_name: "국세기본법"
+    domain: tax
+    citations:
+      - section: "§85의3"
+        topic: "5년 보관 의무"
+        references:
+          - spec: "specs/invoicing-l0.yaml"
+            item: "INV-RETENTION-001 + scope field"
+            wave: R95
+            context: "전자세금계산서 5년 보관 — 법적 lower bound (수정 금지)"
+
+  # ── INDUSTRY-SPECIFIC domain ───────────────────────────────────────────
+  - id: "전자금융거래법"
+    full_name: "전자금융거래법"
+    domain: industry_specific
+    citations:
+      - section: "§6"
+        topic: "금융권 2단계 인증 의무화 (AAL2)"
+        references:
+          - spec: "specs/two-factor-auth-l0.yaml"
+            item: "TFA-FACTOR-001"
+            wave: R96
+            context: "AAL2 mandatory in financial vertical"
+
+  - id: "전자금융감독규정"
+    full_name: "전자금융감독규정 (금융위원회 고시)"
+    domain: industry_specific
+    citations:
+      - section: "§13의5"
+        topic: "SMS-OTP 단독 사용 금지"
+        references:
+          - spec: "specs/two-factor-auth-l0.yaml"
+            item: "TFA-FACTOR-001 (P6 F4 deferral)"
+            wave: R96
+            context: "본인확인기관 인증서 OR ARS 콜백 + 추가 인증 mandatory in 금융권"
+
+  - id: "의료법"
+    full_name: "의료법"
+    domain: industry_specific
+    citations:
+      - section: "§21"
+        topic: "환자정보 보호"
+        references:
+          - spec: "specs/chat-messaging-l0.yaml"
+            item: "CHAT-MODERATION-001 (P6 F4 deferral)"
+            wave: R98
+            context: "의료 vertical chat → 환자정보 보호 의무"
+
+  - id: "디지털의료기기법"
+    full_name: "디지털의료기기 산업 육성 및 혁신의료기기 지원에 관한 법률"
+    domain: industry_specific
+    citations:
+      - section: "§22"
+        topic: "telemedicine + chat 통합"
+        references:
+          - spec: "specs/chat-messaging-l0.yaml"
+            item: "CHAT-MODERATION-001 (P6 F4 deferral)"
+            wave: R98
+            context: "디지털의료기기 + chat 통합 vertical mapping"
+
+  # ── PUBLIC SECTOR domain ───────────────────────────────────────────────
+  - id: "행정업무용 전자문서법"
+    full_name: "행정업무의 운영 및 혁신에 관한 규정 (대통령령) + 행정업무용 전자문서법"
+    domain: public_sector
+    citations:
+      - section: "§5"
+        topic: "전자결재 효력 부여"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-FRAMEWORK-001"
+            wave: R99
+            context: "효력 부여 5조건 (PKI / TSA / 무결성 / 결재선 / 보존)"
+      - section: "§6"
+        topic: "전자문서 무결성"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-AUDIT-001"
+            wave: R99
+            context: "Merkle hash chain + append-only enforcement"
+      - section: "§16"
+        topic: "전자결재 시스템 요건 + 사후결재 24h 시한"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-POSTAPPROVAL-001"
+            wave: R99
+            context: "사후결재 24h 강행규정 (Quote anchor 인용)"
+      - section: "운영 규정 §10"
+        topic: "전자결재 정의"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-FRAMEWORK-001"
+            wave: R99
+            context: "행정업무의 운영 및 혁신에 관한 규정 §10 — 전자결재 정의 anchor"
+      - section: "운영 규정 §11 + §12"
+        topic: "결재 + 시행세칙 (위임 처리)"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-LINE-001"
+            wave: R99
+            context: "결재선 구성 + 72h 자동 위임 escalation"
+      - section: "운영 규정 §13"
+        topic: "긴급 사유"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-POSTAPPROVAL-001"
+            wave: R99
+            context: "사후결재 발동 trigger"
+      - section: "운영 규정 §14"
+        topic: "시행세칙 — 보안등급별 결재선"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-CLASSIFICATION-001"
+            wave: R99
+            context: "보안등급별 결재선 escalation matrix ratification"
+
+  - id: "전자정부법"
+    full_name: "전자정부법"
+    domain: public_sector
+    citations:
+      - section: "§29"
+        topic: "전자결재"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-FRAMEWORK-001"
+            wave: R99
+            context: "정부 전자결재 정의"
+      - section: "§30"
+        topic: "전자결재 안전성"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-FRAMEWORK-001"
+            wave: R99
+            context: "안전성 + 신뢰성 + 무결성 + 보존 4가지 조치 (Quote anchor 인용)"
+
+  - id: "공공기록물법"
+    full_name: "공공기록물 관리에 관한 법률"
+    domain: public_sector
+    citations:
+      - section: "§27"
+        topic: "보존기간 차등 (영구 / 30년 / 10년 / 5년 / 3년 / 1년)"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-AUDIT-001"
+            wave: R99
+            context: "보안등급별 retention 차등 — 일반 5년 / 중요 30년 / 영구 (Quote anchor 인용)"
+
+  - id: "보안업무 규정"
+    full_name: "보안업무 규정 (대통령령)"
+    domain: public_sector
+    citations:
+      - section: "§3"
+        topic: "보안등급 분류 (대외비 / 비밀 / 극비)"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-CLASSIFICATION-001"
+            wave: R99
+            context: "보안등급 enum + 결재선 자동 escalation (Quote anchor 인용)"
+      - section: "§10"
+        topic: "보안등급 처리 권한"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-CLASSIFICATION-001"
+            wave: R99
+            context: "결재권자 권한 추출 — GPKI cert OID extension에서"
+      - section: "§17"
+        topic: "긴급 보안조치"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-POSTAPPROVAL-001"
+            wave: R99
+            context: "긴급 사유 → 사후결재 발동"
+
+  - id: "GPKI 정부공개키기반구조 시행계획"
+    full_name: "GPKI 정부공개키기반구조 시행계획 (행정안전부 고시)"
+    domain: public_sector
+    citations:
+      - section: "§4"
+        topic: "GPKI 인증서 발급 절차"
+        references:
+          - spec: "specs/e-government-approval-l0.yaml"
+            item: "EGA-PKI-001"
+            wave: R99
+            context: "정부공개키기반구조 인증서 발급 + 검증 (Quote anchor 인용)"
+
+  # ── KISA / STANDARDS-CROSS-CITES (not laws but treated as regulatory anchors) ────────
+  - id: "KISA 본인확인기관 가이드라인"
+    full_name: "KISA 본인확인기관 가이드라인 (KISA 고시)"
+    domain: privacy
+    citations:
+      - section: "§4 + §6"
+        topic: "인증서 발급·검증 절차 + 개인정보 보호 의무"
+        references:
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-CERT-001 + DOC-IDENTITY-001"
+            wave: R97
+            context: "본인확인기관 cert 경로 검증 + PII 보호"
+
+  - id: "KS X 6101"
+    full_name: "KS X 6101 (한국 전자서명 표준)"
+    domain: commerce
+    citations:
+      - section: "§5 + §6"
+        topic: "XMLDSig + PAdES 표준 ratification + TSA 권장 기관"
+        references:
+          - spec: "specs/document-signing-l0.yaml"
+            item: "DOC-FORMAT-001 + DOC-TIMESTAMP-001"
+            wave: R97
+            context: "한국 전자서명 표준 — 양 format ratification + KISA TSA 권장"
+
+  - id: "KS X ISO/IEC 19792"
+    full_name: "KS X ISO/IEC 19792 (전자세금계산서 표준)"
+    domain: tax
+    citations:
+      - section: "전반"
+        topic: "전자세금계산서 XML 표준"
+        references:
+          - spec: "specs/invoicing-l0.yaml"
+            item: "INV-FORMAT-001 + standard: field"
+            wave: R95
+            context: "전자세금계산서 표준 anchor"
+
+# Aggregate stats (catalog snapshot at R100 pre-wave)
+stats:
+  total_laws: 21
+  total_section_citations: 36
+  total_spec_references: 42
+  laws_by_domain:
+    privacy: 6                # 개인정보보호법 + 정보통신망법 + 청소년보호법 + 통신비밀보호법 + 성폭력처벌법 + KISA 본인확인
+    commerce: 4               # 전자거래기본법 + 전자서명법 + 공인전자문서법 + KS X 6101
+    public_sector: 5          # 행정업무용 전자문서법 + 전자정부법 + 공공기록물법 + 보안업무 규정 + GPKI 시행계획
+    industry_specific: 4      # 전자금융거래법 + 전자금융감독규정 + 의료법 + 디지털의료기기법
+    tax: 3                    # 부가가치세법 + 국세기본법 + KS X ISO/IEC 19792
+  citations_by_wave:
+    R94: 0                    # realtime-policy — RFC-anchored only, no Korean law
+    R95: 4                    # invoicing — 부가가치세법 + 국세기본법 + 전자거래기본법 + KS X ISO/IEC 19792
+    R96: 3                    # two-factor-auth — 전자금융거래법 + 전자금융감독규정 + 개인정보보호법
+    R97: 11                   # document-signing — 개인정보보호법(3) + 전자거래기본법(2) + 전자서명법(2) + 공인전자문서법 + KISA + KS X 6101
+    R98: 6                    # chat-messaging — 정보통신망법(2) + 청소년보호법 + 통신비밀 + 성폭력 + 의료법 + 디지털의료기기법 + 개인정보보호법(§29)
+    R99: 12                   # e-government — 행정업무용(7) + 전자정부법(2) + 공공기록물법 + 보안업무규정(3) + GPKI + 전자서명법(2)
+  total_catalog_law_cites: 36
+
+# R101+ extension agenda (carry forward, do not implement R100)
+future_work:
+  - id: "L4_WORKLOAD_BACKFILL"
+    description: |
+      Survey L4 workload specs (templates/L4/auth / payment / billing /
+      api-key / approval-workflow / etc.) for additional Korean law cites
+      not surfaced in modular catalog. Estimated 5-10 additional law
+      references (e.g., 전자금융거래법 §6 in payment / 개인정보보호법
+      §15 in auth signup). Manual survey + integration into this YAML.
+
+  - id: "BUILD_LAW_INDEX_SCRIPT"
+    description: |
+      Implement practices/scripts/build_law_index.sh as a generator that
+      scans specs/*.yaml + blueprints/*.yaml + templates/L4/**/RECIPE.md
+      for 한국법 § patterns, emits this YAML automatically. Replaces
+      manual update. R101 mandatory_iter1_agenda candidate (4th mechanical
+      anchor class = AUTO-DATA artifact — pattern adaptation continues).
+
+  - id: "PER_LAW_VERSION_TRACKING"
+    description: |
+      Korean laws revise every 1-2 years; 시행령 + 시행규칙 separately.
+      Add `laws[].last_revision_date` field + per-citation version
+      annotation. R99 P6 F4 deferral (시행령 detail matrix) feeds into
+      this. R102+ agenda.
+
+  - id: "FORK_RECEIVER_COMPLIANCE_HINT"
+    description: |
+      Add per-spec.law_dependency hint surfacing from this index. When
+      a fork-receiver adopts a spec, they receive an aggregated list of
+      Korean law expertise required for compliance. Could be generated
+      from this index + spec-side metadata. R102+ agenda.
+
+# Mechanical anchor class taxonomy reference (R100 contribution)
+mechanical_anchor_classes:
+  - class: hard_guard
+    description: |
+      Mandatory shell guard registered in practices/evals/run-all-guards.sh.
+      Runs as part of verify-completion (R25 Iron Law) and may be invoked
+      from pre-commit / pre-push hooks. Fork-receivers cannot opt out
+      without breaking catalog quality contract.
+    examples:
+      - "R97 48th wave_kickoff_ledger_guard.sh"
+      - "R98 49th registry_backfill_completeness_guard.sh"
+      - "R85 spec_policy_ref_guard.sh"
+
+  - class: catalog_helper
+    description: |
+      Catalog-provided shell script, fork-receiver opt-in. NOT registered
+      in run-all-guards.sh. Fork-receivers wire to .git/hooks/pre-commit
+      (or Husky / lefthook / pre-commit framework) per their workflow.
+      Catalog provides contract; fork-receiver decides adoption per the
+      CLAUDE.md fork-receiver-decides-git-policy principle.
+    examples:
+      - "R99 practices/scripts/pre-commit-fast-guards.sh"
+
+  - class: data_artifact
+    description: |
+      Static YAML / JSON / Markdown reference file. NO execution semantics.
+      Read by humans (P6 한국 규제 lens compliance audit) or by other
+      tools (future build_law_index.sh generator). Catalog provides
+      structured data; consumers query.
+    examples:
+      - "R100 practices/korean_law_reference_index.yaml (this file)"
+
+  # Future class candidates (R101+ exploration):
+  - class: auto_data_artifact
+    description: |
+      Static DATA artifact + automated generator script. Generator scans
+      catalog state + emits artifact. Bridges DATA artifact and HELPER —
+      data is canonical (committed), generator keeps it synced. R101
+      mandatory_iter1_agenda candidate via build_law_index.sh + this
+      YAML synced.
+    examples: []  # not yet introduced
