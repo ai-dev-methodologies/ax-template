@@ -1,6 +1,6 @@
 # R99 — e-government-approval-l0 spec dogfood iter1 (10-persona, 7th wave)
 #
-# Wave subject: specs/e-government-approval-l0.yaml (R99 phase α).
+# Wave subject: specs/e-government-approval-l0.yaml (R99 phase α, commit 075afc8).
 # 7 items (FRAMEWORK / PKI / LINE / POSTAPPROVAL / CLASSIFICATION / AUDIT
 # / OBSERVABILITY) anchored to 행정업무의 운영 및 혁신에 관한 규정 + 행정
 # 업무용 전자문서법 + 전자정부법 §29/§30 + GPKI 시행계획 + 공공기록물법
@@ -9,38 +9,71 @@
 # Panel reuse: P3-P12 per persona-registry R98 next_panel_composition_for_R99.
 # 7th wave application of the 10-persona protocol.
 #
-# **Third mechanical wave guard application** (R99 pre-commit-fast-guards.sh
-# helper script, commit fb8a5de — completes 3-cycle anchor pattern):
-#   R97 48th wave_kickoff_ledger_guard       (commit-1 phase α atomic)
-#   R98 49th registry_backfill_completeness  (commit-5 backfill enforcement)
-#   R99 pre-commit-fast-guards (catalog helper) (3-gate timing model: <10s pre-commit subset)
-# Each guard's first application caught a real bug:
-#   48th: R97 phase α atomic land (931afc9) demonstrated spec-only would block
-#   49th: R97 P3 missing R97 history (bb5f4db hotfix race detection)
-#   R99 helper: 13s elapsed within 15s budget at standalone test
+# **Third mechanical wave guard application** — R97 48th + R98 49th + R99
+# pre-commit-fast-guards helper. 3-cycle anchor pattern empirically validated.
 #
-# **R99 wave initiation pattern**: same R98 pre-wave + 5-commit wave shape.
-# Pre-wave fb8a5de (R98 F10 close — pre-commit-fast-guards helper) + 5-commit
-# wave proper begins with this phase α. Collision-free novel scope replacing
-# R98 A5 결재 collision (approval-workflow-l0 R31 already covers private
-# enterprise 결재; e-government-approval extends with GPKI/NPKI + 위임 +
-# 사후결재 + 보안등급 + 30년 보존 — government-grade only).
-#
-# **7-wave cross-wave consistency expected** (7 consecutive occurrences):
-#   P4 priority order        : R93/R94/R95/R96/R97/R98/R99 F2 → real_bug × 7 (R99 closure expected)
-#   P5 RECIPE example        : R93/R94/R95/R96/R97/R98/R99 F3 → real_bug × 7 (R99 closure expected)
+# **7-wave cross-wave consistency observed** (7 consecutive occurrences):
+#   P4 priority order        : R93/R94/R95/R96/R97/R98/R99 F2 → real_bug × 7 (R99 closure 42686ce)
+#   P5 RECIPE example        : R93/R94/R95/R96/R97/R98/R99 F3 → real_bug × 7 (R99 closure 42686ce)
 #   P8 SLO/alert wiring      : R93/R94/R95/R96/R97/R98/R99 F6 → scope_deferral × 7
-#   P11 standards-symmetric  : R93/R94/R95/R96/R97/R98/R99 F8 → real_bug × 7+ (R99 closure expected;
-#                              GPKI OID extension format default / TSA archive refresh interval 등 standards lens)
-#   P12 mechanical-anchor    : R97 48th + R98 49th + R99 helper = 3 consecutive mechanical anchors
-#                              empirically validated cycle. R99 NEW finding TBD at iter1.
+#   P11 standards-symmetric  : R93/R94/R95/R96/R97/R98/R99 F8 → real_bug × 7+ (R99 closure 42686ce)
+#   P12 mechanical-anchor    : R97 + R98 + R99 = 3 consecutive mechanical anchors, each catching real
+#                              bug at first application. R99 P12 NEW finding surfaces (see F10 below).
 #
-# Distribution post-F10-retirement (R97 onward): 3+7 baseline stable.
-# R99 expected to maintain 3 real_bug + 7 scope_deferral.
-#
-# P6 한국 규제 lens direct domain: e-government-approval is heaviest Korean
-# enterprise law domain to date — 행정업무 운영 규정 + 행정업무용 전자문서법
-# + 전자정부법 + 공공기록물법 + 보안업무 규정 6 laws cross-cited.
+# P6 한국 규제 lens direct domain wave: e-government-approval cross-cites 6
+# laws (행정업무 운영 규정 + 행정업무용 전자문서법 + 전자정부법 + 공공기록물법
+# + 보안업무 규정 + 전자서명법) — heaviest Korean enterprise law cross-cite
+# in catalog history. R99 P12 NEW finding (catalog-wide law-reference index)
+# directly observable from this 7-wave aggregate.
 
 iteration: 1
-findings: []
+findings:
+  - persona: P3
+    finding: "F1 (LOW): e-government-approval-l0 covers 결재권자 desktop 시나리오 cover하나 mobile-specific (공무원 모바일 GPKI 서명 / 출장 중 결재 / mobile 보안등급 처리 권한 토큰 보존 / 모바일 push로 결재 도착 알림) 부재. 공무원 mobile-first 환경 (재택근무 / 출장 / 외부 현장) 증가 추세. A mobile-first Junior (P3 김민준, 24)이 government-vertical 모바일 결재 needs CHAT-MOBILE-analog. Expiry trigger: 첫 공공기관 fork-receiver의 mobile 결재 도입 — EGA-MOBILE-001 (모바일 GPKI deep link + iOS Secure Enclave / Android Strongbox / Push 결재 알림 + 잠금화면 보안등급 마스킹)."
+    classification: scope_deferral
+    references_artifact_path: specs/e-government-approval-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): e-government-approval-l0 7 items priority 부재 — **7th consecutive wave** (R93+R94+R95+R96+R97+R98+R99). A pragmatic Junior (P4 박지영, 33) cannot tell whether EGA-FRAMEWORK-001 효력 조건 또는 EGA-PKI-001 인증서가 foundational. Closure: priority order block (EGA-FRAMEWORK-001 효력 부여 foundation → EGA-OBSERVABILITY-001) commit 42686ce."
+    classification: real_bug
+    closure_commit_sha: 42686ce
+    closure_verification_ref: "specs/e-government-approval-l0.yaml now carries priority order block before items: with foundation rationale (un-declared 효력 5조건 → 모든 결재 법적 무효)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/e-government-approval-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): e-government-approval-l0 12 config fields (PKI types / GPKI root CA / 자동 escalate / 사후결재 window / 보안등급 권한 source / hash algorithm / retention 차등 / archive refresh / document-signing format) declare는 했으나 RECIPE.md example 없음 — **7th wave** (R93+R94+R95+R96+R97+R98+R99). A docs-Senior (P5 이상호, ~36) cannot demo public-agency recipe in <1min. Closure: public-agency-approval-kr frontmatter + 중앙행정기관 vs 지방자치단체 vertical guidance + 비밀급 분류 처리 시 GPKI cert OID 강제 (commit 42686ce)."
+    classification: real_bug
+    closure_commit_sha: 42686ce
+    closure_verification_ref: "specs/e-government-approval-l0.yaml priority block now contains complete RECIPE.md frontmatter example with 12 fields + central/local government + 비밀급 vertical-specific guidance."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/e-government-approval-l0.yaml
+  - persona: P6
+    finding: "F4 (HIGH): EGA-FRAMEWORK-001 ~ EGA-AUDIT-001 cite 6 laws (행정업무 운영 규정 + 행정업무용 전자문서법 + 전자정부법 + 공공기록물법 + 보안업무 규정 + 전자서명법)이지만 **하위 시행령 + 시행규칙** detail 부재 — 행정업무용 전자문서법 시행령 §10 (전자결재 시스템 운영 세부사항) / 공공기록물법 시행령 §63 (보존기간별 처리) / 보안업무 규정 시행규칙 §3 (보안등급 세부 분류 기준) / 전자정부법 시행령 §30의2 (전자결재 보안 인증) corner case 부재. 직접 본인 domain (P6 최영숙, 53)인데도 시행령까지 cover 불가 — 시행령은 1-2년 주기로 개정되므로 별도 추적 메커니즘 필요. Expiry trigger: 첫 공공기관 fork-receiver의 production deploy — 시행령 매핑 + 분기별 갱신 contract (EGA-FRAMEWORK-002 시행령 detail matrix)."
+    classification: scope_deferral
+    references_artifact_path: specs/e-government-approval-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): EGA-PKI-001 + EGA-AUDIT-001 명시하나 typed-SDK GPKI 인증서 OID extension parsing TypeScript binding 부재 (X.509 v3 extension OID 1.2.410.200004.* 한국 GPKI 전용 branch / 직무 정보 BER encoding / 보안등급 권한 enum 추출). A typed-SDK Senior (P7 정도윤, 28) needs EGA-BINDING-001 covering typed envelope. Expiry trigger: 첫 frontend government-vertical integration 시 — EGA-BINDING-001 (GPKI OID parser typed contract + ASN.1 BER → JSON projection)."
+    classification: scope_deferral
+    references_artifact_path: specs/e-government-approval-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): EGA-OBSERVABILITY-001 names 3 canonical metrics (approvals_submitted_total / postapproval_invalidation_rate / archive_timestamp_refresh_warning_days) but defines NO SLO threshold / alert convention — **7th wave occurrence** of metric-without-alert-wiring pattern (R93~R99). 사후결재 무효율 > 5% over 1d → PAGE (운영 규정 §13 abuse 신호) / archive_warning_days < 30 → PAGE (TSA refresh 임박) 등 specific threshold 부재. Expiry trigger: 첫 e-government-approval production deployment OR R100 OBSERVABILITY-002 표준 item 7-spec batch 적용 시."
+    classification: scope_deferral
+    references_artifact_path: specs/e-government-approval-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): No migration playbook for fork-receivers transitioning from 종이결재 또는 단순 e-결재 (R31 approval-workflow 또는 사설인증서 결재)에서 GPKI 전자결재로 — 기존 종이 결재 history archival (스캔 / OCR) vs 신규 GPKI 결재 separate track / 사설인증서 결재 historical preservation requirements / 보안등급 retroactive classification. An architect (P9 윤재호, 44) cannot present 공공기관 cutover plan. Expiry trigger: 첫 공공기관 fork-receiver의 ega_enabled=true on existing deployment — MIGRATION.md with 3-track matrix (paper-archive / private-cert-archive / new-gpki-going-forward) + 공공기록물법 §27 retroactive retention application."
+    classification: scope_deferral
+    references_artifact_path: specs/e-government-approval-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): EGA-AUDIT-001 30년 보존 의무 vs 기존 5년 retention deployed fork-receiver — mid-life retention extension matrix 미정의. 일반 (5년) → 중요 (30년) elevation 시 기존 5년 archive 자동 30년 연장 (소급) 가능한가, 아니면 elevation 시점 이후만? 공공기록물법 §27 시행령은 elevate 시점 기준으로 보존 기간 연장 명시하지만 archive timestamp refresh frequency 변경 (5년 → 30년 → 1차 refresh) corner case 부재. A backward-compat veteran (P10 신경수, 52) flags audit-policy retroactive application gap. Expiry trigger: 첫 fork-receiver의 보안등급 elevate 처리 시 — EGA-CUTOVER-001 (retention 연장 + archive token refresh re-scheduling matrix)."
+    classification: scope_deferral
+    references_artifact_path: specs/e-government-approval-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): EGA-AUDIT-001 cites 공공기록물법 §27 + 행정업무용 전자문서법 §6 but hash chain algorithm default 미pin — recipe can pass any value or none. **7th wave 동일 패턴** (R93 ISO 8601 + R94 subprotocol + R95 XML namespace + R96 WebAuthn attestation + R97 c14n+PAdES baseline + R98 message id format + R99 hash chain algorithm). Closure: ega_audit_hash_algorithm pin + 3 enum (sha-256/sha-3-256/sha-512) + per-context defaults (sha-256 broad support; sha-3-256 비밀급 post-quantum hedging; sha-512 acceptable 2x storage cost) + FIPS 180-4 + FIPS 202 + KS X ISO/IEC 10118-3 cite (commit 42686ce)."
+    classification: real_bug
+    closure_commit_sha: 42686ce
+    closure_verification_ref: "specs/e-government-approval-l0.yaml#EGA-AUDIT-001.notes now carries hash chain algorithm pin contract with 3 enum + per-context defaults + 7-wave standards lens streak acknowledgment."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/e-government-approval-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): R99 wave demonstrates **third mechanical anchor cycle** (R97 48th + R98 49th + R99 pre-commit-fast-guards helper). Cycle pattern repeating: 4-data-point evidence → mechanical anchor → first-app empirical catch → next gap discovery. R99 pre-commit-fast-guards is the first NON-guard mechanical anchor (catalog HELPER script, fork-receiver opt-in) — different mechanical class from R97/R98 (hard guards in run-all-guards.sh). **NEW R99 P12 gap surfaces**: catalog-wide Korean law reference index. R99 e-government-approval cross-cites **6 laws** (행정업무 운영 규정 + 행정업무용 전자문서법 + 전자정부법 + 공공기록물법 + 보안업무 규정 + 전자서명법) — heaviest law cross-cite in catalog history. Across all 7 modular-catalog specs (R94~R99) + 26 L4 reference workloads, NO aggregated index of which Korean laws map to which spec/item exists. P6 한국 규제 lens compliance audit would require manual greppage across 50+ files. R100 mandatory_iter1_agenda candidate: korean_law_reference_index.yaml (or generator script) cataloging all 한국법 cites + their spec/item locations. **Meta-meta-governance**: 3-cycle anchor pattern self-awareness — verify next-wave finding genuinely NEW (not ritual repetition of mechanical-anchor-add-without-retirement-review). Expiry trigger: R100 wave 시작 시 catalog law-reference aggregation 필요성 평가 OR 첫 fork-receiver의 multi-law compliance audit 요청 시."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/r99-iter1.yaml
