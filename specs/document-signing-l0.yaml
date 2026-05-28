@@ -1,0 +1,169 @@
+version: "0.1.0"
+scope: "document-signing-l0 — 전자서명 (XML Digital Signature / PDF Advanced ES) 생성·검증·장기보관 contract for fork-receivers handling legally binding electronic documents (전자거래기본법 §6, 전자서명법, 공인전자문서법 §31의2). Covers signature format selection, KISA PKI / 본인확인기관 인증서 검증, 서명자 신원 (RRN PII), RFC 3161 timestamp, CRL/OCSP revocation, 10-year retention, observability"
+stack: "Spring Boot 3.2.x + Apache Santuario (XMLDSig) + Apache PDFBox + iText 7 (PAdES) + BouncyCastle (CMS/TSP) + KISA PKI / 네이버 인증서 / 카카오 인증서 adapters + Micrometer metrics"
+standard: "W3C XML Digital Signature 1.1 (XMLDSig) + ISO 32000-2 + ETSI EN 319 142-1 (PAdES) + RFC 3161 (Time-Stamp Protocol) + RFC 5280 (X.509 PKI + CRL) + RFC 6960 (OCSP) + 전자거래기본법 §6 (전자서명 효력) + 전자서명법 (2020 개정) + 공인전자문서법 §31의2 (10년 보관 의무) + KS X 6101 (한국 전자서명 표준) + 개인정보보호법 §23의2 (본인확인 수단) + KISA 본인확인기관 가이드라인"
+domain_mode: backend_only
+introduced_at: "R97 phase α — seeded as the 5th modular-catalog candidate from R93 probability table (50% adoption — A4 document-signing). P11 황태완 standards lens active wave (W3C XMLDSig + ISO 32000 PDF/A-3 + RFC 3161 TSA + KS X 6101) + P6 최영숙 한국 규제 lens (전자서명법 + 공인전자문서법 §31의2 + 본인확인기관 RRN 처리) + P5 김지원 docs lens (RECIPE.md frontmatter example) + P4 이도현 priority lens (foundation → observability 순서). **First mechanical application** of practices/evals/wave_kickoff_ledger_guard.sh (R97 commit 6db3710, 48th hard guard) — phase α commit MUST atomically land docs/dogfood-ledger/r97-iter1.yaml; spec-only commit is BLOCKED by pre-push hook. P12 F10 4-wave cycle (R93/R94/R95/R96 PROCEDURE-as-text) is now mechanically closed."
+
+# document-signing is OPT-IN. ax-template's reference workloads do NOT
+# require legally-binding signing (R30 ASVS L1 baseline assumes simple
+# bearer-token auth + audit logging). Recipes producing legally binding
+# documents (전자세금계산서 / 전자계약서 / 의료 동의서 / 보험 청약서 /
+# 공인전자문서) MUST adopt items below before production. This spec
+# defines the policy contract; the future templates/L4/document-signing/
+# vertical will define canonical Spring + Santuario + PDFBox wiring.
+#
+# Composition note: DOC-IDENTITY-001 cross-references the existing
+# identity-verification L4 (R54 VerifiedIdentity precedent) — signer RRN
+# MUST follow R54's ElementCollection separation + masking + R67
+# AuditPiiHelper recipient hash pattern. Document signing is the highest-
+# stakes consumer of identity-verification; same RRN handling discipline
+# applies.
+
+items:
+  # ── FORMAT family ───────────────────────────────────────────────────────
+  - id: "DOC-FORMAT-001"
+    chapter: "전자서명 포맷 선언"
+    requirement: "Recipes producing legally binding electronic documents MUST declare the signature format in RECIPE.md frontmatter: `document_signing_format` ∈ {xmldsig, pades}. XMLDSig (W3C XML Digital Signature 1.1) applies to XML-anchored business documents (전자세금계산서, EDI-XML). PAdES (ETSI EN 319 142-1, PDF Advanced ES) applies to PDF-anchored documents (전자계약서, 의료 동의서, 보험 청약서). Format declaration determines the algorithm suite (RSA-SHA256 / ECDSA-P256 / Ed25519 selection), canonicalization method (XMLDSig: c14n11, PAdES: not applicable), and long-term archival profile (PAdES-B-LTA for 10-year retention). Recipes producing both formats MUST declare a primary + secondary format pair; mixed-format documents MUST NOT inherit ambiguous signature semantics."
+    test_method: "doc_FORMAT_001_recipeDeclaresValidFormat"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      RECIPE.md frontmatter validation: document_signing_format must be
+      one of {xmldsig, pades}. Mixed-format recipes MUST add
+      document_signing_secondary_format. Anchored to W3C XMLDSig 1.1
+      (https://www.w3.org/TR/xmldsig-core1/) §4.3 (canonicalization) +
+      ETSI EN 319 142-1 (https://www.etsi.org/deliver/etsi_en/319100_319199/31914201/01.01.01_60/en_31914201v010101p.pdf)
+      §5 (PAdES baseline profiles) + ISO 32000-2 §12.8 (PDF digital
+      signatures). KS X 6101 §5 ratifies both formats as 한국 표준.
+      Quote anchor (W3C XMLDSig 1.1 §4.3): "Implementations MUST
+      support the Canonical XML 1.1 algorithm and SHOULD support
+      Exclusive XML Canonicalization 1.0."
+
+  # ── CERT family ─────────────────────────────────────────────────────────
+  - id: "DOC-CERT-001"
+    chapter: "인증서 신뢰체계 (PKI)"
+    requirement: "Document signature verification MUST validate the signer's X.509 certificate against a declared trust anchor list (KISA-rooted PKI for 공인인증서 OR 본인확인기관 사설인증서 chain). Trust anchors MUST be pinned in RECIPE.md (document_signing_cert_providers) — verification rejects certificates outside the declared whitelist with HTTP 422 (signature accepted but trust chain invalid). Self-signed certificates MUST NOT validate in production recipes. Certificate path validation MUST follow RFC 5280 §6 algorithm; path length and policy constraints MUST be enforced."
+    test_method: "doc_CERT_001_verifyRejectsCertOutsideWhitelist"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: java.security.cert.CertPathValidator with
+      PKIXParameters; trust anchors loaded from KeyStore per provider.
+      Anchored to RFC 5280 (https://datatracker.ietf.org/doc/html/rfc5280)
+      §6 (certification path validation) + KISA 본인확인기관 가이드라인
+      (https://www.kisa.or.kr) §4 (인증서 발급·검증 절차) + 전자서명법
+      (2020 개정) §8 (전자서명 인증서 효력).
+      Quote anchor (RFC 5280 §6.1): "The primary goal of path
+      validation is to verify the binding between a subject distinguished
+      name or a subject alternative name and subject public key."
+
+  # ── IDENTITY family ─────────────────────────────────────────────────────
+  - id: "DOC-IDENTITY-001"
+    chapter: "서명자 신원 (RRN PII)"
+    requirement: "Document signatures MUST be associated with the signer's identity via the existing identity-verification L4 (R54 VerifiedIdentity precedent). RRN MUST be stored using the R54 ElementCollection separation pattern — raw RRN MUST NOT appear on the primary entity column, MUST NOT appear in DTO/JSON transport, MUST NOT appear in signed artifact metadata, MUST NOT appear in dogfood ledgers, MUST NOT appear in observability metric labels (low-cardinality only), MUST NOT appear in OAuth callback responses, MUST NOT appear in WebSocket frames, MUST NOT appear in log messages. CRL/OCSP lookups MUST be keyed by cert serial number, NOT by RRN. Audit logging follows R67 AuditPiiHelper recipient-hash pattern. Signer identity in DTO/API MUST be masked (prefix-6-mask: YYMMDD-N****** form). Backend-only; this item has no frontend surface."
+    test_method: "doc_IDENTITY_001_rrnNotInPrimaryColumnNorTransport"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      pii_pattern (R97 phase α A1 P1 — Architect HIGH + Critic P1):
+        storage: ElementCollection 분리 (raw RRN never in primary entity columns; mirror R54 VerifiedIdentity.metadata ElementCollection shape)
+        transport: 마스킹 form (prefix-6-mask) 만 DTO/JSON 노출; raw RRN never serialized
+        audit: AuditLogService.record + recipient_hash (R67 AuditPiiHelper sha256 of RRN, never raw)
+        forbidden_sinks:
+          - signed artifact metadata (XMLDSig <ds:KeyInfo>, PAdES /SignerInfo)
+          - ledgers (docs/dogfood-ledger/*.yaml)
+          - observability metric labels (low-cardinality only — per-RRN labels banned)
+          - log messages (slf4j {} placeholders never receive raw RRN)
+          - OAuth callback responses (provider→service callbacks return cert serial, not RRN)
+          - WebSocket frames (real-time signing UI receives masked form only)
+        negative_checks:
+          - raw RRN absent from frontend bundle (compile-time grep + runtime CSP)
+          - raw RRN absent from r97-iter1.yaml ledger + all docs/dogfood-ledger/*.yaml
+          - raw RRN absent from metric labels (low-cardinality only — verified by Micrometer
+            MeterFilter denylist)
+          - CRL/OCSP lookup keyed by cert serial number (RFC 5280 §5.3 / RFC 6960 §2.1),
+            NOT by RRN
+      Anchored to R54 precedent (specs/identity-verification-l0.yaml
+      domain_mode: backend_only + ElementCollection separation) +
+      개인정보보호법 §23의2 (본인확인 수단 — RRN처리 제한) +
+      개인정보보호법 §24 (고유식별정보 처리 제한) + KISA 본인확인기관
+      가이드라인 §6 (개인정보 보호 의무).
+      Quote anchor (개인정보보호법 §24①): "개인정보처리자는 다음 각 호의
+      경우를 제외하고는 법령에 따라 개인을 고유하게 구별하기 위하여 부여된
+      식별정보로서 대통령령으로 정하는 정보(이하 "고유식별정보"라 한다)를
+      처리할 수 없다."
+
+  # ── TIMESTAMP family ────────────────────────────────────────────────────
+  - id: "DOC-TIMESTAMP-001"
+    chapter: "시점확인 (Time-Stamp)"
+    requirement: "Signed documents intended for long-term archival (10-year retention per 공인전자문서법 §31의2) MUST carry an RFC 3161 timestamp from a declared TSA (Time-Stamp Authority). TSA URL MUST be pinned in RECIPE.md (document_signing_tsa_url). XMLDSig signatures attach the timestamp via <xades:SignatureTimeStamp>; PAdES signatures attach via the /DocTimeStamp dictionary (PAdES Baseline B-T profile minimum). Timestamp tokens MUST be verified against the TSA's certificate at signing time and re-verified at retrieval time. Signatures without a timestamp MUST NOT qualify for long-term legal effect (전자서명법 §3 효력 inheritance from timestamp authority recognition)."
+    test_method: "doc_TIMESTAMP_001_tsaTokenAttachedAndVerified"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: BouncyCastle TSP client (TimeStampRequestGenerator
+      / TimeStampResponse) for KISA TSA endpoint
+      (http://timestamp.kisa.or.kr — KS X 6101 §6 권장 기관).
+      Anchored to RFC 3161 (https://datatracker.ietf.org/doc/html/rfc3161)
+      §2.4 (timestamp token format) + ETSI EN 319 122-1 (XAdES) §G.2
+      (signature time-stamp) + ETSI EN 319 142-1 (PAdES) §6.3
+      (document time-stamp) + KS X 6101 §6 (시점확인 기관 권장 목록).
+      Quote anchor (RFC 3161 §2.4.2): "If the timestamp request is
+      valid, the TSA shall generate a TimeStampResp containing a
+      TimeStampToken (TST) which is a signed data structure."
+
+  # ── VERIFY family ───────────────────────────────────────────────────────
+  - id: "DOC-VERIFY-001"
+    chapter: "검증 (Revocation Check)"
+    requirement: "Signature verification MUST check the signer certificate's revocation status using BOTH the CRL (RFC 5280 §5) AND OCSP (RFC 6960) paths declared in the certificate's AIA / CRLDistributionPoints extensions. Revocation lookups MUST be keyed by cert serial number, NEVER by RRN or other PII (mirrors DOC-IDENTITY-001 forbidden_sinks). At signing time the certificate MUST NOT be revoked; at verification time signatures created before revocation but verified after MUST be accepted IF a timestamp token (DOC-TIMESTAMP-001) precedes the revocation timestamp. Soft-fail (network unreachable) MUST log a structured warning AND require explicit recipe opt-in (`document_signing_revocation_soft_fail_allowed: true`); fail-closed by default."
+    test_method: "doc_VERIFY_001_revokedCertRejectedAfterTimestamp"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: java.security.cert.PKIXRevocationChecker with
+      Option.PREFER_CRLS + Option.SOFT_FAIL disabled by default.
+      Anchored to RFC 5280 (https://datatracker.ietf.org/doc/html/rfc5280)
+      §5 (CRL extensions) + RFC 6960
+      (https://datatracker.ietf.org/doc/html/rfc6960) §2 (OCSP request
+      and response semantics) + RFC 5816 (ESSCertIDv2).
+      Quote anchor (RFC 6960 §2.1): "OCSP enables applications to
+      determine the (revocation) state of an identified certificate."
+
+  # ── RETENTION family ────────────────────────────────────────────────────
+  - id: "DOC-RETENTION-001"
+    chapter: "장기보관 (10년 의무)"
+    requirement: "Signed documents qualifying as 공인전자문서 MUST be retained for 10 years per 공인전자문서법 §31의2. Storage profile MUST use PAdES-B-LTA (Baseline Long-Term with Archive timestamps; PAdES) OR XAdES-A (Archive form; XMLDSig) to preserve verifiability across CA/TSA certificate expiration. Archive timestamps MUST be refreshed before the previous timestamp's CA expires (typically every 5 years). Storage MUST be tamper-evident (append-only object store + write-once retention lock OR cryptographic Merkle log). Deletion MUST require explicit legal-hold release + audit trail."
+    test_method: "doc_RETENTION_001_archiveTimestampRefreshedBeforeCaExpiry"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: Scheduled refresh job re-signs the archive
+      timestamp 90 days before the previous TSA cert expiry; emits
+      `document_signing_archive_refresh_total` metric.
+      Anchored to 공인전자문서법 §31의2 (10년 보관 의무) + ETSI EN
+      319 122-1 (XAdES) §G.3 (XAdES-A long-term archive) + ETSI EN
+      319 142-1 (PAdES) §6.4 (PAdES-B-LTA archival profile) +
+      전자거래기본법 §16 (전자문서 보관).
+      Quote anchor (공인전자문서법 §31의2): "공인전자문서센터는
+      대통령령으로 정하는 기간 동안 전자문서를 보관하여야 한다."
+      Anchor URL: https://www.law.go.kr/법령/전자문서및전자거래기본법
+
+  # ── OBSERVABILITY family ────────────────────────────────────────────────
+  - id: "DOC-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Document-signing implementations MUST expose exactly three canonical Micrometer metrics with bounded cardinality labels: (1) `document_signing_sign_total{format,tenant}` — signatures created (counter); (2) `document_signing_verify_failure_rate{format,reason,tenant}` — verification failures by failure reason (counter; reason ∈ {invalid_signature, untrusted_cert, revoked_cert, expired_cert, missing_timestamp, soft_fail_disallowed}); (3) `document_signing_cert_expiry_warning_days{provider,tenant}` — days until next signer cert expiry (gauge). Labels MUST exclude RRN, signer name, document content, or any high-cardinality / PII value (mirrors DOC-IDENTITY-001 forbidden_sinks). SLO/alert wiring is fork-receiver concern (scope_deferral; matches R93/R94/R95/R96 F6 pattern)."
+    test_method: "doc_OBSERVABILITY_001_threeMetricsRegisteredWithBoundedLabels"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: Micrometer MeterRegistry with @ConditionalOnClass
+      Counter.builder() / Gauge.builder() invocations + MeterFilter
+      denylist for RRN / signer_name / document_id labels.
+      Anchored to OpenTelemetry Semantic Conventions
+      (https://opentelemetry.io/docs/specs/semconv/) §metric naming
+      + R97 wave catalog "canonical 3 metric" pattern (R94 realtime /
+      R95 invoicing / R96 two-factor-auth all settled on 3-metric
+      bounded-label discipline; document-signing inherits).
+      Quote anchor (OpenTelemetry semconv stability): "Label
+      cardinality SHOULD be bounded to prevent metric explosion."

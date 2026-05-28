@@ -1,0 +1,34 @@
+# R97 — document-signing-l0 spec dogfood iter1 (10-persona, 5th wave)
+#
+# Wave subject: specs/document-signing-l0.yaml (R97 phase α).
+# 7 items (FORMAT / CERT / IDENTITY / TIMESTAMP / VERIFY / RETENTION /
+# OBSERVABILITY) anchored to W3C XMLDSig 1.1 + ETSI EN 319 142-1 PAdES +
+# RFC 3161 TSA + RFC 5280 CRL + RFC 6960 OCSP + 전자서명법 + 공인전자문서법
+# §31의2 + KS X 6101 한국 전자서명 표준 + 개인정보보호법 §24 (고유식별정보).
+#
+# Panel reuse: P3-P12 per persona-registry R96 next_panel_composition_for_R97.
+# 5th wave application of the 10-persona protocol.
+#
+# **First mechanical wave_kickoff_ledger_guard application** (R97 commit
+# 6db3710, 48th hard guard). Spec-only commit is BLOCKED by pre-push hook;
+# phase α requires this placeholder ledger to land atomically with the
+# spec. P12 F10 4-wave cycle (R93/R94/R95/R96 PROCEDURE-as-text) is now
+# mechanically closed — this is the first commit shape that empirically
+# proves the guard is active in steady state.
+#
+# **5-wave cross-wave consistency expected** (5 consecutive occurrences):
+#   P4 priority order      : R93/R94/R95/R96 F2 → real_bug × 4 (R97 F2 closure expected)
+#   P5 RECIPE example      : R93/R94/R95/R96 F3 → real_bug × 4 (R97 F3 closure expected)
+#   P8 SLO/alert wiring    : R93/R94/R95/R96 F6 → scope_deferral × 4 (R97 F6 expected)
+#   P11 standards-symmetric: R93 F9/F11 + R94 F8 + R95 F8 + R96 F8 → real_bug × 5 (R97 F8 expected)
+#   P12 mechanical guard   : R93/R94/R95/R96 F10 → R97에서 mechanical guard 첫 적용 → F10 절대 재발 안 됨
+#
+# Lens overlap status (R96 review_summary): permanently retired (P4/P5
+# overlap on priority+RECIPE is by-design 5-wave cross-evidence, not
+# noise). Saturation review: P12 한상미 4-wave methodology_gap streak
+# now mechanically closed via guard introduction — P12 R97 lens
+# expected to surface NEW finding outside F10 cycle (or scope_deferral
+# on a new meta-governance gap).
+
+iteration: 1
+findings: []
