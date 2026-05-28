@@ -246,9 +246,16 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "two-factor-auth-l0이 desktop/server 2FA flow는 cover하나 mobile-specific (authenticator app deep link / WebAuthn platform credential biometrics / SMS-OTP autofill / Push approval) 시나리오 부재. Trigger: 첫 mobile fork-receiver의 MFA enrollment 시."
+      - wave: R97
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "document-signing-l0이 desktop/server XMLDSig + PAdES generation/verification cover하나 mobile-specific (KakaoTalk 메시지 서명 deep link / iOS Keychain · Android KeyStore / 카메라 OCR 자필 + biometric witness / 모바일 WebAuthn platform credential for PAdES) 시나리오 부재. Trigger: 첫 mobile fork-receiver의 document signing — DOC-MOBILE-001 필요."
     verdict: active
-    verdict_reason: "**4-wave 일관 mobile lens** — R93 multi-tenant + R94 realtime + R95 invoicing + R96 2FA 모두 모바일 surface 부재 deferral 산출. unique mobile lens 9 persona cover 불가, 4-wave stable signature."
-    next_review_at: "R97 wave OR first mobile fork-receiver (multi-tenant / realtime / invoicing / 2FA 어느 영역이든)"
+    verdict_reason: "**5-wave 일관 mobile lens** — R93 multi-tenant + R94 realtime + R95 invoicing + R96 2FA + R97 document-signing 모두 모바일 surface 부재 deferral 산출. unique mobile lens 9 persona cover 불가, 5-wave stable signature."
+    next_review_at: "R98 wave OR first mobile fork-receiver (multi-tenant / realtime / invoicing / 2FA / document-signing 어느 영역이든)"
 
   - id: P4
     name: 박지영
