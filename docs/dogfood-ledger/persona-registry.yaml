@@ -260,9 +260,16 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "chat-messaging-l0이 WebSocket + HTTP REST 표면 cover하나 mobile-OS push integration (APNs / FCM badge counts / 백그라운드 silent push / 잠금화면 미리보기 privacy hashing) 부재. Critical for KakaoTalk-grade UX. Trigger: 첫 mobile fork-receiver의 chat 도입 — CHAT-MOBILE-001 (APNs/FCM topic + badge sync via silent push + 잠금화면 privacy mode)."
+      - wave: R99
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "e-government-approval-l0이 결재권자 desktop scenarios cover하나 공무원 mobile-specific (모바일 GPKI 서명 / 출장 결재 / 모바일 보안등급 권한 토큰 / Push 결재 알림 + 잠금화면 보안등급 마스킹) 부재. 공무원 mobile-first 환경 (재택 / 출장 / 외부 현장) 증가. Trigger: 첫 공공기관 fork-receiver의 모바일 결재 도입 — EGA-MOBILE-001 (모바일 GPKI deep link + iOS Secure Enclave / Android Strongbox + 잠금화면 보안등급 mask)."
     verdict: active
-    verdict_reason: "**6-wave 일관 mobile lens** — R93 multi-tenant + R94 realtime + R95 invoicing + R96 2FA + R97 document-signing + R98 chat-messaging 모두 모바일 surface 부재 deferral 산출. unique mobile lens 9 persona cover 불가, 6-wave stable signature. R98는 P3 lens 직접 domain (chat is mobile-first by default)였으나 spec 자체는 protocol-layer만 cover."
-    next_review_at: "R99 wave OR first mobile fork-receiver (multi-tenant / realtime / invoicing / 2FA / document-signing / chat-messaging 어느 영역이든)"
+    verdict_reason: "**7-wave 일관 mobile lens** — R93~R99 모두 모바일 surface 부재 deferral 산출. unique mobile lens 9 persona cover 불가, 7-wave stable signature. R98 chat + R99 e-government 모두 lens 직접 domain (mobile-first 환경)였으나 spec 자체는 protocol/policy-layer만 cover."
+    next_review_at: "R100 wave OR first mobile fork-receiver (multi-tenant / realtime / invoicing / 2FA / document-signing / chat-messaging / e-government-approval 어느 영역이든)"
 
   - id: P4
     name: 박지영
@@ -321,9 +328,16 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "chat-messaging-l0 7 items priority 부재 — **6th consecutive wave** (R93+R94+R95+R96+R97+R98). Closure: priority order block (CHAT-MESSAGE-001 envelope foundation → CHAT-OBSERVABILITY-001) commit a1d8eae."
+      - wave: R99
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "e-government-approval-l0 7 items priority 부재 — **7th consecutive wave** (R93~R99). Closure: priority order block (EGA-FRAMEWORK-001 효력 부여 foundation → EGA-OBSERVABILITY-001) commit 42686ce."
     verdict: active
-    verdict_reason: "**7 real_bug closed across 6 waves**. 'priority 부재' 패턴 6-wave 연속 — learnability lens가 신규 spec 표면화 시 반드시 발화 재재확정. P5와 differentiation 6-wave 연속 유지 → **lens overlap 영구-not-needed retire 재재확정** (R95 결정, R96/R97/R98 differentiation 재확인)."
-    next_review_at: "유지 (6-wave validated)"
+    verdict_reason: "**8 real_bug closed across 7 waves**. 'priority 부재' 패턴 7-wave 연속 — learnability lens가 신규 spec 표면화 시 반드시 발화 재재재확정. P5와 differentiation 7-wave 연속 → **lens overlap 영구-not-needed retire 재재재확정** (R95 결정 + R96/R97/R98/R99 재확인)."
+    next_review_at: "유지 (7-wave validated)"
 
   - id: P5
     name: 이상호
@@ -382,9 +396,16 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "chat-messaging-l0 11 config fields (message id format / retention / subprotocol / moderation SLA / 청소년보호 filter / E2E encryption / broker / presence + typing timing) declare는 했으나 RECIPE.md example 없음 — **6th wave** (R93+R94+R95+R96+R97+R98). Closure: saas-customer-support-chat frontmatter + 의료/금융/법률 E2E flip 가이드 + 청소년 vertical min_age filter 의무 pinned per 청소년보호법 §16의2 (commit a1d8eae)."
+      - wave: R99
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "e-government-approval-l0 12 config fields (PKI types / GPKI root CA / 자동 escalate / 사후결재 window / 보안등급 권한 source / hash algorithm / retention 차등 / archive refresh / document-signing format) declare는 했으나 RECIPE.md example 없음 — **7th wave** (R93~R99). Closure: public-agency-approval-kr frontmatter + 중앙행정기관 vs 지방자치단체 vertical guidance + 비밀급 분류 GPKI OID 강제 pinned (commit 42686ce)."
     verdict: active
-    verdict_reason: "**7 real_bug closed across 6 waves**. sequential lens 6-wave 일관 — 신규 spec config declaration 표면화 시 'RECIPE example 부재' 동일 패턴 산출. P4와 differentiation 6-wave 연속 → **lens overlap 영구-not-needed retire 재재확정** (R95 결정 + R96/R97/R98 재확인)."
-    next_review_at: "유지 (6-wave validated)"
+    verdict_reason: "**8 real_bug closed across 7 waves**. sequential lens 7-wave 일관 — 신규 spec config declaration 표면화 시 'RECIPE example 부재' 동일 패턴 산출. P4와 differentiation 7-wave 연속 → **lens overlap 영구-not-needed retire 재재재확정** (R95 결정 + R96/R97/R98/R99 재확인)."
+    next_review_at: "유지 (7-wave validated)"
 
   - id: P6
     name: 최영숙
@@ -436,9 +457,16 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "CHAT-MODERATION-001이 정보통신망법 §44의2/§44의7 + 청소년보호법 §16의2 cite하나 2024 deepfake 처벌법 (성폭력처벌법 §14의3 허위영상물 유포) + 통신비밀보호법 §3 (chat 메시지 통신비밀 분류) corner case 부재. 의료 vertical 추가: 의료법 §21 환자정보 + 디지털의료기기법 §22 (telemedicine chat). Trigger: 첫 의료 / 미디어 / 청소년 vertical fork-receiver wires chat — CHAT-MODERATION-002 (deepfake takedown + 통신비밀 분류 + vertical-specific 의무 매핑)."
+      - wave: R99
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "EGA-FRAMEWORK-001 ~ EGA-AUDIT-001 cite 6 laws (행정업무 운영 규정 + 행정업무용 전자문서법 + 전자정부법 + 공공기록물법 + 보안업무 규정 + 전자서명법)이지만 시행령 + 시행규칙 detail 부재 — 행정업무용 전자문서법 시행령 §10 / 공공기록물법 시행령 §63 / 보안업무 규정 시행규칙 §3 / 전자정부법 시행령 §30의2 corner case 부재. 시행령은 1-2년 주기로 개정되므로 별도 추적 메커니즘 필요. Trigger: 첫 공공기관 fork-receiver의 production deploy — 시행령 매핑 + 분기별 갱신 contract (EGA-FRAMEWORK-002 시행령 detail matrix)."
     verdict: active
-    verdict_reason: "**6-wave 한국 규제 lens 일관성** — R93 multi-tenant + R94 realtime + R95 invoicing + R96 2FA + R97 document-signing + R98 chat-messaging 모두 한국 규제 매핑 deferral 산출. R97 RRN PII / R98 통신비밀 + 청소년보호 본인 직접 domain. 글로벌 catalog 한국 enterprise 규제 vector unique provider — 9 persona 누구도 cover 불가, 6-wave stable signature."
-    next_review_at: "R99 wave OR first PIPA 마이데이터 §35의2 / 전자금융감독규정 §13의5 / KISA ISMS audit / 통신비밀보호법 §3 chat 분류 / 의료법 §21 telemedicine / 청소년보호법 시행령 (어느 trigger든)"
+    verdict_reason: "**7-wave 한국 규제 lens 일관성** — R93~R99 모두 한국 규제 매핑 deferral 산출. R97 RRN PII / R98 통신비밀 + 청소년보호 / R99 6 laws 행정업무 직접 domain — heaviest law cross-cite in catalog history. 글로벌 catalog 한국 enterprise 규제 vector unique provider — 9 persona 누구도 cover 불가, 7-wave stable signature."
+    next_review_at: "R100 wave OR first PIPA 마이데이터 §35의2 / 행정업무용 전자문서법 시행령 §10 / 공공기록물법 시행령 §63 / 보안업무 규정 시행규칙 §3 / 전자정부법 시행령 §30의2 / 의료법 §21 / 청소년보호법 시행령 (어느 trigger든)"
 
   - id: P7
     name: 정도윤
@@ -504,9 +532,16 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "CHAT-MESSAGE-001 + CHAT-DELIVERY-001 명시하나 typed-SDK XMPP/Matrix JSON envelope TypeScript binding 부재 (RFC 6120 stanza ↔ JSON 변환 / Matrix m.room.message event JSON shape / XEP-0184 <received/> ACK typed handler / WebSocket STOMP frame headers typed). Trigger: 첫 frontend chat client typed-binding 시 CHAT-BINDING-001 (RFC 6120 §8 JSON projection draft + Matrix JS SDK reference types)."
+      - wave: R99
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "EGA-PKI-001 + EGA-AUDIT-001 명시하나 typed-SDK GPKI 인증서 OID extension parsing TypeScript binding 부재 (X.509 v3 + 한국 GPKI 전용 OID branch 1.2.410.200004.* / 직무 정보 BER encoding / 보안등급 권한 enum 추출). Trigger: 첫 frontend government-vertical integration — EGA-BINDING-001 (GPKI OID parser typed contract + ASN.1 BER → JSON projection)."
     verdict: active
-    verdict_reason: "**8 deferrals across 6 waves** (R93 iter1/iter3/iter4 + R94 iter1 + R95 iter1 + R96 iter1 + R97 iter1 + R98 iter1). typed-contract lens 6-wave 일관 — 매 spec landing 시 'typed boundary undefined' 동일 패턴 산출. F18 (R93 registry schema) B1에서 closure; 나머지 trigger 대기."
-    next_review_at: "유지 (6-wave stable signature)"
+    verdict_reason: "**9 deferrals across 7 waves** (R93~R99). typed-contract lens 7-wave 일관 — 매 spec landing 시 'typed boundary undefined' 동일 패턴 산출. F18 (R93 registry schema) B1에서 closure; 나머지 trigger 대기."
+    next_review_at: "유지 (7-wave stable signature)"
 
   - id: P8
     name: 강하늘
@@ -558,9 +593,16 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "CHAT-OBSERVABILITY-001이 3 canonical metrics (messages_sent_total / delivery_failure_rate / active_room_count) 명시하나 SLO threshold / alert convention 부재 — **6th wave** (R93+R94+R95+R96+R97+R98 모두 동일 패턴). delivery_failure_rate.broker_unavailable > 5% over 1min → PAGE / active_room_count drop > 50% in 5min → PAGE 등 specific threshold 부재. Trigger: 첫 chat-messaging production deployment OR R99 OBSERVABILITY-002 표준 item 6-spec batch 적용 시."
+      - wave: R99
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "EGA-OBSERVABILITY-001 3 canonical metrics (approvals_submitted_total / postapproval_invalidation_rate / archive_timestamp_refresh_warning_days) 명시하나 SLO threshold / alert convention 부재 — **7th wave** (R93~R99 모두 동일 패턴). postapproval_invalidation_rate > 5% over 1d → PAGE / archive_warning_days < 30 → PAGE 등 specific threshold 부재. Trigger: 첫 e-government-approval production deployment OR R100 OBSERVABILITY-002 표준 item 7-spec batch 적용 시."
     verdict: active
-    verdict_reason: "**6-wave stabilized pattern confirmed** — 6 deferrals (R93+R94+R95+R96+R97+R98) 모두 동일 'metric/log 정의됐으나 alert wiring 미정의' shape. observability lens cross-wave 6-consecutive 입증 — OBSERVABILITY-002 표준 item catalog 차원 정착 evidence-overwhelming 도달 (R99 mandatory_iter1_agenda 후보 #2)."
-    next_review_at: "유지 (6-wave validated); R99 catalog work: OBSERVABILITY-002 표준 item을 affected 6 spec (multi-tenant + realtime + invoicing + 2FA + document-signing + chat-messaging)에 일괄 추가"
+    verdict_reason: "**7-wave stabilized pattern confirmed** — 7 deferrals (R93~R99) 모두 동일 'metric/log 정의됐으나 alert wiring 미정의' shape. observability lens cross-wave 7-consecutive 입증 — OBSERVABILITY-002 표준 item catalog 차원 정착 evidence-overwhelming continued (R100 mandatory_iter1_agenda 후보 #2)."
+    next_review_at: "유지 (7-wave validated); R100 catalog work: OBSERVABILITY-002 표준 item을 affected 7 spec (multi-tenant + realtime + invoicing + 2FA + document-signing + chat-messaging + e-government-approval)에 일괄 추가"
 
   - id: P9
     name: 윤재호
@@ -619,9 +661,16 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "polling-based notification 시스템에서 realtime chat 전환 시 migration playbook 부재 — notification queue backfill into CHAT-HISTORY / 하이브리드 모드 cutover 기간 / version-gated rollout (older mobile apps without STOMP) 미정의. Trigger: 첫 fork-receiver의 chat_enabled=false → true on existing user base with notification history — MIGRATION.md with polling-to-realtime upgrade matrix."
+      - wave: R99
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "종이결재 또는 단순 e-결재 (R31 approval-workflow / 사설인증서)에서 GPKI 전자결재로 전환 migration playbook 부재 — paper archive (스캔/OCR) vs private-cert archive vs new-gpki separate track / 보안등급 retroactive classification / 공공기록물법 §27 retroactive retention application. Trigger: 첫 공공기관 fork-receiver의 ega_enabled=true on existing deployment — MIGRATION.md with 3-track matrix."
     verdict: active
-    verdict_reason: "**6-wave migration-playbook lens** — R93 single→multi DB + R94 polling→realtime + R95 paper→e-invoice + R96 single-factor→MFA + R97 unsigned→signed + R98 polling-notification→realtime-chat 모두 'migration playbook 부재' high-signal deferral. architecture lens 6-wave stable. P10과 lens 비중첩 cross-wave maintained."
-    next_review_at: "유지; lens differentiation with P10 6-wave 연속 holds"
+    verdict_reason: "**7-wave migration-playbook lens** — R93~R99 (single→multi DB / polling→realtime / paper→e-invoice / single-factor→MFA / unsigned→signed / polling-notification→realtime-chat / paper-cert→GPKI) 모두 'migration playbook 부재' high-signal deferral. architecture lens 7-wave stable. P10과 lens 비중첩 cross-wave maintained."
+    next_review_at: "유지; lens differentiation with P10 7-wave 연속 holds"
 
   - id: P10
     name: 신경수
@@ -687,8 +736,15 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "CHAT-DELIVERY-001 WebSocket + outbox 의무 vs broker (RabbitMQ/Kafka) 부재 상황 degraded mode 미정의 — 의료/금융 vertical는 fail-closed (no message ambiguity) vs 일반 SaaS는 long-poll fallback (UX 보존) 선택 필요. Trigger: 첫 fork-receiver의 chat broker 의존 production deploy — CHAT-DEGRADED-001 (broker outage 처리 matrix)."
+      - wave: R99
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "EGA-AUDIT-001 30년 보존 의무 vs 기존 5년 retention deployed fork-receiver — mid-life retention extension matrix 미정의. 일반(5년) → 중요(30년) elevation 시 기존 5년 archive 자동 30년 소급 연장 가능한가, elevation 시점 이후만? archive timestamp refresh frequency 변경 (5년 → 30년 → 1차 refresh) corner case 부재. Trigger: 첫 fork-receiver의 보안등급 elevate 처리 — EGA-CUTOVER-001 (retention 연장 + archive token refresh re-scheduling matrix)."
     verdict: active
-    verdict_reason: "**6-wave backward-compat lens** — 1 real_bug + 7 deferral (R93/R94/R95/R96/R97/R98 deployed-state vigilance). 매 spec land 때마다 'deployed state 영향' 확인하는 메타-vigilance 6-wave consistency. P9와 lens 비중첩 6-wave maintained."
+    verdict_reason: "**7-wave backward-compat lens** — 1 real_bug + 8 deferral (R93~R99 deployed-state vigilance). 매 spec land 때마다 'deployed state 영향' 확인하는 메타-vigilance 7-wave consistency. P9와 lens 비중첩 7-wave maintained."
     next_review_at: "유지"
 
   - id: P11
@@ -755,9 +811,16 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "CHAT-MESSAGE-001이 XMPP RFC 6120 + Matrix.org + RFC 8259 cite하나 message id format default 미pin — vendor-dependent (UUID v4 / ULID / Snowflake / nanoid). **6th wave 동일 패턴** (R93 ISO 8601 Z + R94 subprotocol + R95 XML namespace + R96 WebAuthn attestation + R97 c14n + PAdES baseline + R98 message id format). Closure: chat_message_id_format pin + 3 enum (uuid-v4/ulid/snowflake) + per-context defaults (ulid for cursor-sort compatibility; snowflake for high-scale; uuid-v4 acceptable with separate sort field) + RFC 4122 + ULID spec cite (commit a1d8eae)."
+      - wave: R99
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "EGA-AUDIT-001 cites 공공기록물법 §27 + 행정업무용 전자문서법 §6 but hash chain algorithm default 미pin — vendor-dependent (SHA-256 / SHA-3-256 / SHA-512 / BLAKE2 등). **7th wave 동일 패턴** (R93~R99). Closure: ega_audit_hash_algorithm pin + 3 enum (sha-256/sha-3-256/sha-512) + per-context defaults (sha-256 broad support; sha-3-256 비밀급 post-quantum hedging; sha-512 acceptable 2x storage) + FIPS 180-4 + FIPS 202 + KS X ISO/IEC 10118-3 cite (commit 42686ce)."
     verdict: active
-    verdict_reason: "**6-wave most productive persona** — R93 F9/F11 (2) + R94 F8 + R95 F8 + R96 F8 + R97 F8 + R98 F8 = **7 real_bug closed across 6 waves**. 'standards spec cite했으나 symmetric pin 누락' 패턴 6-wave 일관 — principal-eng symmetric coverage lens의 cross-wave 정밀 검증 재재확인. catalog가 standards anchor 사용 때마다 P11이 reliably 'pin missing' catch — most reliable single-signal lens 재재확정."
-    next_review_at: "유지 (6-wave validated high-signal anchor); R99+ 동일 lens 작동 예상"
+    verdict_reason: "**7-wave most productive persona** — R93 F9/F11 (2) + R94/R95/R96/R97/R98/R99 F8 = **8 real_bug closed across 7 waves**. 'standards spec cite했으나 symmetric pin 누락' 패턴 7-wave 일관 — principal-eng symmetric coverage lens cross-wave 정밀 검증 재재재확인. catalog가 standards anchor 사용 때마다 P11이 reliably 'pin missing' catch — most reliable single-signal lens 재재재확정."
+    next_review_at: "유지 (7-wave validated high-signal anchor); R100+ 동일 lens 작동 예상"
 
   - id: P12
     name: 한상미
@@ -830,9 +893,16 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "**R97 NEW finding (commit-5 omission) mechanically CLOSED at R98** — registry_backfill_completeness_guard.sh (c1ea7f1, 49th hard guard) deployed pre-wave + empirically caught R97 P3 missing history entry (bb5f4db hotfix) at FIRST APPLICATION. Same R97 wave_kickoff_ledger_guard first-app validation pattern (P12 F10 4-data-point cycle close → mechanical anchor → empirical catch). **R98 NEW gap surfaces**: spec_policy_ref_guard (existing 47th, R85) caught chat-messaging-l0 7 policy_ref orphans at verify-completion stage POST-commit. 3-gate timing model (pre-commit / pre-push / verify-completion) — pre-commit hook doesn't run full catalog-meta guard set (speed budget). R99 mandatory_iter1_agenda candidate: define pre-commit guard subset (speed-budgeted subset of 49 guards). 0 wave evidence yet — R99 evaluation."
+      - wave: R99
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "**R98 NEW finding (pre-commit guard timing gap) mechanically CLOSED at R99** — pre-commit-fast-guards.sh helper (fb8a5de, catalog HELPER, NOT a hard guard) deployed pre-wave + empirically validated 13s elapsed in 15s budget at first application. **First NON-guard mechanical anchor** (different class from R97 48th + R98 49th hard guards) — catalog provides, fork-receiver opt-in for .git/hooks/pre-commit. Pattern adaptation: catalog HELPER vs catalog HARD GUARD. **R99 NEW gap surfaces**: catalog-wide Korean law reference index. R99 e-government-approval cross-cites 6 laws (heaviest catalog history). Across 7 modular-catalog specs (R94 4 / R95 5 / R96 5 / R97 7 / R98 4 / R99 6 = 31 law cites) + 26 L4 workloads (additional cites unbounded), NO aggregated 한국법 ↔ spec/item index exists. P6 한국 규제 lens compliance audit requires manual greppage across 50+ files. R100 mandatory_iter1_agenda candidate: korean_law_reference_index.yaml (or generator script). **Meta-meta-governance observation**: 3-cycle anchor pattern repeating — R99 introduces NON-guard class as pattern adaptation, verify R100 finding genuinely NEW (DATA artifact OR script, NOT another hard guard ritual). Expiry trigger: R100 wave 시작 시 catalog law-reference aggregation 필요성 평가 OR 첫 fork-receiver의 multi-law compliance audit 요청."
     verdict: active
-    verdict_reason: "**6-wave governance lens — 2-cycle close-and-discover signature validated**. R97 F10 historical PROCEDURE-as-text cycle (4 data points) → mechanical anchor → empirical retirement. R97 NEW F10 (commit-5 omission) → R98 49th guard mechanical close + first-app catch. R98 NEW F10 (pre-commit guard timing) → R99 evaluation. Total: 4 historical real_bug + 2 NEW scope_deferral + 3 methodology_gap = 9 findings across 6 waves. **most-revealing lens for catalog meta-evolution** RE-validated: cyclical close-and-discover signature 2 consecutive cycles (R97 → R98 mechanical anchors each catching first-app bug)."
-    next_review_at: "R99 wave 시작 시 pre-commit guard subset 도입 결정 (R98 F10 NEW finding의 active 이관) — registry_backfill_completeness_guard 첫 적용 empirical 성공이 precedent. R98 mechanical closure는 commit-5 omission 영구 종료, R99는 pre-commit timing gap"
+    verdict_reason: "**7-wave governance lens — 3-cycle close-and-discover signature validated**. R97 F10 historical PROCEDURE-as-text cycle (4 data points) → mechanical hard guard → retirement. R97 NEW F10 (commit-5 omission) → R98 49th hard guard close + first-app catch. R98 NEW F10 (pre-commit timing) → R99 catalog HELPER (NON-guard class adaptation) close + first-app catch. R99 NEW F10 (catalog law index) → R100 evaluation. Total: 4 historical real_bug + 3 NEW scope_deferral + 3 methodology_gap = 10 findings across 7 waves. **most-revealing lens for catalog meta-evolution** RE-RE-validated: 3 consecutive cycles + pattern adaptation (hard guard → HELPER class). Pattern fitness check active."
+    next_review_at: "R100 wave 시작 시 catalog-wide Korean law reference index 도입 결정 (R99 F10 NEW finding의 active 이관) — pre-commit-fast-guards 첫 적용 empirical 성공이 precedent. R99 mechanical closure는 pre-commit timing gap 영구 종료, R100는 law-reference aggregation"
 
 # ── R93 wave 종합 판정 (iter5 TRUE 0-convergence 후 최종) ────────────────
 review_summary:
@@ -1100,3 +1170,51 @@ review_summary:
         - "P1/P2 backfill 필요성 — 다음 domain dogfood ledger land 여부 따라 (5-wave + R98 consecutive 미참여)"
         - "domain 선택 — R93 probability table 남은 후보: A5 결재 (45% — but collision with existing approval-workflow R31; alternative: 행정업무용 e-government-approval-l0 novel scope) OR A7 referral program (35% — marketing referral + 추천인 보상 분배 + FTC/공정거래법) — R99 wave 결정"
         - "Pre-wave / wave 분리 통일성 — R97 (48th guard pre-wave) + R98 (49th guard pre-wave + R97 hotfix) 모두 wave 직전 commit 1-2개를 pre-wave으로 분류했음. 'pre-wave commit + 5-commit wave' = 6-commit total 패턴 명문화 검토 (R99 mandatory_iter1_agenda item)"
+
+  # ── R99 wave 종합 판정 (e-government-approval-l0 + 7-wave aggregate) ────
+  R99:
+    panel_size: 10
+    iterations: 2                              # iter1 + iter2 (TRUE 0-convergence)
+    total_findings: 10                         # 10 + 0
+    real_bug_closures: 3                       # F2, F3, F8 (모두 commit 42686ce)
+    scope_deferrals: 7                         # F1, F4, F5, F6, F7, F9, F10 (F10 NEW catalog-wide Korean law index)
+    methodology_gaps: 0
+    closure_commits:
+      - "fb8a5de (R99 pre-wave — pre-commit-fast-guards.sh helper, R98 F10 mechanical close via catalog HELPER class)"
+      - "075afc8 (R99 phase α — e-government-approval-l0.yaml seed + r99-iter1.yaml atomically via 48th guard)"
+      - "42686ce (R99 iter1 closures — F2 priority + F3 RECIPE example + F8 hash chain algorithm pin)"
+      - "392f9d2 (R99 iter1 ledger — 10 findings + F10 NEW scope_deferral on catalog-wide Korean law index)"
+      - "bf8fc5f (R99 iter2 TRUE 0-convergence terminator + A2 inline assertion)"
+      - "this commit (R99 persona-registry backfill — 10 history + review_summary.R99 + 7-wave aggregate)"
+    most_productive_persona: "tied (10 personas 각자 1 finding). signal_strength로는 P6 최영숙 (F4 high, 6-law cross-cite 시행령 detail matrix — heaviest law domain) + P9 윤재호 (F7 high, paper/private-cert → GPKI 3-track migration) + P12 한상미 (F10 high, NEW catalog-wide Korean law reference index gap)."
+    least_productive_personas: []
+    lens_overlap_flagged: []                   # P4/P5 7-wave differentiation maintained, 영구 retire 재재재확정
+    saturation_flagged: []                     # P12 historical F10 closed R97, R97/R98/R99 each NEW finding — 3-cycle close-and-discover validated
+    panel_judgment: "all_active_no_retirement"
+    cross_wave_observations:
+      panel_protocol_validation: "10-persona panel이 7th wave에서도 effective — R99 모든 10 persona가 1 finding 산출. R93~R99 panel_size 10 일관, 7-wave saturation 없이 작동. e-government-approval의 government-grade + 6-law cross-cite domain (heaviest catalog history)에서도 lens diversity 유지."
+      stabilized_signatures:
+        - "P4 priority order: R93/R94/R95/R96/R97/R98/R99 F2 — real_bug × 7"
+        - "P5 RECIPE example: R93/R94/R95/R96/R97/R98/R99 F3 — real_bug × 7"
+        - "P8 SLO/alert wiring: R93/R94/R95/R96/R97/R98/R99 F6 — scope_deferral × 7"
+        - "P11 standards-symmetric: R93/F9+F11 + R94/R95/R96/R97/R98/R99 F8 — real_bug × 8"
+        - "P12 mechanical-anchor cycle: R97 48th hard guard + R98 49th hard guard + R99 catalog HELPER (NON-guard class) = 3 consecutive mechanical anchors. R99 first pattern adaptation (HELPER class vs hard guard)."
+      convergence_speed_rule: "iter terminator = iter1 + 1 IF no new artifact introduced; +N for each new artifact iter cycle. R93 (iter5) vs R94/R95/R96/R97/R98/R99 (iter2 each) — 7-wave validated (6/7 no-new-artifact cases)."
+      lens_overlap_permanent_retirement: "P4 + P5 7-wave differentiation maintained. 7-wave evidence — lens overlap merge 결정 영구 not-needed로 retire 재재재확정 (4th cycle of confirmation: R95 + R96/R97/R98/R99)."
+      saturation_permanent_retirement: "P12 — historical F10 PROCEDURE-as-text cycle mechanically retired at R97. R97/R98/R99 each surfaced NEW finding outside historical cycle (R97 commit-5 omission → R98 49th hard guard close; R98 pre-commit timing → R99 catalog HELPER close; R99 catalog law index → R100 evaluation). cyclical close-and-discover signature 3 consecutive cycles validated. saturation flag deprecated 4-cycle confirmed."
+      r97_r98_r99_mechanical_anchor_triple: "R97 48th wave_kickoff_ledger_guard (hard guard) + R98 49th registry_backfill_completeness_guard (hard guard) + R99 pre-commit-fast-guards.sh (catalog HELPER — fork-receiver opt-in). 3-cycle pattern: 48th covers commit-1 (phase α atomic), 49th covers commit-5 (backfill enforcement), R99 helper covers pre-commit timing (3-gate model). Each anchor's first application caught a real bug: 48th (R97 phase α spec-only would-block); 49th (R97 P3 history backfill race bug); R99 helper (13s budget validated at standalone test). **First pattern adaptation at R99**: NON-guard mechanical class — catalog provides, fork-receiver decides (per CLAUDE.md fork-receiver-decides-git-policy principle). 3-class taxonomy emerging: hard guard (mandatory) / catalog HELPER (opt-in) / DATA artifact (R100 candidate)."
+      r99_p12_new_gap_signal: "R99 e-government-approval cross-cites 6 한국법 (행정업무 운영 규정 + 행정업무용 전자문서법 + 전자정부법 + 공공기록물법 + 보안업무 규정 + 전자서명법) — heaviest in catalog history. Across 7 modular-catalog specs (R94 4 / R95 5 / R96 5 / R97 7 / R98 4 / R99 6 = 31 law cites) + 26 L4 workloads (additional cites unbounded), NO aggregated 한국법 ↔ spec/item index exists. P6 한국 규제 lens compliance audit requires manual greppage across 50+ files. R100 candidate: korean_law_reference_index.yaml generator OR script. 0 wave evidence yet — R100 evaluation. **Meta-meta-governance pattern fitness**: verify R100 finding genuinely NEW (DATA artifact OR script, NOT another hard guard ritual)."
+      cross_wave_distribution_post_f10_retirement: "R96 (4+6) → R97 (3+7 — F10 mechanically retired) → R98 (3+7) → R99 (3+7). 7-wave cumulative: 26+3=29 real_bug + 42+7=49 scope_deferral catalog maturity index. Post-F10-retirement baseline stable at 3+7 distribution per wave for 3rd cycle."
+    next_panel_composition_for_R100:
+      keep: ["P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"]
+      under_review: []
+      add: []
+      retire: []
+      mandatory_R100_iter1_agenda:
+        - "R99 F10 NEW finding → catalog-wide Korean law reference index 구현 평가 (korean_law_reference_index.yaml DATA artifact OR generator script — scan all specs[].standard / item.notes for 한국법 cites, build aggregated index per law → spec/item locations). **DATA artifact mechanical class** (3rd anchor class after hard guard + HELPER). P6 compliance audit primary consumer + R100+ wave standards lens reference"
+        - "OBSERVABILITY-002 표준 item을 affected 7 specs (multi-tenant + realtime + invoicing + 2FA + document-signing + chat-messaging + e-government-approval)에 일괄 추가 — 7-wave P8 동일 패턴 evidence overwhelming continued (R96 → R97 → R98 → R99 agenda 답습)"
+        - "52 active scope_deferral (R93:13 + R94:6 + R95:6 + R96:6 + R97:7 + R98:7 + R99:7) trigger 점검 (R98 45 → R99 +7 = 52)"
+        - "P1/P2 backfill 필요성 — 다음 domain dogfood ledger land 여부 따라 (6-wave + R99 consecutive 미참여)"
+        - "domain 선택 — R93 probability table 남은 후보: A7 referral program (35% — marketing referral + 추천인 보상 분배 + FTC/공정거래법) OR newly-derived candidate from R99 P6 6-law cross-cite (additional government-grade vertical?). R100 wave 결정"
+        - "Pre-wave + wave 6-commit shape 명문화 — R97/R98/R99 3-cycle 모두 pre-wave + 5-commit pattern (R97: 1 pre-wave + 5; R98: 2 pre-wave [hotfix + 49th] + 5; R99: 1 pre-wave + 5). README.md or CLAUDE.md에 'pre-wave + 5-commit wave proper' shape 문서화 (R98 agenda 답습 — 미완료 carry forward)"
+        - "Mechanical anchor class taxonomy 정형화 — R97 hard guard / R98 hard guard / R99 catalog HELPER. R100 DATA artifact 도입 시 3-class taxonomy 완성. METHODOLOGY.md or CLAUDE.md에 mechanical anchor selection guide 명시 검토"
