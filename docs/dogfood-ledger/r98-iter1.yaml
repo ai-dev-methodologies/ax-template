@@ -1,0 +1,43 @@
+# R98 — chat-messaging-l0 spec dogfood iter1 (10-persona, 6th wave)
+#
+# Wave subject: specs/chat-messaging-l0.yaml (R98 phase α).
+# 7 items (MESSAGE / ROOM / DELIVERY / PRESENCE / HISTORY / MODERATION /
+# OBSERVABILITY) anchored to XMPP RFC 6120 + RFC 6121 + Matrix.org Client-
+# Server API + RFC 8259 JSON + RFC 3339 timestamps + XEP-0184/0085/0313 +
+# 정보통신망법 §44의2/§44의7 + 청소년보호법 §16의2 + 개인정보보호법 §29.
+#
+# Panel reuse: P3-P12 per persona-registry R97 next_panel_composition_for_R98.
+# 6th wave application of the 10-persona protocol.
+#
+# **Second mechanical wave guard application** (R98 49th hard guard
+# registry_backfill_completeness_guard.sh, commit c1ea7f1 — symmetric
+# pair with R97 48th wave_kickoff_ledger_guard 6db3710). Phase α atomic
+# commit landed via 48th guard; commit 5 registry backfill enforced by
+# 49th guard at wave end.
+#
+# **R98 wave initiation pivot**: R97 mandatory_R98_iter1_agenda item #5
+# originally listed "A5 결재 OR A6 chat OR A7 referral" but A5 결재
+# collides with existing approval-workflow-l0.yaml (R31 active workload,
+# 26/26 tests PASS, Korean enterprise 결재 already covered). User
+# selected A6 chat pivot — chat-messaging-l0 has NO existing domain
+# collision. Probability per R93 table: 40% adoption (3rd-most-likely
+# remaining vertical after A4 document-signing 50% + A5 결재 45%
+# scrubbed for collision).
+#
+# **6-wave cross-wave consistency expected** (6 consecutive occurrences):
+#   P4 priority order        : R93/R94/R95/R96/R97/R98 F2 → real_bug × 6 (R98 closure expected)
+#   P5 RECIPE example        : R93/R94/R95/R96/R97/R98 F3 → real_bug × 6 (R98 closure expected)
+#   P8 SLO/alert wiring      : R93/R94/R95/R96/R97/R98 F6 → scope_deferral × 6
+#   P11 standards-symmetric  : R93/R94/R95/R96/R97/R98 F8 → real_bug × 6+ (R98 closure expected;
+#                              XMPP/Matrix default 등 standards lens 활성)
+#   P12 mechanical anchor    : R97 wave_kickoff_ledger_guard 첫 적용 → R98 registry_backfill_completeness
+#                              둘째 적용 → 5 / 6 wave cycle 영구 retired (4-data-point evidence pattern)
+#
+# Lens overlap status: P4/P5 5-wave retired confirmed at R97; R98는 6-wave
+# confirmation. P3 mobile lens 다시 active (chat is mobile-first by default;
+# KakaoTalk-grade UX expectations) — R97 (document-signing) deferred mobile
+# scenarios, R98 (chat-messaging) likely surfaces explicit DOC-MOBILE / CHAT-MOBILE
+# parallel items.
+
+iteration: 1
+findings: []
