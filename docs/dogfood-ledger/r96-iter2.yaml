@@ -1,0 +1,84 @@
+# R96 — two-factor-auth-l0 spec dogfood iter2 (TRUE 0-convergence terminator)
+#
+# Wave subject: specs/two-factor-auth-l0.yaml + iter1 closures (commit 9fbaf6a)
+# + iter1 ledger (commit 9f75540).
+#
+# iter1 closed 4 real_bug (F2 priority + F3 RECIPE example + F8 WebAuthn
+# attestation pin + F10 ledger self-creation) and deferred 6 scope_deferral
+# (F1/F4/F5/F6/F7/F9) with explicit Expiry triggers.
+#
+# iter2 sweep — same 10-persona panel (P3-P12) re-reviews iter1 closures
+# + iter1 ledger.
+#
+# Result: 0 findings. TRUE 0-convergence at iter2 — same pattern as R94/R95
+# (no new artifact introduced in iter1; doc-only edits to existing spec).
+#
+# Per-persona iter2 verdict (all "no residual"):
+#
+#   P3 김민준  iter1 closures don't touch mobile surface. F1 deferral unchanged.
+#   P4 박지영  F2 priority closure structurally identical to R93/R94/R95
+#              priority closures. 4th successful application.
+#   P5 이상호  F3 RECIPE closure ships verbatim financial-saas-kr frontmatter
+#              with 금융권 SMS-OTP 금지 pinned. 4th successful application.
+#   P6 최영숙  iter1 closures don't touch ISOLATION or regulatory mapping.
+#              F4 deferral unchanged. 본 wave가 P6 직접 domain이었으나
+#              standard surfaces 위주로 closure; 한국 규제 corner case는
+#              deferral lane (R97 trigger 대기).
+#   P7 정도윤  F5 typed-binding deferral unchanged. F8 attestation pin closure
+#              partial mitigation but JSON envelope shape는 별도.
+#   P8 강하늘  F6 SLO/alert deferral unchanged. 4th-wave repeat of metric-
+#              without-alert pattern stable.
+#   P9 윤재호  F7 single-factor → MFA migration deferral unchanged.
+#   P10 신경수 F9 MFA enforce cutover deferral unchanged.
+#   P11 황태완 Own F8 closure (WebAuthn attestation pin) comprehensive —
+#              4 enum values + per-context defaults + production-no-none
+#              assertion. 4th-wave repeat of standards-symmetric coverage
+#              pattern.
+#   P12 한상미 F10 closure (r96-iter1.yaml itself) records the **4-data-point
+#              escalation** + R97 binary decision requirement. Methodology
+#              suggestion embedded in audit trail per B2 resolution.
+#
+# Wave totals after iter2:
+#   iter1: 10 findings — 4 real_bug closed + 6 scope_deferral
+#   iter2:  0 findings — TRUE convergence
+#   ──────────────────────────────────────────────────────────────────────
+#   TOTAL: 10 findings produced
+#           4 real_bug closed (closure_commit_sha 9fbaf6a all 4)
+#           6 scope_deferral with Expiry triggers (R85)
+#           0 methodology_gap
+#
+# 4 commits land the R96 wave end-to-end:
+#   bf50cab  R96 phase α (two-factor-auth-l0.yaml spec seed)
+#   9fbaf6a  R96 iter1 closures (F2/F3/F8)
+#   9f75540  R96 iter1 ledger (10 findings + F10 self-closure)
+#   this     R96 iter2 terminator (0 findings)
+#
+# **4-wave aggregate cross-wave evidence** (R93 + R94 + R95 + R96):
+#
+#   Stabilized signatures (4-consecutive cross-wave hits):
+#     P4 priority ordering    : R93+R94+R95+R96 F2 → real_bug × 4
+#     P5 RECIPE example       : R93+R94+R95+R96 F3 → real_bug × 4
+#     P8 SLO/alert wiring     : R93+R94+R95+R96 F6 → scope_deferral × 4
+#     P11 standards-symmetric : R93 F9/F11 + R94 F8 + R95 F8 + R96 F8 → real_bug × 5
+#     P12 no-ledger-at-kickoff: R93+R94+R95+R96 F10 → real_bug × 4
+#
+#   Lens overlap retirement (R95 결정 재확인): P4/P5 4-wave differentiation
+#     MAINTAINED. R96에서도 다른 surfaces (priority vs RECIPE example).
+#     영구-not-needed로 retire.
+#
+#   Saturation retirement (R95 결정 재확인): P12 saturation flag 영구 retire
+#     confirmed. 4-wave 누적: 4 real_bug + 3 methodology_gap.
+#
+#   Convergence speed (4-wave validated): iter terminator = iter1 + 1 IF no
+#     new artifact (R94 + R95 + R96 = 3/3 cases); +N for each new artifact
+#     iter cycle (R93 single case).
+#
+#   **P12 F10 4-data-point escalation** (R97 binary decision):
+#     R93 lesson-as-text → R94 lesson 무시 → R95 lesson 무시 → R96 PROCEDURE
+#     적용 시도 but identical failure. 4-data-point가 갖춰진 시점:
+#     - (a) introduce wave_kickoff_ledger_guard.sh mechanically
+#       (catalog rule 추가) OR
+#     - (b) formally accept 4+ consecutive drift as permanent property
+#       (remove lesson from R97+ agenda — unactionable lesson은 noise)
+iteration: 2
+findings: []
