@@ -1,0 +1,41 @@
+# R100 — referral-program-l0 spec dogfood iter1 (10-persona, 8th wave)
+#
+# Wave subject: specs/referral-program-l0.yaml (R100 phase α).
+# 7 items (CODE / ATTRIBUTION / REWARD / DISCLOSURE / FRAUD / PRIVACY /
+# OBSERVABILITY) anchored to 공정거래법 §23 + 공정거래위원회 고시 제2020-15호
+# + 표시·광고법 §3 + 전자상거래법 §13/§17/§18 + 개인정보보호법 §15/§22 +
+# 국세기본법 §85의3 + FTC 16 CFR Part 255 + W3C Web Beacon + UTM params.
+#
+# Panel reuse: P3-P12 per persona-registry R99 next_panel_composition_for_R100.
+# 8th wave application of the 10-persona protocol.
+#
+# **3-class mechanical anchor taxonomy completed at R100 pre-wave** (R97 hard
+# guard + R98 hard guard + R99 catalog HELPER + R100 DATA artifact). Pattern
+# adaptation validated — 3-cycle close-and-discover signature now demonstrated
+# across 3 distinct mechanical classes, NOT ritual hard-guard repetition.
+#
+# **8-wave cross-wave consistency expected** (8 consecutive occurrences):
+#   P4 priority order        : R93~R100 F2 → real_bug × 8 (R100 closure expected)
+#   P5 RECIPE example        : R93~R100 F3 → real_bug × 8 (R100 closure expected)
+#   P8 SLO/alert wiring      : R93~R100 F6 → scope_deferral × 8
+#   P11 standards-symmetric  : R93~R100 F8 → real_bug × 8+ (R100 closure expected;
+#                              UTM/Web Beacon cookie default 등 standards lens)
+#   P12 mechanical-anchor    : R97 hard guard + R98 hard guard + R99 HELPER + R100 DATA
+#                              = 4 consecutive anchors across 3 classes (3-class taxonomy
+#                              empirically demonstrated). R100 NEW finding TBD at iter1.
+#
+# Distribution post-F10-retirement (R97 onward): 3+7 baseline. R100 expected
+# to maintain 3 real_bug + 7 scope_deferral.
+#
+# P6 한국 규제 lens active (공정거래법 §23 추천인 보상 + 공정거래위원회 고시
+# 제2020-15호 추천·보증 심사지침 + 표시·광고법) + P11 standards lens active
+# (UTM tracking + W3C Web Beacon + FTC cross-mapping) — heaviest standards/
+# regulation mix yet (15+ anchors across spec).
+#
+# **R100 P12 NEW finding hypothesis**: Pattern adaptation continuing — R100
+# completed 3-class taxonomy. R101 mandatory candidates: (a) 4th anchor class
+# (auto-data artifact = DATA + generator), (b) pattern retirement review
+# (which anchors are 영구 vs review for refresh).
+
+iteration: 1
+findings: []

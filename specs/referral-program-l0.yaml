@@ -1,0 +1,166 @@
+version: "0.1.0"
+scope: "referral-program-l0 — 마케팅 추천 (referral) 시스템 (추천 코드 + attribution + 보상 분배 + FTC 공시 의무 + 공정거래법 추천인 보상 규제 + 사기 방지 + PII 처리 + 관측) contract for fork-receivers running consumer SaaS / 이커머스 / fintech / 구독 서비스 referral programs. Korean enterprise 공정거래법 추천·보증 심사지침 + 미국 FTC 16 CFR Part 255 cross-mapped — 글로벌 fork-receivers MAY adopt either; 한국 시장 진출은 공정거래위원회 고시 mandatory."
+stack: "Spring Boot 3.2.x + JPA + Redis (attribution cookie cache) + Kafka (reward event stream) + identity-verification (R54 추천인 본인확인) + chat-messaging (R98 공유 채널 정합성) + Micrometer metrics"
+standard: "공정거래법 §23 (불공정거래행위 — 부당한 고객유인) + 표시·광고의 공정화에 관한 법률 §3 (소비자기만 광고 금지) + 추천·보증 등에 관한 표시·광고 심사지침 (공정거래위원회 고시 제2020-15호) + 전자상거래법 §13 (신원 표시 의무) + 개인정보보호법 §15 (수집·이용 동의) + FTC 16 CFR Part 255 (Endorsement Guides — international cross-mapping) + W3C Web Beacon Working Draft + Google Analytics UTM tracking parameters (de facto standard)"
+domain_mode: full_trio
+introduced_at: "R100 phase α — seeded as the 8th modular-catalog candidate from R93 probability table (35% adoption — A7 referral, lowest probability in remaining vertical set). P6 최영숙 한국 규제 lens active wave (공정거래법 §23 + 표시·광고법 + 추천·보증 심사지침) + P11 황태완 standards lens (UTM tracking + W3C Web Beacon + FTC cross-mapping) + P10 신경수 backward-compat lens (organic 가입 → referral-tracked 전환 시 기존 사용자 attribution 처리). **R100 wave 3-class taxonomy completion** — pre-wave (R99 F10 close, DATA artifact aa4b855) demonstrated 3rd mechanical anchor class. R100 P12 NEW finding TBD at iter1."
+
+# referral-program is OPT-IN. ax-template's reference workloads do NOT
+# require referral tracking (R30 ASVS L1 baseline assumes organic
+# acquisition). Recipes building 추천 보상 features (consumer SaaS /
+# 이커머스 / fintech 가입 추천 / 구독 갱신 인센티브 / 커뮤니티 invite)
+# MUST adopt items below before launch. This spec defines the policy
+# contract; the future templates/L4/referral-program/ vertical will
+# define canonical Spring + Redis + Kafka wiring.
+#
+# Composition note (depends on existing catalog domains):
+# - REFERRAL-DISCLOSURE-001 cross-references identity-verification-l0
+#   (R54) for 추천인 신원 보장 — 보상 분배 시 본인확인 필수 (사기 방지).
+#   R54 VerifiedIdentity ElementCollection 패턴 적용 (PII 분리 저장).
+# - REFERRAL-ATTRIBUTION-001 cross-references chat-messaging-l0 (R98)
+#   for 공유 채널 추적 — KakaoTalk / SMS 공유 시 carrier param 정합성.
+#   chat-messaging의 CHAT-MESSAGE-001 envelope schema와 attribution
+#   metadata 호환.
+# - REFERRAL-PRIVACY-001 cross-references korean_law_reference_index.yaml
+#   (R100 pre-wave DATA artifact) for 개인정보보호법 §15 동의 처리 +
+#   다른 spec의 PII handling 패턴과 일관성. 추천 추적 IP 보존 vs anonymize
+#   결정은 fork-receiver vertical 따라.
+# - REFERRAL-OBSERVABILITY-001 will adopt OBSERVABILITY-002 표준 item
+#   (R99 mandatory_R100_iter1_agenda item #2) when that lands across
+#   the 7+ affected specs (multi-tenant + realtime + invoicing + 2FA +
+#   document-signing + chat-messaging + e-government-approval +
+#   referral-program = 8 adopters).
+
+items:
+  # ── CODE family ─────────────────────────────────────────────────────────
+  - id: "REFERRAL-CODE-001"
+    chapter: "추천 코드 발급 + 추적"
+    requirement: "각 사용자에게 unique referral_code (8자리 영숫자, case-insensitive, 충돌 시 재발급) 발급. 추천 link는 두 form 지원: (1) https://app.example/r/<code> short URL + (2) UTM-style query params (?utm_source=referral&utm_medium=<channel>&utm_campaign=referral&referral_code=<code>). Cookie name `__r_attr` + 30d default expiry (recipe 조정 가능 7-90d). 같은 디바이스 multi-code visit 시 last-touch attribution (latest cookie set wins; first-touch는 별도 recipe flag로 opt-in). Code 길이 8자리 → 36^8 = 2.8조 unique space (collision 확률 무시 가능). 폐기된 사용자 code는 90d 후 다른 사용자에게 재발급 가능 (audit log 보존)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: ReferralCodeService.generateUnique() with
+      AlphaNumericGenerator (excludes 0/O/1/I to avoid OCR confusion)
+      + JPA unique constraint + retry-on-collision (max 3). Cookie set
+      via Set-Cookie header on /r/<code> redirect.
+      Anchored to W3C Web Beacon Working Draft (cookie-based attribution
+      semantics) + Google Analytics UTM parameters (de facto standard
+      from 2008) + RFC 6265 (HTTP State Management Mechanism).
+      Quote anchor (RFC 6265 §5.3): "The user agent associates the
+      following default attributes with each cookie: Expires (set to
+      the latest representable date)."
+
+  - id: "REFERRAL-ATTRIBUTION-001"
+    chapter: "Attribution 기간 + multi-touch"
+    requirement: "Attribution 기간 default 30d (recipe override 7-90d). Multi-touch attribution: last-touch (default) / first-touch (opt-in) / linear weighted (opt-in) / position-based (40-20-40 first-middle-last, opt-in). Recipe declares `attribution_model` ∈ {last_touch, first_touch, linear, position_based}. Multi-device visitor handling: 동일 사용자 (login 후) 다른 device 방문 시 referral_code carry-forward (latest device의 latest cookie). 가입 ceremony 완료 후 attribution lock (해당 사용자의 reward 분배는 lock된 referrer에게 영구 귀속). 환불 + 가입 취소 시 reward rollback (REFERRAL-FRAUD-001)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: AttributionEngine.resolveReferrer(userId, signupTimestamp)
+      → walks back referral_attribution_event table within 30d window
+      + applies attribution_model. Cross-references chat-messaging-l0
+      (R98) for 공유 채널 carrier metadata (KakaoTalk deep link param
+      + SMS sender id) when attributing to chat-originated referrals.
+      Anchored to Google Analytics Attribution Models documentation +
+      W3C Web Tracking Protection Working Group reports.
+      Quote anchor (Google Attribution Models): "Position-based gives
+      40% credit to the first and last interactions, distributing
+      remaining 20% evenly across middle interactions."
+
+  # ── REWARD family ─────────────────────────────────────────────────────
+  - id: "REFERRAL-REWARD-001"
+    chapter: "보상 분배 정책"
+    requirement: "보상 type enum: {cash_credit, discount_coupon, points, free_subscription_days, physical_gift}. 분배 trigger enum: {signup_only, first_purchase, milestone_N (recipe-defined milestone events)}. Recipe declares `reward_policy` with type + trigger + amount + conditions. 양자 보상 (referrer + referee 모두 지급) vs 일방 보상 (referrer만 OR referee만) 모두 지원. 보상 한도 (recipe 정의 + 시스템 default 50만원 cap per referrer per month — 공정거래법 §23 부당한 고객유인 한도). 한도 초과 시 → 사후 검토 큐 (admin 수동 승인). 보상 분배 transaction은 idempotent (referrer + referee + trigger 조합당 1회만 — REFERRAL-FRAUD-001 자기 추천 차단)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: ReferralRewardService.distribute(referrerId,
+      refereeId, triggerEvent, amount) → idempotency check (referrer,
+      referee, trigger) tuple + monthly limit check + audit log.
+      Anchored to 공정거래법 §23 (불공정거래행위) + 공정거래위원회 고시
+      제2020-15호 (추천·보증 심사지침) + 표시·광고법 §3.
+      Quote anchor (공정거래법 §23①): "사업자는 다음 각 호의 어느 하나에
+      해당하는 행위로서 공정한 거래를 해칠 우려가 있는 행위를 하거나
+      계열회사 또는 다른 사업자로 하여금 이를 하도록 하여서는 아니
+      된다. 1. 부당하게 거래를 거절하거나 거래의 상대방을 차별하여
+      취급하는 행위 2. 부당하게 경쟁자를 배제하는 행위 3. 부당하게
+      경쟁자의 고객을 자기와 거래하도록 유인..."
+
+  # ── DISCLOSURE family ────────────────────────────────────────────────
+  - id: "REFERRAL-DISCLOSURE-001"
+    chapter: "추천 관계 공시 + FTC + 공정거래위원회"
+    requirement: "모든 추천 (referrer가 referee에게 추천 link 또는 메시지 보낼 때) MUST 추천 관계 공시 (disclosure)를 포함: (1) 명시적 문구 (예: '추천 시 양자 모두 보상받음' / '광고') (2) 보상 수령 사실 + 보상 type 간략 (3) 한국 공정거래위원회 추천·보증 심사지침에 따라 '추천' / '광고' / '협찬' 등 라벨 → 추천 가입자가 보상 의도를 인지 가능하게. SNS 공유 시 hashtag #광고 #추천 등 mandatory (인스타그램 / 페이스북 / 카카오톡 모두). FTC 16 CFR Part 255 international cross-reference — 글로벌 SaaS는 양 규제 동시 충족. 미공시 발견 시 admin alert + 추천인 임시 보상 정지."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: ReferralShareTextBuilder.buildWithDisclosure(
+      referrerId, channel) → automatic disclosure prefix. 공유 텍스트
+      template에 #광고 + 보상 type 자동 삽입. Audit log per share event.
+      Anchored to 공정거래위원회 고시 제2020-15호 (추천·보증 등에 관한
+      표시·광고 심사지침) §3 + 표시·광고법 §3 + 전자상거래법 §13 +
+      FTC 16 CFR Part 255 §255.5 (Disclosure of Material Connections).
+      Quote anchor (공정거래위원회 고시 §3①): "추천·보증의 의미를 가지는
+      광고는 그 사실을 소비자가 명확히 인식할 수 있도록 표시하여야 한다."
+
+  # ── FRAUD family ────────────────────────────────────────────────────
+  - id: "REFERRAL-FRAUD-001"
+    chapter: "사기 방지 + 자기 추천 + 다중 계정 + 환불 rollback"
+    requirement: "Self-referral block: 같은 IP / device fingerprint / payment method (카드 BIN + 뒷 4자리) / 휴대전화 번호 / email domain (free email 무관 / business email 같은 도메인) 일치 시 reward 자동 보류 + admin review queue. Multi-account detection: identity-verification (R54)와 cross-check — 동일 본인확인 정보 (CI/DI hash 일치) → reward 차단. 환불 / 가입 취소 시 reward rollback (이미 지급된 cash_credit / discount_coupon 회수; 환불 후 30d 내 rollback 강행 — 30d 이후는 추천인 보호 lock). 의심스러운 패턴 (단일 referrer가 24h 내 10+ 가입 유발 / referrer가 직접 referee 본인확인 거치며 같은 device session 사용) → 자동 hold + manual review."
+    test_method: "RestAssured + fraud probe test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: FraudDetector.evaluateReferral(referrerId, refereeId,
+      contextSignals) → checks 5 signals (IP / device / payment / phone /
+      email_domain) + R54 CI/DI hash compare + 24h velocity check.
+      Rollback via ReferralRewardService.reverse(referrerId, refereeId,
+      reason) — issues compensating transaction.
+      Anchored to 공정거래법 §23 (불공정거래행위) + 전자상거래법 §17
+      (소비자 청약 철회) + 전자상거래법 §18 (환급) + 표시·광고법 §3
+      (소비자기만 광고 금지).
+      Quote anchor (전자상거래법 §17①): "통신판매업자와 재화등의 매매에
+      관한 계약을 체결한 소비자는 다음 각 호의 기간 이내에 그 계약에
+      관한 청약철회등을 할 수 있다."
+
+  # ── PRIVACY family ─────────────────────────────────────────────────
+  - id: "REFERRAL-PRIVACY-001"
+    chapter: "추천 추적 PII 처리"
+    requirement: "Referral attribution을 위해 수집되는 PII 항목 명시 + 사용자 동의 (개인정보보호법 §15): IP address (anonymized — last octet zeroed within 30d), device fingerprint (hashed SHA-256), referral_code (PII 아님), cookie identifier (random UUID v4, PII 아님), 가입 시점 user_id (PII 별도 동의). 동의 철회 시 → attribution 기록 anonymize (referrer_id / referee_id 해시 보존, 나머지 삭제). 보상 분배 audit log는 anonymized form으로 5년 보존 (국세기본법 §85의3 — 보상 = 수익으로 회계 처리 시). 다른 spec (R98 chat-messaging E2E) 모듈과 일관: chat 공유 attribution은 메시지 본문 미저장 (carrier metadata만)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: ReferralAttributionEvent entity with anonymized
+      IP column (last_octet=0 stored) + hashed device fingerprint +
+      no raw user identifier. PII consent flow integrates with R54
+      identity-verification 본인확인 동의 ceremony.
+      Anchored to 개인정보보호법 §15 (수집·이용 동의) + §22 (동의 받는
+      방법) + 국세기본법 §85의3 (5년 보관 — 보상 = 수익 시) + R67
+      AuditPiiHelper recipient_hash precedent.
+      Quote anchor (개인정보보호법 §15①): "개인정보처리자는 다음 각 호의
+      어느 하나에 해당하는 경우에는 개인정보를 수집할 수 있으며 그
+      수집 목적의 범위에서 이용할 수 있다."
+
+  # ── OBSERVABILITY family ──────────────────────────────────────────
+  - id: "REFERRAL-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Referral 구현은 정확히 3개의 canonical Micrometer metric 노출 + bounded cardinality labels: (1) `referral_shares_emitted_total{tenant, channel}` — 공유 발생 (counter; channel ∈ {direct_link, kakao, sms, email, twitter, facebook, instagram, other}); (2) `referral_attribution_conversion_rate{tenant, attribution_model}` — 가입 전환율 (counter; attribution_model ∈ {last_touch, first_touch, linear, position_based}); (3) `referral_fraud_hold_rate{tenant, signal}` — 사기 보류율 (counter; signal ∈ {ip_match, device_match, payment_match, phone_match, email_domain_match, velocity_24h, ci_di_match}). Labels 제외: referrer_id / referee_id / referral_code / cookie_id (low-cardinality only). SLO/alert wiring은 fork-receiver concern — **8th wave consecutive F6 패턴** (R93~R100)."
+    test_method: "Micrometer registry assertion test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: Micrometer MeterRegistry with @ConditionalOnClass
+      Counter.builder() invocations + MeterFilter denylist for referrer
+      _id / referee_id / referral_code / cookie_id labels.
+      Anchored to OpenTelemetry Semantic Conventions §metric naming +
+      8-wave canonical "3 metric" pattern (R94~R99 all settled on
+      3-metric bounded-label discipline; referral-program inherits).
+      R100 mandatory_R100_iter1_agenda item #2 lands OBSERVABILITY-002
+      표준 item batch — referral-program은 8th adopter (이제 batch 적용
+      evidence-overwhelming + 7-wave streak 후 첫 unified item 검토).
+      Quote anchor (OpenTelemetry semconv stability): "Label cardinality
+      SHOULD be bounded to prevent metric explosion."
