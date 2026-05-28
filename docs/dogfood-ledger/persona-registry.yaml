@@ -239,9 +239,16 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "invoicing-l0이 backend 발행 flow는 cover하나 mobile-side 세금계산서 viewer / share-sheet / 다운로드 시나리오 부재. Trigger: 첫 모바일 fork-receiver의 invoice download 노출 시."
+      - wave: R96
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "two-factor-auth-l0이 desktop/server 2FA flow는 cover하나 mobile-specific (authenticator app deep link / WebAuthn platform credential biometrics / SMS-OTP autofill / Push approval) 시나리오 부재. Trigger: 첫 mobile fork-receiver의 MFA enrollment 시."
     verdict: active
-    verdict_reason: "3-wave 일관 mobile lens — R93 multi-tenant + R94 realtime + R95 invoicing 모두 모바일 surface 부재 deferral 산출. unique mobile lens 9 persona cover 불가, 3-wave stable signature."
-    next_review_at: "R96 wave OR first mobile fork-receiver (multi-tenant / realtime / invoicing 어느 영역이든)"
+    verdict_reason: "**4-wave 일관 mobile lens** — R93 multi-tenant + R94 realtime + R95 invoicing + R96 2FA 모두 모바일 surface 부재 deferral 산출. unique mobile lens 9 persona cover 불가, 4-wave stable signature."
+    next_review_at: "R97 wave OR first mobile fork-receiver (multi-tenant / realtime / invoicing / 2FA 어느 영역이든)"
 
   - id: P4
     name: 박지영
@@ -279,9 +286,16 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "invoicing-l0 7 items priority 부재 — **3rd consecutive wave** (R93 + R94 + R95). 신규 spec landing 패턴이 자동으로 priority 부재 trigger. Closure: priority order block (FORMAT-001 legal precondition → RETENTION-001) commit bf9494f."
+      - wave: R96
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "two-factor-auth-l0 7 items priority 부재 — **4th consecutive wave** (R93+R94+R95+R96). Closure: priority order block (FACTOR-001 foundation → OBSERVABILITY-001) commit 9fbaf6a."
     verdict: active
-    verdict_reason: "**4 real_bug closed across 3 waves** (R93 iter1+iter4 + R94 iter1 + R95 iter1). 'priority 부재' 패턴 3-wave 연속 산출 — learnability lens가 신규 spec 표면화 시 반드시 발화. P5와 differentiation 3-wave 연속 유지 → **lens overlap 영구-not-needed로 retire 후보**."
-    next_review_at: "R96 wave에서 또 P4 priority + P5 RECIPE example 분리 시 lens overlap flag 영구 retire 결정"
+    verdict_reason: "**5 real_bug closed across 4 waves**. 'priority 부재' 패턴 4-wave 연속 — learnability lens가 신규 spec 표면화 시 반드시 발화 확정. P5와 differentiation 4-wave 연속 유지 → **lens overlap 영구-not-needed retire 확정** (R95에서 retire 결정, R96에서 4번째 differentiation 재확인)."
+    next_review_at: "유지 (4-wave validated)"
 
   - id: P5
     name: 이상호
@@ -319,9 +333,16 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "invoicing-l0 config fields (사업자등록번호 / NTS endpoint / 공동인증서 / retention) declare는 했으나 copy-pasteable RECIPE.md example 없음 — **3rd wave** (R93 + R94 + R95). Closure: b2b-saas-subscription-kr 풀 frontmatter block + 5년 retention 法적 lower bound pinned (commit bf9494f)."
+      - wave: R96
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "two-factor-auth-l0 config fields (factor types / SMS allow / session reauth / WebAuthn attestation / recovery count) declare는 했으나 RECIPE.md example 없음 — **4th wave** (R93+R94+R95+R96). Closure: financial-saas-kr frontmatter + 금융권 SMS-OTP 금지 pinned per 전자금융거래법 §6 (commit 9fbaf6a)."
     verdict: active
-    verdict_reason: "**4 real_bug closed across 3 waves** (R93 iter1+iter4 + R94 iter1 + R95 iter1). sequential lens 3-wave 일관 — 신규 spec config field declaration 표면화 시 'example block 부재' 동일 패턴 산출. P4와 differentiation 3-wave 연속 유지 → **lens overlap 영구-not-needed retire 후보**."
-    next_review_at: "R96 wave에서 또 P4 priority + P5 RECIPE example 분리 시 lens overlap flag 영구 retire 결정"
+    verdict_reason: "**5 real_bug closed across 4 waves**. sequential lens 4-wave 일관 — 신규 spec config declaration 표면화 시 'RECIPE example 부재' 동일 패턴 산출. P4와 differentiation 4-wave 연속 → **lens overlap 영구-not-needed retire 확정**."
+    next_review_at: "유지 (4-wave validated)"
 
   - id: P6
     name: 최영숙
@@ -352,9 +373,16 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "invoicing-l0이 canonical 일반발행 cover하나 한국 corner case 부재: 면세사업자 (의료/교육/금융 — 계산서 별도 format), 매입자 발행 세금계산서 (역발행 — 부가가치세법 시행령 §70(1)(11)), 종이병행 (소규모 사업자 < 8천만원/년). Trigger: 면세 vertical / 역발행 / paper-parallel scenario 발생 시."
+      - wave: R96
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "TFA-FACTOR-001이 전자금융거래법 §6 일반 cite하나 전자금융감독규정 §13의5 SMS-OTP 단독 금지 mapping 부재. healthcare PIPA §23의2 본인확인 기준도 SMS 단독 거부. Trigger: 금융권 / 의료 SaaS fork-receiver wires MFA — TFA-FACTOR-002 regulatory factor restrictions table 필요."
     verdict: active
-    verdict_reason: "**3-wave 한국 규제 lens 일관성** — R93 multi-tenant 규제 매핑 + R94 realtime channel 규제 매핑 + R95 invoicing 한국 corner case (본 wave가 자기 직접 domain). 글로벌 catalog에서 유일하게 한국 enterprise 규제 vector 제공 — 9 persona 누구도 cover 불가. 3-wave stable signature."
-    next_review_at: "R96 wave OR first PIPA / 전자금융감독규정 / KISA ISMS audit (multi-tenant + realtime + 면세 vertical / 역발행 / paper-parallel 어느 trigger든)"
+    verdict_reason: "**4-wave 한국 규제 lens 일관성** — R93 multi-tenant + R94 realtime + R95 invoicing + R96 2FA 모두 한국 규제 매핑 deferral 산출. 4 wave 중 R95 + R96는 본인 직접 domain. 글로벌 catalog 한국 enterprise 규제 vector unique provider — 9 persona 누구도 cover 불가."
+    next_review_at: "R97 wave OR first PIPA / 전자금융감독규정 §13의5 / KISA ISMS audit / 금융권 multi-tenant flip / 의료 MFA 필수 (multi-tenant + realtime + invoicing + 2FA 어느 trigger든)"
 
   - id: P7
     name: 정도윤
@@ -399,9 +427,16 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "invoicing INV-FORMAT-001이 XML schema validation 명시하나 typed-client binding pattern 부재 (TypeScript xsd-ts / JAXB / partner SDK). F8 namespace pin closure가 XML side 정렬 강화하나 typed-binding gap은 별도. Trigger: 첫 typed XML client codegen 시."
+      - wave: R96
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "TFA-ENROLL-001 + TFA-VERIFY-001이 WebAuthn 명시하나 PublicKeyCredentialCreationOptions / AuthenticatorAttestationResponse JSON envelope TypeScript binding 부재 (ArrayBuffer ↔ base64url, COSE keys). Trigger: 첫 frontend WebAuthn integration 시 W3C WebAuthn-JSON proposal (draft-jcs-webauthn-json) 따라 BINDING-001."
     verdict: active
-    verdict_reason: "**5 deferrals across 4 iters / 3 waves** (R93 iter1/iter3/iter4 + R94 iter1 + R95 iter1). typed-contract lens 3-wave 일관 — 매 spec landing 시 'typed boundary undefined' 동일 패턴 산출. F18 (R93 registry schema) B1에서 closure됨; 나머지 trigger 대기."
-    next_review_at: "유지 (3-wave stable signature)"
+    verdict_reason: "**6 deferrals across 5 iters / 4 waves** (R93 iter1/iter3/iter4 + R94 iter1 + R95 iter1 + R96 iter1). typed-contract lens 4-wave 일관 — 매 spec landing 시 'typed boundary undefined' 동일 패턴 산출. F18 (R93 registry schema) B1에서 closure; 나머지 trigger 대기."
+    next_review_at: "유지 (4-wave stable signature)"
 
   - id: P8
     name: 강하늘
@@ -432,9 +467,16 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "INV-NTS-001이 24h boundary alert + DLQ contract 명시하나 SLO threshold / metric naming / alert convention 부재 — **3rd wave** (R93 + R94 + R95 모두 metric-without-alert-wiring 동일 패턴). nts_24h_breach_count > 0 immediate PAGE 등 specific threshold 부재. Trigger: 첫 invoicing production deployment 시."
+      - wave: R96
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "TFA-OBSERVABILITY-001이 3 canonical metrics 명시하나 SLO threshold / alert convention 부재 — **4th wave** (R93+R94+R95+R96 모두 동일 패턴). verify_failure_rate.totp > 30% over 10min → PAGE 등 brute-force 감지용 specific threshold 부재. Trigger: 첫 MFA production deployment 시."
     verdict: active
-    verdict_reason: "**3-wave stabilized pattern** — 3 deferrals (R93 + R94 + R95) 모두 동일 'metric/log 정의됐으나 alert wiring 미정의' shape. observability lens cross-wave consistency empirically 입증. trigger 발화 임박 분야 (i18n / realtime / invoicing 셋 중 어느 하나가 첫 production 진입 시)."
-    next_review_at: "유지 (3-wave stable signature); 첫 production deploy 시 OBSERVABILITY-002 item 패턴화 후보"
+    verdict_reason: "**4-wave stabilized pattern confirmed** — 4 deferrals (R93+R94+R95+R96) 모두 동일 'metric/log 정의됐으나 alert wiring 미정의' shape. observability lens cross-wave 4-consecutive 입증 — OBSERVABILITY-002 표준 item을 catalog 차원에서 정착시킬 후보 패턴."
+    next_review_at: "유지 (4-wave validated); 첫 production deploy 시 OBSERVABILITY-002 표준 item을 affected spec에 일괄 추가"
 
   - id: P9
     name: 윤재호
@@ -472,9 +514,16 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "기존 paper-only / proprietary EDI invoice 발행하는 fork-receiver를 e-invoice (전자세금계산서)로 cutover playbook 부재. historical 발행이력 backfill / dual-issue overlap period / NTS approval-no reconciliation 미정의. Trigger: 첫 paper-to-e cutover 시 MIGRATION.md sibling 작성."
+      - wave: R96
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "single-factor (R30 ASVS L1) → MFA-enforced 전환 시 staged enrollment (opt-in → soft-enforce → hard-enforce) + 사용자 교육 + CS escalation handling playbook 부재. Trigger: 첫 fork-receiver의 mfa_enabled=true on existing user base — MIGRATION.md with phased rollout + grace period + audit trail."
     verdict: active
-    verdict_reason: "**3-wave migration-playbook lens** — R93 single→multi DB + R94 polling→realtime + R95 paper→e-invoice 모두 'migration playbook 부재' high-signal deferral 산출. architecture lens 3-wave stable signature. P10과 lens 비중첩 cross-wave maintained."
-    next_review_at: "유지; lens differentiation with P10 3-wave 연속 holds — 둘 다 high-signal 산출하나 differentiation 명확 (P9 능동 cutover, P10 수동 backward compat)"
+    verdict_reason: "**4-wave migration-playbook lens** — R93 single→multi DB + R94 polling→realtime + R95 paper→e-invoice + R96 single-factor→MFA 모두 'migration playbook 부재' high-signal deferral. architecture lens 4-wave stable. P10과 lens 비중첩 cross-wave maintained."
+    next_review_at: "유지; lens differentiation with P10 4-wave 연속 holds"
 
   - id: P10
     name: 신경수
@@ -519,8 +568,15 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "INV-RETENTION-001 immutable storage (DB trigger + @Column updatable=false) enforce 시 기존 mutable invoice table 갖고 있는 deployed fork-receiver의 UPDATE flow 깨짐. Trigger: 첫 fork-receiver의 mutable → immutable 마이그레이션 시 MIGRATION-RETENTION-001 (read-only snapshot + cutoff timestamp + trigger 설치 순서)."
+      - wave: R96
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "TFA-VERIFY-001 bearer-alone → 403 MFA_REQUIRED enforce 시 ACTIVE 기존 사용자 sessions cutover semantics 미정의 (big-bang force-relogin vs grace until expiry). Trigger: 첫 fork-receiver의 mfa_enabled=false → true on existing deployment — CUTOVER-001 session-handling matrix."
     verdict: active
-    verdict_reason: "**3-wave backward-compat lens** — 1 real_bug + 4 deferral (R93 iter1 F8 closure + R93 iter3 F14 + R93 iter4 F20 (B3 closure) + R94 iter1 F9 + R95 iter1 F9). 매 spec land 때마다 'deployed state 영향' 확인하는 메타-vigilance 일관 작동. P9와 lens 비중첩 3-wave maintained — 둘 다 high-signal."
+    verdict_reason: "**4-wave backward-compat lens** — 1 real_bug + 5 deferral (R93 iter1 F8 closure + R93 iter3 F14 + R93 iter4 F20 (B3 closure) + R94 iter1 F9 + R95 iter1 F9 + R96 iter1 F9). 매 spec land 때마다 'deployed state 영향' 확인하는 메타-vigilance 4-wave consistency. P9와 lens 비중첩 4-wave maintained."
     next_review_at: "유지"
 
   - id: P11
@@ -566,9 +622,16 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "INV-FORMAT-001이 KS X ISO/IEC 19792 + NTS XML Specification cite하나 XML root namespace URI 미pin — recipe가 declare할 canonical namespace string 부재 (R93 F9/F11 ISO 8601 Z form + R94 F8 RFC 6455 §1.9 subprotocol과 동일 'standards-cite-without-symmetric-pin' 패턴). Closure: namespace pin contract + recipe declaration + XmlInvoiceWriter assertion + v2 opt-out flag 추가 (commit bf9494f)."
+      - wave: R96
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: high
+        unique_to_persona: true
+        notes: "TFA-FACTOR-001이 W3C WebAuthn Level 3 + RFC 6238 cite하나 WebAuthn `attestation` parameter (§5.4.7) default 미pin — vendor-dependent + cross-fork-receiver inconsistent. **4th wave 동일 패턴** (R93 ISO 8601 Z + R94 subprotocol + R95 XML namespace + R96 WebAuthn attestation). Closure: attestation pin contract + 4 enum values (none/indirect/direct/enterprise) + per-context defaults + production-no-none assertion (commit 9fbaf6a)."
     verdict: active
-    verdict_reason: "**3-wave most productive persona** — R93 F9/F11 (2) + R94 F8 (1) + R95 F8 (1) = **4 real_bug closed across 3 waves**. 'standards spec cite했으나 symmetric pin 누락' 패턴 3-wave 일관 — principal-eng symmetric coverage lens의 cross-wave validation 완료. catalog가 standards anchor를 사용할 때마다 P11이 reliably 'pin missing' catch."
-    next_review_at: "유지 (3-wave validated high-signal anchor)"
+    verdict_reason: "**4-wave most productive persona** — R93 F9/F11 (2) + R94 F8 + R95 F8 + R96 F8 = **5 real_bug closed across 4 waves**. 'standards spec cite했으나 symmetric pin 누락' 패턴 4-wave 일관 — principal-eng symmetric coverage lens의 cross-wave 정밀 검증 완료. catalog가 standards anchor 사용 때마다 P11이 reliably 'pin missing' catch — most reliable single-signal lens."
+    next_review_at: "유지 (4-wave validated high-signal anchor); R97+ 동일 lens 작동 예상"
 
   - id: P12
     name: 한상미
@@ -620,9 +683,16 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "R95 phase α (425585b)가 dogfood ledger 없이 land — **3rd consecutive occurrence** (R93 + R94 + R95). R94 F10 closure에 기록된 'every wave start should auto-create iter1 ledger' lesson이 R95에서 적용 안 됨. **empirical evidence: lesson-as-text는 self-learning mechanism으로 불충분**, mechanical R-anchor (wave_kickoff_ledger_guard.sh) 필요. 3-data-point가 갖춰진 시점에 R96 mandatory_iter1_agenda에서 guard 도입 vs explicit drift acceptance 결정. Closure: r95-iter1.yaml 자체 (commit bf9494f)."
+      - wave: R96
+        iter: 1
+        finding_id: F10
+        classification: real_bug
+        signal_strength: high
+        unique_to_persona: true
+        notes: "R96 phase α (bf50cab)가 ledger 없이 land — **4th consecutive occurrence**. R96는 PROCEDURE 적용 시도 (phase α 헤더 코멘트에 'ledger MUST be created' 명시)했으나 실제로는 lesson-as-text와 동일한 결과 → ledger 파일 부재. **4-data-point empirical**: PROCEDURE-as-text는 lesson-as-text와 functionally identical, 둘 다 self-learning mechanism으로 불충분. R97 mandatory_iter1_agenda must commit to binary: (a) introduce wave_kickoff_ledger_guard.sh mechanically OR (b) formally accept 4+ consecutive drift as permanent property + remove lesson from agenda (unactionable lesson noise). Closure: r96-iter1.yaml 자체 (commit 9fbaf6a)."
     verdict: active
-    verdict_reason: "**3-wave validated saturation flag retirement** — R93에서 saturation flag (3 methodology_gap)가 R94 real_bug (F10)로 NEGATED됨; R95에서 또 real_bug (F10) → 3-wave 누적: 3 real_bug + 3 methodology_gap = governance lens는 high-signal real_bug catch + meta-observation 둘 다 stable. R96 wave에서 lens redirect (wave_kickoff_ledger_guard.sh mechanical anchor 도입 결정) 임박."
-    next_review_at: "R96 wave에서 wave_kickoff_ledger_guard 도입 시 — 도입되면 P12 본 lens는 다른 governance gap 영역으로 redirect (saturation 회피); 미도입 시 lens 동일 영역에서 4번째 catch 예상"
+    verdict_reason: "**4-wave governance lens** — 4 real_bug (R93 F10 + R94 F10 + R95 F10 + R96 F10) + 3 methodology_gap (R93 F12/F15/F22) = 7 findings across 4 waves. Saturation flag R94에서 NEGATED + R95/R96에서 confirmed retirement. 매 wave마다 catalog의 governance gap (no ledger / unactionable lesson / PROCEDURE-as-text failure) reliable catch — **most-revealing lens for catalog meta-evolution**. R97에서 wave_kickoff_ledger_guard 도입 시 lens redirect; 미도입 시 5번째 F10 inevitable."
+    next_review_at: "R97 wave 시작 시 wave_kickoff_ledger_guard.sh 도입 결정 강제 — (a) 도입되면 P12 본 lens 영역에서 lesson retire + 다른 governance gap으로 redirect; (b) 미도입 시 lens가 자동으로 5번째 catch + R98 에서 6번째 catch... 무한 반복 (catalog의 honest self-limitation)"
 
 # ── R93 wave 종합 판정 (iter5 TRUE 0-convergence 후 최종) ────────────────
 review_summary:
@@ -752,3 +822,45 @@ review_summary:
         - "P12 saturation flag 영구 retire 공식화 (3-wave 3 real_bug + 3 methodology_gap balance)"
         - "13 R93 + 6 R94 + 6 R95 = 25 active scope_deferral expiry trigger 발화 여부 점검 (현재 모두 dormant)"
         - "P1/P2 backfill 필요성 — 다음 domain dogfood ledger land 여부 따라"
+
+  # ── R96 wave 종합 판정 (two-factor-auth-l0 + 4-wave aggregate) ────────
+  R96:
+    panel_size: 10
+    iterations: 2                              # iter1 + iter2 (TRUE 0-convergence)
+    total_findings: 10                         # 10 + 0
+    real_bug_closures: 4                       # F2, F3, F8, F10 (모두 commit 9fbaf6a)
+    scope_deferrals: 6                         # F1, F4, F5, F6, F7, F9
+    methodology_gaps: 0
+    closure_commits:
+      - "bf50cab (R96 phase α — two-factor-auth-l0 spec seed)"
+      - "9fbaf6a (R96 iter1 closures — F2 priority + F3 RECIPE example + F8 WebAuthn attestation pin)"
+      - "9f75540 (R96 iter1 ledger — F10 self-closure)"
+      - "7f00dc7 (R96 iter2 TRUE 0-convergence terminator)"
+    most_productive_persona: "tied (10 personas 각자 1 finding). signal_strength로는 P6 최영숙 (F4 high, 전자금융감독규정 §13의5) + P9 윤재호 (F7 high, single-factor→MFA migration) + P11 황태완 (F8 high, WebAuthn attestation) + P12 한상미 (F10 high, 4th occurrence escalation)."
+    least_productive_personas: []
+    lens_overlap_flagged: []                   # P4/P5 4-wave differentiation maintained, 영구 retire confirmed
+    saturation_flagged: []                     # P12 4-wave 4 real_bug + 3 methodology_gap, 영구 retire confirmed
+    panel_judgment: "all_active_no_retirement"
+    cross_wave_observations:
+      panel_protocol_validation: "10-persona panel이 4th wave에서도 effective — R96 모든 10 persona가 1 finding 산출. R93~R96 panel_size 10 일관, 4-wave saturation 없이 작동."
+      stabilized_signatures:
+        - "P4 priority order: R93/R94/R95/R96 F2 — real_bug × 4"
+        - "P5 RECIPE example: R93/R94/R95/R96 F3 — real_bug × 4"
+        - "P8 SLO/alert wiring: R93/R94/R95/R96 F6 — scope_deferral × 4"
+        - "P11 standards-symmetric: R93 F9/F11 + R94/R95/R96 F8 — real_bug × 5"
+        - "P12 no-ledger-at-kickoff: R93/R94/R95/R96 F10 — real_bug × 4"
+      convergence_speed_rule: "iter terminator = iter1 + 1 IF no new artifact introduced; +N for each new artifact iter cycle. R93 (iter5) vs R94/R95/R96 (iter2 each) — 4-wave validated."
+      lens_overlap_permanent_retirement: "P4 + P5 4-wave differentiation maintained (R93 priority vs sequential / R94 priority+rubric vs procedure / R95 priority vs RECIPE / R96 priority vs RECIPE). 4-wave evidence — lens overlap merge 결정 영구 not-needed로 retire confirmed."
+      saturation_permanent_retirement: "P12 — R93 saturation flag negated R94, confirmed R95 + R96. 4-wave 누적 4 real_bug + 3 methodology_gap. governance lens의 highest-signal real_bug catch ability empirically established."
+      p12_f10_4_data_point_escalation: "R93 lesson-as-text → R94 lesson 무시 → R95 lesson 무시 → R96 PROCEDURE-as-text 시도 but identical failure. **PROCEDURE-as-text는 lesson-as-text와 functionally identical** (둘 다 self-learning insufficient). R97 binary decision: (a) wave_kickoff_ledger_guard.sh mechanical (catalog rule 추가) OR (b) formally accept 4+ consecutive drift as permanent + remove lesson from agenda."
+    next_panel_composition_for_R97:
+      keep: ["P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"]
+      under_review: []
+      add: []
+      retire: []
+      mandatory_R97_iter1_agenda:
+        - "P12 F10 binary decision FORCED — (a) wave_kickoff_ledger_guard.sh OR (b) accept 4+ drift permanent (4-data-point already exceeds threshold for 'just record the lesson again')"
+        - "31 active scope_deferral (R93:13 + R94:6 + R95:6 + R96:6) trigger 점검 (현재 모두 dormant)"
+        - "OBSERVABILITY-002 표준 item을 affected spec들에 일괄 추가 검토 — 4-wave P8 동일 패턴 evidence sufficient"
+        - "P1/P2 backfill 필요성 — 다음 domain dogfood ledger land 여부 따라"
+        - "domain 선택 — A4 document-signing 전자서명 (50% 채택률, P11 standards lens 다시 활성)"
