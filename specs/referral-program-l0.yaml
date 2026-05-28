@@ -31,6 +31,52 @@ introduced_at: "R100 phase α — seeded as the 8th modular-catalog candidate fr
 #   document-signing + chat-messaging + e-government-approval +
 #   referral-program = 8 adopters).
 
+# ── Priority order for fork-receivers (R100 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt items in this order. Earlier items are foundational for later
+# ones — skipping REFERRAL-CODE-001 (code 발급) makes everything else
+# moot because 추적 ID 없이 attribution 불가능. 8-wave pattern (R93~R100
+# F2): Junior priority lens consistently flags missing adoption order.
+#
+#   1. REFERRAL-CODE-001          — code 발급 + 추적 (foundation; everything else references code)
+#   2. REFERRAL-ATTRIBUTION-001   — attribution 기간 + multi-touch
+#   3. REFERRAL-REWARD-001        — 보상 정책 + 공정거래법 §23 한도
+#   4. REFERRAL-DISCLOSURE-001    — 공시 의무 (공정거래위원회 + FTC)
+#   5. REFERRAL-FRAUD-001         — 사기 방지 (5 signals + R54 cross-check)
+#   6. REFERRAL-PRIVACY-001       — PIPA §15 동의 + IP/fingerprint anonymize
+#   7. REFERRAL-OBSERVABILITY-001 — 3 canonical metrics
+
+# ── RECIPE.md frontmatter example (R100 iter1 F3 closure — P5 이상호 lens) ──
+# Canonical opt-in shape. 8-wave pattern (R93~R100 F3): Senior docs lens
+# consistently flags missing copy-pasteable recipe block.
+#
+#   ---
+#   recipe: consumer-saas-referral-kr
+#   tenant_model: multi
+#   default_locale: ko-KR
+#   supported_locales: [ko-KR, en-US]
+#   referral_enabled: true
+#   referral_code_length: 8                                  # REFERRAL-CODE-001 default
+#   referral_cookie_name: __r_attr                            # REFERRAL-CODE-001 default
+#   referral_attribution_window_days: 30                      # REFERRAL-ATTRIBUTION-001 default
+#   referral_attribution_model: last_touch                    # OR first_touch / linear / position_based
+#   referral_device_fingerprint_method: ua_screen_hash        # R100 F8 default — privacy-preserving baseline
+#   referral_ip_anonymization: last_octet_zero                # R100 F8 default — PIPA §15 compliant
+#   referral_cookie_samesite: lax                             # CSRF default
+#   referral_reward_monthly_cap_krw: 500000                   # 공정거래법 §23 한도
+#   referral_disclosure_hashtags: ["#광고", "#추천"]           # 공정거래위원회 고시 §3
+#   referral_fraud_velocity_threshold_per_24h: 10             # REFERRAL-FRAUD-001 default
+#   referral_pii_retention_days: 30                           # PIPA §15 + audit log 5년 별도
+#   referral_audit_log_retention_years: 5                     # 국세기본법 §85의3 (보상 = 수익 시)
+#   ---
+#
+# Fork-receivers targeting 금융권 (전자금융감독규정 §13의5 — 본인확인 강화)
+# MUST flip referral_device_fingerprint_method=fingerprintjs_open_source +
+# referral_fraud_velocity_threshold_per_24h=3 (사기 sensitivity 상향).
+# Privacy-first verticals (해외 GDPR-pure 시장) flip fingerprint_method=none
+# + ip_anonymization=full_hash (last octet 보존 안 함).
+# 청소년 vertical (게임 + 교육) → disclosure_hashtags에 #14세이상_적합
+# 강제 (청소년보호법 §16의2 + 공정거래위원회 고시 §3 cross-cite).
+
 items:
   # ── CODE family ─────────────────────────────────────────────────────────
   - id: "REFERRAL-CODE-001"
@@ -144,6 +190,23 @@ items:
       Quote anchor (개인정보보호법 §15①): "개인정보처리자는 다음 각 호의
       어느 하나에 해당하는 경우에는 개인정보를 수집할 수 있으며 그
       수집 목적의 범위에서 이용할 수 있다."
+      R100 iter1 F8 closure (P11 황태완 standards lens): device fingerprint
+      method + IP anonymization scheme MUST be pinned — recipe declares
+      `referral_device_fingerprint_method` ∈ {ua_screen_hash, fingerprintjs_
+      open_source, canvas_webgl_audio, none} + `referral_ip_anonymization`
+      ∈ {last_octet_zero, full_hash, none}. Default catalog opinion:
+      `ua_screen_hash` (privacy-preserving baseline + sufficient for
+      cross-device detection — only User-Agent string + screen resolution
+      SHA-256 hashed) + `last_octet_zero` (PIPA §15 compliant + 30d
+      retention). `fingerprintjs_open_source` for high-fraud verticals
+      (금융 / 게임 / 가상자산); `canvas_webgl_audio` for adversarial
+      environments (지능형 봇 차단); `none` for privacy-first verticals
+      (해외 GDPR-pure). `last_octet_zero` IPv4 → 192.168.1.0 form; IPv6
+      → /64 prefix (RFC 4291). `full_hash` for cookieless privacy-pure
+      attribution (SHA-256 of full IP + UA, irreversible). 8-wave streak:
+      R93 ISO 8601 + R94 subprotocol + R95 XML namespace + R96 WebAuthn
+      attestation + R97 c14n+PAdES baseline + R98 message id format +
+      R99 hash chain algorithm + R100 device fingerprint + IP anon.
 
   # ── OBSERVABILITY family ──────────────────────────────────────────
   - id: "REFERRAL-OBSERVABILITY-001"
