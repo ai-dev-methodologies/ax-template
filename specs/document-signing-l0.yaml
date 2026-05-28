@@ -20,6 +20,57 @@ introduced_at: "R97 phase α — seeded as the 5th modular-catalog candidate fro
 # stakes consumer of identity-verification; same RRN handling discipline
 # applies.
 
+# ── Priority order for fork-receivers (R97 iter1 F2 closure — P4 이도현 lens) ──
+# Adopt items in this order. Earlier items are foundational for later
+# ones — skipping DOC-FORMAT-001 (signature format declaration) makes
+# everything else moot because un-declared signature formats cannot be
+# verified safely against the appropriate algorithm suite. 5-wave
+# pattern (R93/R94/R95/R96/R97 F2): Junior priority lens consistently
+# flags missing adoption order — closure adds explicit foundation
+# rationale to spec body.
+#
+#   1. DOC-FORMAT-001         — XMLDSig vs PAdES format declaration (foundation)
+#   2. DOC-CERT-001           — KISA PKI / 본인확인기관 인증서 신뢰체계
+#   3. DOC-IDENTITY-001       — 서명자 신원 (RRN PII 분리 + 마스킹 + R54 precedent)
+#   4. DOC-TIMESTAMP-001      — RFC 3161 TSA timestamp 부착 (장기 효력 prerequisite)
+#   5. DOC-VERIFY-001         — CRL/OCSP revocation check (서명 시점 + 검증 시점)
+#   6. DOC-RETENTION-001      — 10년 보관 의무 (공인전자문서법 §31의2)
+#   7. DOC-OBSERVABILITY-001  — 3 canonical metrics + per-tenant labels
+
+# ── RECIPE.md frontmatter example (R97 iter1 F3 closure — P5 김지원 lens) ──
+# Canonical opt-in shape. 5-wave pattern (R93/R94/R95/R96/R97 F3): Senior
+# docs lens consistently flags missing copy-pasteable recipe block —
+# closure adds verbatim financial-document-signing-kr frontmatter example.
+# Fork-receivers producing legally binding documents copy this verbatim
+# and adjust per their regulatory profile.
+#
+#   ---
+#   recipe: financial-document-signing-kr
+#   tenant_model: multi
+#   default_locale: ko-KR
+#   supported_locales: [ko-KR, en-US]
+#   document_signing_enabled: true
+#   document_signing_format: xmldsig          # OR pades (PDF Advanced ES BASELINE-B-LT)
+#   document_signing_xmldsig_c14n_algorithm: c14n11   # R97 F8 default — W3C XMLDSig 1.1 §4.3 MUST-support floor
+#   document_signing_pades_baseline: b-lta             # R97 F8 default — ETSI EN 319 142-1 §6.4 archival profile
+#   document_signing_cert_providers:          # 본인확인기관 화이트리스트
+#     - kisa-pki                              # 공인인증서 (deprecated for new issuance — 사설인증서 default)
+#     - naver-cert
+#     - kakao-cert
+#     - pass-mvno                             # KCB PASS
+#   document_signing_tsa_url: "http://timestamp.kisa.or.kr"   # KISA TSA (KS X 6101 §6 권장)
+#   document_signing_revocation_check: crl-and-ocsp           # 서명·검증 양 시점 (R96 F4 한국 규제 lens 답습)
+#   document_signing_retention_years: 10                      # 공인전자문서법 §31의2 의무
+#   document_signing_signer_identity_storage: separated-element-collection  # R54 precedent
+#   document_signing_signer_identity_masking: prefix-6-mask    # 6자리 노출 + 7자리 이후 마스킹
+#   ---
+#
+# Fork-receivers targeting 금융권 (전자금융감독규정 §13의5) MAY pin
+# document_signing_cert_providers=[kisa-pki, naver-cert, kakao-cert]
+# (RRN-tied 본인확인기관 only). 의료·일반 SaaS는 pass-mvno 포함.
+# Enterprise PKI recipes flip format=pades + custom
+# document_signing_cert_providers=[internal-ca].
+
 items:
   # ── FORMAT family ───────────────────────────────────────────────────────
   - id: "DOC-FORMAT-001"
@@ -39,6 +90,21 @@ items:
       Quote anchor (W3C XMLDSig 1.1 §4.3): "Implementations MUST
       support the Canonical XML 1.1 algorithm and SHOULD support
       Exclusive XML Canonicalization 1.0."
+      R97 iter1 F8 closure (P11 황태완 standards lens): XMLDSig
+      canonicalization algorithm MUST be pinned per W3C XMLDSig 1.1
+      §4.3 — recipe declares `document_signing_xmldsig_c14n_algorithm`
+      in RECIPE.md frontmatter where value ∈ {c14n11, exc-c14n}.
+      Default catalog opinion: `c14n11` (Canonical XML 1.1 — W3C
+      MUST-support floor; SHOULD-support `exc-c14n` retained for
+      legacy XMLDSig 1.0 verifier interop). PAdES recipes pin
+      `document_signing_pades_baseline` ∈ {b-b, b-t, b-lt, b-lta} per
+      ETSI EN 319 142-1 §5 (baseline signature profiles); default
+      `b-lta` for compliance-driven (financial / medical) recipes
+      (preserves long-term verifiability across CA/TSA expiry); `b-t`
+      for short-term-only documents where 10-year retention is not
+      required. R94/R95/R96/R97 F8 pattern: standards lens
+      consistently surfaces default-pinning gap on phase α — closure
+      adds default catalog opinion to spec body.
 
   # ── CERT family ─────────────────────────────────────────────────────────
   - id: "DOC-CERT-001"
