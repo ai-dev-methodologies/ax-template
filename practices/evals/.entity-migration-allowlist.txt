@@ -6,8 +6,7 @@
 # coverage check.
 #
 # IMW1-C (IDW1 dogfood closure): the guard enforces FORWARD — any NEW @Entity
-# MUST ship a V*.sql migration. The 8 entities below predate the guard. They are
-# classified:
+# MUST ship a V*.sql migration.
 #
 # --- DEMO entities (permanent exempt: reference/teaching workloads, never a
 #     production schema a fork-receiver ships) ---
@@ -16,10 +15,7 @@ child
 versioned_account
 items
 #
-# --- DEBT (core infra tables that SHOULD have migrations; tests run on
-#     ddl-auto=create-drop so the gap is invisible. Retire via IMW1-E by
-#     writing V*.sql matching the entity, then deleting the line here) ---
-users
-refresh_tokens
-verification_tokens
-provider_links
+# --- DEBT: RETIRED by IMW1-E (V028__create_core_auth_user_tables.sql now ships
+#     the canonical DDL for users / refresh_tokens / verification_tokens /
+#     provider_links, matching their @Entity definitions). The 4 core infra tables
+#     are no longer allowlisted — the guard now ENFORCES their migration. ---
