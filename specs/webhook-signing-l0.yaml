@@ -1,0 +1,152 @@
+version: "0.1.0"
+scope: "webhook-signing-l0 — HMAC-SHA256 signature scheme over (timestamp + raw body) for signing & verifying outbound/inbound webhooks. Cross-cutting catalog pattern, jurisdiction-agnostic."
+stack: "Spring Boot 3.2.x + javax.crypto.Mac (HmacSHA256) + MessageDigest.isEqual (constant-time) + Micrometer metrics"
+standard: "RFC 2104 (HMAC) + RFC 9421 (HTTP Message Signatures) + RFC 3339 (timestamp) + Stripe / GitHub / Svix webhook signature schemes (de facto)"
+domain_mode: full_trio
+introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
+
+# webhook-signing-l0 is OPT-IN. It is the cryptographic SIGNATURE PRIMITIVE
+# distinct from webhook-l0 (delivery: endpoints / retry / dead-letter /
+# circuit-breaker). A fork-receiver adopts this when it must PROVE message
+# authenticity + bound replay on either axis — signing its own outbound
+# webhooks, OR verifying inbound webhooks from a third party (Stripe, GitHub).
+#
+# Composition note: webhook-l0 (existing L4) owns delivery mechanics and
+# already references HMAC at WEBHOOK-SIGN-001/002 — this spec lifts that
+# signature concern into a standalone reusable primitive (the RFC 2104 +
+# ASVS anchor is shared, per templates/DECISIONS.md TD-2026-05-22-025 HMAC
+# anchor-reuse bullet — sender + receiver are distinct catalog axes sharing
+# one HMAC-SHA256 construction). Replay dedup composes with idempotency-l0
+# (event-id → IDEMPOTENCY-KEY-001 dedup store). NOTE: webhook-l0 carries its
+# signature on `X-Webhook-Signature: sha256=<hex>` + `X-Webhook-Timestamp`;
+# this primitive defines a single structured `Webhook-Signature: t=..,v1=..`
+# header (WHSIGN-HEADER-001). A fork-receiver picks ONE wire format; the two
+# are independent opt-in surfaces, not a contradiction of a normative rule.
+
+# ── Priority order for fork-receivers (earlier items are foundational) ──
+#   1. WHSIGN-HMAC-001          — MAC computation (keystone)
+#   2. WHSIGN-TIMESTAMP-001     — signed timestamp + tolerance window
+#   3. WHSIGN-HEADER-001        — wire format (parseable, versioned)
+#   4. WHSIGN-REPLAY-001        — replay prevention (window + optional nonce)
+#   5. WHSIGN-SECRET-001        — per-endpoint secret + rotation overlap
+#   6. WHSIGN-VERIFY-001        — receiver verification contract
+#   7. WHSIGN-OBSERVABILITY-001 — 3 canonical metrics
+
+
+# ── RECIPE.md frontmatter example (P5 recipe-author lens) ──
+#   ---
+#   recipe: generic-webhook-signing
+#   webhook_signing_enabled: true
+#   webhook_signing_algorithm: hmac-sha256
+#   webhook_signing_tolerance_seconds: 300
+#   webhook_signing_replay_dedup: true
+#   ---
+
+# ── F8 standards pin (P11 standards lens) ──
+# Default pinned: HMAC-SHA256 (RFC 2104) over (timestamp + '.' + raw body) +
+# constant-time compare (MessageDigest.isEqual) + 300s tolerance window +
+# `Webhook-Signature: t=..,v1=..` versioned header. Standards-pin streak continued.
+
+items:
+  - id: "WHSIGN-HMAC-001"
+    chapter: "HMAC-SHA256 signature computation"
+    requirement: "Signature MUST be HMAC-SHA256(secret, signed_input) where signed_input = timestamp + '.' + raw_request_body (exact bytes on the wire, before any deserialization). Comparison on the verify side MUST be constant-time (MessageDigest.isEqual) to defeat timing oracles. A body-only MAC (no timestamp prefix) MUST be rejected. Bad signature → 401 WEBHOOK_SIGNATURE_INVALID."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Impl hint: HmacSigner.sign(secret, ts + "." + rawBody) via
+      Mac.getInstance("HmacSHA256"); verifier recomputes over the captured
+      raw byte[] (use ContentCachingRequestWrapper so the body is read once)
+      and compares with MessageDigest.isEqual(expected, actual). Never use
+      String.equals on hex (early-exit timing leak).
+      Anchored to RFC 2104 (https://www.rfc-editor.org/rfc/rfc2104.html).
+      Quote anchor (RFC 2104 Abstract): "This document describes HMAC, a
+      mechanism for message authentication using cryptographic hash functions."
+
+  - id: "WHSIGN-TIMESTAMP-001"
+    chapter: "Signed timestamp + tolerance window"
+    requirement: "A timestamp MUST be part of signed_input and carried on the wire (unix epoch seconds). Receiver MUST reject a request whose timestamp is outside a configurable tolerance window (default ±300s / 5 min) → 400 WEBHOOK_TIMESTAMP_STALE. The window bounds the replay surface to the configured skew. Recipe declares `webhook_signing_tolerance_seconds` (default 300, range 60-900)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Impl hint: parse the wire timestamp, compute abs(now - ts) and reject
+      before MAC verification short-circuits cost. Tighter windows reduce
+      replay surface but require clock sync (NTP). Wire timestamps that are
+      themselves human-readable SHOULD use RFC 3339 in any audit log row.
+      Reference: RFC 3339 §5.6 (Internet Date/Time Format) (see source) +
+      Stripe webhook signature tolerance (de facto 5 min default).
+
+  - id: "WHSIGN-REPLAY-001"
+    chapter: "Replay prevention (window + optional nonce/event-id dedup)"
+    requirement: "Replay prevention MUST combine (a) the WHSIGN-TIMESTAMP-001 tolerance window with (b) optional dedup of a per-event identifier (nonce or event_id header) so an attacker cannot re-send a captured-and-still-fresh request. When dedup is enabled, a repeated event_id within the tolerance window → 409 WEBHOOK_EVENT_REPLAYED. Dedup store composes with idempotency-l0 (event_id → IDEMPOTENCY-KEY-001)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Impl hint: window alone allows replay within the skew; add a seen-set
+      keyed by event_id with TTL = tolerance window to close the gap.
+      Delegate the store to idempotency-l0 rather than re-implementing.
+      Reference: RFC 9421 §7.2.2 (Signature Replay) — application-level
+      replay protection is the application's responsibility (see source) +
+      Svix replay-window design (de facto).
+
+  - id: "WHSIGN-SECRET-001"
+    chapter: "Per-endpoint signing secret + rotation overlap"
+    requirement: "Each endpoint/integration MUST own its own ≥256-bit signing secret (never a shared global secret). Rotation MUST support an overlap window with EXACTLY 2 active secrets: during overlap the verifier accepts a signature matching EITHER the current OR the previous secret, then the previous is retired. Secrets MUST NOT appear in logs, metric labels, or error bodies."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Impl hint: store secrets as a small ordered set per endpoint
+      {current, previous}; verifier loops the (≤2) candidates and accepts
+      on first constant-time match. Rotation = promote new→current,
+      old→previous, drop the third. Generate via SecureRandom 32 bytes.
+      Reference: RFC 9421 §3.2.1 (Enforcing Application Requirements) — the
+      verifier enforces which key material is acceptable (see source) +
+      Stripe webhook secret rotation overlap (de facto).
+
+  - id: "WHSIGN-HEADER-001"
+    chapter: "Signature header wire format (versioned, parseable)"
+    requirement: "The signature MUST be carried in a structured, versioned header parseable into discrete fields: a scheme/version token, the signed timestamp, and the hex MAC — e.g. `Webhook-Signature: t=<unix_ts>,v1=<hex(HMAC-SHA256)>`. Multiple `v1=` values MAY appear (rotation overlap, WHSIGN-SECRET-001). An unparseable or version-unknown header → 400 WEBHOOK_SIGNATURE_MALFORMED. The version token gates future algorithm migration."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Impl hint: split on ',' then on '=' into a small map; require keys
+      't' and at least one 'v1'; reject unknown scheme tokens so a future
+      'v2' (e.g. an RFC 9421 structured-field signature) can coexist.
+      Reference: RFC 9421 §4.2 (The Signature HTTP Field) (see source) +
+      Stripe Stripe-Signature header grammar `t=...,v1=...` (de facto).
+
+  - id: "WHSIGN-VERIFY-001"
+    chapter: "Receiver verification contract"
+    requirement: "Receiver verification order is fixed: (1) parse header → 400 WEBHOOK_SIGNATURE_MALFORMED on failure; (2) check timestamp window → 400 WEBHOOK_TIMESTAMP_STALE if stale; (3) constant-time MAC compare against each active secret → 401 WEBHOOK_SIGNATURE_INVALID if none match; (4) optional replay dedup → 409 WEBHOOK_EVENT_REPLAYED. A request passing all four → 2xx. The body MUST NOT be deserialized or acted upon before verification succeeds."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Impl hint: implement as a Filter/interceptor in front of the handler
+      so unverified bodies never reach business logic; read raw bytes once
+      via ContentCachingRequestWrapper. Distinct status codes let the caller
+      distinguish a config bug (400) from an auth failure (401) from a
+      replay (409).
+      Reference: RFC 9421 §3.2 (Verifying a Signature) (see source) +
+      GitHub webhook signature verification guidance (de facto).
+
+  - id: "WHSIGN-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Signing/verification MUST expose EXACTLY 3 bounded-cardinality Micrometer metrics: (1) `webhook_signatures_issued_total{endpoint}` — counter of outbound signatures created; (2) `webhook_signature_verification_failure_total{reason}` — reason ∈ {malformed, stale, bad_mac} (bounded enum); (3) `webhook_replay_rejected_total{}` — counter of dedup-rejected replays. Labels MUST NOT include secret, raw signature, event_id, or body."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Impl hint: register meters at startup with a fixed reason enum so
+      cardinality is bounded; an unbounded {event_id} label is the
+      anti-pattern this item forbids. SLO/alert wiring is fork-receiver
+      concern. Anchored to Micrometer naming/cardinality guidance
+      (https://docs.micrometer.io/micrometer/reference/concepts/naming.html).
+      Quote anchor (Micrometer Naming, Tag Values): "Beware of the potential
+      for tag values coming from user-supplied sources to blow up the
+      cardinality of a metric."

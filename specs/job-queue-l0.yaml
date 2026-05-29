@@ -1,0 +1,176 @@
+version: "0.1.0"
+scope: "job-queue-l0 — on-demand async job queue contract (enqueue + at-least-once worker delivery + retry/backoff + dead-letter + priority fairness + status query) for fork-receivers offloading work to background workers. Cross-cutting catalog pattern, jurisdiction-agnostic."
+stack: "Spring Boot 3.2.x + RabbitMQ OR Apache Kafka OR JPA outbox-poller (broker-agnostic) + Micrometer metrics"
+standard: "Generic async job queue pattern + RabbitMQ AMQP 0-9-1 (ack/nack/dead-letter) + Apache Kafka consumer group (at-least-once) + Amazon SQS Developer Guide (visibility timeout + dead-letter queue model) + RFC 7231 §7.1.3 (Retry-After) + RFC 9457 (Problem Details for HTTP APIs)"
+domain_mode: full_trio
+introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards lens active (RabbitMQ AMQP + Kafka consumer-group + SQS visibility-timeout de facto + RFC 7231) + P9 distributed-system lens active (at-least-once delivery + dead-letter + priority fairness = async work-distribution containment for any fan-out workload). R114 P12 TBD."
+
+# job-queue is the ON-DEMAND async sibling of scheduled-task-l0: where
+# scheduled-task-l0 fires work on a CRON timetable (timetable-driven, fixed
+# cadence), job-queue-l0 fires work in response to a request/event NOW
+# (demand-driven, variable volume). OPT-IN: recipes that must offload slow,
+# bursty, or fan-out work off the request thread (report exports, email/
+# notification fan-out, webhook delivery, media processing) SHOULD adopt.
+# Composition note: composes idempotency-l0 (JOB-ENQUEUE-001 reuses the
+# Idempotency-Key + fingerprint contract verbatim for enqueue dedup),
+# cross-references resilience-l0 (worker → external-call protection),
+# report-export-l0 / email-outbox-l0 / notification-l0 / webhook-l0 (each is a
+# concrete consumer of this generic queue), and is distinct from
+# scheduled-task-l0 (cron cadence, not on-demand).
+
+# ── Priority order for fork-receivers (P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational. ENQUEUE + WORKER are the
+# keystone — without durable enqueue and explicit ack, retry/dlq/priority
+# are undefined.
+#   1. JOB-ENQUEUE-001        — enqueue + idempotency key + job id (foundation)
+#   2. JOB-WORKER-001         — at-least-once + ack/nack + visibility timeout
+#   3. JOB-RETRY-001          — exponential backoff + jitter + max-attempts cap
+#   4. JOB-DLQ-001            — dead-letter after exhaustion + inspect/replay
+#   5. JOB-PRIORITY-001       — priority lanes + starvation prevention
+#   6. JOB-STATUS-001         — status query + result handle
+#   7. JOB-OBSERVABILITY-001  — 3 metrics
+
+# ── RECIPE.md frontmatter example (P5 이상호 lens) ──
+#   ---
+#   recipe: generic-job-queue
+#   job_queue_backend: rabbitmq               # OR kafka / jpa-outbox
+#   job_visibility_timeout_seconds: 30
+#   job_retry_max_attempts: 5                  # counting the initial delivery
+#   job_retry_base_delay_ms: 1000
+#   job_retry_max_delay_ms: 300000
+#   job_dlq_enabled: true
+#   job_priority_lanes: [high, normal, low]
+#   job_weighted_fair_dispatch: true          # starvation prevention
+#   ---
+# Durable verticals (exports / payments fan-out) MUST set backend=rabbitmq or
+# kafka (broker-backed); low-volume single-node MAY use jpa-outbox.
+
+# ── F8 standards pin (P11 황태완 lens) ──
+# Defaults pinned: at-least-once delivery + SQS-style visibility-timeout
+# redelivery + exponential backoff with jitter + dead-letter after max
+# attempts (RabbitMQ x-dead-letter / Kafka DLT / SQS DLQ). Worker handlers
+# MUST be idempotent because at-least-once permits duplicate delivery.
+
+items:
+  - id: "JOB-ENQUEUE-001"
+    chapter: "Enqueue + client idempotency key + job id return"
+    requirement: "Producers MUST enqueue a job via POST returning 202 ACCEPTED with a server-generated `job_id` (RFC 4122 UUID) and a `status_url` location handle. The request MAY carry an `Idempotency-Key` header (composes idempotency-l0): when present + previously seen with an identical request fingerprint within the key TTL, the server MUST return the original `job_id` (replay, no second enqueue) rather than create a duplicate job; same key + different fingerprint → 422 IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD. Missing required job payload fields → 400 JOB_PAYLOAD_INVALID. The enqueue write (job row + broker publish) MUST be atomic so a job is never acknowledged to the client without being durably queued."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: reuse idempotency-l0 KEY + DEDUP contract for enqueue
+      dedup; persist {job_id, idempotency_key, fingerprint, status=QUEUED}
+      then publish in the same transaction (transactional outbox if broker
+      publish cannot enlist). Anchored to RFC 9457
+      (https://www.rfc-editor.org/rfc/rfc9457) for the 400/422 error bodies.
+      Quote anchor (RFC 9457 §1): "This document defines a 'problem detail'
+      to carry machine-readable details of errors in HTTP response content
+      to avoid the need to define new error response formats for HTTP APIs."
+
+  - id: "JOB-WORKER-001"
+    chapter: "At-least-once delivery + explicit ack/nack + visibility timeout"
+    requirement: "Workers MUST consume with at-least-once delivery semantics: a job becomes invisible to other workers for `job_visibility_timeout_seconds` (default 30) once delivered, and is redelivered if not acknowledged within that window (crashed/slow worker). The worker MUST explicitly ACK on success (job removed/committed) and NACK on failure (job returned for retry per JOB-RETRY-001) — auto-ack is forbidden because it loses jobs on crash. Because delivery is at-least-once, worker handlers MUST be idempotent (a job MAY be delivered more than once); duplicate-safe handlers reuse the JOB-ENQUEUE-001 / idempotency-l0 fingerprint. Visibility-timeout expiry while still processing MUST NOT corrupt state (the long-running worker either extends the lease or its ACK is rejected as stale)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: RabbitMQ manual basic.ack/basic.nack(requeue),
+      Kafka manual offset commit after processing, or SQS-style
+      ReceiveMessage → DeleteMessage after visibility window. Anchored to
+      Amazon SQS Developer Guide, Visibility timeout
+      (https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)
+      + RabbitMQ Consumer Acknowledgements
+      (https://www.rabbitmq.com/docs/confirms).
+      Quote anchor (Amazon SQS Developer Guide, Visibility timeout): "When
+      you receive a message from an Amazon SQS queue, it remains in the
+      queue but becomes temporarily invisible to other consumers."
+      Quote anchor (RabbitMQ Consumer Acknowledgements): "automatic message
+      acknowledgement should be considered unsafe and not suitable for all
+      workloads."
+
+  - id: "JOB-RETRY-001"
+    chapter: "Retry — exponential backoff + jitter + max-attempts cap"
+    requirement: "Failed jobs MUST be retried with exponential backoff plus jitter and a hard maximum-attempts cap. Recipe declares `job_retry_max_attempts` (default 5, counting the initial delivery), `job_retry_base_delay_ms` (default 1000), `job_retry_max_delay_ms` (default 300000), and jitter ON by default. The computed delay before attempt N MUST be `random_between(0, min(max_delay, base * 2^N))` (full jitter — never a fixed multiplier) so retries do not synchronize into a thundering herd. The delivery `attempt` count MUST be carried on the message/job row and incremented per redelivery. On reaching the max-attempts cap the job MUST NOT be retried again and MUST be routed to the dead-letter queue (JOB-DLQ-001) — it MUST NOT loop indefinitely or be silently dropped."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: per-attempt delay via broker delayed-message / retry
+      topic ladder / re-enqueue with visible-after timestamp; attempt count
+      from x-death header (RabbitMQ) or a job-row column. Anchored to AWS
+      Architecture Blog, Exponential Backoff And Jitter
+      (https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/).
+      Quote anchor (AWS Architecture Blog, Exponential Backoff And Jitter):
+      "we want to spread out the spikes to an approximately constant rate."
+      The Full Jitter formula itself is presented as a code figure, not
+      quoted here.
+
+  - id: "JOB-DLQ-001"
+    chapter: "Dead-letter queue after max retries + inspection/replay"
+    requirement: "When a job exhausts `job_retry_max_attempts` (or is rejected as non-retryable / poison), it MUST be moved to a dead-letter queue rather than discarded, preserving the original payload, the failure reason, and the attempt count. The DLQ MUST be inspectable by an operator: an admin-only endpoint (GET /api/admin/jobs/dead-letter, @PreAuthorize ROLE_ADMIN, 403 for non-admin) lists dead-lettered jobs, and a replay endpoint (POST /api/admin/jobs/dead-letter/{job_id}/replay) re-enqueues a selected job onto its origin queue with the attempt counter reset, returning 202 ACCEPTED. Replaying a `job_id` not in the DLQ → 404 JOB_NOT_IN_DEAD_LETTER. DLQ entries MUST NOT auto-expire silently within the recipe's retention window."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: RabbitMQ x-dead-letter-exchange routing, Kafka
+      dead-letter topic (DLT), or SQS redrive policy → DLQ; replay = read
+      DLQ entry, reset attempt=0, publish to origin. Anchored to Amazon SQS
+      Developer Guide, Dead-letter queues
+      (https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html)
+      + RabbitMQ Dead Letter Exchanges (https://www.rabbitmq.com/docs/dlx).
+      Quote anchor (Amazon SQS Developer Guide, Dead-letter queues): "Amazon
+      SQS supports dead-letter queues (DLQs), which source queues can target
+      for messages that are not processed successfully."
+
+  - id: "JOB-PRIORITY-001"
+    chapter: "Priority lanes + fairness (starvation prevention)"
+    requirement: "The queue MUST support priority so urgent jobs are dispatched ahead of bulk work. Recipe declares `job_priority_lanes` (default [high, normal, low]) and `job_weighted_fair_dispatch` (default true). Strict-priority dispatch alone is forbidden as the sole policy because it starves low-priority jobs indefinitely under sustained high-priority load; the dispatcher MUST enforce fairness — weighted round-robin across lanes OR priority-aging that escalates a job's effective priority after `job_priority_max_wait_seconds` — so every lane makes forward progress. Each job carries an explicit lane; an unknown/out-of-range lane on enqueue → 400 JOB_PRIORITY_INVALID. Within a lane, ordering is FIFO by enqueue time."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: RabbitMQ priority queues (x-max-priority) plus a
+      weighted-fair consumer across separate lane queues, or a DB poller
+      ordering by (effective_priority, enqueued_at) with aging. Strict
+      priority without aging is the starvation anti-pattern this item
+      forbids. Anchored to RabbitMQ Priority Queue Support
+      (https://www.rabbitmq.com/docs/priority).
+      Quote anchor (RabbitMQ Priority Queue Support): "Priority queues
+      deliver messages in the order of message priorities." The broker
+      provides max-priority ordering; weighted-fair / aging starvation
+      prevention is the catalog's added constraint.
+
+  - id: "JOB-STATUS-001"
+    chapter: "Job status query + result handle"
+    requirement: "Producers MUST be able to query a job's lifecycle state via GET /api/jobs/{job_id} returning a JSON body with `job_id`, `status` ∈ {QUEUED, RUNNING, SUCCEEDED, FAILED, DEAD}, `attempt` count, `enqueued_at`, `updated_at`, and — on SUCCEEDED — a `result_handle` (URL/id to fetch the output, never the full payload inline) or — on FAILED/DEAD — a `failure_reason`. The state set is exactly those five terminal/transient values (QUEUED→RUNNING→SUCCEEDED|FAILED, FAILED→QUEUED on retry, exhausted→DEAD). An unknown `job_id` → 404 JOB_NOT_FOUND. The caller MUST authorize: a non-owner non-admin requesting another principal's job → 404 (IDOR-safe, indistinguishable from not-found)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: status read from the job row updated by the worker
+      state machine; result_handle points at report-export/file-storage
+      output rather than inlining large results. 404 (not 403) on
+      cross-principal access is the IDOR-safe choice. Anchored to RFC 9457
+      (https://www.rfc-editor.org/rfc/rfc9457) for the 404 problem body.
+      Quote anchor (RFC 9457 §1): "This document defines a 'problem detail'
+      to carry machine-readable details of errors in HTTP response content
+      to avoid the need to define new error response formats for HTTP APIs."
+      (RFC 9457 §3 opening carries an inline [JSON] citation marker so its
+      sentence is not reproduced verbatim here; the §1 definitional quote
+      anchors the problem-body contract instead.)
+
+  - id: "JOB-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Job-queue implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `jobs_enqueued_total{queue, priority}` — counter of jobs accepted onto a queue, `priority` drawn only from the recipe's enumerated lanes; (2) `job_processing_seconds{queue, outcome}` — a timer/histogram of end-to-end worker processing duration, outcome ∈ {succeeded, failed, dead}; (3) `dlq_depth{queue}` — a gauge of the current dead-letter queue size. The `queue` label MUST be a bounded, recipe-enumerated logical queue name, NEVER a per-job job_id, user_id, tenant_id, payload field, or any unbounded/PII value. SLO/alert wiring (e.g., alert on dlq_depth > 0) is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Three metrics map 1:1 to the three queue health questions — intake
+      (enqueued), throughput/latency (processing_seconds), and failure
+      backlog (dlq_depth). Anchored to Micrometer Concepts
+      (https://docs.micrometer.io/micrometer/reference/concepts.html).
+      Reference: Micrometer Concepts — Counter / Timer / Gauge meter types
+      and tag-cardinality guidance (see source; the bounded-cardinality
+      rule is paraphrased, not quoted verbatim).

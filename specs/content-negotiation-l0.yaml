@@ -1,0 +1,152 @@
+version: "0.1.0"
+scope: "content-negotiation-l0 — HTTP proactive content negotiation (Accept / Content-Type / Accept-Language / Accept-Encoding) + 406 / 415 selection contract for fork-receivers serving any HTTP API with multiple representations. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
+stack: "Spring Boot 3.2.x + Spring MVC ContentNegotiationManager / HttpMessageConverter + Accept-header parsing (MediaType.parseMediaTypes) + LocaleResolver + Servlet response compression + Micrometer metrics"
+standard: "RFC 9110 §12 (Content Negotiation) + RFC 9110 §12.5.1 (Accept) + RFC 9110 §8.3 (Content-Type) + RFC 9110 §15.5.16 (406 Not Acceptable) + RFC 9110 §15.5.18 (415 Unsupported Media Type)"
+domain_mode: full_trio
+introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
+
+# OPT-IN baseline content-negotiation contract. Any fork-receiver whose HTTP
+# API may serve more than one representation (media type, language, or
+# encoding) adopts to make representation selection deterministic, spec-
+# compliant, and machine-driven from request headers rather than ad-hoc.
+# Composition note: CONNEG-LANGUAGE-001 composes i18n-policy-l0 (locale
+# negotiation / MessageSource); 406/415 error bodies SHOULD route through
+# problem-details-l0 (RFC 9457). This spec canonicalizes the header-driven
+# selection layer those L4s already touch in passing — it is HTTP plumbing,
+# distinct from any business vertical.
+
+# ── Priority order for fork-receivers (P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. CONNEG-TYPE-001
+#   2. CONNEG-ACCEPT-001
+#   3. CONNEG-DEFAULT-001
+#   4. CONNEG-406-001
+#   5. CONNEG-LANGUAGE-001
+#   6. CONNEG-ENCODING-001
+#   7. CONNEG-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (P5 이상호 lens) ──
+#   ---
+#   recipe: generic-content-negotiation
+#   content_negotiation_enabled: true
+#   conneg_supported_media_types: ["application/json"]
+#   conneg_default_media_type: application/json
+#   conneg_accept_language_enabled: true
+#   conneg_compression_enabled: true
+#   ---
+
+# ── F8 standards pin (P11 황태완 lens) ──
+# Default pinned: proactive negotiation on Accept / Accept-Language /
+# Accept-Encoding with RFC 9110 §12.4.2 quality-value ranking. Standards-pin
+# streak continued (R93~R114).
+
+items:
+  - id: "CONNEG-ACCEPT-001"
+    chapter: "Accept header parsing + quality-value ranking"
+    requirement: "The server MUST parse the request `Accept` header into an ordered list of media ranges with their quality values (`q`, default 1.0 when absent, range 0.0-1.0) and select the most-preferred representation the resource can produce. Specificity tie-breaks MUST follow RFC 9110: a more specific media range (e.g. `application/json`) outranks a wildcard subtype (`application/*`) which outranks the full wildcard (`*/*`) at equal `q`. A media range with `q=0` MUST be treated as 'not acceptable' and MUST NOT be selected. When two acceptable types tie on both `q` and specificity, the server MAY use a configured server preference. Selecting a representation the client ranked below an available higher-`q` acceptable type → contract violation."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: Spring MVC ContentNegotiationManager backed by
+      HeaderContentNegotiationStrategy; rank via MediaType.sortBySpecificityAndQuality
+      over the parsed Accept media ranges. The Accept field itself is defined
+      in RFC 9110 §12.5.1; the q-parameter quality-value mechanics it relies
+      on are defined in RFC 9110 §12.4.2
+      (https://www.rfc-editor.org/rfc/rfc9110.html#section-12.4.2).
+      Quote anchor (RFC 9110 §12.4.2): "The content negotiation fields
+      defined by this specification use a common parameter, named \"q\"
+      (case-insensitive), to assign a relative \"weight\" to the preference
+      for that associated kind of content."
+  - id: "CONNEG-TYPE-001"
+    chapter: "Content-Type validation on request bodies + 415"
+    requirement: "For any request carrying a body (POST / PUT / PATCH), the server MUST inspect the `Content-Type` request header and reject with `415 Unsupported Media Type` when the indicated media type is not one the endpoint can consume (no matching HttpMessageConverter / @RequestMapping consumes). A missing `Content-Type` on a body-bearing request MUST be treated as `application/octet-stream` (unprocessable for typed endpoints) → 415, never silently parsed as JSON. The server MUST NOT attempt to sniff or guess the body media type from its contents. A successful consume path MUST match an explicitly declared supported type."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: declare `consumes` on the handler mapping; Spring MVC
+      raises HttpMediaTypeNotSupportedException → 415 mapped via the
+      problem-details-l0 @ControllerAdvice. Anchored to RFC 9110 §15.5.18
+      (https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.18).
+      Quote anchor (RFC 9110 §15.5.18): "The 415 (Unsupported Media Type)
+      status code indicates that the origin server is refusing to service
+      the request because the content is in a format not supported by this
+      method on the target resource."
+  - id: "CONNEG-LANGUAGE-001"
+    chapter: "Accept-Language + content-language selection (composes i18n-policy-l0)"
+    requirement: "When a resource has localizable representations, the server MUST select a language from the request `Accept-Language` header using BCP 47 language-range matching with quality values, and MUST advertise the chosen language in the `Content-Language` response header. The match MUST fall back gracefully (e.g. `ko-KR` requested, `ko` available → serve `ko`) and MUST resolve to a configured default language when no requested range is satisfiable rather than returning 406 for language alone. The selected language MUST NOT alter machine-stable identifiers (problem `type` URIs, enum codes). This item composes i18n-policy-l0 for the underlying MessageSource / locale resolution."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: Spring LocaleResolver (AcceptHeaderLocaleResolver) +
+      MessageSource keyed per i18n-policy-l0; set Content-Language from the
+      resolved Locale. Language tags per BCP 47 / RFC 5646. Anchored to
+      RFC 9110 §12.5.4
+      (https://www.rfc-editor.org/rfc/rfc9110.html#section-12.5.4).
+      Quote anchor (RFC 9110 §12.5.4): "The \"Accept-Language\" header field
+      can be used by user agents to indicate the set of natural languages
+      that are preferred in the response."
+  - id: "CONNEG-ENCODING-001"
+    chapter: "Accept-Encoding (gzip / br) + Content-Encoding response"
+    requirement: "When the request carries `Accept-Encoding`, the server MAY apply a content coding (e.g. `gzip` or `br`) the client signalled as acceptable, and when it does it MUST set the `Content-Encoding` response header to the applied coding and MUST add `Vary: Accept-Encoding` so caches key correctly. The server MUST NOT apply a coding the client did not list (or listed with `q=0`); a coding listed with `q=0` is forbidden. The `identity` (uncompressed) coding MUST remain available, and the server MUST serve uncompressed when no acceptable coding is offered rather than failing the request. Coding MUST be transparent — the decoded body MUST be byte-identical to the uncompressed representation."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: enable servlet container response compression
+      (server.compression.* in Spring Boot) gated on Accept-Encoding; ensure
+      Vary: Accept-Encoding is emitted. Anchored to RFC 9110 §12.5.3
+      (https://www.rfc-editor.org/rfc/rfc9110.html#section-12.5.3).
+      Quote anchor (RFC 9110 §12.5.3): "The \"Accept-Encoding\" header field
+      can be used to indicate preferences regarding the use of content
+      codings (Section 8.4.1)."
+  - id: "CONNEG-406-001"
+    chapter: "406 Not Acceptable when no representation matches Accept"
+    requirement: "When the request `Accept` header is present and NONE of the representations the resource can produce is acceptable (every producible type was excluded or assigned `q=0`), the server MUST respond `406 Not Acceptable`. The 406 body SHOULD itself be served in a safe, broadly-acceptable type (the problem-details-l0 `application/problem+json` envelope) and SHOULD enumerate the available media types to aid the client. The server MUST NOT silently downgrade to an unacceptable type and return 200. 406 applies to representation media type/language/encoding mismatch, distinct from 415 (request-body type) — the two MUST NOT be conflated."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: Spring MVC raises HttpMediaTypeNotAcceptableException →
+      406, mapped through the problem-details-l0 @ControllerAdvice with the
+      list of producible types as an extension member. Anchored to RFC 9110
+      §15.5.16 (https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.16).
+      Quote anchor (RFC 9110 §15.5.16): "The 406 (Not Acceptable) status code
+      indicates that the target resource does not have a current
+      representation that would be acceptable to the user agent, according
+      to the proactive negotiation header fields received in the request
+      (Section 12.1), and the server is unwilling to supply a default
+      representation."
+  - id: "CONNEG-DEFAULT-001"
+    chapter: "Default representation when Accept absent or */*"
+    requirement: "When the request omits `Accept` entirely, or sends `Accept: */*` (or an `application/*`-style wildcard satisfied by the default), the server MUST serve a single configured default representation (`conneg_default_media_type`, recommended `application/json`) with a deterministic, stable `Content-Type`. Absence of Accept MUST NOT trigger 406. The default MUST be explicit and documented per resource — it MUST NOT depend on handler-method declaration order or HttpMessageConverter registration order. The same default request MUST always yield the same media type across releases."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: ContentNegotiationManager defaultContentType (or
+      ContentNegotiationConfigurer.defaultContentType) pinned to the recipe's
+      conneg_default_media_type. Anchored to RFC 9110 §12.1
+      (https://www.rfc-editor.org/rfc/rfc9110.html#section-12.1).
+      Quote anchor (RFC 9110 §12.1): "A user agent cannot rely on proactive
+      negotiation preferences being consistently honored, since the origin
+      server might not implement proactive negotiation for the requested
+      resource or might decide that sending a response that doesn't conform
+      to the user agent's preferences is better than sending a 406 (Not
+      Acceptable) response."
+  - id: "CONNEG-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Content negotiation MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `negotiation_total{media_type}` — counter of successful selections keyed by the selected type drawn ONLY from the closed `conneg_supported_media_types` set plus a fixed `default` bucket (never the raw Accept header, never free text); (2) `unsupported_media_total` — counter of 415 outcomes (request Content-Type not consumable); (3) `not_acceptable_total` — counter of 406 outcomes (no producible representation acceptable). Labels MUST draw only from the closed supported-type set + fixed status buckets; raw Accept / Accept-Language / Accept-Encoding strings, user id, and any PII / high-cardinality value are EXCLUDED. SLO / alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded cardinality = configured supported media types (closed set)
+      + fixed {default} bucket; 415 and 406 counters are label-free totals.
+      Anchored to OpenTelemetry Semantic Conventions for HTTP metrics
+      (https://opentelemetry.io/docs/specs/semconv/http/http-metrics/).
+      Quote anchor (OTel HTTP metrics, http.server.request.duration note):
+      "The `error.type` value SHOULD be predictable and SHOULD have low
+      cardinality."

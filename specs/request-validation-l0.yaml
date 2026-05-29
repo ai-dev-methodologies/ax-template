@@ -1,0 +1,159 @@
+version: "0.1.0"
+scope: "request-validation-l0 — declarative boundary input validation (Bean Validation / JSON Schema) + strict typing / no silent coercion + reject-not-sanitize + nested/collection path-qualified errors, all surfaced through the shared RFC 9457 problem+json error array, for fork-receivers accepting any structured HTTP request body. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
+stack: "Spring Boot 3.2.x + Jakarta Bean Validation 3.0 (Hibernate Validator) + Spring MVC @Valid / MethodArgumentNotValidException handling + Jackson strict deserialization + Micrometer metrics"
+standard: "Jakarta Bean Validation 3.0 (JSR 380) + JSON Schema (json-schema.org draft 2020-12) + RFC 9457 (Problem Details for HTTP APIs) + RFC 6901 (JSON Pointer) + OWASP Input Validation Cheat Sheet + RFC 8259 (JSON data interchange) + RFC 9110 (HTTP Semantics, 415/422 status)"
+domain_mode: full_trio
+introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
+
+# OPT-IN baseline request-validation contract. Any fork-receiver accepting a
+# structured HTTP request body (JSON form/command/query DTO) adopts to make
+# input validation declarative, exhaustive, and machine-readable at the edge.
+# Composition note: error bodies route through problem-details-l0 — this spec
+# does NOT introduce a competing error envelope. VALIDATION-ERROR-001 reuses
+# the SAME `errors` extension array that problem-details-l0 PROBLEM-VALIDATION
+# -001 already defines (object fields `detail` + `pointer`/`name`, per RFC 9457
+# §3) and only ADDS a `code` field on each entry — the engine specializes the
+# shared problem+json shape, it does not redefine it. pagination-l0 +
+# idempotency-l0 reuse the same constraint annotations on their query/header
+# params; i18n-policy-l0 supplies localized constraint messages keyed by code.
+
+# ── Priority order for fork-receivers (P4 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. VALIDATION-SCHEMA-001
+#   2. VALIDATION-TYPE-001
+#   3. VALIDATION-CONSTRAINT-001
+#   4. VALIDATION-NESTED-001
+#   5. VALIDATION-SANITIZE-001
+#   6. VALIDATION-ERROR-001
+#   7. VALIDATION-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (P5 lens) ──
+#   ---
+#   recipe: generic-request-validation
+#   request_validation_enabled: true
+#   validation_engine: bean-validation
+#   validation_strict_types: true
+#   validation_reject_unknown_fields: true
+#   validation_error_array: true
+#   ---
+
+# ── F8 standards pin (P11 lens) ──
+# Default pinned: Jakarta Bean Validation @Valid at the controller boundary +
+# RFC 9457 errors[] array (detail + pointer, code extension) (JSR 380 + RFC
+# 9457). 12-wave standards-pin streak (R93~R114).
+
+items:
+  - id: "VALIDATION-SCHEMA-001"
+    chapter: "declarative boundary validation"
+    requirement: "Every inbound request body and bound command/query DTO MUST be validated declaratively at the controller boundary — via Jakarta Bean Validation constraint annotations on the DTO triggered by `@Valid`/`@Validated`, OR via a JSON Schema (draft 2020-12) document evaluated before binding. Imperative `if (x == null) throw ...` checks scattered through service code are NOT a substitute and MUST NOT be the primary mechanism. A request that fails the declared schema MUST be rejected with HTTP 400 (or 422 for semantically-valid-but-unprocessable per RFC 9110) before any business logic executes. A controller accepting a body with no declared validation contract → violation."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: annotate DTO fields with Jakarta constraints and add
+      @Valid on the @RequestBody parameter; Spring raises
+      MethodArgumentNotValidException pre-handler. Anchored to Jakarta Bean
+      Validation 3.0
+      (https://jakarta.ee/specifications/bean-validation/3.0/jakarta-bean-validation-spec-3.0.html)
+      and JSON Schema draft 2020-12
+      (https://json-schema.org/draft/2020-12/json-schema-core).
+      Reference: Jakarta Bean Validation 3.0 §5 (constraint declaration +
+      validation routine) (see source).
+  - id: "VALIDATION-TYPE-001"
+    chapter: "strict type handling"
+    requirement: "JSON deserialization MUST be strict: a field declared as a number MUST reject a JSON string, a field declared boolean MUST reject `\"true\"`/`1`, and an enum field MUST reject an unlisted token — with NO silent coercion. Wrong-type input MUST yield HTTP 400 (a binding/parse failure), never a coerced value that reaches business logic. Recipes MAY also reject unknown/extra fields (`validation_reject_unknown_fields`, default reject) so typo'd field names surface instead of being dropped. A request whose `amount` arrives as `\"100\"` and is silently coerced to the integer 100 → violation."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: disable Jackson lenient coercion
+      (MapperFeature/coercion config) and enable
+      DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES; map
+      HttpMessageNotReadableException to 400. Anchored to RFC 8259
+      (https://www.rfc-editor.org/rfc/rfc8259) and the JSON Schema
+      validation vocabulary `type` keyword
+      (https://json-schema.org/draft/2020-12/json-schema-validation).
+      Quote anchor (JSON Schema draft 2020-12 validation §6.1.1, "type"):
+      "If the value of \"type\" is a string, then an instance validates
+      successfully if its type matches the type represented by the value of
+      the string."
+  - id: "VALIDATION-CONSTRAINT-001"
+    chapter: "standard + custom constraints"
+    requirement: "Field constraints MUST be expressed with the standard Bean Validation constraint set where one fits: `@NotNull`/`@NotBlank` (required), `@Size`/`@Length` (length bounds), `@Pattern` (regex format), `@Min`/`@Max`/`@Positive`/`@PositiveOrZero` (numeric range), `@Email`, `@Past`/`@Future` (temporal). Cross-field or domain-specific rules (e.g. `startDate < endDate`, mutually-exclusive flags) MUST be expressed as a class-level custom `ConstraintValidator`, NOT hand-coded inside the handler. Every constraint MUST carry a stable machine `code` (used by VALIDATION-ERROR-001). Re-implementing a length/range check imperatively when a standard constraint exists → violation."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: prefer built-in jakarta.validation.constraints.*; for
+      cross-field rules write a @Constraint-annotated annotation + a
+      ConstraintValidator returning a stable message template key.
+      Anchored to Jakarta Bean Validation 3.0
+      (https://jakarta.ee/specifications/bean-validation/3.0/jakarta-bean-validation-spec-3.0.html).
+      Reference: Jakarta Bean Validation 3.0 §8 (built-in constraint
+      definitions) + §3 (constraint definition / custom ConstraintValidator)
+      (see source).
+  - id: "VALIDATION-NESTED-001"
+    chapter: "nested object + collection validation"
+    requirement: "Validation MUST cascade into nested objects and collection elements: a `@Valid` nested DTO and a `List<@Valid Item>` (or container-element constraint such as `List<@NotBlank String>`) MUST each be fully validated, and EVERY violating element MUST be reported — not just the first. Each reported violation MUST carry a path-qualified locator resolving to the exact element (e.g. `/items/2/quantity`, `/address/postalCode`) so the client can pinpoint the offending value. Validating only the top-level object while ignoring nested/collection members, or reporting `items` without the failing index → violation."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: place @Valid on nested fields and use container-element
+      constraints; map each ConstraintViolation.getPropertyPath() to an
+      RFC 6901 JSON Pointer. Anchored to Jakarta Bean Validation 3.0
+      (graph + container-element validation)
+      (https://jakarta.ee/specifications/bean-validation/3.0/jakarta-bean-validation-spec-3.0.html)
+      and RFC 6901 (https://www.rfc-editor.org/rfc/rfc6901).
+      Reference: Jakarta Bean Validation 3.0 §5.7.1 (object graph validation)
+      + §5.5 (container element constraints) (see source).
+  - id: "VALIDATION-SANITIZE-001"
+    chapter: "reject-not-sanitize default"
+    requirement: "The default posture for untrusted input MUST be reject-not-sanitize: input that does not match the declared constraint is rejected with 400/422, NOT silently stripped, escaped, or transformed into a 'cleaned' value that proceeds. Any normalization that is genuinely required (e.g. Unicode NFC normalization of a name, trimming surrounding whitespace, lowercasing an email local part) MUST be an explicit, documented allowlist transform applied at a named boundary step — never an implicit silent mutation, and never a denylist/blocklist of 'bad' characters. Silently sanitizing malformed input and continuing as if valid → violation."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: validate first and reject; apply only a small, named
+      set of allowlisted normalizers (e.g. NFC normalize, trim) and document
+      each. Anchored to OWASP Input Validation Cheat Sheet
+      (https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html).
+      Quote anchor (OWASP Input Validation Cheat Sheet, "Allow List vs Block
+      List"): "Allowlist validation is appropriate for all input fields
+      provided by the user."
+  - id: "VALIDATION-ERROR-001"
+    chapter: "RFC 9457 validation error array"
+    requirement: "Validation failures MUST be returned as an `application/problem+json` body (RFC 9457) with HTTP 400, reusing the SAME top-level `errors` extension array that problem-details-l0 PROBLEM-VALIDATION-001 already defines — NOT a new envelope. Each entry MUST carry `pointer` (RFC 6901 JSON Pointer, e.g. `/email`) or `name` (form/query parameter) locating the input, and `detail` (human-readable, localizable), exactly as PROBLEM-VALIDATION-001 mandates. Each entry MUST additionally carry `code` (a stable machine constraint identifier, e.g. `Size`, `NotBlank`, `Pattern`) so clients branch on `code` independent of `detail` wording — `code` is an additive extension field on the shared entry shape. ALL violations from one request MUST appear in the single `errors` array (no fail-fast). Returning a single concatenated error string, omitting the `pointer`/`name` locator, redefining a competing envelope, or branching keyed on free-text `detail` → violation."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: a @ControllerAdvice maps
+      MethodArgumentNotValidException → ProblemDetail with the `errors`
+      extension array; this SPECIALIZES problem-details-l0
+      PROBLEM-VALIDATION-001 (adds `code` per entry) rather than defining a
+      new envelope. Anchored to RFC 9457 §3.2 + the validation-error example
+      (https://www.rfc-editor.org/rfc/rfc9457) and RFC 6901
+      (https://www.rfc-editor.org/rfc/rfc6901).
+      Quote anchor (RFC 9457 §3.2): "Problem type definitions MAY extend the
+      problem details object with additional members that are specific to
+      that problem type."
+      Quote anchor (RFC 9457 §3.2): "Similarly, the validation error example
+      defines an 'errors' extension that contains a list of individual error
+      occurrences found, with details and a pointer to the location of each."
+      Quote anchor (RFC 6901 Abstract): "JSON Pointer defines a string syntax
+      for identifying a specific value within a JavaScript Object Notation
+      (JSON) document."
+  - id: "VALIDATION-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Validation MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `validation_failure_total{field}` — counter keyed by the offending field path drawn ONLY from the closed, schema-declared field-name set (NOT a raw user-supplied JSON Pointer with attacker-controlled indices/keys); (2) `validation_failure_total{code}` — same counter sliced by the closed constraint-code set (e.g. NotNull, Size, Pattern); (3) `request_rejected_total{status_class}` — counter of rejected requests with status_class ∈ {4xx}. Labels MUST exclude the offending value, message text, user id, and any unbounded/PII value. Collection indices MUST be collapsed to a template segment (e.g. `/items/{index}/quantity`) to keep cardinality bounded. SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded cardinality = declared schema field templates (closed) ×
+      constraint codes (closed) × {4xx}; never tag with the rejected value.
+      Anchored to OpenTelemetry Semantic Conventions for HTTP metrics
+      (https://opentelemetry.io/docs/specs/semconv/http/http-metrics/).
+      Quote anchor (OTel HTTP metrics, error.type note): "The `error.type`
+      value SHOULD be predictable and SHOULD have low cardinality."

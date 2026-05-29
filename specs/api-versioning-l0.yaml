@@ -1,0 +1,159 @@
+version: "0.1.0"
+scope: "api-versioning-l0 — HTTP API version negotiation + deprecation / sunset signalling + backward-compatibility policy + migration window + version discovery for fork-receivers evolving a public or partner-facing API surface. Cross-cutting catalog pattern, jurisdiction-agnostic."
+stack: "Spring Boot 3.2.x + Spring Web (content negotiation / custom request mapping) + Micrometer metrics"
+standard: "RFC 8594 (The Sunset HTTP Header Field) + The Deprecation HTTP Header Field (draft-ietf-httpapi-deprecation-header, in progress) + RFC 9110 (HTTP Semantics §12 Content Negotiation) + Semantic Versioning 2.0.0"
+domain_mode: full_trio
+introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
+
+# OPT-IN versioning catalog. Fork-receivers that expose an API to clients
+# they do not control (mobile apps, partner integrations, public SDKs)
+# adopt to evolve the contract without silently breaking consumers.
+# Single-consumer / internal-only forks MAY keep only NEGOTIATION + DEFAULT
+# and skip the deprecation / migration / discovery machinery.
+#
+# Composition note: pairs with problem-details-l0 (version errors use
+# RFC 9457 bodies), pagination-l0 (cursor shape is part of the versioned
+# contract), and idempotency-l0 (Idempotency-Key semantics survive a
+# version bump). Version negotiation is API-surface plumbing — distinct
+# from any business L4 vertical.
+#
+# RELATIONSHIP TO spring-practices-l0 PRACTICES-API-003 (no conflict):
+# PRACTICES-API-003 ("API / Versioning") is the catalog's standing best-
+# practices rule and unconditionally requires url-path versioning
+# (every public URI carries a `/v{N}/` segment; header / query-param
+# versioning are disrecommended for caching + tooling reasons). This spec
+# EXTENDS — never contradicts — that rule: url-path is the catalog-default
+# and PRACTICES-API-003-aligned strategy here. The accept-param and
+# custom-header strategies are advisory ALTERNATIVES only; a fork-receiver
+# that selects either MUST record a documented PRACTICES-API-003 exemption
+# (the same exemption channel PRACTICES-API-003 already allows for
+# /actuator/** and /api/admin/**). The catalog reference workload uses
+# url-path so testPractices stays GREEN.
+
+# ── Priority order for fork-receivers (P4 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. VERSION-NEGOTIATION-001
+#   2. VERSION-DEFAULT-001
+#   3. VERSION-COMPATIBILITY-001
+#   4. VERSION-DEPRECATION-001
+#   5. VERSION-MIGRATION-001
+#   6. VERSION-DISCOVERY-001
+#   7. VERSION-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (P5 lens) ──
+#   ---
+#   recipe: generic-api-versioning
+#   api_versioning_enabled: true
+#   api_version_strategy: url-path        # url-path (default, PRACTICES-API-003-aligned) | accept-param | custom-header
+#   api_version_default: latest-stable    # latest-stable | pinned
+#   api_version_deprecation_window_months: 6
+#   ---
+
+# ── F8 standards pin (P11 lens) ──
+# Default pinned: URL-path major versioning + RFC 8594 Sunset + Deprecation
+# header on retired versions + SemVer 2.0.0 compatibility rules.
+
+items:
+  - id: "VERSION-NEGOTIATION-001"
+    chapter: "Version selection strategy"
+    requirement: "The recipe MUST declare exactly ONE canonical version-selection strategy via `api_version_strategy` ∈ {url-path, accept-param, custom-header} and apply it uniformly across the API surface. url-path is the catalog DEFAULT and is the only strategy aligned with spring-practices-l0 PRACTICES-API-003; selecting accept-param or custom-header REQUIRES a documented PRACTICES-API-003 exemption. url-path: major version is the first path segment (`/v1/...`, `/v2/...`). accept-param: version is a media-type parameter on the `Accept` header (`Accept: application/vnd.app+json; version=2`). custom-header: version is a single declared header (`X-API-Version: 2`). A request that selects a syntactically valid but unsupported version MUST yield 406 Not Acceptable (accept-param) or 404 Not Found (url-path); a malformed version token MUST yield 400 Bad Request with an RFC 9457 problem body whose `type` identifies the version-negotiation failure. Mixing two strategies in one request (e.g., `/v1` path with a conflicting `X-API-Version: 2`) MUST be rejected with 400 rather than silently resolved."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implement via a single resolver (custom HandlerMapping or a
+      content-negotiation strategy); do not scatter version branching
+      through controllers. url-path keeps the surface PRACTICES-API-003
+      compliant (every public URI has a /v{N}/ segment); the other two
+      strategies are advisory and need an exemption. Anchored to RFC 9110
+      §12 Content Negotiation
+      (https://www.rfc-editor.org/rfc/rfc9110#name-content-negotiation)
+      and the Accept field definition in §12.5.1.
+      Reference: RFC 9110 §12 / §12.5.1 (see source).
+
+  - id: "VERSION-DEFAULT-001"
+    chapter: "Default-version policy (client sends none)"
+    requirement: "When a client supplies NO version selector, the server MUST resolve it deterministically per the recipe-declared `api_version_default` policy ∈ {latest-stable, pinned}. latest-stable: route to the newest non-deprecated major and ECHO the resolved version back in an `X-API-Version` response header so the client can observe what it got. pinned: route to a fixed declared major (`api_version_pinned`, e.g. v1) so an un-versioned client never silently jumps majors on a future release. The default policy MUST NOT resolve to a deprecated or sunset version. The resolved version MUST always be surfaced on the response (header or body field `apiVersion`) regardless of policy."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      pinned is the safer default for partner / mobile clients that cannot
+      be force-upgraded; latest-stable suits internal first-party callers.
+      Echoing the resolved version closes the "which version did I get?"
+      ambiguity. Anchored to RFC 9110 §12 Content Negotiation
+      (https://www.rfc-editor.org/rfc/rfc9110#name-content-negotiation).
+      Reference: RFC 9110 §12 (see source).
+
+  - id: "VERSION-COMPATIBILITY-001"
+    chapter: "Backward-compatible change policy (SemVer)"
+    requirement: "Within a single advertised major version the server MUST only ship additive, backward-compatible changes: NEW optional response fields, NEW optional request fields with safe defaults, NEW endpoints, NEW enum values only where the client contract documents forward-tolerance. The server MUST NOT, within a major, remove or rename a response field, tighten validation on an existing field, change a field's type, change an existing field's semantics, or alter an existing endpoint's success status code. Any such backward-incompatible change MUST be introduced under a NEW major version (per SemVer 2.0.0 rule 8). Clients MUST be expected to ignore unknown response fields (tolerant reader) so additive changes do not break them."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      A contract test asserting v1 still returns its original required
+      field set after a feature add is the cheapest guard. Anchored to
+      Semantic Versioning 2.0.0 (https://semver.org/#spec-item-8).
+      Quote anchor (Semantic Versioning 2.0.0, item 8): "Major version X
+      (X.y.z | X > 0) MUST be incremented if any backward incompatible
+      changes are introduced to the public API."
+
+  - id: "VERSION-DEPRECATION-001"
+    chapter: "Deprecation + Sunset headers on retired versions"
+    requirement: "Every response served from a version flagged deprecated MUST carry a `Deprecation` HTTP response header AND, when a removal date is known, a `Sunset` HTTP response header (RFC 8594) whose value is an IMF-fixdate (RFC 9110 §5.6.7 / HTTP-date) at the planned unresponsive instant. The response SHOULD additionally include a `Link` header with relation type `deprecation` pointing to human-readable deprecation documentation, and MAY include a `Link` with relation `sunset`. A deprecated version MUST still serve normally (200, NOT 4xx) until its sunset instant. After the sunset instant the server MAY return 410 Gone. The `Sunset` value MUST NOT be in the past while the version is still served."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Deprecation signals the WHAT (this version is deprecated); Sunset
+      signals the WHEN (removal instant). Anchored to RFC 8594
+      (https://www.rfc-editor.org/rfc/rfc8594) + The Deprecation HTTP
+      Header Field (https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-deprecation-header).
+      Quote anchor (RFC 8594 §3): "The Sunset HTTP response header field
+      allows a server to communicate the fact that a resource is expected
+      to become unresponsive at a specific point in time."
+      Quote anchor (draft-ietf-httpapi-deprecation-header §2): "The
+      Deprecation HTTP response header field allows a server to communicate
+      to a client application that the resource in context of the message
+      is or will be deprecated."
+
+  - id: "VERSION-MIGRATION-001"
+    chapter: "Deprecation window + migration guide link"
+    requirement: "Between marking a version deprecated and its sunset instant the server MUST honour a minimum migration window of `api_version_deprecation_window_months` (default 6, minimum 3) — i.e. the `Sunset` instant MUST be at least that many months after the `Deprecation` instant. Every deprecated-version response MUST expose a stable migration guide URL via a `Link` header with relation type `deprecation` (reused for the guide). The migration guide URL MUST be absolute and version-specific (it tells the client which NEXT major to move to). Shortening the window below the configured minimum for an already-announced sunset MUST be rejected at configuration/startup, not silently applied."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The window protects partner / mobile clients that cannot upgrade on
+      demand; fail-closed at startup if Sunset - Deprecation < minimum.
+      Anchored to The Deprecation HTTP Header Field §3 (the `deprecation`
+      Link relation type) + §4 (pairing with the RFC 8594 Sunset header)
+      (https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-deprecation-header).
+      Reference: draft-ietf-httpapi-deprecation-header §3 / §4 (see source).
+
+  - id: "VERSION-DISCOVERY-001"
+    chapter: "Version discovery endpoint"
+    requirement: "The server MUST expose an unauthenticated, cacheable version-discovery endpoint (default `/api/versions`) returning 200 with a JSON document listing every advertised major version and, per version, its `status` ∈ {current, deprecated, sunset} plus, for deprecated versions, the `deprecationDate` and `sunsetDate` (RFC 3339) and the migration guide URL. The document MUST identify which version the default policy resolves to (`default: \"v2\"`). The endpoint MUST set `Cache-Control` and MUST NOT leak internal build identifiers, hostnames, or stack traces. A sunset (already-removed) major MAY be listed with `status: sunset` for client diagnostics or omitted once fully retired."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Discovery lets a client self-detect that it is on a soon-to-sunset
+      major without parsing per-response headers. Anchored to The
+      Deprecation HTTP Header Field §3 (deprecation discovery via links)
+      (https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-deprecation-header).
+      Reference: draft-ietf-httpapi-deprecation-header §3 (see source).
+
+  - id: "VERSION-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "API-versioning implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `api_requests_by_version_total{version, status}` — counter, `version` from the recipe-declared fixed advertised-version set, `status` ∈ {current, deprecated, sunset}; (2) `api_deprecated_version_calls_total{version}` — counter, incremented per request served from a deprecated version, `version` from the same fixed set; (3) `api_version_sunset_breach_total{version}` — counter, incremented when a request arrives for a version whose sunset instant has passed (served 410 or restricted). Labels MUST exclude client id / user id / route / api key / IP / any high-cardinality or PII value. SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded label sets keep metric-backend cardinality flat; `version`
+      is safe only because the advertised-version set is small and fixed.
+      Anchored to OpenTelemetry Semantic Conventions, general metrics
+      naming (https://opentelemetry.io/docs/specs/semconv/general/naming/).
+      Quote anchor (OTel SemConv naming): "Names SHOULD be lowercase."

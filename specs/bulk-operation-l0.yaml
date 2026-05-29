@@ -1,0 +1,155 @@
+version: "0.1.0"
+scope: "bulk-operation-l0 — batch / bulk-write endpoint contract (max-batch-size limit, per-item partial-success status array, declared atomicity mode, multi-format input, async job hand-off, pre-validation pass) for fork-receivers exposing any high-volume create/update/delete-many HTTP API. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
+stack: "Spring Boot 3.2.x + JPA (batch persistence) + Jackson (JSON / JSONL streaming) + Apache Commons CSV or univocity (RFC 4180) + Micrometer metrics"
+standard: "RFC 9457 (Problem Details for HTTP APIs — per-item error objects) + RFC 4918 §11.1 (HTTP 207 Multi-Status, source of the 207 code) + JSON Lines text format (jsonlines.org, de facto) + RFC 4180 (CSV) + RFC 9110 §15.5.14 (413 Content Too Large) + OData v4 Batch Requests (de facto) + Google Cloud API batch request pattern (de facto)"
+domain_mode: full_trio
+introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
+
+# OPT-IN bulk-write catalog. Fork-receivers exposing import / bulk-create
+# / mass-update endpoints adopt to bound request size, return per-item
+# outcomes, and declare atomicity explicitly instead of leaving partial
+# failure undefined. Single-row CRUD forks MAY skip entirely.
+#
+# Maps to the R93-reserved `bulk-import` L4 slot (the bilateral partner of
+# report-export, ingress vs egress) generalized from CSV/XLSX file import
+# to any bulk write/update/delete-many HTTP API.
+#
+# Composition note vs existing L4: composes idempotency-l0 (one
+# Idempotency-Key dedups the whole batch submission), job-queue-l0 /
+# scheduled-task-l0 (BULK-ASYNC-001 returns a job ref for large batches),
+# pagination-l0 (paged readback of job item results), problem-details-l0
+# (per-item error member uses application/problem+json shape), and
+# report-export-l0 (shared RFC 4180 + formula-injection neutralizer for
+# CSV ingress). Order-management / inventory verticals inherit this base.
+
+# ── Priority order for fork-receivers (P4 lens) ──
+# Adopt in order; earlier items are foundational. SUBMIT + PARTIAL are
+# the keystone — without a size bound and a per-item result array the
+# atomicity / format / async items are undefined.
+#   1. BULK-SUBMIT-001        — payload envelope + max-batch-size + 413
+#   2. BULK-PARTIAL-001       — per-item status array (207-style)
+#   3. BULK-ATOMICITY-001     — declared atomicity mode
+#   4. BULK-FORMAT-001        — declared input formats
+#   5. BULK-ASYNC-001         — large-batch job hand-off
+#   6. BULK-VALIDATION-001    — pre-validation pass
+#   7. BULK-OBSERVABILITY-001 — 3 metrics
+
+# ── RECIPE.md frontmatter example (P5 lens) ──
+#   ---
+#   recipe: generic-bulk-import
+#   bulk_max_batch_size: 1000               # hard cap; oversize → 413
+#   bulk_atomicity_mode: best_effort        # OR all_or_nothing
+#   bulk_input_formats: [json, jsonl, csv]  # subset declared per endpoint
+#   bulk_async_threshold: 500               # ≥ → job ref instead of sync
+#   bulk_prevalidate: true                  # report all item errors first
+#   ---
+# Financial / ledger verticals MUST set atomicity_mode=all_or_nothing;
+# tolerant import verticals use best_effort. Large async_threshold trades
+# latency for sync simplicity.
+
+# ── F8 standards pin (P11 lens) ──
+# Default pinned: per-item result objects shaped like RFC 9457 problem
+# details, 207-style aggregate response (RFC 4918 §11.1), JSONL framing
+# (jsonlines.org), CSV per RFC 4180, 413 per RFC 9110 §15.5.14.
+
+items:
+  - id: "BULK-SUBMIT-001"
+    chapter: "Batch payload envelope + max-batch-size limit"
+    requirement: "Bulk endpoints MUST accept a batch envelope carrying a top-level `items` array (or an equivalent declared streaming format) and MUST enforce a recipe-declared `bulk_max_batch_size` (default 1000) on the number of items. A request whose item count exceeds the cap → 413 Content Too Large with a Problem Details body (`type`, `title`, `status`=413, `detail` naming the cap and the received count); the field carrying the limit MUST be `max_batch_size` and the observed value `received_count`. An empty `items` array → 400 with `detail` \"items must not be empty\". The cap MUST be enforced before any item is persisted."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Enforce the cap in the controller / argument resolver before the
+      service layer touches the DB. Anchored to RFC 9110 §15.5.14
+      (https://www.rfc-editor.org/rfc/rfc9110#section-15.5.14).
+      Quote anchor (RFC 9110 §15.5.14): "The 413 (Content Too Large)
+      status code indicates that the server is refusing to process a
+      request because the request content is larger than the server is
+      willing or able to process."
+
+  - id: "BULK-PARTIAL-001"
+    chapter: "Partial success — per-item status array (207-style)"
+    requirement: "Unless the endpoint declares all-or-nothing atomicity, a bulk request MUST default to partial success: the server processes each item independently and returns 207 Multi-Status with a `results` array preserving input order, one entry per submitted item, each carrying `index` (int), `status` (per-item HTTP status code int, e.g. 201/200/409/422), and on failure an embedded RFC 9457 `error` object (`type`, `title`, `detail`). The aggregate response MUST NOT collapse mixed outcomes into a single 200 or single 4xx. A batch where every item fails still returns 207 (the request itself was processed); transport-level rejection (oversize, malformed envelope) is the only path to a top-level 4xx."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      207 conveys mixed per-resource outcomes; the per-item error object
+      reuses problem-details-l0 members. Anchored to RFC 4918 §11.1
+      (https://www.rfc-editor.org/rfc/rfc4918#section-11.1) for the 207
+      code and RFC 9457 (https://www.rfc-editor.org/rfc/rfc9457) for the
+      per-item error shape.
+      Quote anchor (RFC 4918 §11.1): "The 207 (Multi-Status) status code
+      provides status for multiple independent operations."
+
+  - id: "BULK-ATOMICITY-001"
+    chapter: "Declared atomicity mode (transactional vs best-effort)"
+    requirement: "Each bulk endpoint MUST declare its atomicity via `bulk_atomicity_mode` ∈ {all_or_nothing, best_effort} (default `best_effort`). In `all_or_nothing` the whole batch runs in a single transaction: the first item that fails validation or persistence MUST roll back every prior item in the batch and return 422 with a Problem Details body whose `detail` names the failing `index` and reason; the `results` array (if returned) MUST show zero committed items. In `best_effort` each item commits or fails independently (per BULK-PARTIAL-001). The mode MUST be discoverable to clients (response header `X-Bulk-Atomicity` or an OpenAPI-documented field); a client MUST NOT have to guess whether a partial commit occurred."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Drive all_or_nothing with a single @Transactional service method so
+      a thrown exception rolls back the batch; best_effort uses
+      per-item transaction boundaries (REQUIRES_NEW) so one failure does
+      not poison committed siblings. Reference: OData v4.01 §11.7 Batch
+      Requests, change set (atomic group) semantics
+      (https://docs.oasis-open.org/odata/odata/v4.01/odata-v4.01-part1-protocol.html#sec_BatchRequests)
+      (see source).
+
+  - id: "BULK-FORMAT-001"
+    chapter: "Declared input formats (JSON array / JSONL / CSV RFC 4180)"
+    requirement: "Each bulk endpoint MUST declare its accepted input formats via `bulk_input_formats` ⊆ {json, jsonl, csv} and select the parser by request `Content-Type`: `application/json` → top-level array, `application/jsonl` (or `application/x-ndjson`) → one JSON object per line, `text/csv` → RFC 4180 records with a header row mapping to item fields. An unsupported Content-Type → 415 Unsupported Media Type. A malformed line / record → that item fails with a per-item 422 (best_effort) or rolls back the batch (all_or_nothing); a parse error MUST report the offending line/record `index`. CSV ingress MUST neutralize formula-injection (cells starting with = + - @ tab CR) before any echo-back, sharing the report-export-l0 guard. JSONL and CSV MUST be parsed streamingly so the size cap (BULK-SUBMIT-001) can be enforced without buffering the whole body."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Stream JSONL/CSV to bound memory and short-circuit at the size cap.
+      Anchored to the JSON Lines text format (https://jsonlines.org/) and
+      RFC 4180 (https://www.rfc-editor.org/rfc/rfc4180).
+      Quote anchor (RFC 4180 §2): "Each record is located on a separate
+      line, delimited by a line break (CRLF)."
+
+  - id: "BULK-ASYNC-001"
+    chapter: "Large-batch async job hand-off (composes job-queue-l0)"
+    requirement: "When an accepted batch size reaches the recipe-declared `bulk_async_threshold` (default 500), the endpoint MUST NOT block the request thread to completion. Instead it MUST persist the batch, enqueue a job, and return 202 Accepted with a `Location` header pointing at a job-status resource and a body carrying `job_id` plus initial `status` (e.g. `queued`). The client polls (or is notified) for per-item results, which MUST be retrievable in the same 207-style `results` shape as the sync path (composing pagination-l0 for large result sets). Below the threshold the endpoint MAY answer synchronously with 207. The same Idempotency-Key (idempotency-l0) MUST dedup a re-submitted batch to the existing job rather than creating a second one."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      202 + Location is the canonical long-running-operation hand-off;
+      reuse scheduled-task-l0 / job-queue-l0 for the worker. Reference:
+      Google API design guide, long-running operations (AIP-151)
+      (https://cloud.google.com/apis/design/design_patterns#long_running_operations)
+      (see source).
+
+  - id: "BULK-VALIDATION-001"
+    chapter: "Pre-validation pass — report all item errors before mutation"
+    requirement: "When `bulk_prevalidate` is true (default for all_or_nothing endpoints), the server MUST run a full validation pass over every item BEFORE mutating any item. If one or more items are invalid, the server MUST return without persisting anything and answer 422 with a Problem Details body whose `errors` array lists every invalid item by `index` with its `error` object — the client sees the complete error set in one round-trip rather than fixing items one-at-a-time. A dry-run MUST be exposed (request param `validate_only=true` or `X-Bulk-Validate-Only: true`) that runs the same pass and returns the would-be `results` with HTTP 200 and zero mutations. Pre-validation MUST cover the same constraints (schema, uniqueness, authorization) the mutating path enforces, so a passing pre-validation does not later 422 mid-batch for an avoidable reason."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Two-phase (validate-all → mutate-all) keeps all_or_nothing failures
+      cheap and gives best_effort clients an upfront error map. The
+      aggregated error list reuses the RFC 9457 problem-details member
+      shape. Anchored to RFC 9457
+      (https://www.rfc-editor.org/rfc/rfc9457).
+      Quote anchor (RFC 9457 Abstract): "This document defines a \"problem
+      detail\" to carry machine-readable details of errors in HTTP
+      response content to avoid the need to define new error response
+      formats for HTTP APIs."
+
+  - id: "BULK-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Bulk implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `bulk_items_total{endpoint, outcome}` — counter, outcome ∈ {succeeded, failed, skipped}; (2) `bulk_partial_failure_rate{endpoint}` — gauge in [0.0, 1.0] reporting the failed-item fraction of the most recent batches; (3) `bulk_batch_seconds{endpoint, mode}` — timer/histogram, mode ∈ {all_or_nothing, best_effort}. Labels MUST exclude item ids / payload values / tenant_id / user_id / job_id (no high-cardinality or PII); `endpoint` MUST be a low-cardinality route template, never a resolved path. SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded label sets keep the metric backend cardinality flat; bucket
+      bulk_batch_seconds for the async vs sync split. Anchored to
+      OpenTelemetry Semantic Conventions naming
+      (https://opentelemetry.io/docs/specs/semconv/general/naming/).
+      Quote anchor (OTel SemConv naming): "Names SHOULD be lowercase."

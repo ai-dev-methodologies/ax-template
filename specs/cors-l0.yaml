@@ -1,0 +1,136 @@
+version: "0.1.0"
+scope: "cors-l0 — Cross-Origin Resource Sharing preflight + allowlist + credential policy contract for fork-receivers exposing browser-reachable HTTP APIs. Cross-cutting catalog pattern, jurisdiction-agnostic."
+stack: "Spring Boot 3.2.x + Spring Web CorsConfigurationSource / CorsFilter + Spring Security CORS bridge + Micrometer metrics"
+standard: "WHATWG Fetch Standard (CORS protocol) + W3C CORS (Cross-Origin Resource Sharing, historical Recommendation) + RFC 9110 (HTTP Semantics) + OWASP CORS guidance (HTML5 Security Cheat Sheet / OWASP Testing Guide)"
+domain_mode: full_trio
+introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
+
+# OPT-IN browser-CORS contract. Any fork-receiver whose API is called from
+# a browser on a different origin adopts to keep an explicit allowlist
+# instead of reflecting arbitrary Origin headers. Server-to-server-only
+# forks MAY skip every item (CORS is a browser-enforced control, not a
+# server access control). Composition note: pairs with problem-details-l0
+# (rejected-origin responses still emit application/problem+json) and
+# distributed-tracing-l0 (preflight OPTIONS spans named by route template,
+# Origin never used as a span attribute). CORS is NEVER a substitute for
+# authn/authz — auth-asvs-l1 remains the access-control authority.
+
+# ── Priority order for fork-receivers (P4 adoption-order lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. CORS-ORIGIN-001
+#   2. CORS-PREFLIGHT-001
+#   3. CORS-CREDENTIALS-001
+#   4. CORS-METHODS-001
+#   5. CORS-HEADERS-001
+#   6. CORS-MAXAGE-001
+#   7. CORS-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (P5 recipe-author lens) ──
+#   ---
+#   recipe: generic-cors
+#   cors_enabled: true
+#   cors_allowed_origins: ["https://app.example.com"]
+#   cors_allow_credentials: false
+#   cors_max_age_seconds: 600
+#   ---
+
+# ── F8 standards pin (P11 standards lens) ──
+# Default pinned: explicit Origin allowlist + no wildcard-with-credentials (WHATWG Fetch CORS protocol). Standards-pin streak continued.
+
+items:
+  - id: "CORS-ORIGIN-001"
+    chapter: "Allowed-origins allowlist"
+    requirement: "Allowed origins MUST be a recipe-declared finite allowlist (`cors_allowed_origins`) of exact `scheme://host[:port]` serializations. The server MUST NOT reflect an arbitrary inbound `Origin` header back as `Access-Control-Allow-Origin`. On an allowed origin the response MUST echo that single origin (not `*`) and MUST add `Vary: Origin` so caches do not serve one origin's CORS response to another. On a disallowed origin the server MUST omit all `Access-Control-Allow-*` headers (the browser then blocks the read); it MUST NOT 4xx the actual request solely for origin mismatch. `Access-Control-Allow-Origin: *` is forbidden whenever credentials are allowed (see CORS-CREDENTIALS-001)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Use Spring CorsConfigurationSource.setAllowedOrigins (exact) or
+      setAllowedOriginPatterns (bounded patterns); never reflect the raw
+      Origin. Anchored to WHATWG Fetch Standard
+      (https://fetch.spec.whatwg.org/#http-access-control-allow-origin).
+      Reference: WHATWG Fetch Standard, CORS protocol — Access-Control-Allow-Origin
+      response header (see source).
+
+  - id: "CORS-PREFLIGHT-001"
+    chapter: "OPTIONS preflight handling"
+    requirement: "For a CORS preflight (an `OPTIONS` request carrying both `Origin` and `Access-Control-Request-Method`, optionally `Access-Control-Request-Headers`) the server MUST respond 204 (or 200) WITHOUT executing business logic and WITHOUT requiring authentication, returning `Access-Control-Allow-Origin`, `Access-Control-Allow-Methods`, and (when requested) `Access-Control-Allow-Headers`. The preflight MUST be answered before any authn/authz filter runs so that a protected endpoint is still reachable by a legitimate cross-origin client. A non-preflight `OPTIONS` (no `Access-Control-Request-Method`) is a normal request and MUST NOT be treated as preflight."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      In Spring Security, enable .cors() and let CorsFilter run ahead of
+      the authorization filter; do not gate OPTIONS preflight behind
+      authentication. Anchored to WHATWG Fetch Standard
+      (https://fetch.spec.whatwg.org/#cors-preflight-fetch).
+      Reference: WHATWG Fetch Standard, CORS-preflight fetch +
+      Access-Control-Request-Method request header (see source).
+
+  - id: "CORS-CREDENTIALS-001"
+    chapter: "Allow-Credentials policy"
+    requirement: "`Access-Control-Allow-Credentials: true` MUST be sent ONLY when the recipe sets `cors_allow_credentials: true` AND a specific origin is echoed in `Access-Control-Allow-Origin`. The combination of `Access-Control-Allow-Origin: *` with `Access-Control-Allow-Credentials: true` is forbidden — the credentialed mode disallows the wildcard for origin, methods, and headers, so each MUST be an explicit value. When credentials are allowed the response MUST include `Vary: Origin`. Default `cors_allow_credentials` MUST be `false`; cookie/Authorization-bearing cross-origin reads require an explicit opt-in."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      setAllowCredentials(true) in Spring forbids "*" for origins, methods,
+      and headers — pin explicit values. Anchored to WHATWG Fetch Standard
+      (https://fetch.spec.whatwg.org/#http-access-control-allow-credentials).
+      Reference: WHATWG Fetch Standard, CORS protocol — credentialed
+      requests disallow `*` for Allow-Origin/Methods/Headers (see source).
+
+  - id: "CORS-METHODS-001"
+    chapter: "Allow-Methods per endpoint"
+    requirement: "`Access-Control-Allow-Methods` MUST enumerate the exact HTTP methods the endpoint group supports (e.g., `GET, POST, PUT, DELETE`) drawn from a recipe-declared `cors_allowed_methods` list. `*` is permitted ONLY in non-credentialed mode and MUST NOT be used when `cors_allow_credentials` is true. The preflight MUST reflect the support set such that the value in `Access-Control-Request-Method` is included; a method not in the allowlist MUST cause the server to omit it from `Access-Control-Allow-Methods` (browser blocks), NOT to 405 the preflight. CORS-simple methods (GET/HEAD/POST) are still subject to the declared allowlist for the response advertisement."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Declare methods on the CorsConfiguration per path pattern, not a
+      blanket "*", so credentialed surfaces stay explicit. Anchored to
+      WHATWG Fetch Standard
+      (https://fetch.spec.whatwg.org/#http-access-control-allow-methods).
+      Reference: WHATWG Fetch Standard, CORS protocol —
+      Access-Control-Allow-Methods response header (see source).
+
+  - id: "CORS-HEADERS-001"
+    chapter: "Allow-Headers + Expose-Headers"
+    requirement: "`Access-Control-Allow-Headers` MUST enumerate the request headers the client may send (covering every value listed in `Access-Control-Request-Headers`), drawn from a recipe-declared `cors_allowed_headers` list; CORS-safelisted request headers need not be listed but a custom header such as `Authorization`, `X-Idempotency-Key`, or `X-Tenant-Id` MUST be. `Access-Control-Expose-Headers` MUST enumerate any non-safelisted RESPONSE headers (e.g., `X-Total-Count`, `Location`, `ETag`) the browser is allowed to read; without it those headers are hidden from script. `*` for either header is permitted ONLY in non-credentialed mode. A requested header absent from the allowlist MUST cause omission (browser blocks), NOT a 4xx."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Pair with pagination-l0 — expose X-Total-Count / Link or the read
+      stays invisible to fetch(). Anchored to WHATWG Fetch Standard
+      (https://fetch.spec.whatwg.org/#http-access-control-allow-headers).
+      Reference: WHATWG Fetch Standard, CORS protocol —
+      Access-Control-Allow-Headers + Access-Control-Expose-Headers (see source).
+
+  - id: "CORS-MAXAGE-001"
+    chapter: "Preflight cache duration"
+    requirement: "Preflight responses MUST set `Access-Control-Max-Age` to a recipe-declared `cors_max_age_seconds` (default 600) bounding how long the browser caches the preflight result, reducing repeat OPTIONS round-trips. The value MUST be a non-negative integer of seconds; the server MUST treat it as advisory because the user agent enforces its own upper cap and MAY ignore larger values. A value of `0` (or omission) means re-preflight every request and is acceptable for rarely-called or rapidly-changing surfaces. The configured value MUST be a bounded constant, never derived from request input."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      setMaxAge(Duration) on the CorsConfiguration; keep it a fixed config
+      constant, not request-derived. Anchored to WHATWG Fetch Standard
+      (https://fetch.spec.whatwg.org/#http-access-control-max-age).
+      Reference: WHATWG Fetch Standard, CORS protocol —
+      Access-Control-Max-Age response header (see source).
+
+  - id: "CORS-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "CORS handling MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `cors_preflight_total{outcome}` — counter, outcome ∈ {allowed, rejected}; (2) `cors_rejected_origin_total{reason}` — counter, reason ∈ {origin_not_allowed, method_not_allowed, header_not_allowed, credentials_wildcard}; (3) `cors_requests_by_origin_class_total{origin_class}` — counter, origin_class ∈ {same_site, allowlisted, disallowed} (a coarse classification, NOT the raw Origin value). Labels MUST exclude the raw `Origin` string, host, path, tenant_id, and user_id (no high-cardinality or PII). SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Map each raw Origin to one of three classes before tagging — never
+      tag with the Origin itself. Anchored to OWASP CORS guidance
+      (https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html).
+      Quote anchor (OWASP HTML5 Security Cheat Sheet, Cross-Origin Resource
+      Sharing): "Allow only selected, trusted domains in the
+      Access-Control-Allow-Origin header. Prefer allowing specific domains
+      over blocking or allowing any domain (do not use * wildcard nor
+      blindly return the Origin header content without any checks)."
