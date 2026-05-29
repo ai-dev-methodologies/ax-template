@@ -1125,3 +1125,73 @@ authoritative until source-verified.** Prefer `Reference: RFC X §Y (see
 source)` over a fabricated verbatim quote. Adversarial verify (a second
 agent refuting each draft) catches most hallucination before land — make
 it a required stage of any Workflow-drafted batch.
+
+## Dogfood-Driven Hardening Loop (IDW / IMW)
+
+The Spec Trio + wave methodology above *builds* the catalog. This loop
+*proves and hardens* it empirically — it is how the catalog converges toward
+the north star: **100% complete** (no gap forces off-template code) **+
+zero-tolerance enforced** (every deviation mechanically blocked). Spec-only
+authoring (prose YAML) is necessary but insufficient; only real builds reveal
+whether the standardization actually holds.
+
+### The cycle
+
+```
+IDW (Industry Dogfood Wave)
+  pick a real, usable industry app slice (issue-tracker, seller-admin, …)
+  → 3 personas (Junior / Senior / 특급시니어) build the SAME slice INDEPENDENTLY
+    in isolated git worktrees, each USING + stress-testing the live catalog
+  → synthesize the 3 builds into the empirical signal:
+       • common_components   — built the same by all → promote as REAL code
+       • completeness_gaps    — where the catalog lacked guidance (→ build it)
+       • enforcement_gaps     — deviations the guards FAILED to block (→ guard it)
+       • automation_validation — did build/test/guards actually work?
+        ↓
+IMW (Improvement Wave) — close what IDW found, each sub-wave verified + pushed:
+       • -A enforcement   : re-scope / add guards so deviations are blocked
+       • -B completeness  : ship REAL reusable code (prose→code) under common/
+       • -C guards        : new mechanical guards (calibrated GREEN-on-current)
+       • -D… : fix surfaced existing violations (with their test updates)
+        ↓
+next IDW on the HARDENED catalog → validate the IMW worked (personas now REUSE
+  the new helpers instead of hand-rolling; new guards guide them) + find the
+  next gap round → loop until gaps→0 and every deviation is blocked.
+```
+
+### Rules that make the signal trustworthy
+
+1. **3 independent personas, isolated worktrees.** Convergence (all 3 build the
+   same shape) is strong evidence a pattern is canonical + promotable. Divergence
+   marks a missing canonical rule. Worktrees prevent cross-contamination AND let
+   each build self-verify its own domain test before reporting.
+2. **Capture enforcement gaps explicitly.** Each persona records deviations it
+   tried and whether a guard/test caught them (`was_caught`). An off-template move
+   that passed silently is the highest-value finding — it becomes an IMW-C guard.
+3. **Guards calibrate GREEN-on-current.** A new guard must pass on the existing
+   tree (no false positives) while catching the found deviation. If GREEN needs
+   fixing existing code, do NOT weaken the guard — fix the code (IMW-D) or
+   allowlist documented debt with a retirement task.
+4. **Backend-only for now.** Per the React+Spring north star, dogfood the Spring
+   Boot backend first; the React frontend is a deferred second target within the
+   same stack (do not branch to other backend languages until the contract layer
+   is frozen — see project memory).
+5. **Integrate from the worktree, not the agent's returned text.** Workflow
+   subagents self-verify in their worktree (compiled, GREEN); copy the actual
+   files from the worktree on integration — returned `changed_files` content can
+   be serialization-corrupted (a 295-line build.gradle.kts once collapsed to one).
+6. **Never run a spec-/code-drafting Workflow concurrently with `verify-completion`.**
+   Subagents mutate the working tree; a concurrent verify scans it and spuriously
+   FAILs. Serialize: build → integrate → verify → push → next.
+7. **Resource discipline.** Cap concurrent worktree gradle builds at ~3 (a proven
+   safe oversubscription on a 16-core host with zero swap); batch larger fan-outs.
+   Watch swap (the real OOM signal), not transient load spikes.
+
+### Artifacts
+
+- `docs/NEW-DOMAIN-CHECKLIST.md` — the single-entry scaffold a new domain follows
+  (the IDW1 "had to reverse-engineer the artifact set" gap closure).
+- `docs/dogfood-ledger/<idw>-…md` — per-IDW findings + the prioritized IMW backlog.
+- The IMW sub-waves land as ordinary verified+pushed commits; the next IDW is the
+  regression test that the improvement actually took.
+
