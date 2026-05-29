@@ -22,6 +22,8 @@ import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import CreatePage from 'templates/L3/pages/create-page/page'
 import CrudCreateForm, { type FieldDef } from 'templates/L2/blocks/crud-create-form'
+import { parseError } from 'templates/L0/fork-receiver-kit/parse-error'
+import { parseFieldErrors } from 'templates/L0/fork-receiver-kit/parse-field-errors'
 
 // ─── fields ─────────────────────────────────────────────────────────────────
 
@@ -55,13 +57,24 @@ interface Item {
 
 // ─── fetcher ────────────────────────────────────────────────────────────────
 
+/** Error thrown on a failed create — carries the per-field validation map. */
+type CreateError = Error & { fieldErrors?: Record<string, string> }
+
 async function createItem(data: CreateItemRequest): Promise<Item> {
   const res = await fetch('/api/items', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
-  if (!res.ok) throw new Error(`Failed to create item: ${res.status}`)
+  if (!res.ok) {
+    // Parse the top-level message (parse-error) AND the per-field validation
+    // map (parse-field-errors) from the one problem+json response. Clone first
+    // so both can read the body.
+    const fieldErrors = await parseFieldErrors(res.clone())
+    const error: CreateError = await parseError(res, 'Failed to create item.')
+    error.fieldErrors = fieldErrors
+    throw error
+  }
   return res.json() as Promise<Item>
 }
 
@@ -83,6 +96,9 @@ async function createItem(data: CreateItemRequest): Promise<Item> {
 export default function NewItemPage() {
   const queryClient = useQueryClient()
   const [error, setError] = React.useState<string | null>(null)
+  // Per-field server validation errors → passed to the form's fieldErrors prop,
+  // which marks each input aria-invalid and shows its message (FMW2 seam).
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({})
 
   const mutation = useMutation({
     mutationFn: createItem,
@@ -92,13 +108,15 @@ export default function NewItemPage() {
       // Navigate to the new item's detail page
       window.location.href = `/items/${created.id}`
     },
-    onError: (err: Error) => {
-      setError(err.message ?? 'Failed to create item. Please try again.')
+    onError: (err: CreateError) => {
+      setError(err.message || 'Failed to create item. Please try again.')
+      setFieldErrors(err.fieldErrors ?? {})
     },
   })
 
   function handleSubmit(data: Record<string, unknown>) {
     setError(null)
+    setFieldErrors({})
     mutation.mutate({
       title: String(data.title ?? ''),
       description: data.description ? String(data.description) : undefined,
@@ -122,6 +140,7 @@ export default function NewItemPage() {
             onSubmit={handleSubmit}
             isLoading={mutation.isPending}
             submitLabel="Create item"
+            fieldErrors={fieldErrors}
           />
         </>
       }

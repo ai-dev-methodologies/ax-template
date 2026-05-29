@@ -23,6 +23,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import EditPage from 'templates/L3/pages/edit-page/[id]/page'
 import CrudEditForm, { type FieldDef } from 'templates/L2/blocks/crud-edit-form'
 import CrudDeleteConfirm from 'templates/L2/blocks/crud-delete-confirm'
+import { parseError } from 'templates/L0/fork-receiver-kit/parse-error'
+import { parseFieldErrors } from 'templates/L0/fork-receiver-kit/parse-field-errors'
 
 // ─── fields ─────────────────────────────────────────────────────────────────
 
@@ -68,13 +70,21 @@ async function fetchItem(id: string): Promise<Item> {
   return res.json() as Promise<Item>
 }
 
+/** Error thrown on a failed update — carries the per-field validation map. */
+type UpdateError = Error & { fieldErrors?: Record<string, string> }
+
 async function updateItem(id: string, data: UpdateItemRequest): Promise<Item> {
   const res = await fetch(`/api/items/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
-  if (!res.ok) throw new Error(`Failed to update item: ${res.status}`)
+  if (!res.ok) {
+    const fieldErrors = await parseFieldErrors(res.clone())
+    const error: UpdateError = await parseError(res, 'Failed to save changes.')
+    error.fieldErrors = fieldErrors
+    throw error
+  }
   return res.json() as Promise<Item>
 }
 
@@ -103,6 +113,7 @@ export default function EditItemPage({ params }: { params: { id: string } }) {
   const { id } = params
   const queryClient = useQueryClient()
   const [updateError, setUpdateError] = React.useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({})
 
   const { data: item, isLoading } = useQuery<Item>({
     queryKey: ['items', id],
@@ -115,8 +126,9 @@ export default function EditItemPage({ params }: { params: { id: string } }) {
       queryClient.invalidateQueries({ queryKey: ['items'] })
       window.location.href = `/items/${updated.id}`
     },
-    onError: (err: Error) => {
-      setUpdateError(err.message ?? 'Failed to save changes.')
+    onError: (err: UpdateError) => {
+      setUpdateError(err.message || 'Failed to save changes.')
+      setFieldErrors(err.fieldErrors ?? {})
     },
   })
 
@@ -130,6 +142,7 @@ export default function EditItemPage({ params }: { params: { id: string } }) {
 
   function handleUpdate(data: Record<string, unknown>) {
     setUpdateError(null)
+    setFieldErrors({})
     updateMutation.mutate({
       title: data.title ? String(data.title) : undefined,
       description: data.description ? String(data.description) : undefined,
@@ -166,6 +179,7 @@ export default function EditItemPage({ params }: { params: { id: string } }) {
             onSubmit={handleUpdate}
             isLoading={updateMutation.isPending}
             submitLabel="Save changes"
+            fieldErrors={fieldErrors}
           />
         </>
       }

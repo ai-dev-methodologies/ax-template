@@ -39,12 +39,20 @@ interface Item {
   updatedAt?: string
 }
 
+// Canonical pagination envelope — the shape backend common/PageEnvelope emits
+// (pagination-l0): { data, pagination:{ page (0-based), pageSize, totalElements,
+// totalPages, hasMore } }. FMW3 aligned this off the stale Spring
+// { content, totalElements, totalPages, page, size } shape so a fork copying
+// this reference matches what the backend actually returns.
 interface ItemsPage {
-  content: Item[]
-  totalElements: number
-  totalPages: number
-  page: number
-  size: number
+  data: Item[]
+  pagination: {
+    page: number
+    pageSize: number
+    totalElements: number
+    totalPages: number
+    hasMore: boolean
+  }
 }
 
 // ─── columns ────────────────────────────────────────────────────────────────
@@ -85,7 +93,7 @@ async function fetchItems(page: number, size: number): Promise<ItemsPage> {
  *   L2 FilterBar    → filter group containing SearchInput
  *   L2 DataTable    → server-paginated item rows with sort + row selection
  *   L2 EmptyState   → rendered in DataTable's emptySlot when data is empty
- *   L2 Pagination   → page controls wired to page/totalPages
+ *   L2 Pagination   → page controls wired to PageEnvelope page/pageSize/total
  *   L2 BulkActionsBar → rendered above table when rows selected
  *
  * Fork instructions:
@@ -109,13 +117,13 @@ export default function ItemsListPage() {
 
   // Client-side search filter (title contains search string)
   const filtered = React.useMemo(() => {
-    if (!data?.content) return []
-    if (!search.trim()) return data.content
+    if (!data?.data) return []
+    if (!search.trim()) return data.data
     const lower = search.toLowerCase()
-    return data.content.filter((item) =>
+    return data.data.filter((item) =>
       item.title.toLowerCase().includes(lower)
     )
-  }, [data?.content, search])
+  }, [data?.data, search])
 
   function handleBulkDelete() {
     // Fork: implement batch-delete API call using selectedKeys
@@ -140,13 +148,15 @@ export default function ItemsListPage() {
         <BulkActionsBar
           selectedCount={selectedKeys.size}
           onClearSelection={() => setSelectedKeys(new Set())}
-          actions={[
-            {
-              label: 'Delete selected',
-              onClick: handleBulkDelete,
-              variant: 'destructive',
-            },
-          ]}
+          actionsSlot={
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="inline-flex h-8 items-center rounded-md bg-destructive px-3 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete selected
+            </button>
+          }
         />
       )}
       <DataTable<Item>
@@ -163,15 +173,28 @@ export default function ItemsListPage() {
             <EmptyState
               title="Failed to load items"
               description="An error occurred while fetching your items. Please try again."
-              actionLabel="Retry"
-              onAction={() => window.location.reload()}
+              actionSlot={
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent"
+                >
+                  Retry
+                </button>
+              }
             />
           ) : (
             <EmptyState
               title="No items yet"
               description="Create your first item to get started."
-              actionLabel="Create item"
-              actionHref="/items/new"
+              actionSlot={
+                <a
+                  href="/items/new"
+                  className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  Create item
+                </a>
+              }
             />
           )
         }
@@ -179,11 +202,14 @@ export default function ItemsListPage() {
     </>
   )
 
-  const paginationSlot = data && data.totalPages > 1 ? (
+  // PageEnvelope.pagination.page is 0-based; the Pagination block is 1-based,
+  // so convert at the boundary (display page+1; store the chosen page-1).
+  const paginationSlot = data && data.pagination.totalPages > 1 ? (
     <Pagination
-      currentPage={data.page}
-      totalPages={data.totalPages}
-      onPageChange={setPage}
+      page={data.pagination.page + 1}
+      pageSize={data.pagination.pageSize}
+      total={data.pagination.totalElements}
+      onPageChange={(p) => setPage(p - 1)}
     />
   ) : null
 
