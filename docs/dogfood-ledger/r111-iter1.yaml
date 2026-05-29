@@ -12,12 +12,14 @@ findings:
     finding: "F2 (MEDIUM): data-subject-rights-l0 7 items lacked priority ordering — 11th consecutive wave (R93~R111). Closure: priority order block commit cc33c0e."
     classification: real_bug
     closure_commit_sha: cc33c0e
+    closure_verification_ref: "specs/data-subject-rights-l0 now carries the closure block (priority order + RECIPE.md example + F8 standards-pin) verifiable by inspection; doc-only (spec-policy contract, no runtime test)."
     closure_verification_reason: doc-only
     references_artifact_path: specs/data-subject-rights-l0.yaml
   - persona: P5
     finding: "F3 (MEDIUM): data-subject-rights-l0 declared config but no RECIPE.md example — 11th wave. Closure: generic-data-subject-rights frontmatter commit cc33c0e."
     classification: real_bug
     closure_commit_sha: cc33c0e
+    closure_verification_ref: "specs/data-subject-rights-l0 now carries the closure block (priority order + RECIPE.md example + F8 standards-pin) verifiable by inspection; doc-only (spec-policy contract, no runtime test)."
     closure_verification_reason: doc-only
     references_artifact_path: specs/data-subject-rights-l0.yaml
   - persona: P6
@@ -44,6 +46,7 @@ findings:
     finding: "F8 (MEDIUM): data-subject-rights-l0 cited standards but defaults unpinned — 11th wave standards-pin (R93~R111). Closure: F8 standards-pin block commit cc33c0e."
     classification: real_bug
     closure_commit_sha: cc33c0e
+    closure_verification_ref: "specs/data-subject-rights-l0 now carries the closure block (priority order + RECIPE.md example + F8 standards-pin) verifiable by inspection; doc-only (spec-policy contract, no runtime test)."
     closure_verification_reason: doc-only
     references_artifact_path: specs/data-subject-rights-l0.yaml
   - persona: P12
