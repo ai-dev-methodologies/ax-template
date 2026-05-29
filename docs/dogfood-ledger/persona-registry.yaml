@@ -274,9 +274,16 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "referral-program-l0이 desktop share + tracking cover하나 mobile-native (iOS Universal Links / Android App Links / native Share Sheet API / 카카오톡 라인 페이스북 메신저 in-app share / Push 알림 referral arrival) 부재. KakaoTalk-grade share UX 부적합. Expiry trigger: 첫 mobile fork-receiver referral 도입 — REFERRAL-MOBILE-001."
+      - wave: R101
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "customs-e-trade-l0이 desktop UNI-PASS 연동 cover하나 mobile-specific (무역업체 ERP 모바일 + AEO portal 모바일 + 신고 status push 알림 + 잠금화면 EORI 마스킹) 부재. Expiry trigger: 첫 mobile 무역업체 fork-receiver — CUSTOMS-MOBILE-001."
     verdict: active
-    verdict_reason: "**8-wave 일관 mobile lens** — R93~R100 모두 모바일 surface 부재 deferral 산출. unique mobile lens 9 persona cover 불가, 8-wave stable signature."
-    next_review_at: "R101 wave OR first mobile fork-receiver (8 domains 어느 영역이든)"
+    verdict_reason: "**9-wave 일관 mobile lens** — R93~R101 모두 모바일 surface 부재 deferral. 9-wave stable signature."
+    next_review_at: "R102 wave OR first mobile fork-receiver (9 domains 어느 영역이든)"
 
   - id: P4
     name: 박지영
@@ -349,9 +356,16 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "referral-program-l0 7 items priority 부재 — **8th consecutive wave** (R93~R100). Closure: priority order block (REFERRAL-CODE-001 foundation → REFERRAL-OBSERVABILITY-001) commit d221d7d."
+      - wave: R101
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "customs-e-trade-l0 7 items priority 부재 — **9th consecutive wave** (R93~R101). Closure: priority order block (CUSTOMS-DECLARATION-001 foundation → CUSTOMS-OBSERVABILITY-001) commit c9849af."
     verdict: active
-    verdict_reason: "**9 real_bug closed across 8 waves**. 'priority 부재' 패턴 8-wave 연속 — learnability lens validated. P5와 differentiation 8-wave 연속 (4th cycle of retire confirmation)."
-    next_review_at: "유지 (8-wave validated)"
+    verdict_reason: "**10 real_bug closed across 9 waves**. 'priority 부재' 패턴 9-wave 연속 (5th cycle of retire confirmation)."
+    next_review_at: "유지 (9-wave validated)"
 
   - id: P5
     name: 이상호
@@ -424,9 +438,16 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "referral-program-l0 14 config fields declare는 했으나 RECIPE.md example 없음 — **8th wave** (R93~R100). Closure: consumer-saas-referral-kr frontmatter + 금융 / 청소년 / privacy-first vertical guidance pinned (commit d221d7d)."
+      - wave: R101
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "customs-e-trade-l0 12 config fields declare는 했으나 RECIPE.md example 없음 — **9th wave** (R93~R101). Closure: trade-customs-platform-kr frontmatter + AAA 등급 / 환적·물류 / D.21B 글로벌 vertical guidance (commit c9849af)."
     verdict: active
-    verdict_reason: "**9 real_bug closed across 8 waves**. sequential lens 8-wave 일관. P4와 differentiation 8-wave 연속 (4th cycle of retire confirmation)."
-    next_review_at: "유지 (8-wave validated)"
+    verdict_reason: "**10 real_bug closed across 9 waves**. sequential lens 9-wave 일관 (5th cycle of retire confirmation)."
+    next_review_at: "유지 (9-wave validated)"
 
   - id: P6
     name: 최영숙
@@ -492,9 +513,16 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "REFERRAL-REWARD-001 + REFERRAL-DISCLOSURE-001 cite 공정거래법 §23 + 공정거래위원회 고시 제2020-15호이지만 시행세칙 + 2024 개정 detail 부재 — 추천인 보상 한도 산정 방법 / 가구 단위 self-referral 처리 / 영업비밀로 보호된 추천 알고리즘 vs 공시 의무 conflict (영업비밀보호법 §2) corner case 부재. Expiry trigger: 첫 referral fork-receiver의 공정거래위원회 신고 위험 시 — REFERRAL-DISCLOSURE-002. R100 pre-wave (korean_law_reference_index)에 공정거래법 § cross-cite 추가 등록은 R101 agenda (build_law_index.sh)."
+      - wave: R101
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "CUSTOMS-DECLARATION-001 + CUSTOMS-AUDIT-001 cite 관세법 §38 + 관세청 시행규칙이지만 시행령 §63 (신고 절차 세부) + §163 (사후 검증) + 시행규칙 §54 (정정) + WCO 한국 confidentiality classification corner case 부재. 환적 (T1/T2) + 보세창고 corner case 미상세. Expiry trigger: 첫 환적/물류 vertical fork-receiver — CUSTOMS-CORNER-001."
     verdict: active
-    verdict_reason: "**8-wave 한국 규제 lens 일관성** — R93~R100 모두 한국 규제 매핑 deferral 산출. R99 6-law cross-cite heaviest / R100 공정거래법 + 추천·보증 심사지침 직접 domain. 8-wave stable signature."
-    next_review_at: "R101 wave OR first 공정거래위원회 신고 / 영업비밀 conflict / 8 domain 어느 trigger든"
+    verdict_reason: "**9-wave 한국 규제 lens 일관성** — R93~R101 모두 한국 규제 매핑 deferral. R99/R100/R101 본인 직접 domain (행정업무 + 공정거래법 + 관세법). 9-wave stable signature."
+    next_review_at: "R102 wave OR first 관세청 사후 검증 / 환적 vertical / 9 domain 어느 trigger든"
 
   - id: P7
     name: 정도윤
@@ -574,9 +602,16 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "REFERRAL-CODE-001 + REFERRAL-ATTRIBUTION-001 명시하나 typed-SDK ReferralShareKit binding 부재 (TypeScript/Kotlin/Swift cross-platform — share API + cookie sync + attribution callback typed contract; Universal Links/App Links/KakaoLink schema). Expiry trigger: 첫 frontend/mobile referral integration — REFERRAL-BINDING-001."
+      - wave: R101
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "CUSTOMS-EDI-001 + CUSTOMS-DECLARATION-001 명시하나 typed-SDK UN/EDIFACT TypeScript binding 부재 (CUSDEC/CUSRES/CUSREP/COREOR 4종 + segment-level typed parsing + UNB/UNH envelope schema). Expiry trigger: 첫 frontend customs integration — CUSTOMS-BINDING-001."
     verdict: active
-    verdict_reason: "**10 deferrals across 8 waves** (R93~R100). typed-contract lens 8-wave 일관."
-    next_review_at: "유지 (8-wave stable signature)"
+    verdict_reason: "**11 deferrals across 9 waves** (R93~R101). typed-contract lens 9-wave 일관."
+    next_review_at: "유지 (9-wave stable signature)"
 
   - id: P8
     name: 강하늘
@@ -642,9 +677,16 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "REFERRAL-OBSERVABILITY-001 3 canonical metrics 명시하나 SLO threshold / alert convention 부재 — **8th wave** (R93~R100 모두 동일 패턴). fraud_hold_rate > 20% over 1h → PAGE / attribution_conversion_rate drop > 30% over 1d → PAGE 등 specific threshold 부재. Expiry trigger: 첫 referral production deployment OR R101 OBSERVABILITY-002 표준 item 8-spec batch 적용 시."
+      - wave: R101
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "CUSTOMS-OBSERVABILITY-001 3 canonical metrics 명시하나 SLO threshold 부재 — **9th wave** (R93~R101 모두 동일 패턴). uni_pass_failure_rate.connection_timeout > 10% over 5min → PAGE / cert_expiry_warning_days < 14 → PAGE 등 specific threshold 부재. Expiry trigger: 첫 customs production deployment OR R102 OBSERVABILITY-002 표준 item 9-spec batch."
     verdict: active
-    verdict_reason: "**8-wave stabilized pattern confirmed** — 8 deferrals (R93~R100) 모두 동일 shape. OBSERVABILITY-002 표준 item catalog 차원 정착 evidence-overwhelming continued — R101 mandatory_iter1_agenda 후보 #2 carry forward."
-    next_review_at: "유지 (8-wave validated); R101 catalog work: OBSERVABILITY-002 표준 item을 affected 8 spec에 일괄 추가"
+    verdict_reason: "**9-wave stabilized pattern confirmed** — 9 deferrals (R93~R101) 모두 동일 shape. OBSERVABILITY-002 표준 item evidence-overwhelming continued — R102 mandatory_iter1_agenda 후보 #2 carry forward (5-wave 누적 deferral)."
+    next_review_at: "유지 (9-wave validated); R102 catalog work: OBSERVABILITY-002 9-spec batch"
 
   - id: P9
     name: 윤재호
@@ -717,9 +759,16 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "organic acquisition (no referral)에서 referral-tracked 전환 시 migration playbook 부재 — 기존 사용자 첫 referral_code 발급 (대량 backfill OR lazy on-login) / cohort segmentation (pre-launch users no-reward vs post-launch normal) / 기존 promotional code 시스템과 conflict resolution. Expiry trigger: 첫 fork-receiver의 referral_enabled=true on existing user base — MIGRATION.md (lazy backfill + cohort + conflict matrix)."
+      - wave: R101
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "paper 통관 → e-Customs UNI-PASS 전환 migration playbook 부재 — paper 신고 archive (스캔+OCR vs forward-only) / dual-mode cutover N개월 / 무역업체 EORI 신청 + 인증서 KICA lead time 7-14d. Expiry trigger: 첫 fork-receiver의 paper-based 무역업체 cutover — MIGRATION.md (3-track: paper-archive / dual-mode / forward-only)."
     verdict: active
-    verdict_reason: "**8-wave migration-playbook lens** — R93~R100 모두 'migration playbook 부재' high-signal deferral. architecture lens 8-wave stable. P10과 lens 비중첩 cross-wave maintained."
-    next_review_at: "유지; lens differentiation with P10 8-wave 연속 holds"
+    verdict_reason: "**9-wave migration-playbook lens** — R93~R101 모두 'migration playbook 부재' high-signal deferral. 9-wave stable. P10과 lens 비중첩 cross-wave maintained."
+    next_review_at: "유지; lens differentiation with P10 9-wave 연속 holds"
 
   - id: P10
     name: 신경수
@@ -799,8 +848,15 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "REFERRAL-CODE-001 30d cookie 의존 vs browser privacy 변화 (Chrome 3rd-party cookie deprecation / Safari ITP 2.3 cookie 7d cap / Firefox ETP) — cookieless attribution fallback 미정의. server-side tracking + first-party cookie scoping matrix 미정의. Expiry trigger: 첫 fork-receiver의 Chrome 3rd-party 폐기 후 attribution 정확도 저하 — REFERRAL-COOKIELESS-001."
+      - wave: R101
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "CUSTOMS-EDI-001 D.16B 의존 vs UN/EDIFACT 표준 진화 — D.16B 2016 / D.21B (2021 부분 정착) / D.27B (2027 예정). 관세청 UNI-PASS는 D.16B-only 호환. Recipe forward 시 호환성 break risk. 글로벌 SaaS multi-version envelope 필요. Expiry trigger: 첫 글로벌 customs fork-receiver — CUSTOMS-VERSION-001."
     verdict: active
-    verdict_reason: "**8-wave backward-compat lens** — 1 real_bug + 9 deferral (R93~R100 deployed-state vigilance). 8-wave consistency. P9와 lens 비중첩 8-wave maintained."
+    verdict_reason: "**9-wave backward-compat lens** — 1 real_bug + 10 deferral (R93~R101 deployed-state vigilance). 9-wave consistency."
     next_review_at: "유지"
 
   - id: P11
@@ -881,9 +937,16 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "REFERRAL-CODE-001 + REFERRAL-PRIVACY-001 cite RFC 6265 / W3C Web Beacon / UTM but device fingerprint method + IP anonymization scheme default 미pin — vendor-dependent. **8th wave 동일 패턴** (R93~R100). Closure: referral_device_fingerprint_method + referral_ip_anonymization pin + 4/3 enum + per-context defaults (ua_screen_hash + last_octet_zero baseline / fingerprintjs / canvas_webgl_audio / none + full_hash) + RFC 4291 IPv6 /64 prefix (commit d221d7d). R100 F8는 **2 pins** in single closure (fingerprint + IP)."
+      - wave: R101
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "CUSTOMS-CLASSIFICATION-001 + CUSTOMS-EDI-001 cite WCO + UN/EDIFACT but HS revision + EDI version default 미pin — vendor-dependent. **9th wave 동일 패턴** (R93~R101). Closure: customs_hs_revision + customs_edi_version pin + 3/2 enum + per-context defaults (HS 2022 + D.16B baseline / HS 2027 + D.21B future) + 관세협력이사회 협약 + WCO Customs Data Model cite (commit c9849af). R101 F8는 **2 pins** (R100 패턴 답습)."
     verdict: active
-    verdict_reason: "**8-wave most productive persona** — R93 F9/F11 (2) + R94~R100 F8 (R100 2 pins) = **9 real_bug closed across 8 waves**. 'standards spec cite했으나 symmetric pin 누락' 패턴 8-wave 일관."
-    next_review_at: "유지 (8-wave validated high-signal anchor); R101+ 동일 lens 작동 예상"
+    verdict_reason: "**9-wave most productive persona** — R93 F9/F11 (2) + R94~R101 F8 (R100+R101 each 2 pins) = **11 real_bug closed across 9 waves**. 'standards spec cite했으나 symmetric pin 누락' 패턴 9-wave 일관 — dual-pin pattern emerging (R100/R101 standards lens 2 pins consecutive)."
+    next_review_at: "유지 (9-wave validated high-signal anchor); R102+ 동일 lens 작동 예상"
 
   - id: P12
     name: 한상미
@@ -970,9 +1033,16 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "**R99 NEW finding (catalog-wide Korean law reference index) mechanically CLOSED at R100** — korean_law_reference_index.yaml (aa4b855, DATA artifact 3rd anchor class) deployed pre-wave + 22 laws + 36 section cites + 42 spec references aggregated. **3rd anchor class completes 3-class taxonomy** (hard_guard / catalog_helper / data_artifact). **R100 NEW gap surfaces**: 4th anchor class candidate (auto-data artifact = DATA + generator script) — build_law_index.sh would scan specs + emit YAML automatically, bridging DATA + HELPER classes. R101 mandatory_iter1_agenda candidate. **Meta-meta-governance observation**: 3-class taxonomy now risks 'class proliferation' anti-pattern — principled criterion for introducing new class? **Anchor retirement review** R102+ candidate: 어느 anchor가 영구 (R97 wave_kickoff) vs fork-receiver-decided (R99 HELPER) vs stale-when-generated (R100 DATA, after auto-data). Anchor lifecycle 명문화. Expiry trigger: R101 wave 시작 시 build_law_index.sh 도입 결정 OR 첫 anchor obsolescence symptom (stale DATA / unused HELPER) 시."
+      - wave: R101
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "**R100 NEW finding (4th anchor class + anchor lifecycle) closed at R101 via DOCUMENTATION CONTRIBUTION** — METHODOLOGY.md anchor lifecycle policy (881f2aa). Per policy text: 3-class mechanical taxonomy held; 4-criterion rule for new class introduction; auto-data verdict NOT distinct enough. **Documentation IS catalog evolution but NOT a mechanical class**. **R101 NEW gap surfaces**: documentation contribution lifecycle — METHODOLOGY.md anchor lifecycle policy itself needs refresh cadence (catalog evolves; current text references R97-R101 commits as ground truth — R110+ catalog may drift). Documentation classes (METHODOLOGY / CLAUDE.md / README / DECISIONS) each have distinct ownership + refresh cycle + retirement criteria. R102 mandatory_iter1_agenda candidate: documentation lifecycle policy extension. Expiry trigger: re-opens when METHODOLOGY.md update encounters first staleness symptom (referenced practice diverges from current catalog) OR R110+ scheduled refresh review."
     verdict: active
-    verdict_reason: "**8-wave governance lens — 4-cycle close-and-discover signature validated**. R97 F10 historical PROCEDURE-as-text → hard guard retirement. R97/R98/R99/R100 NEW F10 each closed via DIFFERENT mechanical class (49th hard guard / catalog HELPER / DATA artifact). Total: 4 historical real_bug + 4 NEW scope_deferral + 3 methodology_gap = 11 findings across 8 waves. **3-class taxonomy COMPLETED at R100**. Pattern adaptation across 4 consecutive waves empirically validated — cyclical close-and-discover signature with class diversification, NOT ritual repetition."
-    next_review_at: "R101 wave 시작 시 4th anchor class (auto-data) 도입 결정 OR anchor retirement review (R100 F10 NEW의 active 이관). R100 mechanical closure는 law-reference aggregation 영구 종료 (manual update phase); R101은 generator automation OR retirement."
+    verdict_reason: "**9-wave governance lens — 5-cycle close-and-discover with class diversification**. R97 F10 historical → hard_guard. R97 NEW → R98 hard_guard. R98 NEW → R99 catalog_helper. R99 NEW → R100 data_artifact. R100 NEW → R101 documentation contribution (NOT new mechanical class). R101 NEW → R102 evaluation. Total: 4 historical real_bug + 5 NEW scope_deferral + 3 methodology_gap = 12 findings across 9 waves. **Pattern adaptation continues with mechanical class restraint** — METHODOLOGY.md policy enforces 4-criterion rule preventing reflexive class proliferation."
+    next_review_at: "R102 wave 시작 시 documentation contribution lifecycle policy 도입 결정 (R101 F10 NEW finding의 active 이관). R101 mechanical class restraint 영구 종료 (METHODOLOGY.md policy text); R102는 documentation refresh cadence."
 
 # ── R93 wave 종합 판정 (iter5 TRUE 0-convergence 후 최종) ────────────────
 review_summary:
@@ -1338,3 +1408,52 @@ review_summary:
         - "Next domain selection — R93 probability table COVERAGE COMPLETED. R101+ derived vertical candidates: (a) e-government extensions (관세청 EDI / 국세청 통합); (b) industry-specific (의료 EMR / 금융 자산관리 / 게임 결제); (c) global-vertical cross-mapping (GDPR / HIPAA / PDPA)."
         - "Pre-wave + wave 6-commit shape 명문화 — R97/R98/R99/R100 4-cycle 모두 pattern. README.md / CLAUDE.md 문서화 (3-wave 누적 deferral carry forward)."
         - "Anchor lifecycle 명문화 — 영구 vs fork-receiver-decided vs stale-when-generated. METHODOLOGY.md / CLAUDE.md 명시 (R100 P12 F10 직접 이관)."
+
+  # ── R101 wave 종합 판정 (customs-e-trade-l0 + 9-wave aggregate) ───────
+  R101:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3                       # F2, F3, F8 (commit c9849af; F8 has 2 pins per R100 dual-pin pattern)
+    scope_deferrals: 7                         # F1, F4, F5, F6, F7, F9, F10 (F10 NEW documentation lifecycle)
+    methodology_gaps: 0
+    closure_commits:
+      - "881f2aa (R101 pre-wave — METHODOLOGY.md anchor lifecycle policy, R100 F10 close via documentation contribution)"
+      - "5749a4c (R101 phase α — customs-e-trade-l0.yaml seed + r101-iter1.yaml atomically)"
+      - "c9849af (R101 iter1 closures — F2 priority + F3 RECIPE + F8 HS+EDI version pin)"
+      - "ffc2b7b (R101 iter1 ledger — 10 findings + F10 NEW scope_deferral on documentation lifecycle)"
+      - "d205945 (R101 iter2 TRUE 0-convergence terminator)"
+      - "this commit (R101 persona-registry backfill — 10 history + review_summary.R101 + 9-wave aggregate)"
+    most_productive_persona: "tied (10 personas 각자 1 finding). signal_strength로는 P6 최영숙 (F4 high, 관세법 시행령 §63/§163 + 환적/물류 corner) + P9 윤재호 (F7 high, paper → e-Customs migration) + P12 한상미 (F10 high, NEW documentation contribution lifecycle)."
+    least_productive_personas: []
+    lens_overlap_flagged: []
+    saturation_flagged: []
+    panel_judgment: "all_active_no_retirement"
+    cross_wave_observations:
+      panel_protocol_validation: "10-persona panel 9th wave에서도 effective. R93~R101 panel_size 10 일관, 9-wave saturation 없이 작동."
+      stabilized_signatures:
+        - "P4 priority order: R93~R101 F2 — real_bug × 9"
+        - "P5 RECIPE example: R93~R101 F3 — real_bug × 9"
+        - "P8 SLO/alert wiring: R93~R101 F6 — scope_deferral × 9 (5-wave OBS-002 carry forward)"
+        - "P11 standards-symmetric: R93/F9+F11 + R94~R101 F8 — real_bug × 11 (R100+R101 each 2 pins, dual-pin pattern emerging)"
+        - "P12 mechanical+documentation: R97/R98 hard_guard + R99 catalog_helper + R100 data_artifact + R101 documentation contribution. **3-class mechanical taxonomy held** per METHODOLOGY.md 881f2aa policy."
+      convergence_speed_rule: "iter terminator = iter1 + 1 IF no new artifact. R94~R101 (iter2 each) — 9-wave validated (8/9 cases)."
+      lens_overlap_permanent_retirement: "P4 + P5 9-wave differentiation maintained. 5th cycle of retire confirmation (R95 + R96/R97/R98/R99/R100/R101)."
+      saturation_permanent_retirement: "P12 — 5 consecutive cycles of close-and-discover (R97~R101). saturation flag deprecated 6-cycle confirmed. Class diversification pattern + METHODOLOGY.md 4-criterion rule restraint."
+      r97_r98_r99_r100_r101_anchor_quintuple: "R97 48th hard_guard + R98 49th hard_guard + R99 catalog_helper + R100 data_artifact + R101 documentation contribution. **3-class mechanical taxonomy COMPLETED at R100 + 1 documentation class at R101**. METHODOLOGY.md 881f2aa policy: 4-criterion rule for new mechanical class introduction. Pattern: mechanism for what machines must enforce; documentation for what humans must decide."
+      r101_p12_new_gap_signal: "Documentation contribution lifecycle — METHODOLOGY.md / CLAUDE.md / README / DECISIONS each have distinct ownership + refresh cycle + retirement criteria. R102 candidate. **Meta-meta-governance**: documentation can become stale just as mechanical artifacts can. R110+ scheduled refresh review trigger."
+      cross_wave_distribution_post_f10_retirement: "R96 (4+6) → R97~R101 (3+7) for 5 consecutive cycles. 9-wave cumulative: 35 real_bug + 63 scope_deferral."
+      r93_probability_table_aftermath: "R100 closed R93 original table (A1-A7). R101 = first R101+ derived vertical (e-government extension = customs-e-trade). R102+ candidates: industry-specific (의료 EMR / 금융 / 게임) + global cross-mapping (GDPR / HIPAA / PDPA) + e-government further extensions (특허청 / 식약처 / 국토교통부)."
+    next_panel_composition_for_R102:
+      keep: ["P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"]
+      under_review: []
+      add: []
+      retire: []
+      mandatory_R102_iter1_agenda:
+        - "R101 F10 NEW finding → documentation contribution lifecycle policy extension. METHODOLOGY.md / CLAUDE.md / README / DECISIONS each refresh cadence + ownership + retirement criteria. Document class taxonomy potentially analog to mechanical class taxonomy (evergreen / version-tracked / point-in-time)."
+        - "OBSERVABILITY-002 표준 item을 affected 9 specs에 일괄 추가 — 9-wave evidence overwhelming continued (R96~R101 agenda 답습 — 6-wave carry forward, agenda saturation candidate)."
+        - "66 active scope_deferral (R100 59 → R101 +7 = 66) trigger 점검."
+        - "P1/P2 backfill 필요성 — 8-wave + R101 consecutive 미참여."
+        - "Next domain selection — R102+ derived vertical: (a) industry-specific (의료 EMR HL7 FHIR / 금융 자산관리 / 게임 결제); (b) global cross-mapping (GDPR / HIPAA / PDPA / kross-jurisdictional); (c) e-gov extension (특허청 KIPO / 식약처 식품안전 / 국토교통부 부동산)."
+        - "Pre-wave + wave 6-commit shape 명문화 — R97~R101 5-cycle 모두 pattern. README.md / CLAUDE.md 문서화 (4-wave 누적 deferral carry forward)."
+        - "Build_law_index.sh generator 도입 검토 — R101 METHODOLOGY.md 정책에서 'NOT distinct enough as 4th class' verdict. 실제 사용 후 staleness symptom 발생 시 catalog HELPER으로 도입 (existing 3-class 내).
