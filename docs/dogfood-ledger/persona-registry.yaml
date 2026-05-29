@@ -1456,4 +1456,4 @@ review_summary:
         - "P1/P2 backfill 필요성 — 8-wave + R101 consecutive 미참여."
         - "Next domain selection — R102+ derived vertical: (a) industry-specific (의료 EMR HL7 FHIR / 금융 자산관리 / 게임 결제); (b) global cross-mapping (GDPR / HIPAA / PDPA / kross-jurisdictional); (c) e-gov extension (특허청 KIPO / 식약처 식품안전 / 국토교통부 부동산)."
         - "Pre-wave + wave 6-commit shape 명문화 — R97~R101 5-cycle 모두 pattern. README.md / CLAUDE.md 문서화 (4-wave 누적 deferral carry forward)."
-        - "Build_law_index.sh generator 도입 검토 — R101 METHODOLOGY.md 정책에서 'NOT distinct enough as 4th class' verdict. 실제 사용 후 staleness symptom 발생 시 catalog HELPER으로 도입 (existing 3-class 내).
+        - "Build_law_index.sh generator 도입 검토 — R101 METHODOLOGY.md 정책에서 'NOT distinct enough as 4th class' verdict. 실제 사용 후 staleness symptom 발생 시 catalog HELPER으로 도입 (existing 3-class 내)."
