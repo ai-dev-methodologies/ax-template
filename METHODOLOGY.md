@@ -1070,3 +1070,58 @@ class genuinely cannot express the need. Documentation contributions
 (METHODOLOGY.md / CLAUDE.md updates) are catalog evolution too — they do
 NOT introduce new mechanical classes. The principle: **mechanism for what
 machines must enforce; documentation for what humans must decide.**
+
+## Wave Shape Taxonomy (R113)
+
+R94-R112 produced three wave shapes. R102 P12 + R112 P12 flagged whether
+multi-spec waves are a new mechanical class. Per the anchor lifecycle
+4-criterion rule above, they are NOT — they are the **same wave shape with
+N spec files**. This section documents the shapes so future waves pick
+deliberately.
+
+### The three shapes
+
+| Shape | Waves | Phase α | Closures | iter1 ledger | iter2 | registry backfill |
+|-------|-------|---------|----------|--------------|-------|-------------------|
+| **single-spec** | R94-R101 | 1 spec + 1 ledger placeholder (atomic) | 1 spec edited | 1 ledger (10 findings) | 1 iter2 | 10 persona entries + 1 review_summary |
+| **dual-spec** | R102 | 2 specs + 1 ledger (atomic) | 2 specs edited (1 commit) | 1 ledger (10 findings for the WAVE) | 1 iter2 | 10 persona entries + 1 review_summary |
+| **multi-spec batch** | R103-R112 | N specs + N ledger placeholders (1 batch commit) | N specs edited (1 batch commit) | N ledgers (10 findings each) | N iter2 | N×10 persona entries + N review_summary |
+
+### Invariants across all shapes
+
+1. **wave_kickoff_ledger_guard** pairs each spec's `R<N> phase α` marker with
+   its `r<N>-iter1.yaml`. Multi-spec batch with distinct R-numbers needs one
+   ledger per R-number; same R-number (dual-spec) needs one ledger for the wave.
+2. **registry_backfill_completeness_guard** counts by WAVE (R-number), not by
+   spec. Each terminated wave (`iter>=2` with `findings: []`) needs its
+   `review_summary.R<N>` + 10 distinct P3-P12 history entries. A multi-spec
+   batch covering R103-R112 produces one review_summary + 10 entries PER
+   R-number.
+3. **Findings are per-WAVE, not per-spec.** A dual/batch wave's 10-persona
+   panel reviews all specs in the wave and emits 10 findings (1 per persona)
+   covering the wave; closure commits reference the batch.
+
+### When to use which
+
+- **single-spec**: default; one cohesive domain (auth, payment, chat).
+- **dual-spec**: two tightly-related specs landing together (pagination +
+  idempotency — both HTTP-collection cross-cutting; reviewed as a pair).
+- **multi-spec batch**: a themed sweep of N independent cross-cutting specs
+  drafted together (R103-R112 generic catalog: caching / soft-delete /
+  problem-details / optimistic-locking / health-check / resilience /
+  consent / data-subject-rights / distributed-tracing). Batch commits
+  (phase α / closures / ledger / iter2+registry) keep the shape legible
+  while amortizing per-wave overhead. Use Python batch generation +
+  `pre-commit-fast-guards` per batch + one `verify-completion` for the set.
+
+### Quality caveat (R113 learning)
+
+Multi-spec batch waves that draft specs via parallel agents (Workflow)
+risk **anchor hallucination** — agents fabricate RFC quotes / mis-cite
+section numbers. R103-R112 land with paraphrase-labeled anchors and a
+follow-up quote-recovery pass (R113) re-verifies each against the live
+source. **Rule: a batch-drafted spec's `Quote anchor` claims are NOT
+authoritative until source-verified.** Prefer `Reference: RFC X §Y (see
+source)` over a fabricated verbatim quote. Adversarial verify (a second
+agent refuting each draft) catches most hallucination before land — make
+it a required stage of any Workflow-drafted batch.
