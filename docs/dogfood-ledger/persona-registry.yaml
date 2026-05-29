@@ -281,6 +281,13 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "customs-e-trade-l0이 desktop UNI-PASS 연동 cover하나 mobile-specific (무역업체 ERP 모바일 + AEO portal 모바일 + 신고 status push 알림 + 잠금화면 EORI 마스킹) 부재. Expiry trigger: 첫 mobile 무역업체 fork-receiver — CUSTOMS-MOBILE-001."
+      - wave: R102
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "pagination-l0 + idempotency-l0 (dual generic) lack mobile-client guidance (cursor infinite-scroll + offline cursor persistence / Idempotency-Key app-restart-safe storage + retry-on-reconnect). Expiry trigger: 첫 mobile fork-receiver의 list/mutation API 통합 — PAGE-MOBILE / IDEMPOTENCY-MOBILE client binding."
     verdict: active
     verdict_reason: "**9-wave 일관 mobile lens** — R93~R101 모두 모바일 surface 부재 deferral. 9-wave stable signature."
     next_review_at: "R102 wave OR first mobile fork-receiver (9 domains 어느 영역이든)"
@@ -363,6 +370,13 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "customs-e-trade-l0 7 items priority 부재 — **9th consecutive wave** (R93~R101). Closure: priority order block (CUSTOMS-DECLARATION-001 foundation → CUSTOMS-OBSERVABILITY-001) commit c9849af."
+      - wave: R102
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "both pagination-l0 + idempotency-l0 lack priority ordering — 10th consecutive wave (R93~R102), dual-spec. Closure: priority order block prepended to BOTH specs (pagination CURSOR→STABLE-SORT keystone; idempotency KEY→CACHE→PAYLOAD keystone) commit e7d0a2e."
     verdict: active
     verdict_reason: "**10 real_bug closed across 9 waves**. 'priority 부재' 패턴 9-wave 연속 (5th cycle of retire confirmation)."
     next_review_at: "유지 (9-wave validated)"
@@ -445,6 +459,13 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "customs-e-trade-l0 12 config fields declare는 했으나 RECIPE.md example 없음 — **9th wave** (R93~R101). Closure: trade-customs-platform-kr frontmatter + AAA 등급 / 환적·물류 / D.21B 글로벌 vertical guidance (commit c9849af)."
+      - wave: R102
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "both specs declare config fields but no RECIPE.md example — 10th wave (R93~R102), dual-spec → 2 RECIPEs. Closure: generic-list-api (pagination, 7 fields) + generic-idempotent-api (idempotency, 6 fields) frontmatter commit e7d0a2e."
     verdict: active
     verdict_reason: "**10 real_bug closed across 9 waves**. sequential lens 9-wave 일관 (5th cycle of retire confirmation)."
     next_review_at: "유지 (9-wave validated)"
@@ -520,6 +541,13 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "CUSTOMS-DECLARATION-001 + CUSTOMS-AUDIT-001 cite 관세법 §38 + 관세청 시행규칙이지만 시행령 §63 (신고 절차 세부) + §163 (사후 검증) + 시행규칙 §54 (정정) + WCO 한국 confidentiality classification corner case 부재. 환적 (T1/T2) + 보세창고 corner case 미상세. Expiry trigger: 첫 환적/물류 vertical fork-receiver — CUSTOMS-CORNER-001."
+      - wave: R102
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "**course-correction confirmation** — pagination-l0 + idempotency-l0 cite ZERO Korean law (first generic-only wave after R99-R101 vertical drift). P6 한국 규제 lens produces NO regulatory deferral this wave — jurisdiction-agnostic HTTP contracts have no Korean gap. i18n observation only (PAGE-LINK envelope localization → i18n-policy-l0 R93). Expiry trigger: re-opens only if a fork-receiver adds jurisdiction-specific pagination/idempotency rules (none expected). Validates user feedback feedback_prefer_generic_catalog."
     verdict: active
     verdict_reason: "**9-wave 한국 규제 lens 일관성** — R93~R101 모두 한국 규제 매핑 deferral. R99/R100/R101 본인 직접 domain (행정업무 + 공정거래법 + 관세법). 9-wave stable signature."
     next_review_at: "R102 wave OR first 관세청 사후 검증 / 환적 vertical / 9 domain 어느 trigger든"
@@ -609,6 +637,13 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "CUSTOMS-EDI-001 + CUSTOMS-DECLARATION-001 명시하나 typed-SDK UN/EDIFACT TypeScript binding 부재 (CUSDEC/CUSRES/CUSREP/COREOR 4종 + segment-level typed parsing + UNB/UNH envelope schema). Expiry trigger: 첫 frontend customs integration — CUSTOMS-BINDING-001."
+      - wave: R102
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "both specs define wire contracts but no typed-SDK binding — TypeScript cursor opaque-string brand type + Idempotency-Key typed retry-fetch wrapper. Expiry trigger: 첫 frontend typed-client codegen — PAGE-BINDING / IDEMPOTENCY-BINDING."
     verdict: active
     verdict_reason: "**11 deferrals across 9 waves** (R93~R101). typed-contract lens 9-wave 일관."
     next_review_at: "유지 (9-wave stable signature)"
@@ -684,6 +719,13 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "CUSTOMS-OBSERVABILITY-001 3 canonical metrics 명시하나 SLO threshold 부재 — **9th wave** (R93~R101 모두 동일 패턴). uni_pass_failure_rate.connection_timeout > 10% over 5min → PAGE / cert_expiry_warning_days < 14 → PAGE 등 specific threshold 부재. Expiry trigger: 첫 customs production deployment OR R102 OBSERVABILITY-002 표준 item 9-spec batch."
+      - wave: R102
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "both observability items name 3 canonical metrics but no SLO threshold / alert convention — 10th wave (R93~R102). pagination_response_time p99 > 1s → ALERT / idempotency_lock_wait p99 > 3s → PAGE missing. Expiry trigger: 첫 production deployment OR R103 OBSERVABILITY-002 표준 item 10-spec batch (6-wave carry forward saturation candidate)."
     verdict: active
     verdict_reason: "**9-wave stabilized pattern confirmed** — 9 deferrals (R93~R101) 모두 동일 shape. OBSERVABILITY-002 표준 item evidence-overwhelming continued — R102 mandatory_iter1_agenda 후보 #2 carry forward (5-wave 누적 deferral)."
     next_review_at: "유지 (9-wave validated); R102 catalog work: OBSERVABILITY-002 9-spec batch"
@@ -766,6 +808,13 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "paper 통관 → e-Customs UNI-PASS 전환 migration playbook 부재 — paper 신고 archive (스캔+OCR vs forward-only) / dual-mode cutover N개월 / 무역업체 EORI 신청 + 인증서 KICA lead time 7-14d. Expiry trigger: 첫 fork-receiver의 paper-based 무역업체 cutover — MIGRATION.md (3-track: paper-archive / dual-mode / forward-only)."
+      - wave: R102
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "no migration playbook — offset→cursor pagination migration (existing page-number clients; dual-mode bridge) + idempotency retrofit onto existing non-idempotent endpoints (gradual enforcement). Expiry trigger: 첫 fork-receiver의 existing API에 cursor/idempotency 도입 — MIGRATION.md (offset→cursor dual-mode + idempotency opt-in→enforce ramp)."
     verdict: active
     verdict_reason: "**9-wave migration-playbook lens** — R93~R101 모두 'migration playbook 부재' high-signal deferral. 9-wave stable. P10과 lens 비중첩 cross-wave maintained."
     next_review_at: "유지; lens differentiation with P10 9-wave 연속 holds"
@@ -855,6 +904,13 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "CUSTOMS-EDI-001 D.16B 의존 vs UN/EDIFACT 표준 진화 — D.16B 2016 / D.21B (2021 부분 정착) / D.27B (2027 예정). 관세청 UNI-PASS는 D.16B-only 호환. Recipe forward 시 호환성 break risk. 글로벌 SaaS multi-version envelope 필요. Expiry trigger: 첫 글로벌 customs fork-receiver — CUSTOMS-VERSION-001."
+      - wave: R102
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "PAGE-OFFSET fallback + IDEMPOTENCY-SCOPE opt-out address deployed-state but no version-skew contract — old clients sending offset while server prefers cursor / clients not yet sending Idempotency-Key during rollout. Server must honor both gracefully. Expiry trigger: 첫 fork-receiver의 mixed-client-version production — PAGE-VERSION-SKEW / IDEMPOTENCY-GRADUAL contract."
     verdict: active
     verdict_reason: "**9-wave backward-compat lens** — 1 real_bug + 10 deferral (R93~R101 deployed-state vigilance). 9-wave consistency."
     next_review_at: "유지"
@@ -944,6 +1000,13 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "CUSTOMS-CLASSIFICATION-001 + CUSTOMS-EDI-001 cite WCO + UN/EDIFACT but HS revision + EDI version default 미pin — vendor-dependent. **9th wave 동일 패턴** (R93~R101). Closure: customs_hs_revision + customs_edi_version pin + 3/2 enum + per-context defaults (HS 2022 + D.16B baseline / HS 2027 + D.21B future) + 관세협력이사회 협약 + WCO Customs Data Model cite (commit c9849af). R101 F8는 **2 pins** (R100 패턴 답습)."
+      - wave: R102
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "both specs cite standards but defaults unpinned — pagination cursor HMAC algorithm + envelope shape; idempotency fingerprint algorithm + key format. **10th wave standards-pin** (R93~R102), DUAL pin. Closure: pagination (hmac-sha256 RFC 2104 + RFC 5988 envelope) + idempotency (sha-256 FIPS 180-4 + uuid-v4 RFC 4122) defaults pinned commit e7d0a2e. R100/R101/R102 dual-pin pattern."
     verdict: active
     verdict_reason: "**9-wave most productive persona** — R93 F9/F11 (2) + R94~R101 F8 (R100+R101 each 2 pins) = **11 real_bug closed across 9 waves**. 'standards spec cite했으나 symmetric pin 누락' 패턴 9-wave 일관 — dual-pin pattern emerging (R100/R101 standards lens 2 pins consecutive)."
     next_review_at: "유지 (9-wave validated high-signal anchor); R102+ 동일 lens 작동 예상"
@@ -1040,6 +1103,13 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "**R100 NEW finding (4th anchor class + anchor lifecycle) closed at R101 via DOCUMENTATION CONTRIBUTION** — METHODOLOGY.md anchor lifecycle policy (881f2aa). Per policy text: 3-class mechanical taxonomy held; 4-criterion rule for new class introduction; auto-data verdict NOT distinct enough. **Documentation IS catalog evolution but NOT a mechanical class**. **R101 NEW gap surfaces**: documentation contribution lifecycle — METHODOLOGY.md anchor lifecycle policy itself needs refresh cadence (catalog evolves; current text references R97-R101 commits as ground truth — R110+ catalog may drift). Documentation classes (METHODOLOGY / CLAUDE.md / README / DECISIONS) each have distinct ownership + refresh cycle + retirement criteria. R102 mandatory_iter1_agenda candidate: documentation lifecycle policy extension. Expiry trigger: re-opens when METHODOLOGY.md update encounters first staleness symptom (referenced practice diverges from current catalog) OR R110+ scheduled refresh review."
+      - wave: R102
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "**R102 introduces DUAL-SPEC wave shape** — two specs (pagination + idempotency) in single phase α + single iter1 ledger + single registry backfill, vs R97-R101 single-spec. Per METHODOLOGY.md anchor lifecycle policy (R101 881f2aa) 4-criterion rule: dual-spec is NOT a new mechanical anchor class — reuses existing wave shape with 2 spec files. 49th guard (registry_backfill_completeness) counts by WAVE not by spec (1 entry per persona for the wave). R103 evaluation: document multi-spec wave shape in METHODOLOGY.md (documentation contribution, not mechanism). Expiry trigger: R103 wave 시작 시 multi-spec wave shape 명문화 OR 첫 fork-receiver가 multi-spec wave 혼란 시."
     verdict: active
     verdict_reason: "**9-wave governance lens — 5-cycle close-and-discover with class diversification**. R97 F10 historical → hard_guard. R97 NEW → R98 hard_guard. R98 NEW → R99 catalog_helper. R99 NEW → R100 data_artifact. R100 NEW → R101 documentation contribution (NOT new mechanical class). R101 NEW → R102 evaluation. Total: 4 historical real_bug + 5 NEW scope_deferral + 3 methodology_gap = 12 findings across 9 waves. **Pattern adaptation continues with mechanical class restraint** — METHODOLOGY.md policy enforces 4-criterion rule preventing reflexive class proliferation."
     next_review_at: "R102 wave 시작 시 documentation contribution lifecycle policy 도입 결정 (R101 F10 NEW finding의 active 이관). R101 mechanical class restraint 영구 종료 (METHODOLOGY.md policy text); R102는 documentation refresh cadence."
@@ -1457,3 +1527,44 @@ review_summary:
         - "Next domain selection — R102+ derived vertical: (a) industry-specific (의료 EMR HL7 FHIR / 금융 자산관리 / 게임 결제); (b) global cross-mapping (GDPR / HIPAA / PDPA / kross-jurisdictional); (c) e-gov extension (특허청 KIPO / 식약처 식품안전 / 국토교통부 부동산)."
         - "Pre-wave + wave 6-commit shape 명문화 — R97~R101 5-cycle 모두 pattern. README.md / CLAUDE.md 문서화 (4-wave 누적 deferral carry forward)."
         - "Build_law_index.sh generator 도입 검토 — R101 METHODOLOGY.md 정책에서 'NOT distinct enough as 4th class' verdict. 실제 사용 후 staleness symptom 발생 시 catalog HELPER으로 도입 (existing 3-class 내)."
+
+  R102:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3
+    scope_deferrals: 7
+    methodology_gaps: 0
+    wave_shape: dual-spec
+    closure_commits:
+      - "86a8ee0 (R102 phase α — pagination-l0 + idempotency-l0 dual seed, course-correct to generic catalog)"
+      - "e7d0a2e (R102 iter1 closures — F2/F3/F8 across BOTH specs)"
+      - "(R102 iter1 ledger + iter2 terminator + this registry backfill)"
+    most_productive_persona: "tied. signal: P9 윤재호 (F7 high, dual migration) + P12 한상미 (F10 high, dual-spec wave shape) + P6 최영숙 (F4 — course-correction confirmation, ZERO Korean deferral first in 10 waves)."
+    least_productive_personas: []
+    lens_overlap_flagged: []
+    saturation_flagged: []
+    panel_judgment: "all_active_no_retirement"
+    cross_wave_observations:
+      panel_protocol_validation: "10-persona panel 10th wave effective. R93~R102 panel_size 10 consistent. DUAL-SPEC wave (first) handled — panel reviews both specs, 10 findings (1 per persona for the WAVE)."
+      stabilized_signatures:
+        - "P4 priority order: R93~R102 F2 — real_bug × 10"
+        - "P5 RECIPE example: R93~R102 F3 — real_bug × 10"
+        - "P8 SLO/alert wiring: R93~R102 F6 — scope_deferral × 10 (6-wave OBS-002 carry forward)"
+        - "P11 standards-symmetric: R93~R102 F8 — real_bug × 12 (R100/R101/R102 dual-pin)"
+        - "P12 mechanical-anchor: 3-class taxonomy held; dual-spec NOT a new class (METHODOLOGY.md 4-criterion rule)"
+      course_correction_milestone: "R102 first generic-only wave (zero Korean law in both specs). P6 한국 규제 lens produced NO deferral — first time in 10 waves. R99-R101 each had P6 HIGH Korean-vertical deferral; R102 confirms generic catalog escapes the vertical-deferral treadmill (user feedback feedback_prefer_generic_catalog validated empirically)."
+      dual_spec_wave_shape: "R102 = first multi-spec wave (pagination + idempotency). Single phase α commit (both specs + 1 ledger), single iter1 ledger (10 findings for the wave), single registry backfill (10 persona entries for the wave). 49th guard counts by WAVE. NOT a new mechanical anchor class per METHODOLOGY.md 4-criterion rule. R103 documents the shape."
+      cross_wave_distribution_post_f10_retirement: "R97~R102 all 3+7 (6 consecutive cycles). 10-wave cumulative: 38 real_bug + 70 scope_deferral."
+    next_panel_composition_for_R103:
+      keep: ["P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"]
+      under_review: []
+      add: []
+      retire: []
+      mandatory_R103_iter1_agenda:
+        - "R102 P12 F10 → document multi-spec / dual-spec wave shape in METHODOLOGY.md (documentation contribution, NOT new mechanical class per 4-criterion rule)."
+        - "OBSERVABILITY-002 표준 item을 affected 10+ specs에 일괄 추가 — 10-wave evidence overwhelming (R96~R102 agenda, 7-wave carry forward — strong saturation candidate, decide R103)."
+        - "73 active scope_deferral (R101 66 → R102 +7 = 73) trigger 점검."
+        - "P1/P2 backfill 필요성 — 9-wave + R102 consecutive 미참여."
+        - "R103~R112 generic catalog wave 진행 — caching / soft-delete / problem-details / optimistic-locking / health-check / money-currency / resilience / consent-management / data-subject-rights / distributed-tracing (Workflow drafted + verified). Continue generic-catalog course (memory feedback_prefer_generic_catalog)."
+        - "Generic-catalog course CONFIRMED by R102 P6 zero-deferral signal — R103+ stays generic, Korean specifics only as variant within generic baseline."
