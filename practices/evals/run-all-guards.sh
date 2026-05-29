@@ -837,6 +837,16 @@ echo "[46] registry_backfill_completeness_guard.sh (live repo — R98, 49th guar
 run_guard "registry_backfill_completeness/live" 0 \
     bash "$SCRIPT_DIR/registry_backfill_completeness_guard.sh"
 
+echo ""
+echo "[47] entity_migration_guard.sh (IMW1-C — IDW1 entity↔migration coverage; ddl-auto hides drift)"
+run_guard "entity_migration/live" 0 \
+    bash "$SCRIPT_DIR/entity_migration_guard.sh"
+
+echo ""
+echo "[48] spec_ref_code_guard.sh (IMW1-C — IDW1 backend specs/*.yaml reference resolution)"
+run_guard "spec_ref_code/live" 0 \
+    bash "$SCRIPT_DIR/spec_ref_code_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
