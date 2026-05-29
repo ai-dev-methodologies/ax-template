@@ -1,0 +1,3 @@
+# entity_migration fixture (fail_inline_entity) — EMPTY allowlist on purpose.
+# The inline @Entity @Table(name="widget") has no migration and is not exempted,
+# so the guard MUST detect the drift and exit 1.

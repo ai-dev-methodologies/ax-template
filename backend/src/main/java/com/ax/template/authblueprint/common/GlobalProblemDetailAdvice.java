@@ -52,8 +52,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  *
  * <h2>Scope — framework exceptions only</h2>
  * It deliberately handles ONLY the framework exceptions domains should not have to
- * re-handle; it does NOT register a catch-all {@code Exception} handler, so it never
- * masks a domain's own business exceptions.
+ * re-handle PLUS the two COMMON cross-cutting signals shipped in this package
+ * ({@link ResourceNotFoundException}, {@link InvalidPageRequestException}); it does NOT
+ * register a catch-all {@code Exception} handler, nor a broad
+ * {@code IllegalArgumentException} handler (which would mask genuine programming bugs),
+ * so it never masks a domain's own business exceptions.
  * <ul>
  *   <li>{@link MethodArgumentNotValidException} + {@link ConstraintViolationException}
  *       → 400 with the shared {@code errors[]} extension array
@@ -61,7 +64,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  *       {@code request-validation-l0} VALIDATION-ERROR-001);</li>
  *   <li>{@link HttpMessageNotReadableException} → 400 (unreadable / malformed body);</li>
  *   <li>{@link HttpMediaTypeNotSupportedException} → 415;</li>
- *   <li>{@link HttpRequestMethodNotSupportedException} → 405.</li>
+ *   <li>{@link HttpRequestMethodNotSupportedException} → 405;</li>
+ *   <li>{@link ResourceNotFoundException} → 404 (code {@code NOT_FOUND}) — the
+ *       IDOR-safe-404 primitive. {@code @ResponseStatus(404)} alone is a TRAP under the
+ *       reference {@code SecurityConfig}: {@code sendError(404)} re-dispatches to
+ *       {@code /error}, which re-enters the filter chain and is caught by
+ *       {@code anyRequest().denyAll()} → a misleading 403. This handler returns the
+ *       404 DIRECTLY (no re-dispatch), closing that trap;</li>
+ *   <li>{@link InvalidPageRequestException} → 400 (code {@code PAGE_SIZE_INVALID}) —
+ *       the typed out-of-range page-request signal from
+ *       {@link OffsetPageSupport#clamp(int, int, int)} (same 403 trap if left
+ *       unmapped).</li>
  * </ul>
  * Each body carries a stable {@code code} extension member so clients branch on
  * {@code code} (not free-text {@code detail}).
@@ -74,6 +87,8 @@ public class GlobalProblemDetailAdvice {
     private static final URI MALFORMED_BODY_TYPE = URI.create("https://errors.example.com/malformed-request-body");
     private static final URI UNSUPPORTED_MEDIA_TYPE = URI.create("https://errors.example.com/unsupported-media-type");
     private static final URI METHOD_NOT_ALLOWED_TYPE = URI.create("https://errors.example.com/method-not-allowed");
+    private static final URI NOT_FOUND_TYPE = URI.create("https://errors.example.com/not-found");
+    private static final URI PAGE_SIZE_INVALID_TYPE = URI.create("https://errors.example.com/page-size-invalid");
 
     /**
      * {@code @Valid}/{@code @Validated} body-binding failures. Reports EVERY field +
@@ -127,6 +142,37 @@ public class GlobalProblemDetailAdvice {
         ProblemDetail pd = problem(HttpStatus.METHOD_NOT_ALLOWED, METHOD_NOT_ALLOWED_TYPE, "Method Not Allowed",
                 "METHOD_NOT_ALLOWED", "The HTTP method is not supported by this endpoint.");
         return entity(HttpStatus.METHOD_NOT_ALLOWED, pd);
+    }
+
+    /**
+     * COMMON IDOR-safe 404. Returns the {@code 404} DIRECTLY (no {@code sendError}
+     * re-dispatch), so {@link ResourceNotFoundException} surfaces as
+     * {@code 404 application/problem+json} instead of the misleading {@code 403} the
+     * {@code @ResponseStatus} + {@code /error} re-entry produces under the reference
+     * {@code SecurityConfig}. Carries the exception's neutral not-found message so the
+     * existence of another caller's resource is never leaked (see
+     * {@link ResourceNotFoundException}).
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleResourceNotFound(ResourceNotFoundException ex) {
+        ProblemDetail pd = problem(HttpStatus.NOT_FOUND, NOT_FOUND_TYPE, "Not Found",
+                "NOT_FOUND", defaultMessage(ex.getMessage()));
+        return entity(HttpStatus.NOT_FOUND, pd);
+    }
+
+    /**
+     * COMMON out-of-range page request → {@code 400} (code {@code PAGE_SIZE_INVALID}).
+     * Mirrors the {@link ResourceNotFoundException} handler: returning the response
+     * directly avoids the {@code /error} re-dispatch that would otherwise turn the
+     * unmapped {@link InvalidPageRequestException} into a {@code 403}. Deliberately
+     * narrow — only the typed {@link InvalidPageRequestException} is mapped, NOT a broad
+     * {@link IllegalArgumentException}, so genuine programming bugs are not masked.
+     */
+    @ExceptionHandler(InvalidPageRequestException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidPageRequest(InvalidPageRequestException ex) {
+        ProblemDetail pd = problem(HttpStatus.BAD_REQUEST, PAGE_SIZE_INVALID_TYPE, "Invalid Page Request",
+                "PAGE_SIZE_INVALID", defaultMessage(ex.getMessage()));
+        return entity(HttpStatus.BAD_REQUEST, pd);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

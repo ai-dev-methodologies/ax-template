@@ -1,0 +1,2 @@
+# entity_migration fixture (pass) — empty allowlist on purpose so nothing is
+# silently exempted. The single inline @Entity here is backed by V001__widget.sql.

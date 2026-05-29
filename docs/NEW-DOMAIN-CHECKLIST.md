@@ -21,6 +21,14 @@ Do **NOT** hand-roll these — import the real implementations from `common/`:
 
 Read a clean reference domain end-to-end first: `commentthread`, `approvalworkflow`, or `billing`.
 
+> **Business roles ≠ security principals (IDW3).** Domain roles like `CUSTOMER`/`SELLER`/`RIDER`/`RESTAURANT`
+> are NOT JWT authorities — the auth system only mints `UserRole` = {ADMIN, MANAGER, MEMBER, AUDITOR}, and
+> `role_literal_guard` blocks any `@PreAuthorize("...ROLE_X")` outside that set (signup also rejects an unknown
+> role with 400). Model a business role as a **relationship** derived in the service from the resource
+> (use `common/CallerScope` + an owner/participant check), NOT as a `@PreAuthorize` authority or a new
+> `UserRole` constant. Throw `common/ResourceNotFoundException` for the not-yours case — it maps to a
+> 404 problem+json via `GlobalProblemDetailAdvice` (IDOR-safe; never 403-leak existence).
+
 ## 1. Required artifact set (every domain)
 Create these under `backend/src/main/java/com/ax/template/authblueprint/<domain>/`:
 

@@ -19,9 +19,9 @@ import org.springframework.data.domain.Sort;
  * "Server MUST NEVER honor unlimited requests" and out-of-range → 400. Inline
  * {@code Math.min(size, 100)}-style clamps silently differ per controller and
  * let {@code size <= 0} or oversized values through. {@link #clamp(int, int, int)}
- * centralises the rule and THROWS {@link IllegalArgumentException} on out-of-range
- * so a controller maps it to a 400 (PAGE_SIZE_INVALID) instead of silently
- * returning a surprise slice.
+ * centralises the rule and THROWS {@link InvalidPageRequestException} on out-of-range,
+ * which {@link GlobalProblemDetailAdvice} maps to a 400 (PAGE_SIZE_INVALID) by default
+ * instead of silently returning a surprise slice.
  *
  * <h2>Failure mode 2 — unstable sort (PAGE-STABLE-SORT-001)</h2>
  * Spec PAGE-STABLE-SORT-001: pagination MUST run over a stable sort with at
@@ -77,29 +77,29 @@ public final class OffsetPageSupport {
      *       — a recipe cannot raise its ceiling above the absolute cap.</li>
      * </ul>
      *
-     * <p>On any out-of-range input this THROWS {@link IllegalArgumentException}
-     * with a hint, which a controller maps to {@code 400 PAGE_SIZE_INVALID}
-     * (RFC 9457 problem detail). The returned {@code PageRequest} carries no
-     * sort — chain {@code .withSort(stableSort(...))} to satisfy
-     * PAGE-STABLE-SORT-001.
+     * <p>On any out-of-range input this THROWS {@link InvalidPageRequestException}
+     * with a hint, which {@link GlobalProblemDetailAdvice} maps to
+     * {@code 400 PAGE_SIZE_INVALID} (RFC 9457 problem detail) by default. The
+     * returned {@code PageRequest} carries no sort — chain
+     * {@code .withSort(stableSort(...))} to satisfy PAGE-STABLE-SORT-001.
      *
      * @param page    zero-based page index requested by the client
      * @param size    page size requested by the client
      * @param maxSize the recipe's declared maximum page size
      * @return an unsorted {@link PageRequest} for {@code (page, size)}
-     * @throws IllegalArgumentException when any argument is out of range
+     * @throws InvalidPageRequestException when any argument is out of range
      */
     public static PageRequest clamp(int page, int size, int maxSize) {
         if (maxSize < 1 || maxSize > ABSOLUTE_MAX_PAGE_SIZE) {
-            throw new IllegalArgumentException(
+            throw new InvalidPageRequestException(
                     "maxSize must be within [1, " + ABSOLUTE_MAX_PAGE_SIZE + "]: maxSize=" + maxSize);
         }
         if (page < 0) {
-            throw new IllegalArgumentException(
+            throw new InvalidPageRequestException(
                     "page must be >= 0 (offset pagination is zero-based): page=" + page);
         }
         if (size < 1 || size > maxSize) {
-            throw new IllegalArgumentException(
+            throw new InvalidPageRequestException(
                     "size must be within [1, " + maxSize + "]: size=" + size
                             + " (server never honors unlimited requests)");
         }

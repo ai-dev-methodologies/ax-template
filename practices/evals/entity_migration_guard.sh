@@ -60,6 +60,35 @@
 # With an empty allowlist this guard exits 1 on the current tree and names
 # those 8 — they are genuine entity↔migration drift, NOT false positives.
 #
+# calibration_notes (IMW3 / IDW3 G4, 2026-05-29)
+# ----------------------------------------------
+# * Detection regex was widened from `^\s*@Entity\s*(\(|$)` to `(?m)^\s*@Entity\b`
+#   to close a false-negative: the inline annotation pair
+#   `@Entity @Table(name="x")` on ONE line previously escaped detection
+#   (own-line=EXIT1, same-line=EXIT0 — P-staff repro), so an un-migrated entity
+#   could ship GREEN. The \b boundary matches all three @Entity forms (alone,
+#   `@Entity(`, and inline-followed-by-another-annotation) while still excluding
+#   @EntityGraph / @EntityListeners (word chars follow `Entity`, no boundary).
+#   The @Table-name extraction is unaffected: TABLE_OPEN_RE scans the whole file
+#   text, so an inline `@Entity @Table(name="x")` still resolves table "x".
+# * Regression fixtures (run-all-guards.sh entity_migration/fixture_*):
+#     fixtures/entity_migration/pass            — inline @Entity @Table(name=widget)
+#                                                 WITH a CREATE TABLE widget → EXIT 0
+#                                                 (proves inline @Table resolution + backed)
+#     fixtures/entity_migration/fail_inline_entity
+#                                               — same inline entity, NO migration,
+#                                                 empty allowlist → EXIT 1
+#                                                 (proves the false negative is DETECTED)
+# * SIBLING-GUARD AUDIT — same own-line `^\s*@X` anchor false-negative class:
+#     controller_problemdetail_guard.sh ALREADY uses the safe form
+#     `^\s*@ExceptionHandler\b` (line 102), so it is NOT vulnerable to the inline
+#     pair. Its companion `OTHER_ANN_RE = re.compile(r"^\s*@\w")` (line 104) only
+#     skips intervening annotation LINES while walking to a method signature, so
+#     an inline annotation does not cause a missed @ExceptionHandler there either.
+#     No other practices/evals guard anchors on `^\s*@<Java-annotation>` for
+#     presence detection. New guards that detect a Java annotation by line anchor
+#     MUST use the `\b` token form, never `\s*(\(|$)`.
+#
 # Exit codes:
 #   0 — every @Entity has a CREATE/ALTER TABLE migration (or is allowlisted).
 #   1 — at least one @Entity lacks a backing migration.
@@ -120,9 +149,17 @@ def camel_to_snake(name: str) -> str:
     s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
-# A real @Entity is a line that is exactly `@Entity` or `@Entity(`.
-# This deliberately excludes @EntityGraph / @EntityListeners (substring traps).
-ENTITY_RE = re.compile(r"^\s*@Entity\s*(\(|$)", re.M)
+# A real @Entity is the @Entity annotation as a token at the start of a line.
+# The \b token boundary matches @Entity whether it stands alone, opens its own
+# parens (@Entity(name="x")), OR is followed on the SAME line by another
+# annotation (the inline pair `@Entity @Table(name="x")`). The boundary still
+# excludes @EntityGraph / @EntityListeners because those continue with word
+# characters after `Entity`, so no \b sits between `@Entity` and `Graph`.
+# (IMW3 / IDW3 G4: the previous anchor `^\s*@Entity\s*(\(|$)` matched only the
+# own-line and `@Entity(` forms — an inline `@Entity @Table(...)` escaped
+# detection, letting an un-migrated entity ship GREEN. The fixture cases
+# wired in run-all-guards.sh prove the inline pair is now DETECTED.)
+ENTITY_RE = re.compile(r"(?m)^\s*@Entity\b")
 TABLE_OPEN_RE = re.compile(r"@Table\s*\(")
 NAME_RE = re.compile(r'name\s*=\s*"([^"]+)"')
 CLASS_RE = re.compile(r"\b(?:public\s+)?(?:abstract\s+)?class\s+(\w+)")

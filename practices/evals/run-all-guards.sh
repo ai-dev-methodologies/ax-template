@@ -842,6 +842,23 @@ echo "[47] entity_migration_guard.sh (IMW1-C — IDW1 entity↔migration coverag
 run_guard "entity_migration/live" 0 \
     bash "$SCRIPT_DIR/entity_migration_guard.sh"
 
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    # IMW3 / IDW3 G4 regression: the INLINE @Entity @Table pair on ONE line.
+    # The old anchor ^\s*@Entity\s*(\(|$) missed this form (own-line=EXIT1,
+    # same-line=EXIT0), so an un-migrated entity shipped GREEN. The widened
+    # (?m)^\s*@Entity\b now DETECTS it. pass/ proves inline @Table resolution +
+    # a backing CREATE TABLE → 0; fail_inline_entity/ proves the false negative
+    # is now caught (inline @Entity, no migration, empty allowlist → 1).
+    echo ""
+    echo "[47f] entity_migration_guard.sh --fixtures (inline @Entity @Table detection)"
+    run_guard "entity_migration/fixture_pass" 0 \
+        bash "$SCRIPT_DIR/entity_migration_guard.sh" \
+            --root "$SCRIPT_DIR/fixtures/entity_migration/pass"
+    run_guard "entity_migration/fixture_fail_inline_entity" 1 \
+        bash "$SCRIPT_DIR/entity_migration_guard.sh" \
+            --root "$SCRIPT_DIR/fixtures/entity_migration/fail_inline_entity"
+fi
+
 echo ""
 echo "[48] spec_ref_code_guard.sh (IMW1-C — IDW1 backend specs/*.yaml reference resolution)"
 run_guard "spec_ref_code/live" 0 \

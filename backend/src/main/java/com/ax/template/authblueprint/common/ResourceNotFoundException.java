@@ -21,16 +21,29 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  * identity and NO "you are not the owner" wording — only a neutral not-found
  * message — so a leak cannot creep back in through the response body.
  *
- * <h2>Mapping</h2>
- * Annotated {@link ResponseStatus @ResponseStatus(NOT_FOUND)} so it maps to HTTP 404
- * with zero wiring — a fork-receiver inherits the correct status the moment they
- * throw it. {@link GlobalProblemDetailAdvice} deliberately does NOT register a
- * catch-all {@code Exception} handler, so this signal is free to surface as a plain
- * 404 by default. A fork-receiver that wants an RFC 9457 {@code application/problem+json}
- * body can add a single {@code @ExceptionHandler(ResourceNotFoundException.class)} to
- * their own {@code @RestControllerAdvice} (mirroring how {@code ActivityController}
- * maps its domain {@code NotFound} to a {@link org.springframework.http.ProblemDetail});
- * the annotation here is the safe default, not a ceiling.
+ * <h2>Mapping — 404 RFC 9457 problem+json, built-in</h2>
+ * {@link GlobalProblemDetailAdvice} (the {@code LOWEST_PRECEDENCE} fallback) registers
+ * an {@code @ExceptionHandler(ResourceNotFoundException.class)} that maps this signal
+ * to {@code 404 application/problem+json} (code {@code NOT_FOUND}, with the neutral
+ * not-found message) by default — a fork-receiver inherits a uniform RFC 9457 body the
+ * moment they throw it, no extra wiring required.
+ *
+ * <p>This explicit handler is also what makes the IDOR-safe 404 actually <em>be</em> a
+ * 404: relying on the {@link ResponseStatus @ResponseStatus(NOT_FOUND)} annotation
+ * alone is a trap under the reference {@code SecurityConfig}. The annotation drives a
+ * {@code sendError(404)} which re-dispatches the request to {@code /error}; that
+ * re-entry passes back through the filter chain and is caught by
+ * {@code anyRequest().denyAll()}, turning the intended 404 into a misleading
+ * {@code 403}. A global {@code @ExceptionHandler} returns the response DIRECTLY (no
+ * {@code sendError} re-dispatch), so it sidesteps the trap. The {@code @ResponseStatus}
+ * annotation is kept as a belt-and-braces default for any path that bypasses the
+ * advice.
+ *
+ * <p>Because the advice is {@code LOWEST_PRECEDENCE}, a domain that wants a richer body
+ * can still override it with its own controller-local or {@code basePackages}-scoped
+ * {@code @ExceptionHandler} (mirroring how {@code ActivityController} maps its domain
+ * {@code NotFound} to a {@link org.springframework.http.ProblemDetail}); the built-in
+ * 404 is the safe default, not a ceiling.
  *
  * <p>Framework-light: the only Spring touchpoint is the {@code @ResponseStatus}
  * mapping annotation; it carries no domain types.
