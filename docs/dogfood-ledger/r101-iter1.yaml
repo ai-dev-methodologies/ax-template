@@ -1,37 +1,69 @@
 # R101 — customs-e-trade-l0 spec dogfood iter1 (10-persona, 9th wave)
 #
-# Wave subject: specs/customs-e-trade-l0.yaml (R101 phase α).
-# 7 items (DECLARATION / EDI / CLASSIFICATION / CERT / AEO / AUDIT /
-# OBSERVABILITY) anchored to 관세법 §38/§51/§214/§270 + 관세청 UNI-PASS
-# API 4.0 + 관세청 e-Customs 시행규칙 + WCO Customs Data Model 3.x +
-# UN/EDIFACT D.16B + HS 2022 + ISO 6346 + 관세청 한국통일품목분류표 (HSK).
+# Wave subject: specs/customs-e-trade-l0.yaml (R101 phase α, commit 5749a4c).
+# 7 items + closures (c9849af). 9-wave application of 10-persona protocol.
 #
-# Panel reuse: P3-P12 per persona-registry R100 next_panel_composition_for_R101.
-# 9th wave application of the 10-persona protocol.
+# **3-class taxonomy preserved at R101** (pre-wave 881f2aa METHODOLOGY.md
+# anchor lifecycle policy). R100 P12 F10 closed via documentation
+# contribution — NOT 4th mechanical class.
 #
-# **3-class taxonomy preserved at R101** (anchor lifecycle policy commit
-# 881f2aa). R100 P12 F10 NEW finding closed via documentation contribution
-# instead of 4th anchor class — pattern fitness preserved.
-#
-# **R101 wave = first R101+ derived vertical** post-R93-table completion.
-# R94~R100 covered all 7 R93 candidates (A1-A7). R101 selects e-government
-# extension category (customs-e-trade = R99 e-government-approval extension).
-# Alternative categories (industry-specific medical/finance, global cross-
-# mapping) carry forward to R102+.
-#
-# **9-wave cross-wave consistency expected** (9 consecutive occurrences):
-#   P4 priority order        : R93~R101 F2 → real_bug × 9 (R101 closure expected)
-#   P5 RECIPE example        : R93~R101 F3 → real_bug × 9 (R101 closure expected)
+# **9-wave cross-wave consistency observed** (9 consecutive occurrences):
+#   P4 priority order        : R93~R101 F2 → real_bug × 9 (R101 closure c9849af)
+#   P5 RECIPE example        : R93~R101 F3 → real_bug × 9 (R101 closure c9849af)
 #   P8 SLO/alert wiring      : R93~R101 F6 → scope_deferral × 9 (5-wave OBS-002 carry forward)
-#   P11 standards-symmetric  : R93~R101 F8 → real_bug × 10+ (R101 closure expected; UN/EDIFACT
-#                              version / HS revision / EORI format 등 standards lens)
-#   P12 mechanical-anchor    : R97 hard_guard + R98 hard_guard + R99 catalog_helper + R100
-#                              data_artifact + R101 documentation_contribution. **4 mechanical
-#                              classes + 1 documentation class** — but documentation is NOT
-#                              a mechanical class (per METHODOLOGY.md policy text). 3-class
-#                              taxonomy held. R101 P12 NEW finding TBD.
+#   P11 standards-symmetric  : R93~R101 F8 → real_bug × 11 (R100 + R101 each 2 pins)
+#   P12 mechanical-anchor    : 3-class taxonomy held + R101 documentation contribution
 #
-# Distribution stable: 3 real_bug + 7 scope_deferral post-F10-retirement.
+# Distribution stable: 3 real_bug + 7 scope_deferral.
 
 iteration: 1
-findings: []
+findings:
+  - persona: P3
+    finding: "F1 (LOW): customs-e-trade-l0 desktop/server cover하나 mobile-specific (무역업체 ERP 모바일 + AEO 자격 모바일 portal + 신고 status push 알림 + 잠금화면 EORI 마스킹) 부재. Expiry trigger: 첫 mobile 무역업체 fork-receiver의 customs 도입 — CUSTOMS-MOBILE-001 (모바일 UNI-PASS deep link + iOS Universal Links for AEO portal)."
+    classification: scope_deferral
+    references_artifact_path: specs/customs-e-trade-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): customs-e-trade-l0 7 items priority 부재 — **9th consecutive wave** (R93~R101). Closure: priority order block (CUSTOMS-DECLARATION-001 foundation → CUSTOMS-OBSERVABILITY-001) commit c9849af."
+    classification: real_bug
+    closure_commit_sha: c9849af
+    closure_verification_ref: "specs/customs-e-trade-l0.yaml now carries priority order block."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/customs-e-trade-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): customs-e-trade-l0 12 config fields declare는 했으나 RECIPE.md example 없음 — **9th wave** (R93~R101). Closure: trade-customs-platform-kr frontmatter + AAA 등급 + 환적/물류 + D.21B 글로벌 vertical guidance (commit c9849af)."
+    classification: real_bug
+    closure_commit_sha: c9849af
+    closure_verification_ref: "specs/customs-e-trade-l0.yaml priority block now contains RECIPE.md frontmatter with 12 fields."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/customs-e-trade-l0.yaml
+  - persona: P6
+    finding: "F4 (HIGH): CUSTOMS-DECLARATION-001 + CUSTOMS-AUDIT-001 cite 관세법 §38 + 관세청 시행규칙이지만 시행령 detail 부재 — 관세법 시행령 §63 (신고 절차 세부) + §163 (사후 검증) + 관세법 시행규칙 §54 (정정 절차) + WCO Customs Data Model 한국 confidentiality classification corner case 부재. 환적 (T1/T2) + 물류 (보세창고 반입/반출) corner case 미상세. Expiry trigger: 첫 환적/물류 vertical fork-receiver의 production deploy — CUSTOMS-CORNER-001 (시행령 detail matrix + 환적/물류 expansion)."
+    classification: scope_deferral
+    references_artifact_path: specs/customs-e-trade-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): CUSTOMS-EDI-001 + CUSTOMS-DECLARATION-001 명시하나 typed-SDK UN/EDIFACT TypeScript binding 부재 (CUSDEC / CUSRES / CUSREP / COREOR 4종 메시지 + segment-level typed parsing + UNB/UNH/UNT/UNZ envelope schema). Expiry trigger: 첫 frontend customs integration — CUSTOMS-BINDING-001 (TypeScript UN/EDIFACT parser + UNI-PASS REST API typed contract)."
+    classification: scope_deferral
+    references_artifact_path: specs/customs-e-trade-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): CUSTOMS-OBSERVABILITY-001 names 3 canonical metrics but defines NO SLO threshold / alert convention — **9th wave** (R93~R101 동일 패턴). customs_uni_pass_failure_rate.connection_timeout > 10% over 5min → PAGE / cert_expiry_warning_days < 14 → PAGE 등 specific threshold 부재. Expiry trigger: 첫 customs production deployment OR R102 OBSERVABILITY-002 표준 item 9-spec batch 적용 시."
+    classification: scope_deferral
+    references_artifact_path: specs/customs-e-trade-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): No migration playbook for paper 통관 → e-Customs UNI-PASS — paper 신고 historical archive (스캔 + OCR + manual entry vs e-Customs forward-only) / dual-mode cutover (paper + e parallel for N개월) / 기존 무역업체 EORI 신청 + 인증서 발급 lead time (관세청 KICA 7-14d) 미정의. Expiry trigger: 첫 fork-receiver의 customs_enabled=true on existing paper-based 무역업체 — MIGRATION.md (3-track matrix: paper-archive / dual-mode / forward-only)."
+    classification: scope_deferral
+    references_artifact_path: specs/customs-e-trade-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): CUSTOMS-EDI-001 D.16B 의존 vs UN/EDIFACT 표준 진화 — D.16B 2016년 표준, D.21B (2021) 개정 부분 정착, D.27B (2027 예정). 관세청 UNI-PASS는 현재 D.16B-only 호환 (다음 upgrade 미정). Recipe가 D.21B/D.27B로 forward할 때 관세청 호환성 break + UNI-PASS API breaking change risk. 글로벌 SaaS는 multi-version envelope 필요. Expiry trigger: 첫 fork-receiver의 글로벌 customs (해외 관세 시스템 + 한국 UNI-PASS 동시 처리) — CUSTOMS-VERSION-001 (multi-version envelope matrix)."
+    classification: scope_deferral
+    references_artifact_path: specs/customs-e-trade-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): CUSTOMS-CLASSIFICATION-001 + CUSTOMS-EDI-001 cite WCO + UN/EDIFACT but HS revision + EDI version default 미pin — vendor-dependent. **9th wave 동일 패턴** (R93~R101). Closure: customs_hs_revision + customs_edi_version pin + 3/2 enum + per-context defaults (HS 2022 + D.16B baseline; HS 2027 / D.21B future) + 관세협력이사회 협약 + WCO Customs Data Model cite (commit c9849af). R101 F8는 **2 pins** (R100 패턴 답습)."
+    classification: real_bug
+    closure_commit_sha: c9849af
+    closure_verification_ref: "specs/customs-e-trade-l0.yaml#CUSTOMS-CLASSIFICATION-001.notes now carries HS revision + EDI version pin contract."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/customs-e-trade-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): R101 wave introduces **documentation contribution** as catalog evolution mechanism (METHODOLOGY.md anchor lifecycle policy 881f2aa). Per METHODOLOGY.md policy text: 'documentation is NOT a mechanical class'. R97/R98 hard_guard + R99 catalog_helper + R100 data_artifact + R101 documentation contribution = **4 catalog evolution mechanisms across 2 categories**: mechanical (3 classes) + documentation (1 class). **3-class mechanical taxonomy held**. **R101 NEW gap surfaces**: documentation contribution lifecycle — is METHODOLOGY.md 'evergreen' (영구 retain — like wave_kickoff hard guard) OR 'wave-revision-tracked' (refresh per major catalog version)? Documentation also has lifecycle (refresh / retire — like markdown becomes stale). R102 mandatory_iter1_agenda candidate: documentation lifecycle policy (메소돌로지 vs CLAUDE.md vs README vs DECISIONS — 각 doc class의 refresh cadence + ownership + retirement). Expiry trigger: re-opens when METHODOLOGY.md update encounters first staleness symptom (R97 policy referenced ≠ current catalog R110+ practice)."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/r101-iter1.yaml
