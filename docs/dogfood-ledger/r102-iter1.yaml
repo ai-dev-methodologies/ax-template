@@ -1,36 +1,77 @@
 # R102 — pagination-l0 + idempotency-l0 spec dogfood iter1 (10-persona, 10th wave)
 #
-# Wave subject (dual): specs/pagination-l0.yaml + specs/idempotency-l0.yaml
-# (R102 phase α — both atomically). Both cross-cutting generic patterns,
-# jurisdiction-agnostic per user feedback (R99-R101 vertical-specific drift
-# course-corrected at R102).
+# Wave subject (DUAL): specs/pagination-l0.yaml + specs/idempotency-l0.yaml
+# (R102 phase α 86a8ee0 both atomically; closures dual). 14 items total.
+# Cross-cutting generic patterns, jurisdiction-agnostic — course correction
+# from R99-R101 Korean-vertical drift (memory: feedback_prefer_generic_catalog).
 #
-# 7+7 = 14 items total. Anchored to RFC 5988 / RFC 8288 / RFC 9457 / RFC
-# 7231 / IETF draft-ietf-httpapi-idempotency-key / IETF draft-ietf-httpapi-
-# pagination / GraphQL Connections / FIPS 180-4 / Stripe-Square-Adyen
-# industry de facto.
+# Anchored to RFC 5988/8288/9111/7234/7232/9110/9457 + IETF draft-ietf-
+# httpapi-idempotency-key + GraphQL Cursor Connections + FIPS 180-4 +
+# Stripe/Square/Adyen de facto. ZERO Korean law cites in either spec.
 #
-# Panel: P3-P12 per persona-registry R101 next_panel_composition_for_R102.
+# Panel reuse: P3-P12 per persona-registry R101 next_panel_composition_for_R102.
 # 10th wave of 10-persona protocol.
 #
-# **R102 wave = course correction** — user feedback (memory:
-# feedback_prefer_generic_catalog) reverted R99-R101 Korean-vertical drift.
-# Both R102 specs cite minimal Korean law (0 in either standard: field).
-#
-# **10-wave cross-wave consistency expected** (10 consecutive occurrences):
-#   P4 priority order        : R93~R102 F2 → real_bug × 10 (R102 closure expected;
-#                              priority may apply per-spec OR combined for dual phase α)
-#   P5 RECIPE example        : R93~R102 F3 → real_bug × 10 (R102 closure expected;
-#                              2 RECIPE examples needed for dual specs)
+# **10-wave cross-wave consistency observed**:
+#   P4 priority order        : R93~R102 F2 → real_bug × 10 (R102 dual closure)
+#   P5 RECIPE example        : R93~R102 F3 → real_bug × 10 (R102 dual closure, 2 RECIPEs)
 #   P8 SLO/alert wiring      : R93~R102 F6 → scope_deferral × 10 (6-wave OBS-002 carry forward)
-#   P11 standards-symmetric  : R93~R102 F8 → real_bug × 12+ (R102 may have 2-4 pins
-#                              given dual spec scope)
-#   P12 mechanical-anchor    : 3-class mechanical taxonomy held + R101 documentation
-#                              contribution + **R102 dual-spec wave shape** (new pattern:
-#                              two specs single phase α). R102 P12 NEW finding TBD.
+#   P11 standards-symmetric  : R93~R102 F8 → real_bug × 12 (R102 dual pin)
+#   P12 mechanical-anchor    : 3-class taxonomy held; R102 introduces DUAL-SPEC wave shape
 #
-# Distribution potentially shifts: dual-spec wave may produce 4-6 real_bug
-# + 8-10 scope_deferral instead of standard 3+7.
+# **Course-correction signal (P6)**: R102 generic specs cite ZERO Korean
+# law — P6 한국 규제 lens produces NO deferral this wave (first time in 10
+# waves). Empirically confirms the user feedback: generic cross-cutting
+# patterns don't trigger the Korean-regulation deferral lane.
 
 iteration: 1
-findings: []
+findings:
+  - persona: P3
+    finding: "F1 (LOW): pagination-l0 + idempotency-l0 both define HTTP-surface contracts but no mobile-client guidance — cursor pagination on mobile (infinite scroll + prefetch + offline cursor persistence) + Idempotency-Key generation on mobile (app-restart-safe key storage, retry-on-reconnect). A mobile-first Junior (P3 김민준, 24) needs client-side patterns. Expiry trigger: 첫 mobile fork-receiver의 list/mutation API 통합 — PAGE-MOBILE / IDEMPOTENCY-MOBILE client binding note."
+    classification: scope_deferral
+    references_artifact_path: specs/pagination-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): both specs' 7 items lack priority ordering — 10th consecutive wave (R93~R102). Dual-spec: priority needed for BOTH. Closure: priority order block prepended to pagination (CURSOR→STABLE-SORT keystone) + idempotency (KEY→CACHE→PAYLOAD keystone) in iter1 closures commit."
+    classification: real_bug
+    closure_commit_sha: e7d0a2e
+    closure_verification_ref: "both specs/pagination-l0.yaml + specs/idempotency-l0.yaml now carry priority order blocks before items:."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/pagination-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): both specs declare config fields but ship no copy-pasteable RECIPE.md example — 10th wave (R93~R102). Dual-spec needs 2 RECIPEs. Closure: generic-list-api frontmatter (pagination, 7 fields) + generic-idempotent-api frontmatter (idempotency, 6 fields) in iter1 closures commit."
+    classification: real_bug
+    closure_commit_sha: e7d0a2e
+    closure_verification_ref: "both specs now contain verbatim RECIPE.md frontmatter examples + vertical guidance."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/idempotency-l0.yaml
+  - persona: P6
+    finding: "F4 (LOW): **course-correction confirmation** — pagination-l0 + idempotency-l0 cite ZERO Korean law (first generic-only wave after R99-R101 vertical drift). P6 한국 규제 lens (최영숙, 53) produces NO regulatory deferral this wave — there is no Korean-jurisdiction gap because these are jurisdiction-agnostic HTTP contracts. Instead P6 offers a generic i18n observation: PAGE-LINK-001 envelope localization should reference i18n-policy-l0 (R93) for Accept-Language. Expiry trigger: re-opens only if a fork-receiver adds jurisdiction-specific pagination/idempotency rules (none expected — these are universal). This LOW finding validates user feedback that generic catalog avoids the Korean-deferral treadmill."
+    classification: scope_deferral
+    references_artifact_path: specs/pagination-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): both specs define wire contracts but no typed-SDK binding — TypeScript cursor envelope type (opaque string branding) + Idempotency-Key client helper (typed retry wrapper). A typed-SDK Senior (P7 정도윤, 28) needs client binding contracts. Expiry trigger: 첫 frontend typed-client codegen — PAGE-BINDING / IDEMPOTENCY-BINDING (cursor opaque type + idempotent fetch wrapper)."
+    classification: scope_deferral
+    references_artifact_path: specs/idempotency-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): both observability items name 3 canonical metrics each but no SLO threshold / alert convention — 10th wave (R93~R102 same pattern). pagination_response_time p99 > 1s → ALERT / idempotency_lock_wait p99 > 3s → PAGE missing. Expiry trigger: 첫 production deployment OR R103 OBSERVABILITY-002 표준 item 10-spec batch (6-wave carry forward saturation candidate)."
+    classification: scope_deferral
+    references_artifact_path: specs/pagination-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): no migration playbook — (a) offset→cursor pagination migration (existing clients depend on page numbers; dual-mode bridge + deprecation window) + (b) retrofitting idempotency onto existing non-idempotent endpoints (clients don't send Idempotency-Key yet; gradual enforcement). An architect (P9 윤재호, 44) needs rollout plan. Expiry trigger: 첫 fork-receiver의 existing API에 cursor/idempotency 도입 — MIGRATION.md (offset→cursor dual-mode + idempotency opt-in→enforce ramp)."
+    classification: scope_deferral
+    references_artifact_path: specs/idempotency-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): PAGE-OFFSET-001 backward-compat fallback + IDEMPOTENCY-SCOPE-001 opt-out both address deployed-state, but no version-skew contract — old clients sending offset while server prefers cursor / clients NOT sending Idempotency-Key during rollout. Server must honor both gracefully. A backward-compat veteran (P10 신경수, 52) flags the transition window. Expiry trigger: 첫 fork-receiver의 mixed-client-version production — PAGE-VERSION-SKEW / IDEMPOTENCY-GRADUAL contract."
+    classification: scope_deferral
+    references_artifact_path: specs/pagination-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): pagination cites RFC 5988/8288/Relay + idempotency cites IETF draft/RFC 7231/Stripe but defaults unpinned — pagination cursor HMAC algorithm + envelope shape; idempotency fingerprint algorithm + key format. **10th wave standards-pin pattern** (R93~R102). DUAL pin needed. Closure: pagination (hmac-sha256 + RFC 5988 envelope) + idempotency (sha-256 + uuid-v4) defaults pinned in iter1 closures."
+    classification: real_bug
+    closure_commit_sha: e7d0a2e
+    closure_verification_ref: "both specs now carry F8 standards-pin blocks (4 defaults total across 2 specs)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/idempotency-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): **R102 introduces DUAL-SPEC wave shape** — two specs (pagination + idempotency) in a single phase α + single iter1 ledger + single registry backfill, vs R97-R101 single-spec waves. Per METHODOLOGY.md anchor lifecycle policy (R101 881f2aa) 4-criterion rule: dual-spec is NOT a new mechanical anchor class — it reuses existing wave shape with 2 spec files. No new class. BUT registry backfill for a dual-spec wave still produces 10 persona entries (1 per persona for the WAVE, not per spec) — 49th guard (registry_backfill_completeness) counts by WAVE not by spec. R103 evaluation: document dual/multi-spec wave shape in METHODOLOGY.md wave-shape section (documentation contribution, not mechanism). Expiry trigger: R103 wave 시작 시 dual/multi-spec wave shape 명문화 OR 첫 fork-receiver가 multi-spec wave 혼란 시."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/r102-iter1.yaml
