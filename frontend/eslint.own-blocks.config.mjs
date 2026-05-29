@@ -1,0 +1,42 @@
+// frontend/eslint.own-blocks.config.mjs — ESLint v9 flat config for the
+// CATALOG'S OWN shipped components (templates/L2 + templates/L0).
+//
+// FDW1 (frontend dogfood) found that frontend/eslint.config.mjs globs only
+// src/** and tests/**, so the catalog NEVER lints its own blocks — and
+// column-picker.tsx shipped an ax/no-array-includes-in-loop violation that
+// stayed invisible until a fork copied it into src/. "The catalog must eat
+// its own dogfood." This config lints the template trees with EVERY ax rule
+// at error level; lint_own_blocks_guard.sh runs it with --max-warnings 0 so
+// even the warn-level rules block.
+//
+// Lives in frontend/ (not practices-react/evals/) so its plugin/parser
+// imports resolve from frontend/node_modules. The guard passes the template
+// file paths explicitly; the single catch-all config object below applies to
+// whatever is passed.
+
+import globals from 'globals'
+import tsParser from '@typescript-eslint/parser'
+import axPlugin from '@ax/eslint-plugin-ax'
+
+export default [
+  {
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 2024,
+      sourceType: 'module',
+      globals: { ...globals.browser, ...globals.es2022, ...globals.node },
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    plugins: { ax: axPlugin },
+    rules: {
+      'ax/react-async-parallel': 'error',
+      'ax/no-broad-barrel-imports': 'error',
+      'ax/no-falsy-numeric-render': 'error',
+      'ax/no-array-includes-in-loop': 'error',
+      'ax/no-array-mutate-on-state': 'error',
+      'ax/prefer-functional-setstate': 'error',
+      'ax/no-inline-component-definition': 'error',
+    },
+  },
+]

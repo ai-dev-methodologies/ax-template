@@ -1,16 +1,22 @@
 /**
  * ax/no-array-includes-in-loop
  *
- * Flags `<arr>.includes(x)` (or `<arr>.find(...)`) inside a callback for
- * .filter / .map / .forEach / .some / .every / .reduce when:
- *   - the array <arr> is an identifier (a name from the surrounding scope),
+ * Flags `<arr>.includes(x)` (or `<arr>.find/.findIndex/.indexOf(...)`) inside:
+ *   - a callback for .filter / .map / .forEach / .some / .every / .reduce, OR
+ *   - the body of a `for (const x of <iterable>)` loop (FMW1 — FDW1 found the
+ *     callback-only scope let a plain for-of O(n*m) lookup ship green),
+ * when:
+ *   - the looked-up array <arr> is an identifier (a name from the surrounding
+ *     scope), and
  *   - the array is NOT the same as the one being iterated.
  *
  * Pairs 1:1 with: practices-react/rules/js-set-map-lookups.md
  *
- * Conservative — only flags the simple "iterate items, look up by includes
- * in another array" pattern. False-negatives are acceptable; false-positives
- * are not (because the fix — building a Set — has a cost of its own).
+ * Conservative — only flags the simple "iterate items, look up by includes in
+ * another array" pattern. Plain `for (;;)` / `while` loops are intentionally
+ * NOT covered: without a clear iterable their iteration count is ambiguous, and
+ * the fix (building a Set) has a cost of its own — false-negatives are
+ * acceptable here, false-positives are not.
  */
 
 const ITERATOR_METHODS = new Set([
@@ -79,36 +85,43 @@ const rule = {
     schema: [],
     messages: {
       hotLookupInLoop:
-        '`{{outerName}}.{{method}}(...)` inside an iterator callback is O(n) per iteration. Build a Set or Map of `{{outerName}}` once before the loop and use `has`/`get` instead.',
+        '`{{outerName}}.{{method}}(...)` inside a loop is O(n) per iteration. Build a Set or Map of `{{outerName}}` once before the loop and use `has`/`get` instead.',
     },
   },
 
   create(context) {
+    // Scan a loop body for an O(n) hot-lookup on a closed-over identifier that
+    // is NOT the array being iterated. Shared by iterator callbacks + for-of.
+    function reportHotLookups(body, iteratedName) {
+      walkExpressions(body, (n) => {
+        if (n.type !== 'CallExpression') return
+        const cal = n.callee
+        if (!cal || cal.type !== 'MemberExpression' || cal.computed) return
+        if (!HOT_LOOKUP_METHODS.has(cal.property.name)) return
+        const outerName = getIdentifierName(cal.object)
+        if (!outerName) return
+        // Skip lookups on the iterated array itself.
+        if (iteratedName && outerName === iteratedName) return
+
+        context.report({
+          node: n,
+          messageId: 'hotLookupInLoop',
+          data: { outerName, method: cal.property.name },
+        })
+      })
+    }
+
     return {
       CallExpression(node) {
         const iter = isIteratorCall(node)
         if (!iter) return
-        const iteratedName = getIdentifierName(iter.iteratedExpr)
+        reportHotLookups(callbackBody(iter.callback), getIdentifierName(iter.iteratedExpr))
+      },
 
-        const body = callbackBody(iter.callback)
-        walkExpressions(body, (n) => {
-          if (n.type !== 'CallExpression') return
-          const cal = n.callee
-          if (!cal || cal.type !== 'MemberExpression' || cal.computed) return
-          if (!HOT_LOOKUP_METHODS.has(cal.property.name)) return
-          const outerName = getIdentifierName(cal.object)
-          if (!outerName) return
-          // Skip lookups on the iterated array itself
-          // (filter(items, x => items.includes(x)) is unusual but not the
-          // pattern this rule targets).
-          if (iteratedName && outerName === iteratedName) return
-
-          context.report({
-            node: n,
-            messageId: 'hotLookupInLoop',
-            data: { outerName, method: cal.property.name },
-          })
-        })
+      // for (const x of items) { lookup.includes(x) }  — the iterable is the
+      // for-of right-hand side; exclude it as the "iterated array".
+      ForOfStatement(node) {
+        reportHotLookups(node.body, getIdentifierName(node.right))
       },
     }
   },

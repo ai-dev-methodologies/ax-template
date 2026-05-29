@@ -45,9 +45,13 @@ export default function ColumnReorder({ columns, order, onChange }: ColumnReorde
   const [dragKey, setDragKey] = React.useState<string | null>(null)
   const [keyboardFocusIdx, setKeyboardFocusIdx] = React.useState<number | null>(null)
 
+  // O(1) lookup — avoids an O(n*m) `columns.find(...)` inside `order.map(...)`
+  // (ax/no-array-includes-in-loop). The catalog lints its own blocks (FMW1).
+  const columnByKey = new Map(columns.map(c => [c.key, c]))
+
   // Build ordered list of columns
   const ordered = order
-    .map(key => columns.find(c => c.key === key))
+    .map(key => columnByKey.get(key))
     .filter((c): c is ReorderableColumn => Boolean(c))
 
   // Append any columns not in order (safety net)

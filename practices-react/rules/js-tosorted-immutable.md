@@ -9,7 +9,7 @@ verification:
   type: lint
   rule_id: "ax/no-array-mutate-on-state"
   status: shipped
-  notes: "Custom ESLint rule planned: flag arr.sort()/arr.reverse()/arr.splice() where arr is a prop or state-derived value."
+  notes: "Shipped as ax/no-array-mutate-on-state: flags .sort/.reverse/.splice (suggest .toSorted/.toReversed/.toSpliced), the no-immutable-variant mutators .push/.pop/.shift/.unshift/.fill, and arr[i]=v index assignment, where arr is a prop or state-derived value (FMW1 closed the doc-vs-impl gap on .push/arr[i]=v)."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

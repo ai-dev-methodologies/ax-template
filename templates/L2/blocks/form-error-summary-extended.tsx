@@ -69,7 +69,9 @@ export default function FormErrorSummaryExtended({
   const { formState: { errors, submitCount } } = useFormContext()
 
   const flatErrors = React.useMemo(
-    () => flattenErrors(errors, '', excludeFields),
+    // Build the exclude Set once (O(1) membership in the recursive walk —
+    // avoids exclude.includes() per node; ax/no-array-includes-in-loop, FMW1).
+    () => flattenErrors(errors, '', new Set(excludeFields)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [errors, submitCount, excludeFields.join(',')]
   )
@@ -118,14 +120,14 @@ export default function FormErrorSummaryExtended({
 function flattenErrors(
   errors: FieldErrors<FieldValues>,
   prefix: string,
-  exclude: string[]
+  exclude: Set<string>
 ): FlatError[] {
   const result: FlatError[] = []
 
   for (const [key, value] of Object.entries(errors)) {
     if (!value) continue
     const path = prefix ? `${prefix}.${key}` : key
-    if (exclude.includes(path)) continue
+    if (exclude.has(path)) continue
 
     if (typeof (value as { message?: string }).message === 'string') {
       result.push({ path, message: (value as { message: string }).message })

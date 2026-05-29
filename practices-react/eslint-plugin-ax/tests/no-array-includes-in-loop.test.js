@@ -22,6 +22,15 @@ test('ax/no-array-includes-in-loop — RuleTester suite', () => {
       `
         const x = allowed.includes(value)
       `,
+      // for-of with a Set — correct pattern
+      `
+        const allowedIds = new Set(['a', 'b'])
+        for (const it of items) { if (allowedIds.has(it.id)) doIt(it) }
+      `,
+      // for-of with .includes on the iterated array itself — not our target
+      `
+        for (const it of items) { if (items.includes(it.parent)) doIt(it) }
+      `,
     ],
     invalid: [
       {
@@ -41,6 +50,21 @@ test('ax/no-array-includes-in-loop — RuleTester suite', () => {
       {
         code: `
           orders.forEach((o) => { if (allowed.indexOf(o.id) > -1) doIt(o) })
+        `,
+        errors: [{ messageId: 'hotLookupInLoop' }],
+      },
+      // for-of body with a closed-over array lookup — O(n*m) (FMW1 broadening)
+      {
+        code: `
+          const allowed = ['a', 'b']
+          for (const o of orders) { if (allowed.includes(o.id)) doIt(o) }
+        `,
+        errors: [{ messageId: 'hotLookupInLoop' }],
+      },
+      // for-of body with .find on a closed-over array
+      {
+        code: `
+          for (const o of orders) { const u = users.find((x) => x.id === o.userId); render(u) }
         `,
         errors: [{ messageId: 'hotLookupInLoop' }],
       },

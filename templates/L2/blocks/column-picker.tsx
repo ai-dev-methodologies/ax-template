@@ -33,9 +33,13 @@ export default function ColumnPicker({
   onChange,
 }: ColumnPickerProps) {
   const [open, setOpen] = React.useState(false)
+  // O(1) membership for the per-row `checked` lookup in the columns.map below —
+  // avoids an O(n*m) `visible.includes(col.key)` inside the loop
+  // (ax/no-array-includes-in-loop). The catalog lints its own blocks (FMW1).
+  const visibleSet = React.useMemo(() => new Set(visible), [visible])
 
   function toggleColumn(key: string) {
-    const next = visible.includes(key)
+    const next = visibleSet.has(key)
       ? visible.filter(k => k !== key)
       : [...visible, key]
     onChange(next)
@@ -64,7 +68,7 @@ export default function ColumnPicker({
           className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md border border-border bg-background p-2 shadow-md"
         >
           {columns.map(col => {
-            const checked = visible.includes(col.key)
+            const checked = visibleSet.has(col.key)
             return (
               <label
                 key={col.key}

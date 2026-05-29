@@ -17,7 +17,7 @@ verification:
   type: eslint
   rule_id: "ax/no-array-includes-in-loop"
   status: shipped
-  notes: "Custom ESLint rule planned: flag `array.includes(...)` or `array.find(...)` inside an iteration callback (.filter / .map / for-of / while) when the same array is closed over and not mutated in the loop. Until shipped: peer review checkpoint."
+  notes: "Shipped as ax/no-array-includes-in-loop: flags `array.includes/.find/.findIndex/.indexOf(...)` inside an iterator callback (.filter / .map / .forEach / .some / .every / .reduce) or a for-of body when the array is closed over and not the one being iterated. Plain for/while are intentionally NOT covered (ambiguous iteration count → false-positive risk; the rule's contract is false-negatives-OK, false-positives-not)."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -117,7 +117,7 @@ cacheById.has(1)       // true
 
 ### Verification
 
-- Static check (planned): custom ESLint rule `ax/no-array-includes-in-loop`. Flags `arr.includes(x)` or `arr.find(...)` inside `.filter`, `.map`, `for-of`, or `while` when the array is closed over and not mutated inside the loop.
+- Static check (shipped): ESLint rule `ax/no-array-includes-in-loop`. Flags `arr.includes(x)` or `arr.find(...)` inside an iterator callback (`.filter`/`.map`/`.forEach`/`.some`/`.every`/`.reduce`) or a `for-of` body when the array is closed over and not the one being iterated. Plain `for`/`while` are intentionally excluded (ambiguous iteration count → false-positive risk).
 - Manual: bundle/profiler review for hot iteration sites.
 
 Sources for this rule:

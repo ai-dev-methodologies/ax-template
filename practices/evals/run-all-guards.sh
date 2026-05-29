@@ -958,6 +958,14 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/controller_repository_shell_guard.sh" --fixtures
 fi
 
+echo ""
+echo "[56] lint_own_blocks_guard.sh (FMW1 — FDW1: the catalog must lint its OWN shipped React blocks; templates/L2/blocks + L0 must satisfy every ax/* rule)"
+# FRONTEND guard (practices-react/evals). Green-on-current: column-picker /
+# MappingEditor / column-reorder O(n*m) lookups fixed in FMW1. SKIPs gracefully
+# (exit 0) when frontend/node_modules/eslint is absent (e.g. backend-only CI).
+run_guard "lint_own_blocks/live" 0 \
+    bash "$SCRIPT_DIR/../../practices-react/evals/lint_own_blocks_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

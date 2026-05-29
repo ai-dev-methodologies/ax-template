@@ -53,6 +53,13 @@ export function MappingEditor({
       field.required &&
       !mappings.some((m) => m.targetField === field.key),
   )
+  // O(1) lookup for the per-row mapping in the sourceColumns.map below —
+  // avoids an O(n*m) `mappings.find(...)` inside the loop
+  // (ax/no-array-includes-in-loop). The catalog lints its own blocks (FMW1).
+  const mappingBySource = React.useMemo(
+    () => new Map(mappings.map((m) => [m.sourceColumn, m])),
+    [mappings],
+  )
 
   function handleMappingChange(
     sourceColumn: string,
@@ -83,7 +90,7 @@ export function MappingEditor({
         </thead>
         <tbody>
           {sourceColumns.map((col) => {
-            const mapping = mappings.find((m) => m.sourceColumn === col)
+            const mapping = mappingBySource.get(col)
             return (
               <tr key={col}>
                 <td className="mapping-editor__source">{col}</td>

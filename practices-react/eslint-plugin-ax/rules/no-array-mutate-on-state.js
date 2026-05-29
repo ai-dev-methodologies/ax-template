@@ -1,8 +1,12 @@
 /**
  * ax/no-array-mutate-on-state
  *
- * Flags `.sort` / `.reverse` / `.splice` (and `arr[i] = v` mutation patterns)
- * on arrays that look like React props or state.
+ * Flags in-place array mutation on arrays that look like React props or state:
+ *   - the ES2023-replaceable methods `.sort` / `.reverse` / `.splice`
+ *     (suggest the immutable `.toSorted` / `.toReversed` / `.toSpliced`)
+ *   - the no-immutable-variant mutators `.push` / `.pop` / `.shift` /
+ *     `.unshift` / `.fill` (suggest spread / `.slice` / `.concat` + the setter)
+ *   - index assignment `arr[i] = v`
  *
  * Pairs 1:1 with: practices-react/rules/js-tosorted-immutable.md
  *
@@ -13,10 +17,16 @@
  *     {} or function Foo(props) and props.items)
  *
  * We do NOT try to follow values through intermediate variables — false
- * negatives are accepted; the rule is a tripwire for the obvious cases.
+ * negatives are accepted; the rule is a tripwire for the obvious cases. The
+ * coverage above is the rule's CONTRACT — keep this doc in sync with the
+ * method sets / visitors below (FDW1 found the doc claimed `arr[i] = v`
+ * coverage the impl never had).
  */
 
-const MUTATING_METHODS = new Set(['sort', 'reverse', 'splice'])
+// `.sort/.reverse/.splice` have a 1:1 ES2023 immutable variant (`.toX`).
+const IMMUTABLE_VARIANT_METHODS = new Set(['sort', 'reverse', 'splice'])
+// In-place mutators with NO drop-in immutable variant — must rebuild the array.
+const IN_PLACE_MUTATING_METHODS = new Set(['push', 'pop', 'shift', 'unshift', 'fill'])
 
 function paramIdentifierNames(params) {
   const names = new Set()
@@ -68,7 +78,7 @@ const rule = {
     type: 'problem',
     docs: {
       description:
-        'Disallow `.sort/.reverse/.splice` on arrays that look like React props or state. Use the ES2023 immutable variants (`.toSorted/.toReversed/.toSpliced`) or spread + sort.',
+        'Disallow in-place array mutation (`.sort/.reverse/.splice/.push/.pop/.shift/.unshift/.fill` and `arr[i] = v`) on arrays that look like React props or state. Use the ES2023 immutable variants or rebuild the array immutably and call the setter.',
       recommended: true,
       url: 'https://github.com/ax-template/practices-react/blob/main/rules/js-tosorted-immutable.md',
     },
@@ -76,6 +86,10 @@ const rule = {
     messages: {
       mutateOnState:
         "`{{name}}.{{method}}(...)` mutates the array — likely a prop or state. Use `.to{{method_pascal}}(...)` (ES2023) or `[...{{name}}].{{method}}(...)`.",
+      mutateMethodOnState:
+        "`{{name}}.{{method}}(...)` mutates the array in place — likely a prop or state. Build a new array immutably (spread / `.slice` / `.concat`) and call the setter.",
+      assignIndexOnState:
+        "`{{name}}[...] = ...` index-assigns into the array — likely a prop or state. Build a new array immutably (`.map` / spread) and call the setter.",
     },
   },
 
@@ -124,17 +138,41 @@ const rule = {
       CallExpression(node) {
         const callee = node.callee
         if (callee.type !== 'MemberExpression' || callee.computed) return
-        if (!MUTATING_METHODS.has(callee.property.name)) return
+        const method = callee.property.name
+        const hasImmutableVariant = IMMUTABLE_VARIANT_METHODS.has(method)
+        const isInPlaceMutator = IN_PLACE_MUTATING_METHODS.has(method)
+        if (!hasImmutableVariant && !isInPlaceMutator) return
         if (callee.object.type !== 'Identifier') return
         const name = callee.object.name
         if (!nameIsStateOrProp(name)) return
 
-        const method = callee.property.name
-        const methodPascal = method.charAt(0).toUpperCase() + method.slice(1)
+        if (hasImmutableVariant) {
+          const methodPascal = method.charAt(0).toUpperCase() + method.slice(1)
+          context.report({
+            node,
+            messageId: 'mutateOnState',
+            data: { name, method, method_pascal: methodPascal },
+          })
+        } else {
+          context.report({
+            node,
+            messageId: 'mutateMethodOnState',
+            data: { name, method },
+          })
+        }
+      },
+
+      // arr[i] = v  /  arr[i] += v  (computed member assignment into tracked array)
+      AssignmentExpression(node) {
+        const left = node.left
+        if (left.type !== 'MemberExpression' || !left.computed) return
+        if (left.object.type !== 'Identifier') return
+        const name = left.object.name
+        if (!nameIsStateOrProp(name)) return
         context.report({
           node,
-          messageId: 'mutateOnState',
-          data: { name, method, method_pascal: methodPascal },
+          messageId: 'assignIndexOnState',
+          data: { name },
         })
       },
     }
