@@ -26,6 +26,47 @@ introduced_at: "R101 phase α — first R101+ derived vertical candidate post-R9
 #   compliance audit이 단일 lookup으로 확인 가능. R100 pre-wave DATA
 #   artifact 첫 fork-receiver use case.
 
+# ── Priority order for fork-receivers (R101 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt items in this order. Earlier items are foundational — skipping
+# CUSTOMS-DECLARATION-001 makes everything else moot (신고 자체가 모든
+# downstream의 기반). 9-wave pattern (R93~R101 F2): Junior priority lens
+# consistently flags missing adoption order.
+#
+#   1. CUSTOMS-DECLARATION-001    — UNI-PASS 신고 (foundation)
+#   2. CUSTOMS-EDI-001            — UN/EDIFACT 메시지 (신고 carrier)
+#   3. CUSTOMS-CLASSIFICATION-001 — HS Code (신고 payload 정확성)
+#   4. CUSTOMS-CERT-001           — 인증서 + EORI (인증)
+#   5. CUSTOMS-AEO-001            — AEO 자격 (routing layer)
+#   6. CUSTOMS-AUDIT-001          — 5년 보관 (의무)
+#   7. CUSTOMS-OBSERVABILITY-001  — 3 metrics
+
+# ── RECIPE.md frontmatter example (R101 iter1 F3 closure — P5 이상호 lens) ──
+# Canonical opt-in shape. 9-wave pattern (R93~R101 F3): Senior docs lens
+# consistently flags missing copy-pasteable recipe block.
+#
+#   ---
+#   recipe: trade-customs-platform-kr
+#   tenant_model: multi
+#   default_locale: ko-KR
+#   supported_locales: [ko-KR, en-US]
+#   customs_enabled: true
+#   customs_uni_pass_endpoint: "https://api.unipass.customs.go.kr/v4"   # 관세청 production
+#   customs_hs_revision: HS 2022                                       # R101 F8 default — current 협약 부속서
+#   customs_hsk_active_version_year: 2024                              # 한국통일품목분류표 연도
+#   customs_edi_version: D.16B                                         # R101 F8 default — 현행 UNI-PASS 표준
+#   customs_aeo_status: none                                           # OR A / AA / AAA
+#   customs_audit_retention_years: 5                                   # 관세법 §38③
+#   customs_audit_archive_profile: pades-b-lta                         # R97 reference
+#   customs_audit_hash_algorithm: sha-256                              # R99 EGA-AUDIT-001 reference
+#   customs_cert_issuer: kica                                          # OR customs_direct
+#   customs_cert_expiry_warning_days: 30
+#   ---
+#
+# Fork-receivers targeting AAA 등급 무역업체 → customs_aeo_status=AAA +
+# fast-track routing 활성. 환적/물류 vertical → customs_declaration_types
+# 추가 enum (T1/T2 환적 분리). 글로벌 SaaS는 customs_edi_version=D.21B
+# (다음 표준 — 2027+) 검토 가능 (단 UNI-PASS 호환성 확인 후).
+
 items:
   # ── DECLARATION family ─────────────────────────────────────────────────
   - id: "CUSTOMS-DECLARATION-001"
@@ -83,6 +124,17 @@ items:
       Quote anchor (관세협력이사회 협약 §3): "각 체약국은 관세 목적상
       자국의 관세통계와 관세표를 협약 부속서 표시의 통일된 명명체계와
       일치시킨다."
+      R101 iter1 F8 closure (P11 황태완 standards lens): HS Code revision
+      + UN/EDIFACT version default MUST be pinned — recipe declares
+      `customs_hs_revision` ∈ {HS 2017, HS 2022, HS 2027} (default 'HS
+      2022' — current 관세협력이사회 협약 부속서; 5년 주기 개정) +
+      `customs_edi_version` ∈ {D.16B, D.21B} (default 'D.16B' — current
+      UNI-PASS 호환; D.21B는 2027+ 검토). HS revision mismatch는 관세법
+      §270 가산세 위험. UN/EDIFACT version mismatch는 segment-level
+      parser error → 422. 9-wave streak: R93 ISO 8601 + R94 subprotocol
+      + R95 XML namespace + R96 WebAuthn + R97 c14n+PAdES + R98 message
+      id + R99 hash chain + R100 fingerprint+IP anon + R101 HS+EDI
+      version. P11 standards lens 9-wave consistent default-pinning gap.
 
   # ── CERT family ────────────────────────────────────────────────────────
   - id: "CUSTOMS-CERT-001"
