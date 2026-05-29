@@ -1,6 +1,9 @@
 package com.ax.template.authblueprint.common;
 
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,5 +43,28 @@ public class ProblemDetailProbeController {
     public String page(@RequestParam(defaultValue = "999") int size) {
         OffsetPageSupport.clamp(0, size, OffsetPageSupport.DEFAULT_MAX_PAGE_SIZE);
         return "unreachable";
+    }
+
+    /**
+     * Conditional write through {@link OptimisticLockingSupport#requireMatch(String, String, long)}.
+     * Probes the three IMW4 global mappings the COMMON
+     * {@link GlobalProblemDetailAdvice} now owns (no local {@code @ExceptionHandler}):
+     * <ul>
+     *   <li>no {@code If-Match} header → {@code PreconditionRequiredException} → 428;</li>
+     *   <li>a stale validator (anything other than the current {@code "7-3"}) →
+     *       {@code PreconditionFailedException} → 412 (with {@code current_etag});</li>
+     *   <li>{@code If-Match: race} → simulate the concurrent-write race that surfaces at
+     *       flush time after the precondition check passed → 409.</li>
+     * </ul>
+     * The current strong validator is the deterministic {@code "7-3"}
+     * ({@code etag("7", 3)}); a matching {@code If-Match} therefore proceeds to the write.
+     */
+    @PutMapping("/optlock")
+    public String optlock(@RequestHeader(name = "If-Match", required = false) String ifMatch) {
+        if ("race".equals(ifMatch)) {
+            throw new ObjectOptimisticLockingFailureException(Object.class, "7");
+        }
+        OptimisticLockingSupport.requireMatch(ifMatch, "7", 3L);
+        return "written";
     }
 }

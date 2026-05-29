@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -75,6 +76,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  *       the typed out-of-range page-request signal from
  *       {@link OffsetPageSupport#clamp(int, int, int)} (same 403 trap if left
  *       unmapped).</li>
+ *   <li>{@link OptimisticLockingSupport.PreconditionRequiredException} → 428
+ *       (code {@code PRECONDITION_REQUIRED}) — conditional write arrived without an
+ *       {@code If-Match} header (RFC 6585 §3);</li>
+ *   <li>{@link OptimisticLockingSupport.PreconditionFailedException} → 412
+ *       (code {@code PRECONDITION_FAILED}) — supplied {@code If-Match} validator is stale
+ *       (RFC 9110 §15.5.13); carries the authoritative {@code current_etag} member;</li>
+ *   <li>{@link ObjectOptimisticLockingFailureException} → 409
+ *       (code {@code OPTIMISTIC_LOCK_CONFLICT}) — a {@code @Version} bump lost the race at
+ *       flush time (RFC 9110 §15.5.10). These three close the IDW4 hole where every
+ *       {@link OptimisticLockingSupport} adopter hand-rolled the same mappings.</li>
  * </ul>
  * Each body carries a stable {@code code} extension member so clients branch on
  * {@code code} (not free-text {@code detail}).
@@ -89,6 +100,12 @@ public class GlobalProblemDetailAdvice {
     private static final URI METHOD_NOT_ALLOWED_TYPE = URI.create("https://errors.example.com/method-not-allowed");
     private static final URI NOT_FOUND_TYPE = URI.create("https://errors.example.com/not-found");
     private static final URI PAGE_SIZE_INVALID_TYPE = URI.create("https://errors.example.com/page-size-invalid");
+    private static final URI PRECONDITION_REQUIRED_TYPE =
+            URI.create(OptimisticLockingSupport.TYPE_PRECONDITION_REQUIRED);
+    private static final URI PRECONDITION_FAILED_TYPE =
+            URI.create(OptimisticLockingSupport.TYPE_PRECONDITION_FAILED);
+    private static final URI OPTIMISTIC_LOCK_CONFLICT_TYPE =
+            URI.create("urn:problem:optimistic-lock-conflict");
 
     /**
      * {@code @Valid}/{@code @Validated} body-binding failures. Reports EVERY field +
@@ -173,6 +190,58 @@ public class GlobalProblemDetailAdvice {
         ProblemDetail pd = problem(HttpStatus.BAD_REQUEST, PAGE_SIZE_INVALID_TYPE, "Invalid Page Request",
                 "PAGE_SIZE_INVALID", defaultMessage(ex.getMessage()));
         return entity(HttpStatus.BAD_REQUEST, pd);
+    }
+
+    /**
+     * COMMON conditional-write {@code If-Match} absent → {@code 428 Precondition Required}
+     * (RFC 6585 §3). Raised by {@link OptimisticLockingSupport#requireMatch(String, String, long)}
+     * when a mutation arrives without an {@code If-Match} validator. Mirrors the
+     * {@link ResourceNotFoundException} handler (returns the response directly, no
+     * {@code /error} re-dispatch). Closes the hole the first regulated consumer hit:
+     * {@code OptimisticLockingSupport} raises this signal but no global advice mapped it,
+     * so every adopter hand-rolled the same 3 ProblemDetail mappings.
+     */
+    @ExceptionHandler(OptimisticLockingSupport.PreconditionRequiredException.class)
+    public ResponseEntity<ProblemDetail> handlePreconditionRequired(
+            OptimisticLockingSupport.PreconditionRequiredException ex) {
+        ProblemDetail pd = problem(HttpStatus.PRECONDITION_REQUIRED, PRECONDITION_REQUIRED_TYPE,
+                "Precondition Required", "PRECONDITION_REQUIRED", defaultMessage(ex.getMessage()));
+        return entity(HttpStatus.PRECONDITION_REQUIRED, pd);
+    }
+
+    /**
+     * COMMON stale conditional-write validator → {@code 412 Precondition Failed}
+     * (RFC 9110 §15.5.13). Raised by {@link OptimisticLockingSupport#requireMatch(String, String, long)}
+     * when the supplied {@code If-Match} validator no longer matches the current version.
+     * Carries the authoritative {@code current_etag} extension member so the client can
+     * re-GET, merge, and retry (spec OPTLOCK-RETRY-001).
+     */
+    @ExceptionHandler(OptimisticLockingSupport.PreconditionFailedException.class)
+    public ResponseEntity<ProblemDetail> handlePreconditionFailed(
+            OptimisticLockingSupport.PreconditionFailedException ex) {
+        ProblemDetail pd = problem(HttpStatus.PRECONDITION_FAILED, PRECONDITION_FAILED_TYPE,
+                "Precondition Failed", "PRECONDITION_FAILED", defaultMessage(ex.getMessage()));
+        if (ex.currentEtag() != null) {
+            pd.setProperty("current_etag", ex.currentEtag());
+        }
+        return entity(HttpStatus.PRECONDITION_FAILED, pd);
+    }
+
+    /**
+     * COMMON concurrent-write conflict → {@code 409 Conflict} (RFC 9110 §15.5.10).
+     * The persistence provider raises {@link ObjectOptimisticLockingFailureException} when
+     * a {@code @Version} bump loses the race at flush time (two writers passed the
+     * {@code If-Match} check, then both flushed). Returns the response directly to avoid the
+     * {@code /error} re-dispatch trap; carries no row-existence detail so a neutral
+     * "concurrent write" message is surfaced rather than persistence internals.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleOptimisticLockConflict(
+            ObjectOptimisticLockingFailureException ex) {
+        ProblemDetail pd = problem(HttpStatus.CONFLICT, OPTIMISTIC_LOCK_CONFLICT_TYPE,
+                "Conflict", "OPTIMISTIC_LOCK_CONFLICT",
+                "The resource was modified concurrently; re-read and retry.");
+        return entity(HttpStatus.CONFLICT, pd);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

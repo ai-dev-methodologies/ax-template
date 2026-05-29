@@ -82,4 +82,48 @@ class GlobalProblemDetailProbeTest {
             .body("status", Matchers.equalTo(400))
             .body("code", Matchers.equalTo("PAGE_SIZE_INVALID"));
     }
+
+    @Test
+    @Tag("COMMON-ADVICE-PRECONDITION-REQUIRED")
+    void missingIfMatchReturnsProblemJson428() {
+        given()
+            .header("Authorization", "Bearer " + token)
+        .when().put("/api/items/probe/optlock")
+        .then()
+            .statusCode(428)
+            .contentType("application/problem+json")
+            .body("status", Matchers.equalTo(428))
+            .body("type", Matchers.equalTo("urn:problem:precondition-required"))
+            .body("code", Matchers.equalTo("PRECONDITION_REQUIRED"));
+    }
+
+    @Test
+    @Tag("COMMON-ADVICE-PRECONDITION-FAILED")
+    void staleIfMatchReturnsProblemJson412WithCurrentEtag() {
+        given()
+            .header("Authorization", "Bearer " + token)
+            .header("If-Match", "\"7-1\"")
+        .when().put("/api/items/probe/optlock")
+        .then()
+            .statusCode(412)
+            .contentType("application/problem+json")
+            .body("status", Matchers.equalTo(412))
+            .body("type", Matchers.equalTo("urn:problem:precondition-failed"))
+            .body("code", Matchers.equalTo("PRECONDITION_FAILED"))
+            .body("current_etag", Matchers.equalTo("\"7-3\""));
+    }
+
+    @Test
+    @Tag("COMMON-ADVICE-OPTIMISTIC-LOCK-CONFLICT")
+    void concurrentWriteReturnsProblemJson409() {
+        given()
+            .header("Authorization", "Bearer " + token)
+            .header("If-Match", "race")
+        .when().put("/api/items/probe/optlock")
+        .then()
+            .statusCode(409)
+            .contentType("application/problem+json")
+            .body("status", Matchers.equalTo(409))
+            .body("code", Matchers.equalTo("OPTIMISTIC_LOCK_CONFLICT"));
+    }
 }

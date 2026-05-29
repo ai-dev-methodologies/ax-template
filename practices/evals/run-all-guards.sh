@@ -860,10 +860,7 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
 
     # name_collision_guard inline-stereotype detection (IMW3-followup / IDW3 G4 audit):
     # the guard's stereotype anchor had the SAME own-line false-negative as entity_migration —
-    # an inline `@Service @Transactional` escaped detection, so a cross-package bean-name
-    # collision was missed (empirically reproduced). The \b token-boundary fix now catches it.
-    # pass/ = distinct names incl. an inline @Service → 0; fail_inline/ = two inline/own-line
-    # @Service FooService across packages → 1 (collision now detected).
+    # an inline `@Service @Transactional` escaped detection. The \b token-boundary fix catches it.
     echo ""
     echo "[50f] name_collision_guard.sh --fixtures (inline @Service collision detection)"
     run_guard "name_collision/fixture_pass" 0 \
@@ -893,6 +890,38 @@ echo ""
 echo "[51] role_literal_guard.sh (IMW2-C — IDW2: every @PreAuthorize authority literal maps to a UserRole or API scope)"
 run_guard "role_literal/live" 0 \
     bash "$SCRIPT_DIR/role_literal_guard.sh"
+
+echo ""
+echo "[52] audit_on_read_guard.sh (IMW4 — IDW4: a @Phi-returning read method must reference AuditLogService.record)"
+# Forward-enforcing: the live main tree has NO @Phi usage yet, so the PHI type
+# set is empty and the guard exits 0. It fires only once a fork-receiver tags
+# real PHI with common/Phi.java. Closes the IDW4 hole where an adversarial probe
+# shipped an un-audited PHI read with a fully GREEN build (HIPAA §164.312(b)).
+run_guard "audit_on_read/live" 0 \
+    bash "$SCRIPT_DIR/audit_on_read_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[52f] audit_on_read_guard.sh --fixtures (pass→0, fail→1)"
+    run_guard "audit_on_read/fixtures" 0 \
+        bash "$SCRIPT_DIR/audit_on_read_guard.sh" --fixtures
+fi
+
+echo ""
+echo "[53] phi_in_logs_guard.sh (IMW4 — IDW4: no log.{info,debug,warn,error,trace}(...) may interpolate a @Phi getter)"
+# Forward-enforcing companion to [52]: the live main tree has NO @Phi usage yet,
+# so the forbidden-getter set is empty and the guard exits 0. It fires only once
+# a fork-receiver tags real PHI. Closes the IDW4 hole where an adversarial probe
+# shipped a raw-PHI log statement with a fully GREEN build (HIPAA §164.312(b)).
+run_guard "phi_in_logs/live" 0 \
+    bash "$SCRIPT_DIR/phi_in_logs_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[53f] phi_in_logs_guard.sh --fixtures (pass→0, fail→1)"
+    run_guard "phi_in_logs/fixtures" 0 \
+        bash "$SCRIPT_DIR/phi_in_logs_guard.sh" --fixtures
+fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""

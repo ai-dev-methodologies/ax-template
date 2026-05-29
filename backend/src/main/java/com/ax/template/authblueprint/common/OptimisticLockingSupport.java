@@ -39,10 +39,23 @@ package com.ax.template.authblueprint.common;
  * }</pre>
  *
  * <p>Framework-clean: no Spring, no JPA, no domain types — pure {@code String}/
- * {@code long} in, signal out. Controllers map the thrown signals to RFC 9457
- * ProblemDetail (see {@link PreconditionRequiredException} /
- * {@link PreconditionFailedException} for the canonical {@code type} URIs and
- * status codes). All methods are pure and side-effect-free.
+ * {@code long} in, signal out. All methods are pure and side-effect-free.
+ *
+ * <h2>Global ProblemDetail mapping (no caller @ExceptionHandler needed)</h2>
+ * The thrown signals are mapped to RFC 9457 {@code application/problem+json} by the
+ * COMMON {@code GlobalProblemDetailAdvice} ({@code LOWEST_PRECEDENCE} fallback), so an
+ * adopter inherits the mappings without writing any {@code @ExceptionHandler}:
+ * <ul>
+ *   <li>{@link PreconditionRequiredException} → {@code 428} (code {@code PRECONDITION_REQUIRED});</li>
+ *   <li>{@link PreconditionFailedException} → {@code 412} (code {@code PRECONDITION_FAILED},
+ *       carrying the {@code current_etag} member);</li>
+ *   <li>{@code org.springframework.orm.ObjectOptimisticLockingFailureException} → {@code 409}
+ *       (code {@code OPTIMISTIC_LOCK_CONFLICT}) for the concurrent-write race that surfaces at
+ *       flush time after the {@code If-Match} check passed.</li>
+ * </ul>
+ * See {@link PreconditionRequiredException} / {@link PreconditionFailedException} for the
+ * canonical {@code type} URIs and status codes. A controller may still register its own
+ * {@code @ExceptionHandler} to override the fallback, but it is no longer required.
  */
 public final class OptimisticLockingSupport {
 
@@ -211,8 +224,9 @@ public final class OptimisticLockingSupport {
 
     /**
      * 428 Precondition Required signal (RFC 6585 §3) — raised when a mutation
-     * arrives without an {@code If-Match} header. Controllers map this to an
-     * RFC 9457 ProblemDetail with {@code type=}{@link #TYPE_PRECONDITION_REQUIRED}.
+     * arrives without an {@code If-Match} header. The COMMON
+     * {@code GlobalProblemDetailAdvice} maps this to an RFC 9457 ProblemDetail with
+     * {@code type=}{@link #TYPE_PRECONDITION_REQUIRED} (no caller handler required).
      */
     public static final class PreconditionRequiredException extends RuntimeException {
         private final String currentEtag;
@@ -231,9 +245,10 @@ public final class OptimisticLockingSupport {
     /**
      * 412 Precondition Failed signal (RFC 9110 §15.5.13) — raised when the
      * supplied {@code If-Match} validator is stale relative to the current
-     * resource version. Controllers map this to an RFC 9457 ProblemDetail with
-     * {@code type=}{@link #TYPE_PRECONDITION_FAILED} and a {@code current_etag}
-     * member so the client can read-modify-write retry (spec OPTLOCK-RETRY-001).
+     * resource version. The COMMON {@code GlobalProblemDetailAdvice} maps this to an
+     * RFC 9457 ProblemDetail with {@code type=}{@link #TYPE_PRECONDITION_FAILED} and a
+     * {@code current_etag} member so the client can read-modify-write retry
+     * (spec OPTLOCK-RETRY-001) — no caller handler required.
      */
     public static final class PreconditionFailedException extends RuntimeException {
         private final String currentEtag;
