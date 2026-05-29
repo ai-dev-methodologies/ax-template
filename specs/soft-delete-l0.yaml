@@ -1,0 +1,123 @@
+version: "0.1.0"
+scope: "soft-delete-l0 — tombstone (deleted_at) soft-delete contract: logical delete instead of physical DELETE, default-excluding queries, bounded recovery window, consistent cascade, retention purge + GDPR-style erasure. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
+stack: "Spring Boot 3.2.x + Hibernate ORM 6.4.x (@SoftDelete / @SQLDelete / @SQLRestriction) + JPA + PostgreSQL partial index + Micrometer metrics"
+standard: "RFC 9457 (Problem Details for HTTP APIs) + GDPR Article 17 (Right to erasure, generic data-protection baseline) + Hibernate ORM Soft Delete / @SQLDelete / @SQLRestriction reference + ISO/IEC 27040:2024 (storage security, secure data sanitization) + PostgreSQL Partial Indexes (de facto unique-constraint interplay)"
+domain_mode: full_trio
+introduced_at: "R104 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 황태완 standards lens active (RFC 9457 + Hibernate Soft Delete + ISO/IEC 27040 sanitization) + P9 윤재호 distributed-system lens (cascade soft-delete consistency + retention purge as bounded eventual cleanup). R104 P12 NEW finding TBD."
+
+# soft-delete is BASELINE for any mutable entity that needs reversible
+# deletion, audit trails, or regulated retention. OPT-IN per entity —
+# fork-receivers annotate only the entities that warrant a tombstone
+# (orders, comments, user profiles). High-churn ephemeral rows (sessions,
+# cache rows) keep physical DELETE. Generic pattern; zero Korean law cite
+# per R102+ generic catalog principle (GDPR Art 17 used only as the
+# jurisdiction-agnostic erasure baseline, not a regional law).
+#
+# Composition note: cross-references audit-log-l0 (purge events SHOULD be
+# audited) + idempotency-l0 (restore/purge are state-changing → dedup) +
+# pagination-l0 (default-excluding list queries inherit the filter).
+# comment-thread-l0 / favorites-bookmarks-l0 already do ad-hoc soft-delete;
+# this spec is the canonical lift they MAY adopt.
+
+items:
+  - id: "SOFTDELETE-MARK-001"
+    chapter: "Tombstone marking (deleted_at)"
+    requirement: "DELETE on a soft-delete entity MUST set a `deleted_at TIMESTAMP` tombstone column (NULL = live, non-NULL = deleted) instead of issuing a physical SQL DELETE. The mutating endpoint returns 204 No Content on first delete and 404 NOT_FOUND on a second delete of an already-tombstoned row (idempotent observable state). `deleted_at` MUST be set server-side (UTC), never client-supplied, and MUST NOT be reset to NULL except via the explicit restore path (SOFTDELETE-RESTORE-001)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: Hibernate `@SoftDelete(columnName = "deleted_at")`
+      or `@SQLDelete(sql = "UPDATE t SET deleted_at = now() WHERE id = ?")`.
+      Anchored to Hibernate ORM Soft Delete reference
+      (https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#soft-delete).
+      Anchor — paraphrase, verify against source (Hibernate User Guide, Soft Delete): "Soft delete is
+      the practice of marking a row as deleted (e.g. with a timestamp or
+      boolean) rather than physically deleting it from the database."
+
+  - id: "SOFTDELETE-QUERY-001"
+    chapter: "Default-excluding queries + explicit include flag"
+    requirement: "All default read queries (findById, list, count) MUST silently exclude tombstoned rows (`WHERE deleted_at IS NULL`) so soft-deleted data is invisible to ordinary callers. A tombstoned id requested via the normal GET MUST return 404 NOT_FOUND, not the deleted body. Admin/audit surfaces MAY opt back in with an explicit `?include_deleted=true` query param, gated to ROLE_ADMIN; non-admin use of the flag is ignored (filtered as if absent), never 500."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: Hibernate `@SQLRestriction("deleted_at IS NULL")`
+      (the Hibernate 6.3+ replacement for the deprecated `@Where`) applies
+      the filter automatically. Anchored to Hibernate ORM @SQLRestriction
+      reference
+      (https://docs.jboss.org/hibernate/orm/6.4/javadocs/org/hibernate/annotations/SQLRestriction.html).
+      Anchor — paraphrase, verify against source (SQLRestriction javadoc): "Specifies a restriction
+      written in native SQL to add to the generated SQL when querying an
+      entity or collection."
+
+  - id: "SOFTDELETE-RESTORE-001"
+    chapter: "Restore within recovery window"
+    requirement: "A tombstoned entity MAY be restored (set `deleted_at = NULL`) within a recovery window the recipe declares as `soft_delete_recovery_window_days` (default 30). Restore is a state-changing POST (e.g. `POST /resource/{id}:restore`) gated to ROLE_ADMIN or the original owner. Restore of a row whose tombstone age exceeds the window → 409 SOFT_DELETE_WINDOW_EXPIRED. Restore of a row already purged (physically gone) → 404 NOT_FOUND. Restore of a live (non-tombstoned) row → 409 SOFT_DELETE_NOT_DELETED."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      The 30-day default mirrors common platform trash-retention windows.
+      Error envelope anchored to RFC 9457 Problem Details for HTTP APIs
+      (https://datatracker.ietf.org/doc/html/rfc9457).
+      Anchor — paraphrase, verify against source (RFC 9457 §3): "A problem details object can have the
+      following members: type, status, title, detail, instance."
+
+  - id: "SOFTDELETE-CASCADE-001"
+    chapter: "Consistent cascade soft-delete"
+    requirement: "Soft-deleting a parent MUST cascade the tombstone to dependent child entities within one transaction so the aggregate is consistently invisible — partial cascades (parent tombstoned, children live) are forbidden. The recipe declares cascade scope explicitly per association (`soft_delete_cascade` = {none, children, aggregate}); default `children`. Restore MUST cascade symmetrically only to children tombstoned at-or-after the parent's `deleted_at` (children deleted earlier on their own stay deleted), preventing accidental un-delete of independently removed rows."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implement via a domain service that walks the aggregate in one
+      @Transactional unit (not DB ON DELETE CASCADE, which is physical).
+      Anchored to Hibernate ORM Soft Delete reference (cascade caveat)
+      (https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#soft-delete).
+      Anchor — paraphrase, verify against source (Hibernate User Guide, Soft Delete): "Soft delete
+      applies to the specific entity it is declared on; it does not
+      automatically apply to associated entities."
+
+  - id: "SOFTDELETE-PURGE-001"
+    chapter: "Retention purge + erasure request"
+    requirement: "A scheduled purge job MUST physically delete tombstoned rows once `deleted_at` is older than `soft_delete_retention_days` (default 90, MUST be >= recovery window). An out-of-band erasure request (data-subject right-to-be-forgotten) MUST purge the targeted subject immediately, bypassing the retention timer, and MUST overwrite/sanitize rather than leave recoverable remnants. Purge of a non-existent or already-purged subject → 404 NOT_FOUND; purge MUST be idempotent (repeat → 404, never 500). Each purge emits an audit event (id + reason ∈ {retention, erasure_request}, never the purged payload)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      GDPR Article 17 is used as the jurisdiction-agnostic erasure
+      baseline (not a regional statute). Anchored to GDPR Art 17
+      (https://gdpr-info.eu/art-17-gdpr/) + ISO/IEC 27040:2024 for the
+      sanitize-on-purge posture
+      (https://www.iso.org/standard/80194.html).
+      Anchor — paraphrase, verify against source (GDPR Art 17(1)): "The data subject shall have the
+      right to obtain from the controller the erasure of personal data
+      concerning him or her without undue delay."
+
+  - id: "SOFTDELETE-UNIQUE-001"
+    chapter: "Unique constraint interplay (partial index)"
+    requirement: "A column unique among LIVE rows (e.g. `email`, `slug`) MUST NOT collide with a previously soft-deleted row holding the same value. Recipes MUST enforce uniqueness via a partial unique index scoped to live rows (`UNIQUE ... WHERE deleted_at IS NULL`) rather than a plain table-wide UNIQUE constraint. Creating a new live row whose natural key duplicates a *live* row → 409 SOFT_DELETE_UNIQUE_CONFLICT; duplicating only a *tombstoned* row MUST succeed (the deleted value is freed for reuse)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Migration: `CREATE UNIQUE INDEX ... ON t (email) WHERE deleted_at
+      IS NULL`. Anchored to PostgreSQL Partial Indexes documentation
+      (https://www.postgresql.org/docs/current/indexes-partial.html).
+      Anchor — paraphrase, verify against source (PostgreSQL docs §11.8): "A partial index is an index
+      built over a subset of a table; the subset is defined by a
+      conditional expression (called the predicate of the partial index)."
+
+  - id: "SOFTDELETE-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Soft-delete implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `soft_delete_total{tenant, entity}` — tombstone events; (2) `soft_delete_restore_total{tenant, entity, outcome}` — outcome ∈ {restored, window_expired, not_deleted}; (3) `soft_delete_purge_total{tenant, entity, reason}` — reason ∈ {retention, erasure_request}. Labels MUST exclude row id / natural key (email, slug) / payload — entity is the table name (low-cardinality), tenant is bounded. SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Anchored to OpenTelemetry Semantic Conventions for metrics
+      (https://opentelemetry.io/docs/specs/semconv/general/metrics/).
+      Anchor — paraphrase, verify against source (OTel metric guidelines): "Metric attributes should
+      have low cardinality; high-cardinality attributes such as user IDs
+      should be avoided."

@@ -1,0 +1,122 @@
+version: "0.1.0"
+scope: "caching-l0 — HTTP + application-tier caching contract (Cache-Control / ETag / invalidation / stampede / TTL jitter) for fork-receivers building any read-heavy API. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
+stack: "Spring Boot 3.2.x + Spring Cache abstraction + Redis (distributed cache) + Caffeine (local cache) + Micrometer metrics"
+standard: "RFC 9111 (HTTP Caching) + RFC 7234 (HTTP/1.1 Caching, obsoleted-by baseline) + RFC 9110 (HTTP Semantics — ETag / conditional requests) + RFC 7232 (Conditional Requests, If-None-Match / 304) + RFC 5861 (HTTP Cache-Control Extensions for Stale Content — stale-while-revalidate / stale-if-error)"
+domain_mode: full_trio
+introduced_at: "R103 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 standards lens active (RFC 9111 + RFC 9110 conditional requests + RFC 5861 SWR) + P9 distributed-system lens active (cache stampede = thundering-herd failure mode + multi-tenant key isolation). R103 P12 NEW finding TBD."
+
+# caching-l0 is OPT-IN. Recipes serving read-heavy collections, reference
+# data, computed aggregates, or rendered fragments adopt to cut origin
+# load + tail latency. Generic pattern; Korean cite ZERO per R102+ generic
+# catalog principle.
+#
+# Composition note: cross-references pagination-l0 (R102 — cursor pages are
+# cacheable per-tenant) + idempotency-l0 (R102 — replay cache is a sibling
+# concern but distinct lifecycle) + ratelimit-l0 (cache hits relieve limiter
+# pressure). search-l0 / report-export-l0 MAY adopt result caching directly.
+
+items:
+  - id: "CACHE-CONTROL-001"
+    chapter: "Cache-Control directives"
+    requirement: "Cacheable GET responses MUST emit an explicit `Cache-Control` header — never rely on heuristic freshness. Public reference data → `Cache-Control: public, max-age=<s>`. Per-user data → `Cache-Control: private, max-age=<s>`. Sensitive / never-cache responses → `Cache-Control: no-store`. Responses requiring revalidation before reuse → `must-revalidate` (or `no-cache` for always-revalidate). Recipe declares `cache_default_max_age_seconds` (default 60) + `cache_visibility` per endpoint ∈ {public, private, no-store}. Missing directive on a cacheable endpoint → contract REJECT at startup."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to RFC 9111 §5.2 (Cache-Control) +
+      https://datatracker.ietf.org/doc/html/rfc9111#section-5.2.
+      Anchor — paraphrase, verify against source (RFC 9111 §5.2.2.5 no-store): "The no-store response
+      directive indicates that a cache MUST NOT store any part of either
+      the immediate request or response and MUST NOT use the response to
+      satisfy any other request."
+  - id: "CACHE-ETAG-001"
+    chapter: "ETag + 304 conditional GET"
+    requirement: "Cacheable GET responses MUST emit a strong `ETag` validator derived from the representation (e.g., SHA-256 of body bytes, hex, quoted). Server MUST honor conditional GET: when request carries `If-None-Match` whose value matches the current ETag, server returns `304 Not Modified` with NO body and re-sends `ETag` + `Cache-Control`. Non-match → `200 OK` with full body + fresh ETag. Weak validators (`W/\"...\"`) MAY be used only for semantically-equivalent representations. Conditional request on a mutated resource MUST NOT return 304."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to RFC 9110 §8.8.3 (ETag) + RFC 7232 §3.2 (If-None-Match) +
+      https://datatracker.ietf.org/doc/html/rfc9110#section-8.8.3.
+      Anchor — paraphrase, verify against source (RFC 7232 §4.1 304 Not Modified): "The 304 (Not
+      Modified) status code indicates that a conditional GET or HEAD
+      request has been received and would have resulted in a 200 (OK)
+      response if it were not for the fact that the condition evaluated
+      to false."
+  - id: "CACHE-INVALIDATION-001"
+    chapter: "Event-driven invalidation + key versioning"
+    requirement: "On any write (create / update / delete) that changes a cached representation, the owning service MUST invalidate or version-bump the affected cache keys within the same transaction boundary (publish-after-commit). Recipe declares `cache_invalidation_mode` ∈ {evict, version}. `evict` deletes affected keys; `version` increments a per-resource version token folded into the cache key (read-your-writes safe, no race window). A stale read served AFTER a committed write that should have invalidated it is a contract FAILURE. Bulk writes MUST batch-invalidate, never leave orphaned stale entries."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Version-bump avoids the delete-then-repopulate race that re-caches
+      stale data under concurrency. Anchored to RFC 9111 §4.4
+      (Invalidating Stored Responses) +
+      https://datatracker.ietf.org/doc/html/rfc9111#section-4.4.
+      Anchor — paraphrase, verify against source (RFC 9111 §4.4): "Because unsafe request methods
+      (Section 9.2.1 of [HTTP]) such as PUT, POST, or DELETE have the
+      potential for changing state on the origin server, intervening
+      caches are required to invalidate stored responses to keep their
+      contents up to date."
+  - id: "CACHE-KEY-001"
+    chapter: "Key namespacing + multi-tenant isolation"
+    requirement: "Cache keys MUST be namespaced and MUST carry a mandatory tenant prefix when the deployment is multi-tenant: `{app}:{tenant_id}:{resource_type}:{resource_id}:v{version}`. A key WITHOUT a tenant component in multi-tenant mode is a contract REJECT — cross-tenant cache bleed is a confidentiality defect. Keys MUST be deterministic and collision-free; user-controlled segments MUST be hashed or length-bounded (≤256 bytes) to prevent key-space injection. Recipe declares `cache_key_prefix` + `cache_tenant_isolation` ∈ {required, single_tenant}."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Tenant prefix is the keystone confidentiality invariant — a missing
+      prefix lets tenant B read tenant A's cached representation. Anchored
+      to RFC 9111 §4.1 (Constructing Responses from Caches — cache key) +
+      https://datatracker.ietf.org/doc/html/rfc9111#section-4.1.
+      Anchor — paraphrase, verify against source (RFC 9111 §4.1): "The primary cache key consists of the
+      request method and target URI. However, since HTTP caches in common
+      use today are typically limited to caching responses to GET, many
+      caches simply decline other methods and use only the URI as the
+      primary cache key."
+  - id: "CACHE-STAMPEDE-001"
+    chapter: "Stampede / thundering-herd prevention"
+    requirement: "On a cache miss for a hot key, concurrent requests MUST NOT all recompute the value (thundering herd). Recipe declares `cache_stampede_strategy` ∈ {lock, early_recompute}. `lock` = single-flight: one request acquires a short-TTL recompute lock (Redis SETNX + EXPIRE, lock TTL ≤ recompute budget), others wait-and-read or serve stale-while-revalidate. `early_recompute` = probabilistic early expiration (XFetch: recompute when `now - delta*beta*ln(rand()) >= expiry`). A measured N-parallel-miss burst MUST result in exactly ONE origin recomputation, not N."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      stale-while-revalidate lets caches serve the stale value during the
+      single-flight recompute, eliminating latency cliffs. Anchored to
+      RFC 5861 §3 (stale-while-revalidate) +
+      https://datatracker.ietf.org/doc/html/rfc5861#section-3.
+      Anchor — paraphrase, verify against source (RFC 5861 §3): "When present in an HTTP response, the
+      stale-while-revalidate Cache-Control extension indicates that caches
+      MAY serve the response in which it appears after it becomes stale, up
+      to the indicated number of seconds."
+  - id: "CACHE-TTL-001"
+    chapter: "TTL policy + expiry jitter"
+    requirement: "Every cache entry MUST have a bounded TTL — unbounded entries are a contract REJECT (memory leak + permanent staleness risk). Recipe declares `cache_ttl_seconds` per resource class. TTLs MUST be jittered: effective TTL = `base_ttl ± random(0, jitter_pct * base_ttl)` with `cache_ttl_jitter_pct` default 10% (range 0–50%). Jitter prevents synchronized mass expiry of a cohort populated in the same window from stampeding the origin simultaneously. `stale-if-error` MAY extend usable lifetime when the origin is unavailable."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Jitter de-synchronizes the expiry of entries written together (the
+      "TTL cliff"). stale-if-error provides graceful degradation. Anchored
+      to RFC 5861 §4 (stale-if-error) +
+      https://datatracker.ietf.org/doc/html/rfc5861#section-4.
+      Anchor — paraphrase, verify against source (RFC 5861 §4): "The stale-if-error Cache-Control
+      extension indicates that when an error is encountered, a cached stale
+      response MAY be used to satisfy the request, regardless of other
+      freshness information."
+  - id: "CACHE-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Caching implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `cache_hit_rate{tenant, cache_name}` — gauge, hit fraction over the resolved window; (2) `cache_eviction_total{tenant, cache_name, reason}` — counter, reason ∈ {ttl, capacity, manual}; (3) `cache_operation_latency{tenant, cache_name, op}` — timer/histogram, op ∈ {get, put, evict}. Labels MUST exclude cache key value / resource_id / user_id / payload (no high-cardinality, no PII). SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded label sets only (tenant + cache_name + small enums) — key
+      values and resource_ids are unbounded/PII and MUST stay out of label
+      dimensions. Anchored to OpenTelemetry Semantic Conventions for HTTP
+      / database client metrics (low-cardinality attribute discipline) +
+      https://opentelemetry.io/docs/specs/semconv/general/metrics/.
+      Anchor — paraphrase, verify against source (OTel metric guidelines): "Metric attributes should
+      have low cardinality. High cardinality attribute values such as user
+      IDs should be avoided."

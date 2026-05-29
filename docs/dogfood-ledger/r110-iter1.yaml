@@ -1,0 +1,7 @@
+# R110 — consent-management-l0 spec dogfood iter1 (placeholder, generic cross-cutting wave)
+# Drafted + adversarially verified via Workflow (R102 session, 4 pass / 6 revise;
+# this spec's quote anchors paraphrase-labeled per user decision after verify
+# flagged anchor hallucination). 7 items. Generic catalog (memory
+# feedback_prefer_generic_catalog). 10-persona dogfood populates in iter1 ledger commit.
+iteration: 1
+findings: []

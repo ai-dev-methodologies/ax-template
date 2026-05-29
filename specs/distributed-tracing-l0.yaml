@@ -1,0 +1,106 @@
+version: "0.1.0"
+scope: "distributed-tracing-l0 — W3C Trace Context propagation + span lifecycle + baggage + sampling + OTel semantic conventions + log-trace correlation for fork-receivers running multi-service request flows. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
+stack: "Spring Boot 3.2.x + Micrometer Tracing (Brave / OpenTelemetry bridge) + OpenTelemetry SDK + SLF4J/Logback MDC + Micrometer metrics"
+standard: "W3C Trace Context (traceparent / tracestate, W3C Recommendation) + W3C Baggage (W3C Recommendation) + OpenTelemetry Specification (Trace API + SDK Samplers) + OpenTelemetry Semantic Conventions + RFC 9457 (Problem Details for HTTP APIs)"
+domain_mode: full_trio
+introduced_at: "R112 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 standards lens + P9 distributed-system lens active. R112 P12 NEW finding TBD."
+
+# OPT-IN observability catalog. Fork-receivers running 2+ cooperating
+# services (gateway → API → worker) adopt to keep one trace_id flowing
+# end-to-end. Single-service forks MAY skip propagation items and keep
+# only span lifecycle + correlation. Composition note: pairs with
+# idempotency-l0 (Idempotency-Key excluded from span attributes) +
+# pagination-l0 (cursor never logged); audit-log-l0 reuses trace_id MDC.
+
+items:
+  - id: "TRACE-CONTEXT-001"
+    chapter: "W3C Trace Context propagation"
+    requirement: "Every inbound HTTP request MUST be inspected for `traceparent` (and optional `tracestate`) headers. Present + valid (version-format `00`, 16-byte trace-id + 8-byte parent-id hex, 1-byte flags) → server continues that trace as child span. Absent → server starts a new root trace. Malformed traceparent → server MUST NOT 4xx; it restarts a fresh trace (resilience over strictness) and increments a malformed counter. Every outbound call to a downstream service MUST inject the current `traceparent` (+ `tracestate` if non-empty)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Use Micrometer Tracing W3C propagator; do not hand-roll header
+      parsing. Anchored to W3C Trace Context
+      (https://www.w3.org/TR/trace-context/#traceparent-header).
+      Anchor — paraphrase, verify against source (W3C Trace Context §3.2): "The traceparent HTTP
+      header field identifies the incoming request in a tracing system."
+
+  - id: "TRACE-SPAN-001"
+    chapter: "Span lifecycle + parent-child + status"
+    requirement: "Server-side request handling MUST open exactly one SERVER span per inbound request and close it in a finally-equivalent path (no leaked open spans). Child spans (CLIENT for outbound HTTP, INTERNAL for sub-operations) MUST reference the active span as parent. Span status MUST be set from the canonical set {Unset, Ok, Error}: 2xx/3xx → leave Unset or set Ok per policy, 5xx or thrown exception → Error with exception recorded. Status MUST NOT use any non-canonical value. A span MUST be ended exactly once."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to OpenTelemetry Trace API
+      (https://opentelemetry.io/docs/specs/otel/trace/api/#set-status).
+      Anchor — paraphrase, verify against source (OTel Trace API, Status Ok): "The operation has been
+      validated by an Application developer or Operator to have completed
+      successfully." Span end: "Signals that the operation described by
+      this span has now (or at the time optionally specified) ended."
+
+  - id: "TRACE-BAGGAGE-001"
+    chapter: "W3C Baggage propagation (tenant / locale)"
+    requirement: "Cross-cutting request context (e.g., `tenant.id`, `locale`, `request.origin`) MAY be carried via the W3C `baggage` header as percent-encoded name-value pairs and MUST propagate unchanged across every downstream hop. Baggage keys are recipe-declared via an allowlist (`tracing_baggage_allowed_keys`); unlisted inbound baggage keys MUST be dropped, not forwarded. Baggage MUST NEVER carry secrets, tokens, PII, or unbounded values (per-key value cap 256 bytes, total baggage cap 8192 bytes). Oversized baggage → truncate + increment a drop counter, never 4xx."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Bridge baggage into MDC only for allowlisted keys. Anchored to
+      W3C Baggage (https://www.w3.org/TR/baggage/#baggage-http-header-format).
+      Anchor — paraphrase, verify against source (W3C Baggage, Overview): "The baggage header
+      represents a set of user-defined properties associated with a
+      distributed request."
+
+  - id: "TRACE-SAMPLING-001"
+    chapter: "Sampling strategy (head-based ratio + parent-based)"
+    requirement: "Recipe MUST declare a sampling strategy via `tracing_sampler` ∈ {parent_based_ratio, always_on, always_off} (default `parent_based_ratio`) and `tracing_sample_ratio` ∈ [0.0, 1.0] (default 0.1). The default sampler MUST be a ParentBased decorator wrapping a head-based ratio sampler so that a sampled inbound parent forces the child to be sampled (consistent traces across services). The sampling decision MUST be made at span start (head sampling), MUST be deterministic for a given trace-id, and MUST be encoded into the outbound traceparent `sampled` flag. always_on is forbidden in the `prod` profile unless explicitly opted in."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Anchored to OpenTelemetry sampling
+      (https://opentelemetry.io/docs/concepts/sampling/) + SDK samplers
+      (https://opentelemetry.io/docs/specs/otel/trace/sdk/#parentbased).
+      Anchor — paraphrase, verify against source (OTel Sampling): "Head sampling is a sampling
+      technique used to make a sampling decision as early as possible."
+
+  - id: "TRACE-SEMCONV-001"
+    chapter: "OpenTelemetry semantic conventions"
+    requirement: "Span names and attribute keys MUST follow OpenTelemetry Semantic Conventions: HTTP server spans named by low-cardinality route template (e.g., `GET /api/orders/{id}`, NEVER the resolved path with the concrete id), attribute keys lowercase + dot-namespaced (`http.request.method`, `http.response.status_code`, `url.path`, `server.address`). Custom attributes MUST be namespaced under a recipe-declared prefix (`tracing_attribute_namespace`, default `app`). Span names and attribute keys MUST NOT embed raw ids, query strings, tokens, or PII (cardinality + leak control). Unknown/legacy attribute keys are tolerated but flagged."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to OpenTelemetry Semantic Conventions naming
+      (https://opentelemetry.io/docs/specs/semconv/general/naming/).
+      Anchor — paraphrase, verify against source (OTel SemConv naming): "Use namespacing. Delimit the
+      namespaces using a dot character. For example service.version
+      denotes the service version where service is the namespace and
+      version is an attribute in that namespace."
+
+  - id: "TRACE-CORRELATION-001"
+    chapter: "trace_id in structured logs (MDC)"
+    requirement: "Every log line emitted during a request MUST carry the active `trace_id` and `span_id` in the SLF4J/Logback MDC so logs join traces. The MDC keys MUST be exactly `traceId` and `spanId` (Micrometer Tracing defaults) and MUST be cleared at request completion to prevent thread-pool MDC bleed across requests. Structured (JSON) log layout MUST include these fields as top-level keys. RFC 9457 problem responses MUST surface the same trace via an `instance` or `trace_id` member so a client error can be cross-referenced to server logs. trace_id MUST NEVER be presented as a security identifier."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Micrometer Tracing populates traceId/spanId MDC automatically; the
+      bleed risk is on pooled threads — clear in a finally block.
+      Anchored to RFC 9457 (https://www.rfc-editor.org/rfc/rfc9457).
+      Anchor — paraphrase, verify against source (RFC 9457 §3.1): "instance - A URI reference that
+      identifies the specific occurrence of the problem."
+
+  - id: "TRACE-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Tracing implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `tracing_spans_exported_total{service, kind}` — counter, kind ∈ {server, client, internal, producer, consumer}; (2) `tracing_sampling_rate{service}` — gauge reporting the effective head-sampling ratio in [0.0, 1.0]; (3) `tracing_export_failure_total{service, reason}` — counter, reason ∈ {timeout, connection, rejected, serialization}. Labels MUST exclude trace_id / span_id / route / tenant_id / user_id / baggage values (no high-cardinality or PII). SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded label sets keep the metric backend cardinality flat.
+      Anchored to OpenTelemetry Semantic Conventions naming
+      (https://opentelemetry.io/docs/specs/semconv/general/naming/).
+      Anchor — paraphrase, verify against source (OTel SemConv naming): "Names SHOULD be lowercase."

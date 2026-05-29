@@ -1,0 +1,110 @@
+version: "0.1.0"
+scope: "health-check-l0 — liveness / readiness / startup probe + downstream dependency health + application/health+json response contract for fork-receivers running any containerized HTTP service. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic Kubernetes / cloud-native / on-prem orchestrator applicable."
+stack: "Spring Boot 3.2.x + Spring Boot Actuator (health groups) + Kubernetes probes + Micrometer metrics"
+standard: "Kubernetes liveness/readiness/startup probes (de facto orchestration contract) + IETF draft-inadarei-api-health-check (health+json media type, in progress) + RFC 9110 (HTTP Semantics, §15 Status Codes baseline) + RFC 8615 (Well-Known URIs, /.well-known baseline) + OpenTelemetry Semantic Conventions (metrics)"
+domain_mode: full_trio
+introduced_at: "R107 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 황태완 standards lens active (Kubernetes probe contract + IETF health+json draft + RFC 9110 status semantics) + P9 윤재호 distributed-system lens (readiness gates dependency fan-out + graceful drain ordering). R107 P12 NEW finding TBD."
+
+# health-check is BASELINE for any containerized service. OPT-IN: recipes
+# deploying to Kubernetes / Nomad / ECS or any orchestrator with probe
+# semantics MUST adopt to survive rolling deploys, node drains, and
+# at-least-once restart loops. Generic pattern; zero Korean cite per
+# R102+ generic catalog principle.
+#
+# Composition note: cross-references scheduled-task-l0 (worker liveness),
+# email-outbox-l0 (downstream SMTP dependency health), and multi-tenant
+# -l0 (per-tenant degraded surfacing deferred to fork-receiver). Probe
+# endpoints are infra plumbing — distinct from business L4 verticals.
+
+items:
+  - id: "HEALTH-LIVENESS-001"
+    chapter: "Liveness probe (process alive)"
+    requirement: "Service MUST expose a liveness endpoint (default `/actuator/health/liveness`) that returns 200 when the process is running and the event loop / request thread pool is not deadlocked. Liveness MUST NOT check downstream dependencies (DB, cache, message broker) — a dependency outage must NOT cause a liveness failure (which would trigger a pod restart and amplify the outage). Deadlocked / unrecoverable state → 503. No request body required."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to Kubernetes liveness/readiness/startup probe docs
+      (https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
+      Anchor — paraphrase, verify against source (Kubernetes probe docs): "The kubelet uses liveness
+      probes to know when to restart a container."
+
+  - id: "HEALTH-READINESS-001"
+    chapter: "Readiness probe (critical dependencies)"
+    requirement: "Service MUST expose a readiness endpoint (default `/actuator/health/readiness`) that returns 200 only when ALL critical dependencies declared in `health_critical_dependencies` are reachable. Any critical dependency DOWN → 503 (orchestrator removes the pod from service endpoints; traffic routes elsewhere). Readiness MUST be cheap and bounded (per-check timeout default 2s); it MUST NOT cascade an arbitrary-depth dependency walk. Recovery → next probe returns 200 with no restart."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to Kubernetes liveness/readiness/startup probe docs
+      (https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
+      Anchor — paraphrase, verify against source (Kubernetes probe docs): "The kubelet uses readiness
+      probes to know when a container is ready to start accepting
+      traffic."
+
+  - id: "HEALTH-STARTUP-001"
+    chapter: "Startup probe (slow-start grace)"
+    requirement: "Service MAY expose a startup endpoint (default `/actuator/health/readiness` reused, or a dedicated `/actuator/health/startup`) so the orchestrator defers liveness/readiness evaluation until first success. Recipe declares `health_startup_grace_seconds` (default 60, range 10-300) which the deployment maps to `failureThreshold × periodSeconds`. During startup grace, the liveness probe MUST be suppressed so a slow boot (migration replay, cache warm) is NOT killed prematurely. After first startup success the probe MUST disable itself (liveness/readiness resume)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to Kubernetes liveness/readiness/startup probe docs
+      (https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
+      Anchor — paraphrase, verify against source (Kubernetes probe docs): "The kubelet uses startup
+      probes to know when a container application has started. If such a
+      probe is configured, liveness and readiness probes do not start
+      until it succeeds."
+
+  - id: "HEALTH-DEPENDENCY-001"
+    chapter: "Downstream dependency health + degraded status"
+    requirement: "Aggregate health (default `/actuator/health`) MUST report each declared dependency as a named check with status ∈ {pass, warn, fail}. A NON-critical dependency that is degraded → overall `warn` and the endpoint still returns 200 (service stays in rotation). A critical dependency failing → overall `fail` and 503. Recipe declares per-dependency criticality + per-check timeout. Dependency checks MUST be bounded and MUST NOT block on a slow downstream beyond the declared timeout (treat timeout as `fail`)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to IETF draft-inadarei-api-health-check
+      (https://datatracker.ietf.org/doc/html/draft-inadarei-api-health-check-06).
+      Anchor — paraphrase, verify against source (draft-inadarei §3.1): "warn: indicates the health
+      check resulted in a non-critical level of concern, but did not
+      cause a failure."
+
+  - id: "HEALTH-FORMAT-001"
+    chapter: "application/health+json response format"
+    requirement: "The aggregate health endpoint MUST emit `Content-Type: application/health+json` with a top-level `status` ∈ {pass, fail, warn} and a `checks` object keyed by `componentName:measurementName`. Each check carries `status` + `time` (RFC 3339) + optional `output`. Response MUST set `Cache-Control: no-store`. The endpoint MUST NOT leak secrets, connection strings, or stack traces in `output` (generic descriptive text only). 200 for pass/warn, 503 for fail."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Anchored to IETF draft-inadarei-api-health-check
+      (https://datatracker.ietf.org/doc/html/draft-inadarei-api-health-check-06)
+      + RFC 9110 §15 status codes.
+      Anchor — paraphrase, verify against source (draft-inadarei §3): "status: (required) indicates
+      whether the service status is acceptable or not. API publishers
+      SHOULD use following values for the field: 'pass', 'fail', 'warn'."
+
+  - id: "HEALTH-GRACEFUL-001"
+    chapter: "Graceful shutdown (readiness fails before drain)"
+    requirement: "On SIGTERM the service MUST first flip readiness to 503 (so the orchestrator stops routing new traffic via endpoint removal), THEN wait `health_predrain_seconds` (default 5, range 0-30) for in-flight propagation, THEN drain in-flight requests within `health_graceful_timeout_seconds` (default 30) before the process exits. Liveness MUST stay 200 during drain so the pod is NOT restart-killed mid-drain. New requests arriving during drain are accepted only if already routed (no hard reject of in-flight work)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Ordering keystone: readiness-down precedes SIGTERM drain to close
+      the endpoint-propagation race. Anchored to Kubernetes probe docs
+      (https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
+      Anchor — paraphrase, verify against source (Kubernetes probe docs): "Readiness probes runs on
+      the container during its whole lifecycle."
+
+  - id: "HEALTH-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Health-check implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `health_check_total{probe, outcome}` — probe ∈ {liveness, readiness, startup}, outcome ∈ {pass, warn, fail}; (2) `dependency_up{dependency}` gauge — 1=up / 0=down, `dependency` from the recipe-declared fixed dependency set; (3) `health_check_duration_seconds{probe}` (histogram). Labels MUST exclude PII / pod IP / instance host / request id / any high-cardinality value. SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Anchored to OpenTelemetry Semantic Conventions
+      (https://opentelemetry.io/docs/specs/semconv/general/metrics/).
+      Anchor — paraphrase, verify against source (OTel metric guidelines): "Associating each unique
+      combination of attribute values creates a new time series, so
+      keep cardinality low to control cost."

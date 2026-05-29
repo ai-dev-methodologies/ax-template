@@ -1,0 +1,118 @@
+version: "0.1.0"
+scope: "resilience-l0 — circuit breaker + retry + timeout + bulkhead + fallback + client-side rate limiting contract for fork-receivers calling any external dependency (HTTP API, DB, message broker, third-party SaaS). Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
+stack: "Spring Boot 3.2.x + Resilience4j (CircuitBreaker / Retry / TimeLimiter / Bulkhead / RateLimiter) + Spring Cloud OpenFeign or RestClient + Micrometer metrics"
+standard: "Resilience4j reference documentation (de facto JVM standard) + Michael Nygard, Release It! 2nd ed. (Circuit Breaker + Bulkhead stability patterns) + RFC 7231 §7.1.3 (Retry-After) + RFC 6585 §4 (429 Too Many Requests) + AWS Architecture Blog Exponential Backoff And Jitter (full jitter) + RFC 9457 (Problem Details for HTTP APIs)"
+domain_mode: full_trio
+introduced_at: "R109 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 standards lens active (Resilience4j de facto + RFC 7231/6585 + Nygard stability patterns) + P9 distributed-system lens active (circuit breaker / bulkhead / backpressure = partial-failure containment for any fan-out call graph). R109 P12 NEW finding TBD."
+
+# resilience is BASELINE for any service that calls an external dependency.
+# OPT-IN: recipes performing outbound HTTP / RPC / broker calls (payment
+# gateways, identity providers, notification senders, webhook delivery)
+# SHOULD adopt to survive partial failure + retry storms + cascading collapse.
+# Composition note: cross-references webhook-l0 (delivery retry) + payment-l0
+# (gateway call protection) + notification-l0 (sender fan-out) + email-outbox
+# -l0 (its own retry/backoff is the in-process variant of RESILIENCE-RETRY-001).
+
+items:
+  - id: "RESILIENCE-CIRCUITBREAKER-001"
+    chapter: "Circuit breaker 상태 전이 (CLOSED/OPEN/HALF_OPEN)"
+    requirement: "Every external dependency call MUST be wrapped by a circuit breaker with three states (CLOSED, OPEN, HALF_OPEN). Recipe declares `circuitbreaker_failure_rate_threshold` (percent, default 50) + `circuitbreaker_sliding_window_size` (default 100 calls) + `circuitbreaker_wait_duration_in_open_state` (default 60s) + `circuitbreaker_permitted_calls_in_half_open` (default 10). When failure rate over the sliding window meets or exceeds the threshold, the breaker MUST transition CLOSED→OPEN and short-circuit subsequent calls; while OPEN, calls MUST fail fast (no dependency invocation) returning the fallback contract (see RESILIENCE-FALLBACK-001) — NOT a raw timeout. After wait-duration the breaker MUST transition OPEN→HALF_OPEN and admit only the permitted probe count; probe success → HALF_OPEN→CLOSED, probe failure → HALF_OPEN→OPEN."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: Resilience4j CircuitBreaker with COUNT_BASED or
+      TIME_BASED sliding window; assert state via registry events.
+      Anchored to Resilience4j CircuitBreaker reference
+      (https://resilience4j.readme.io/docs/circuitbreaker).
+      Anchor — paraphrase, verify against source (Resilience4j CircuitBreaker docs): "The CircuitBreaker
+      uses a sliding window to store and aggregate the outcome of calls.
+      The state of the CircuitBreaker changes from CLOSED to OPEN when the
+      failure rate is equal or greater than a configurable threshold."
+
+  - id: "RESILIENCE-RETRY-001"
+    chapter: "재시도 — 지수 백오프 + full jitter"
+    requirement: "Retries on transient failures MUST use exponential backoff with full jitter and a hard maximum-attempts cap. Recipe declares `retry_max_attempts` (default 3, ceiling 10 — counting the initial call), `retry_base_delay_ms` (default 200), `retry_max_delay_ms` (default 20000), and `retry_jitter` = full. Computed sleep MUST be `random_between(0, min(max_delay, base * 2^attempt))` — full jitter, never a fixed multiplier. Retries MUST be restricted to idempotent operations or operations carrying an Idempotency-Key; non-idempotent POST without such a key MUST NOT be retried. On exhaustion of attempts the call MUST surface the fallback contract, not loop indefinitely."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Full jitter prevents synchronized retry storms (thundering herd).
+      Anchored to AWS Architecture Blog, Exponential Backoff And Jitter
+      (https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/).
+      Anchor — paraphrase, verify against source (AWS Exponential Backoff And Jitter): "Full Jitter ...
+      sleep = random_between(0, min(cap, base * 2 ** attempt))".
+      Korean enterprise variant: same backoff applies to gateway retries
+      regardless of jurisdiction.
+
+  - id: "RESILIENCE-TIMEOUT-001"
+    chapter: "외부 호출 타임아웃 (connect + read)"
+    requirement: "Every external call MUST set an explicit, finite timeout for BOTH connect and read phases — unbounded waits are forbidden. Recipe declares `timeout_connect_ms` (default 2000) + `timeout_read_ms` (default 5000); a non-blocking/reactive call additionally bounds total duration via `timeout_total_ms`. A call exceeding its timeout MUST be cancelled and converted into a circuit-breaker-counted failure (feeding RESILIENCE-CIRCUITBREAKER-001) and MUST surface 504 GATEWAY_TIMEOUT to the upstream caller — never a hung request or default-infinite client timeout."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Resilience4j TimeLimiter for reactive paths; underlying HTTP client
+      (RestClient / WebClient / OpenFeign) MUST set connect+read timeouts.
+      Anchored to Resilience4j TimeLimiter reference
+      (https://resilience4j.readme.io/docs/timeout).
+      Anchor — paraphrase, verify against source (Resilience4j TimeLimiter docs): "The TimeLimiter ...
+      limits the time spent waiting for a Future to complete."
+
+  - id: "RESILIENCE-BULKHEAD-001"
+    chapter: "Bulkhead 격리 (semaphore/threadpool)"
+    requirement: "Concurrent calls to each external dependency MUST be capped by a bulkhead so that saturation of one dependency cannot exhaust the shared thread pool and cascade. Recipe declares `bulkhead_type` ∈ {semaphore, threadpool} + `bulkhead_max_concurrent_calls` (default 25) + `bulkhead_max_wait_duration_ms` (default 0 — fail fast). When the bulkhead is full a new call MUST be rejected immediately with the fallback contract and counted as a bulkhead-rejection (not as a dependency failure for breaker purposes), surfacing 503 SERVICE_UNAVAILABLE with a Retry-After header to the upstream caller."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Bulkhead = ship-compartment isolation; one flooded compartment does
+      not sink the vessel. Anchored to Michael Nygard, Release It! 2nd ed.
+      (Pragmatic Bookshelf, 2018), Stability Patterns — Bulkheads, and
+      Resilience4j Bulkhead reference (https://resilience4j.readme.io/docs/bulkhead).
+      Anchor — paraphrase, verify against source (Release It!, Bulkheads pattern): "Partition the system
+      so that even if one part fails, the others can continue to function."
+
+  - id: "RESILIENCE-FALLBACK-001"
+    chapter: "Fallback 계약 (cached/default/degraded)"
+    requirement: "Each protected call MUST declare an explicit fallback that executes when the breaker is OPEN, the bulkhead rejects, the timeout fires, or retries are exhausted. Recipe declares `fallback_strategy` ∈ {cached, default, degraded, fail} per call site. `cached` returns the last-known-good value with a `X-Resilience-Fallback: cached` header; `default` returns a documented static stub; `degraded` returns a partial/reduced response with `X-Resilience-Fallback: degraded`; `fail` returns 503 with RFC 9457 Problem Details. Fallbacks MUST NOT silently fabricate authoritative data (e.g., a payment confirmation) — degraded responses MUST be machine-distinguishable from live ones."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Fallback is the graceful-degradation half of the circuit breaker.
+      Anchored to RFC 9457 (https://www.rfc-editor.org/rfc/rfc9457) +
+      Resilience4j CircuitBreaker fallback semantics.
+      Anchor — paraphrase, verify against source (RFC 9457 §3): "A problem details object can have the
+      following members ... type ... title ... status ... detail ...
+      instance."
+
+  - id: "RESILIENCE-RATELIMITER-001"
+    chapter: "Client-side rate limiter (Retry-After / 429 준수)"
+    requirement: "Outbound callers MUST throttle themselves with a client-side rate limiter AND honor server backpressure. Recipe declares `ratelimiter_limit_for_period` + `ratelimiter_limit_refresh_period_ms` (default window 1000) + `ratelimiter_timeout_ms` (default 0 — fail fast). When a downstream returns 429 Too Many Requests (RFC 6585 §4), the client MUST parse the `Retry-After` header (RFC 7231 §7.1.3 — delta-seconds OR HTTP-date), suspend further calls to that dependency until the indicated instant, and MUST NOT retry before it. Absence of Retry-After → fall back to the exponential-backoff schedule of RESILIENCE-RETRY-001. Local limiter exhaustion → reject with 429 to the upstream caller carrying a computed Retry-After."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to RFC 6585 §4 (https://www.rfc-editor.org/rfc/rfc6585#section-4)
+      + RFC 7231 §7.1.3 (https://www.rfc-editor.org/rfc/rfc7231#section-7.1.3)
+      + Resilience4j RateLimiter (https://resilience4j.readme.io/docs/ratelimiter).
+      Anchor — paraphrase, verify against source (RFC 6585 §4): "The 429 status code indicates that the
+      user has sent too many requests in a given amount of time (rate
+      limiting). The response representations SHOULD include details
+      explaining the condition, and MAY include a Retry-After header."
+
+  - id: "RESILIENCE-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Resilience implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `resilience_circuit_state{dependency, state}` — a gauge emitting 1 for the currently active state, state ∈ {closed, open, half_open}; (2) `resilience_retry_total{dependency, outcome}` — counter, outcome ∈ {success_with_retry, success_without_retry, error, exhausted}; (3) `resilience_fallback_total{dependency, strategy}` — counter, strategy ∈ {cached, default, degraded, fail}. The `dependency` label MUST be a bounded, recipe-enumerated logical name (e.g., \"payment-gateway\"), NEVER a per-request URL, user_id, tenant_id, or any unbounded/PII value. SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Three metrics map 1:1 to the three failure-containment mechanisms
+      (breaker state, retry effort, fallback engagement). Anchored to
+      Resilience4j Micrometer metrics
+      (https://resilience4j.readme.io/docs/micrometer).
+      Anchor — paraphrase, verify against source (Resilience4j Micrometer docs): "Resilience4j provides
+      a Micrometer module which exposes metrics for CircuitBreaker, Retry,
+      RateLimiter, Bulkhead and TimeLimiter."

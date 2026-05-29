@@ -1,0 +1,122 @@
+version: "0.1.0"
+scope: "data-subject-rights-l0 — data subject rights (access / rectify / erase / restrict / portability) request handling + 30-day response SLA + tracking contract for fork-receivers processing personal data. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
+stack: "Spring Boot 3.2.x + JPA + Jackson (JSON export) + Apache Commons CSV (portability export) + Micrometer metrics"
+standard: "GDPR Art 15 (Right of access) + GDPR Art 16 (Right to rectification) + GDPR Art 17 (Right to erasure / right to be forgotten) + GDPR Art 18 (Right to restriction of processing) + GDPR Art 20 (Right to data portability) + GDPR Art 12(3) (one-month response window, extendable by two further months) + ISO/IEC 27701:2019 (Privacy Information Management System) + RFC 9457 (Problem Details for HTTP APIs)"
+domain_mode: full_trio
+introduced_at: "R111 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 standards lens (GDPR Art 15-20 + ISO/IEC 27701) + P9 distributed-system lens (erasure fan-out across services + restriction freeze invariant) active. R111 P12 NEW finding TBD."
+
+# data-subject-rights is OPT-IN. ax-template reference workloads do NOT
+# require DSR handling (ASVS L1 baseline assumes no personal-data export
+# surface). Recipes processing personal data (consumer SaaS / 이커머스 /
+# fintech / any service holding identifiable user records) MUST adopt
+# these items before launch in a GDPR / 개인정보보호법 jurisdiction.
+#
+# Composition note (depends on existing catalog domains):
+# - DSR-ERASURE-001 composes with the soft-delete PURGE lifecycle —
+#   erasure escalates a soft-deleted row to hard PURGE + audit tombstone.
+# - DSR-ACCESS-001 reuses report-export-l0 (R29) job + format machinery
+#   for large personal-data exports.
+# - DSR-SLA-001 reuses scheduled-task-l0 (R28) for SLA-breach sweeps.
+# - All mutating endpoints inherit audit-log-l0 (R27) record semantics.
+
+items:
+  - id: "DSR-ACCESS-001"
+    chapter: "열람 (Right of access)"
+    requirement: "Authenticated data subject MAY POST /api/me/dsr/access to open a subject-access request. Server assembles ALL personal data concerning the subject across every owning module into a single export bundle and returns confirmation + a download handle (job id). Re-requesting an in-flight access job → 409 DSR_ACCESS_IN_FLIGHT. Access of another subject's data without ROLE_ADMIN → 403; unknown subject reference → 404 (IDOR-safe, never confirm existence to non-owner)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: DsrAccessService scans registered PersonalDataProvider
+      beans (one per module) and aggregates into a single bundle; large
+      bundles reuse report-export-l0 job machinery. Anchored to GDPR Art 15
+      (https://gdpr-info.eu/art-15-gdpr/).
+      Anchor — paraphrase, verify against source (GDPR Art 15(1)): "The data subject shall have the right
+      to obtain from the controller confirmation as to whether or not
+      personal data concerning him or her are being processed..."
+  - id: "DSR-RECTIFY-001"
+    chapter: "정정 (Right to rectification)"
+    requirement: "Data subject MAY PATCH /api/me/dsr/rectify with a field-level correction payload {field_path, current_value, corrected_value, justification}. Server validates the field is subject-editable (recipe declares rectifiable_fields allowlist) — non-editable / derived / system field → 422 DSR_FIELD_NOT_RECTIFIABLE. Mismatched current_value (optimistic concurrency) → 409 DSR_RECTIFY_STALE. Every accepted rectification writes a before/after audit record without undue delay."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Rectifiable-field allowlist prevents tampering with derived or
+      authority-of-record fields (e.g. verified identity from R54).
+      Anchored to GDPR Art 16 (https://gdpr-info.eu/art-16-gdpr/).
+      Anchor — paraphrase, verify against source (GDPR Art 16): "The data subject shall have the right to
+      obtain from the controller without undue delay the rectification of
+      inaccurate personal data concerning him or her."
+  - id: "DSR-ERASURE-001"
+    chapter: "삭제 (Right to be forgotten)"
+    requirement: "Data subject MAY POST /api/me/dsr/erasure to request erasure. Server transitions the subject's records through soft-delete → scheduled PURGE (hard delete) across all owning modules, leaving only a non-personal audit tombstone {request_id, erased_at, legal_basis}. Records under an active legal-hold / retention-obligation → 200 with partial-erasure manifest listing retained categories + retention basis (erasure is NOT unconditional). Erasure MUST be idempotent: re-request on already-erased subject → 200 with prior completion manifest, never 500."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Composes with the soft-delete PURGE lifecycle — erasure escalates
+      soft-deleted rows to hard PURGE + tombstone. Retention exceptions
+      (Art 17(3) e.g. legal-obligation, established claims) yield a
+      partial-erasure manifest. Anchored to GDPR Art 17
+      (https://gdpr-info.eu/art-17-gdpr/).
+      Anchor — paraphrase, verify against source (GDPR Art 17(1)): "The data subject shall have the right
+      to obtain from the controller the erasure of personal data concerning
+      him or her without undue delay and the controller shall have the
+      obligation to erase personal data without undue delay where one of
+      the following grounds applies:"
+  - id: "DSR-PORTABILITY-001"
+    chapter: "이동 (Right to data portability)"
+    requirement: "Data subject MAY POST /api/me/dsr/portability?format={json,csv} to receive the personal data they provided to the controller in a structured, commonly-used, machine-readable format. Default format JSON; CSV per-category as zip. Export covers only subject-provided + observed data (NOT derived/inferred profiling output). Unsupported format → 400 DSR_PORTABILITY_FORMAT_INVALID. Export MUST carry a stable schema_version header so the receiving controller can parse it deterministically."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      JSON via Jackson canonical serialization; CSV via Apache Commons CSV
+      (RFC 4180) one file per data category. schema_version pins the export
+      contract. Anchored to GDPR Art 20 (https://gdpr-info.eu/art-20-gdpr/).
+      Anchor — paraphrase, verify against source (GDPR Art 20(1)): "The data subject shall have the right
+      to receive the personal data concerning him or her, which he or she
+      has provided to a controller, in a structured, commonly used and
+      machine-readable format"
+  - id: "DSR-RESTRICT-001"
+    chapter: "처리제한 (Right to restriction of processing)"
+    requirement: "Data subject MAY POST /api/me/dsr/restrict to freeze processing WITHOUT deletion. Restricted records remain stored but server MUST block all non-storage processing (no analytics, no marketing, no model training, no non-essential reads) until restriction is lifted or a lawful exception applies. Any write/processing attempt against a restricted subject → 423 DSR_PROCESSING_RESTRICTED (Locked). Lifting restriction requires the subject's request or documented legal ground; lift writes an audit record."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Restriction is a freeze flag enforced as a fail-closed processing
+      gate (default deny while restricted), distinct from erasure — data
+      is retained. Anchored to GDPR Art 18 (https://gdpr-info.eu/art-18-gdpr/).
+      Anchor — paraphrase, verify against source (GDPR Art 18(1)): "The data subject shall have the right
+      to obtain from the controller restriction of processing where one of
+      the following applies:"
+  - id: "DSR-SLA-001"
+    chapter: "처리기한 (Response SLA + tracking)"
+    requirement: "Every DSR request (access/rectify/erase/restrict/portability) is tracked with {request_id, type, status, received_at, due_at, closed_at}. due_at defaults to received_at + 30 days. Recipe MAY extend a single request by up to 60 further days when justified (complexity/volume) — extension MUST record an extension_reason and notify the subject before the original due_at. A scheduled sweep flags requests approaching/over due_at as SLA-breaching. GET on another subject's request id without ROLE_ADMIN → 404 (IDOR-safe)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      30-day baseline + extension-by-60-days mirrors the GDPR one-month +
+      two-further-months window; equivalent 개인정보보호법 처리기한 variant
+      applies in KR jurisdictions (recipe-configured). Sweep reuses
+      scheduled-task-l0 (R28). Anchored to GDPR Art 12(3)
+      (https://gdpr-info.eu/art-12-gdpr/).
+      Anchor — paraphrase, verify against source (GDPR Art 12(3)): "That period may be extended by two
+      further months where necessary, taking into account the complexity
+      and number of the requests."
+  - id: "DSR-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "DSR implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) dsr_request_total{tenant, type} — type ∈ {access, rectify, erasure, portability, restrict} (fixed enum, 5 values); (2) dsr_sla_breach_total{tenant, type} — requests closed after due_at OR currently overdue; (3) dsr_processing_time_seconds{tenant, type} (histogram, 5 buckets). Labels MUST exclude subject_id / request_id / email / any PII or unbounded value. SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded labels only (tenant + fixed type enum) — never the subject
+      identifier, which is both PII and high-cardinality. Anchored to
+      OpenTelemetry Semantic Conventions for metrics
+      (https://opentelemetry.io/docs/specs/semconv/general/metrics/).
+      Anchor — paraphrase, verify against source (OTel Metrics General): "Metric attributes SHOULD NOT
+      have high cardinality, as this can lead to performance and storage
+      issues."
