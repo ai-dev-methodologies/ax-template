@@ -42,16 +42,20 @@ column-picker shipped an `ax/no-array-includes-in-loop` violation invisible unti
 4. **vitest RTL cleanup** — `afterEach(cleanup)` in vitest.setup.ts (all 3 personas hit the getMultipleElementsFound DOM-leak footgun). 265 tests still green.
 5. **doc==impl alignment** — js-tosorted-immutable.md + js-set-map-lookups.md notes now match the shipped rule scope (the exact "doc lies about impl" failure mode this wave exists to kill).
 
-### FMW2 — completeness: the 4 hand-rolled seams (rule-of-three, NEXT)
+### ✅ FMW2 — completeness: the 4 hand-rolled seams (DONE, commit 2039ebc)
 1. **L0 field-error mapping primitive** (`parse-field-errors.ts`): RFC9457 errors[]/violations[]/CodedError → Record<field,string> + wire crud-create/edit-form `fieldErrors` prop. (#1 r3 gap; harvest persona2 `lib/parse-error` + senior `SERVER_CODE_TO_FIELD`.)
 2. **`useUrlListState` L0 hook** (page/sort/search/filter ↔ query string, reset-page-on-filter) + fix advanced-filter-builder's JSDoc reference to the non-existent `useUrlState`. (harvest persona2 `useProductListParams` + persona3 `use-list-params`.)
 3. **L2 `bulk-result-panel`** consuming `{id, ok, error}[]` — mirror backend `common.BulkResult` (#37); close the backend/frontend asymmetry.
 4. **`useIdempotencyKey` L0 hook** (generate-once + regenerate-on-failure) + `toMinorUnits/toMajorUnits` currency helper (the float-bug the currency rule warns about but ships no helper for).
 
-### FMW3 — spec/verification depth (after FMW2)
-1. Reconcile the **pagination envelope contradiction**: pin ONE shape ({data,pagination{…}} vs Spring {content,totalElements,…}) across crud-ui-manifest + crud-openapi + pagination.tsx + crud-frontend-l0.
-2. **Type-check the L4 reference** (tsc --noEmit on templates/L4/crud) + fix the drifted props in items/page.tsx (currentPage/totalPages→page/pageSize/total, actions→actionsSlot, actionLabel/actionHref→actionSlot) so the reference matches real block signatures.
-3. (dep decision) Wire `eslint-plugin-react` jsx-key — deferred from FMW1 (needs a new frontend devDependency).
+### ✅ FMW3 — spec/verification depth (DONE, commit b75176b)
+1. **Pagination envelope contradiction resolved IN THE REFERENCE**: items/page.tsx now uses canonical PageEnvelope `{data, pagination:{page(0-based),pageSize,totalElements,totalPages,hasMore}}` (backend common/PageEnvelope) instead of the stale Spring `{content,totalElements,…}`. (A repo-wide spec reconcile across crud-ui-manifest/crud-openapi remains a separate, more delicate task.)
+2. **Fixed the drifted props in items/page.tsx** (currentPage/totalPages→page/pageSize/total with 0↔1 index, actions→actionsSlot, actionLabel/actionHref→actionSlot) so the reference matches real block signatures + **wired new/edit pages to DEMO the parse-field-errors→fieldErrors seam**.
+
+### Deferred follow-ups
+- **tsc-on-L4 enforcement guard** — to mechanically PREVENT future prop drift (the FDW1 root finding). Needs a `templates/*` path-map tsconfig harness; pulls all templates into one compile (surfaces pre-existing template `any`/key noise) → larger infra task than the drift fix itself.
+- **Wire `eslint-plugin-react` jsx-key** — needs a new frontend devDependency (dep decision).
+- **Repo-wide envelope spec reconcile** (crud-ui-manifest + crud-openapi + crud-frontend-l0) — delicate (spec guards); the reference is now correct, the spec docs lag.
 
 ## Verdict
 First frontend wave proves the dogfood loop works identically on the React side: the rich L2 kit
