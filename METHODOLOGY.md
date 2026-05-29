@@ -982,3 +982,91 @@ helpers BEFORE per-module drift accumulates.
 See `practices/rules/promote-on-third-use.md` for the full rule + R80
 canonical Java example, and `practices/MAINTAINER.md` for the detector
 one-liner that scans for missed lifts.
+
+## Mechanical Anchor Lifecycle Policy (R101)
+
+R97-R100 introduced 3 distinct mechanical anchor classes. R100 P12 F10 NEW
+finding flagged "class proliferation" anti-pattern + anchor retirement
+review gap. This policy formalizes the taxonomy and lifecycle to guide
+R102+ decisions.
+
+### Three anchor classes (taxonomy)
+
+| Class | Examples | Catalog touch | Fork-receiver touch | Source of truth |
+|-------|----------|---------------|---------------------|-----------------|
+| **hard_guard** | `wave_kickoff_ledger_guard.sh` (R97), `registry_backfill_completeness_guard.sh` (R98) | Registered in `practices/evals/run-all-guards.sh`; invoked by `verify-completion.sh` (R25 Iron Law) and pre-push hook | Cannot opt out without breaking catalog quality contract | Shell script in `practices/evals/` |
+| **catalog_helper** | `pre-commit-fast-guards.sh` (R99) | Provided in `practices/scripts/`; NOT in `run-all-guards.sh` | Opt-in via `.git/hooks/pre-commit` (or Husky / lefthook); fork-receiver decides per CLAUDE.md fork-receiver-decides-git-policy principle | Shell script in `practices/scripts/` |
+| **data_artifact** | `korean_law_reference_index.yaml` (R100) | YAML / JSON / Markdown reference file; no execution semantics | Read by humans (lens compliance audit) or future tools | Static file in `practices/` |
+
+### Anchor lifecycle (per class)
+
+| Class | Initial state | Refresh trigger | Retirement criterion |
+|-------|---------------|-----------------|-----------------------|
+| **hard_guard** | Permanent on land. Catalog evolution does not retire. | Bug fix (logic change) or pattern extension (new wave-specific check) — same script edited in place. | Only retire if the entire invariant it protects is removed from catalog (rare — would be a catalog regression). Wave_kickoff_ledger_guard is **permanent** as long as waves emit phase α atomic shapes. |
+| **catalog_helper** | Optional from land. Fork-receivers choose adoption per release. | Speed budget adjustment, subset addition/removal, framework migration (e.g., Husky → lefthook example). | Retire when: (1) fork-receivers stop using it (zero adoption signal in fork survey), OR (2) underlying hard guards expand to cover the same gap (e.g., pre-commit hooks become catalog-mandatory), OR (3) catalog contract evolves to make the helper redundant. |
+| **data_artifact** | Initial baseline at wave commit. | Manual update at each subsequent wave (or fork-receiver release) OR automated via generator script when one exists. | Retire when: (1) consumed by NO consumer (lens reorganization, audit stopped), OR (2) source-of-truth shifts to runtime computation (artifact becomes derived not authoritative), OR (3) **stale-when-generated** — if an automated generator (e.g., `build_law_index.sh` candidate) replaces manual maintenance, the manually-curated artifact lifecycle transitions to generator output (retire manual version after one wave of generator validation). |
+
+### Principled criterion for introducing a NEW anchor class
+
+**The 4-data-point evidence rule applies to class introduction**, not just
+finding closure. Before introducing a 4th class (or beyond), the catalog
+MUST demonstrate:
+
+1. **Distinct execution semantics** — the new class CANNOT be expressed
+   as a member of an existing class (e.g., DATA artifact is NOT a HELPER
+   because it has no execution semantics; HELPER is NOT a hard guard
+   because fork-receivers can decline).
+2. **Distinct catalog/fork-receiver responsibility split** — clear ownership
+   (catalog provides + enforces / catalog provides + fork-receiver decides /
+   catalog provides + nobody enforces, only references).
+3. **Distinct lifecycle** — the new class has retirement / refresh triggers
+   not covered by existing classes.
+4. **4 wave evidence** — at least 4 consecutive waves where the gap surfaced
+   would have been better addressed by the new class than reusing existing
+   classes. This mirrors the R97 F10 4-data-point escalation pattern.
+
+**Auto-data artifact candidate (R101 evaluation)**: build_law_index.sh +
+korean_law_reference_index.yaml synced.
+- (1) Distinct semantics? Borderline — it's DATA + generator script; could
+  be expressed as catalog HELPER that emits to a DATA artifact. NOT clearly
+  distinct.
+- (2) Distinct ownership split? Borderline — catalog provides both; fork-
+  receiver runs generator at release. Similar to HELPER pattern.
+- (3) Distinct lifecycle? The data artifact's lifecycle changes (manual →
+  generated) but the GENERATOR's lifecycle is the same as HELPER (refresh
+  / retirement same triggers).
+- (4) 4 wave evidence? NO — only R100 has the artifact, R101+ may surface
+  staleness.
+
+**Verdict (R101)**: Auto-data is NOT distinct enough to introduce as a 4th
+class today. The build_law_index.sh script (if introduced later) is a
+catalog HELPER that emits to a DATA artifact — both classes already exist.
+Anchor lifecycle table above governs the relationship. **3-class taxonomy
+held; class proliferation avoided.**
+
+### Anchor retirement review cadence
+
+- **Quarterly** review of `catalog_helper` adoption signals (fork-receiver
+  survey, GitHub issue references, last-commit-touch date).
+- **At wave start** review of `data_artifact` freshness (compare current
+  catalog wave_revision_seen vs newest wave). If 3+ waves behind, schedule
+  refresh in the current wave's mandatory_iter1_agenda.
+- **Pattern fitness check at every P12 finding** — does the proposed new
+  anchor match the 4-criterion rule above? If not, document why an existing
+  class suffices.
+
+### Reference
+
+- R97 hard_guard introduction: commit `6db3710` (wave_kickoff_ledger_guard.sh)
+- R98 hard_guard expansion: commit `c1ea7f1` (registry_backfill_completeness_guard.sh)
+- R99 catalog_helper introduction: commit `fb8a5de` (pre-commit-fast-guards.sh)
+- R100 data_artifact introduction: commit `aa4b855` (korean_law_reference_index.yaml)
+- R101 documentation contribution (this section): pre-wave commit closes
+  R100 P12 F10 NEW finding via principled criterion definition rather than
+  4th anchor class introduction. Pattern fitness preserved.
+
+The catalog evolves by adding NEW mechanical artifacts only when an existing
+class genuinely cannot express the need. Documentation contributions
+(METHODOLOGY.md / CLAUDE.md updates) are catalog evolution too — they do
+NOT introduce new mechanical classes. The principle: **mechanism for what
+machines must enforce; documentation for what humans must decide.**
