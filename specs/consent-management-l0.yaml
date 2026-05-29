@@ -76,8 +76,18 @@ items:
     verification_type: "positive"
     applicable: true
     notes: >
-      Append-only ledger reuses audit-log-l0 posture. Anchored to
-      GDPR Art 7(1) (https://gdpr-info.eu/art-7-gdpr/).
+      Append-only ledger reuses audit-log-l0 posture. Shippable shape:
+      common/ConsentRecord (an append-only ledger ROW — id, subjectId,
+      purpose, action GRANT|WITHDRAW, recordedAt; immutable via
+      @Column(updatable=false) + no public setters + grant()/withdraw()
+      factories). This resolves the apparent contradiction the IDW4 EMR
+      dogfood surfaced (all 3 personas reached for a mutable @Version'd
+      current-state row and flagged it as conflicting with this rule): the
+      LEDGER is append-only and a withdrawal APPENDS a WITHDRAW row, while
+      "current consent" is a DERIVED query (latest action per
+      (subject, purpose)) computed by common/ConsentGate.activeConsent — not
+      a mutable column. So the demonstrate-consent trail is never overwritten.
+      Anchored to GDPR Art 7(1) (https://gdpr-info.eu/art-7-gdpr/).
       Quote anchor (GDPR Art 7(1)): "Where processing is based on
       consent, the controller shall be able to demonstrate that the
       data subject has consented to processing of his or her personal
