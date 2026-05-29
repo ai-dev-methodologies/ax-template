@@ -29,6 +29,14 @@ export interface CrudCreateFormProps {
   onSubmit: (data: Record<string, unknown>) => void
   isLoading?: boolean
   submitLabel?: string
+  /**
+   * Server-side validation errors keyed by field key — the output of
+   * L0/fork-receiver-kit/parse-field-errors. When present, the matching field
+   * is marked aria-invalid and shows its message. This is the seam that lets a
+   * problem+json 400 land on the right input (CRUD-FE-006); without it the
+   * form could only show a top-level banner. FDW1/FMW2.
+   */
+  fieldErrors?: Record<string, string>
   /** Slot for additional content below fields */
   extraSlot?: React.ReactNode
 }
@@ -38,6 +46,7 @@ export default function CrudCreateForm({
   onSubmit,
   isLoading = false,
   submitLabel = 'Create',
+  fieldErrors = {},
   extraSlot,
 }: CrudCreateFormProps) {
   const [values, setValues] = React.useState<Record<string, string>>(() =>
@@ -55,7 +64,10 @@ export default function CrudCreateForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      {fields.map(field => (
+      {fields.map(field => {
+        const fieldError = fieldErrors[field.key]
+        const errorId = fieldError ? `ccf-${field.key}-error` : undefined
+        return (
         <div key={field.key} className="space-y-2">
           <label
             htmlFor={`ccf-${field.key}`}
@@ -72,6 +84,8 @@ export default function CrudCreateForm({
               id={`ccf-${field.key}`}
               required={field.required}
               disabled={isLoading}
+              aria-invalid={fieldError ? true : undefined}
+              aria-describedby={errorId}
               value={values[field.key] ?? ''}
               onChange={e => set(field.key, e.target.value)}
               placeholder={field.placeholder}
@@ -83,6 +97,8 @@ export default function CrudCreateForm({
               id={`ccf-${field.key}`}
               required={field.required}
               disabled={isLoading}
+              aria-invalid={fieldError ? true : undefined}
+              aria-describedby={errorId}
               value={values[field.key] ?? ''}
               onChange={e => set(field.key, e.target.value)}
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -100,14 +116,23 @@ export default function CrudCreateForm({
               type={field.type}
               required={field.required}
               disabled={isLoading}
+              aria-invalid={fieldError ? true : undefined}
+              aria-describedby={errorId}
               value={values[field.key] ?? ''}
               onChange={e => set(field.key, e.target.value)}
               placeholder={field.placeholder}
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             />
           )}
+
+          {fieldError && (
+            <p id={errorId} role="alert" className="text-sm text-destructive">
+              {fieldError}
+            </p>
+          )}
         </div>
-      ))}
+        )
+      })}
 
       {extraSlot}
 

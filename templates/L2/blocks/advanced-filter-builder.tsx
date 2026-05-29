@@ -284,8 +284,11 @@ function GroupEditor({ group, fields, depth, onChange, onRemove }: GroupEditorPr
  * 2 logical connectors (AND, OR), nesting capped at 3 levels.
  * Throws DepthExceededError if an invalid schema is passed.
  *
- * L4 usage:
- *   const [filterTree, setFilterTree] = useUrlState<FilterGroup>('filter', emptyGroup())
+ * L4 usage (local state shown; for a SHAREABLE filter the L4 owns the
+ * tree↔query-string serializer — `useUrlListState` from the fork-receiver-kit
+ * persists FLAT page/sort/search/filter params, not this nested AND/OR tree,
+ * so a tree filter needs its own encode/decode before it can live in the URL):
+ *   const [filterTree, setFilterTree] = React.useState<FilterGroup>(emptyGroup())
  *   <AdvancedFilterBuilder
  *     fields={TABLE_FIELDS}
  *     value={filterTree}

@@ -30,6 +30,13 @@ export interface CrudEditFormProps {
   onSubmit: (data: Record<string, unknown>) => void
   isLoading?: boolean
   submitLabel?: string
+  /**
+   * Server-side validation errors keyed by field key — the output of
+   * L0/fork-receiver-kit/parse-field-errors. Marks the field aria-invalid and
+   * shows its message so a problem+json 400 lands on the right input
+   * (CRUD-FE-006). FDW1/FMW2.
+   */
+  fieldErrors?: Record<string, string>
   /** Slot for delete action, change-log, etc. */
   extraSlot?: React.ReactNode
 }
@@ -40,6 +47,7 @@ export default function CrudEditForm({
   onSubmit,
   isLoading = false,
   submitLabel = 'Save changes',
+  fieldErrors = {},
   extraSlot,
 }: CrudEditFormProps) {
   const [values, setValues] = React.useState<Record<string, string>>(() =>
@@ -57,7 +65,10 @@ export default function CrudEditForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      {fields.map(field => (
+      {fields.map(field => {
+        const fieldError = fieldErrors[field.key]
+        const errorId = fieldError ? `cef-${field.key}-error` : undefined
+        return (
         <div key={field.key} className="space-y-2">
           <label
             htmlFor={`cef-${field.key}`}
@@ -74,6 +85,8 @@ export default function CrudEditForm({
               id={`cef-${field.key}`}
               required={field.required}
               disabled={isLoading}
+              aria-invalid={fieldError ? true : undefined}
+              aria-describedby={errorId}
               value={values[field.key] ?? ''}
               onChange={e => set(field.key, e.target.value)}
               placeholder={field.placeholder}
@@ -85,6 +98,8 @@ export default function CrudEditForm({
               id={`cef-${field.key}`}
               required={field.required}
               disabled={isLoading}
+              aria-invalid={fieldError ? true : undefined}
+              aria-describedby={errorId}
               value={values[field.key] ?? ''}
               onChange={e => set(field.key, e.target.value)}
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -102,14 +117,23 @@ export default function CrudEditForm({
               type={field.type}
               required={field.required}
               disabled={isLoading}
+              aria-invalid={fieldError ? true : undefined}
+              aria-describedby={errorId}
               value={values[field.key] ?? ''}
               onChange={e => set(field.key, e.target.value)}
               placeholder={field.placeholder}
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             />
           )}
+
+          {fieldError && (
+            <p id={errorId} role="alert" className="text-sm text-destructive">
+              {fieldError}
+            </p>
+          )}
         </div>
-      ))}
+        )
+      })}
 
       {extraSlot}
 
