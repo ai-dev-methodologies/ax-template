@@ -93,3 +93,54 @@ bash practices/evals/run-all-guards.sh        # all catalog guards green
 bash practices/scripts/verify-completion.sh   # R25 Iron Law — full regression + audit
 ```
 Exit 0 ⇒ done. The Iron Law (`CLAUDE.md` R25) requires `verify-completion.sh` before declaring done.
+
+## 6. REGULATED domains (PHI / personal data) — extra checklist
+
+> Skip this section for an ordinary CRUD domain. Apply it when your domain stores or
+> returns **protected health information** (diagnosis, medication, vitals, clinical
+> notes) or other **regulated personal data** subject to consent / data-subject-rights
+> obligations. The IDW4 EMR-lite dogfood proved all three personas hand-rolled these
+> identically (rule-of-three) — so the catalog ships the primitives; do **NOT** invent
+> your own. A regulated domain is a §1–§5 domain **plus** every box below.
+
+- [ ] **Tag every PHI member with `@Phi`** (`common/Phi.java`) — on the entity field, DTO
+      record component, or getter. This is the single intent-bearing tag the regulated
+      guards key on (never a name heuristic). Forward-enforcing: tagging real PHI is what
+      *activates* the two guards below.
+- [ ] **Audit every PHI read** — a read method whose return type exposes a `@Phi` member
+      MUST reference `AuditLogService.record(...)` on that path (HIPAA §164.312(b)).
+      `audit_on_read_guard` fails the build otherwise.
+- [ ] **Never log raw PHI** — no `log.{info,debug,warn,error,trace}(...)` may interpolate a
+      `@Phi` getter. Use `common/AuditPiiHelper.piiHash(value)` for a non-recoverable
+      correlation token instead, and `AuditPiiHelper.sanitizeReason(msg)` before storing any
+      exception message. `phi_in_logs_guard` fails the build otherwise.
+- [ ] **`Cache-Control: no-store` on every PHI endpoint** — set it on the controller method/
+      response (mirror `IdentityVerificationAdminController` / `EmailOutboxAdminController`)
+      so PHI never lands in a browser or proxy cache.
+- [ ] **Gate data-sharing with `ConsentGate`** — before disclosing personal data for a
+      purpose, check the subject's recorded opt-in via `ConsentGate` (purpose-scoped, with
+      withdrawal + audit record). Anchors `specs/consent-management-l0.yaml`
+      (`#CONSENT-CAPTURE-001` / `#CONSENT-WITHDRAW-001` / `#CONSENT-PURPOSE-001`). Do NOT
+      hard-code "consent granted"; resolve it per request.
+- [ ] **Model multi-actor roles with `ParticipantScope`** — when several real-world actors
+      touch one resource (patient · clinician · admin · guardian; or subject · processor ·
+      controller), derive the caller's relationship to the resource via `ParticipantScope`
+      (built on `common/CallerScope`), NOT a `@PreAuthorize` authority or a new `UserRole`.
+      Throw `common/ResourceNotFoundException` → 404 for the not-a-participant case
+      (IDOR-safe; never 403-leak existence). See §0's business-role note.
+- [ ] **Provide an audited `BreakGlass` path** — emergency override access to PHI MUST go
+      through `BreakGlass`, which records an explicit high-severity audit entry (actor,
+      resource, justification, timestamp) via `AuditLogService.record(...)`. Break-glass is
+      logged-and-allowed, never silent.
+- [ ] **Honor data-subject rights** — if the domain holds personal data, wire access /
+      rectify / erase / restrict / portability through the DSR contract
+      (`specs/data-subject-rights-l0.yaml` `#DSR-ACCESS-001` … `#DSR-SLA-001`, 30-day SLA).
+
+| Regulated guard / primitive | Enforces |
+|---|---|
+| `common/Phi` + `audit_on_read_guard` | PHI read without `AuditLogService.record` → build fails |
+| `common/Phi` + `phi_in_logs_guard` | raw `@Phi` getter inside a `log.*(...)` → build fails |
+| `common/AuditPiiHelper` | `piiHash` / `sanitizeReason` — no raw PII in logs or stored-error columns |
+| `ConsentGate` (`consent-management-l0`) | purpose-scoped opt-in checked before data-sharing |
+| `ParticipantScope` (built on `common/CallerScope`) | multi-actor relationship check (404, not 403) |
+| `BreakGlass` | emergency PHI access is audited, never silent |

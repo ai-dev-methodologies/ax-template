@@ -923,6 +923,41 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/phi_in_logs_guard.sh" --fixtures
 fi
 
+echo ""
+echo "[54] consent_gate_guard.sh (IMW5 — IDW4: a data-sharing method in a ConsentRecord-adopting tree must reference ConsentGate)"
+# Forward-enforcing: the live main tree ships common/ConsentRecord as the consent
+# ledger @Entity, but has NO domain method matching a data-sharing signal, so the
+# candidate set is empty → vacuous pass. The guard fires only once a fork-receiver
+# BOTH adopts the consent ledger AND writes a sharing path (third-party share /
+# marketing send / export) — exactly when consent-management-l0#CONSENT-PURPOSE-001
+# attaches. Closes the IDW4 hole where a SPEC-ONLY consent subsystem let an
+# adversarial probe ship an un-gated third-party share with a fully GREEN build.
+run_guard "consent_gate/live" 0 \
+    bash "$SCRIPT_DIR/consent_gate_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[54f] consent_gate_guard.sh --fixtures (pass→0, fail→1, no_entity→0)"
+    run_guard "consent_gate/fixtures" 0 \
+        bash "$SCRIPT_DIR/consent_gate_guard.sh" --fixtures
+fi
+
+echo ""
+echo "[55] controller_repository_shell_guard.sh (IMW5 — IDW4: shell-level Controller→Repository ban; closes the run-all-guards vs ArchUnit coverage asymmetry)"
+# Green-on-current: IMW1-A routed every controller through a service, so no
+# *Controller injects/calls a *Repository. Mirrors ArchitectureLayerBoundaryTest
+# at the shell level so the boundary is caught in run-all-guards, not only under a
+# full gradle test run.
+run_guard "controller_repository_shell/live" 0 \
+    bash "$SCRIPT_DIR/controller_repository_shell_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[55f] controller_repository_shell_guard.sh --fixtures (pass→0, fail_repo_injection→1)"
+    run_guard "controller_repository_shell/fixtures" 0 \
+        bash "$SCRIPT_DIR/controller_repository_shell_guard.sh" --fixtures
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

@@ -106,6 +106,8 @@ public class GlobalProblemDetailAdvice {
             URI.create(OptimisticLockingSupport.TYPE_PRECONDITION_FAILED);
     private static final URI OPTIMISTIC_LOCK_CONFLICT_TYPE =
             URI.create("urn:problem:optimistic-lock-conflict");
+    private static final URI CONSENT_REQUIRED_TYPE =
+            URI.create("https://errors.example.com/consent-required");
 
     /**
      * {@code @Valid}/{@code @Validated} body-binding failures. Reports EVERY field +
@@ -242,6 +244,26 @@ public class GlobalProblemDetailAdvice {
                 "Conflict", "OPTIMISTIC_LOCK_CONFLICT",
                 "The resource was modified concurrently; re-read and retry.");
         return entity(HttpStatus.CONFLICT, pd);
+    }
+
+    /**
+     * COMMON purpose-gated consent failure → {@code 403 Forbidden}
+     * (code {@code CONSENT_REQUIRED}). Raised by
+     * {@link ConsentGate#requireConsent(String, String, java.util.List)} when a
+     * purpose-gated operation is attempted without an active consent grant
+     * (spec {@code consent-management-l0#CONSENT-PURPOSE-001}). Returns the response
+     * directly (no {@code /error} re-dispatch); carries the absent {@code purpose}
+     * as an extension member so a client knows which grant to capture, without
+     * leaking any subject identity.
+     */
+    @ExceptionHandler(ConsentGate.ConsentRequiredException.class)
+    public ResponseEntity<ProblemDetail> handleConsentRequired(ConsentGate.ConsentRequiredException ex) {
+        ProblemDetail pd = problem(HttpStatus.FORBIDDEN, CONSENT_REQUIRED_TYPE, "Consent Required",
+                ConsentGate.ConsentRequiredException.CODE, defaultMessage(ex.getMessage()));
+        if (ex.purpose() != null) {
+            pd.setProperty("purpose", ex.purpose());
+        }
+        return entity(HttpStatus.FORBIDDEN, pd);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
