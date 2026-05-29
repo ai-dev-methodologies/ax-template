@@ -75,16 +75,13 @@ public class PaymentCallbackController {
 
     private final PaymentCallbackVerifierRegistry registry;
     private final PaymentService paymentService;
-    private final PaymentRepository paymentRepository;
 
     public PaymentCallbackController(
         PaymentCallbackVerifierRegistry registry,
-        PaymentService paymentService,
-        PaymentRepository paymentRepository
+        PaymentService paymentService
     ) {
         this.registry = Objects.requireNonNull(registry);
         this.paymentService = Objects.requireNonNull(paymentService);
-        this.paymentRepository = Objects.requireNonNull(paymentRepository);
     }
 
     /**
@@ -169,16 +166,14 @@ public class PaymentCallbackController {
 
         // Signature OK — resolve Payment by the verified orderId.
         final String verifiedOrderId = result.orderId();
-        Optional<Payment> paymentOpt = paymentRepository.findAll().stream()
-            .filter(p -> verifiedOrderId != null && verifiedOrderId.equals(p.getOrderId()))
-            .findFirst();
-        if (paymentOpt.isEmpty()) {
+        Optional<UUID> paymentIdOpt = paymentService.findIdByOrderId(verifiedOrderId);
+        if (paymentIdOpt.isEmpty()) {
             ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
             pd.setTitle("No Payment matches the callback orderId");
             pd.setDetail("orderId=" + verifiedOrderId);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(pd);
         }
-        UUID paymentId = paymentOpt.get().getId();
+        UUID paymentId = paymentIdOpt.get();
 
         try {
             PaymentService.CallbackOutcome outcome = paymentService.markCapturedFromCallback(

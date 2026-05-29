@@ -6,15 +6,20 @@ import com.ax.template.authblueprint.user.UserRole;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthServiceImpl {
@@ -25,6 +30,7 @@ public class AuthServiceImpl {
     private final LoginRateLimiter rateLimiter;
     private final VerificationTokenRepository verificationTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final OAuthService oAuthService;
     private final long graceWindowSeconds;
     private final boolean autoVerifyOnSignup;
     private final boolean allowRoleOverride;
@@ -35,6 +41,7 @@ public class AuthServiceImpl {
                            LoginRateLimiter rateLimiter,
                            VerificationTokenRepository verificationTokenRepository,
                            RefreshTokenRepository refreshTokenRepository,
+                           OAuthService oAuthService,
                            @Value("${auth.refresh.grace-window-seconds:30}") long graceWindowSeconds,
                            @Value("${auth.signup.auto-verify:false}") boolean autoVerifyOnSignup,
                            @Value("${auth.signup.allow-role-override:true}") boolean allowRoleOverride) {
@@ -44,9 +51,33 @@ public class AuthServiceImpl {
         this.rateLimiter = rateLimiter;
         this.verificationTokenRepository = verificationTokenRepository;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.oAuthService = oAuthService;
         this.graceWindowSeconds = graceWindowSeconds;
         this.autoVerifyOnSignup = autoVerifyOnSignup;
         this.allowRoleOverride = allowRoleOverride;
+    }
+
+    public List<Map<String, Object>> listAllUsers() {
+        return userRepository.findAll().stream()
+                .map(u -> Map.<String, Object>of(
+                        "userId", u.getId().toString(),
+                        "email", u.getEmail(),
+                        "role", u.getRole().name(),
+                        "emailVerified", u.isEmailVerified()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    public UserProfileResponse getProfile(UUID userId) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        List<String> linkedProviders = oAuthService.getLinkedProviders(userId);
+        return new UserProfileResponse(
+                user.getId().toString(),
+                user.getEmail(),
+                user.getRole().name(),
+                user.isEmailVerified(),
+                linkedProviders);
     }
 
     public SignupResponse signup(SignupRequest request) {

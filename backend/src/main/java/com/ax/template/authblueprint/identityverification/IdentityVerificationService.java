@@ -8,6 +8,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +19,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * R54 — sole mutator for the identity-verification domain.
@@ -38,6 +43,10 @@ public class IdentityVerificationService {
 
     public static final String AUDIT_ACTION = "IDENTITY_VERIFICATION_CALLBACK";
     public static final String RESOURCE_TYPE = "verified_identity";
+
+    /** IDV-ADMIN-001 — pagination bounds for the admin browse surface. */
+    public static final int DEFAULT_PAGE_SIZE = 20;
+    public static final int MAX_PAGE_SIZE = 200;
 
     private static final Logger log =
         LoggerFactory.getLogger(IdentityVerificationService.class);
@@ -88,6 +97,51 @@ public class IdentityVerificationService {
     public void recordUnknownProvider(String providerName) {
         publishAudit(providerName, AuditOutcome.FAILURE, "UNKNOWN_PROVIDER", null);
     }
+
+    /**
+     * IDV-ADMIN-001 — paginated VerifiedIdentity browse for ROLE_ADMIN.
+     *
+     * <p>Page/size are clamped to the catalog bounds, results are ordered by
+     * {@code verifiedAt DESC}, and an optional {@code provider} filter narrows
+     * by provider name. The response is mapped to the tight {@link Row} shape
+     * (id / providerName / verifiedAt / name / dob) — CI and DI are correlation
+     * tokens kept internal, never surfaced in the list view.
+     *
+     * <p>This read lives in the service so the admin controller never touches
+     * the repository directly (layer-boundary invariant; PRACTICES-TEST-002).
+     */
+    @Transactional(readOnly = true)
+    public PageResponse listAdmin(int page, int size, String provider) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(MAX_PAGE_SIZE, Math.max(1, size));
+        Pageable pageable = PageRequest.of(safePage, safeSize,
+                Sort.by(Sort.Direction.DESC, "verifiedAt"));
+
+        Page<VerifiedIdentity> result = (provider == null || provider.isBlank())
+            ? repository.findAll(pageable)
+            : repository.findAllByProviderName(provider, pageable);
+
+        List<Row> rows = result.getContent().stream().map(Row::from).toList();
+        return new PageResponse(
+                rows,
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements(),
+                result.getTotalPages());
+    }
+
+    /** IDV-ADMIN-001 list row — tight projection, no CI / DI / RRN. */
+    public record Row(UUID id, String providerName, Instant verifiedAt,
+                      String name, String dob) {
+        static Row from(VerifiedIdentity v) {
+            return new Row(v.getId(), v.getProviderName(), v.getVerifiedAt(),
+                           v.getName(), v.getDob());
+        }
+    }
+
+    /** IDV-ADMIN-001 paginated response envelope. */
+    public record PageResponse(List<Row> content, int page, int size,
+                                long totalElements, int totalPages) {}
 
     private void publishAudit(String providerName, AuditOutcome outcome,
                                String outcomeDetail, String ci) {

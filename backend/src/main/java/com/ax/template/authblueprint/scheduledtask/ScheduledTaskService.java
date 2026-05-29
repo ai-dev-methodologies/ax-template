@@ -2,6 +2,7 @@ package com.ax.template.authblueprint.scheduledtask;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,6 +89,21 @@ public class ScheduledTaskService {
     @Transactional(readOnly = true)
     public List<ScheduledTask> listAll() {
         return taskRepository.findAll();
+    }
+
+    /**
+     * blueprints/scheduled-task-manifest.yaml#admin_api — paged execution history
+     * for a single task, newest-first. The task is resolved first so a missing id
+     * surfaces {@link ScheduledTaskNotFoundException} (mapped to 404 by the admin
+     * controller) rather than an empty page.
+     */
+    @Transactional(readOnly = true)
+    public List<JobHistory> history(UUID id, int page, int size) {
+        ScheduledTask task = taskRepository.findById(id)
+            .orElseThrow(() -> new ScheduledTaskNotFoundException(id));
+        return historyRepository
+            .findByTaskNameOrderByStartedAtDesc(task.getName(), PageRequest.of(page, size))
+            .getContent();
     }
 
     @Transactional

@@ -6,8 +6,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,15 +28,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping(value = "/practices/demo", produces = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
 public class PracticesDemoController {
 
-    private static final int MAX_PAGE_SIZE = 100;
+    private final PracticesDemoService demoService;
 
-    private final ParentRepository parents;
-    private final SoftDeletedRecordRepository softDeletedRecords;
-
-    public PracticesDemoController(ParentRepository parents,
-                                   SoftDeletedRecordRepository softDeletedRecords) {
-        this.parents = parents;
-        this.softDeletedRecords = softDeletedRecords;
+    public PracticesDemoController(PracticesDemoService demoService) {
+        this.demoService = demoService;
     }
 
     @GetMapping("/bad")
@@ -65,9 +58,7 @@ public class PracticesDemoController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
-        Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize);
-        return parents.findAll(pageable).map(ParentResponse::from);
+        return demoService.listParents(page, size);
     }
 
     // ─── PRACTICES-PERS-005: soft-delete fixture endpoints ─────────────────────
@@ -79,10 +70,7 @@ public class PracticesDemoController {
     @PostMapping("/soft-deleted-records")
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> createSoftDeletedRecord(@RequestBody Map<String, String> body) {
-        var record = new SoftDeletedRecord();
-        record.setLabel(body.getOrDefault("label", "test"));
-        var saved = softDeletedRecords.save(record);
-        return Map.of("id", saved.getId().toString(), "label", saved.getLabel());
+        return demoService.createSoftDeletedRecord(body.getOrDefault("label", "test"));
     }
 
     /**
@@ -91,12 +79,7 @@ public class PracticesDemoController {
      */
     @GetMapping("/soft-deleted-records")
     public List<Map<String, Object>> listSoftDeletedRecords() {
-        return softDeletedRecords.findAll().stream()
-                .map(r -> Map.<String, Object>of(
-                        "id", r.getId().toString(),
-                        "label", r.getLabel(),
-                        "deleted", r.isDeleted()))
-                .toList();
+        return demoService.listSoftDeletedRecords();
     }
 
     /**
@@ -107,6 +90,6 @@ public class PracticesDemoController {
     @DeleteMapping("/soft-deleted-records/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void softDeleteRecord(@PathVariable UUID id) {
-        softDeletedRecords.deleteById(id);
+        demoService.softDeleteRecord(id);
     }
 }

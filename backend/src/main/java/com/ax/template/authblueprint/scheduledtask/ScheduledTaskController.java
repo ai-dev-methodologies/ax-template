@@ -2,8 +2,6 @@ package com.ax.template.authblueprint.scheduledtask;
 
 import com.ax.template.authblueprint.auditlog.Audited;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -38,12 +36,9 @@ public class ScheduledTaskController {
     public static final String NOT_FOUND_TYPE = "https://ax-template.dev/problems/scheduled-task-not-found";
 
     private final ScheduledTaskService service;
-    private final JobHistoryRepository historyRepository;
 
-    public ScheduledTaskController(ScheduledTaskService service,
-                                   JobHistoryRepository historyRepository) {
+    public ScheduledTaskController(ScheduledTaskService service) {
         this.service = service;
-        this.historyRepository = historyRepository;
     }
 
     @GetMapping
@@ -83,11 +78,9 @@ public class ScheduledTaskController {
             @PathVariable UUID id,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ScheduledTask task = service.findById(id)
-            .orElseThrow(() -> new ScheduledTaskNotFoundException(id));
-        Page<JobHistory> rows = historyRepository
-            .findByTaskNameOrderByStartedAtDesc(task.getName(), PageRequest.of(page, size));
-        return rows.stream().map(ScheduledTaskDto.HistoryResponse::from).toList();
+        return service.history(id, page, size).stream()
+            .map(ScheduledTaskDto.HistoryResponse::from)
+            .toList();
     }
 
     @ExceptionHandler(ScheduledTaskNotFoundException.class)

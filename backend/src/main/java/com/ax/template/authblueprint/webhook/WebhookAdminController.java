@@ -3,7 +3,6 @@ package com.ax.template.authblueprint.webhook;
 import com.ax.template.authblueprint.auditlog.Audited;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -41,14 +40,11 @@ public class WebhookAdminController {
     public static final String NOT_FOUND_TYPE = "https://ax-template.dev/problems/webhook-not-found";
 
     private final WebhookEndpointService endpointService;
-    private final WebhookDeliveryRepository deliveryRepository;
     private final WebhookAdminService adminService;
 
     public WebhookAdminController(WebhookEndpointService endpointService,
-                                  WebhookDeliveryRepository deliveryRepository,
                                   WebhookAdminService adminService) {
         this.endpointService = endpointService;
-        this.deliveryRepository = deliveryRepository;
         this.adminService = adminService;
     }
 
@@ -93,15 +89,13 @@ public class WebhookAdminController {
             @RequestParam(defaultValue = "FAILED_PERMANENT") WebhookDeliveryStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<WebhookDelivery> rows = deliveryRepository
-            .findByStatusOrderByCreatedAtDesc(status, PageRequest.of(page, size));
+        Page<WebhookDelivery> rows = adminService.listDeliveries(status, page, size);
         return rows.stream().map(WebhookDto.DeliveryResponse::from).toList();
     }
 
     @GetMapping("/webhook-deliveries/{id}")
     public WebhookDto.DeliveryResponse getDelivery(@PathVariable UUID id) {
-        WebhookDelivery delivery = deliveryRepository.findById(id)
-            .orElseThrow(() -> new WebhookDeliveryNotFoundException(id));
+        WebhookDelivery delivery = adminService.getDelivery(id);
         return WebhookDto.DeliveryResponse.from(delivery);
     }
 

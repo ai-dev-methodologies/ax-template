@@ -13,9 +13,12 @@ import org.junit.jupiter.api.Test;
 @Tag("PRACTICES-TEST-002")
 class ArchitectureLayerBoundaryTest {
 
+    // IMW1-A (IDW1 dogfood 2026-05-29): re-scoped from the demo `practices` package to
+    // the WHOLE authblueprint tree so the layering contract is enforced on ALL ~40
+    // domains, not just the demo — the largest silent enforcement hole the dogfood found.
     private static final JavaClasses CLASSES = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .importPackages("com.ax.template.authblueprint.practices");
+            .importPackages("com.ax.template.authblueprint");
 
     @Test
     void practices_TEST_002_servicesDoNotDependOnControllers() {
@@ -37,6 +40,18 @@ class ArchitectureLayerBoundaryTest {
                 .that().haveSimpleNameEndingWith("Repository")
                 .should().dependOnClassesThat().haveSimpleNameEndingWith("Controller")
                 .orShould().dependOnClassesThat().haveSimpleNameEndingWith("Service")
+                .allowEmptyShould(true);
+        rule.check(CLASSES);
+    }
+
+    @Test
+    void practices_TEST_002_controllersDoNotDependOnRepositories() {
+        // Controllers must route through services, never touch repositories directly.
+        // IDW1 dogfood: this ban did not previously exist (even within practices), so
+        // controller→repository bypasses slipped past all guards on every real domain.
+        ArchRule rule = noClasses()
+                .that().haveSimpleNameEndingWith("Controller")
+                .should().dependOnClassesThat().haveSimpleNameEndingWith("Repository")
                 .allowEmptyShould(true);
         rule.check(CLASSES);
     }
