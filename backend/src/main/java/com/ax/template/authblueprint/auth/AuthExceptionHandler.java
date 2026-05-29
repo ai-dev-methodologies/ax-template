@@ -37,6 +37,8 @@ public class AuthExceptionHandler {
             URI.create("https://errors.example.com/auth/email-not-verified");
     private static final URI INVALID_TOKEN_TYPE =
             URI.create("https://errors.example.com/auth/invalid-token");
+    private static final URI INVALID_ROLE_TYPE =
+            URI.create("https://errors.example.com/auth/invalid-role");
     private static final URI INVALID_REFRESH_TOKEN_TYPE =
             URI.create("https://errors.example.com/auth/invalid-refresh-token");
     private static final URI INVALID_OAUTH_STATE_TYPE =
@@ -66,6 +68,12 @@ public class AuthExceptionHandler {
     public ProblemDetail handleInvalidToken(InvalidTokenException e) {
         return problem(HttpStatus.BAD_REQUEST, INVALID_TOKEN_TYPE, "Invalid Token",
                 "INVALID_TOKEN", e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidRoleException.class)
+    public ProblemDetail handleInvalidRole(InvalidRoleException e) {
+        return problem(HttpStatus.BAD_REQUEST, INVALID_ROLE_TYPE, "Invalid Role",
+                "INVALID_ROLE", e.getMessage());
     }
 
     @ExceptionHandler(InvalidRefreshTokenException.class)

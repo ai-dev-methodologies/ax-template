@@ -81,6 +81,39 @@ class SignupAsvs21Test {
     }
 
     @Test
+    @Tag("ASVS")
+    void signup_unknownRole_rejectedWith400_notSilentMemberDowngrade() throws Exception {
+        // IMW2-C (IDW2 dogfood): an UNKNOWN requested role must surface as a LOUD 400,
+        // NOT a silent MEMBER downgrade that only shows up as confusing later 403s.
+        mockMvc.perform(post("/api/auth/email/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"unknownrole@example.com\",\"password\":\"securepassword12\",\"role\":\"SUPERUSER\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ROLE"));
+    }
+
+    @Test
+    @Tag("ASVS")
+    void signup_validRole_stillHonored() throws Exception {
+        // PRESERVE existing behavior for a valid role string (the override path the
+        // Payment/Billing/FeatureFlag black-box ITs rely on to mint ADMIN tokens).
+        mockMvc.perform(post("/api/auth/email/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"validrole@example.com\",\"password\":\"securepassword12\",\"role\":\"ADMIN\"}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @Tag("ASVS")
+    void signup_absentRole_defaultsToMember() throws Exception {
+        // PRESERVE default-when-absent behavior: no role field → MEMBER, still 201.
+        mockMvc.perform(post("/api/auth/email/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"norole@example.com\",\"password\":\"securepassword12\"}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     void signup_duplicateEmail_returnsGenericResponse() throws Exception {
         String body = "{\"email\":\"dup@example.com\",\"password\":\"securepassword12\"}";
         mockMvc.perform(post("/api/auth/email/signup")

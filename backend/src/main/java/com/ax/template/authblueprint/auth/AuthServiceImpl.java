@@ -114,8 +114,11 @@ public class AuthServiceImpl {
         }
         try {
             return UserRole.valueOf(requested.toUpperCase());
-        } catch (IllegalArgumentException ignored) {
-            return UserRole.MEMBER;
+        } catch (IllegalArgumentException unknownRole) {
+            // IMW2-C (IDW2 dogfood): do NOT silently downgrade an UNKNOWN role to
+            // MEMBER — that hides the deviation as confusing later 403s. Surface it
+            // as a LOUD 400 (mapped to problem+json by AuthExceptionHandler).
+            throw new InvalidRoleException("Unknown role: " + requested);
         }
     }
 

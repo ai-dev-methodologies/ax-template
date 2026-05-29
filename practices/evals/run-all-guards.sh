@@ -852,6 +852,16 @@ echo "[49] controller_problemdetail_guard.sh (IMW1-D — IDW2: every domain @Exc
 run_guard "controller_problemdetail/live" 0 \
     bash "$SCRIPT_DIR/controller_problemdetail_guard.sh"
 
+echo ""
+echo "[50] name_collision_guard.sh (IMW2-C — IDW2: cross-package @Entity/@Service/@Repository/@Controller simple-name collision)"
+run_guard "name_collision/live" 0 \
+    bash "$SCRIPT_DIR/name_collision_guard.sh"
+
+echo ""
+echo "[51] role_literal_guard.sh (IMW2-C — IDW2: every @PreAuthorize authority literal maps to a UserRole or API scope)"
+run_guard "role_literal/live" 0 \
+    bash "$SCRIPT_DIR/role_literal_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
