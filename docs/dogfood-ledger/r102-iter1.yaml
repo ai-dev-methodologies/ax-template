@@ -1,0 +1,36 @@
+# R102 — pagination-l0 + idempotency-l0 spec dogfood iter1 (10-persona, 10th wave)
+#
+# Wave subject (dual): specs/pagination-l0.yaml + specs/idempotency-l0.yaml
+# (R102 phase α — both atomically). Both cross-cutting generic patterns,
+# jurisdiction-agnostic per user feedback (R99-R101 vertical-specific drift
+# course-corrected at R102).
+#
+# 7+7 = 14 items total. Anchored to RFC 5988 / RFC 8288 / RFC 9457 / RFC
+# 7231 / IETF draft-ietf-httpapi-idempotency-key / IETF draft-ietf-httpapi-
+# pagination / GraphQL Connections / FIPS 180-4 / Stripe-Square-Adyen
+# industry de facto.
+#
+# Panel: P3-P12 per persona-registry R101 next_panel_composition_for_R102.
+# 10th wave of 10-persona protocol.
+#
+# **R102 wave = course correction** — user feedback (memory:
+# feedback_prefer_generic_catalog) reverted R99-R101 Korean-vertical drift.
+# Both R102 specs cite minimal Korean law (0 in either standard: field).
+#
+# **10-wave cross-wave consistency expected** (10 consecutive occurrences):
+#   P4 priority order        : R93~R102 F2 → real_bug × 10 (R102 closure expected;
+#                              priority may apply per-spec OR combined for dual phase α)
+#   P5 RECIPE example        : R93~R102 F3 → real_bug × 10 (R102 closure expected;
+#                              2 RECIPE examples needed for dual specs)
+#   P8 SLO/alert wiring      : R93~R102 F6 → scope_deferral × 10 (6-wave OBS-002 carry forward)
+#   P11 standards-symmetric  : R93~R102 F8 → real_bug × 12+ (R102 may have 2-4 pins
+#                              given dual spec scope)
+#   P12 mechanical-anchor    : 3-class mechanical taxonomy held + R101 documentation
+#                              contribution + **R102 dual-spec wave shape** (new pattern:
+#                              two specs single phase α). R102 P12 NEW finding TBD.
+#
+# Distribution potentially shifts: dual-spec wave may produce 4-6 real_bug
+# + 8-10 scope_deferral instead of standard 3+7.
+
+iteration: 1
+findings: []

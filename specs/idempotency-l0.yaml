@@ -1,0 +1,97 @@
+version: "0.1.0"
+scope: "idempotency-l0 — Idempotency-Key header + request dedup + replay response contract for fork-receivers building any state-changing HTTP API (POST / PUT / PATCH / DELETE). Cross-cutting catalog pattern — jurisdiction-agnostic. Stripe / Square / Adyen / PayPal industry de facto standard."
+stack: "Spring Boot 3.2.x + Redis (key cache) OR JPA (key persistence) + Micrometer metrics"
+standard: "IETF draft-ietf-httpapi-idempotency-key (in progress, near consensus) + RFC 9457 (Problem Details) + RFC 7231 (HTTP Semantics, §4.2.2 Idempotent Methods baseline) + Stripe Idempotency Documentation (de facto industry reference) + Square Idempotency Keys (de facto) + AWS Idempotency Token (de facto)"
+domain_mode: full_trio
+introduced_at: "R102 phase α (#2 of 2 simultaneous) — pivot to cross-cutting generic catalog per user feedback. Generic pattern applicable to any fork-receiver. P11 황태완 standards lens active (IETF draft + Stripe de facto) + P9 윤재호 distributed-system lens (idempotency = saga compensation prerequisite). Companion phase α: pagination-l0 (same R102 wave). R102 P12 NEW finding TBD."
+
+# idempotency is BASELINE for any non-idempotent HTTP method. Recipes
+# building payments / orders / messaging / file uploads MUST adopt to
+# survive network retries + at-least-once delivery semantics. Generic
+# pattern; Korean cite minimized per R102+ generic catalog principle.
+#
+# Composition note: cross-references payment-l0 (existing L4 — payment
+# tx idempotency) + report-export-l0 (export job dedup) + email-outbox
+# -l0 (send dedup). Order-management-l0 (R103+ candidate) will inherit.
+
+items:
+  - id: "IDEMPOTENCY-KEY-001"
+    chapter: "Idempotency-Key header parsing"
+    requirement: "State-changing methods (POST/PUT/PATCH/DELETE) MAY include `Idempotency-Key: <client-generated-uuid>` header. Server treats absence as default behavior (no dedup). Present + valid (RFC 4122 UUID v4 OR ULID OR custom string up to 255 chars) → server dedups within key TTL. Invalid format → 400 IDEMPOTENCY_KEY_INVALID."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to IETF draft-ietf-httpapi-idempotency-key (current
+      draft-04) + Stripe Idempotency Documentation
+      (https://stripe.com/docs/api/idempotent_requests).
+      Quote anchor (IETF draft §3): "The Idempotency-Key HTTP request
+      header field carries a unique key identifying a request, generated
+      by the client."
+
+  - id: "IDEMPOTENCY-CACHE-001"
+    chapter: "Key storage + TTL"
+    requirement: "Recipe declares `idempotency_cache_backend` ∈ {redis, jpa, in-memory} + `idempotency_key_ttl_hours` (default 24h, recipe range 1h-7d). Storage MUST persist `{key, request_fingerprint_hash, response_body, response_status, created_at}`. Per-tenant key isolation mandatory (multi-tenant collision protection)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Backend choice trade-off: Redis (fast, TTL native, ephemeral
+      acceptable) vs JPA (durable, audit-friendly). Multi-tenant via
+      composite key (tenant_id, idempotency_key).
+
+  - id: "IDEMPOTENCY-DEDUP-001"
+    chapter: "Replay response semantics"
+    requirement: "When server receives a request with previously-seen Idempotency-Key + identical request_fingerprint (URL + method + body hash): replay the cached response verbatim (status + body + headers). When key matches but fingerprint differs → 422 IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD. When key in-flight (request still processing concurrently) → 409 IDEMPOTENCY_KEY_CONFLICT with Retry-After header."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Three-state machine: never-seen → process + cache; seen-completed
+      → replay; seen-in-flight → 409. fingerprint protects against
+      accidental client key reuse with new payload.
+
+  - id: "IDEMPOTENCY-SCOPE-001"
+    chapter: "Method scope + opt-out endpoints"
+    requirement: "Idempotency-Key applies to POST/PUT/PATCH/DELETE by default. GET/HEAD/OPTIONS are inherently idempotent (RFC 7231 §4.2.2) — server MUST reject Idempotency-Key on these with 400. Recipe MAY opt-out specific endpoints from dedup (e.g., real-time signal endpoints) via `idempotency_excluded_paths` list. Opt-out endpoints document the trade-off (at-least-once delivery)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to RFC 7231 §4.2.2 (https://datatracker.ietf.org/doc/html/rfc7231#section-4.2.2)
+      + IETF idempotency-key draft §4 (Scope).
+      Quote anchor (RFC 7231 §4.2.2): "A request method is considered
+      idempotent if the intended effect on the server of multiple
+      identical requests with that method is the same as the effect
+      for a single such request."
+
+  - id: "IDEMPOTENCY-CONCURRENT-001"
+    chapter: "Concurrent request handling"
+    requirement: "Two simultaneous requests with same Idempotency-Key: server MUST process only one (winner via database lock or Redis SETNX) and queue/reject the other(s) via 409 with Retry-After. Concurrent dedup MUST NOT corrupt cache state — atomic write-once semantics enforced. Test: 10 parallel requests same key → 1 success + 9 conflicts; second-attempt after winner completes → cached replay."
+    test_method: "RestAssured + concurrency probe"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Redis SETNX + EXPIRE atomic pair OR JPA INSERT with unique
+      constraint. Lock acquisition timeout 5s default.
+
+  - id: "IDEMPOTENCY-PAYLOAD-001"
+    chapter: "Request fingerprint hash algorithm"
+    requirement: "Request fingerprint = SHA-256 of canonicalized request (method + path + sorted query params + body bytes). Recipe declares `idempotency_fingerprint_algorithm` ∈ {sha-256, sha-3-256} (default 'sha-256'). Headers EXCLUDED from fingerprint (User-Agent / Date / tracing IDs vary). Body canonicalization: JSON sorted-keys + minified, binary as-is."
+    test_method: "RestAssured + fingerprint probe"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Anchored to FIPS 180-4 (SHA-256) + FIPS 202 (SHA-3). Body
+      canonicalization avoids false-mismatch from semantically-identical
+      JSON with different key order.
+
+  - id: "IDEMPOTENCY-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Idempotency implementations MUST expose exactly 3 canonical Micrometer metrics: (1) `idempotency_requests_total{tenant, outcome}` — outcome ∈ {first_seen, replayed, conflict, fingerprint_mismatch}; (2) `idempotency_cache_hit_rate{tenant}` — replay fraction; (3) `idempotency_lock_wait_seconds{tenant}` (histogram). Labels exclude key value / fingerprint / payload. SLO/alert wiring fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      OBSERVABILITY-002 standard item candidate (10-wave streak —
+      9+1 with pagination-l0 R102 dual emission).

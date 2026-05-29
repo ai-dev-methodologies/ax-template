@@ -1,0 +1,96 @@
+version: "0.1.0"
+scope: "pagination-l0 — cursor-based + offset-fallback pagination contract for fork-receivers building any list/collection API. Cross-cutting catalog pattern — jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / API platform applicable."
+stack: "Spring Boot 3.2.x + JPA / R2DBC pageable + JSON cursor encoding + Micrometer metrics"
+standard: "RFC 5988 (Web Linking — Link header) + RFC 8288 (Web Linking, BCP) + RFC 9457 (Problem Details for HTTP APIs) + GraphQL Cursor Connections Specification (Relay) + OpenAPI 3.1 pagination patterns + IETF draft-ietf-httpapi-pagination (in progress)"
+domain_mode: full_trio
+introduced_at: "R102 phase α (#1 of 2 simultaneous) — pivot to cross-cutting generic catalog per user feedback (R99-R101 over-fitted to Korean verticals). Generic pattern applicable to any fork-receiver. P11 황태완 standards lens active (RFC 5988 + GraphQL Connections + IETF draft) + P10 신경수 backward-compat lens (offset→cursor migration). Companion phase α: idempotency-l0 (same R102 wave). R102 P12 NEW finding TBD."
+
+# pagination is BASELINE — every list/collection API benefits. Recipes
+# building admin dashboards / product listings / user feeds / activity
+# streams / message history MUST adopt items below. Generic pattern;
+# Korean cite minimized per user feedback (R102+ generic catalog principle).
+#
+# Composition note: cross-references chat-messaging-l0 (R98) CHAT-HISTORY
+# -001 + report-export-l0 reuse cursor pattern. activity-feed-l0 inherits
+# pagination contract. List/feed L4 workloads MAY adopt directly.
+
+items:
+  - id: "PAGE-CURSOR-001"
+    chapter: "Cursor encoding + opaque schema"
+    requirement: "Cursors MUST be opaque to clients — server encodes `{last_sort_value, last_id, page_size}` + HMAC-SHA256 signature + base64url. Cursors MUST NOT expose internal pk values directly. Server validates HMAC on receive; tampered cursor → 400 PAGE_CURSOR_INVALID. Cursor TTL recommended 24h (recipe-configurable 1h-30d)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: CursorService.encode(sortValue, id, pageSize) →
+      JSON + HMAC + base64url. CursorService.decode(cursor) →
+      validates HMAC, throws on tamper. Anchored to RFC 8288
+      (https://datatracker.ietf.org/doc/html/rfc8288) + GraphQL Cursor
+      Connections (https://relay.dev/graphql/connections.htm).
+      Quote anchor (Relay Cursor Connections): "Cursors should be
+      considered opaque strings; clients should never attempt to parse
+      cursors."
+
+  - id: "PAGE-LIMIT-001"
+    chapter: "Page size limits + defaults"
+    requirement: "Recipe declares `pagination_default_page_size` (default 20) + `pagination_max_page_size` (default 200; absolute ceiling 1000). Clients MAY pass `page_size` param within [1, max]. Out-of-range → 400 PAGE_SIZE_INVALID with hint. Server MUST NEVER honor unlimited requests."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Anchored to OpenAPI 3.1 pagination patterns + RFC 9457 Problem
+      Details for HTTP APIs.
+      Quote anchor (RFC 9457 §3): "An HTTP problem details object is
+      a JSON object that describes a problem related to an HTTP request."
+
+  - id: "PAGE-LINK-001"
+    chapter: "Link header + response envelope"
+    requirement: "Response MUST include `Link` header per RFC 5988 with `rel=\"next\"` (if more pages) + `rel=\"prev\"` (if not first). Optional `rel=\"first\"` + `rel=\"last\"` for offset mode only. Body envelope: `{data: [...], pagination: {next_cursor, prev_cursor, page_size, has_more}}`. GraphQL Connections shape acceptable alternative (recipe choice)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Anchored to RFC 5988 (https://datatracker.ietf.org/doc/html/rfc5988)
+      + RFC 8288 + GraphQL Cursor Connections.
+
+  - id: "PAGE-OFFSET-001"
+    chapter: "Offset fallback + drift warning"
+    requirement: "Offset mode supported as legacy / backward-compat — recipe MUST declare `pagination_mode` ∈ {cursor, offset, both}. Default 'cursor'. Offset mode MUST emit `X-Pagination-Drift-Warning` header when client requests offset > 10000 (linear scan risk). Server may impose offset hard ceiling at 100000."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Cursor mode prevents drift from concurrent inserts; offset mode
+      may skip/duplicate items. P10 backward-compat lens addressed via
+      both-mode support.
+
+  - id: "PAGE-STABLE-SORT-001"
+    chapter: "Stable sort enforcement"
+    requirement: "Pagination MUST be over a stable sort — at least one tiebreaker column (typically `id` or `created_at + id`). Single-column sort over non-unique value (e.g., `name` alone) is REJECTED at API contract level — recipe MUST declare composite sort. Unstable sort breaks cursor semantics → 500 PAGE_UNSTABLE_SORT."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Stable sort is the keystone invariant — cursor relies on it.
+      Recipe-declared composite sort columns validated at startup.
+
+  - id: "PAGE-COUNT-001"
+    chapter: "Total count opt-in (expensive)"
+    requirement: "Total count is NOT returned by default — count queries are O(table) and may dominate query budget. Clients MAY request via `?include_total=true` — server then returns `total_count` in pagination object. Server MUST cap count query at 5s timeout; over-cap → return `total_count_approximate: true` flag + estimate from table statistics."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Cost discipline pattern. Anti-pattern: always-on COUNT(*) — kills
+      large tables. Opt-in + timeout + approximate fallback.
+
+  - id: "PAGE-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Pagination implementations MUST expose exactly 3 canonical Micrometer metrics with bounded labels: (1) `pagination_requests_total{tenant, mode}` — mode ∈ {cursor, offset}; (2) `pagination_drift_warning_rate{tenant}` — offset>10k events; (3) `pagination_response_time_seconds{tenant, mode}` (histogram, 5 buckets). Labels exclude resource_id / user_id / cursor_value (low-cardinality only). SLO/alert wiring fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Anchored to OpenTelemetry Semantic Conventions HTTP metrics.
+      10th-wave OBSERVABILITY-002 candidate (R102 mandatory_R103
+      forward).
