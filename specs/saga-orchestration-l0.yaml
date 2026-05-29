@@ -1,0 +1,179 @@
+version: "0.1.0"
+scope: "saga-orchestration-l0 — multi-step distributed transaction (saga) contract for fork-receivers coordinating a business operation that spans multiple services or aggregates without a global ACID transaction. Cross-cutting catalog pattern, jurisdiction-agnostic."
+stack: "Spring Boot 3.2.x + JPA (saga state persistence) + Spring Statemachine or hand-rolled state machine + Spring @Transactional (per-step local tx) + optional Spring Cloud Stream / Kafka (choreography events) + Micrometer metrics"
+standard: "Saga pattern (microservices.io / Chris Richardson, de facto microservices reference) + Hector Garcia-Molina & Kenneth Salem, Sagas (1987, ACM SIGMOD Record) — long-lived transactions decomposed into local transactions with compensating transactions + orchestration vs choreography coordination styles"
+domain_mode: full_trio
+introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards lens active (Garcia-Molina & Salem 1987 + microservices.io saga) + P9 distributed-system lens active (saga = atomicity surrogate for any fan-out write across service / aggregate boundaries; compensations are the rollback substitute when 2PC is unavailable). R115 P12 TBD."
+
+# saga IS the baseline for any business operation that must update state
+# across more than one service or aggregate boundary where a single ACID
+# transaction is impossible. OPT-IN: recipes performing multi-service writes
+# (order → payment → inventory, signup → provisioning → billing) SHOULD adopt
+# to keep the operation eventually-atomic via compensation.
+#
+# Composition note: composes idempotency-l0 (every step + compensation is
+# idempotency-key-keyed and retry-safe — SAGA-IDEMPOTENT-001). Reliable command
+# emission uses the transactional outbox pattern (microservices.io): the
+# orchestrator emits step commands / events via an outbox row written in the
+# same local tx that advances saga state, so a crash never loses or double-sends
+# a command — SAGA-STATE-001. (No transactional-outbox-l0 sibling spec exists
+# yet; SAGA-STATE-001 carries the outbox requirement inline.)
+# Cross-references resilience-l0 (per-step external call uses circuit breaker /
+# timeout / retry) + payment-l0 (payment leg as one saga step).
+
+# ── Priority order for fork-receivers (P4 lens) ──
+# Adopt in order; earlier items are foundational. STEP + COMPENSATE are the
+# keystone — without them saga atomicity is undefined.
+#   1. SAGA-STEP-001          — ordered local-transaction sequence (foundation)
+#   2. SAGA-COMPENSATE-001    — reverse-order compensating actions
+#   3. SAGA-ORCHESTRATION-001 — single declared coordination style
+#   4. SAGA-IDEMPOTENT-001    — idempotent + retry-safe steps (composes idempotency-l0)
+#   5. SAGA-STATE-001         — recoverable persisted state machine + transactional outbox emission
+#   6. SAGA-TIMEOUT-001       — per-step timeout triggers compensation
+#   7. SAGA-OBSERVABILITY-001 — 3 canonical metrics
+
+# ── RECIPE.md frontmatter example (P5 lens) ──
+#   ---
+#   recipe: generic-saga
+#   saga_coordination_style: orchestration       # OR choreography (exactly one)
+#   saga_state_backend: jpa                       # durable recoverable state machine
+#   saga_command_emission: transactional-outbox   # reliable command/event emission
+#   saga_step_timeout_ms: 5000                     # per-step timeout -> compensate
+#   saga_compensation_max_attempts: 5              # retry-safe compensation cap
+#   saga_steps: [reserve-inventory, charge-payment, confirm-order]
+#   ---
+# Orchestration verticals declare a central coordinator; choreography
+# verticals declare event topics. A recipe MUST NOT mix the two implicitly.
+
+# ── F8 standards pin (P11 lens) ──
+# Coordination model pinned to Garcia-Molina & Salem (1987) saga semantics:
+# a saga T = T1..Tn local transactions, each Ti has compensating transaction
+# Ci; either T1..Tn all commit, or T1..Tj (j<n) then Cj..C1 execute. Default
+# coordination style = orchestration (explicit, easier to reason about) with
+# choreography opt-in. Compensations run in REVERSE completion order.
+
+items:
+  - id: "SAGA-STEP-001"
+    chapter: "Ordered local-transaction sequence"
+    requirement: "A saga MUST be modeled as an ordered, recipe-declared sequence of local transactions (steps) T1..Tn, where each Ti commits independently in its own local @Transactional boundary before Ti+1 begins. No step MAY span more than one local transaction, and there MUST be no enclosing global/distributed (2PC) transaction across steps. The orchestrator (or choreography handler) MUST drive steps strictly in declared order; a step MUST NOT start until its predecessor has durably committed. Triggering a saga returns 202 ACCEPTED with a `saga_id` and a `Location` header pointing at the saga status resource; the operation is NOT synchronously complete on return."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: persist a saga aggregate with an ordered step list and
+      a cursor; advance the cursor only after each step's local tx commits.
+      Anchored to microservices.io Saga pattern
+      (https://microservices.io/patterns/data/saga.html).
+      Quote anchor (microservices.io Saga pattern): "A saga is a sequence of
+      local transactions. Each local transaction updates the database and
+      publishes a message or event to trigger the next local transaction in
+      the saga."
+      Reference: Garcia-Molina & Salem, "Sagas", ACM SIGMOD Record 1987
+      (print/PDF source; a saga is a sequence of transactions interleavable
+      with other transactions — no fetchable verbatim quote reproduced here).
+
+  - id: "SAGA-COMPENSATE-001"
+    chapter: "Reverse-order compensating actions"
+    requirement: "Every step Ti that can be undone MUST declare a compensating action Ci. When any step Tj fails after T1..T(j-1) have committed, the saga MUST execute compensations C(j-1), C(j-2), ..., C1 in STRICT REVERSE order of completion — never forward, never partial-skip. A compensation MUST semantically undo or counteract its committed step (it cannot rollback the already-committed local tx, it issues a new compensating local tx). Steps with no meaningful inverse (pivot/retriable steps) MUST be declared `compensatable: false` and placed so that no committed compensatable step follows them. On compensation completion the saga terminates in a COMPENSATED terminal state; the status resource returns 200 with `status=COMPENSATED`."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Force a mid-sequence step failure and assert compensations fire in
+      reverse completion order with no forward progress after failure.
+      Anchored to microservices.io Saga pattern — compensating transactions
+      (https://microservices.io/patterns/data/saga.html).
+      Quote anchor (microservices.io Saga pattern): "If a local transaction
+      fails because it violates a business rule then the saga executes a
+      series of compensating transactions that undo the changes that were
+      made by the preceding local transactions."
+      Reference: Garcia-Molina & Salem, "Sagas", ACM SIGMOD Record 1987
+      (compensating transaction Ci semantically undoes Ti; print/PDF source,
+      no verbatim quote reproduced).
+
+  - id: "SAGA-ORCHESTRATION-001"
+    chapter: "Single declared coordination style"
+    requirement: "A recipe MUST declare exactly one coordination style via `saga_coordination_style` ∈ {orchestration, choreography} and MUST NOT mix them implicitly within one saga definition. ORCHESTRATION: a central coordinator owns the saga state machine and explicitly invokes each step / compensation and decides the next transition. CHOREOGRAPHY: each step service reacts to the prior step's domain event and emits its own; no central coordinator. A request to start a saga whose recipe mixes both styles for the same saga, or omits the declaration, MUST be rejected at startup (fail-fast configuration error) rather than executing in an undefined hybrid mode. The chosen style MUST be discoverable on the saga status resource as a `coordination` field."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Orchestration centralizes control + observability (recommended default);
+      choreography decentralizes but risks cyclic event dependencies. Assert a
+      malformed mixed-style recipe fails fast.
+      Anchored to microservices.io — orchestration vs choreography
+      (https://microservices.io/patterns/data/saga.html).
+      Quote anchor (microservices.io Saga pattern): "There are two ways of
+      coordination sagas: Choreography - each local transaction publishes
+      domain events that trigger local transactions in other services [and]
+      Orchestration - an orchestrator (object) tells the participants what
+      local transactions to execute."
+
+  - id: "SAGA-IDEMPOTENT-001"
+    chapter: "Idempotent + retry-safe steps (composes idempotency-l0)"
+    requirement: "Every step Ti AND every compensation Ci MUST be idempotent and retry-safe: re-delivering the same step command or compensation command (at-least-once delivery is assumed) MUST NOT produce a duplicate side effect. Each step/compensation command MUST carry a stable `Idempotency-Key` derived from `(saga_id, step_index, attempt-invariant)` per idempotency-l0, and the handler MUST dedup on it. A retried step that already committed MUST replay its recorded outcome rather than re-execute. Compensations MUST be safe to invoke even if the corresponding step never effectively committed (compensate-of-no-op = no-op, not error). Test: deliver each step command twice → single side effect; deliver a compensation twice → single undo."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Composes idempotency-l0 (IDEMPOTENCY-KEY-001 / IDEMPOTENCY-DEDUP-001):
+      the saga is the canonical producer of state-changing commands that WILL
+      be redelivered, so idempotency is a hard prerequisite, not optional.
+      Anchored to microservices.io Saga pattern
+      (https://microservices.io/patterns/data/saga.html) + idempotency-l0
+      (sibling catalog spec).
+      Reference: microservices.io Saga pattern — each local transaction
+      publishes a message/event that triggers the next, so at-least-once
+      messaging makes idempotent handlers a prerequisite (see source; no
+      verbatim sentence on idempotent handlers reproduced from this page).
+
+  - id: "SAGA-STATE-001"
+    chapter: "Recoverable persisted state machine + transactional outbox emission"
+    requirement: "Saga state MUST be persisted as a durable, recoverable state machine: the current step index, each step's outcome, and the overall saga status ∈ {STARTED, STEP_COMPLETED, COMPENSATING, COMPLETED, COMPENSATED, FAILED} MUST be written transactionally with each step's local transaction. On orchestrator (or coordinator process) crash and restart, the saga MUST RESUME from the persisted cursor — it MUST NOT restart from step 1 nor abandon in-flight sagas. Step commands and domain events MUST be emitted via a transactional outbox (the outbox pattern) in the SAME local transaction that advances the saga state, so a command is never lost on crash and never emitted twice. State transitions MUST go through a single sole-mutator state-machine component (no ad-hoc status writes)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Apply the transactional outbox pattern: write saga state + outbox row in
+      one local tx; a relay publishes the outbox row, giving
+      exactly-effectively-once command emission across crashes. (No
+      transactional-outbox-l0 sibling spec exists yet — the outbox requirement
+      is carried inline here.)
+      Anchored to microservices.io Transactional Outbox pattern
+      (https://microservices.io/patterns/data/transactional-outbox.html).
+      Quote anchor (microservices.io Transactional Outbox pattern): "The
+      solution is for the service that sends the message to first store the
+      message in the database as part of the transaction that updates the
+      business entities."
+
+  - id: "SAGA-TIMEOUT-001"
+    chapter: "Per-step timeout triggers compensation"
+    requirement: "Each step MUST have a finite per-step timeout (`saga_step_timeout_ms`, recipe-declared, default 5000) — a saga MUST NOT remain in-flight indefinitely. If a step neither completes nor fails within its timeout, the saga MUST transition to COMPENSATING and run the compensations of all previously-completed steps in reverse order (per SAGA-COMPENSATE-001), exactly as for an explicit step failure. The timed-out step itself MUST be treated as not-completed (its own compensation runs only if the step's local tx is later confirmed to have committed — reconciled via the step's idempotency record). Querying a timed-out saga's status resource MUST return 200 with `status` ∈ {COMPENSATING, COMPENSATED} and a machine-readable `failure_reason=STEP_TIMEOUT`; it MUST NEVER hang."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      A timeout watchdog (scheduled poller over persisted saga state) detects
+      steps stuck past their deadline and drives compensation — bounding every
+      saga's lifetime.
+      Anchored to microservices.io Saga pattern (failure handling)
+      (https://microservices.io/patterns/data/saga.html).
+      Reference: microservices.io Saga pattern + Garcia-Molina & Salem 1987 —
+      a saga either completes (all Ti) or is compensated (Cj..C1); there is no
+      third indefinite outcome, so timeouts must resolve to compensation (see
+      source; no verbatim timeout sentence on these pages).
+
+  - id: "SAGA-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Saga implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `saga_started_total{saga_type}` — counter incremented once per saga start; (2) `saga_compensated_total{saga_type, failure_reason}` — counter incremented when a saga terminates in COMPENSATED, failure_reason ∈ {step_failure, step_timeout, manual}; (3) `saga_step_duration_seconds{saga_type, step}` — histogram of per-step execution duration. The `saga_type` and `step` labels MUST be bounded, recipe-enumerated logical names — NEVER a per-request saga_id, user_id, tenant_id, payload, or any unbounded/PII value. SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Three metrics map to the three saga lifecycle facts: how many started,
+      how many had to compensate (and why), and how long each step takes.
+      Anchored to Micrometer naming / tag-cardinality guidance
+      (https://docs.micrometer.io/micrometer/reference/concepts/naming.html).
+      Quote anchor (Micrometer naming docs): "Beware of the potential for tag
+      values coming from user-supplied sources to blow up the cardinality of a
+      metric."

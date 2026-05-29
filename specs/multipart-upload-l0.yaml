@@ -1,0 +1,166 @@
+version: "0.1.0"
+scope: "multipart-upload-l0 — resumable chunked upload (offset-based PATCH append + HEAD resume + per-chunk checksum) for fork-receivers building any large-file ingest API. Cross-cutting catalog pattern, jurisdiction-agnostic."
+stack: "Spring Boot 3.2.x + JPA (upload session persistence) + S3-compatible blob store (chunk staging) + Micrometer"
+standard: "tus.io resumable upload protocol 1.0.0 (Upload-Offset / Upload-Length / Tus-Resumable / checksum + expiration extensions) + RFC 9110 (HTTP Semantics — Range / Content-Range) + RFC 7233 (Range Requests)"
+domain_mode: full_trio
+introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R115 P12 TBD."
+
+# OPT-IN: multipart-upload is the RESUMABLE UPLOAD PROTOCOL (transport
+# concern) — distinct from file-storage-l0 (the storage-backend / virus-scan /
+# IDOR-authz abstraction). Fork-receivers ingesting large media (video, CSV
+# import, document bundles) adopt this when a single multipart/form-data POST
+# is too fragile for flaky mobile / WAN clients. Generic; Korean cite ZERO.
+#
+# Composition note: layers ON TOP of file-storage-l0 — once an upload session
+# COMPLETES (offset == Upload-Length), the assembled blob is handed to the
+# file-storage-l0 pipeline (FILE-UPLOAD-* content-type allowlist + virus scan).
+# Pairs with idempotency-l0 (create-upload MAY carry Idempotency-Key) and
+# job-queue-l0 (post-assembly processing). Does NOT replace file-storage-l0.
+
+# ── Priority order for fork-receivers (P4 adoption lens) ──
+# Adopt in order; INIT + CHUNK are the keystone — without a session resource
+# and offset-validated append, resume / checksum / expiry are undefined.
+#   1. UPLOAD-INIT-001          — create session + declare Upload-Length (foundation)
+#   2. UPLOAD-CHUNK-001         — offset-validated PATCH append
+#   3. UPLOAD-RESUME-001        — HEAD returns current Upload-Offset
+#   4. UPLOAD-CHECKSUM-001      — per-chunk integrity gate
+#   5. UPLOAD-LIMIT-001         — server-side size + content-type ceiling
+#   6. UPLOAD-EXPIRY-001        — TTL + abandoned-partial cleanup
+#   7. UPLOAD-OBSERVABILITY-001 — 3 metrics
+
+# ── RECIPE.md frontmatter example (P5 recipe lens) ──
+#   ---
+#   recipe: generic-resumable-upload
+#   upload_max_total_bytes: 5368709120                 # 5 GiB ceiling (not client-derived)
+#   upload_chunk_min_bytes: 5242880                     # 5 MiB min part (S3 multipart floor)
+#   upload_allowed_content_types: [video/mp4, text/csv, application/pdf]
+#   upload_checksum_algorithm: sha-256                  # R115 F8 default (FIPS 180-4)
+#   upload_session_ttl_hours: 24                        # incomplete-session reaper window
+#   upload_storage_backend: s3                          # OR local-fs / jpa-blob
+#   ---
+# Mobile-heavy verticals lower chunk size; bulk-import verticals raise
+# upload_max_total_bytes and pin content type to text/csv only.
+
+# ── F8 standards pin (P11 standards lens) ──
+# per-chunk checksum algorithm default = sha-256 (FIPS 180-4) pinned, declared
+# via tus Upload-Checksum header value "sha256 <base64-digest>"; offset/length
+# headers per tus.io 1.0.0 (Upload-Offset / Upload-Length / Tus-Resumable);
+# Range semantics per RFC 9110. Standards-pin streak continued (R93~R115).
+
+items:
+  - id: "UPLOAD-INIT-001"
+    chapter: "Create upload session + declare total length"
+    requirement: "POST to the create-upload endpoint MUST create a server-side upload resource and return 201 with a `Location` header pointing at the new session URL. Client declares total size via `Upload-Length: <bytes>`. Server compares against the recipe `upload_max_total_bytes` ceiling — over-ceiling → 413 with PROBLEM_UPLOAD_TOO_LARGE. Response MUST echo `Tus-Resumable: 1.0.0`. Initial `Upload-Offset` of the new resource is 0."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: UploadSessionService.create(uploadLength, contentType, callerId)
+      persists {sessionId, uploadLength, offset=0, contentType, status=ACTIVE,
+      createdAt, expiresAt}; controller returns 201 + Location:/api/uploads/{id}.
+      Validate Upload-Length against recipe ceiling BEFORE allocating any staging
+      blob. Anchored to https://tus.io/protocols/resumable-upload (Creation
+      extension) + RFC 9110 §15.5.14 (413 Content Too Large).
+      Quote anchor (tus.io 1.0.0, Creation extension §POST): "The Client MUST
+      send a POST request against a known upload creation URL to request a new
+      upload resource."
+
+  - id: "UPLOAD-CHUNK-001"
+    chapter: "Offset-validated chunk append"
+    requirement: "PATCH to the session URL appends a chunk. Request MUST carry `Upload-Offset: <n>` (the byte position the client believes the resource is at) and `Content-Type: application/offset+octet-stream`. Server MUST reject any PATCH whose `Upload-Offset` does NOT equal the current server-side offset with 409 PROBLEM_UPLOAD_OFFSET_CONFLICT (no bytes written). On success the server appends the bytes, advances the offset, and returns 204 with the new `Upload-Offset` header."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: synchronize the append per session (DB row lock or
+      per-session mutex) so two concurrent PATCH at the same offset cannot both
+      win — losing request gets 409. Offset is the sole source of truth; never
+      trust a client-supplied running total beyond the equality check. Anchored
+      to https://tus.io/protocols/resumable-upload (Core Protocol PATCH).
+      Quote anchor (tus.io 1.0.0, Core Protocol §PATCH): "If the offsets do not
+      match, the Server MUST respond with the 409 Conflict status without
+      modifying the upload resource."
+
+  - id: "UPLOAD-RESUME-001"
+    chapter: "HEAD returns current offset for resume"
+    requirement: "HEAD on the session URL MUST return 200 with the current `Upload-Offset` header and `Cache-Control: no-store` so an interrupted client learns exactly how many bytes were durably received and resumes by sending only the remainder. If the upload length is known the response MAY also include `Upload-Length`. HEAD on an unknown or expired session → 404. Response MUST echo `Tus-Resumable: 1.0.0`."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: controller HEAD handler reads the persisted offset and sets
+      Upload-Offset + Cache-Control: no-store (offset must never be cached by
+      intermediaries). A client that lost its connection issues HEAD, then resumes
+      PATCH from the returned offset — zero re-sent bytes. Anchored to
+      https://tus.io/protocols/resumable-upload (Core Protocol HEAD).
+      Quote anchor (tus.io 1.0.0, Core Protocol §HEAD): "The Server MUST prevent
+      the client and/or proxies from caching the response by adding the
+      Cache-Control: no-store header."
+
+  - id: "UPLOAD-CHECKSUM-001"
+    chapter: "Per-chunk integrity gate"
+    requirement: "When a PATCH carries `Upload-Checksum: <algorithm> <base64-digest>` (default algorithm `sha256`, recipe-configurable), the server MUST compute the digest of the received chunk bytes and compare. On mismatch the server MUST discard the chunk, leave the offset UNCHANGED, and respond 460 (tus Checksum Mismatch). An unsupported checksum algorithm → 400. A correct checksum proceeds as a normal append (204 + advanced offset)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: ChecksumValidator.verify(algorithm, chunkBytes, expected)
+      runs BEFORE the offset advances; on failure the staging write is rolled back
+      so a retried PATCH at the same offset is valid. sha-256 default per FIPS
+      180-4. Anchored to https://tus.io/protocols/resumable-upload (Checksum
+      extension) + FIPS 180-4 (SHA-256).
+      Quote anchor (tus.io 1.0.0, Checksum extension): "the uploaded chunk MUST
+      be discarded, and the upload and its offset MUST NOT be updated."
+
+  - id: "UPLOAD-LIMIT-001"
+    chapter: "Server-side size + content-type allowlist"
+    requirement: "Maximum total size (`upload_max_total_bytes`) and the allowed content-type allowlist (`upload_allowed_content_types`) MUST be enforced server-side from the recipe — NEVER derived from a client-supplied value alone. Declared `Upload-Length` over the ceiling → 413. A declared content-type (via tus `Upload-Metadata` filetype OR the create request) outside the allowlist → 415 PROBLEM_UPLOAD_UNSUPPORTED_TYPE. Cumulative appended bytes MUST also be capped so a client cannot exceed the declared length."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: enforce ceiling at INIT (declared length) AND on every
+      PATCH (offset + chunk size must not exceed Upload-Length). Content-type
+      allowlist mirrors file-storage-l0 FILE-UPLOAD content-type gate — the
+      assembled blob is later re-validated by file-storage-l0. Anchored to
+      RFC 9110 §15.5.14 (413) + §15.5.16 (415 Unsupported Media Type).
+      Quote anchor (RFC 9110 §15.5.16): "The 415 (Unsupported Media Type) status
+      code indicates that the origin server is refusing to service the request
+      because the payload is in a format not supported by this method on the
+      target resource."
+
+  - id: "UPLOAD-EXPIRY-001"
+    chapter: "Session TTL + abandoned-partial cleanup"
+    requirement: "Every incomplete upload session MUST carry a TTL (`upload_session_ttl_hours`, default 24h). The server MAY advertise the deadline via the `Upload-Expires` header (HTTP-date). PATCH or HEAD against an expired session → 410 PROBLEM_UPLOAD_EXPIRED. A scheduled reaper MUST purge expired ACTIVE sessions and their staged chunks so abandoned partial uploads do not accumulate storage indefinitely. Completed sessions are exempt (handed off to file-storage-l0)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: @Scheduled reaper marks ACTIVE sessions past expiresAt as
+      EXPIRED, deletes their staging blobs, and frees the offset row. Reuses the
+      scheduled-task-l0 single-runner + lease pattern. Anchored to
+      https://tus.io/protocols/resumable-upload (Expiration extension) + RFC 9110
+      §15.5.11 (410 Gone).
+      Quote anchor (tus.io 1.0.0, Expiration extension §Upload-Expires): "The
+      Upload-Expires response header indicates the time after which the
+      unfinished upload expires."
+
+  - id: "UPLOAD-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Resumable-upload implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `uploads_initiated_total{tenant, content_type_group}` — content_type_group is a coarse bucket (video / document / data), NOT the raw MIME string; (2) `upload_bytes_total{tenant}` — counter of durably-appended bytes; (3) `upload_abandoned_total{tenant, reason}` — reason ∈ {expired, checksum_fail, client_aborted}. Labels MUST exclude session_id / filename / user_id / offset. SLO and alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: increment uploads_initiated_total on 201 from INIT,
+      upload_bytes_total by chunk size on each successful PATCH, and
+      upload_abandoned_total in the reaper / 460 / client-disconnect paths.
+      content_type_group derived from a fixed mapping table keeps cardinality
+      bounded. The bounded-cardinality discipline follows the OpenTelemetry
+      Semantic Conventions general-metric guidance.
+      Reference: OpenTelemetry Semantic Conventions — General Metrics Guidelines
+      (https://opentelemetry.io/docs/specs/semconv/general/metrics/) (see
+      source) — no verbatim low-cardinality sentence is published; the
+      convention's general guideline is that aggregations over a metric's
+      attributes should remain meaningful, which the coarse content_type_group
+      bucket satisfies.

@@ -1,0 +1,147 @@
+version: "0.1.0"
+scope: "config-validation-l0 — typed configuration binding + declarative Bean Validation constraints + fail-fast startup + required-key enforcement + secret/config separation + profile explicitness + post-startup immutability for fork-receivers wiring any externalized configuration. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
+stack: "Spring Boot 3.2.x + Spring Boot @ConfigurationProperties + @Validated + Jakarta Bean Validation 3.0 (Hibernate Validator) + Spring profiles + Spring Cloud Config / environment externalization + Micrometer metrics"
+standard: "The Twelve-Factor App (III. Config — strict env/config separation) + Jakarta Bean Validation 3.0 (JSR 380 declarative constraints) + Spring Boot @ConfigurationProperties validation + @Validated fail-fast startup binding"
+domain_mode: full_trio
+introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R115 P12 TBD."
+
+# OPT-IN configuration-hardening catalog. Fork-receivers externalizing any
+# config (URLs, timeouts, secret references, feature toggles, allowlists)
+# adopt to make every config error a STARTUP failure, never a 3am lazy
+# NullPointerException. Single-binary forks adopt the full set; library
+# forks MAY keep only SCHEMA + FAILFAST + REQUIRED.
+#
+# Composition note: CONFIG-SECRET-SEPARATION-001 composes the future
+# secrets-management-l0 sibling (config holds references, not values) and
+# pairs with health-check-l0 (a failed required-config probe fails readiness
+# before traffic). Distinct from request-validation-l0 (that validates
+# inbound HTTP bodies; this validates startup-time configuration).
+
+# ── Priority order for fork-receivers (R115 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. CONFIG-SCHEMA-001
+#   2. CONFIG-FAILFAST-001
+#   3. CONFIG-REQUIRED-001
+#   4. CONFIG-SECRET-SEPARATION-001
+#   5. CONFIG-PROFILE-001
+#   6. CONFIG-IMMUTABLE-001
+#   7. CONFIG-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (R115 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-config-validation
+#   config_validation_enabled: true
+#   config_fail_fast: true
+#   config_active_profile: prod
+#   config_secret_store: vault
+#   config_reload_contract: none
+#   ---
+
+# ── F8 standards pin (R115 iter1 F8 closure — P11 황태완 lens) ──
+# Default pinned: @Validated @ConfigurationProperties fail-fast binding + Twelve-Factor strict config/secret separation (JSR 380). 14-wave standards-pin streak (R93~R115).
+
+items:
+  - id: "CONFIG-SCHEMA-001"
+    chapter: "Typed binding + declarative constraints"
+    requirement: "Externalized configuration MUST be bound to typed `@ConfigurationProperties` objects (not scattered `@Value` string lookups) and MUST be annotated `@Validated` so Jakarta Bean Validation constraints (`@NotNull`, `@NotBlank`, `@Min`, `@Max`, `@Positive`, `@Pattern`, `@Email`, `@URL`) run at bind time. A constraint violation MUST surface a `BindValidationException` / `ConfigurationPropertiesBindException` listing the failing property path + constraint message. Raw untyped `Map<String,Object>` config holders are forbidden for any key carrying a semantic constraint."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Prefer constructor-bound immutable records with field constraints;
+      do not hand-roll validation in @PostConstruct. Anchored to Jakarta
+      Bean Validation 3.0
+      (https://jakarta.ee/specifications/bean-validation/3.0/).
+      Quote anchor (Jakarta Bean Validation 3.0): "Jakarta Bean Validation
+      defines a metadata model and API for JavaBean and method validation."
+      anchor: jakarta-bean-validation-3.0
+
+  - id: "CONFIG-FAILFAST-001"
+    chapter: "Fail-fast at application startup"
+    requirement: "Invalid or unbindable configuration MUST cause the application context to FAIL TO START (non-zero exit, no listening port), never to start in a degraded state that throws lazily on first use. Validation MUST execute during context refresh / bean binding, before the embedded server accepts traffic. The startup failure MUST emit a structured log entry naming every offending property path and the violated constraint. A health/readiness probe MUST NOT report ready if any validated config bean failed to bind."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Spring binds and validates @ConfigurationProperties during refresh,
+      so a violation aborts startup automatically — do not catch and
+      swallow it. Anchored to Spring Boot reference (Validation of
+      @ConfigurationProperties)
+      (https://docs.spring.io/spring-boot/reference/features/external-config.html#features.external-config.typesafe-configuration-properties.validation).
+      Reference: Spring Boot reference, Validation section (see source).
+      anchor: spring-boot-configuration-properties-validation
+
+  - id: "CONFIG-REQUIRED-001"
+    chapter: "Required keys have no silent default"
+    requirement: "Security-relevant configuration keys (secret-store references, downstream service URLs, CORS / trust allowlists, signing-key identifiers, token issuer/audience) MUST be declared required (`@NotNull` / `@NotBlank`) with NO in-code fallback default. Absence of such a key MUST be a startup error (per CONFIG-FAILFAST-001), never a substitution with an insecure built-in placeholder (no `http://localhost`, `changeme`, empty-allowlist-as-allow-all). Non-security operational tunables (timeouts, page sizes) MAY carry documented defaults."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      A missing allowlist defaulting to 'allow all' is the classic
+      fail-open bug; required + no-default makes the gap loud at boot.
+      Anchored to The Twelve-Factor App (III. Config)
+      (https://12factor.net/config).
+      Quote anchor (The Twelve-Factor App, III. Config): "The twelve-factor
+      app stores config in environment variables."
+      anchor: twelve-factor-config
+
+  - id: "CONFIG-SECRET-SEPARATION-001"
+    chapter: "Secret values separated from config"
+    requirement: "Secret VALUES (passwords, private keys, API tokens, DB credentials) MUST NOT appear in plain-text config files, committed property files, or container images. Configuration MUST hold only a REFERENCE (e.g., a secret-store path / key alias / env-var name) that is resolved at runtime from a secret store (composes secrets-management-l0). Bound `@ConfigurationProperties` fields carrying secrets MUST be excluded from any config-dump / actuator `/configprops` / log output (masked). A literal high-entropy secret detected in a property source SHOULD fail a startup guard or CI scan."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Resolve via env-var indirection or a secret-store client; keep the
+      value out of the bound object's toString(). Anchored to The
+      Twelve-Factor App (III. Config)
+      (https://12factor.net/config).
+      Quote anchor (The Twelve-Factor App, III. Config): "Config varies
+      substantially across deploys, code does not."
+      anchor: twelve-factor-config
+
+  - id: "CONFIG-PROFILE-001"
+    chapter: "Explicit environment profiles"
+    requirement: "The active environment profile MUST be set explicitly (e.g., `spring.profiles.active`) and a `prod` deployment MUST NOT silently fall back to development defaults when no profile is supplied. If no profile is active, the application MUST refuse to start in a production-intended packaging OR MUST start under an explicitly safe default that disables dev-only conveniences (no in-memory DB, no permit-all security, no verbose stack traces). Profile-specific property files MUST NOT leak dev secrets into the prod profile."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      A blank profile silently picking H2 + permit-all is a common prod
+      incident; require an explicit profile or a hardened default.
+      Anchored to Spring Boot reference (Profiles)
+      (https://docs.spring.io/spring-boot/reference/features/profiles.html).
+      Quote anchor (Spring Boot reference, Profiles): "Spring Profiles
+      provide a way to segregate parts of your application configuration and
+      make it be available only in certain environments."
+      anchor: spring-boot-profiles
+
+  - id: "CONFIG-IMMUTABLE-001"
+    chapter: "Config immutable after startup"
+    requirement: "Bound configuration MUST be effectively immutable after context startup: `@ConfigurationProperties` objects SHOULD be constructor-bound records / final fields exposing no public setters, and no code path may mutate a shared config bean at request time (no hidden mutable global state). If runtime reconfiguration is genuinely required, it MUST be an EXPLICITLY declared reload contract (e.g., Spring Cloud `@RefreshScope` or a documented reload endpoint) that re-runs the same validation; an undeclared mutable config field is forbidden. Reload MUST re-validate and reject an invalid new value without corrupting the prior good state."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Constructor binding + final fields make accidental mutation a
+      compile error; @RefreshScope is the only sanctioned reload path.
+      Anchored to Spring Boot reference (Constructor Binding)
+      (https://docs.spring.io/spring-boot/reference/features/external-config.html#features.external-config.typesafe-configuration-properties.constructor-binding).
+      Reference: Spring Boot reference, Constructor Binding section
+      (see source).
+      anchor: spring-boot-constructor-binding
+
+  - id: "CONFIG-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Config-validation implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `config_validation_failure_total{phase}` — counter, phase ∈ {startup, reload}; (2) `config_missing_required_total{key_class}` — counter, key_class ∈ {secret_ref, url, allowlist, issuer, other} (a bounded classification, NEVER the raw property name); (3) `config_reload_total{outcome}` — counter, outcome ∈ {applied, rejected, noop}. Labels MUST exclude raw property paths, secret values, profile-specific URLs, and any high-cardinality or sensitive token. Alert/SLO wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded key_class buckets keep the metric backend cardinality flat
+      and avoid leaking the offending property name as a label value.
+      Anchored to OpenTelemetry Semantic Conventions naming
+      (https://opentelemetry.io/docs/specs/semconv/general/naming/).
+      Quote anchor (OTel SemConv naming): "Names SHOULD be lowercase."
+      anchor: otel-semconv-naming

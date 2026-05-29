@@ -1,0 +1,177 @@
+---
+version: "0.1.0"
+scope: "observability-convention-l0 — unified cross-spec observability convention: declared SLIs/SLOs + error-budget multi-window multi-burn-rate alerting + alert severity routing + metric label cardinality budget + RED/USE method + metric-to-trace exemplar linkage + dashboards-and-alerts-as-code for fork-receivers operating any HTTP service or background worker. Cross-cutting catalog pattern, jurisdiction-agnostic."
+stack: "Spring Boot 3.2.x + Micrometer (registry + meter filters) + Micrometer Tracing (exemplar bridge) + OpenTelemetry semantic conventions + Prometheus/OpenMetrics exposition + Grafana (dashboards-as-code)"
+standard: "Google SRE Workbook (SLO / error budget / multi-window multi-burn-rate alerting) + Google SRE Book Ch.6 (symptom-based alerting) + OpenTelemetry Semantic Conventions (general metrics + naming) + RED method (Tom Wilkie / Grafana) + USE method (Brendan Gregg) + Micrometer (meter naming + bounded tags) + OpenMetrics exemplars (W3C Trace Context trace_id linkage)"
+domain_mode: full_trio
+introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R115 P12 TBD."
+
+# OPT-IN unified observability convention. This is the cross-spec
+# OBSERVABILITY-002 standard that every per-spec 3-metric triad (e.g.
+# TRACE-OBSERVABILITY-001, HEALTH-OBSERVABILITY-001) now feeds into:
+# the per-spec triads emit the raw signals, this spec governs how those
+# signals roll up into SLOs, error budgets, alert routing, and dashboards.
+# Closes the 12-wave P8 SLO/alert saturation by giving one declared home
+# for SLI/SLO/burn-rate/cardinality/RED-USE/exemplar/dashboard rules.
+# Composition note: composes distributed-tracing-l0 (W3C Trace Context
+# trace_id reused as the exemplar target for metric→trace drill-down) and
+# generalizes the cardinality clause every per-spec OBSERVABILITY-001
+# item already states locally; health-check-l0 dependency_up gauges and
+# resilience-l0 breaker states surface as SLIs here, not duplicate metrics.
+
+# ── Priority order for fork-receivers (P4 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. OBSCONV-SLO-001
+#   2. OBSCONV-ERROR-BUDGET-001
+#   3. OBSCONV-ALERT-ROUTING-001
+#   4. OBSCONV-CARDINALITY-001
+#   5. OBSCONV-RED-USE-001
+#   6. OBSCONV-TRACE-METRIC-LINK-001
+#   7. OBSCONV-DASHBOARD-AS-CODE-001
+
+# ── RECIPE.md frontmatter example (P5 lens) ──
+#   ---
+#   recipe: generic-observability-convention
+#   observability_convention_enabled: true
+#   slo_target_availability: 0.999
+#   slo_target_latency_p99_ms: 300
+#   error_budget_window_days: 30
+#   burn_rate_fast_window: 1h
+#   burn_rate_slow_window: 6h
+#   alert_routing_page_channel: pagerduty
+#   metric_cardinality_max_series_per_meter: 500
+#   dashboards_as_code_path: ops/dashboards
+#   ---
+
+# ── F8 standards pin (P11 lens) ──
+# Default pinned: multi-window multi-burn-rate alerting + bounded-cardinality OTel meter naming (Google SRE Workbook + OTel SemConv). 12-wave standards-pin streak (R93~R115).
+
+items:
+  - id: "OBSCONV-SLO-001"
+    chapter: "Declared SLIs + SLO targets (first-class artifact)"
+    requirement: "Each deployable service MUST declare its Service Level Indicators (SLIs) and Service Level Objective (SLO) targets as a version-controlled artifact, not as an implicit operator assumption. At minimum a request-driven service MUST declare an availability SLI (good-event / valid-event ratio over a rolling window) and a latency SLI (e.g. p99 under a threshold), each with an explicit numeric SLO target (e.g. `slo_target_availability: 0.999`, `slo_target_latency_p99_ms: 300`) and a window (`error_budget_window_days`, default 30). The per-spec 3-metric triads (TRACE-OBSERVABILITY-001, HEALTH-OBSERVABILITY-001, etc.) supply the numerator/denominator signals; this spec binds them to a declared target. A service with NO declared SLO MUST fail the convention check (missing artifact is a defect, not a default)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Expose the declared SLO artifact via a read-only ops endpoint (e.g.
+      GET /ops/slo returning declared SLIs + targets) so the test asserts
+      presence + numeric bounds; back the SLI ratio with Micrometer
+      counters. Anchored to the Google SRE Workbook, Implementing SLOs
+      (https://sre.google/workbook/implementing-slos/).
+      Quote anchor (Google SRE Workbook, Implementing SLOs): "While many
+      numbers can function as an SLI, we generally recommend treating the
+      SLI as the ratio of two numbers: the number of good events divided
+      by the total number of events."
+
+  - id: "OBSCONV-ERROR-BUDGET-001"
+    chapter: "Error budget + multi-window multi-burn-rate alerting"
+    requirement: "The error budget MUST be derived from the declared SLO as (1 − SLO_target) over the configured window (e.g. SLO 99.9% over 30d → 0.1% budget). Alerting on budget consumption MUST use multi-window, multi-burn-rate signals: at least one FAST-burn condition (short window, e.g. 1h, high burn-rate threshold catching budget exhaustion within hours) AND one SLOW-burn condition (long window, e.g. 6h, lower threshold catching gradual erosion), each gated by a matching shorter window to suppress flapping. A single fixed-threshold alert (e.g. \"error rate > 1%\") MUST NOT be used as the sole budget alert. The burn-rate computation MUST consume the same SLI series declared in OBSCONV-SLO-001 (no parallel definition)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Compute burn rate = (observed error ratio) / (1 − SLO target);
+      a burn rate of 1 exhausts the budget exactly at window end. Pair a
+      long alerting window with a short for-duration window to cut alert
+      latency without flapping. Anchored to the Google SRE Workbook,
+      Alerting on SLOs
+      (https://sre.google/workbook/alerting-on-slos/).
+      Quote anchor (Google SRE Workbook, Alerting on SLOs §"Multiwindow,
+      Multi-Burn-Rate Alerts"): "Burn rate is how fast, relative to the
+      SLO, the service consumes the error budget."
+
+  - id: "OBSCONV-ALERT-ROUTING-001"
+    chapter: "Alert severity → routing convention"
+    requirement: "Every alert rule MUST carry an explicit `severity` label drawn from a fixed enum and MUST route by that severity: PAGE (wake a human) ONLY for fast budget-burning, user-impacting conditions (e.g. fast-burn from OBSCONV-ERROR-BUDGET-001); TICKET (async, next-business-day) for degraded / slow-burn conditions that are not yet user-impacting; LOG (record-only, no notification) for informational signals. An alert that pages MUST be actionable and tied to user-facing symptom or imminent budget exhaustion — cause-based noise (e.g. raw CPU high) MUST NOT page. The routing map (severity → channel) is recipe-declared (`alert_routing_page_channel` etc.) and version-controlled; an alert rule with no severity label MUST fail the convention check."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Symptom-based paging over cause-based paging keeps the pager
+      actionable; route LOG/TICKET via the registry's non-paging sinks.
+      Anchored to the Google SRE Workbook, Alerting on SLOs
+      (https://sre.google/workbook/alerting-on-slos/) + Site Reliability
+      Engineering, Ch.6 Monitoring Distributed Systems
+      (https://sre.google/sre-book/monitoring-distributed-systems/).
+      Quote anchor (Google SRE Book, Ch.6 Monitoring Distributed
+      Systems): "Every page should be actionable."
+
+  - id: "OBSCONV-CARDINALITY-001"
+    chapter: "Metric label cardinality budget (bounded enums only)"
+    requirement: "Every metric (Micrometer meter) MUST keep its tag/label set bounded: labels MUST be drawn ONLY from fixed, low-cardinality enums (e.g. http method, route TEMPLATE, status class, outcome). Labels MUST NEVER carry user id, tenant id, raw request input, full URL/path with concrete ids, email, trace_id/span_id, or any unbounded value. Route labels MUST use the low-cardinality template (`/api/orders/{id}`), never the resolved path. A recipe-declared ceiling (`metric_cardinality_max_series_per_meter`, default 500) bounds active series per meter; a meter exceeding it MUST be rejected or its high-cardinality tag stripped by a registry MeterFilter (fail-closed), never silently exported. This generalizes the local cardinality clause every per-spec OBSERVABILITY-001 item states."
+    test_method: "Micrometer registry assertion"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Enforce with a Micrometer MeterFilter (denyUnless / maximumAllowable
+      Tags) so unbounded tags are blocked at registration, not at scrape.
+      Anchored to Micrometer, Naming Meters
+      (https://docs.micrometer.io/micrometer/reference/concepts/naming.html);
+      OpenTelemetry Semantic Conventions general metrics
+      (https://opentelemetry.io/docs/specs/semconv/general/metrics/) is a
+      non-quoted reference for naming only.
+      Quote anchor (Micrometer, Naming Meters §"Tag Values"): "Beware of
+      the potential for tag values coming from user-supplied sources to
+      blow up the cardinality of a metric."
+
+  - id: "OBSCONV-RED-USE-001"
+    chapter: "RED for request services + USE for resources"
+    requirement: "Request-driven services MUST expose the RED triad — Rate (requests/sec), Errors (failed-request rate or ratio), and Duration (request latency distribution, exposed as a histogram/timer so percentiles are queryable) — keyed by the bounded route-template + status-class labels from OBSCONV-CARDINALITY-001. Resources (thread pools, connection pools, queues, caches) MUST expose the USE triad — Utilization, Saturation, and Errors — for each constrained resource. RED + USE are the MINIMUM instrumentation floor that feeds the OBSCONV-SLO-001 SLIs; a request handler with no Duration timer or a bounded resource with no Saturation gauge MUST fail the convention check. Latency MUST be a distribution, never a precomputed average gauge."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      RED maps to Micrometer Timer (count=Rate, error tag=Errors,
+      histogram=Duration); USE maps to gauges for pool active/max +
+      queue depth. Anchored to the USE Method (Brendan Gregg,
+      https://www.brendangregg.com/usemethod.html) + the RED method
+      (Tom Wilkie / Grafana,
+      https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/).
+      Quote anchor (Brendan Gregg, The USE Method): "For every resource,
+      check utilization, saturation, and errors."
+      Quote anchor (Grafana, The RED Method — Tom Wilkie): Rate is "the
+      number of requests per second", Errors is "the number of those
+      requests that are failing", and Duration is "the amount of time
+      those requests take".
+
+  - id: "OBSCONV-TRACE-METRIC-LINK-001"
+    chapter: "Metric exemplars link to traces (metric→trace drill-down)"
+    requirement: "Latency/error metrics SHOULD attach exemplars so an operator can pivot from an anomalous histogram bucket to a concrete representative trace. Each exemplar MUST carry the active `trace_id` (and SHOULD carry `span_id`) sourced from the W3C Trace Context propagated per distributed-tracing-l0 (TRACE-CONTEXT-001) — the SAME trace_id, never a parallel id. Exemplars MUST be emitted only for SAMPLED traces (an unsampled trace_id is not retrievable downstream and MUST be omitted). The exemplar label set MUST remain exempt from the cardinality budget (exemplars are not aggregation dimensions) but MUST still NOT carry PII or secrets — trace_id/span_id only."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Micrometer with the OTel/Prometheus exemplar bridge attaches the
+      sampled trace_id to histogram buckets automatically; gate on the
+      sampled flag. Anchored to OpenMetrics exemplars
+      (https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md);
+      W3C Trace Context (https://www.w3.org/TR/trace-context/) is a
+      non-quoted reference for the trace_id format.
+      Quote anchor (OpenMetrics specification §"Exemplars"): "Exemplars
+      are references to data outside of the MetricSet. A common use case
+      are IDs of program traces."
+
+  - id: "OBSCONV-DASHBOARD-AS-CODE-001"
+    chapter: "Dashboards + alert rules version-controlled as code"
+    requirement: "Dashboards and alert rules MUST be defined as version-controlled artifacts (e.g. Grafana dashboard JSON / provisioning files, Prometheus rule YAML) under a recipe-declared path (`dashboards_as_code_path`, default `ops/dashboards`), NOT created or edited solely through a UI (click-ops). Each dashboard/alert change MUST be reviewable as a diff and reproducible from the repository onto a fresh environment. Alert rules committed as code MUST reference the SLO/error-budget definitions from OBSCONV-SLO-001 / OBSCONV-ERROR-BUDGET-001 so the alerting source of truth is a single declared artifact. An alert or dashboard that exists only in a live instance with no committed source MUST fail the convention check."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Provision dashboards/alerts from the repo on boot (Grafana
+      provisioning / Prometheus rule_files); the test asserts the declared
+      path exists and is non-empty and that committed alert rules
+      reference the declared SLO. Anchored to OpenTelemetry Semantic
+      Conventions naming
+      (https://opentelemetry.io/docs/specs/semconv/general/naming/)
+      for committed-artifact naming + the Google SRE Workbook,
+      Implementing SLOs
+      (https://sre.google/workbook/implementing-slos/) for the
+      single-source-of-truth posture.
+      Quote anchor (OpenTelemetry Semantic Conventions §"General naming"):
+      "Names SHOULD be lowercase."
+      Reference: Google SRE Workbook, Implementing SLOs — treat SLOs and
+      alerts as a single declared source of truth (see source; the
+      "declared configuration" phrasing is a paraphrase, not a verbatim
+      quote).
