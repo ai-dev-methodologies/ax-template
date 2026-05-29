@@ -209,7 +209,6 @@ describe('L3 page template render-contract', () => {
 describe('SP20 behavioral contract', () => {
   describe('forgot-password', () => {
     it('renders email input and fires onSubmit with email value', async () => {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore dynamic path
       const { default: ForgotPasswordPage } = await import(
         /* @vite-ignore */ '../../../templates/L3/pages/forgot-password/page'
@@ -225,7 +224,6 @@ describe('SP20 behavioral contract', () => {
 
   describe('reset-password', () => {
     it('renders password inputs and fires onSubmit with password value', async () => {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore dynamic path
       const { default: ResetPasswordPage } = await import(
         /* @vite-ignore */ '../../../templates/L3/pages/reset-password/[token]/page'
@@ -243,7 +241,6 @@ describe('SP20 behavioral contract', () => {
 
   describe('wizard', () => {
     it('navigates from step 1 → 2 → 3 via Next button', async () => {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore dynamic path
       const { default: WizardPage } = await import(
         /* @vite-ignore */ '../../../templates/L3/pages/wizard/[step]/page'
@@ -266,7 +263,6 @@ describe('SP20 behavioral contract', () => {
 
   describe('settings-overview', () => {
     it('renders all section slots', async () => {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore dynamic path
       const { default: SettingsOverviewPage } = await import(
         /* @vite-ignore */ '../../../templates/L3/pages/settings-overview/page'

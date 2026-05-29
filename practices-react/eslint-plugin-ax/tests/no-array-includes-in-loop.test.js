@@ -31,6 +31,21 @@ test('ax/no-array-includes-in-loop — RuleTester suite', () => {
       `
         for (const it of items) { if (items.includes(it.parent)) doIt(it) }
       `,
+      // lookup on a name DECLARED inside the loop body (per-iteration local,
+      // often a string) — not the closed-over-array pattern; must NOT flag.
+      `
+        files.forEach((f) => {
+          const src = read(f)
+          if (src.includes('template_id:')) keep(f)
+        })
+      `,
+      // same via for-of
+      `
+        for (const f of files) {
+          const src = read(f)
+          if (src.includes('x') && src.includes('y')) keep(f)
+        }
+      `,
     ],
     invalid: [
       {

@@ -90,9 +90,39 @@ const rule = {
   },
 
   create(context) {
-    // Scan a loop body for an O(n) hot-lookup on a closed-over identifier that
-    // is NOT the array being iterated. Shared by iterator callbacks + for-of.
+    // Collect identifier names DECLARED inside `body` (const/let/var + their
+    // destructuring). A name declared within the loop body is recomputed each
+    // iteration — it is NOT the "build the Set once OUTSIDE the loop" pattern,
+    // so a hot-lookup on it is not the O(n*m) bug this rule targets. Skipping
+    // them kills a false-positive class (e.g. `const src = readFile(f);
+    // src.includes('x')` where `src` is a per-iteration local string, not a
+    // closed-over array). FDW2 regression fix.
+    function collectDeclaredNames(body) {
+      const names = new Set()
+      walkExpressions(body, (n) => {
+        if (n.type !== 'VariableDeclarator' || !n.id) return
+        const id = n.id
+        if (id.type === 'Identifier') {
+          names.add(id.name)
+        } else if (id.type === 'ObjectPattern') {
+          for (const p of id.properties) {
+            if (p.type === 'Property' && p.value && p.value.type === 'Identifier') names.add(p.value.name)
+            else if (p.type === 'RestElement' && p.argument.type === 'Identifier') names.add(p.argument.name)
+          }
+        } else if (id.type === 'ArrayPattern') {
+          for (const el of id.elements) {
+            if (el && el.type === 'Identifier') names.add(el.name)
+          }
+        }
+      })
+      return names
+    }
+
+    // Scan a loop body for an O(n) hot-lookup on a CLOSED-OVER identifier (not
+    // declared in the body) that is NOT the array being iterated. Shared by
+    // iterator callbacks + for-of.
     function reportHotLookups(body, iteratedName) {
+      const localNames = collectDeclaredNames(body)
       walkExpressions(body, (n) => {
         if (n.type !== 'CallExpression') return
         const cal = n.callee
@@ -102,6 +132,8 @@ const rule = {
         if (!outerName) return
         // Skip lookups on the iterated array itself.
         if (iteratedName && outerName === iteratedName) return
+        // Skip names declared inside the loop body (per-iteration locals).
+        if (localNames.has(outerName)) return
 
         context.report({
           node: n,

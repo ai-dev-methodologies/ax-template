@@ -1,26 +1,27 @@
 /**
  * ax/no-array-mutate-on-state
  *
- * Flags in-place array mutation on arrays that look like React props or state:
- *   - the ES2023-replaceable methods `.sort` / `.reverse` / `.splice`
- *     (suggest the immutable `.toSorted` / `.toReversed` / `.toSpliced`)
- *   - the no-immutable-variant mutators `.push` / `.pop` / `.shift` /
- *     `.unshift` / `.fill` (suggest spread / `.slice` / `.concat` + the setter)
- *   - index assignment `arr[i] = v`
+ * Flags in-place array mutation on arrays that look like React props or state.
+ * Coverage is scoped by collision risk (the rule is name-based, no type info):
+ *   - `.sort` / `.reverse` / `.splice` — array-specific (suggest the immutable
+ *     `.toSorted` / `.toReversed` / `.toSpliced`). Flagged on props AND state.
+ *   - `arr[i] = v` index assignment. Flagged on props AND state.
+ *   - `.push` / `.pop` / `.shift` / `.unshift` / `.fill` — these collide with
+ *     non-array APIs (`page.fill()`, `ctx.fill()`, `router.push()`), so they
+ *     are flagged on **useState-derived names ONLY**, never on a bare param.
+ *     (FDW2: `.fill` on a destructured Playwright `page` param produced 6
+ *     blocking false-positives on a clean tree.)
  *
  * Pairs 1:1 with: practices-react/rules/js-tosorted-immutable.md
  *
- * Heuristic for "looks like prop/state":
- *   - destructured directly from useState's tuple (left side of a const
- *     [name, setName] = useState(...))
- *   - listed in the function's parameter destructuring (function Foo({ items })
- *     {} or function Foo(props) and props.items)
+ * Heuristic for "state" vs "prop":
+ *   - STATE = destructured from useState's tuple (const [name,setName]=useState(…))
+ *   - PROP  = the function's parameter destructuring (function Foo({ items }))
  *
- * We do NOT try to follow values through intermediate variables — false
- * negatives are accepted; the rule is a tripwire for the obvious cases. The
- * coverage above is the rule's CONTRACT — keep this doc in sync with the
- * method sets / visitors below (FDW1 found the doc claimed `arr[i] = v`
- * coverage the impl never had).
+ * We do NOT follow values through intermediate variables — false negatives are
+ * accepted; false positives are NOT (they erode trust + can block a clean
+ * build). The coverage above is the rule's CONTRACT — keep this doc in sync
+ * with the method sets / visitors below.
  */
 
 // `.sort/.reverse/.splice` have a 1:1 ES2023 immutable variant (`.toX`).
@@ -111,6 +112,16 @@ const rule = {
       if (!name) return false
       return stack.some((s) => s.propNames.has(name) || s.stateNames.has(name))
     }
+    // useState-derived names ONLY (not bare params). The broadened in-place
+    // mutators (.push/.pop/.shift/.unshift/.fill) collide with non-array APIs on
+    // arbitrary params — Playwright `page.fill()`, canvas `ctx.fill()`,
+    // `router.push()` — so without type info we only flag them on names we KNOW
+    // came from useState. FDW2 found `.fill` mis-firing on a destructured
+    // Playwright `page` param (6 blocking false-positives on a clean tree).
+    function nameIsState(name) {
+      if (!name) return false
+      return stack.some((s) => s.stateNames.has(name))
+    }
 
     return {
       'FunctionDeclaration': (node) => pushScope(node.params),
@@ -144,7 +155,11 @@ const rule = {
         if (!hasImmutableVariant && !isInPlaceMutator) return
         if (callee.object.type !== 'Identifier') return
         const name = callee.object.name
-        if (!nameIsStateOrProp(name)) return
+        // .sort/.reverse/.splice are array-specific (safe on props + state);
+        // the collision-prone in-place mutators are flagged on useState-derived
+        // names ONLY (see nameIsState).
+        const tracked = hasImmutableVariant ? nameIsStateOrProp(name) : nameIsState(name)
+        if (!tracked) return
 
         if (hasImmutableVariant) {
           const methodPascal = method.charAt(0).toUpperCase() + method.slice(1)

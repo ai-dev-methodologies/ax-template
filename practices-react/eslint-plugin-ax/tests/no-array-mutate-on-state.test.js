@@ -45,6 +45,19 @@ test('ax/no-array-mutate-on-state — RuleTester suite', () => {
           return next
         }
       `,
+      // .fill on a destructured NON-array param (Playwright page) — must NOT
+      // fire: collision-prone methods are useState-only (FDW2 regression fix).
+      `
+        async function test({ page }) {
+          await page.fill('#email', 'a@b.com')
+        }
+      `,
+      // .push on a bare param (could be anything) — not flagged (state-only).
+      `
+        function handler({ stack }) {
+          stack.push(1)
+        }
+      `,
     ],
     invalid: [
       // .sort on a prop
@@ -86,19 +99,21 @@ test('ax/no-array-mutate-on-state — RuleTester suite', () => {
         `,
         errors: [{ messageId: 'mutateMethodOnState' }],
       },
-      // .pop on a prop
+      // .pop on a useState array (state-only for in-place mutators)
       {
         code: `
-          function Cart({ lineItems }) {
+          function Cart() {
+            const [lineItems, setLineItems] = useState([])
             lineItems.pop()
           }
         `,
         errors: [{ messageId: 'mutateMethodOnState' }],
       },
-      // .unshift on a prop
+      // .unshift on a useState array
       {
         code: `
-          function List({ rows }) {
+          function List() {
+            const [rows, setRows] = useState([])
             rows.unshift({})
           }
         `,
