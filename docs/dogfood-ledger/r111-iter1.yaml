@@ -1,7 +1,52 @@
-# R111 — data-subject-rights-l0 spec dogfood iter1 (placeholder, generic cross-cutting wave)
-# Drafted + adversarially verified via Workflow (R102 session, 4 pass / 6 revise;
-# this spec's quote anchors paraphrase-labeled per user decision after verify
-# flagged anchor hallucination). 7 items. Generic catalog (memory
-# feedback_prefer_generic_catalog). 10-persona dogfood populates in iter1 ledger commit.
+# R111 — data-subject-rights-l0 spec dogfood iter1 (10-persona, generic cross-cutting wave)
+# Workflow-drafted + adversarially-verified (R102 session). 7 items.
+# Generic catalog (memory feedback_prefer_generic_catalog) — ZERO Korean law.
+# 3 real_bug closed cc33c0e (F2/F3/F8) + 7 scope_deferral.
 iteration: 1
-findings: []
+findings:
+  - persona: P3
+    finding: "F1 (LOW): data-subject-rights-l0 lacks mobile-client guidance (mobile DSR self-service portal). Expiry trigger: 첫 mobile fork-receiver의 data-subject-rights-l0 도입 시 — DATA-SUBJECT-RIGHTS-MOBILE note."
+    classification: scope_deferral
+    references_artifact_path: specs/data-subject-rights-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): data-subject-rights-l0 7 items lacked priority ordering — 11th consecutive wave (R93~R111). Closure: priority order block commit cc33c0e."
+    classification: real_bug
+    closure_commit_sha: cc33c0e
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/data-subject-rights-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): data-subject-rights-l0 declared config but no RECIPE.md example — 11th wave. Closure: generic-data-subject-rights frontmatter commit cc33c0e."
+    classification: real_bug
+    closure_commit_sha: cc33c0e
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/data-subject-rights-l0.yaml
+  - persona: P6
+    finding: "F4 (LOW): **generic-catalog confirmation** — data-subject-rights-l0 cites ZERO Korean law (R102+ generic course). P6 한국 규제 lens produces NO regulatory deferral — jurisdiction-agnostic. i18n observation only (localized output → i18n-policy-l0 R93). Expiry trigger: re-opens only if jurisdiction-specific rule added (none expected)."
+    classification: scope_deferral
+    references_artifact_path: specs/data-subject-rights-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): data-subject-rights-l0 defines wire contract but no typed-SDK binding (typed DSR request/status client). Expiry trigger: 첫 frontend typed-client codegen 시 — DATA-SUBJECT-RIGHTS-BINDING."
+    classification: scope_deferral
+    references_artifact_path: specs/data-subject-rights-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): data-subject-rights-l0 observability item names 3 metrics but no SLO threshold/alert convention — 11th wave (R93~R111). e.g. sla_breach_total > 0 → PAGE. Expiry trigger: 첫 production deployment OR R113 OBSERVABILITY-002 batch."
+    classification: scope_deferral
+    references_artifact_path: specs/data-subject-rights-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): data-subject-rights-l0 lacks migration playbook (no-DSR → DSR (backfill data inventory for export)). Expiry trigger: 첫 fork-receiver의 existing system 전환 시 — MIGRATION.md."
+    classification: scope_deferral
+    references_artifact_path: specs/data-subject-rights-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): data-subject-rights-l0 lacks version-skew/backward-compat contract (existing data without provenance for export). Expiry trigger: 첫 fork-receiver의 mixed-client-version production."
+    classification: scope_deferral
+    references_artifact_path: specs/data-subject-rights-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): data-subject-rights-l0 cited standards but defaults unpinned — 11th wave standards-pin (R93~R111). Closure: F8 standards-pin block commit cc33c0e."
+    classification: real_bug
+    closure_commit_sha: cc33c0e
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/data-subject-rights-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): multi-spec batch wave shape (R103-R112 9 specs in batch phase α + closures). NOT a new mechanical class (METHODOLOGY.md 4-criterion rule). NOTE: composition with soft-delete PURGE (Art 17 shared). Expiry trigger: R113 wave 시작 시 multi-spec batch shape 명문화 OR composition overlap 해소."
+    classification: scope_deferral
+    references_artifact_path: specs/data-subject-rights-l0.yaml
