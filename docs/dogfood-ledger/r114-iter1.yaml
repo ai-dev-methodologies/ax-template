@@ -1,0 +1,92 @@
+# R114 — 7 generic cross-cutting specs dogfood iter1 (10-persona, multi-spec batch)
+#
+# Wave subject (7 specs, R114 phase α 8836b59 atomic):
+#   specs/api-versioning-l0.yaml + job-queue-l0 + bulk-operation-l0 +
+#   content-negotiation-l0 + request-validation-l0 + cors-l0 + webhook-signing-l0.
+# 49 items total (7 × 7). Cross-cutting generic patterns, jurisdiction-agnostic
+# — continues the R102+ generic course correction (memory:
+# feedback_prefer_generic_catalog). ZERO Korean law cites across all 7 specs.
+#
+# Anchored to: RFC 8594 + draft-ietf-httpapi-deprecation-header + SemVer 2.0.0
+# (api-versioning) · RabbitMQ/Kafka/SQS visibility-timeout + RFC 7231 Retry-After
+# (job-queue) · RFC 9457 + JSON Lines + RFC 4180 (bulk-operation) · RFC 9110 §12
+# (content-negotiation) · Jakarta Bean Validation 3.0 + JSON Schema 2020-12 +
+# RFC 6901 (request-validation) · WHATWG Fetch CORS + OWASP CORS (cors) ·
+# RFC 2104 + RFC 9421 + RFC 3339 (webhook-signing). WebFetch-verified per R113
+# anchor-recovery rule (Workflow wv88dwghk, 14 agents, 503s).
+#
+# Wave shape (R113 taxonomy): MULTI-SPEC BATCH (7 specs) — same as R103-R112.
+# Closures CO-LOCATED in phase α (NOT a separate closures commit): the
+# adversarial-verify + draft workflow baked F2/F3/F8 closure blocks directly
+# into each phase-α spec, so closure_commit_sha for F2/F3/F8 = phase α 8836b59.
+# This is a wave-shape variation (co-located closure), NOT a new mechanical
+# anchor class (METHODOLOGY.md 4-criterion rule — no run-all-guards entry,
+# no fork-receiver opt-in surface, no static data artifact).
+#
+# Panel reuse: P3-P12 per persona-registry next_panel_composition_for_R114.
+#
+# **Cross-wave consistency observed**:
+#   P4 priority order        : F2 → real_bug (12th wave R93~R114; 7-spec closure)
+#   P5 RECIPE example         : F3 → real_bug (12th wave; 7 RECIPE frontmatters)
+#   P8 SLO/alert wiring       : F6 → scope_deferral (12th wave; OBSERVABILITY-002
+#                               unified-item carry forward, multi-wave saturation)
+#   P11 standards-symmetric   : F8 → real_bug (12th wave; 7-spec standards pin)
+#   P12 mechanical-anchor      : 3-class taxonomy held; R114 co-located-closure
+#                               variation documented, no new class
+#
+# **Course-correction signal (P6)**: all 7 R114 specs cite ZERO Korean law —
+# P6 한국 규제 lens produces NO regulatory deferral (4th consecutive generic
+# wave R102/R103.../R114). Generic cross-cutting patterns escape the Korean-
+# regulation deferral lane, empirically confirming the user feedback.
+
+iteration: 1
+findings:
+  - persona: P3
+    finding: "F1 (LOW): all 7 specs define server-side HTTP contracts but no client-side adoption guidance — api-versioning client version-pinning + content-negotiation Accept/Accept-Language header construction + job-queue/bulk async job-status polling UX + webhook-signing client-side signature generation (mobile/SPA). A mobile-first Junior (P3 김민준, 24) needs client binding notes. Expiry trigger: 첫 mobile/SPA fork-receiver의 versioned + negotiated API 통합 — per-spec CLIENT-BINDING note (version pin / Accept builder / job-poll / sign helper)."
+    classification: scope_deferral
+    references_artifact_path: specs/content-negotiation-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): all 7 specs' 49 items lacked priority ordering in the bare draft — 12th consecutive wave (R93~R114). 7-spec batch needs a priority block per spec. Closure: priority-order comment block prepended to each of the 7 specs (api-versioning NEGOTIATION→DEFAULT keystone, job-queue ENQUEUE→WORKER keystone, bulk-operation SUBMIT→PARTIAL keystone, content-negotiation ACCEPT→TYPE keystone, request-validation SCHEMA→ERROR keystone, cors ORIGIN→PREFLIGHT keystone, webhook-signing HMAC→TIMESTAMP keystone) — co-located in phase α 8836b59."
+    classification: real_bug
+    closure_commit_sha: 8836b59
+    closure_verification_ref: "all 7 specs/*-l0.yaml carry a '── Priority order for fork-receivers' block before items: (grep -l 'Priority order' specs/{api-versioning,job-queue,bulk-operation,content-negotiation,request-validation,cors,webhook-signing}-l0.yaml = 7)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/api-versioning-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): all 7 specs declare recipe config fields but the bare draft shipped no copy-pasteable RECIPE.md frontmatter — 12th wave (R93~R114). 7-spec batch needs 7 RECIPEs. Closure: generic-api-versioning + generic-job-queue + generic-bulk-operation + generic-content-negotiation + generic-request-validation + generic-cors + generic-webhook-signing frontmatter examples co-located in phase α 8836b59 (webhook-signing RECIPE+F8 normalized at phase α)."
+    classification: real_bug
+    closure_commit_sha: 8836b59
+    closure_verification_ref: "all 7 specs contain a '── RECIPE.md frontmatter example' block with a verbatim recipe: <name> stanza (grep -l 'RECIPE.md frontmatter' specs/*-l0.yaml includes all 7 R114 specs)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/job-queue-l0.yaml
+  - persona: P6
+    finding: "F4 (LOW): **course-correction confirmation (4th generic wave)** — api-versioning / job-queue / bulk-operation / content-negotiation / request-validation / cors / webhook-signing cite ZERO Korean law. P6 한국 규제 lens (최영숙, 53) produces NO regulatory deferral: these are jurisdiction-agnostic HTTP/crypto contracts with no Korean-jurisdiction gap. Generic i18n observation only: content-negotiation CONNEG-LANGUAGE-001 + api-versioning error bodies should reference i18n-policy-l0 (R93) for Accept-Language localization, which they already do via composition. Expiry trigger: re-opens only if a fork-receiver adds jurisdiction-specific versioning/validation/CORS rules (none expected — these are universal web standards)."
+    classification: scope_deferral
+    references_artifact_path: specs/content-negotiation-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): all 7 specs define wire contracts but no typed-SDK binding — TS discriminated-union for api-version negotiation result, typed job-status enum + result handle (job-queue), per-item BulkItemResult<T> array (bulk-operation), typed validation error[] (request-validation), typed webhook-verify result (webhook-signing). A typed-SDK Senior (P7 정도윤, 28) needs client binding contracts. Expiry trigger: 첫 frontend typed-client codegen against any R114 spec — per-spec BINDING note (versioned client / job poller / bulk result / verify wrapper)."
+    classification: scope_deferral
+    references_artifact_path: specs/request-validation-l0.yaml
+  - persona: P8
+    finding: "F6 (MEDIUM): all 7 OBSERVABILITY items name exactly 3 canonical Micrometer metrics each (21 metrics total) but no SLO threshold / alert convention — 12th wave (R93~R114 same pattern). e.g. dlq_depth > N → PAGE (job-queue), bulk_partial_failure_rate > X% → ALERT, cors_rejected_origin_total spike → SECURITY ALERT, webhook verification_failure_total spike → ALERT missing. Expiry trigger: 첫 production deployment OR OBSERVABILITY-002 unified-item standard batch (multi-wave carry-forward saturation candidate — 12-wave streak, escalate to a single cross-spec observability convention spec)."
+    classification: scope_deferral
+    references_artifact_path: specs/job-queue-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): no migration / rollout playbook for any of the 7 — (a) introducing api-versioning onto an unversioned API (default-version + deprecation ramp), (b) retrofitting request-validation onto lenient endpoints (warn→enforce window), (c) adding webhook-signing to existing unsigned webhooks (dual-accept overlap), (d) enabling CORS allowlist without breaking existing browser clients. An architect (P9 윤재호, 44) needs rollout plans. Expiry trigger: 첫 fork-receiver의 existing-API retrofit of any R114 cross-cutting concern — per-spec MIGRATION.md (unversioned→versioned / lenient→strict / unsigned→signed / open→allowlisted ramp)."
+    classification: scope_deferral
+    references_artifact_path: specs/api-versioning-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): each spec addresses steady-state but not the version-skew transition window — old clients calling a deprecated api-version during sunset, clients not yet sending Idempotency-Key/event-id during webhook-signing replay rollout, browser clients hitting CORS before the allowlist is deployed, bulk clients on the old all-or-nothing semantics during partial-success rollout. A backward-compat veteran (P10 신경수, 52) flags the mixed-client window. Expiry trigger: 첫 fork-receiver의 mixed-client-version production rollout of any R114 spec — per-spec VERSION-SKEW contract (graceful dual-mode acceptance during transition)."
+    classification: scope_deferral
+    references_artifact_path: specs/webhook-signing-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): the 7 bare-draft specs cited standards (RFC 8594/SemVer, SQS visibility-timeout, RFC 9457/JSONL, RFC 9110 §12, Bean Validation/JSON Schema, WHATWG Fetch CORS, RFC 2104/9421) but left defaults unpinned — versioning strategy + deprecation header set, job retry/backoff algorithm, bulk atomicity mode + format set, conneg default representation, validation error envelope shape, CORS allowlist+credential default, webhook MAC construction + tolerance + header grammar. **12th wave standards-pin pattern** (R93~R114). 7-spec pin needed. Closure: an '── F8 standards pin' block added to each of the 7 specs (7 default pins) — co-located in phase α 8836b59."
+    classification: real_bug
+    closure_commit_sha: 8836b59
+    closure_verification_ref: "all 7 specs carry an '── F8 standards pin' block declaring the pinned default (grep -l 'F8 standards pin' specs/*-l0.yaml includes all 7 R114 specs; webhook-signing pin = HMAC-SHA256 over timestamp+'.'+body, 300s window, Webhook-Signature t=,v1= header)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/cors-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): **R114 introduces the CO-LOCATED-CLOSURE wave-shape variation** — F2/F3/F8 closure blocks are baked into phase α 8836b59 (by the adversarial-verify draft workflow) rather than landed in a separate post-phase-α closures commit (R102 e7d0a2e precedent). Per METHODOLOGY.md anchor lifecycle 4-criterion rule, co-located closure is NOT a new mechanical anchor class: it registers no run-all-guards entry, exposes no fork-receiver opt-in surface, and ships no static data artifact — it is purely a commit-sequencing variation where closure_commit_sha == phase-α sha. The dogfood_finding_real_bug_closure_commit_guard is satisfied identically (the sha resolves). R115 evaluation: document co-located-closure under METHODOLOGY.md Wave Shape Taxonomy (documentation contribution, not mechanism). Expiry trigger: R115 wave 시작 시 co-located-closure shape 명문화 OR 첫 fork-receiver가 phase-α-bundled-closure 혼란 시."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/r114-iter1.yaml
