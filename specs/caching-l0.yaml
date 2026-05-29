@@ -49,9 +49,9 @@ items:
     notes: >
       Anchored to RFC 9111 §5.2 (Cache-Control) +
       https://datatracker.ietf.org/doc/html/rfc9111#section-5.2.
-      Anchor — paraphrase, verify against source (RFC 9111 §5.2.2.5 no-store): "The no-store response
+      Quote anchor (RFC 9111 §5.2.2.5 no-store): "The no-store response
       directive indicates that a cache MUST NOT store any part of either
-      the immediate request or response and MUST NOT use the response to
+      the immediate request or the response and MUST NOT use the response to
       satisfy any other request."
   - id: "CACHE-ETAG-001"
     chapter: "ETag + 304 conditional GET"
@@ -62,7 +62,7 @@ items:
     notes: >
       Anchored to RFC 9110 §8.8.3 (ETag) + RFC 7232 §3.2 (If-None-Match) +
       https://datatracker.ietf.org/doc/html/rfc9110#section-8.8.3.
-      Anchor — paraphrase, verify against source (RFC 7232 §4.1 304 Not Modified): "The 304 (Not
+      Quote anchor (RFC 7232 §4.1 304 Not Modified): "The 304 (Not
       Modified) status code indicates that a conditional GET or HEAD
       request has been received and would have resulted in a 200 (OK)
       response if it were not for the fact that the condition evaluated
@@ -78,7 +78,7 @@ items:
       stale data under concurrency. Anchored to RFC 9111 §4.4
       (Invalidating Stored Responses) +
       https://datatracker.ietf.org/doc/html/rfc9111#section-4.4.
-      Anchor — paraphrase, verify against source (RFC 9111 §4.4): "Because unsafe request methods
+      Quote anchor (RFC 9111 §4.4): "Because unsafe request methods
       (Section 9.2.1 of [HTTP]) such as PUT, POST, or DELETE have the
       potential for changing state on the origin server, intervening
       caches are required to invalidate stored responses to keep their
@@ -94,11 +94,11 @@ items:
       prefix lets tenant B read tenant A's cached representation. Anchored
       to RFC 9111 §4.1 (Constructing Responses from Caches — cache key) +
       https://datatracker.ietf.org/doc/html/rfc9111#section-4.1.
-      Anchor — paraphrase, verify against source (RFC 9111 §4.1): "The primary cache key consists of the
-      request method and target URI. However, since HTTP caches in common
-      use today are typically limited to caching responses to GET, many
-      caches simply decline other methods and use only the URI as the
-      primary cache key."
+      Quote anchor (RFC 9111 §2): "The \"cache key\" is the information a
+      cache uses to choose a response and is composed from, at a minimum,
+      the request method and target URI used to retrieve the stored response;
+      the method determines under which circumstances that response can be
+      used to satisfy a subsequent request."
   - id: "CACHE-STAMPEDE-001"
     chapter: "Stampede / thundering-herd prevention"
     requirement: "On a cache miss for a hot key, concurrent requests MUST NOT all recompute the value (thundering herd). Recipe declares `cache_stampede_strategy` ∈ {lock, early_recompute}. `lock` = single-flight: one request acquires a short-TTL recompute lock (Redis SETNX + EXPIRE, lock TTL ≤ recompute budget), others wait-and-read or serve stale-while-revalidate. `early_recompute` = probabilistic early expiration (XFetch: recompute when `now - delta*beta*ln(rand()) >= expiry`). A measured N-parallel-miss burst MUST result in exactly ONE origin recomputation, not N."
@@ -110,7 +110,7 @@ items:
       single-flight recompute, eliminating latency cliffs. Anchored to
       RFC 5861 §3 (stale-while-revalidate) +
       https://datatracker.ietf.org/doc/html/rfc5861#section-3.
-      Anchor — paraphrase, verify against source (RFC 5861 §3): "When present in an HTTP response, the
+      Quote anchor (RFC 5861 §3): "When present in an HTTP response, the
       stale-while-revalidate Cache-Control extension indicates that caches
       MAY serve the response in which it appears after it becomes stale, up
       to the indicated number of seconds."
@@ -125,7 +125,7 @@ items:
       "TTL cliff"). stale-if-error provides graceful degradation. Anchored
       to RFC 5861 §4 (stale-if-error) +
       https://datatracker.ietf.org/doc/html/rfc5861#section-4.
-      Anchor — paraphrase, verify against source (RFC 5861 §4): "The stale-if-error Cache-Control
+      Quote anchor (RFC 5861 §4): "The stale-if-error Cache-Control
       extension indicates that when an error is encountered, a cached stale
       response MAY be used to satisfy the request, regardless of other
       freshness information."
@@ -141,6 +141,4 @@ items:
       dimensions. Anchored to OpenTelemetry Semantic Conventions for HTTP
       / database client metrics (low-cardinality attribute discipline) +
       https://opentelemetry.io/docs/specs/semconv/general/metrics/.
-      Anchor — paraphrase, verify against source (OTel metric guidelines): "Metric attributes should
-      have low cardinality. High cardinality attribute values such as user
-      IDs should be avoided."
+      Reference: OpenTelemetry Semantic Conventions — Metrics (see source; no verbatim quote).

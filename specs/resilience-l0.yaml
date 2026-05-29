@@ -48,7 +48,7 @@ items:
       TIME_BASED sliding window; assert state via registry events.
       Anchored to Resilience4j CircuitBreaker reference
       (https://resilience4j.readme.io/docs/circuitbreaker).
-      Anchor — paraphrase, verify against source (Resilience4j CircuitBreaker docs): "The CircuitBreaker
+      Quote anchor (Resilience4j CircuitBreaker docs): "The CircuitBreaker
       uses a sliding window to store and aggregate the outcome of calls.
       The state of the CircuitBreaker changes from CLOSED to OPEN when the
       failure rate is equal or greater than a configurable threshold."
@@ -63,8 +63,9 @@ items:
       Full jitter prevents synchronized retry storms (thundering herd).
       Anchored to AWS Architecture Blog, Exponential Backoff And Jitter
       (https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/).
-      Anchor — paraphrase, verify against source (AWS Exponential Backoff And Jitter): "Full Jitter ...
-      sleep = random_between(0, min(cap, base * 2 ** attempt))".
+      Reference: AWS Architecture Blog, Exponential Backoff And Jitter,
+      "Full Jitter" algorithm (see source; formula given only as a figure,
+      no verbatim quote).
       Korean enterprise variant: same backoff applies to gateway retries
       regardless of jurisdiction.
 
@@ -79,8 +80,8 @@ items:
       (RestClient / WebClient / OpenFeign) MUST set connect+read timeouts.
       Anchored to Resilience4j TimeLimiter reference
       (https://resilience4j.readme.io/docs/timeout).
-      Anchor — paraphrase, verify against source (Resilience4j TimeLimiter docs): "The TimeLimiter ...
-      limits the time spent waiting for a Future to complete."
+      Reference: Resilience4j TimeLimiter docs (see source; page gives only
+      configuration + usage examples, no verbatim definitional quote).
 
   - id: "RESILIENCE-BULKHEAD-001"
     chapter: "Bulkhead 격리 (semaphore/threadpool)"
@@ -93,8 +94,8 @@ items:
       not sink the vessel. Anchored to Michael Nygard, Release It! 2nd ed.
       (Pragmatic Bookshelf, 2018), Stability Patterns — Bulkheads, and
       Resilience4j Bulkhead reference (https://resilience4j.readme.io/docs/bulkhead).
-      Anchor — paraphrase, verify against source (Release It!, Bulkheads pattern): "Partition the system
-      so that even if one part fails, the others can continue to function."
+      Reference: Michael Nygard, Release It! 2nd ed., Stability Patterns —
+      Bulkheads (print source; no fetchable verbatim quote).
 
   - id: "RESILIENCE-FALLBACK-001"
     chapter: "Fallback 계약 (cached/default/degraded)"
@@ -106,9 +107,10 @@ items:
       Fallback is the graceful-degradation half of the circuit breaker.
       Anchored to RFC 9457 (https://www.rfc-editor.org/rfc/rfc9457) +
       Resilience4j CircuitBreaker fallback semantics.
-      Anchor — paraphrase, verify against source (RFC 9457 §3): "A problem details object can have the
-      following members ... type ... title ... status ... detail ...
-      instance."
+      Quote anchor (RFC 9457 §3.1): "Problem detail objects can have the
+      following members. If a member's value type does not match the
+      specified type, the member MUST be ignored -- i.e., processing will
+      continue as if the member had not been present."
 
   - id: "RESILIENCE-RATELIMITER-001"
     chapter: "Client-side rate limiter (Retry-After / 429 준수)"
@@ -120,10 +122,11 @@ items:
       Anchored to RFC 6585 §4 (https://www.rfc-editor.org/rfc/rfc6585#section-4)
       + RFC 7231 §7.1.3 (https://www.rfc-editor.org/rfc/rfc7231#section-7.1.3)
       + Resilience4j RateLimiter (https://resilience4j.readme.io/docs/ratelimiter).
-      Anchor — paraphrase, verify against source (RFC 6585 §4): "The 429 status code indicates that the
-      user has sent too many requests in a given amount of time (rate
-      limiting). The response representations SHOULD include details
-      explaining the condition, and MAY include a Retry-After header."
+      Quote anchor (RFC 6585 §4): "The 429 status code indicates that the
+      user has sent too many requests in a given amount of time ('rate
+      limiting'). ... The response representations SHOULD include details
+      explaining the condition, and MAY include a Retry-After header
+      indicating how long to wait before making a new request."
 
   - id: "RESILIENCE-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
@@ -136,6 +139,6 @@ items:
       (breaker state, retry effort, fallback engagement). Anchored to
       Resilience4j Micrometer metrics
       (https://resilience4j.readme.io/docs/micrometer).
-      Anchor — paraphrase, verify against source (Resilience4j Micrometer docs): "Resilience4j provides
-      a Micrometer module which exposes metrics for CircuitBreaker, Retry,
-      RateLimiter, Bulkhead and TimeLimiter."
+      Quote anchor (Resilience4j Micrometer docs): "Resilience4j provides a
+      module for Micrometer which supports most popular monitoring systems
+      like InfluxDB or Prometheus."

@@ -50,9 +50,11 @@ items:
       Default-deny per purpose; only an explicit client action flips a
       grant. Anchored to GDPR Recital 32
       (https://gdpr-info.eu/recitals/no-32/).
-      Anchor — paraphrase, verify against source (GDPR Recital 32): "Consent should be given by a
-      clear affirmative act ... Silence, pre-ticked boxes or inactivity
-      should not therefore constitute consent."
+      Quote anchor (GDPR Recital 32): "Consent should be given by a clear
+      affirmative act establishing a freely given, specific, informed and
+      unambiguous indication of the data subject's agreement ... Silence,
+      pre-ticked boxes or inactivity should not therefore constitute
+      consent."
   - id: "CONSENT-WITHDRAW-001"
     chapter: "동의 철회 (withdrawal)"
     requirement: "Withdrawal MUST be as easy as granting — DELETE /api/consent/{purpose} (or POST with `granted: false`) MUST require no more steps than the original grant (no confirmation chains, no support ticket). Withdrawal takes effect immediately: subsequent purpose-gated operations (e.g., marketing send) MUST observe the revoked state on the very next request. Server returns 200 with the new consent state; withdrawing an already-absent consent is idempotent (200, no error). Prior processing based on consent before withdrawal remains lawful and is NOT retroactively invalidated."
@@ -62,9 +64,11 @@ items:
     notes: >
       Symmetry test: step-count(withdraw) <= step-count(grant). Anchored
       to GDPR Art 7(3) (https://gdpr-info.eu/art-7-gdpr/).
-      Anchor — paraphrase, verify against source (GDPR Art 7(3)): "The data subject shall have the
-      right to withdraw his or her consent at any time ... It shall be
-      as easy to withdraw as to give consent."
+      Quote anchor (GDPR Art 7(3)): "The data subject shall have the right
+      to withdraw his or her consent at any time. The withdrawal of
+      consent shall not affect the lawfulness of processing based on
+      consent before its withdrawal ... It shall be as easy to withdraw
+      as to give consent."
   - id: "CONSENT-RECORD-001"
     chapter: "동의 기록 증빙 (audit proof)"
     requirement: "Every consent state change MUST write an append-only record proving who/what/when/version: `{subject_id, purpose, granted, policy_version, captured_at (UTC), source_ip_masked, user_agent_summary, capture_method}`. Records MUST be immutable (JPA columns `updatable=false`; no public setters; withdrawal appends a new row, never updates). On demonstrate-consent challenge, GET /api/consent/{purpose}/history MUST return the full ordered trail. Absence of a record MUST be treated as no-consent."
@@ -74,7 +78,7 @@ items:
     notes: >
       Append-only ledger reuses audit-log-l0 posture. Anchored to
       GDPR Art 7(1) (https://gdpr-info.eu/art-7-gdpr/).
-      Anchor — paraphrase, verify against source (GDPR Art 7(1)): "Where processing is based on
+      Quote anchor (GDPR Art 7(1)): "Where processing is based on
       consent, the controller shall be able to demonstrate that the
       data subject has consented to processing of his or her personal
       data."
@@ -87,7 +91,7 @@ items:
     notes: >
       Per-purpose grants prevent forced bundling. Anchored to GDPR
       Recital 32 (https://gdpr-info.eu/recitals/no-32/).
-      Anchor — paraphrase, verify against source (GDPR Recital 32): "Consent should cover all
+      Quote anchor (GDPR Recital 32): "Consent should cover all
       processing activities carried out for the same purpose or
       purposes. When the processing has multiple purposes, consent
       should be given for all of them."
@@ -102,11 +106,18 @@ items:
       variant is the same gating with a different notice text (aside).
       Anchored to ePrivacy Directive 2002/58/EC Art 5(3)
       (https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32002L0058).
-      Anchor — paraphrase, verify against source (ePrivacy Directive Art 5(3)): "the storing of
-      information ... is only allowed on condition that the subscriber
-      or user concerned has given his or her consent ... This shall not
-      prevent any technical storage ... strictly necessary in order to
-      provide a service explicitly requested."
+      Quote anchor (ePrivacy Directive 2002/58/EC, original 2002 text,
+      Art 5(3)): "Member States shall ensure that the use of electronic
+      communications networks to store information or to gain access to
+      information stored in the terminal equipment of a subscriber or
+      user is only allowed on condition that the subscriber or user
+      concerned is provided with clear and comprehensive information ...
+      and is offered the right to refuse such processing by the data
+      controller. This shall not prevent any technical storage or access
+      for the sole purpose of carrying out or facilitating the
+      transmission of a communication ... or as strictly necessary in
+      order to provide an information society service explicitly
+      requested by the subscriber or user."
   - id: "CONSENT-VERSIONING-001"
     chapter: "정책 버전 변경 재동의 (re-consent)"
     requirement: "Each consent record pins the `policy_version` it was granted against. When the active privacy-policy version advances beyond a subject's recorded grant version, that grant MUST be treated as STALE — purpose-gated operations MUST behave as no-consent until re-captured. GET /api/consent/{purpose} on a stale grant returns `{granted: true, stale: true, current_policy_version}` so the client can prompt re-consent. A material policy change MUST NOT silently carry forward an old grant; re-consent is an explicit new affirmative action (reuses CONSENT-CAPTURE-001)."
@@ -117,9 +128,9 @@ items:
       Version pin + stale-on-advance forces fresh affirmative act.
       Anchored to ISO/IEC 29184:2020 (online privacy notices and
       consent, https://www.iso.org/standard/70331.html).
-      Anchor — paraphrase, verify against source (ISO/IEC 29184:2020 §5.4): "When there is a change
-      to the conditions under which consent was obtained, the PII
-      controller should obtain renewed consent from the PII principal."
+      Reference: ISO/IEC 29184:2020 — change-of-consent-conditions
+      provisions (see standard; paywalled, no verbatim quote available
+      from a public source).
   - id: "CONSENT-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
     requirement: "Consent implementations MUST expose exactly 3 canonical Micrometer metrics with bounded labels: (1) `consent_granted_total{purpose}` — counter incremented on each affirmative grant; (2) `consent_withdrawn_total{purpose}` — counter incremented on each withdrawal; (3) `consent_active_ratio{purpose}` (gauge) — active-grant fraction per purpose. The `purpose` label is the only dimension and MUST come from the closed recipe-declared `consent_purposes` set (bounded cardinality). Labels MUST exclude subject_id / source_ip / user_agent / policy_version (PII + high-cardinality). SLO/alert wiring is a fork-receiver concern."
@@ -129,7 +140,6 @@ items:
     notes: >
       Anchored to OpenTelemetry Semantic Conventions (metric
       cardinality guidance, https://opentelemetry.io/docs/specs/semconv/general/metrics/).
-      Anchor — paraphrase, verify against source (OTel metric guidelines): "Metric attributes should
-      have low cardinality ... high-cardinality attributes such as user
-      IDs should be avoided as they can lead to a combinatorial
-      explosion of time series."
+      Reference: OpenTelemetry Semantic Conventions, general metrics
+      guidelines (see source; no verbatim quote — the cited page does
+      not contain a low-cardinality / user-ID statement at this section).

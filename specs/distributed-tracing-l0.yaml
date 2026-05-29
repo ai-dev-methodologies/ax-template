@@ -46,7 +46,7 @@ items:
       Use Micrometer Tracing W3C propagator; do not hand-roll header
       parsing. Anchored to W3C Trace Context
       (https://www.w3.org/TR/trace-context/#traceparent-header).
-      Anchor — paraphrase, verify against source (W3C Trace Context §3.2): "The traceparent HTTP
+      Quote anchor (W3C Trace Context §3.2): "The traceparent HTTP
       header field identifies the incoming request in a tracing system."
 
   - id: "TRACE-SPAN-001"
@@ -58,7 +58,7 @@ items:
     notes: >
       Anchored to OpenTelemetry Trace API
       (https://opentelemetry.io/docs/specs/otel/trace/api/#set-status).
-      Anchor — paraphrase, verify against source (OTel Trace API, Status Ok): "The operation has been
+      Quote anchor (OTel Trace API, Status Ok): "The operation has been
       validated by an Application developer or Operator to have completed
       successfully." Span end: "Signals that the operation described by
       this span has now (or at the time optionally specified) ended."
@@ -72,7 +72,7 @@ items:
     notes: >
       Bridge baggage into MDC only for allowlisted keys. Anchored to
       W3C Baggage (https://www.w3.org/TR/baggage/#baggage-http-header-format).
-      Anchor — paraphrase, verify against source (W3C Baggage, Overview): "The baggage header
+      Quote anchor (W3C Baggage, Overview): "The baggage header
       represents a set of user-defined properties associated with a
       distributed request."
 
@@ -86,7 +86,7 @@ items:
       Anchored to OpenTelemetry sampling
       (https://opentelemetry.io/docs/concepts/sampling/) + SDK samplers
       (https://opentelemetry.io/docs/specs/otel/trace/sdk/#parentbased).
-      Anchor — paraphrase, verify against source (OTel Sampling): "Head sampling is a sampling
+      Quote anchor (OTel Sampling): "Head sampling is a sampling
       technique used to make a sampling decision as early as possible."
 
   - id: "TRACE-SEMCONV-001"
@@ -98,7 +98,7 @@ items:
     notes: >
       Anchored to OpenTelemetry Semantic Conventions naming
       (https://opentelemetry.io/docs/specs/semconv/general/naming/).
-      Anchor — paraphrase, verify against source (OTel SemConv naming): "Use namespacing. Delimit the
+      Quote anchor (OTel SemConv naming): "Use namespacing. Delimit the
       namespaces using a dot character. For example service.version
       denotes the service version where service is the namespace and
       version is an attribute in that namespace."
@@ -113,8 +113,9 @@ items:
       Micrometer Tracing populates traceId/spanId MDC automatically; the
       bleed risk is on pooled threads — clear in a finally block.
       Anchored to RFC 9457 (https://www.rfc-editor.org/rfc/rfc9457).
-      Anchor — paraphrase, verify against source (RFC 9457 §3.1): "instance - A URI reference that
-      identifies the specific occurrence of the problem."
+      Quote anchor (RFC 9457 §3.1.5): "The "instance" member is a JSON
+      string containing a URI reference that identifies the specific
+      occurrence of the problem."
 
   - id: "TRACE-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
@@ -126,4 +127,4 @@ items:
       Bounded label sets keep the metric backend cardinality flat.
       Anchored to OpenTelemetry Semantic Conventions naming
       (https://opentelemetry.io/docs/specs/semconv/general/naming/).
-      Anchor — paraphrase, verify against source (OTel SemConv naming): "Names SHOULD be lowercase."
+      Quote anchor (OTel SemConv naming): "Names SHOULD be lowercase."

@@ -54,9 +54,7 @@ items:
       or `@SQLDelete(sql = "UPDATE t SET deleted_at = now() WHERE id = ?")`.
       Anchored to Hibernate ORM Soft Delete reference
       (https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#soft-delete).
-      Anchor — paraphrase, verify against source (Hibernate User Guide, Soft Delete): "Soft delete is
-      the practice of marking a row as deleted (e.g. with a timestamp or
-      boolean) rather than physically deleting it from the database."
+      Reference: Hibernate ORM 6.4 User Guide §3.12 (Soft Delete; see source — no verbatim quote: §3.12 body is not machine-fetchable for verbatim capture, only the section/TOC is confirmable).
 
   - id: "SOFTDELETE-QUERY-001"
     chapter: "Default-excluding queries + explicit include flag"
@@ -70,9 +68,9 @@ items:
       the filter automatically. Anchored to Hibernate ORM @SQLRestriction
       reference
       (https://docs.jboss.org/hibernate/orm/6.4/javadocs/org/hibernate/annotations/SQLRestriction.html).
-      Anchor — paraphrase, verify against source (SQLRestriction javadoc): "Specifies a restriction
-      written in native SQL to add to the generated SQL when querying an
-      entity or collection."
+      Quote anchor (SQLRestriction javadoc): "Specifies a restriction
+      written in native SQL to add to the generated SQL for entities or
+      collections."
 
   - id: "SOFTDELETE-RESTORE-001"
     chapter: "Restore within recovery window"
@@ -84,8 +82,8 @@ items:
       The 30-day default mirrors common platform trash-retention windows.
       Error envelope anchored to RFC 9457 Problem Details for HTTP APIs
       (https://datatracker.ietf.org/doc/html/rfc9457).
-      Anchor — paraphrase, verify against source (RFC 9457 §3): "A problem details object can have the
-      following members: type, status, title, detail, instance."
+      Quote anchor (RFC 9457 §3.1): "Problem detail objects can have the
+      following members."
 
   - id: "SOFTDELETE-CASCADE-001"
     chapter: "Consistent cascade soft-delete"
@@ -98,9 +96,7 @@ items:
       @Transactional unit (not DB ON DELETE CASCADE, which is physical).
       Anchored to Hibernate ORM Soft Delete reference (cascade caveat)
       (https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#soft-delete).
-      Anchor — paraphrase, verify against source (Hibernate User Guide, Soft Delete): "Soft delete
-      applies to the specific entity it is declared on; it does not
-      automatically apply to associated entities."
+      Reference: Hibernate ORM 6.4 User Guide §3.12 (Soft Delete; §3.12.5 Collection soft delete — see source, no verbatim quote captured: §3.12 body is not machine-fetchable for verbatim confirmation).
 
   - id: "SOFTDELETE-PURGE-001"
     chapter: "Retention purge + erasure request"
@@ -114,9 +110,11 @@ items:
       (https://gdpr-info.eu/art-17-gdpr/) + ISO/IEC 27040:2024 for the
       sanitize-on-purge posture
       (https://www.iso.org/standard/80194.html).
-      Anchor — paraphrase, verify against source (GDPR Art 17(1)): "The data subject shall have the
+      Quote anchor (GDPR Art 17(1)): "The data subject shall have the
       right to obtain from the controller the erasure of personal data
-      concerning him or her without undue delay."
+      concerning him or her without undue delay and the controller shall
+      have the obligation to erase personal data without undue delay where
+      one of the following grounds applies:"
 
   - id: "SOFTDELETE-UNIQUE-001"
     chapter: "Unique constraint interplay (partial index)"
@@ -128,7 +126,7 @@ items:
       Migration: `CREATE UNIQUE INDEX ... ON t (email) WHERE deleted_at
       IS NULL`. Anchored to PostgreSQL Partial Indexes documentation
       (https://www.postgresql.org/docs/current/indexes-partial.html).
-      Anchor — paraphrase, verify against source (PostgreSQL docs §11.8): "A partial index is an index
+      Quote anchor (PostgreSQL docs §11.8): "A partial index is an index
       built over a subset of a table; the subset is defined by a
       conditional expression (called the predicate of the partial index)."
 
@@ -141,6 +139,4 @@ items:
     notes: >
       Anchored to OpenTelemetry Semantic Conventions for metrics
       (https://opentelemetry.io/docs/specs/semconv/general/metrics/).
-      Anchor — paraphrase, verify against source (OTel metric guidelines): "Metric attributes should
-      have low cardinality; high-cardinality attributes such as user IDs
-      should be avoided."
+      Quote anchor (OTel Attribute Requirement Levels, opentelemetry.io/docs/specs/semconv/general/attribute-requirement-level/): "Metric attributes that may have high cardinality can only be defined with `Opt-In` level."

@@ -54,9 +54,11 @@ items:
       beans (one per module) and aggregates into a single bundle; large
       bundles reuse report-export-l0 job machinery. Anchored to GDPR Art 15
       (https://gdpr-info.eu/art-15-gdpr/).
-      Anchor — paraphrase, verify against source (GDPR Art 15(1)): "The data subject shall have the right
+      Quote anchor (GDPR Art 15(1)): "The data subject shall have the right
       to obtain from the controller confirmation as to whether or not
-      personal data concerning him or her are being processed..."
+      personal data concerning him or her are being processed, and, where
+      that is the case, access to the personal data and the following
+      information:"
   - id: "DSR-RECTIFY-001"
     chapter: "정정 (Right to rectification)"
     requirement: "Data subject MAY PATCH /api/me/dsr/rectify with a field-level correction payload {field_path, current_value, corrected_value, justification}. Server validates the field is subject-editable (recipe declares rectifiable_fields allowlist) — non-editable / derived / system field → 422 DSR_FIELD_NOT_RECTIFIABLE. Mismatched current_value (optimistic concurrency) → 409 DSR_RECTIFY_STALE. Every accepted rectification writes a before/after audit record without undue delay."
@@ -67,7 +69,7 @@ items:
       Rectifiable-field allowlist prevents tampering with derived or
       authority-of-record fields (e.g. verified identity from R54).
       Anchored to GDPR Art 16 (https://gdpr-info.eu/art-16-gdpr/).
-      Anchor — paraphrase, verify against source (GDPR Art 16): "The data subject shall have the right to
+      Quote anchor (GDPR Art 16): "The data subject shall have the right to
       obtain from the controller without undue delay the rectification of
       inaccurate personal data concerning him or her."
   - id: "DSR-ERASURE-001"
@@ -82,7 +84,7 @@ items:
       (Art 17(3) e.g. legal-obligation, established claims) yield a
       partial-erasure manifest. Anchored to GDPR Art 17
       (https://gdpr-info.eu/art-17-gdpr/).
-      Anchor — paraphrase, verify against source (GDPR Art 17(1)): "The data subject shall have the right
+      Quote anchor (GDPR Art 17(1)): "The data subject shall have the right
       to obtain from the controller the erasure of personal data concerning
       him or her without undue delay and the controller shall have the
       obligation to erase personal data without undue delay where one of
@@ -97,10 +99,12 @@ items:
       JSON via Jackson canonical serialization; CSV via Apache Commons CSV
       (RFC 4180) one file per data category. schema_version pins the export
       contract. Anchored to GDPR Art 20 (https://gdpr-info.eu/art-20-gdpr/).
-      Anchor — paraphrase, verify against source (GDPR Art 20(1)): "The data subject shall have the right
+      Quote anchor (GDPR Art 20(1)): "The data subject shall have the right
       to receive the personal data concerning him or her, which he or she
       has provided to a controller, in a structured, commonly used and
-      machine-readable format"
+      machine-readable format and have the right to transmit those data to
+      another controller without hindrance from the controller to which the
+      personal data have been provided, where:"
   - id: "DSR-RESTRICT-001"
     chapter: "처리제한 (Right to restriction of processing)"
     requirement: "Data subject MAY POST /api/me/dsr/restrict to freeze processing WITHOUT deletion. Restricted records remain stored but server MUST block all non-storage processing (no analytics, no marketing, no model training, no non-essential reads) until restriction is lifted or a lawful exception applies. Any write/processing attempt against a restricted subject → 423 DSR_PROCESSING_RESTRICTED (Locked). Lifting restriction requires the subject's request or documented legal ground; lift writes an audit record."
@@ -111,7 +115,7 @@ items:
       Restriction is a freeze flag enforced as a fail-closed processing
       gate (default deny while restricted), distinct from erasure — data
       is retained. Anchored to GDPR Art 18 (https://gdpr-info.eu/art-18-gdpr/).
-      Anchor — paraphrase, verify against source (GDPR Art 18(1)): "The data subject shall have the right
+      Quote anchor (GDPR Art 18(1)): "The data subject shall have the right
       to obtain from the controller restriction of processing where one of
       the following applies:"
   - id: "DSR-SLA-001"
@@ -126,7 +130,7 @@ items:
       applies in KR jurisdictions (recipe-configured). Sweep reuses
       scheduled-task-l0 (R28). Anchored to GDPR Art 12(3)
       (https://gdpr-info.eu/art-12-gdpr/).
-      Anchor — paraphrase, verify against source (GDPR Art 12(3)): "That period may be extended by two
+      Quote anchor (GDPR Art 12(3)): "That period may be extended by two
       further months where necessary, taking into account the complexity
       and number of the requests."
   - id: "DSR-OBSERVABILITY-001"
@@ -137,9 +141,11 @@ items:
     applicable: true
     notes: >
       Bounded labels only (tenant + fixed type enum) — never the subject
-      identifier, which is both PII and high-cardinality. Anchored to
-      OpenTelemetry Semantic Conventions for metrics
-      (https://opentelemetry.io/docs/specs/semconv/general/metrics/).
-      Anchor — paraphrase, verify against source (OTel Metrics General): "Metric attributes SHOULD NOT
-      have high cardinality, as this can lead to performance and storage
-      issues."
+      identifier, which is both PII and high-cardinality. Anchored to the
+      OpenTelemetry metrics data model, which treats unbounded attribute
+      combinations as a cardinality cost to be controlled via spatial
+      reaggregation
+      (https://opentelemetry.io/docs/specs/otel/metrics/data-model/).
+      Reference: OTel Metrics Data Model, "Timeseries Model" / temporality
+      sections (see source; no verbatim quote — the cited general/metrics
+      page carries no cardinality clause).

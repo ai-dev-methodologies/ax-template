@@ -47,10 +47,10 @@ items:
     verification_type: "negative"
     applicable: true
     notes: >
-      Anchored to Kubernetes liveness/readiness/startup probe docs
-      (https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
-      Anchor — paraphrase, verify against source (Kubernetes probe docs): "The kubelet uses liveness
-      probes to know when to restart a container."
+      Anchored to Kubernetes "Liveness, Readiness and Startup Probes"
+      concepts docs (https://kubernetes.io/docs/concepts/workloads/pods/probes/).
+      Quote anchor (Kubernetes probes concepts, Liveness probe):
+      "Liveness probes determine when to restart a container."
 
   - id: "HEALTH-READINESS-001"
     chapter: "Readiness probe (critical dependencies)"
@@ -59,10 +59,10 @@ items:
     verification_type: "negative"
     applicable: true
     notes: >
-      Anchored to Kubernetes liveness/readiness/startup probe docs
-      (https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
-      Anchor — paraphrase, verify against source (Kubernetes probe docs): "The kubelet uses readiness
-      probes to know when a container is ready to start accepting
+      Anchored to Kubernetes "Liveness, Readiness and Startup Probes"
+      concepts docs (https://kubernetes.io/docs/concepts/workloads/pods/probes/).
+      Quote anchor (Kubernetes probes concepts, Readiness probe):
+      "Readiness probes determine when a container is ready to accept
       traffic."
 
   - id: "HEALTH-STARTUP-001"
@@ -72,12 +72,13 @@ items:
     verification_type: "negative"
     applicable: true
     notes: >
-      Anchored to Kubernetes liveness/readiness/startup probe docs
-      (https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
-      Anchor — paraphrase, verify against source (Kubernetes probe docs): "The kubelet uses startup
-      probes to know when a container application has started. If such a
-      probe is configured, liveness and readiness probes do not start
-      until it succeeds."
+      Anchored to Kubernetes "Liveness, Readiness and Startup Probes"
+      concepts docs (https://kubernetes.io/docs/concepts/workloads/pods/probes/).
+      Quote anchor (Kubernetes probes concepts, Startup probe): "Startup
+      probes verify whether the application within a container is started.
+      If a startup probe is configured, Kubernetes does not execute
+      liveness or readiness probes until the startup probe succeeds,
+      allowing the application time to finish its initialization."
 
   - id: "HEALTH-DEPENDENCY-001"
     chapter: "Downstream dependency health + degraded status"
@@ -88,9 +89,8 @@ items:
     notes: >
       Anchored to IETF draft-inadarei-api-health-check
       (https://datatracker.ietf.org/doc/html/draft-inadarei-api-health-check-06).
-      Anchor — paraphrase, verify against source (draft-inadarei §3.1): "warn: indicates the health
-      check resulted in a non-critical level of concern, but did not
-      cause a failure."
+      Quote anchor (draft-inadarei §3.1 status values): "\"warn\":
+      healthy, with some concerns."
 
   - id: "HEALTH-FORMAT-001"
     chapter: "application/health+json response format"
@@ -101,10 +101,10 @@ items:
     notes: >
       Anchored to IETF draft-inadarei-api-health-check
       (https://datatracker.ietf.org/doc/html/draft-inadarei-api-health-check-06)
-      + RFC 9110 §15 status codes.
-      Anchor — paraphrase, verify against source (draft-inadarei §3): "status: (required) indicates
-      whether the service status is acceptable or not. API publishers
-      SHOULD use following values for the field: 'pass', 'fail', 'warn'."
+      + RFC 9110 §15 Status Codes (cross-reference).
+      Quote anchor (draft-inadarei §3.1 status field): "status: (required)
+      indicates whether the service status is acceptable or not. API
+      publishers SHOULD use following values for the field:"
 
   - id: "HEALTH-GRACEFUL-001"
     chapter: "Graceful shutdown (readiness fails before drain)"
@@ -114,10 +114,11 @@ items:
     applicable: true
     notes: >
       Ordering keystone: readiness-down precedes SIGTERM drain to close
-      the endpoint-propagation race. Anchored to Kubernetes probe docs
-      (https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
-      Anchor — paraphrase, verify against source (Kubernetes probe docs): "Readiness probes runs on
-      the container during its whole lifecycle."
+      the endpoint-propagation race. Anchored to Kubernetes "Liveness,
+      Readiness and Startup Probes" concepts docs
+      (https://kubernetes.io/docs/concepts/workloads/pods/probes/).
+      Quote anchor (Kubernetes probes concepts, Readiness probe):
+      "Readiness probes run on the container during its whole lifecycle."
 
   - id: "HEALTH-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
@@ -128,6 +129,7 @@ items:
     notes: >
       Anchored to OpenTelemetry Semantic Conventions
       (https://opentelemetry.io/docs/specs/semconv/general/metrics/).
-      Anchor — paraphrase, verify against source (OTel metric guidelines): "Associating each unique
-      combination of attribute values creates a new time series, so
-      keep cardinality low to control cost."
+      Reference: OpenTelemetry Semantic Conventions, general metrics
+      guidelines (see source; no verbatim quote — the cited page conveys
+      low-cardinality attribute guidance but does not contain this exact
+      sentence).

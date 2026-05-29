@@ -47,9 +47,12 @@ items:
       Strong validator (not weak) is required because If-Match on
       mutations demands exact-match comparison. Anchored to RFC 7232
       (https://datatracker.ietf.org/doc/html/rfc7232#section-2.3).
-      Anchor — paraphrase, verify against source (RFC 7232 §2.3): "An entity-tag is an opaque
+      Quote anchor (RFC 7232 §2.3): "An entity-tag is an opaque
       validator for differentiating between multiple representations of
-      the same resource, regardless of the representation's content."
+      the same resource, regardless of whether those multiple
+      representations are due to resource state changes over time,
+      content negotiation resulting in multiple representations being
+      valid at the same time, or both."
   - id: "OPTLOCK-IFMATCH-001"
     chapter: "If-Match precondition on mutations"
     requirement: "Mutating methods (PUT / PATCH / DELETE) on a versioned resource MUST require an `If-Match: \"<etag>\"` precondition. When the header is absent, the server MUST reject with 428 Precondition Required (RFC 6585) + RFC 9457 body `type=urn:problem:precondition-required`, refusing to apply the write. `If-Match: *` MAY be accepted to mean unconditional update only when the recipe explicitly opts in via `optlock_allow_wildcard_ifmatch=true` (default false)."
@@ -59,7 +62,7 @@ items:
     notes: >
       Forcing If-Match makes blind overwrites impossible by contract.
       Anchored to RFC 7232 §3.1 + RFC 6585 §3 (428).
-      Anchor — paraphrase, verify against source (RFC 7232 §3.1): "An origin server MUST NOT perform
+      Quote anchor (RFC 7232 §3.1): "An origin server MUST NOT perform
       the requested method if a received If-Match condition evaluates to
       false; instead, the origin server MUST respond with either a) the
       412 (Precondition Failed) status code or b) one of the 2xx
@@ -76,11 +79,13 @@ items:
       JPA @Version is the canonical row-version optimistic-lock
       mechanism; a stale UPDATE bumps no rows and triggers
       OptimisticLockException. Anchored to Jakarta Persistence 3.1
-      (https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1#optimistic-locking-and-concurrency).
-      Anchor — paraphrase, verify against source (Jakarta Persistence 3.1 §3.4.2): "The version
-      attribute is updated by the persistence provider runtime when the
-      object is written to the database. ... The application must not
-      write to or update the version field."
+      (https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1#a2059).
+      Quote anchor (Jakarta Persistence 3.1 §3.4.2 Version Attributes): "An
+      entity may access the state of its version field or property or
+      export a method for use by the application to access the version,
+      but must not modify the version value. ... The version attribute is
+      updated by the persistence provider runtime when the object is
+      written to the database."
   - id: "OPTLOCK-CONFLICT-001"
     chapter: "412 vs 409 conflict mapping"
     requirement: "When the supplied If-Match ETag does not match the current resource version (client validator is stale), the server MUST respond 412 Precondition Failed + RFC 9457 body `type=urn:problem:precondition-failed` carrying the current ETag in a `current_etag` member. When the precondition passes at request entry but the underlying flush raises OptimisticLockException (a concurrent committed bump in the same window), the server MUST translate it to 409 Conflict + `type=urn:problem:optimistic-lock-conflict`. The two outcomes MUST be distinguishable by status code."
@@ -92,7 +97,7 @@ items:
       a race lost during commit. Anchored to RFC 9110 §15.5.13 (412) +
       §15.5.10 (409) + RFC 9457
       (https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.13).
-      Anchor — paraphrase, verify against source (RFC 9110 §15.5.13): "The 412 (Precondition Failed)
+      Quote anchor (RFC 9110 §15.5.13): "The 412 (Precondition Failed)
       status code indicates that one or more conditions given in the
       request header fields evaluated to false when tested on the
       server."
@@ -107,12 +112,15 @@ items:
       server stays a pure validator. Anchored to MDN HTTP Conditional
       Requests
       (https://developer.mozilla.org/en-US/docs/Web/HTTP/Conditional_requests).
-      Anchor — paraphrase, verify against source (MDN Conditional requests — Avoiding the lost update
-      problem): "The client reads the ETag of the resource it wants to
-      modify, then sends a conditional request with the If-Match header.
-      If the resource has changed in the meantime, the request fails and
-      the client must restart from the beginning by re-fetching the
-      resource."
+      Quote anchor (MDN Conditional requests — Avoiding the lost update
+      problem with optimistic locking): "This is implemented using the
+      If-Match or If-Unmodified-Since headers. If the ETag doesn't match
+      the original file, or if the file has been modified since it has
+      been obtained, the change is rejected with a 412 Precondition
+      Failed error. It is then up to the client to deal with the error:
+      either by notifying the user to start again (this time on the
+      newest version), or by showing the user a diff of both versions,
+      helping them decide which changes they wish to keep."
   - id: "OPTLOCK-LOSTUPDATE-001"
     chapter: "Lost-update prevention (concurrency)"
     requirement: "The contract MUST prevent the lost-update anomaly under concurrency: two clients each GET the resource at version v (same ETag), both PATCH with `If-Match: \"...-v\"`. Exactly ONE write MUST succeed (200/204, version → v+1); the OTHER MUST fail with 412 or 409 and MUST NOT overwrite the winner. Negative test: 2 concurrent PATCH with the identical stale ETag → assert one success + one conflict + final persisted state equals the winner's payload only."
@@ -123,7 +131,7 @@ items:
       This is the keystone invariant — without If-Match + @Version the
       second writer silently clobbers the first. Anchored to RFC 7232
       §3.1 (https://datatracker.ietf.org/doc/html/rfc7232#section-3.1).
-      Anchor — paraphrase, verify against source (RFC 7232 §3.1): "If-Match is most often used with
+      Quote anchor (RFC 7232 §3.1): "If-Match is most often used with
       state-changing methods (e.g., POST, PUT, DELETE) to prevent
       accidental overwrites when multiple user agents might be acting in
       parallel on the same resource (i.e., to prevent the 'lost update'
@@ -138,7 +146,7 @@ items:
       Bounded labels keep the time-series count finite. Anchored to
       OpenTelemetry Semantic Conventions for HTTP metrics
       (https://opentelemetry.io/docs/specs/semconv/http/http-metrics/).
-      Anchor — paraphrase, verify against source (OTel HTTP metric guidelines): "Metric attributes
-      with unbounded cardinality (such as full URL paths or user IDs)
-      MUST NOT be used, as they cause unbounded growth of the metric
-      time series."
+      Reference: OTel HTTP metrics semantic conventions (see source; no
+      verbatim quote — the cited page constrains specific attributes to
+      low cardinality per-metric rather than carrying a single blanket
+      sentence prohibiting unbounded-cardinality labels).
