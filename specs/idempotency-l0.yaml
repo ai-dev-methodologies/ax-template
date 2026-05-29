@@ -14,6 +14,36 @@ introduced_at: "R102 phase α (#2 of 2 simultaneous) — pivot to cross-cutting 
 # tx idempotency) + report-export-l0 (export job dedup) + email-outbox
 # -l0 (send dedup). Order-management-l0 (R103+ candidate) will inherit.
 
+# ── Priority order for fork-receivers (R102 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational. KEY + CACHE are the
+# keystone — without them dedup/concurrency are undefined.
+#   1. IDEMPOTENCY-KEY-001        — header parsing (foundation)
+#   2. IDEMPOTENCY-CACHE-001      — key storage + TTL
+#   3. IDEMPOTENCY-PAYLOAD-001    — fingerprint hash (dedup prerequisite)
+#   4. IDEMPOTENCY-DEDUP-001      — replay semantics
+#   5. IDEMPOTENCY-CONCURRENT-001 — atomic write-once
+#   6. IDEMPOTENCY-SCOPE-001      — method scope + opt-out
+#   7. IDEMPOTENCY-OBSERVABILITY-001 — 3 metrics
+
+# ── RECIPE.md frontmatter example (R102 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-idempotent-api
+#   idempotency_cache_backend: redis                 # OR jpa / in-memory
+#   idempotency_key_ttl_hours: 24
+#   idempotency_fingerprint_algorithm: sha-256       # R102 F8 default (FIPS 180-4)
+#   idempotency_key_format: uuid-v4                   # OR ulid / custom-string
+#   idempotency_lock_timeout_seconds: 5
+#   idempotency_excluded_paths: []                    # opt-out real-time signal endpoints
+#   ---
+# Payment/order verticals MUST set backend=jpa (durable audit); ephemeral
+# verticals MAY use redis. High-concurrency flips lock_timeout lower.
+
+# ── F8 standards pin (R102 iter1 F8 closure — P11 황태완 lens) ──
+# fingerprint algorithm default = sha-256 (FIPS 180-4) pinned; key format
+# default = uuid-v4 (RFC 4122) with ulid/custom-string opt-in. Idempotency
+# -Key header per IETF draft-ietf-httpapi-idempotency-key. 10-wave
+# standards-pin streak (R93~R102).
+
 items:
   - id: "IDEMPOTENCY-KEY-001"
     chapter: "Idempotency-Key header parsing"

@@ -14,6 +14,36 @@ introduced_at: "R102 phase α (#1 of 2 simultaneous) — pivot to cross-cutting 
 # -001 + report-export-l0 reuse cursor pattern. activity-feed-l0 inherits
 # pagination contract. List/feed L4 workloads MAY adopt directly.
 
+# ── Priority order for fork-receivers (R102 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational. Skipping CURSOR or
+# STABLE-SORT makes everything else moot (cursor relies on stable sort).
+#   1. PAGE-CURSOR-001       — opaque cursor (foundation)
+#   2. PAGE-STABLE-SORT-001  — composite tiebreaker (cursor prerequisite)
+#   3. PAGE-LIMIT-001        — page size bounds
+#   4. PAGE-LINK-001         — Link header + envelope
+#   5. PAGE-OFFSET-001       — backward-compat fallback
+#   6. PAGE-COUNT-001        — opt-in total
+#   7. PAGE-OBSERVABILITY-001 — 3 metrics
+
+# ── RECIPE.md frontmatter example (R102 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-list-api
+#   pagination_mode: cursor                          # OR offset / both
+#   pagination_default_page_size: 20
+#   pagination_max_page_size: 200
+#   pagination_cursor_ttl_hours: 24
+#   pagination_cursor_hmac_algorithm: hmac-sha256    # R102 F8 default (RFC 2104)
+#   pagination_envelope: link-header-plus-body       # OR graphql-connections
+#   pagination_total_count_mode: opt-in              # ?include_total=true
+#   ---
+# High-throughput feeds flip pagination_mode=cursor only (drop offset);
+# admin tables MAY keep both for jump-to-page UX.
+
+# ── F8 standards pin (R102 iter1 F8 closure — P11 황태완 lens) ──
+# cursor HMAC algorithm default = hmac-sha256 (RFC 2104) pinned;
+# envelope shape default = RFC 5988 Link header + JSON body (GraphQL
+# Cursor Connections opt-in). 10-wave standards-pin streak (R93~R102).
+
 items:
   - id: "PAGE-CURSOR-001"
     chapter: "Cursor encoding + opaque schema"
