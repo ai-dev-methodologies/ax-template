@@ -1,0 +1,67 @@
+# R101 — customs-e-trade-l0 spec dogfood iter2 (TRUE 0-convergence terminator)
+#
+# Wave subject: specs/customs-e-trade-l0.yaml + iter1 closures (commit c9849af)
+# + iter1 ledger (commit ffc2b7b).
+#
+# iter1 closed 3 real_bug (F2 priority + F3 RECIPE + F8 HS+EDI version pin)
+# and deferred 7 scope_deferral (F1/F4/F5/F6/F7/F9/F10). R101 P12 F10 NEW
+# finding: documentation contribution lifecycle policy candidate.
+#
+# iter2 sweep — 0 new findings. TRUE 0-convergence.
+# A2 P1 inline termination assertion + escalation clause.
+
+iteration: 2
+termination_status: TARGET_NOT_GUARANTEED
+real_bug_count: 0
+scope_deferral_count: 7
+no_new_artifacts_mid_stream: true
+escalation:
+  condition: real_bug_count >= 1
+  action: iter3 MANDATORY (not terminator)
+  reference: feedback_iter_terminator_may_reopen.md
+  rationale: |
+    R93 lesson. R101 introduces NO new artifact in iter1 (only doc-only spec
+    edits + ledger). Pre-conditions satisfied. R101 pre-wave (METHODOLOGY.md
+    update 881f2aa documentation contribution) landed BEFORE iter1 — counted
+    as pre-wave NOT mid-stream. R97~R101 all 5-wave anchor cycle follow same
+    pattern.
+
+findings: []
+
+# Per-persona iter2 verdict (all "no residual"):
+#   P3-P12 same as iter1; mobile (P3) / 시행령 detail (P6) / typed binding
+#   (P7) / SLO alert (P8) / paper→e-Customs migration (P9) / D.16B vs D.21B
+#   multi-version (P10) all deferred per R85 expiry triggers. P12 NEW
+#   finding (documentation contribution lifecycle) stands as scope_deferral
+#   — R102 evaluation agenda item.
+#
+# Wave totals: iter1 10 findings (3 real_bug closed + 7 scope_deferral) +
+# iter2 0 = 10 findings produced.
+#
+# 6 commits land R101 wave (pre-wave + 5-commit):
+#   881f2aa  R101 pre-wave (METHODOLOGY.md anchor lifecycle policy — R100 F10 close, documentation class)
+#   5749a4c  R101 phase α (customs-e-trade-l0.yaml + r101-iter1.yaml atomic)
+#   c9849af  R101 iter1 closures (F2/F3/F8 — F8 has 2 pins per R100 pattern)
+#   ffc2b7b  R101 iter1 ledger (10 findings + F10 NEW scope_deferral on documentation lifecycle)
+#   this     R101 iter2 terminator (0 findings)
+#   <next>   R101 persona-registry backfill (49th guard enforces)
+#
+# **9-wave aggregate cross-wave evidence** (R93~R101):
+#   P4 priority ordering      : real_bug × 9
+#   P5 RECIPE example         : real_bug × 9
+#   P8 SLO/alert wiring       : scope_deferral × 9 (5-wave OBS-002 carry forward)
+#   P11 standards-symmetric   : real_bug × 11 (R100+R101 each 2 pins)
+#   P12 mechanical+documentation: 4 mechanical anchors (3 classes) + 1 documentation
+#                                contribution (R101 pre-wave). 3-class mechanical
+#                                taxonomy held per METHODOLOGY.md.
+#
+# **R101 P12 NEW gap signal** (documentation contribution lifecycle):
+# METHODOLOGY.md anchor lifecycle policy itself has a lifecycle — when does
+# it refresh? When does it retire? Documentation can become stale too.
+# R102 mandatory_iter1_agenda candidate: documentation lifecycle policy
+# extension (METHODOLOGY.md / CLAUDE.md / README / DECISIONS refresh
+# cadence + ownership + retirement criteria).
+#
+# Cross-wave distribution stable: R96 (4+6) → R97~R101 (3+7) for 5
+# consecutive cycles post-F10-retirement. 9-wave cumulative: 32+3=35
+# real_bug + 56+7=63 scope_deferral catalog maturity index.
