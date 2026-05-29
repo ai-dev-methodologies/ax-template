@@ -1,5 +1,5 @@
 version: "0.1.0"
-scope: "pagination-l0 — cursor-based + offset-fallback pagination contract for fork-receivers building any list/collection API. Cross-cutting catalog pattern — jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / API platform applicable."
+scope: "pagination-l0 — offset+envelope (canonical default) + cursor (opt-in high-throughput tier) pagination contract for fork-receivers building any list/collection API. Cross-cutting catalog pattern — jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / API platform applicable."
 stack: "Spring Boot 3.2.x + JPA / R2DBC pageable + JSON cursor encoding + Micrometer metrics"
 standard: "RFC 5988 (Web Linking — Link header) + RFC 8288 (Web Linking, BCP) + RFC 9457 (Problem Details for HTTP APIs) + GraphQL Cursor Connections Specification (Relay) + OpenAPI 3.1 pagination patterns + IETF draft-ietf-httpapi-pagination (in progress)"
 domain_mode: full_trio
@@ -10,44 +10,56 @@ introduced_at: "R102 phase α (#1 of 2 simultaneous) — pivot to cross-cutting 
 # streams / message history MUST adopt items below. Generic pattern;
 # Korean cite minimized per user feedback (R102+ generic catalog principle).
 #
+# CANONICAL DEFAULT = offset + body envelope (IDW1 dogfood 2026-05-29: 3/3
+# independent personas REJECTED the cursor/HMAC contract and converged on
+# offset + {data, pagination:{page,pageSize,totalElements,totalPages,hasMore}},
+# matching the existing ecommerce reference workload. Offset+envelope is the
+# default tier; CURSOR is an OPT-IN high-throughput tier — recipes flip
+# pagination_mode=cursor only for large feeds where deep-offset scan / drift
+# is a real cost. This reconciles the spec with the reference code so a
+# fork-receiver following an existing domain literally stays on-contract.)
+#
 # Composition note: cross-references chat-messaging-l0 (R98) CHAT-HISTORY
-# -001 + report-export-l0 reuse cursor pattern. activity-feed-l0 inherits
+# -001 + report-export-l0 reuse the cursor tier. activity-feed-l0 inherits
 # pagination contract. List/feed L4 workloads MAY adopt directly.
 
-# ── Priority order for fork-receivers (R102 iter1 F2 closure — P4 박지영 lens) ──
-# Adopt in order; earlier items are foundational. Skipping CURSOR or
-# STABLE-SORT makes everything else moot (cursor relies on stable sort).
-#   1. PAGE-CURSOR-001       — opaque cursor (foundation)
-#   2. PAGE-STABLE-SORT-001  — composite tiebreaker (cursor prerequisite)
-#   3. PAGE-LIMIT-001        — page size bounds
-#   4. PAGE-LINK-001         — Link header + envelope
-#   5. PAGE-OFFSET-001       — backward-compat fallback
-#   6. PAGE-COUNT-001        — opt-in total
+# ── Priority order for fork-receivers (R102 iter1 F2 closure — P4 박지영 lens;
+#    re-ordered IDW1 2026-05-29 to canonical offset+envelope default) ──
+# Adopt in order; earlier items are foundational. STABLE-SORT underpins both
+# offset and cursor; CURSOR is the last (opt-in) tier.
+#   1. PAGE-LIMIT-001        — page size bounds (foundation)
+#   2. PAGE-STABLE-SORT-001  — composite tiebreaker (prerequisite for both modes)
+#   3. PAGE-OFFSET-001       — offset + body envelope (CANONICAL DEFAULT)
+#   4. PAGE-LINK-001         — Link header + envelope shape
+#   5. PAGE-COUNT-001        — opt-in total
+#   6. PAGE-CURSOR-001       — opaque cursor (OPT-IN high-throughput tier)
 #   7. PAGE-OBSERVABILITY-001 — 3 metrics
 
 # ── RECIPE.md frontmatter example (R102 iter1 F3 closure — P5 이상호 lens) ──
 #   ---
 #   recipe: generic-list-api
-#   pagination_mode: cursor                          # OR offset / both
+#   pagination_mode: offset                          # DEFAULT. OR cursor / both
 #   pagination_default_page_size: 20
 #   pagination_max_page_size: 200
-#   pagination_cursor_ttl_hours: 24
-#   pagination_cursor_hmac_algorithm: hmac-sha256    # R102 F8 default (RFC 2104)
-#   pagination_envelope: link-header-plus-body       # OR graphql-connections
+#   pagination_envelope: body                        # {data, pagination:{...}}. link-header / graphql-connections opt-in
 #   pagination_total_count_mode: opt-in              # ?include_total=true
+#   pagination_cursor_ttl_hours: 24                  # cursor tier only
+#   pagination_cursor_hmac_algorithm: hmac-sha256    # cursor tier only — F8 default (RFC 2104)
 #   ---
-# High-throughput feeds flip pagination_mode=cursor only (drop offset);
-# admin tables MAY keep both for jump-to-page UX.
+# Admin tables / most APIs keep the default offset+envelope for jump-to-page UX;
+# high-throughput feeds flip pagination_mode=cursor (drop offset) to avoid drift.
 
-# ── F8 standards pin (R102 iter1 F8 closure — P11 황태완 lens) ──
-# cursor HMAC algorithm default = hmac-sha256 (RFC 2104) pinned;
-# envelope shape default = RFC 5988 Link header + JSON body (GraphQL
-# Cursor Connections opt-in). 10-wave standards-pin streak (R93~R102).
+# ── F8 standards pin (R102 iter1 F8 closure — P11 황태완 lens; IDW1 reconcile) ──
+# DEFAULT envelope = JSON body {data, pagination:{page, pageSize,
+# totalElements, totalPages, hasMore}} (the 3/3-converged + ecommerce shape).
+# RFC 5988 Link header = additive (PAGE-LINK-001). CURSOR tier default HMAC =
+# hmac-sha256 (RFC 2104) pinned, applied only when pagination_mode=cursor.
+# 10-wave standards-pin streak (R93~R102).
 
 items:
   - id: "PAGE-CURSOR-001"
-    chapter: "Cursor encoding + opaque schema"
-    requirement: "Cursors MUST be opaque to clients — server encodes `{last_sort_value, last_id, page_size}` + HMAC-SHA256 signature + base64url. Cursors MUST NOT expose internal pk values directly. Server validates HMAC on receive; tampered cursor → 400 PAGE_CURSOR_INVALID. Cursor TTL recommended 24h (recipe-configurable 1h-30d)."
+    chapter: "Cursor encoding + opaque schema (OPT-IN high-throughput tier)"
+    requirement: "Cursor is the OPT-IN tier (recipe `pagination_mode=cursor`) for high-throughput / deep-offset / high-churn feeds where offset drift is unacceptable. When enabled, cursors MUST be opaque to clients — server encodes `{last_sort_value, last_id, page_size}` + HMAC-SHA256 signature + base64url. Cursors MUST NOT expose internal pk values directly. Server validates HMAC on receive; tampered cursor → 400 PAGE_CURSOR_INVALID. Cursor TTL recommended 24h (recipe-configurable 1h-30d). Recipes that do NOT enable the cursor tier are exempt from this item."
     test_method: "RestAssured integration test"
     verification_type: "negative"
     applicable: true
@@ -84,15 +96,18 @@ items:
       + RFC 8288 + GraphQL Cursor Connections.
 
   - id: "PAGE-OFFSET-001"
-    chapter: "Offset fallback + drift warning"
-    requirement: "Offset mode supported as legacy / backward-compat — recipe MUST declare `pagination_mode` ∈ {cursor, offset, both}. Default 'cursor'. Offset mode MUST emit `X-Pagination-Drift-Warning` header when client requests offset > 10000 (linear scan risk). Server may impose offset hard ceiling at 100000."
+    chapter: "Offset + body envelope (CANONICAL DEFAULT)"
+    requirement: "Offset is the CANONICAL DEFAULT mode — recipe declares `pagination_mode` ∈ {offset, cursor, both}, default 'offset'. Offset mode MUST return the body envelope `{data: [...], pagination: {page, pageSize, totalElements, totalPages, hasMore}}` (the IDW1 3/3-converged + ecommerce-reference shape) over a stable sort (PAGE-STABLE-SORT-001) with page size clamped per PAGE-LIMIT-001. Offset mode MUST emit `X-Pagination-Drift-Warning` header when client requests offset > 10000 (linear scan + concurrent-insert drift risk); server MAY impose an offset hard ceiling at 100000. For deep-offset / high-churn feeds where drift is unacceptable, recipes flip to the cursor tier (PAGE-CURSOR-001)."
     test_method: "RestAssured integration test"
     verification_type: "positive"
     applicable: true
     notes: >
-      Cursor mode prevents drift from concurrent inserts; offset mode
-      may skip/duplicate items. P10 backward-compat lens addressed via
-      both-mode support.
+      Default tier. Offset may skip/duplicate items under concurrent inserts
+      at deep offsets — the drift warning bounds the risk; switch to the
+      cursor tier when that is unacceptable. P10 backward-compat lens
+      addressed via both-mode support. The envelope shape here is the
+      canonical pagination response across the catalog (matches ecommerce
+      ProductController + IDW1 issue-tracker).
 
   - id: "PAGE-STABLE-SORT-001"
     chapter: "Stable sort enforcement"
