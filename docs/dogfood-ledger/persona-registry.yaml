@@ -358,6 +358,13 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "7 generic specs (api-versioning/job-queue/bulk-operation/content-negotiation/request-validation/cors/webhook-signing) lack client-side adoption guidance (version pin / Accept builder / job-status poll / sign helper). Expiry trigger: 첫 mobile/SPA fork-receiver의 versioned+negotiated API 통합 — per-spec CLIENT-BINDING note."
+      - wave: R115
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "6 specs (transactional-outbox/config-validation/secrets-management/saga-orchestration/observability-convention/multipart-upload) lack client-side adoption guidance where applicable (resumable-upload client / client-observability RUM link). Expiry trigger: 첫 mobile/SPA fork-receiver의 resumable upload OR client-observability 통합 — UPLOAD-CLIENT / RUM-LINK binding note."
     verdict: active
     verdict_reason: "**9-wave 일관 mobile lens** — R93~R101 모두 모바일 surface 부재 deferral. 9-wave stable signature."
     next_review_at: "R102 wave OR first mobile fork-receiver (9 domains 어느 영역이든)"
@@ -517,6 +524,13 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "7-spec batch bare draft lacked priority ordering — 12th wave (R93~R114). Closure: priority-order block in each of 7 specs, co-located phase α 8836b59."
+      - wave: R115
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: high
+        unique_to_persona: true
+        notes: "6-spec batch bare draft lacked priority ordering — 13th wave (R93~R115). Closure: priority-order block in each of 6 specs, co-located phase α 684ffd3."
     verdict: active
     verdict_reason: "**10 real_bug closed across 9 waves**. 'priority 부재' 패턴 9-wave 연속 (5th cycle of retire confirmation)."
     next_review_at: "유지 (9-wave validated)"
@@ -676,6 +690,13 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "7-spec batch shipped no RECIPE.md frontmatter in bare draft — 12th wave. Closure: 7 generic-* frontmatter examples co-located phase α 8836b59 (webhook-signing RECIPE normalized at phase α)."
+      - wave: R115
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: high
+        unique_to_persona: true
+        notes: "6-spec batch shipped no RECIPE.md frontmatter in bare draft — 13th wave. Closure: 6 generic-* frontmatter examples co-located phase α 684ffd3."
     verdict: active
     verdict_reason: "**10 real_bug closed across 9 waves**. sequential lens 9-wave 일관 (5th cycle of retire confirmation)."
     next_review_at: "유지 (9-wave validated)"
@@ -828,6 +849,13 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "**course-correction confirm (4th generic wave)** — 7 specs cite ZERO Korean law; P6 한국 규제 lens 무발화. i18n composition note only (content-negotiation Accept-Language → i18n-policy-l0). Expiry trigger: re-opens only if a fork-receiver adds jurisdiction-specific versioning/validation/CORS rules (none expected — universal web standards)."
+      - wave: R115
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "**course-correction confirm (5th generic wave)** — 6 specs cite ZERO Korean law; P6 한국 규제 lens 무발화. secrets-management audit + saga state persistence may intersect data-residency in regulated forks but that is fork-receiver-owned. Expiry trigger: re-opens only if a fork-receiver adds jurisdiction-specific secret-residency / saga-audit-retention rules (none expected)."
     verdict: active
     verdict_reason: "**9-wave 한국 규제 lens 일관성** — R93~R101 모두 한국 규제 매핑 deferral. R99/R100/R101 본인 직접 domain (행정업무 + 공정거래법 + 관세법). 9-wave stable signature."
     next_review_at: "R102 wave OR first 관세청 사후 검증 / 환적 vertical / 9 domain 어느 trigger든"
@@ -994,6 +1022,13 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "7 specs define wire contracts but no typed-SDK binding (versioned client / job poller / bulk result<T> / verify wrapper). Expiry trigger: 첫 frontend typed-client codegen against any R114 spec — per-spec BINDING note."
+      - wave: R115
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "6 specs define wire/runtime contracts but no typed-SDK binding (resumable-upload client / saga client / config schema codegen / outbox-consumer envelope). Expiry trigger: 첫 frontend/SDK typed-client codegen against any R115 spec — per-spec BINDING note."
     verdict: active
     verdict_reason: "**11 deferrals across 9 waves** (R93~R101). typed-contract lens 9-wave 일관."
     next_review_at: "유지 (9-wave stable signature)"
@@ -1146,6 +1181,13 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "21 OBSERVABILITY metrics (3×7) but no SLO/alert convention — 12th wave (R93~R114). OBSERVABILITY-002 unified-item 12-wave saturation candidate. Expiry trigger: 첫 production deployment OR OBSERVABILITY-002 standard batch in R115."
+      - wave: R115
+        iter: 1
+        finding_id: F6
+        classification: real_bug
+        signal_strength: high
+        unique_to_persona: true
+        notes: "**OBSERVABILITY-002 DELIVERED** — observability-convention-l0 closes the 12-wave (R93~R114) SLO/alert ask (cross-spec SLO + error-budget + alert-routing + cardinality-budget + RED/USE + trace-metric-link + dashboard-as-code). P8 scope_deferral streak (×12) ENDS; now real_bug. Residual per-fork-receiver threshold VALUES = fork-receiver-owned. Closure: observability-convention-l0 phase α 684ffd3."
     verdict: active
     verdict_reason: "**9-wave stabilized pattern confirmed** — 9 deferrals (R93~R101) 모두 동일 shape. OBSERVABILITY-002 표준 item evidence-overwhelming continued — R102 mandatory_iter1_agenda 후보 #2 carry forward (5-wave 누적 deferral)."
     next_review_at: "유지 (9-wave validated); R102 catalog work: OBSERVABILITY-002 9-spec batch"
@@ -1305,6 +1347,13 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "no migration/rollout playbook for retrofitting any R114 concern (unversioned→versioned / lenient→strict validation / unsigned→signed webhook / open→allowlisted CORS). Expiry trigger: 첫 fork-receiver의 existing-API retrofit — per-spec MIGRATION.md."
+      - wave: R115
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "no migration/rollout playbook for retrofitting any R115 concern (dual-write→outbox / lenient→failfast config / inline→managed secret / ad-hoc→saga). Expiry trigger: 첫 fork-receiver의 existing-system retrofit — per-spec MIGRATION.md."
     verdict: active
     verdict_reason: "**9-wave migration-playbook lens** — R93~R101 모두 'migration playbook 부재' high-signal deferral. 9-wave stable. P10과 lens 비중첩 cross-wave maintained."
     next_review_at: "유지; lens differentiation with P10 9-wave 연속 holds"
@@ -1471,6 +1520,13 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "no version-skew contract for the transition window (deprecated-version clients during sunset / unsigned during signing rollout / pre-allowlist browser clients / all-or-nothing during partial-success rollout). Expiry trigger: 첫 fork-receiver의 mixed-client-version production rollout — per-spec VERSION-SKEW."
+      - wave: R115
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "no version-skew contract for the transition window (outbox relay alongside legacy direct-publish / config rejecting older-deploy-accepted configs / secret rotation overlap / saga orchestrator version skew mid-flight). Expiry trigger: 첫 fork-receiver의 mixed-version production rollout — per-spec VERSION-SKEW."
     verdict: active
     verdict_reason: "**9-wave backward-compat lens** — 1 real_bug + 10 deferral (R93~R101 deployed-state vigilance). 9-wave consistency."
     next_review_at: "유지"
@@ -1637,6 +1693,13 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "7 bare-draft specs cited standards but left defaults unpinned — 12th wave. Closure: F8 standards-pin block in each of 7 specs co-located phase α 8836b59 (webhook-signing pin = HMAC-SHA256 over timestamp+body, 300s window, Webhook-Signature t=,v1= header)."
+      - wave: R115
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "6 bare-draft specs cited standards but left defaults unpinned — 13th wave. Closure: F8 standards-pin block in each of 6 specs co-located phase α 684ffd3 (outbox pin = same-tx write + at-least-once + exponential backoff + jitter)."
     verdict: active
     verdict_reason: "**9-wave most productive persona** — R93 F9/F11 (2) + R94~R101 F8 (R100+R101 each 2 pins) = **11 real_bug closed across 9 waves**. 'standards spec cite했으나 symmetric pin 누락' 패턴 9-wave 일관 — dual-pin pattern emerging (R100/R101 standards lens 2 pins consecutive)."
     next_review_at: "유지 (9-wave validated high-signal anchor); R102+ 동일 lens 작동 예상"
@@ -1810,6 +1873,13 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "**R114 co-located-closure wave-shape variation** — F2/F3/F8 closures baked into phase α 8836b59 (not a separate closures commit). NOT a new mechanical anchor class (4-criterion rule: no run-all-guards entry, no fork-receiver opt-in surface, no static data artifact; closure_commit_sha == phase-α sha). Expiry trigger: R115 wave 시작 시 co-located-closure shape 명문화 OR 첫 fork-receiver 혼란 시."
+      - wave: R115
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "**concurrent-Workflow-write methodology hazard** — 2 of 6 R115 draft agents (config-validation, multipart-upload) wrote spec files to the working tree despite a return-only instruction; the concurrently-running R114 verify-completion caught them as a spurious wave_kickoff violation. Lesson: spec-drafting Workflows MUST run sequentially with verify-completion (subagents CAN mutate the working tree; memory feedback_verify_scans_working_tree). PROCESS fix, NOT a new mechanical class (4-criterion rule). Expiry trigger: R116 wave 시작 시 sequence-Workflow-before-verify 명문화 OR 첫 재발 시 guard화."
     verdict: active
     verdict_reason: "**9-wave governance lens — 5-cycle close-and-discover with class diversification**. R97 F10 historical → hard_guard. R97 NEW → R98 hard_guard. R98 NEW → R99 catalog_helper. R99 NEW → R100 data_artifact. R100 NEW → R101 documentation contribution (NOT new mechanical class). R101 NEW → R102 evaluation. Total: 4 historical real_bug + 5 NEW scope_deferral + 3 methodology_gap = 12 findings across 9 waves. **Pattern adaptation continues with mechanical class restraint** — METHODOLOGY.md policy enforces 4-criterion rule preventing reflexive class proliferation."
     next_review_at: "R102 wave 시작 시 documentation contribution lifecycle policy 도입 결정 (R101 F10 NEW finding의 active 이관). R101 mechanical class restraint 영구 종료 (METHODOLOGY.md policy text); R102는 documentation refresh cadence."
@@ -2497,3 +2567,41 @@ review_summary:
         - "co-located-closure wave-shape variation — document under METHODOLOGY.md Wave Shape Taxonomy (R114 P12 F10 close; documentation contribution, not new mechanical class)."
         - "Next generic domain — continue cross-cutting (transactional-outbox / secrets-management / config-validation / feature-flag-evaluation / rate-limit-headers) per generic-catalog course (memory feedback_prefer_generic_catalog)."
         - "Active scope_deferral census — multi-wave accumulation; verify expiry triggers still mechanically detectable (dogfood_finding_expiry_trigger_guard GREEN)."
+
+  R115:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 4
+    scope_deferrals: 6
+    methodology_gaps: 0
+    wave_shape: multi-spec-batch-colocated-closure
+    closure_commits:
+      - "684ffd3 (R115 phase α — 6-spec batch, F2/F3/F8 + F6 OBSERVABILITY-002 closures co-located)"
+      - "ddf5e2c (R115 iter1+iter2 ledger)"
+    most_productive_persona: "P8 강하늘 — OBSERVABILITY-002 DELIVERED (observability-convention-l0); 12-wave scope_deferral streak ended."
+    panel_judgment: all_active_no_retirement
+    milestone: "OBSERVABILITY-002 unified item DELIVERED as observability-convention-l0 — the R93~R114 P8 SLO/alert ask (12-wave scope_deferral streak) is closed at the convention layer. Per-fork-receiver SLO threshold VALUES remain fork-receiver-owned."
+    drafting_method: "Workflow we3mmz696 (12 agents, 1.03M tokens, 156 tool uses, 444s) — draft + adversarial-no-overlap + WebFetch-anchor in one pipeline. 4 pass + 2 revise (resolved in corrected_yaml): saga-orchestration distinct from job-queue (ordered multi-step + compensation), multipart-upload EXTENDS file-storage (resumable upload protocol). NO exclusion needed."
+    incident:
+      concurrent_workflow_write: "2 of 6 draft agents (config-validation, multipart-upload) wrote spec files to the working tree despite a return-only instruction. The concurrently-running R114 verify-completion's wave_kickoff_ledger guard caught them (R115 marker, no r115-iter1.yaml) → spurious non-advisory FAIL. R114 commits themselves were clean (R114-only live guards 49/49). Resolved by landing R115 properly (overwrote leaked files with verified corrected_yaml). LESSON: spec-drafting Workflows MUST NOT run concurrently with verify-completion."
+    cross_wave_observations:
+      generic_catalog: "all 6 R115 specs ZERO Korean law — 5th consecutive generic wave (R102/R103-batch/R114/R115). P6 한국 규제 lens 무발화."
+      stabilized_signatures: "P4/P5 priority+RECIPE → real_bug × 13; P8 SLO scope_deferral × 12 → DELIVERED real_bug @ R115 (streak ended); P11 standards-pin → real_bug × 15; P12 3-class taxonomy held (co-located-closure + concurrent-write-hazard = variations/process, not new classes)."
+      wave_shape_note: "R115 = multi-spec batch (6 specs) co-located-closure (same as R114). observability-convention-l0 is a meta-spec: its 7 items ARE the observability convention (no separate per-spec OBSERVABILITY item)."
+    addressed_R115_agenda:
+      - "agenda#1 OBSERVABILITY-002 unified item — DELIVERED as observability-convention-l0 (closes 12-wave P8 saturation)."
+      - "agenda#3 next generic domain — DONE: transactional-outbox + config-validation + secrets-management + saga-orchestration + multipart-upload."
+    deferred_R115_agenda:
+      - "agenda#2 co-located-closure wave-shape — document under METHODOLOGY.md Wave Shape Taxonomy (R114 P12 + R115 reaffirm; carry to R116)."
+      - "NEW: concurrent-Workflow-write hazard (R115 P12 F10) — sequence spec-drafting Workflow before verify-completion; document in METHODOLOGY.md OR guard if recurs."
+    next_panel_composition_for_R116:
+      keep: ["P3","P4","P5","P6","P7","P8","P9","P10","P11","P12"]
+      under_review: []
+      add: []
+      retire: []
+      mandatory_R116_iter1_agenda:
+        - "Wave Shape Taxonomy update — document co-located-closure variation (R114/R115) under METHODOLOGY.md (P12 carry-forward, documentation contribution)."
+        - "Concurrent-Workflow-write hazard — METHODOLOGY.md note: spec-drafting Workflows run sequentially with verify-completion (subagents mutate working tree). Consider a verify pre-flight guard for untracked phase-marked specs lacking a ledger."
+        - "Next generic domain — continue cross-cutting (feature-flag-evaluation / rate-limit-headers / circuit-breaker-tuning / data-archival / batch-scheduling) per generic-catalog course (memory feedback_prefer_generic_catalog), screening for overlap with resilience-l0 / ratelimit-l0 / scheduled-task-l0."
+        - "P8 post-delivery role — now OBSERVABILITY-002 delivered, P8's R116+ lens shifts to applying observability-convention-l0 to new specs (does each new spec's 3-metric triad map to an SLI?)."
