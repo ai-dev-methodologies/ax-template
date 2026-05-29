@@ -1,0 +1,91 @@
+# R115 — 6 generic cross-cutting specs dogfood iter1 (10-persona, multi-spec batch)
+#
+# Wave subject (6 specs, R115 phase α 684ffd3 atomic):
+#   specs/transactional-outbox-l0.yaml + config-validation-l0 +
+#   secrets-management-l0 + saga-orchestration-l0 + observability-convention-l0 +
+#   multipart-upload-l0. 42 items total (6 × 7). Cross-cutting generic patterns,
+#   jurisdiction-agnostic (memory: feedback_prefer_generic_catalog). ZERO Korean
+#   law across all 6 specs.
+#
+# Anchored to: microservices.io Transactional Outbox + Polling Publisher +
+# Debezium (outbox) · 12-Factor Config + Jakarta Bean Validation 3.0
+# (config-validation) · OWASP Secrets Management Cheat Sheet + NIST SP 800-57
+# (secrets-management) · Saga pattern + Garcia-Molina&Salem 1987
+# (saga-orchestration) · Google SRE + OpenTelemetry semconv + RED/USE
+# (observability-convention) · tus.io 1.0.0 + RFC 9110/7233 (multipart-upload).
+# WebFetch-verified per R113 anchor-recovery rule (Workflow we3mmz696, 12
+# agents, 444s).
+#
+# Wave shape (R113 taxonomy): MULTI-SPEC BATCH (6 specs), co-located-closure
+# variation (F2/F3/F8 closure blocks baked into phase α 684ffd3 — same as R114).
+#
+# **MILESTONE — OBSERVABILITY-002 DELIVERED**: P8's 12-wave (R93~R114) SLO/alert
+# scope_deferral streak ENDS this wave. observability-convention-l0 is the
+# cross-spec SLO + error-budget + alert-routing + cardinality-budget convention
+# the panel asked for since R93. P8 F6 is now a real_bug CLOSED (convention
+# delivered); residual per-fork-receiver threshold VALUES remain fork-receiver-
+# owned (a narrower, expected deferral, not a catalog gap).
+#
+# **Process note (P12 lens)**: 2 of the 6 R115 draft agents wrote spec files to
+# the working tree during the Workflow despite a return-only instruction, which
+# a concurrently-running verify-completion caught as a spurious wave_kickoff
+# violation. Lesson: spec-drafting Workflows MUST run sequentially with
+# verify-completion (agents CAN mutate the working tree). See P12 F10 below.
+#
+# Distribution: 4 real_bug (P4 F2, P5 F3, P8 F6-DELIVERED, P11 F8) +
+#   6 scope_deferral (P3, P6, P7, P9, P10, P12).
+
+iteration: 1
+findings:
+  - persona: P3
+    finding: "F1 (LOW): the 6 specs define server-side contracts but no client-side adoption guidance — multipart-upload resumable client (chunk loop + HEAD-resume), config-validation env injection on mobile/edge, secrets-management client-side secret handling (none — secrets are server-only, good), observability client RUM correlation. A mobile-first Junior (P3 김민준, 24) needs client binding notes where applicable. Expiry trigger: 첫 mobile/SPA fork-receiver의 resumable upload OR client-observability 통합 — UPLOAD-CLIENT / RUM-LINK binding note."
+    classification: scope_deferral
+    references_artifact_path: specs/multipart-upload-l0.yaml
+  - persona: P4
+    finding: "F2 (MEDIUM): all 6 specs' 42 items lacked priority ordering in the bare draft — 13th consecutive wave (R93~R115). 6-spec batch needs a priority block per spec. Closure: priority-order block prepended to each (transactional-outbox WRITE→RELAY keystone, config-validation SCHEMA→FAILFAST keystone, secrets-management SOURCE→NO-LOG keystone, saga-orchestration STEP→COMPENSATE keystone, observability-convention SLO→ERROR-BUDGET keystone, multipart-upload INIT→CHUNK keystone) — co-located in phase α 684ffd3."
+    classification: real_bug
+    closure_commit_sha: 684ffd3
+    closure_verification_ref: "all 6 specs/*-l0.yaml carry a '── Priority order for fork-receivers' block before items: (grep -l 'Priority order' specs/{transactional-outbox,config-validation,secrets-management,saga-orchestration,observability-convention,multipart-upload}-l0.yaml = 6)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/transactional-outbox-l0.yaml
+  - persona: P5
+    finding: "F3 (MEDIUM): all 6 specs declare recipe config fields but the bare draft shipped no copy-pasteable RECIPE.md frontmatter — 13th wave (R93~R115). 6-spec batch needs 6 RECIPEs. Closure: generic-transactional-outbox + generic-config-validation + generic-secrets-management + generic-saga-orchestration + generic-observability-convention + generic-multipart-upload frontmatter examples co-located in phase α 684ffd3."
+    classification: real_bug
+    closure_commit_sha: 684ffd3
+    closure_verification_ref: "all 6 specs contain a '── RECIPE.md frontmatter example' block with a verbatim recipe: <name> stanza (grep -l 'RECIPE.md frontmatter' specs/*-l0.yaml includes all 6 R115 specs)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/saga-orchestration-l0.yaml
+  - persona: P6
+    finding: "F4 (LOW): **course-correction confirmation (5th generic wave)** — transactional-outbox / config-validation / secrets-management / saga-orchestration / observability-convention / multipart-upload cite ZERO Korean law. P6 한국 규제 lens (최영숙, 53) produces NO regulatory deferral: these are jurisdiction-agnostic distributed-systems + HTTP-protocol + ops contracts with no Korean-jurisdiction gap. Generic observation only: secrets-management SECRET-ACCESS-001 audit + saga SAGA-STATE-001 persistence may intersect data-residency requirements in regulated forks, but that is fork-receiver-owned. Expiry trigger: re-opens only if a fork-receiver adds jurisdiction-specific secret-residency / saga-audit-retention rules (none expected — universal patterns)."
+    classification: scope_deferral
+    references_artifact_path: specs/secrets-management-l0.yaml
+  - persona: P7
+    finding: "F5 (MEDIUM): the 6 specs define wire/runtime contracts but no typed-SDK binding — typed resumable-upload client (multipart-upload), typed saga-step/compensation result (saga-orchestration), typed config schema codegen (config-validation), typed outbox-consumer envelope (transactional-outbox). A typed-SDK Senior (P7 정도윤, 28) needs client binding contracts. Expiry trigger: 첫 frontend/SDK typed-client codegen against any R115 spec — per-spec BINDING note (upload client / saga client / config schema export)."
+    classification: scope_deferral
+    references_artifact_path: specs/multipart-upload-l0.yaml
+  - persona: P8
+    finding: "F6 (HIGH→DELIVERED): **the 12-wave (R93~R114) OBSERVABILITY-002 unified-item ask is DELIVERED this wave** — observability-convention-l0 provides the cross-spec SLO + error-budget (multi-window multi-burn-rate) + alert-routing (PAGE/TICKET/LOG) + cardinality-budget + RED/USE + trace-metric-link + dashboard-as-code convention that the per-spec 3-metric triads feed into. P8's standing scope_deferral streak ENDS: the catalog-level SLO/alert convention now exists. Residual: per-fork-receiver SLO threshold VALUES (e.g. p99 < 1s) remain fork-receiver-owned (a narrower expected deferral, NOT a catalog gap)."
+    classification: real_bug
+    closure_commit_sha: 684ffd3
+    closure_verification_ref: "specs/observability-convention-l0.yaml exists (7 items: OBSCONV-SLO/ERROR-BUDGET/ALERT-ROUTING/CARDINALITY/RED-USE/TRACE-METRIC-LINK/DASHBOARD-AS-CODE) landed in phase α 684ffd3, anchored Google SRE + OTel semconv + RED/USE."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/observability-convention-l0.yaml
+  - persona: P9
+    finding: "F7 (HIGH): no migration / rollout playbook for the 6 — (a) retrofitting transactional-outbox onto an existing dual-write service (backfill + cutover), (b) introducing config-validation fail-fast onto a service with lenient config (warn→fail window), (c) adding secrets-management to a service with inlined secrets (rotate-out plan), (d) wrapping existing multi-service flows in saga compensation. An architect (P9 윤재호, 44) needs rollout plans. Expiry trigger: 첫 fork-receiver의 existing-system retrofit of any R115 concern — per-spec MIGRATION.md (dual-write→outbox / lenient→failfast / inline→managed-secret / ad-hoc→saga ramp)."
+    classification: scope_deferral
+    references_artifact_path: specs/transactional-outbox-l0.yaml
+  - persona: P10
+    finding: "F9 (MEDIUM): each spec addresses steady-state but not the transition window — outbox relay running alongside legacy direct-publish during cutover, config-validation rejecting configs that an older deploy accepted, secret rotation overlap when not all consumers have the new secret, saga orchestrator version skew mid-flight. A backward-compat veteran (P10 신경수, 52) flags the mixed-version window. Expiry trigger: 첫 fork-receiver의 mixed-version production rollout of any R115 spec — per-spec VERSION-SKEW contract (graceful dual-mode during transition)."
+    classification: scope_deferral
+    references_artifact_path: specs/saga-orchestration-l0.yaml
+  - persona: P11
+    finding: "F8 (MEDIUM): the 6 bare-draft specs cited standards (microservices.io outbox/saga, 12-Factor, OWASP Secrets, NIST SP 800-57, Google SRE, OTel, tus.io) but left defaults unpinned — outbox relay mode + message-id format + delivery semantics, config fail-fast posture, secret rotation overlap, saga coordination style + compensation order, observability cardinality discipline, upload offset/checksum/TTL. **13th wave standards-pin pattern** (R93~R115). 6-spec pin needed. Closure: an '── F8 standards pin' block added to each of the 6 specs — co-located in phase α 684ffd3."
+    classification: real_bug
+    closure_commit_sha: 684ffd3
+    closure_verification_ref: "all 6 specs carry an '── F8 standards pin' block declaring the pinned default (grep -l 'F8 standards pin' specs/*-l0.yaml includes all 6 R115 specs; outbox pin = same-tx write + at-least-once + exponential backoff + jitter)."
+    closure_verification_reason: doc-only
+    references_artifact_path: specs/secrets-management-l0.yaml
+  - persona: P12
+    finding: "F10 (HIGH): **concurrent-Workflow-write methodology hazard surfaced** — 2 of the 6 R115 draft agents (config-validation, multipart-upload) WROTE spec files to the working tree despite a return-only instruction, and the concurrently-running R114 verify-completion's wave_kickoff_ledger guard caught them as a spurious violation (R115 marker, no r115-iter1.yaml yet). Lesson: subagents in a Workflow CAN mutate the working tree; a spec-drafting Workflow MUST NOT run concurrently with verify-completion (which scans the working tree, per memory feedback_verify_scans_working_tree). Per the 4-criterion rule this is a PROCESS fix, not a new mechanical anchor class. Candidate mechanical closure: a verify-completion pre-flight that aborts if untracked specs/*-l0.yaml with a phase marker lack a ledger, OR sequencing discipline. Expiry trigger: R116 wave 시작 시 sequence-Workflow-before-verify 명문화 in METHODOLOGY.md OR 첫 재발 시 guard화."
+    classification: scope_deferral
+    references_artifact_path: docs/dogfood-ledger/r115-iter1.yaml

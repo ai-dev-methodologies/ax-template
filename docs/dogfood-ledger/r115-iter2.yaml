@@ -1,0 +1,56 @@
+# R115 — 6 generic cross-cutting specs dogfood iter2 (TRUE 0-convergence terminator)
+#
+# Multi-spec batch wave (R115 phase α 684ffd3 + co-located F2/F3/F8/F6 closures +
+# iter1 ledger). Same 10-persona panel re-reviews all 6 specs. 0 new findings.
+# A2 P1 inline termination assertion + escalation clause.
+#
+# Wave shape: MULTI-SPEC BATCH (6 specs), co-located-closure variation.
+
+iteration: 2
+termination_status: TARGET_NOT_GUARANTEED
+real_bug_count: 0
+scope_deferral_count: 6
+no_new_artifacts_mid_stream: true
+escalation:
+  condition: real_bug_count >= 1
+  action: iter3 MANDATORY (not terminator)
+  reference: feedback_iter_terminator_may_reopen.md
+  rationale: |
+    R93 lesson. R115 introduces NO new artifact in iter1 (closures co-located
+    in phase α 684ffd3; observability-convention-l0 is itself a phase-α spec,
+    not a mid-stream artifact; iter1 ledger is doc-only). Pre-conditions
+    satisfied. All 6 specs reviewed; all stable at iter2 with zero residual
+    real_bug.
+findings: []
+
+# Per-persona iter2 verdict (all "no residual"):
+#   P3 김민준  client-binding (upload client / RUM-link) deferral unchanged.
+#   P4 박지영  F2 priority closure structurally identical to R93~R114. 13th wave,
+#              6-spec batch (6 priority blocks in phase α).
+#   P5 이상호  F3 RECIPE closure ships 6 verbatim frontmatter examples. 13th wave.
+#   P6 최영숙  **course-correction confirmed (5th generic wave)** — 6 specs, ZERO
+#              Korean law, NO regulatory deferral.
+#   P7 정도윤  F5 typed-SDK binding deferral unchanged (6 specs).
+#   P8 강하늘  **F6 DELIVERED** — observability-convention-l0 closes the 12-wave
+#              OBSERVABILITY-002 ask. P8 scope_deferral streak ENDED (now real_bug).
+#              Residual per-fork-receiver threshold values = fork-receiver-owned.
+#   P9 윤재호  F7 migration/rollout deferral unchanged (4 retrofit playbooks).
+#   P10 신경수 F9 version-skew (mixed-version transition) deferral unchanged.
+#   P11 황태완 Own F8 closure (6-spec standards pin) comprehensive. 13th wave.
+#   P12 한상미 F10 concurrent-Workflow-write hazard — PROCESS fix (sequence
+#              Workflow before verify), NOT a new mechanical class. R116 명문화.
+#
+# Wave totals: iter1 10 findings (4 real_bug closed at phase α + 6 scope_deferral)
+# + iter2 0 = 10 produced. Commits land R115: phase α (6 specs, closures
+# co-located) + iter1+iter2 ledger + registry backfill.
+#
+# **13-wave aggregate** (R93~R115):
+#   P4 priority × 13 real_bug · P5 RECIPE × 13 real_bug ·
+#   P8 SLO → scope_deferral × 12 then **DELIVERED real_bug @ R115** (streak ended) ·
+#   P11 standards × 15 real_bug · P12 3-class taxonomy held (co-located-closure +
+#   concurrent-write-hazard = variations/process, not new classes).
+#   Distribution: R97~R114 all 3+7; R115 = 4 real_bug + 6 scope_deferral
+#   (P8 F6 promotion to real_bug on OBSERVABILITY-002 delivery).
+#
+# **Course-correction milestone**: R102/R103.../R115 = generic-only waves with
+# ZERO Korean law. P6 한국 규제 lens 무발화 for the 5th consecutive wave.
