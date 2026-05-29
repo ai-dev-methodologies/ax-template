@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -18,8 +19,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * affected. Every emitted body is `application/problem+json` and carries a stable
  * `type` URI plus a human title and detail — never the underlying exception's stack
  * trace or class name.
+ *
+ * <p>{@code @Order(0)} (matching {@code payment.PaymentExceptionHandler}) gives this
+ * package-scoped advice strict precedence over the {@code common.GlobalProblemDetailAdvice}
+ * fallback (at {@code LOWEST_PRECEDENCE}). Without an explicit order an unannotated
+ * advice defaults to {@code LOWEST_PRECEDENCE} too, tying with the fallback and losing
+ * the tie arbitrarily by bean name — so the practices-specific title/type would be
+ * overwritten by the generic fallback's. The explicit order makes this advice win
+ * deterministically for its own package.
  */
 @RestControllerAdvice(basePackages = "com.ax.template.authblueprint.practices")
+@Order(0)
 public class PracticesProblemDetailAdvice {
 
     private static final URI BAD_ARGUMENT_TYPE = URI.create("https://errors.example.com/bad-argument");

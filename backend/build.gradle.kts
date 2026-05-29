@@ -283,6 +283,15 @@ tasks.register<Test>("testEmailOutbox") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testCommonAdvice") {
+    useJUnitPlatform {
+        includeTags("COMMON_ADVICE")
+    }
+    description = "Run shared RFC 9457 fallback advice tests (IMW1-B: common.GlobalProblemDetailAdvice — @Valid/415/405/malformed → problem+json)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")
