@@ -293,6 +293,12 @@ ax-template/
 
 새 도메인 추가 시 `METHODOLOGY.md` 5단계 + Dry-Run Checklist를 따른다.
 
+**새 backend 도메인 scaffold (단일 진입점)**: `docs/NEW-DOMAIN-CHECKLIST.md` — 필수 산출물
+(entity·repo·service·thin-controller·state-machine·domain-advice·V###.sql·ComplianceTest·**ViolationProofTest 필수**·per-domain gradle task),
+재사용할 `common/` reference 구현(OptimisticLockingSupport / GlobalProblemDetailAdvice / IdempotencyKeyStore / AuditPiiHelper),
+그리고 빌드를 막는 강제 가드(layering / entity-migration / unbounded-list / problemdetail / @Tag-uppercase / reachability)를
+한 곳에 정리. IDW1 dogfood가 "필수 산출물을 역설계해야 했다"는 갭을 닫기 위해 추가.
+
 ## Verification Scripts (선택적 — fork받은 팀이 사용 여부 결정)
 
 ```bash
