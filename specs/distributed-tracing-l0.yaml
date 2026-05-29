@@ -12,6 +12,29 @@ introduced_at: "R112 phase α — generic cross-cutting catalog (R102+ generic p
 # idempotency-l0 (Idempotency-Key excluded from span attributes) +
 # pagination-l0 (cursor never logged); audit-log-l0 reuses trace_id MDC.
 
+# ── Priority order for fork-receivers (R112 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. TRACE-CONTEXT-001
+#   2. TRACE-SPAN-001
+#   3. TRACE-BAGGAGE-001
+#   4. TRACE-SAMPLING-001
+#   5. TRACE-SEMCONV-001
+#   6. TRACE-CORRELATION-001
+#   7. TRACE-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (R112 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-distributed-tracing
+#   distributed_tracing_enabled: true
+#   trace_sampling_ratio: 0.1
+#   trace_propagation_format: w3c-trace-context
+#   trace_baggage_enabled: true
+#   trace_log_correlation: true
+#   ---
+
+# ── F8 standards pin (R112 iter1 F8 closure — P11 황태완 lens) ──
+# Default pinned: W3C traceparent propagation + head-based sampling ratio (W3C Trace Context). 11-wave standards-pin streak (R93~R112).
+
 items:
   - id: "TRACE-CONTEXT-001"
     chapter: "W3C Trace Context propagation"

@@ -13,6 +13,29 @@ introduced_at: "R109 phase α — generic cross-cutting catalog (R102+ generic p
 # (gateway call protection) + notification-l0 (sender fan-out) + email-outbox
 # -l0 (its own retry/backoff is the in-process variant of RESILIENCE-RETRY-001).
 
+# ── Priority order for fork-receivers (R109 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. RESILIENCE-CIRCUITBREAKER-001
+#   2. RESILIENCE-RETRY-001
+#   3. RESILIENCE-TIMEOUT-001
+#   4. RESILIENCE-BULKHEAD-001
+#   5. RESILIENCE-FALLBACK-001
+#   6. RESILIENCE-RATELIMITER-001
+#   7. RESILIENCE-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (R109 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-resilience
+#   resilience_enabled: true
+#   resilience_circuit_failure_rate_threshold: 50
+#   resilience_retry_max_attempts: 3
+#   resilience_timeout_ms: 3000
+#   resilience_bulkhead_max_concurrent: 25
+#   ---
+
+# ── F8 standards pin (R109 iter1 F8 closure — P11 황태완 lens) ──
+# Default pinned: circuit-breaker 50% failure-rate threshold + exp backoff + jitter (Resilience4j). 11-wave standards-pin streak (R93~R109).
+
 items:
   - id: "RESILIENCE-CIRCUITBREAKER-001"
     chapter: "Circuit breaker 상태 전이 (CLOSED/OPEN/HALF_OPEN)"

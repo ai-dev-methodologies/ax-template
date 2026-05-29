@@ -19,6 +19,29 @@ introduced_at: "R104 phase α — generic cross-cutting catalog (R102+ generic p
 # comment-thread-l0 / favorites-bookmarks-l0 already do ad-hoc soft-delete;
 # this spec is the canonical lift they MAY adopt.
 
+# ── Priority order for fork-receivers (R104 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. SOFTDELETE-MARK-001
+#   2. SOFTDELETE-QUERY-001
+#   3. SOFTDELETE-RESTORE-001
+#   4. SOFTDELETE-CASCADE-001
+#   5. SOFTDELETE-PURGE-001
+#   6. SOFTDELETE-UNIQUE-001
+#   7. SOFTDELETE-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (R104 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-soft-delete
+#   soft_delete_enabled: true
+#   soft_delete_recovery_window_days: 30
+#   soft_delete_cascade: true
+#   soft_delete_purge_after_days: 90
+#   soft_delete_unique_partial_index: true
+#   ---
+
+# ── F8 standards pin (R104 iter1 F8 closure — P11 황태완 lens) ──
+# Default pinned: tombstone deleted_at column + 30d recovery window default (GDPR Art 17 erasure on demand). 11-wave standards-pin streak (R93~R104).
+
 items:
   - id: "SOFTDELETE-MARK-001"
     chapter: "Tombstone marking (deleted_at)"

@@ -15,6 +15,30 @@ introduced_at: "R103 phase α — generic cross-cutting catalog (R102+ generic p
 # concern but distinct lifecycle) + ratelimit-l0 (cache hits relieve limiter
 # pressure). search-l0 / report-export-l0 MAY adopt result caching directly.
 
+# ── Priority order for fork-receivers (R103 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. CACHE-CONTROL-001
+#   2. CACHE-ETAG-001
+#   3. CACHE-INVALIDATION-001
+#   4. CACHE-KEY-001
+#   5. CACHE-STAMPEDE-001
+#   6. CACHE-TTL-001
+#   7. CACHE-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (R103 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-caching
+#   caching_enabled: true
+#   cache_default_max_age_seconds: 60
+#   cache_visibility: public  # OR private / no-store
+#   cache_invalidation_mode: version  # OR evict
+#   cache_stampede_strategy: lock  # OR early_recompute
+#   cache_ttl_jitter_pct: 10
+#   ---
+
+# ── F8 standards pin (R103 iter1 F8 closure — P11 황태완 lens) ──
+# Default pinned: Cache-Control max-age default + version-bump invalidation (RFC 9111 §5.2). 11-wave standards-pin streak (R93~R103).
+
 items:
   - id: "CACHE-CONTROL-001"
     chapter: "Cache-Control directives"

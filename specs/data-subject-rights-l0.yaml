@@ -19,6 +19,29 @@ introduced_at: "R111 phase α — generic cross-cutting catalog (R102+ generic p
 # - DSR-SLA-001 reuses scheduled-task-l0 (R28) for SLA-breach sweeps.
 # - All mutating endpoints inherit audit-log-l0 (R27) record semantics.
 
+# ── Priority order for fork-receivers (R111 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. DSR-ACCESS-001
+#   2. DSR-RECTIFY-001
+#   3. DSR-ERASURE-001
+#   4. DSR-PORTABILITY-001
+#   5. DSR-RESTRICT-001
+#   6. DSR-SLA-001
+#   7. DSR-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (R111 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-data-subject-rights
+#   data_subject_rights_enabled: true
+#   dsr_response_sla_days: 30
+#   dsr_response_extension_days: 60
+#   dsr_export_format: json  # OR csv
+#   dsr_erasure_mode: soft-delete-purge
+#   ---
+
+# ── F8 standards pin (R111 iter1 F8 closure — P11 황태완 lens) ──
+# Default pinned: 30-day SLA + machine-readable export (GDPR Art 12/20). 11-wave standards-pin streak (R93~R111).
+
 items:
   - id: "DSR-ACCESS-001"
     chapter: "열람 (Right of access)"

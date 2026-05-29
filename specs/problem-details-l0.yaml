@@ -12,6 +12,29 @@ introduced_at: "R105 phase α — generic cross-cutting catalog (R102+ generic p
 # its error bodies through this contract; this spec canonicalizes the shape
 # those recipes already cite in passing.
 
+# ── Priority order for fork-receivers (R105 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. PROBLEM-FORMAT-001
+#   2. PROBLEM-TYPE-001
+#   3. PROBLEM-EXTENSION-001
+#   4. PROBLEM-VALIDATION-001
+#   5. PROBLEM-TRACE-001
+#   6. PROBLEM-I18N-001
+#   7. PROBLEM-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (R105 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-problem-details
+#   problem_details_enabled: true
+#   problem_type_base_uri: "https://errors.example/"
+#   problem_i18n_enabled: true
+#   problem_validation_array: true
+#   problem_trace_correlation: true
+#   ---
+
+# ── F8 standards pin (R105 iter1 F8 closure — P11 황태완 lens) ──
+# Default pinned: application/problem+json + type URI base (RFC 9457 §3). 11-wave standards-pin streak (R93~R105).
+
 items:
   - id: "PROBLEM-FORMAT-001"
     chapter: "problem+json structure"

@@ -16,6 +16,29 @@ introduced_at: "R107 phase α — generic cross-cutting catalog (R102+ generic p
 # -l0 (per-tenant degraded surfacing deferred to fork-receiver). Probe
 # endpoints are infra plumbing — distinct from business L4 verticals.
 
+# ── Priority order for fork-receivers (R107 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. HEALTH-LIVENESS-001
+#   2. HEALTH-READINESS-001
+#   3. HEALTH-STARTUP-001
+#   4. HEALTH-DEPENDENCY-001
+#   5. HEALTH-FORMAT-001
+#   6. HEALTH-GRACEFUL-001
+#   7. HEALTH-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (R107 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-health-check
+#   health_check_enabled: true
+#   health_liveness_path: /health/live
+#   health_readiness_path: /health/ready
+#   health_startup_path: /health/startup
+#   health_dependency_timeout_ms: 2000
+#   ---
+
+# ── F8 standards pin (R107 iter1 F8 closure — P11 황태완 lens) ──
+# Default pinned: application/health+json + separate liveness/readiness paths (IETF draft-inadarei). 11-wave standards-pin streak (R93~R107).
+
 items:
   - id: "HEALTH-LIVENESS-001"
     chapter: "Liveness probe (process alive)"

@@ -16,6 +16,29 @@ introduced_at: "R110 phase α — generic cross-cutting catalog (R102+ generic p
 # gated on CONSENT-COOKIE functional grant). Identity-verification-l0
 # (backend_only) MAY inherit capture-at-onboarding flow.
 
+# ── Priority order for fork-receivers (R110 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. CONSENT-CAPTURE-001
+#   2. CONSENT-WITHDRAW-001
+#   3. CONSENT-RECORD-001
+#   4. CONSENT-PURPOSE-001
+#   5. CONSENT-COOKIE-001
+#   6. CONSENT-VERSIONING-001
+#   7. CONSENT-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (R110 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-consent-management
+#   consent_management_enabled: true
+#   consent_cookie_categories: [necessary, functional, analytics, marketing]
+#   consent_re_consent_on_version_change: true
+#   consent_withdraw_one_step: true
+#   consent_record_retention_years: 5
+#   ---
+
+# ── F8 standards pin (R110 iter1 F8 closure — P11 황태완 lens) ──
+# Default pinned: explicit opt-in + one-step withdrawal + audit record (GDPR Art 7). 11-wave standards-pin streak (R93~R110).
+
 items:
   - id: "CONSENT-CAPTURE-001"
     chapter: "명시적 동의 수집 (explicit opt-in)"

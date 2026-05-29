@@ -14,6 +14,28 @@ introduced_at: "R106 phase α — generic cross-cutting catalog (R102+ generic p
 # precondition without changing their resource model. Generic pattern;
 # zero Korean law cite (R102+ generic catalog principle).
 
+# ── Priority order for fork-receivers (R106 iter1 F2 closure — P4 박지영 lens) ──
+# Adopt in order; earlier items are foundational.
+#   1. OPTLOCK-ETAG-001
+#   2. OPTLOCK-IFMATCH-001
+#   3. OPTLOCK-VERSION-001
+#   4. OPTLOCK-CONFLICT-001
+#   5. OPTLOCK-RETRY-001
+#   6. OPTLOCK-LOSTUPDATE-001
+#   7. OPTLOCK-OBSERVABILITY-001
+
+# ── RECIPE.md frontmatter example (R106 iter1 F3 closure — P5 이상호 lens) ──
+#   ---
+#   recipe: generic-optimistic-locking
+#   optimistic_locking_enabled: true
+#   optlock_etag_mode: strong  # version-derived
+#   optlock_if_match_required: true
+#   optlock_version_column: true
+#   ---
+
+# ── F8 standards pin (R106 iter1 F8 closure — P11 황태완 lens) ──
+# Default pinned: strong ETag from @Version + If-Match required (RFC 7232 §3.1). 11-wave standards-pin streak (R93~R106).
+
 items:
   - id: "OPTLOCK-ETAG-001"
     chapter: "Strong ETag derivation"
