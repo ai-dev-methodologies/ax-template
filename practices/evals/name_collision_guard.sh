@@ -138,11 +138,18 @@ def strip_comments(text: str) -> str:
     return text
 
 # --- stereotype annotation matchers ----------------------------------------
-# Anchored at start-of-line (after optional whitespace) so @EntityListeners /
-# @EntityGraph never match the @Entity stereotype. The annotation must be the
-# whole token: followed by end-of-line OR an opening paren.
+# Anchored at start-of-line (after optional whitespace), matched as a WHOLE TOKEN
+# via a trailing word boundary (\b). The \b still excludes @EntityListeners /
+# @EntityGraph (no boundary between "Entity" and "Graph"/"Listeners") and keeps
+# @Controller distinct from @RestController (the line must START with @Controller).
+# IMW3-followup (IDW3 G4 audit): the previous anchor `@<name>\s*(\(|$)` matched only
+# own-line or `@<name>(` forms, so an INLINE pair like `@Service @Transactional`
+# (the stereotype followed by a space + another annotation on one line) ESCAPED
+# detection — the exact false-negative class fixed in entity_migration_guard.
+# Empirically reproduced: two packages each with an inline `@Service @Transactional`
+# FooService used to PASS (collision missed). The \b form now detects them.
 def stereotype_re(name: str) -> re.Pattern:
-    return re.compile(r"^[ \t]*@" + name + r"\s*(\(|$)", re.M)
+    return re.compile(r"^[ \t]*@" + name + r"\b", re.M)
 
 ENTITY_RE = stereotype_re("Entity")
 SERVICE_RE = stereotype_re("Service")

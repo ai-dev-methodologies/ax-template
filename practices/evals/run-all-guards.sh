@@ -857,6 +857,21 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     run_guard "entity_migration/fixture_fail_inline_entity" 1 \
         bash "$SCRIPT_DIR/entity_migration_guard.sh" \
             --root "$SCRIPT_DIR/fixtures/entity_migration/fail_inline_entity"
+
+    # name_collision_guard inline-stereotype detection (IMW3-followup / IDW3 G4 audit):
+    # the guard's stereotype anchor had the SAME own-line false-negative as entity_migration —
+    # an inline `@Service @Transactional` escaped detection, so a cross-package bean-name
+    # collision was missed (empirically reproduced). The \b token-boundary fix now catches it.
+    # pass/ = distinct names incl. an inline @Service → 0; fail_inline/ = two inline/own-line
+    # @Service FooService across packages → 1 (collision now detected).
+    echo ""
+    echo "[50f] name_collision_guard.sh --fixtures (inline @Service collision detection)"
+    run_guard "name_collision/fixture_pass" 0 \
+        bash "$SCRIPT_DIR/name_collision_guard.sh" \
+            --root "$SCRIPT_DIR/fixtures/name_collision/pass"
+    run_guard "name_collision/fixture_fail_inline" 1 \
+        bash "$SCRIPT_DIR/name_collision_guard.sh" \
+            --root "$SCRIPT_DIR/fixtures/name_collision/fail_inline"
 fi
 
 echo ""
