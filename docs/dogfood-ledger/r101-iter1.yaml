@@ -1,0 +1,37 @@
+# R101 — customs-e-trade-l0 spec dogfood iter1 (10-persona, 9th wave)
+#
+# Wave subject: specs/customs-e-trade-l0.yaml (R101 phase α).
+# 7 items (DECLARATION / EDI / CLASSIFICATION / CERT / AEO / AUDIT /
+# OBSERVABILITY) anchored to 관세법 §38/§51/§214/§270 + 관세청 UNI-PASS
+# API 4.0 + 관세청 e-Customs 시행규칙 + WCO Customs Data Model 3.x +
+# UN/EDIFACT D.16B + HS 2022 + ISO 6346 + 관세청 한국통일품목분류표 (HSK).
+#
+# Panel reuse: P3-P12 per persona-registry R100 next_panel_composition_for_R101.
+# 9th wave application of the 10-persona protocol.
+#
+# **3-class taxonomy preserved at R101** (anchor lifecycle policy commit
+# 881f2aa). R100 P12 F10 NEW finding closed via documentation contribution
+# instead of 4th anchor class — pattern fitness preserved.
+#
+# **R101 wave = first R101+ derived vertical** post-R93-table completion.
+# R94~R100 covered all 7 R93 candidates (A1-A7). R101 selects e-government
+# extension category (customs-e-trade = R99 e-government-approval extension).
+# Alternative categories (industry-specific medical/finance, global cross-
+# mapping) carry forward to R102+.
+#
+# **9-wave cross-wave consistency expected** (9 consecutive occurrences):
+#   P4 priority order        : R93~R101 F2 → real_bug × 9 (R101 closure expected)
+#   P5 RECIPE example        : R93~R101 F3 → real_bug × 9 (R101 closure expected)
+#   P8 SLO/alert wiring      : R93~R101 F6 → scope_deferral × 9 (5-wave OBS-002 carry forward)
+#   P11 standards-symmetric  : R93~R101 F8 → real_bug × 10+ (R101 closure expected; UN/EDIFACT
+#                              version / HS revision / EORI format 등 standards lens)
+#   P12 mechanical-anchor    : R97 hard_guard + R98 hard_guard + R99 catalog_helper + R100
+#                              data_artifact + R101 documentation_contribution. **4 mechanical
+#                              classes + 1 documentation class** — but documentation is NOT
+#                              a mechanical class (per METHODOLOGY.md policy text). 3-class
+#                              taxonomy held. R101 P12 NEW finding TBD.
+#
+# Distribution stable: 3 real_bug + 7 scope_deferral post-F10-retirement.
+
+iteration: 1
+findings: []

@@ -1,0 +1,161 @@
+version: "0.1.0"
+scope: "customs-e-trade-l0 — 관세청 UNI-PASS 연동 전자세관 (수출입 신고 / EDI 메시지 + HS Code 분류 + 관세청 인증서 + AEO 자격 / 5년 audit 보관 / 관측) contract for fork-receivers building 무역업체 또는 관세사 SaaS / 국제물류 / B2B 수출입 platform. R99 e-government extension category — R101+ derived vertical from R93 probability table 종료."
+stack: "Spring Boot 3.2.x + JPA + UNI-PASS SOAP/REST adapter (관세청 e-Customs API) + JAXB UN/EDIFACT D.16B parser + Apache Camel routing + identity-verification (R54 무역업체 본인확인) + document-signing (R97 신고 서명) + Micrometer metrics"
+standard: "관세법 §38 (수출입 신고 의무 + 5년 보관) + 관세법 §51 (HS Code 분류) + 관세법 §214 (AEO 공인 경제운영자) + 전자상거래법 §13 (신원 표시 의무) + 관세청 UNI-PASS API 사양 (4.0+) + 관세청 e-Customs 시행규칙 + WCO Customs Data Model 3.x + UN/EDIFACT D.16B (Customs Declaration syntax) + HS 2022 (관세협력이사회 협약) + ISO 6346 (Container ID 표준) + ISO 8601 (date format)"
+domain_mode: full_trio
+introduced_at: "R101 phase α — first R101+ derived vertical candidate post-R93-table-completion (R94~R100 covered all 7 R93 candidates A1-A7). Selected as e-government extension category per R100 mandatory_R101_iter1_agenda item #5. P6 최영숙 한국 규제 lens active wave (관세법 + 관세청 시행규칙 + 전자상거래법 §13) + P11 황태완 standards lens (WCO + UN/EDIFACT + HS 2022 + ISO 6346 + UNI-PASS API) + P9 윤재호 backward-compat lens (기존 종이 통관에서 e-Customs 전환) — heaviest international standards mix in catalog (8+ international standards cross-cited). R101 P12 NEW finding TBD at iter1."
+
+# customs-e-trade is OPT-IN. ax-template's reference workloads do NOT
+# require 관세청 연동 (R30 ASVS L1 baseline assumes pure domestic B2C
+# or B2B). Recipes building 무역업체 / 관세사 / 국제물류 / B2B 수출입
+# platform MUST adopt items below before deployment to production
+# (incorrect 신고 시 관세법 §270 가산세 + 형사책임). This spec defines
+# the policy contract; the future templates/L4/customs-e-trade/ vertical
+# will define canonical Spring + JAXB UN/EDIFACT + UNI-PASS wiring.
+#
+# Composition note (depends on existing catalog domains):
+# - CUSTOMS-DECLARATION-001 cross-references document-signing-l0 (R97)
+#   for XAdES 서명 + RFC 3161 TSA timestamp on 신고서 submission.
+#   관세청 신고서는 법적 효력 보장을 위해 XAdES-B-LTA + 5년 retention
+#   (R97 DOC-RETENTION-001 적용 가능).
+# - CUSTOMS-CERT-001 cross-references identity-verification-l0 (R54)
+#   for 무역업체 본인확인 + AEO 자격 검증 — 관세청 발급 식별번호 (CI/DI
+#   유사 hash 패턴; R54 ElementCollection 분리 저장).
+# - CUSTOMS-AUDIT-001 cross-references practices/korean_law_reference_
+#   index.yaml (R100 DATA artifact) — 관세법 §38 5년 보관 의무를 P6
+#   compliance audit이 단일 lookup으로 확인 가능. R100 pre-wave DATA
+#   artifact 첫 fork-receiver use case.
+
+items:
+  # ── DECLARATION family ─────────────────────────────────────────────────
+  - id: "CUSTOMS-DECLARATION-001"
+    chapter: "수출입 신고 (관세청 UNI-PASS)"
+    requirement: "수출입 화물 (외환거래 + 물품 + 운송수단) MUST 관세청 UNI-PASS 시스템 통해 전자 신고 — paper 신고는 special cases (시스템 장애 / 보안 비밀 화물)만. 신고서 type enum: {수입_정식 / 수입_간이 / 수출_정식 / 수출_간이 / 통관_보세창고_반입 / 환적_T1 / 환적_T2}. 신고서는 XAdES-B-LTA 서명 (document-signing-l0 R97 reference) + RFC 3161 TSA timestamp + 관세청 발급 식별번호. 신고 처리 결과는 24h SLA (간이) / 72h SLA (정식) — UNI-PASS callback notification으로 수신. 신고 수정 (정정) 시 audit trail 보존 (CUSTOMS-AUDIT-001) + 관세청 사후 검증 권한 (관세법 §38 5년)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: CustomsDeclarationService.submit(declarationType,
+      payload) → JAXB UN/EDIFACT marshalling + XAdES signing (R97 reference)
+      + UNI-PASS adapter HTTPS POST. Callback handler subscribes to UNI-
+      PASS notification queue. Test: declarationType missing → 422 CUSTOMS_
+      MISSING_TYPE. XAdES signature 검증 실패 → 422.
+      Anchored to 관세법 §38 (수출입 신고 의무) + 관세청 UNI-PASS API
+      사양 4.0+ + WCO Customs Data Model 3.x + UN/EDIFACT D.16B (Customs
+      Declaration syntax).
+      Quote anchor (관세법 §38①): "수출입신고를 하려는 자는 수출입신고서를
+      세관장에게 제출하여야 한다. 다만, 대통령령으로 정하는 신고를 하려는
+      자는 수입신고서의 일부 사항을 생략하거나 간이한 방법으로 신고할
+      수 있다."
+
+  # ── EDI family ──────────────────────────────────────────────────────────
+  - id: "CUSTOMS-EDI-001"
+    chapter: "UN/EDIFACT 메시지 (D.16B)"
+    requirement: "관세청 UNI-PASS와의 모든 자동 메시지 교환은 UN/EDIFACT D.16B 표준 적용 — 한국 관세청은 CUSDEC (Customs Declaration) + CUSRES (Customs Response) + CUSREP (Customs Conveyance Report) + COREOR (Container Release Order) 4종 메시지 사용. 메시지 envelope MUST 다음 segment 포함: UNB (interchange header — 발신자 EAN/EORI + 수신자 + interchange control reference) + UNH (message header — message reference number + version D.16B + 한국 NAD subset M0 / M1) + UNT (message trailer) + UNZ (interchange trailer). 메시지 ID는 12자리 영숫자 unique per sender per day. 인코딩은 UN/CEFACT BCD-7 (ASCII) — Latin-1 또는 UTF-8 사용 시 별도 syntax identifier 명시 (UNB element 1.1)."
+    test_method: "RestAssured + EDI parser integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: JAXB UN/EDIFACT D.16B mapping + EdiFactSerializer
+      (segment-level validation per UN/CEFACT TBG3 guideline) + 관세청
+      한국 subset M0/M1 validator.
+      Anchored to UN/EDIFACT D.16B (https://unece.org/trade/uncefact/
+      mainstandards) + 관세청 UNI-PASS EDI 가이드 v4.0 + WCO Customs
+      Data Model 3.x §4 (Message structure).
+      Quote anchor (UN/EDIFACT Syntax Rules ISO 9735): "An interchange
+      is a sequence of segments starting with a UNA or UNB segment and
+      ending with a UNZ segment."
+
+  # ── CLASSIFICATION family ──────────────────────────────────────────────
+  - id: "CUSTOMS-CLASSIFICATION-001"
+    chapter: "HS Code 분류 (관세협력이사회 협약)"
+    requirement: "모든 신고 품목은 HS Code (Harmonized System 6-digit) + 한국 세번 (10-digit; HS 6-digit + 한국 4-digit 확장) 분류 mandatory. HS Code source-of-truth는 HS 2022 (관세협력이사회 협약 부속서 — 5년 주기 개정; 다음 개정 HS 2027 예정). 한국 세번은 관세청 한국통일품목분류표 (HSK) 기준. Recipe declares `customs_hs_revision` (HS 2017 / HS 2022 / HS 2027 — default 'HS 2022') + `customs_hsk_active_version_year` (예: 2024년 한국통일품목분류표). 잘못된 HS Code 분류 시 관세법 §270 가산세 + 후속 사후 추징. 의심스러운 분류는 관세청 사전심사제도 (Advance Ruling) 통해 확정 가능."
+    test_method: "RestAssured + validation test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: HsCodeValidator with embedded HS 2022 reference
+      tree + 한국통일품목분류표 fallback validator + Advance Ruling
+      cache. Test: HS 8517.13 (휴대전화) → 한국 세번 8517.13.0000 valid.
+      Anchored to 관세법 §51 (관세협력이사회 협약 적용) + HS 2022
+      (https://www.wcoomd.org/en/topics/nomenclature/instrument-and-tools/hs-nomenclature-2022-edition.aspx)
+      + 관세청 한국통일품목분류표 (HSK) + 관세법 §270 (가산세).
+      Quote anchor (관세협력이사회 협약 §3): "각 체약국은 관세 목적상
+      자국의 관세통계와 관세표를 협약 부속서 표시의 통일된 명명체계와
+      일치시킨다."
+
+  # ── CERT family ────────────────────────────────────────────────────────
+  - id: "CUSTOMS-CERT-001"
+    chapter: "관세청 인증서 + EORI 식별번호"
+    requirement: "UNI-PASS 연동 무역업체는 관세청 발급 EORI (Economic Operators Registration and Identification — 한국형 EAN) 식별번호 + 관세청 인증서 (X.509 + GPKI 호환 검토 중 — 현재 별도 채널) 모두 필요. EORI 12자리 영숫자 + checksum. 인증서 경로 검증은 document-signing-l0 (R97) DOC-CERT-001 + RFC 5280 §6 알고리즘 따름. 인증서 발급은 관세청 직접 또는 한국 인증센터 (KICA) 위탁. 인증서 만료 30d 전 자동 alert (CUSTOMS-OBSERVABILITY-001 metric). 무역업체 본인확인은 R54 identity-verification + ElementCollection 분리 저장 (CI/DI 패턴 동일)."
+    test_method: "RestAssured + cert path validation test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Implementation: CustomsCertValidator + EoriChecksumValidator +
+      identity-verification (R54) cross-check. 무효 EORI → 422 CUSTOMS_
+      INVALID_EORI. Expired cert → 401.
+      Anchored to 관세청 UNI-PASS API 사양 §6 (인증서) + 관세법 §214
+      (AEO 식별) + 한국 인증센터 (KICA) 발급 절차 + R54 VerifiedIdentity
+      precedent.
+      Quote anchor (관세청 UNI-PASS API §6.2): "관세청 시스템 연동을
+      위한 인증서는 관세청에서 직접 발급하거나 한국 인증센터(KICA)에서
+      위탁 발급한다."
+
+  # ── AEO family ────────────────────────────────────────────────────────
+  - id: "CUSTOMS-AEO-001"
+    chapter: "AEO 공인 경제운영자 (Authorized Economic Operator)"
+    requirement: "AEO (Authorized Economic Operator — 관세법 §214) 자격은 무역업체 신뢰성 + 보안 인증 — 4 등급: A (성실신고 — 일반 신고 면제) / AA (성실+보안 — Tier 1 fast-track) / AAA (성실+보안+준법 — Tier 2 최우대 + 사후 audit 면제) / 없음 (default). AEO 자격은 관세청 심사 통과 후 3년 갱신 (관세법 §214 시행규칙). 자격 변동 시 (등급 상승 / 정지 / 만료) UNI-PASS notification + 시스템 routing 자동 변경. AAA 등급은 사후 audit 면제이나 무작위 검증 유지. 자격 부정 사용 시 관세법 §219 (자격 취소 + 가산세). Recipe declares `customs_aeo_status` ∈ {none, A, AA, AAA} + `customs_aeo_expiry_date` (RFC 3339)."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: AeoStatusService.refresh(eoriId) → UNI-PASS API
+      query + cache + scheduled refresh quarterly. 자격 변동 callback
+      → routing engine update. Test: AAA 등급 무역업체 신고 → fast-track
+      submission (24h SLA → 6h).
+      Anchored to 관세법 §214 (AEO 공인 경제운영자) + WCO SAFE Framework
+      2021 (AEO mutual recognition) + 관세청 시행규칙 §15 (AEO 심사).
+      Quote anchor (관세법 §214①): "관세청장은 수출입자 등 무역과
+      관련된 자가 일정한 기준을 충족하면 수출입 안전관리 공인업체로
+      공인할 수 있다."
+
+  # ── AUDIT family ────────────────────────────────────────────────────
+  - id: "CUSTOMS-AUDIT-001"
+    chapter: "신고 audit + 5년 보관 (관세법 §38)"
+    requirement: "모든 수출입 신고 + EDI 메시지 + 처리 결과 audit trail은 관세법 §38③에 따라 보존기간 5년 (영업폐쇄 / 합병 시도 사후도 유지). 보존 형식은 document-signing-l0 (R97) DOC-RETENTION-001 PAdES-B-LTA OR XAdES-A archive timestamp (5년 마다 refresh 의무 — TSA archive token 재발급). 무결성 보장: hash chain (R99 EGA-AUDIT-001 패턴 답습) — Merkle log + 직전 segment hash 포함. 결재 흐름 변경 불가 (append-only) — 정정 신고도 새 이벤트로 추가. PII 처리는 R54/R67 AuditPiiHelper recipient_hash (무역업체 CI/DI 절대 raw 저장 안 함). 관세청 사후 검증 시 audit log 검색 가능 — 신고 ID / 무역업체 ID / 기간 query 지원."
+    test_method: "RestAssured + integrity probe test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: CustomsAuditEvent entity (append-only @Column
+      updatable=false) + MerkleHasher (SHA-256 chain; R101 mandatory_
+      R102 candidate hash algorithm pin reuse R99 EGA-AUDIT-001 pattern)
+      + ArchiveTimestampRefreshJob quarterly. Test: tamper any prior
+      event → hash chain break detected.
+      Anchored to 관세법 §38③ (보존기간 5년) + 관세법 §270 (사후 검증
+      가산세) + R97 DOC-RETENTION-001 archival profile + R67 AuditPii
+      Helper precedent + practices/korean_law_reference_index.yaml
+      (R100 DATA artifact — first fork-receiver lookup use case).
+      Quote anchor (관세법 §38③): "수출입신고를 한 자는 수출입신고
+      관련 서류를 신고일부터 5년간 보존하여야 한다."
+
+  # ── OBSERVABILITY family ───────────────────────────────────────────
+  - id: "CUSTOMS-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: "Customs e-trade 구현은 정확히 3개의 canonical Micrometer metric 노출 + bounded cardinality labels: (1) `customs_declarations_submitted_total{tenant, declaration_type, aeo_status}` — 신고 제출 (counter; declaration_type 7 enum + aeo_status 4 enum); (2) `customs_uni_pass_failure_rate{tenant, error_code}` — UNI-PASS API 호출 실패 (counter; error_code ∈ {connection_timeout / 422_invalid_format / 401_auth_failed / 500_uni_pass_internal / circuit_breaker_open}); (3) `customs_cert_expiry_warning_days{tenant}` — 관세청 인증서 만료까지 (gauge). Labels 제외: declaration_id / eori_id / hs_code / cargo_value (low-cardinality only). SLO/alert wiring은 fork-receiver concern — **9th wave consecutive F6 패턴** (R93~R101)."
+    test_method: "Micrometer registry assertion test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Implementation: Micrometer MeterRegistry with @ConditionalOnClass
+      Counter.builder() invocations + MeterFilter denylist for
+      declaration_id / eori_id / hs_code labels.
+      Anchored to OpenTelemetry Semantic Conventions §metric naming +
+      9-wave canonical "3 metric" pattern (R94~R100 all settled on
+      3-metric bounded-label discipline; customs-e-trade inherits).
+      R101 mandatory_R102_iter1_agenda item #2 carry forward (OBSERVABILITY
+      -002 표준 item 9-spec batch). **5-wave carry forward 누적** (R96
+      → R97 → R98 → R99 → R100 → R101 evidence-overwhelming).
+      Quote anchor (OpenTelemetry semconv stability): "Label cardinality
+      SHOULD be bounded to prevent metric explosion."
