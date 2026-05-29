@@ -80,13 +80,15 @@ class NotificationListReadDismissTest {
             .body("content.size()", equalTo(5))
             .body("totalElements", equalTo(25));
 
-        // Size > 100 must be rejected.
+        // Size > 100 must be rejected with an RFC 9457 problem+json body.
         given()
             .header("Authorization", "Bearer " + token)
             .accept(ContentType.JSON)
             .queryParam("size", 200)
         .when().get("/api/notifications")
-        .then().statusCode(400);
+        .then().statusCode(400)
+            .contentType("application/problem+json")
+            .body("code", equalTo("NOTIF_BAD_REQUEST"));
     }
 
     @Test
@@ -185,12 +187,14 @@ class NotificationListReadDismissTest {
         .when().delete("/api/notifications/" + id)
         .then().statusCode(204);
 
-        // Subsequent GET single -> 404
+        // Subsequent GET single -> 404 with an RFC 9457 problem+json body.
         given()
             .header("Authorization", "Bearer " + token)
             .accept(ContentType.JSON)
         .when().get("/api/notifications/" + id)
-        .then().statusCode(404);
+        .then().statusCode(404)
+            .contentType("application/problem+json")
+            .body("code", equalTo("NOTIF_NOT_FOUND"));
 
         // GET list filtered to this user -> notif must NOT appear.
         given()

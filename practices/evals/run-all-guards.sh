@@ -847,6 +847,11 @@ echo "[48] spec_ref_code_guard.sh (IMW1-C — IDW1 backend specs/*.yaml referenc
 run_guard "spec_ref_code/live" 0 \
     bash "$SCRIPT_DIR/spec_ref_code_guard.sh"
 
+echo ""
+echo "[49] controller_problemdetail_guard.sh (IMW1-D — IDW2: every domain @ExceptionHandler returns RFC9457 ProblemDetail)"
+run_guard "controller_problemdetail/live" 0 \
+    bash "$SCRIPT_DIR/controller_problemdetail_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

@@ -116,9 +116,15 @@ public class FileStorageController {
 
     /** FILE-AUTHZ-002 — 404 not 403, to avoid leaking row existence. */
     @ExceptionHandler(StoredFileNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleNotFound(StoredFileNotFoundException ex) {
+    public ResponseEntity<ProblemDetail> handleNotFound(StoredFileNotFoundException ex) {
+        // IDOR-safe: never echo the requested file id (ex.getMessage() carries it) —
+        // a generic detail avoids leaking the existence of another user's row.
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "file not found");
+        pd.setTitle("Not Found");
+        pd.setProperty("code", "FILE_NOT_FOUND");
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(Map.of("error", "not_found"));
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(pd);
     }
 
     /** FILE-UPLOAD-001 — 415 Unsupported Media Type. */
@@ -150,7 +156,12 @@ public class FileStorageController {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleBadRequest(IllegalArgumentException ex) {
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    public ResponseEntity<ProblemDetail> handleBadRequest(IllegalArgumentException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("Bad Request");
+        pd.setProperty("code", "INVALID_REQUEST");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(pd);
     }
 }

@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
 
 /**
  * AUTHZ family (3 items): NOTIF-AUTHZ-001, NOTIF-AUTHZ-002, NOTIF-AUTHZ-003.
@@ -94,12 +95,16 @@ class NotificationAuthZTest {
             .updatedAt(now)
             .build());
 
-        // userB attempts to read userA's notification — must return 404.
+        // userB attempts to read userA's notification — must return a generic
+        // 404 (no row-existence leak) as RFC 9457 problem+json.
         given()
             .header("Authorization", "Bearer " + tokenB)
             .accept(ContentType.JSON)
         .when().get("/api/notifications/" + notifId)
-        .then().statusCode(404);
+        .then().statusCode(404)
+            .contentType("application/problem+json")
+            .body("code", equalTo("NOTIF_NOT_FOUND"))
+            .body("detail", equalTo("not found"));
 
         // userB attempts to mark userA's notification as read — 404.
         given()

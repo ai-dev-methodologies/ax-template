@@ -5,6 +5,8 @@ import jakarta.validation.Valid;
 
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -19,7 +21,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -114,21 +115,42 @@ public class NotificationController {
             service.updatePreferences(auth.getName(), req.inAppEnabled(), req.emailEnabled()));
     }
 
+    /**
+     * Domain-specific 400. Raised by {@link #parseStatusFilter} (unknown status
+     * token) and {@code NotificationService.list} (page size over the cap). The
+     * shared {@code common.GlobalProblemDetailAdvice} does not map
+     * {@code IllegalArgumentException}, so this controller-local handler owns it
+     * and now emits RFC 9457 {@code application/problem+json}. The stable
+     * {@code code} member ({@code NOTIF_BAD_REQUEST}) lets clients branch without
+     * parsing free-text {@code detail}; the human {@code detail} preserves the
+     * original message.
+     */
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleBadRequest(IllegalArgumentException ex) {
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    public ResponseEntity<ProblemDetail> handleBadRequest(IllegalArgumentException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setProperty("code", "NOTIF_BAD_REQUEST");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(pd);
     }
 
     /**
      * NOTIF-AUTHZ-002 — cross-user IDOR returns 404 to avoid leaking the
      * existence of another user's row. Explicit handler is used instead of
      * relying solely on {@code @ResponseStatus} so the mapping cannot be
-     * shadowed by other resolvers in the application context.
+     * shadowed by other resolvers in the application context. Emits RFC 9457
+     * {@code application/problem+json}; the {@code detail} stays generic
+     * ("not found") to preserve the IDOR-safe posture, and the stable
+     * {@code code} member ({@code NOTIF_NOT_FOUND}) carries the same machine
+     * identifier the previous {@code {"error":"not_found"}} body conveyed.
      */
     @ExceptionHandler(NotificationNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleNotFound(NotificationNotFoundException ex) {
+    public ResponseEntity<ProblemDetail> handleNotFound(NotificationNotFoundException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "not found");
+        pd.setProperty("code", "NOTIF_NOT_FOUND");
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(Map.of("error", "not_found"));
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(pd);
     }
 
     /**
