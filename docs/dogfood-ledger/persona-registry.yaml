@@ -288,6 +288,69 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "pagination-l0 + idempotency-l0 (dual generic) lack mobile-client guidance (cursor infinite-scroll + offline cursor persistence / Idempotency-Key app-restart-safe storage + retry-on-reconnect). Expiry trigger: 첫 mobile fork-receiver의 list/mutation API 통합 — PAGE-MOBILE / IDEMPOTENCY-MOBILE client binding."
+      - wave: R103
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "caching-l0 mobile-client guidance gap. Expiry trigger: 첫 mobile fork-receiver 도입 시."
+      - wave: R104
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "soft-delete-l0 mobile-client guidance gap. Expiry trigger: 첫 mobile fork-receiver 도입 시."
+      - wave: R105
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "problem-details-l0 mobile-client guidance gap. Expiry trigger: 첫 mobile fork-receiver 도입 시."
+      - wave: R106
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "optimistic-locking-l0 mobile-client guidance gap. Expiry trigger: 첫 mobile fork-receiver 도입 시."
+      - wave: R107
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "health-check-l0 mobile-client guidance gap. Expiry trigger: 첫 mobile fork-receiver 도입 시."
+      - wave: R109
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "resilience-l0 mobile-client guidance gap. Expiry trigger: 첫 mobile fork-receiver 도입 시."
+      - wave: R110
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "consent-management-l0 mobile-client guidance gap. Expiry trigger: 첫 mobile fork-receiver 도입 시."
+      - wave: R111
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "data-subject-rights-l0 mobile-client guidance gap. Expiry trigger: 첫 mobile fork-receiver 도입 시."
+      - wave: R112
+        iter: 1
+        finding_id: F1
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "distributed-tracing-l0 mobile-client guidance gap. Expiry trigger: 첫 mobile fork-receiver 도입 시."
     verdict: active
     verdict_reason: "**9-wave 일관 mobile lens** — R93~R101 모두 모바일 surface 부재 deferral. 9-wave stable signature."
     next_review_at: "R102 wave OR first mobile fork-receiver (9 domains 어느 영역이든)"
@@ -377,6 +440,69 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "both pagination-l0 + idempotency-l0 lack priority ordering — 10th consecutive wave (R93~R102), dual-spec. Closure: priority order block prepended to BOTH specs (pagination CURSOR→STABLE-SORT keystone; idempotency KEY→CACHE→PAYLOAD keystone) commit e7d0a2e."
+      - wave: R103
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "caching-l0 priority order 부재 — 11th wave (R93~R112). Closure: priority block commit cc33c0e."
+      - wave: R104
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "soft-delete-l0 priority order 부재 — 11th wave (R93~R112). Closure: priority block commit cc33c0e."
+      - wave: R105
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "problem-details-l0 priority order 부재 — 11th wave (R93~R112). Closure: priority block commit cc33c0e."
+      - wave: R106
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "optimistic-locking-l0 priority order 부재 — 11th wave (R93~R112). Closure: priority block commit cc33c0e."
+      - wave: R107
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "health-check-l0 priority order 부재 — 11th wave (R93~R112). Closure: priority block commit cc33c0e."
+      - wave: R109
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "resilience-l0 priority order 부재 — 11th wave (R93~R112). Closure: priority block commit cc33c0e."
+      - wave: R110
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "consent-management-l0 priority order 부재 — 11th wave (R93~R112). Closure: priority block commit cc33c0e."
+      - wave: R111
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "data-subject-rights-l0 priority order 부재 — 11th wave (R93~R112). Closure: priority block commit cc33c0e."
+      - wave: R112
+        iter: 1
+        finding_id: F2
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "distributed-tracing-l0 priority order 부재 — 11th wave (R93~R112). Closure: priority block commit cc33c0e."
     verdict: active
     verdict_reason: "**10 real_bug closed across 9 waves**. 'priority 부재' 패턴 9-wave 연속 (5th cycle of retire confirmation)."
     next_review_at: "유지 (9-wave validated)"
@@ -466,6 +592,69 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "both specs declare config fields but no RECIPE.md example — 10th wave (R93~R102), dual-spec → 2 RECIPEs. Closure: generic-list-api (pagination, 7 fields) + generic-idempotent-api (idempotency, 6 fields) frontmatter commit e7d0a2e."
+      - wave: R103
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "caching-l0 RECIPE.md example 부재 — 11th wave. Closure: generic frontmatter commit cc33c0e."
+      - wave: R104
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "soft-delete-l0 RECIPE.md example 부재 — 11th wave. Closure: generic frontmatter commit cc33c0e."
+      - wave: R105
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "problem-details-l0 RECIPE.md example 부재 — 11th wave. Closure: generic frontmatter commit cc33c0e."
+      - wave: R106
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "optimistic-locking-l0 RECIPE.md example 부재 — 11th wave. Closure: generic frontmatter commit cc33c0e."
+      - wave: R107
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "health-check-l0 RECIPE.md example 부재 — 11th wave. Closure: generic frontmatter commit cc33c0e."
+      - wave: R109
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "resilience-l0 RECIPE.md example 부재 — 11th wave. Closure: generic frontmatter commit cc33c0e."
+      - wave: R110
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "consent-management-l0 RECIPE.md example 부재 — 11th wave. Closure: generic frontmatter commit cc33c0e."
+      - wave: R111
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "data-subject-rights-l0 RECIPE.md example 부재 — 11th wave. Closure: generic frontmatter commit cc33c0e."
+      - wave: R112
+        iter: 1
+        finding_id: F3
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "distributed-tracing-l0 RECIPE.md example 부재 — 11th wave. Closure: generic frontmatter commit cc33c0e."
     verdict: active
     verdict_reason: "**10 real_bug closed across 9 waves**. sequential lens 9-wave 일관 (5th cycle of retire confirmation)."
     next_review_at: "유지 (9-wave validated)"
@@ -548,6 +737,69 @@ personas:
         signal_strength: low
         unique_to_persona: true
         notes: "**course-correction confirmation** — pagination-l0 + idempotency-l0 cite ZERO Korean law (first generic-only wave after R99-R101 vertical drift). P6 한국 규제 lens produces NO regulatory deferral this wave — jurisdiction-agnostic HTTP contracts have no Korean gap. i18n observation only (PAGE-LINK envelope localization → i18n-policy-l0 R93). Expiry trigger: re-opens only if a fork-receiver adds jurisdiction-specific pagination/idempotency rules (none expected). Validates user feedback feedback_prefer_generic_catalog."
+      - wave: R103
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "caching-l0 cites ZERO Korean law — generic course (memory feedback_prefer_generic_catalog). P6 한국 규제 lens NO regulatory deferral. Expiry trigger: jurisdiction-specific rule 추가 시 (none expected)."
+      - wave: R104
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "soft-delete-l0 cites ZERO Korean law — generic course (memory feedback_prefer_generic_catalog). P6 한국 규제 lens NO regulatory deferral. Expiry trigger: jurisdiction-specific rule 추가 시 (none expected)."
+      - wave: R105
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "problem-details-l0 cites ZERO Korean law — generic course (memory feedback_prefer_generic_catalog). P6 한국 규제 lens NO regulatory deferral. Expiry trigger: jurisdiction-specific rule 추가 시 (none expected)."
+      - wave: R106
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "optimistic-locking-l0 cites ZERO Korean law — generic course (memory feedback_prefer_generic_catalog). P6 한국 규제 lens NO regulatory deferral. Expiry trigger: jurisdiction-specific rule 추가 시 (none expected)."
+      - wave: R107
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "health-check-l0 cites ZERO Korean law — generic course (memory feedback_prefer_generic_catalog). P6 한국 규제 lens NO regulatory deferral. Expiry trigger: jurisdiction-specific rule 추가 시 (none expected)."
+      - wave: R109
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "resilience-l0 cites ZERO Korean law — generic course (memory feedback_prefer_generic_catalog). P6 한국 규제 lens NO regulatory deferral. Expiry trigger: jurisdiction-specific rule 추가 시 (none expected)."
+      - wave: R110
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "consent-management-l0 cites ZERO Korean law — generic course (memory feedback_prefer_generic_catalog). P6 한국 규제 lens NO regulatory deferral. Expiry trigger: jurisdiction-specific rule 추가 시 (none expected)."
+      - wave: R111
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "data-subject-rights-l0 cites ZERO Korean law — generic course (memory feedback_prefer_generic_catalog). P6 한국 규제 lens NO regulatory deferral. Expiry trigger: jurisdiction-specific rule 추가 시 (none expected)."
+      - wave: R112
+        iter: 1
+        finding_id: F4
+        classification: scope_deferral
+        signal_strength: low
+        unique_to_persona: true
+        notes: "distributed-tracing-l0 cites ZERO Korean law — generic course (memory feedback_prefer_generic_catalog). P6 한국 규제 lens NO regulatory deferral. Expiry trigger: jurisdiction-specific rule 추가 시 (none expected)."
     verdict: active
     verdict_reason: "**9-wave 한국 규제 lens 일관성** — R93~R101 모두 한국 규제 매핑 deferral. R99/R100/R101 본인 직접 domain (행정업무 + 공정거래법 + 관세법). 9-wave stable signature."
     next_review_at: "R102 wave OR first 관세청 사후 검증 / 환적 vertical / 9 domain 어느 trigger든"
@@ -644,6 +896,69 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "both specs define wire contracts but no typed-SDK binding — TypeScript cursor opaque-string brand type + Idempotency-Key typed retry-fetch wrapper. Expiry trigger: 첫 frontend typed-client codegen — PAGE-BINDING / IDEMPOTENCY-BINDING."
+      - wave: R103
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "caching-l0 typed-SDK binding gap. Expiry trigger: 첫 frontend typed-client codegen 시."
+      - wave: R104
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "soft-delete-l0 typed-SDK binding gap. Expiry trigger: 첫 frontend typed-client codegen 시."
+      - wave: R105
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "problem-details-l0 typed-SDK binding gap. Expiry trigger: 첫 frontend typed-client codegen 시."
+      - wave: R106
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "optimistic-locking-l0 typed-SDK binding gap. Expiry trigger: 첫 frontend typed-client codegen 시."
+      - wave: R107
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "health-check-l0 typed-SDK binding gap. Expiry trigger: 첫 frontend typed-client codegen 시."
+      - wave: R109
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "resilience-l0 typed-SDK binding gap. Expiry trigger: 첫 frontend typed-client codegen 시."
+      - wave: R110
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "consent-management-l0 typed-SDK binding gap. Expiry trigger: 첫 frontend typed-client codegen 시."
+      - wave: R111
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "data-subject-rights-l0 typed-SDK binding gap. Expiry trigger: 첫 frontend typed-client codegen 시."
+      - wave: R112
+        iter: 1
+        finding_id: F5
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "distributed-tracing-l0 typed-SDK binding gap. Expiry trigger: 첫 frontend typed-client codegen 시."
     verdict: active
     verdict_reason: "**11 deferrals across 9 waves** (R93~R101). typed-contract lens 9-wave 일관."
     next_review_at: "유지 (9-wave stable signature)"
@@ -726,6 +1041,69 @@ personas:
         signal_strength: medium
         unique_to_persona: false
         notes: "both observability items name 3 canonical metrics but no SLO threshold / alert convention — 10th wave (R93~R102). pagination_response_time p99 > 1s → ALERT / idempotency_lock_wait p99 > 3s → PAGE missing. Expiry trigger: 첫 production deployment OR R103 OBSERVABILITY-002 표준 item 10-spec batch (6-wave carry forward saturation candidate)."
+      - wave: R103
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "caching-l0 SLO/alert convention 부재 — 11th wave. Expiry trigger: 첫 production deployment OR R113 OBSERVABILITY-002 batch."
+      - wave: R104
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "soft-delete-l0 SLO/alert convention 부재 — 11th wave. Expiry trigger: 첫 production deployment OR R113 OBSERVABILITY-002 batch."
+      - wave: R105
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "problem-details-l0 SLO/alert convention 부재 — 11th wave. Expiry trigger: 첫 production deployment OR R113 OBSERVABILITY-002 batch."
+      - wave: R106
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "optimistic-locking-l0 SLO/alert convention 부재 — 11th wave. Expiry trigger: 첫 production deployment OR R113 OBSERVABILITY-002 batch."
+      - wave: R107
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "health-check-l0 SLO/alert convention 부재 — 11th wave. Expiry trigger: 첫 production deployment OR R113 OBSERVABILITY-002 batch."
+      - wave: R109
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "resilience-l0 SLO/alert convention 부재 — 11th wave. Expiry trigger: 첫 production deployment OR R113 OBSERVABILITY-002 batch."
+      - wave: R110
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "consent-management-l0 SLO/alert convention 부재 — 11th wave. Expiry trigger: 첫 production deployment OR R113 OBSERVABILITY-002 batch."
+      - wave: R111
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "data-subject-rights-l0 SLO/alert convention 부재 — 11th wave. Expiry trigger: 첫 production deployment OR R113 OBSERVABILITY-002 batch."
+      - wave: R112
+        iter: 1
+        finding_id: F6
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: false
+        notes: "distributed-tracing-l0 SLO/alert convention 부재 — 11th wave. Expiry trigger: 첫 production deployment OR R113 OBSERVABILITY-002 batch."
     verdict: active
     verdict_reason: "**9-wave stabilized pattern confirmed** — 9 deferrals (R93~R101) 모두 동일 shape. OBSERVABILITY-002 표준 item evidence-overwhelming continued — R102 mandatory_iter1_agenda 후보 #2 carry forward (5-wave 누적 deferral)."
     next_review_at: "유지 (9-wave validated); R102 catalog work: OBSERVABILITY-002 9-spec batch"
@@ -815,6 +1193,69 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "no migration playbook — offset→cursor pagination migration (existing page-number clients; dual-mode bridge) + idempotency retrofit onto existing non-idempotent endpoints (gradual enforcement). Expiry trigger: 첫 fork-receiver의 existing API에 cursor/idempotency 도입 — MIGRATION.md (offset→cursor dual-mode + idempotency opt-in→enforce ramp)."
+      - wave: R103
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "caching-l0 migration playbook 부재. Expiry trigger: 첫 fork-receiver의 existing-system 전환 시."
+      - wave: R104
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "soft-delete-l0 migration playbook 부재. Expiry trigger: 첫 fork-receiver의 existing-system 전환 시."
+      - wave: R105
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "problem-details-l0 migration playbook 부재. Expiry trigger: 첫 fork-receiver의 existing-system 전환 시."
+      - wave: R106
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "optimistic-locking-l0 migration playbook 부재. Expiry trigger: 첫 fork-receiver의 existing-system 전환 시."
+      - wave: R107
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "health-check-l0 migration playbook 부재. Expiry trigger: 첫 fork-receiver의 existing-system 전환 시."
+      - wave: R109
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "resilience-l0 migration playbook 부재. Expiry trigger: 첫 fork-receiver의 existing-system 전환 시."
+      - wave: R110
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "consent-management-l0 migration playbook 부재. Expiry trigger: 첫 fork-receiver의 existing-system 전환 시."
+      - wave: R111
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "data-subject-rights-l0 migration playbook 부재. Expiry trigger: 첫 fork-receiver의 existing-system 전환 시."
+      - wave: R112
+        iter: 1
+        finding_id: F7
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "distributed-tracing-l0 migration playbook 부재. Expiry trigger: 첫 fork-receiver의 existing-system 전환 시."
     verdict: active
     verdict_reason: "**9-wave migration-playbook lens** — R93~R101 모두 'migration playbook 부재' high-signal deferral. 9-wave stable. P10과 lens 비중첩 cross-wave maintained."
     next_review_at: "유지; lens differentiation with P10 9-wave 연속 holds"
@@ -911,6 +1352,69 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "PAGE-OFFSET fallback + IDEMPOTENCY-SCOPE opt-out address deployed-state but no version-skew contract — old clients sending offset while server prefers cursor / clients not yet sending Idempotency-Key during rollout. Server must honor both gracefully. Expiry trigger: 첫 fork-receiver의 mixed-client-version production — PAGE-VERSION-SKEW / IDEMPOTENCY-GRADUAL contract."
+      - wave: R103
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "caching-l0 version-skew/backward-compat 부재. Expiry trigger: 첫 mixed-client-version production 시."
+      - wave: R104
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "soft-delete-l0 version-skew/backward-compat 부재. Expiry trigger: 첫 mixed-client-version production 시."
+      - wave: R105
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "problem-details-l0 version-skew/backward-compat 부재. Expiry trigger: 첫 mixed-client-version production 시."
+      - wave: R106
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "optimistic-locking-l0 version-skew/backward-compat 부재. Expiry trigger: 첫 mixed-client-version production 시."
+      - wave: R107
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "health-check-l0 version-skew/backward-compat 부재. Expiry trigger: 첫 mixed-client-version production 시."
+      - wave: R109
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "resilience-l0 version-skew/backward-compat 부재. Expiry trigger: 첫 mixed-client-version production 시."
+      - wave: R110
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "consent-management-l0 version-skew/backward-compat 부재. Expiry trigger: 첫 mixed-client-version production 시."
+      - wave: R111
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "data-subject-rights-l0 version-skew/backward-compat 부재. Expiry trigger: 첫 mixed-client-version production 시."
+      - wave: R112
+        iter: 1
+        finding_id: F9
+        classification: scope_deferral
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "distributed-tracing-l0 version-skew/backward-compat 부재. Expiry trigger: 첫 mixed-client-version production 시."
     verdict: active
     verdict_reason: "**9-wave backward-compat lens** — 1 real_bug + 10 deferral (R93~R101 deployed-state vigilance). 9-wave consistency."
     next_review_at: "유지"
@@ -1007,6 +1511,69 @@ personas:
         signal_strength: medium
         unique_to_persona: true
         notes: "both specs cite standards but defaults unpinned — pagination cursor HMAC algorithm + envelope shape; idempotency fingerprint algorithm + key format. **10th wave standards-pin** (R93~R102), DUAL pin. Closure: pagination (hmac-sha256 RFC 2104 + RFC 5988 envelope) + idempotency (sha-256 FIPS 180-4 + uuid-v4 RFC 4122) defaults pinned commit e7d0a2e. R100/R101/R102 dual-pin pattern."
+      - wave: R103
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "caching-l0 standards default unpinned — 11th wave standards-pin. Closure: F8 block commit cc33c0e."
+      - wave: R104
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "soft-delete-l0 standards default unpinned — 11th wave standards-pin. Closure: F8 block commit cc33c0e."
+      - wave: R105
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "problem-details-l0 standards default unpinned — 11th wave standards-pin. Closure: F8 block commit cc33c0e."
+      - wave: R106
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "optimistic-locking-l0 standards default unpinned — 11th wave standards-pin. Closure: F8 block commit cc33c0e."
+      - wave: R107
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "health-check-l0 standards default unpinned — 11th wave standards-pin. Closure: F8 block commit cc33c0e."
+      - wave: R109
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "resilience-l0 standards default unpinned — 11th wave standards-pin. Closure: F8 block commit cc33c0e."
+      - wave: R110
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "consent-management-l0 standards default unpinned — 11th wave standards-pin. Closure: F8 block commit cc33c0e."
+      - wave: R111
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "data-subject-rights-l0 standards default unpinned — 11th wave standards-pin. Closure: F8 block commit cc33c0e."
+      - wave: R112
+        iter: 1
+        finding_id: F8
+        classification: real_bug
+        signal_strength: medium
+        unique_to_persona: true
+        notes: "distributed-tracing-l0 standards default unpinned — 11th wave standards-pin. Closure: F8 block commit cc33c0e."
     verdict: active
     verdict_reason: "**9-wave most productive persona** — R93 F9/F11 (2) + R94~R101 F8 (R100+R101 each 2 pins) = **11 real_bug closed across 9 waves**. 'standards spec cite했으나 symmetric pin 누락' 패턴 9-wave 일관 — dual-pin pattern emerging (R100/R101 standards lens 2 pins consecutive)."
     next_review_at: "유지 (9-wave validated high-signal anchor); R102+ 동일 lens 작동 예상"
@@ -1110,6 +1677,69 @@ personas:
         signal_strength: high
         unique_to_persona: true
         notes: "**R102 introduces DUAL-SPEC wave shape** — two specs (pagination + idempotency) in single phase α + single iter1 ledger + single registry backfill, vs R97-R101 single-spec. Per METHODOLOGY.md anchor lifecycle policy (R101 881f2aa) 4-criterion rule: dual-spec is NOT a new mechanical anchor class — reuses existing wave shape with 2 spec files. 49th guard (registry_backfill_completeness) counts by WAVE not by spec (1 entry per persona for the wave). R103 evaluation: document multi-spec wave shape in METHODOLOGY.md (documentation contribution, not mechanism). Expiry trigger: R103 wave 시작 시 multi-spec wave shape 명문화 OR 첫 fork-receiver가 multi-spec wave 혼란 시."
+      - wave: R103
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "multi-spec batch wave shape (R103-R112 9 specs) — NOT new mechanical class (METHODOLOGY.md 4-criterion rule). Expiry trigger: R113 wave 시작 시 multi-spec batch shape 명문화."
+      - wave: R104
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "multi-spec batch wave shape (R103-R112 9 specs) — NOT new mechanical class (METHODOLOGY.md 4-criterion rule). Expiry trigger: R113 wave 시작 시 multi-spec batch shape 명문화."
+      - wave: R105
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "multi-spec batch wave shape (R103-R112 9 specs) — NOT new mechanical class (METHODOLOGY.md 4-criterion rule). Expiry trigger: R113 wave 시작 시 multi-spec batch shape 명문화."
+      - wave: R106
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "multi-spec batch wave shape (R103-R112 9 specs) — NOT new mechanical class (METHODOLOGY.md 4-criterion rule). Expiry trigger: R113 wave 시작 시 multi-spec batch shape 명문화."
+      - wave: R107
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "multi-spec batch wave shape (R103-R112 9 specs) — NOT new mechanical class (METHODOLOGY.md 4-criterion rule). Expiry trigger: R113 wave 시작 시 multi-spec batch shape 명문화."
+      - wave: R109
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "multi-spec batch wave shape (R103-R112 9 specs) — NOT new mechanical class (METHODOLOGY.md 4-criterion rule). Expiry trigger: R113 wave 시작 시 multi-spec batch shape 명문화."
+      - wave: R110
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "multi-spec batch wave shape (R103-R112 9 specs) — NOT new mechanical class (METHODOLOGY.md 4-criterion rule). Expiry trigger: R113 wave 시작 시 multi-spec batch shape 명문화."
+      - wave: R111
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "multi-spec batch wave shape (R103-R112 9 specs) — NOT new mechanical class (METHODOLOGY.md 4-criterion rule). Expiry trigger: R113 wave 시작 시 multi-spec batch shape 명문화."
+      - wave: R112
+        iter: 1
+        finding_id: F10
+        classification: scope_deferral
+        signal_strength: high
+        unique_to_persona: true
+        notes: "multi-spec batch wave shape (R103-R112 9 specs) — NOT new mechanical class (METHODOLOGY.md 4-criterion rule). Expiry trigger: R113 wave 시작 시 multi-spec batch shape 명문화."
     verdict: active
     verdict_reason: "**9-wave governance lens — 5-cycle close-and-discover with class diversification**. R97 F10 historical → hard_guard. R97 NEW → R98 hard_guard. R98 NEW → R99 catalog_helper. R99 NEW → R100 data_artifact. R100 NEW → R101 documentation contribution (NOT new mechanical class). R101 NEW → R102 evaluation. Total: 4 historical real_bug + 5 NEW scope_deferral + 3 methodology_gap = 12 findings across 9 waves. **Pattern adaptation continues with mechanical class restraint** — METHODOLOGY.md policy enforces 4-criterion rule preventing reflexive class proliferation."
     next_review_at: "R102 wave 시작 시 documentation contribution lifecycle policy 도입 결정 (R101 F10 NEW finding의 active 이관). R101 mechanical class restraint 영구 종료 (METHODOLOGY.md policy text); R102는 documentation refresh cadence."
@@ -1568,3 +2198,178 @@ review_summary:
         - "P1/P2 backfill 필요성 — 9-wave + R102 consecutive 미참여."
         - "R103~R112 generic catalog wave 진행 — caching / soft-delete / problem-details / optimistic-locking / health-check / money-currency / resilience / consent-management / data-subject-rights / distributed-tracing (Workflow drafted + verified). Continue generic-catalog course (memory feedback_prefer_generic_catalog)."
         - "Generic-catalog course CONFIRMED by R102 P6 zero-deferral signal — R103+ stays generic, Korean specifics only as variant within generic baseline."
+
+  R103:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3
+    scope_deferrals: 7
+    methodology_gaps: 0
+    wave_shape: multi-spec-batch
+    closure_commits:
+      - "43167ec (R103 phase α — 9-spec batch)"
+      - "cc33c0e (R103 iter1 closures F2/F3/F8 — batch)"
+      - "0e60d83 (ledger closure_verification_ref R87 fix)"
+    most_productive_persona: "tied; P9 migration + P11 standards + P6 generic-confirmation (zero Korean deferral)."
+    panel_judgment: all_active_no_retirement
+    cross_wave_observations:
+      generic_catalog: "caching-l0 ZERO Korean law — generic course confirmed (memory feedback_prefer_generic_catalog). P6 한국 규제 lens produced NO deferral."
+      stabilized_signatures: "P4/P5 priority+RECIPE → real_bug × 11; P8 SLO → scope_deferral × 11; P11 standards-pin → real_bug × 11; P12 multi-spec batch shape (3-class taxonomy held)."
+      wave_shape_note: "R103-R112 landed as 9-spec batch (phase α 43167ec + closures cc33c0e + ledger + iter2 + this registry). Multi-spec batch extends R102 dual-spec; same wave shape, N spec files. Quote anchors paraphrase-labeled (adversarial-verify caught hallucination)."
+  R104:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3
+    scope_deferrals: 7
+    methodology_gaps: 0
+    wave_shape: multi-spec-batch
+    closure_commits:
+      - "43167ec (R104 phase α — 9-spec batch)"
+      - "cc33c0e (R104 iter1 closures F2/F3/F8 — batch)"
+      - "0e60d83 (ledger closure_verification_ref R87 fix)"
+    most_productive_persona: "tied; P9 migration + P11 standards + P6 generic-confirmation (zero Korean deferral)."
+    panel_judgment: all_active_no_retirement
+    cross_wave_observations:
+      generic_catalog: "soft-delete-l0 ZERO Korean law — generic course confirmed (memory feedback_prefer_generic_catalog). P6 한국 규제 lens produced NO deferral."
+      stabilized_signatures: "P4/P5 priority+RECIPE → real_bug × 11; P8 SLO → scope_deferral × 11; P11 standards-pin → real_bug × 11; P12 multi-spec batch shape (3-class taxonomy held)."
+      wave_shape_note: "R103-R112 landed as 9-spec batch (phase α 43167ec + closures cc33c0e + ledger + iter2 + this registry). Multi-spec batch extends R102 dual-spec; same wave shape, N spec files. Quote anchors paraphrase-labeled (adversarial-verify caught hallucination)."
+  R105:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3
+    scope_deferrals: 7
+    methodology_gaps: 0
+    wave_shape: multi-spec-batch
+    closure_commits:
+      - "43167ec (R105 phase α — 9-spec batch)"
+      - "cc33c0e (R105 iter1 closures F2/F3/F8 — batch)"
+      - "0e60d83 (ledger closure_verification_ref R87 fix)"
+    most_productive_persona: "tied; P9 migration + P11 standards + P6 generic-confirmation (zero Korean deferral)."
+    panel_judgment: all_active_no_retirement
+    cross_wave_observations:
+      generic_catalog: "problem-details-l0 ZERO Korean law — generic course confirmed (memory feedback_prefer_generic_catalog). P6 한국 규제 lens produced NO deferral."
+      stabilized_signatures: "P4/P5 priority+RECIPE → real_bug × 11; P8 SLO → scope_deferral × 11; P11 standards-pin → real_bug × 11; P12 multi-spec batch shape (3-class taxonomy held)."
+      wave_shape_note: "R103-R112 landed as 9-spec batch (phase α 43167ec + closures cc33c0e + ledger + iter2 + this registry). Multi-spec batch extends R102 dual-spec; same wave shape, N spec files. Quote anchors paraphrase-labeled (adversarial-verify caught hallucination)."
+  R106:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3
+    scope_deferrals: 7
+    methodology_gaps: 0
+    wave_shape: multi-spec-batch
+    closure_commits:
+      - "43167ec (R106 phase α — 9-spec batch)"
+      - "cc33c0e (R106 iter1 closures F2/F3/F8 — batch)"
+      - "0e60d83 (ledger closure_verification_ref R87 fix)"
+    most_productive_persona: "tied; P9 migration + P11 standards + P6 generic-confirmation (zero Korean deferral)."
+    panel_judgment: all_active_no_retirement
+    cross_wave_observations:
+      generic_catalog: "optimistic-locking-l0 ZERO Korean law — generic course confirmed (memory feedback_prefer_generic_catalog). P6 한국 규제 lens produced NO deferral."
+      stabilized_signatures: "P4/P5 priority+RECIPE → real_bug × 11; P8 SLO → scope_deferral × 11; P11 standards-pin → real_bug × 11; P12 multi-spec batch shape (3-class taxonomy held)."
+      wave_shape_note: "R103-R112 landed as 9-spec batch (phase α 43167ec + closures cc33c0e + ledger + iter2 + this registry). Multi-spec batch extends R102 dual-spec; same wave shape, N spec files. Quote anchors paraphrase-labeled (adversarial-verify caught hallucination)."
+  R107:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3
+    scope_deferrals: 7
+    methodology_gaps: 0
+    wave_shape: multi-spec-batch
+    closure_commits:
+      - "43167ec (R107 phase α — 9-spec batch)"
+      - "cc33c0e (R107 iter1 closures F2/F3/F8 — batch)"
+      - "0e60d83 (ledger closure_verification_ref R87 fix)"
+    most_productive_persona: "tied; P9 migration + P11 standards + P6 generic-confirmation (zero Korean deferral)."
+    panel_judgment: all_active_no_retirement
+    cross_wave_observations:
+      generic_catalog: "health-check-l0 ZERO Korean law — generic course confirmed (memory feedback_prefer_generic_catalog). P6 한국 규제 lens produced NO deferral."
+      stabilized_signatures: "P4/P5 priority+RECIPE → real_bug × 11; P8 SLO → scope_deferral × 11; P11 standards-pin → real_bug × 11; P12 multi-spec batch shape (3-class taxonomy held)."
+      wave_shape_note: "R103-R112 landed as 9-spec batch (phase α 43167ec + closures cc33c0e + ledger + iter2 + this registry). Multi-spec batch extends R102 dual-spec; same wave shape, N spec files. Quote anchors paraphrase-labeled (adversarial-verify caught hallucination)."
+  R109:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3
+    scope_deferrals: 7
+    methodology_gaps: 0
+    wave_shape: multi-spec-batch
+    closure_commits:
+      - "43167ec (R109 phase α — 9-spec batch)"
+      - "cc33c0e (R109 iter1 closures F2/F3/F8 — batch)"
+      - "0e60d83 (ledger closure_verification_ref R87 fix)"
+    most_productive_persona: "tied; P9 migration + P11 standards + P6 generic-confirmation (zero Korean deferral)."
+    panel_judgment: all_active_no_retirement
+    cross_wave_observations:
+      generic_catalog: "resilience-l0 ZERO Korean law — generic course confirmed (memory feedback_prefer_generic_catalog). P6 한국 규제 lens produced NO deferral."
+      stabilized_signatures: "P4/P5 priority+RECIPE → real_bug × 11; P8 SLO → scope_deferral × 11; P11 standards-pin → real_bug × 11; P12 multi-spec batch shape (3-class taxonomy held)."
+      wave_shape_note: "R103-R112 landed as 9-spec batch (phase α 43167ec + closures cc33c0e + ledger + iter2 + this registry). Multi-spec batch extends R102 dual-spec; same wave shape, N spec files. Quote anchors paraphrase-labeled (adversarial-verify caught hallucination)."
+  R110:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3
+    scope_deferrals: 7
+    methodology_gaps: 0
+    wave_shape: multi-spec-batch
+    closure_commits:
+      - "43167ec (R110 phase α — 9-spec batch)"
+      - "cc33c0e (R110 iter1 closures F2/F3/F8 — batch)"
+      - "0e60d83 (ledger closure_verification_ref R87 fix)"
+    most_productive_persona: "tied; P9 migration + P11 standards + P6 generic-confirmation (zero Korean deferral)."
+    panel_judgment: all_active_no_retirement
+    cross_wave_observations:
+      generic_catalog: "consent-management-l0 ZERO Korean law — generic course confirmed (memory feedback_prefer_generic_catalog). P6 한국 규제 lens produced NO deferral."
+      stabilized_signatures: "P4/P5 priority+RECIPE → real_bug × 11; P8 SLO → scope_deferral × 11; P11 standards-pin → real_bug × 11; P12 multi-spec batch shape (3-class taxonomy held)."
+      wave_shape_note: "R103-R112 landed as 9-spec batch (phase α 43167ec + closures cc33c0e + ledger + iter2 + this registry). Multi-spec batch extends R102 dual-spec; same wave shape, N spec files. Quote anchors paraphrase-labeled (adversarial-verify caught hallucination)."
+  R111:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3
+    scope_deferrals: 7
+    methodology_gaps: 0
+    wave_shape: multi-spec-batch
+    closure_commits:
+      - "43167ec (R111 phase α — 9-spec batch)"
+      - "cc33c0e (R111 iter1 closures F2/F3/F8 — batch)"
+      - "0e60d83 (ledger closure_verification_ref R87 fix)"
+    most_productive_persona: "tied; P9 migration + P11 standards + P6 generic-confirmation (zero Korean deferral)."
+    panel_judgment: all_active_no_retirement
+    cross_wave_observations:
+      generic_catalog: "data-subject-rights-l0 ZERO Korean law — generic course confirmed (memory feedback_prefer_generic_catalog). P6 한국 규제 lens produced NO deferral."
+      stabilized_signatures: "P4/P5 priority+RECIPE → real_bug × 11; P8 SLO → scope_deferral × 11; P11 standards-pin → real_bug × 11; P12 multi-spec batch shape (3-class taxonomy held)."
+      wave_shape_note: "R103-R112 landed as 9-spec batch (phase α 43167ec + closures cc33c0e + ledger + iter2 + this registry). Multi-spec batch extends R102 dual-spec; same wave shape, N spec files. Quote anchors paraphrase-labeled (adversarial-verify caught hallucination)."
+  R112:
+    panel_size: 10
+    iterations: 2
+    total_findings: 10
+    real_bug_closures: 3
+    scope_deferrals: 7
+    methodology_gaps: 0
+    wave_shape: multi-spec-batch
+    closure_commits:
+      - "43167ec (R112 phase α — 9-spec batch)"
+      - "cc33c0e (R112 iter1 closures F2/F3/F8 — batch)"
+      - "0e60d83 (ledger closure_verification_ref R87 fix)"
+    most_productive_persona: "tied; P9 migration + P11 standards + P6 generic-confirmation (zero Korean deferral)."
+    panel_judgment: all_active_no_retirement
+    cross_wave_observations:
+      generic_catalog: "distributed-tracing-l0 ZERO Korean law — generic course confirmed (memory feedback_prefer_generic_catalog). P6 한국 규제 lens produced NO deferral."
+      stabilized_signatures: "P4/P5 priority+RECIPE → real_bug × 11; P8 SLO → scope_deferral × 11; P11 standards-pin → real_bug × 11; P12 multi-spec batch shape (3-class taxonomy held)."
+      wave_shape_note: "R103-R112 landed as 9-spec batch (phase α 43167ec + closures cc33c0e + ledger + iter2 + this registry). Multi-spec batch extends R102 dual-spec; same wave shape, N spec files. Quote anchors paraphrase-labeled (adversarial-verify caught hallucination)."
+    next_panel_composition_for_R113:
+      keep: ["P3","P4","P5","P6","P7","P8","P9","P10","P11","P12"]
+      under_review: []
+      add: []
+      retire: []
+      mandatory_R113_iter1_agenda:
+        - "Quote-anchor re-verification — R103-R112 specs paraphrase-labeled their RFC quotes (Workflow draft had anchor hallucination per adversarial verify); re-verify section refs against live RFCs before fork-receivers treat them as authoritative."
+        - "Multi-spec batch wave shape 명문화 in METHODOLOGY.md (R102 dual-spec + R103-R112 9-batch precedent; documentation contribution, not new mechanical class)."
+        - "OBSERVABILITY-002 표준 item — 11-wave P8 consecutive evidence; decide unified observability item across all specs (strong saturation)."
+        - "R105 problem-details / R107 health-check composition note vs existing practices rules (error-rfc7807-problem-detail / spring-practices ACTUATOR) — clarify rule(coding) vs spec(domain-contract) layering."
+        - "Next domain — continue generic cross-cutting (rate-limit-headers / webhook-signing / api-versioning / job-queue) per generic-catalog course."
+        - "80 active scope_deferral (R102 73 + R103-R112 7×9=63 → but multi-spec) trigger 점검."
