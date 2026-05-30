@@ -9,7 +9,7 @@ project. Every layer of the stack ships with rule-enforcement wired in:
 - **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (7 ESLint rules) + 86-rule
   evidence-anchored catalog (`practices-react/rules/`).
 - **Spring Boot side** — `@Tag`-based JUnit + RestAssured tests
-  (`./gradlew test{Domain}`) + 107-rule Java/Spring catalog
+  (`./gradlew test{Domain}`) + 112-rule Java/Spring catalog
   (`practices/rules/`).
 - **Spec-first contract** — every domain has a Spec Trio
   (`specs/X.yaml` + `contracts/X-openapi.yaml` + `blueprints/X-manifest.yaml`).
@@ -39,7 +39,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-20 L4 domains + 11 active recipes · 107 Java rules · 86 React rules · 7 ESLint rules · 41 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+21 L4 domains + 11 active recipes · 112 Java rules · 86 React rules · 7 ESLint rules · 63 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -64,7 +64,7 @@ loop.
 |-------|-------|-----------|
 | Backend reference workload | `backend/` — Spring Boot 3 + Java 21, 14 auth endpoints (signup/login/OAuth Google·Naver·Kakao/password reset/RBAC ADMIN·MANAGER·MEMBER), 5 CRUD endpoints, 1 rate-limit endpoint | TDD-built; per-domain `./gradlew test{Domain}` is binary pass/fail (status matrix in CLAUDE.md Build & Test) |
 | Frontend reference workload | `frontend/` — React 19 + Next.js 15, OAuth UI, login pages, e2e Playwright tests | self-tests the ESLint plugin |
-| Java/Spring rule catalog | `practices/` — 107 rules / 22+ categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
+| Java/Spring rule catalog | `practices/` — 112 rules / 22+ categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
 | React/Next.js rule catalog | `practices-react/` — 86 rules / 8 families, all citing canonical React 19 / Next.js 15 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
 | ESLint plugin (React enforcement) | `practices-react/eslint-plugin-ax/` — 7 custom rules; `react-async-parallel` + `prefer-functional-setstate` recommended; 5 others opt-in | RuleTester suites; install in any downstream project |
 | Spec Trio (per domain) | `specs/<domain>.yaml` + `contracts/<domain>-openapi.yaml` + `blueprints/<domain>-manifest.yaml` | enforced by `spec_ref_guard.sh` — every rule must point to a spec item |
@@ -76,7 +76,7 @@ loop.
 
 ### 30-minute quickstart (fork-receiver path)
 
-> **Step 0 — Read [`docs/IMPLEMENTATION-STATUS.md`](./docs/IMPLEMENTATION-STATUS.md) first.** It documents the current state across the 20 L4 domains: backend implementation level, frontend trio status (full / backend-only / promoted from R39 stub), and which Spec Trio fields are wired. Sealed verdict PASS validates **catalog self-discoverability by AI agents**, NOT that all backend code is production-ready. Skipping this step is the #1 cause of fork-receiver scope misjudgment.
+> **Step 0 — Read [`docs/IMPLEMENTATION-STATUS.md`](./docs/IMPLEMENTATION-STATUS.md) first.** It documents the current state across the 21 L4 domains: backend implementation level, frontend trio status (full / backend-only / promoted from R39 stub), and which Spec Trio fields are wired. Sealed verdict PASS validates **catalog self-discoverability by AI agents**, NOT that all backend code is production-ready. Skipping this step is the #1 cause of fork-receiver scope misjudgment.
 
 The fastest way to evaluate: pick **one of 11 active recipes** that matches your scenario, then compose. Each recipe is a documented composition of L4 domains (auth, crud, payment, audit-log, etc.) with sealed-verdict self-discoverability.
 
@@ -97,20 +97,20 @@ cat recipes/_MANIFEST.yaml | head -40
 cat recipes/saas-subscription/RECIPE.md     # example
 
 # 4. Run the full catalog verification (proves the bundle is intact)
-bash practices/evals/run-all-guards.sh       # 41 hard guards (all PASS expected)
+bash practices/evals/run-all-guards.sh       # 63 hard guards (all PASS expected)
 
-# Per-domain catalog tasks — the "binary pass/fail" surface (R2 baseline 2026-05-20)
+# Per-domain catalog tasks — the "binary pass/fail" surface (R64+ baseline)
 cd backend
 ./gradlew testAsvs              # GREEN — 26 ASVS items
 ./gradlew testCrud              # GREEN — 7 CRUD security tests
-./gradlew testPractices         # GREEN — 107 rules
+./gradlew testPractices         # GREEN — 112 rules
 ./gradlew testPayment           # GREEN — 29 PAYMENT items
 ./gradlew testRateLimit         # GREEN
 ./gradlew testNotification      # GREEN
 ./gradlew testIdentityVerification  # GREEN — 19/19 (HMAC envelope + PASS/KCB canonical extraction + VerifiedIdentity persistence + AuditLog publish + Admin GET. R54 backend residual closure. spec `domain_mode: backend_only` — no frontend trio.)
-./gradlew testBilling           # RED — TDD anchor only; subscription/plan/webhook endpoints intentionally unimplemented
+./gradlew testBilling           # GREEN — 17/17 (R21 backend impl: subscription/plan/webhook endpoints shipped)
 ./gradlew testPortability       # advisory — external fixture (spring-realworld-example-app) cycle, not your code
-./gradlew test                  # aggregate of the above; expect 5 failures in R2 baseline (4 Billing + 1 Portability)
+./gradlew test                  # aggregate of the above; GREEN except the advisory PortabilityCyclic external-fixture cycle
 cd ..
 
 cd frontend && npm install && npm run build && cd ..
@@ -140,7 +140,7 @@ See [`METHODOLOGY.md`](./METHODOLOGY.md). Short version:
 4. **Portable Tests** — `@Tag("<DOMAIN>")` JUnit + RestAssured tests
 5. **Build Verification** — register `./gradlew test<Domain>` task
 
-Currently: **20 L4 domains** (auth, crud, payment, audit-log, billing, feature-flags, file-storage, notification, practices, scheduled-task, search, webhook, api-key, approval-workflow, session-management, activity-feed, comment-thread, tag-categorization, favorites-bookmarks, email-outbox) and **11 active recipes**. All 20 L4 documented with Spec Trio + per-domain `./gradlew test{Domain}` task. `identity-verification` is intentionally `domain_mode: backend_only` (no `templates/L4/identity-verification/` on disk — see [`practices/rules/spec-domain-mode-gates-frontend-trio.md`](./practices/rules/spec-domain-mode-gates-frontend-trio.md)). See `docs/IMPLEMENTATION-STATUS.md` for the full status taxonomy.
+Currently: **21 L4 domains** (auth, crud, payment, audit-log, billing, feature-flags, file-storage, notification, practices, scheduled-task, search, webhook, api-key, approval-workflow, session-management, activity-feed, comment-thread, tag-categorization, favorites-bookmarks, email-outbox, multi-tenant) and **11 active recipes**. All 21 L4 documented with Spec Trio + per-domain `./gradlew test{Domain}` task. `identity-verification` is intentionally `domain_mode: backend_only` (no `templates/L4/identity-verification/` on disk — see [`practices/rules/spec-domain-mode-gates-frontend-trio.md`](./practices/rules/spec-domain-mode-gates-frontend-trio.md)). See `docs/IMPLEMENTATION-STATUS.md` for the full status taxonomy.
 
 Shared client primitives sit at **L0** (`templates/L0/fork-receiver-kit/` — `use-caller-id.ts` / `parse-error.ts` / `entity-key.ts`) and at **L2** (`templates/L2/blocks/` — `confirm-dialog.tsx`, `rate-limit-banner.tsx`, `offline-banner.tsx`, `announce-live.tsx`, and 30+ more).
 
@@ -173,7 +173,7 @@ reference workload ships `mock` provider only; the redirect-style hook
 
 ## Rules currently enforced
 
-### Spring/Java (testPractices — 107 rules / 22+ categories)
+### Spring/Java (testPractices — 112 rules / 22+ categories)
 
 `lang-`, `core-`, `config-`, `web-`, `http-`, `persistence-`, `transaction-`,
 `migration-`, `security-`, `validation-`, `error-`, `api-`, `async-`,
@@ -226,9 +226,9 @@ ax-template/
 │   └── ratelimit-manifest.yaml
 │
 ├── practices/                      # Java/Spring catalog
-│   ├── rules/                      # 107 rule.md files
+│   ├── rules/                      # 112 rule.md files
 │   ├── upstream/                   # External doc snapshots
-│   ├── evals/                      # 4 hard gates + 41 hard guards (R59 + earlier)
+│   ├── evals/                      # 4 hard gates + 63 hard guards
 │   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)
 │   ├── SKILL.md                    # subsystem skill
 │   ├── MAINTAINER.md               # catalog maintainer guide

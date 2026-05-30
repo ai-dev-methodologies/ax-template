@@ -17,13 +17,13 @@ A starter / transformation skill for projects that want AI agents (Claude Code e
 | Asset | Purpose for AI agent |
 |---|---|
 | **Spec Trio** (`specs/` + `contracts/` + `blueprints/`) | Spec is read before code. AI hallucination's 1st line of defense. |
-| **practices/ catalog** (64 rules, 21 categories) | Evidence-anchored Java/Spring rules. AI cannot invent rules at random — every rule has an external URL / quote / RFC / JEP citation. |
+| **practices/ catalog** (112 rules, 22+ categories) | Evidence-anchored Java/Spring rules. AI cannot invent rules at random — every rule has an external URL / quote / RFC / JEP citation. |
 | **`./gradlew test{Domain}`** | Single binary command per domain (testAsvs, testCrud, testPractices, testPortability). AI self-verifies in one shot. |
 | **`AGENTS.md`** (auto-regenerated, sha256-sentinel) | AI agent's primary context file. Stays sync'd to `practices/rules/*.md` automatically. |
 | **4 hard gates** (spec_ref / substance / time_decay / evidence) | Binary checks that block AI output if it diverges from external facts. |
 | **Reference workloads** (`backend/` Spring Boot auth + CRUD + practices fixtures, `frontend/` React) | Worked examples — the skill applies itself to itself. |
 | **Frontend Spec Trio** (`specs/<domain>-frontend-l0.yaml` + `contracts/<domain>-ui.yaml` + `blueprints/<domain>-ui-manifest.yaml`) | Mirrors backend Spec Trio for UI routes. Anchors frontend AI output to external specs. |
-| **`practices-react/` catalog** (68 rules, 8 families) | Evidence-anchored React 19 / Next.js 16 rules. Mirrors Java catalog discipline. |
+| **`practices-react/` catalog** (86 rules, 9 families) | Evidence-anchored React 19 / Next.js 16 rules. Mirrors Java catalog discipline. |
 | **`templates/` layer library** (L1 primitives, L2 feature blocks, L3 page templates, L4 domain workloads) | Composition kit layers. Each artifact carries `evidence:` frontmatter. |
 | **3-tier skill topology** | 3 Tier-1 commands, 8 Tier-2 path-triggered skills, 6 Tier-3 guards. Agents navigate via skill invocation graph. |
 
@@ -61,7 +61,7 @@ bash practices/scripts/install-hooks.sh
 |---|---|
 | `CLAUDE.md` | Top-level project identity + methodology summary. **Read this first.** |
 | `METHODOLOGY.md` | 5-step blueprint playbook for adding a new domain |
-| `practices/AGENTS.md` | The 64 rules in AI-consumable form, with sha256 sentinel |
+| `practices/AGENTS.md` | The 112 rules in AI-consumable form, with sha256 sentinel |
 | `practices/SKILL.md` | The practices subsystem entry point |
 | `practices/MAINTAINER.md` | Maintainer guide for evolving the catalog |
 | `practices/DECISIONS.md` | Rule provenance trail — every accepted / rejected rule with reasoning |

@@ -977,6 +977,21 @@ run_guard "saved_view_url_state/fixture_pass" 0 \
     bash "$SCRIPT_DIR/saved_view_url_state_guard.sh" --check-fixture \
     "$SCRIPT_DIR/fixtures/saved-view-must-be-url-state-or-server-persisted/pass"
 
+echo ""
+echo "[58] verification_checklist_task_coverage_guard.sh (2026-05-30 audit C6 — every registered test{Domain} task must be in the verify-completion hard gate)"
+run_guard "verification_checklist_task_coverage/live" 0 \
+    bash "$SCRIPT_DIR/verification_checklist_task_coverage_guard.sh"
+
+echo ""
+echo "[59] practices_react_sentinel_disk_truth_guard.sh (2026-05-30 audit C5 — React mirror of [11]: re-run practices-react/generate_agents.sh + diff AGENTS.md/SKILL.md + family-table sum == rule_count)"
+run_guard "practices_react_sentinel_disk_truth/live" 0 \
+    bash "$SCRIPT_DIR/practices_react_sentinel_disk_truth_guard.sh"
+
+echo ""
+echo "[60] doc_headline_count_guard.sh (2026-05-30 audit C1/C2/C3 — README hero + CLAUDE.md vision + plugin.json headline counts must match disk: Java/React/ESLint rules · L4 dirs · hard guards)"
+run_guard "doc_headline_count/live" 0 \
+    bash "$SCRIPT_DIR/doc_headline_count_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

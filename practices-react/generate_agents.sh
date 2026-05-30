@@ -136,6 +136,20 @@ FAMILY_TABLE=$(
   render_family_row "js"       "JavaScript performance (Set/Map, immutable arrays, regex, caching, iteration)"
   render_family_row "advanced" "Advanced effect callback patterns (useEffectEvent, init-once, handler refs)"
   render_family_row "nextjs"   "Next.js-specific extensions (use-cache directive, async params, use-cache private/remote)"
+  # Reconciliation row — the named families above are curated buckets; the
+  # remaining rules (ESLint-style no-/prefer- enforcement rules + L2/domain
+  # singletons like saved-/currency-/combobox-) do not form a named family but
+  # MUST still be counted so the table never under-reports against rule_count.
+  # The practices_react_sentinel_disk_truth_guard asserts the Rules column sums
+  # to rule_count; this row keeps that invariant true as the catalog grows.
+  NAMED_TOTAL=0
+  for fam in async bundle server client rerender rendering js advanced nextjs; do
+    NAMED_TOTAL=$((NAMED_TOTAL + $(count_family "$fam")))
+  done
+  OTHER=$((COUNT - NAMED_TOTAL))
+  if [ "$OTHER" -gt 0 ]; then
+    printf '| (other) | %d | ESLint-style no-/prefer- enforcement + L2/domain singletons (saved-, currency-, combobox-, impersonation-, rich-, traceid-, virtualized-, business-) not in a named family |\n' "$OTHER"
+  fi
 )
 
 if [[ -f "$OUT_SKILL" ]]; then
@@ -151,8 +165,14 @@ text = path.read_text()
 #    (first 60 lines only — body has its own "N rules" mentions in audit
 #    snippets that should not be touched).
 lines = text.splitlines()
-head = lines[:60]
-body = lines[60:]
+# Edit the intro region only: frontmatter + title + intro paragraph, i.e.
+# everything BEFORE the first "## " H2 heading. This auto-maintains the
+# intro "N rules" sentence (which sat past the old fixed 60-line cutoff and
+# silently drifted 68→86). The body keeps its own "N rules" mentions in the
+# pipeline/audit snippets, which must NOT be rewritten.
+split_idx = next((i for i, l in enumerate(lines) if l.startswith('## ')), 60)
+head = lines[:split_idx]
+body = lines[split_idx:]
 new_head = []
 for line in head:
     line2 = re.sub(r'\b(\d+) rules\b', f'{count} rules', line)

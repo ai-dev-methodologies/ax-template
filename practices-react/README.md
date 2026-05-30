@@ -1,6 +1,6 @@
 # `practices-react/` — React 19 / Next.js 16 best-practices catalog
 
-68 evidence-anchored rules for React 19 + Next.js 16 applications. Vercel's
+86 evidence-anchored rules for React 19 + Next.js 16 applications. Vercel's
 `react-best-practices` skill is the seed; each rule was cross-checked against
 React 19, Next.js 16, and MDN canonical docs, then codex-reviewed before
 shipping. The catalog ships with a paired ESLint plugin and a binary

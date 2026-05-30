@@ -62,7 +62,7 @@ retrieval:
 
 # practices-react SKILL
 
-This is the AI agent entry-point for the **`practices-react/`** catalog: 68 rules covering React 19 / Next.js 16 best practices — evidence-anchored, codex-reviewed, and continuously time-decay-guarded.
+This is the AI agent entry-point for the **`practices-react/`** catalog: 86 rules covering React 19 / Next.js 16 best practices — evidence-anchored, codex-reviewed, and continuously time-decay-guarded.
 
 ## When this skill activates
 
@@ -89,6 +89,7 @@ both this table and the rule count above.
 | js- | 13 | JavaScript performance (Set/Map, immutable arrays, regex, caching, iteration) |
 | advanced- | 3 | Advanced effect callback patterns (useEffectEvent, init-once, handler refs) |
 | nextjs- | 4 | Next.js-specific extensions (use-cache directive, async params, use-cache private/remote) |
+| (other) | 18 | ESLint-style no-/prefer- enforcement + L2/domain singletons (saved-, currency-, combobox-, impersonation-, rich-, traceid-, virtualized-, business-) not in a named family |
 <!-- END:auto-family-table -->
 
 ## Pipeline
@@ -140,7 +141,7 @@ cd practices-react/eslint-plugin-ax && npm test
 
 ## Sibling pointers
 
-- Spring/Java catalog: `practices/` (64 rules, 21 categories)
+- Spring/Java catalog: `practices/` (112 rules, 22+ categories)
 - Verifying compliance specs: `specs/react-practices-l0.yaml`, `specs/spring-practices-l0.yaml`
 - Methodology: `METHODOLOGY.md` (Spec Trio + portable tests + binary verification)
 - Pilot report: `practices-react/pilot/pilot-report.md` (full audit trail for the first 6 rules; pattern carries to all subsequent rules)
