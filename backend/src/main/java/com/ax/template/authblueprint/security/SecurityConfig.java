@@ -151,6 +151,13 @@ public class SecurityConfig {
                 // on HMAC mismatch), not a Spring Security 401 — same false-
                 // confidence trap closed for /api/payments/callback in dogfood-6.
                 .requestMatchers("/api/identity-verification/callback/**").permitAll()
+                // IMW6 data-subject-rights domain (specs/data-subject-rights-l0.yaml):
+                // DSR-ACCESS/RECTIFY/ERASURE/PORTABILITY/RESTRICT/SLA-001 — the
+                // self-service surface requires JWT; the data-subject is always
+                // Authentication.getName() (no subject id in path/body). Cross-subject
+                // admin lookups use /api/admin/dsr/** which the upstream
+                // "/api/admin/**" hasAuthority("ROLE_ADMIN") matcher already gates.
+                .requestMatchers("/api/me/dsr/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/email/password-change").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/oauth/link").authenticated()

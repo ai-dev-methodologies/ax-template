@@ -283,6 +283,15 @@ tasks.register<Test>("testEmailOutbox") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testDsr") {
+    useJUnitPlatform {
+        includeTags("DSR")
+    }
+    description = "Run data-subject-rights domain compliance tests (IMW6: 7 items / 7 families — ACCESS, RECTIFY, ERASURE, PORTABILITY, RESTRICT, SLA, OBSERVABILITY)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Test>("testCommonAdvice") {
     useJUnitPlatform {
         includeTags("COMMON_ADVICE")
