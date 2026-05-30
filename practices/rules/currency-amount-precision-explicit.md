@@ -43,6 +43,8 @@ decided_at: "2026-05-18"
 
 **Impact: CRITICAL — float/double amounts silently accumulate rounding errors. A 0.1 KRW float error compounded over 1,000 invoices is 100 KRW gone. Stripe and Toss both define integer minor units as canonical. This template enforces the same.**
 
+> **Layered boundary (#39 reconcile, 2026-05-31).** This rule governs the canonical STORAGE/domain representation (long minor-units). The payment/PG-edge intentionally uses `BigDecimal` major-units (`lang-bigdecimal-for-money` + `payment-iso-4217-currency`); the two layers are NOT a contradiction but a documented seam bridged ONLY by `common/Money.toMajorUnits` / `toMinorUnits` and enforced by `money_boundary_seam_guard.sh`. Never hand-convert with `BigDecimal.valueOf(<minor getter>)` — that over-charges 100x on 2-decimal currencies. See `DECISIONS.md` → "Money representation — layered boundary".
+
 Both Stripe and Toss Payments use integer minor-unit amounts as their canonical wire format:
 - KRW (South Korean Won): no subdivisions — 1,000 KRW = `1000` (long)
 - USD (US Dollar): cents — $10.00 = `1000` (long, cents)

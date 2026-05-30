@@ -13,7 +13,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
+import com.ax.template.authblueprint.common.Money;
+
 import java.util.UUID;
 
 /**
@@ -125,7 +126,11 @@ public class OrderService {
 
     private Payment capturePayment(Order order, String userId, String idempotencyKey, String token) {
         CreatePaymentRequest req = new CreatePaymentRequest(
-            BigDecimal.valueOf(order.getTotalAmount()),
+            // #39 money-l0 reconcile: order total is long MINOR units; payment expects
+            // a MAJOR-units BigDecimal scaled to the currency. Money.toMajorUnits places
+            // the decimal point (1099 USD → 10.99) — a raw BigDecimal.valueOf(minor) here
+            // is a 100x over-charge for every 2-decimal currency (the seam bug this fixes).
+            Money.toMajorUnits(order.getTotalAmount(), order.getCurrency()),
             order.getCurrency(),
             order.getId(),
             token == null ? "tok_default" : token,

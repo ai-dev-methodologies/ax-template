@@ -992,6 +992,11 @@ echo "[60] doc_headline_count_guard.sh (2026-05-30 audit C1/C2/C3 — README her
 run_guard "doc_headline_count/live" 0 \
     bash "$SCRIPT_DIR/doc_headline_count_guard.sh"
 
+echo ""
+echo "[61] money_boundary_seam_guard.sh (#39 money-l0 reconcile — block raw BigDecimal.valueOf(<minor getter>) at the long-minor → BigDecimal-major payment boundary; use common/Money.toMajorUnits)"
+run_guard "money_boundary_seam/live" 0 \
+    bash "$SCRIPT_DIR/money_boundary_seam_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

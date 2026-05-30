@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "69d56e5f912397ad4b931944f27c23c28e4273c680be42c5cd779cb7cff0a313"
+  source_concat_sha256: "124eb5a960d70d9c8903efa1c5d882dca48a58ad64f3bda38d9fc6d3f8ec5862"
   rule_count: 112
   generated_by: "practices/generate_agents.sh"
 ---
@@ -2320,6 +2320,8 @@ decided_at: "2026-05-18"
 
 **Impact: CRITICAL — float/double amounts silently accumulate rounding errors. A 0.1 KRW float error compounded over 1,000 invoices is 100 KRW gone. Stripe and Toss both define integer minor units as canonical. This template enforces the same.**
 
+> **Layered boundary (#39 reconcile, 2026-05-31).** This rule governs the canonical STORAGE/domain representation (long minor-units). The payment/PG-edge intentionally uses `BigDecimal` major-units (`lang-bigdecimal-for-money` + `payment-iso-4217-currency`); the two layers are NOT a contradiction but a documented seam bridged ONLY by `common/Money.toMajorUnits` / `toMinorUnits` and enforced by `money_boundary_seam_guard.sh`. Never hand-convert with `BigDecimal.valueOf(<minor getter>)` — that over-charges 100x on 2-decimal currencies. See `DECISIONS.md` → "Money representation — layered boundary".
+
 Both Stripe and Toss Payments use integer minor-unit amounts as their canonical wire format:
 - KRW (South Korean Won): no subdivisions — 1,000 KRW = `1000` (long)
 - USD (US Dollar): cents — $10.00 = `1000` (long, cents)
@@ -3858,6 +3860,8 @@ evidence:
 `double` and `float` are binary floating point — they can represent `0.5`, `0.25`, `0.75` exactly but cannot represent `0.1`, `0.2`, `0.3`, or any tenth that is not a sum of negative powers of two. The classic demonstration `0.1 + 0.2 == 0.30000000000000004` is harmless in a graph but catastrophic in a ledger: a refund computed as `paid - capturedAmount` over a few thousand line items will accumulate sub-cent rounding error that breaks reconciliation, fails audit invariants, and shows up months later as a `recon_drift_detected_total` counter incrementing in production. The Java standard library answer, codified in `java.math.BigDecimal` and recommended verbatim by *Effective Java* Item 60, is unconditional: monetary amounts use `BigDecimal`; never `double`, `float`, or `Number`. The compiler will not catch this — only a rule + a static-analysis scan will.
 
 **Tradeoff — long minor-units integer:** A legitimate alternative is to store an integer in the smallest subdivision of the currency (KRW 1000원 → `1000`, USD $10.99 → `1099`). This is what Stripe, Adyen, and most PSP REST APIs do because integers are exact end-to-end. The tradeoff is binding: **if** the codebase chooses `long` minor-units, **every** monetary field and every arithmetic step must commit to that representation. A mix of `BigDecimal` in some places and `long amountCents` in others reintroduces conversion bugs at every boundary. This rule mandates `BigDecimal` by default; a codebase-wide migration to `long` minor-units is permitted only if (a) documented in `DECISIONS.md`, (b) enforced by a separate ArchUnit rule asserting no `BigDecimal` appears in monetary positions, and (c) the per-currency scale check from `payment-iso-4217-currency.md` is rewritten to assert the integer's implicit scale matches the currency. The mixed form is what this rule rejects.
+
+**#39 reconcile (2026-05-31) — the documented layered boundary is NOT the rejected mixed form.** ax-template runs a deliberate two-layer representation: the storage/domain layer holds `long` minor-units (`currency-amount-precision-explicit`, ArchUnit-enforced on `..billing..`; ecommerce `Product.price`; frontend L0 `money.ts`), and the payment/PG-edge layer holds `BigDecimal` major-units (this rule + `payment-iso-4217-currency`). The two layers are bridged ONLY through `common/Money.toMajorUnits` / `toMinorUnits` (decimal point placed at the ISO-4217 scale) and enforced by `money_boundary_seam_guard.sh`. That arrangement satisfies clauses (a) `DECISIONS.md` ("Money representation — layered boundary"), (b) the billing ArchUnit rule, and (c) `payment-iso-4217-currency.md` — so it is the *reconciled* form, not the rejected one. What this rule still rejects is **undocumented, unscoped mixing with no conversion seam** — the canonical anti-pattern being `BigDecimal.valueOf(order.getTotalAmount())`, which passes a minor-units `long` into a major-units API and silently over-charges 100x on every 2-decimal currency (`money_boundary_seam_guard.sh` blocks exactly this).
 
 **Incorrect — monetary fields typed as double, silent precision drift:**
 

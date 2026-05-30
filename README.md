@@ -39,7 +39,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-22 L4 domains + 11 active recipes · 112 Java rules · 86 React rules · 7 ESLint rules · 63 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+22 L4 domains + 11 active recipes · 112 Java rules · 86 React rules · 7 ESLint rules · 64 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -97,7 +97,7 @@ cat recipes/_MANIFEST.yaml | head -40
 cat recipes/saas-subscription/RECIPE.md     # example
 
 # 4. Run the full catalog verification (proves the bundle is intact)
-bash practices/evals/run-all-guards.sh       # 63 hard guards (all PASS expected)
+bash practices/evals/run-all-guards.sh       # 64 hard guards (all PASS expected)
 
 # Per-domain catalog tasks — the "binary pass/fail" surface (R64+ baseline)
 cd backend
@@ -228,7 +228,7 @@ ax-template/
 ├── practices/                      # Java/Spring catalog
 │   ├── rules/                      # 112 rule.md files
 │   ├── upstream/                   # External doc snapshots
-│   ├── evals/                      # 4 hard gates + 63 hard guards
+│   ├── evals/                      # 4 hard gates + 64 hard guards
 │   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)
 │   ├── SKILL.md                    # subsystem skill
 │   ├── MAINTAINER.md               # catalog maintainer guide
