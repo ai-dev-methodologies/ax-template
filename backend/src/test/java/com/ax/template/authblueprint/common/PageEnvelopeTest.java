@@ -168,7 +168,7 @@ class PageEnvelopeTest {
     @Test
     void clamp_rejectsNegativePage() {
         assertThatThrownBy(() -> OffsetPageSupport.clamp(-1, 20, 200))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidPageRequestException.class)
                 .hasMessageContaining("page");
     }
 
@@ -176,23 +176,23 @@ class PageEnvelopeTest {
     void clamp_rejectsZeroOrNegativeSize() {
         // size <= 0 is the "unlimited" smell PAGE-LIMIT-001 forbids → 400.
         assertThatThrownBy(() -> OffsetPageSupport.clamp(0, 0, 200))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidPageRequestException.class)
                 .hasMessageContaining("size");
         assertThatThrownBy(() -> OffsetPageSupport.clamp(0, -5, 200))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidPageRequestException.class);
     }
 
     @Test
     void clamp_rejectsSizeAboveMax() {
         assertThatThrownBy(() -> OffsetPageSupport.clamp(0, 201, 200))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidPageRequestException.class)
                 .hasMessageContaining("size");
     }
 
     @Test
     void clamp_rejectsMaxSizeAboveAbsoluteCeiling() {
         assertThatThrownBy(() -> OffsetPageSupport.clamp(0, 20, OffsetPageSupport.ABSOLUTE_MAX_PAGE_SIZE + 1))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidPageRequestException.class)
                 .hasMessageContaining("maxSize");
     }
 
