@@ -1,0 +1,126 @@
+# contracts/data-subject-rights-ui.yaml
+# UI Contract — data-subject-rights domain, full_trio mode.
+#
+# All routes carry a non-null backend_operation_id resolving against
+# backend_contract_ref (contracts/data-subject-rights-openapi.yaml).
+# static_source_ref is [] for all routes (full_trio: FORBIDDEN to be non-empty).
+#
+# A self-service privacy console: a dashboard listing the subject's DSR
+# requests + one route per data-subject right.
+
+domain: data-subject-rights
+backend_contract_ref: contracts/data-subject-rights-openapi.yaml
+routes:
+  - path: /privacy
+    method: GET
+    backend_operation_id: dsrGetRequest
+    static_source_ref: []
+    params: {}
+    query:
+      status:
+        type: string
+        description: "Filter requests by status (client-side)"
+    states:
+      loading: LoadingBoundary
+      error: ErrorBanner
+      empty: EmptyState
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: null
+
+  - path: /privacy/access
+    method: POST
+    backend_operation_id: dsrOpenAccess
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingBoundary
+      error: ErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: /privacy
+
+  - path: /privacy/rectify
+    method: PATCH
+    backend_operation_id: dsrRectify
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingBoundary
+      error: FormErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: /privacy
+
+  - path: /privacy/erasure
+    method: POST
+    backend_operation_id: dsrErasure
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingBoundary
+      error: ErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: /privacy
+
+  - path: /privacy/portability
+    method: POST
+    backend_operation_id: dsrPortability
+    static_source_ref: []
+    params: {}
+    query:
+      format:
+        type: string
+        description: "Export format json|csv (default json)"
+    states:
+      loading: LoadingBoundary
+      error: ErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: /privacy
+
+  - path: /privacy/restrict
+    method: POST
+    backend_operation_id: dsrRestrict
+    static_source_ref: []
+    params: {}
+    query: {}
+    states:
+      loading: LoadingBoundary
+      error: ErrorBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: /privacy
+
+  - path: /privacy/requests/{id}
+    method: GET
+    backend_operation_id: dsrGetRequest
+    static_source_ref: []
+    params:
+      id:
+        type: string
+        format: uuid
+    query: {}
+    states:
+      loading: LoadingBoundary
+      error: NotFoundBanner
+      empty: null
+      success: null
+    redirects:
+      on_auth_required: /login
+      on_success: null

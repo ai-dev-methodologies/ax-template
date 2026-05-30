@@ -1,0 +1,47 @@
+/*
+---
+template_id: L4/data-subject-rights/app/layout
+layer: L4
+domain: data-subject-rights
+domain_mode: full_trio
+backend_operation_id: null
+evidence:
+  - source_type: internal
+    rationale: "L4 data-subject-rights vertical — root layout: html/body shell, Providers wrapper."
+  - source_type: external
+    citation: "Next.js 15 App Router — root layout requirements (html + body tags)"
+    url: "https://nextjs.org/docs/app/building-your-application/routing/layouts-and-templates"
+provenance_class: internal_design
+imports_from: [L1, L2, L3]
+imports_forbidden: [other L4 domains]
+---
+*/
+import React from 'react'
+import type { Metadata } from 'next'
+import { Providers } from './providers'
+
+export const metadata: Metadata = {
+  title: 'Privacy & Data Rights',
+  description: 'Built with ax-template',
+}
+
+/**
+ * RootLayout — L4 data-subject-rights vertical root layout.
+ *
+ * Fork instructions:
+ *   1. Update metadata.title / description.
+ *   2. Add your font imports (next/font/google).
+ *   3. Import your global CSS (design tokens, base styles).
+ *   4. Add analytics / monitoring providers inside Providers.
+ */
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className="min-h-svh bg-background font-sans antialiased">
+        <Providers>
+          {children}
+        </Providers>
+      </body>
+    </html>
+  )
+}

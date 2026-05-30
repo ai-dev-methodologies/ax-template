@@ -9099,6 +9099,7 @@ Reference: [RFC 2104 — HMAC: Keyed-Hashing for Message Authentication](https:/
 - **billing** — applied by: (none)
 - **comment-thread** — applied by: (none)
 - **crud** — applied by: api-gateway-relay, b2b-admin, booking, cms, community, crm, e-commerce, internal-it, lms, marketplace
+- **data-subject-rights** — applied by: community, crm, e-commerce, lms, marketplace
 - **email-outbox** — applied by: (none)
 - **favorites-bookmarks** — applied by: (none)
 - **feature-flags** — applied by: api-gateway-relay, b2b-admin, booking, lms, marketplace, saas-subscription

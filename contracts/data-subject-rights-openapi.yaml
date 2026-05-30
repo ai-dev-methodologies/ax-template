@@ -1,0 +1,308 @@
+openapi: 3.0.3
+info:
+  title: "Data Subject Rights (DSR) API"
+  version: "0.1.0"
+  description: >
+    Self-service GDPR data-subject-rights surface. The data subject is always
+    the authenticated principal (Authentication#getName()); no path/body param
+    carries a subject id. Cross-subject access is the separate ROLE_ADMIN
+    /api/admin/dsr/** surface. Responses returning personal data carry
+    Cache-Control: no-store. Paths/verbs/status codes mirror DsrController.
+servers:
+  - url: /api
+paths:
+  /me/dsr/access:
+    post:
+      operationId: dsrOpenAccess
+      summary: "Open a subject-access request (DSR-ACCESS-001)"
+      description: >
+        Assembles ALL personal data concerning the subject across owning modules
+        into a single export bundle and returns confirmation + a download handle.
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: "Access request accepted; bundle assembled"
+          headers:
+            Cache-Control:
+              schema: { type: string }
+              description: "no-store — personal data must not be cached"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessBundle'
+        '401':
+          description: "Unauthenticated"
+        '409':
+          description: "An access job is already in flight (DSR_ACCESS_IN_FLIGHT)"
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /me/dsr/rectify:
+    patch:
+      operationId: dsrRectify
+      summary: "Rectify an inaccurate personal-data field (DSR-RECTIFY-001)"
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RectifyRequest'
+      responses:
+        '200':
+          description: "Rectification accepted; before/after audit written"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DsrRequestResponse'
+        '409':
+          description: "current_value mismatch — optimistic concurrency (DSR_RECTIFY_STALE)"
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: "Field is not subject-rectifiable (DSR_FIELD_NOT_RECTIFIABLE)"
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /me/dsr/erasure:
+    post:
+      operationId: dsrErasure
+      summary: "Request erasure / right to be forgotten (DSR-ERASURE-001)"
+      description: >
+        Transitions the subject's records through soft-delete → scheduled PURGE
+        across owning modules. Idempotent: a re-request on an already-erased
+        subject returns the prior completion manifest, never 500.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: "Erasure manifest (full erasure or partial-erasure with retained categories)"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErasureManifest'
+        '401':
+          description: "Unauthenticated"
+
+  /me/dsr/portability:
+    post:
+      operationId: dsrPortability
+      summary: "Receive subject-provided data in a portable format (DSR-PORTABILITY-001)"
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          required: false
+          description: "Export format; default json"
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '202':
+          description: "Portable copy produced"
+          headers:
+            DSR-Schema-Version:
+              schema: { type: string }
+              description: "Stable export schema contract pin"
+            Cache-Control:
+              schema: { type: string }
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessBundle'
+        '400':
+          description: "Unsupported format (DSR_PORTABILITY_FORMAT_INVALID)"
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /me/dsr/restrict:
+    post:
+      operationId: dsrRestrict
+      summary: "Freeze processing without deletion (DSR-RESTRICT-001)"
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: "Restriction request accepted; processing frozen"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DsrRequestResponse'
+        '401':
+          description: "Unauthenticated"
+
+  /me/dsr/restrict/lift:
+    post:
+      operationId: dsrLiftRestriction
+      summary: "Lift a processing restriction (DSR-RESTRICT-001)"
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiftRequest'
+      responses:
+        '200':
+          description: "Restriction lifted; audit record written"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DsrRequestResponse'
+        '400':
+          description: "Missing justification"
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /me/dsr/requests/{requestId}:
+    get:
+      operationId: dsrGetRequest
+      summary: "Track a DSR request by id (DSR-SLA-001)"
+      description: >
+        IDOR-safe: a GET on another subject's request id without ROLE_ADMIN → 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: "DSR request tracking envelope"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DsrRequestResponse'
+        '404':
+          description: "Not found or not owner (IDOR-safe)"
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /me/dsr/requests/{requestId}/extend:
+    post:
+      operationId: dsrExtendRequest
+      summary: "Extend a DSR request response window (DSR-SLA-001)"
+      description: >
+        Extend a single request by up to 60 further days when justified;
+        records an extension_reason.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtendRequest'
+      responses:
+        '200':
+          description: "Extended request envelope"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DsrRequestResponse'
+        '404':
+          description: "Not found or not owner (IDOR-safe)"
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RectifyRequest:
+      type: object
+      required: [fieldPath, correctedValue, justification]
+      properties:
+        fieldPath: { type: string }
+        currentValue: { type: string }
+        correctedValue: { type: string }
+        justification: { type: string }
+    LiftRequest:
+      type: object
+      required: [justification]
+      properties:
+        justification: { type: string }
+    ExtendRequest:
+      type: object
+      required: [extensionDays, extensionReason]
+      properties:
+        extensionDays: { type: integer }
+        extensionReason: { type: string }
+    DsrRequestResponse:
+      type: object
+      properties:
+        requestId: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [access, rectify, erasure, portability, restrict]
+        status: { type: string }
+        receivedAt: { type: string, format: date-time }
+        dueAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time, nullable: true }
+        extensionDays: { type: integer }
+        slaBreached: { type: boolean }
+    AccessBundle:
+      type: object
+      properties:
+        request:
+          $ref: '#/components/schemas/DsrRequestResponse'
+        modules:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: true
+          description: "Per-module map of personal-data field → value"
+    ErasureManifest:
+      type: object
+      properties:
+        requestId: { type: string, format: uuid }
+        erasedAt: { type: string, format: date-time }
+        legalBasis: { type: string }
+        fullyErased: { type: boolean }
+        retained:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetainedCategory'
+    RetainedCategory:
+      type: object
+      properties:
+        category: { type: string }
+        legalBasis: { type: string }
+    ProblemDetail:
+      type: object
+      description: "RFC 9457 Problem Details"
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }

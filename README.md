@@ -39,7 +39,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-21 L4 domains + 11 active recipes · 112 Java rules · 86 React rules · 7 ESLint rules · 63 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+22 L4 domains + 11 active recipes · 112 Java rules · 86 React rules · 7 ESLint rules · 63 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -76,7 +76,7 @@ loop.
 
 ### 30-minute quickstart (fork-receiver path)
 
-> **Step 0 — Read [`docs/IMPLEMENTATION-STATUS.md`](./docs/IMPLEMENTATION-STATUS.md) first.** It documents the current state across the 21 L4 domains: backend implementation level, frontend trio status (full / backend-only / promoted from R39 stub), and which Spec Trio fields are wired. Sealed verdict PASS validates **catalog self-discoverability by AI agents**, NOT that all backend code is production-ready. Skipping this step is the #1 cause of fork-receiver scope misjudgment.
+> **Step 0 — Read [`docs/IMPLEMENTATION-STATUS.md`](./docs/IMPLEMENTATION-STATUS.md) first.** It documents the current state across the 22 L4 domains: backend implementation level, frontend trio status (full / backend-only / promoted from R39 stub), and which Spec Trio fields are wired. Sealed verdict PASS validates **catalog self-discoverability by AI agents**, NOT that all backend code is production-ready. Skipping this step is the #1 cause of fork-receiver scope misjudgment.
 
 The fastest way to evaluate: pick **one of 11 active recipes** that matches your scenario, then compose. Each recipe is a documented composition of L4 domains (auth, crud, payment, audit-log, etc.) with sealed-verdict self-discoverability.
 
@@ -140,7 +140,7 @@ See [`METHODOLOGY.md`](./METHODOLOGY.md). Short version:
 4. **Portable Tests** — `@Tag("<DOMAIN>")` JUnit + RestAssured tests
 5. **Build Verification** — register `./gradlew test<Domain>` task
 
-Currently: **21 L4 domains** (auth, crud, payment, audit-log, billing, feature-flags, file-storage, notification, practices, scheduled-task, search, webhook, api-key, approval-workflow, session-management, activity-feed, comment-thread, tag-categorization, favorites-bookmarks, email-outbox, multi-tenant) and **11 active recipes**. All 21 L4 documented with Spec Trio + per-domain `./gradlew test{Domain}` task. `identity-verification` is intentionally `domain_mode: backend_only` (no `templates/L4/identity-verification/` on disk — see [`practices/rules/spec-domain-mode-gates-frontend-trio.md`](./practices/rules/spec-domain-mode-gates-frontend-trio.md)). See `docs/IMPLEMENTATION-STATUS.md` for the full status taxonomy.
+Currently: **22 L4 domains** (auth, crud, payment, audit-log, billing, feature-flags, file-storage, notification, practices, scheduled-task, search, webhook, api-key, approval-workflow, session-management, activity-feed, comment-thread, tag-categorization, favorites-bookmarks, email-outbox, multi-tenant, data-subject-rights) and **11 active recipes**. All 22 L4 documented with Spec Trio + per-domain `./gradlew test{Domain}` task. `identity-verification` is intentionally `domain_mode: backend_only` (no `templates/L4/identity-verification/` on disk — see [`practices/rules/spec-domain-mode-gates-frontend-trio.md`](./practices/rules/spec-domain-mode-gates-frontend-trio.md)). See `docs/IMPLEMENTATION-STATUS.md` for the full status taxonomy.
 
 Shared client primitives sit at **L0** (`templates/L0/fork-receiver-kit/` — `use-caller-id.ts` / `parse-error.ts` / `entity-key.ts`) and at **L2** (`templates/L2/blocks/` — `confirm-dialog.tsx`, `rate-limit-banner.tsx`, `offline-banner.tsx`, `announce-live.tsx`, and 30+ more).
 

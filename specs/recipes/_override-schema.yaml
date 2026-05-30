@@ -75,6 +75,7 @@ $defs:
       - bulk-import
       - comment-thread
       - crud
+      - data-subject-rights
       - email-outbox
       - favorites-bookmarks
       - feature-flags

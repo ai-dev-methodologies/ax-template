@@ -1,4 +1,4 @@
-# Implementation Status — 21 L4 Domains (R63 baseline · R93 multi-tenant · 2026-05-30 audit refresh)
+# Implementation Status — 22 L4 Domains (R63 baseline · R93 multi-tenant · IMW6 DSR full-stack · 2026-05-30)
 
 > **Fork-receiver expectation alignment.** This doc closes the gap between catalog promises and runnable code. Persona simulation (R15 옵션A) revealed that fork-receivers consistently confuse `templates/L4/<domain>/` (catalog reference template + Next.js stub) with `backend/src/main/java/com/ax/template/authblueprint/<domain>/` (actual Java reference workload). The two layers are different by design — this table makes the boundary explicit.
 
@@ -8,7 +8,7 @@
 - **backend-only** — `specs/<domain>-l0.yaml` declares `domain_mode: backend_only`. Backend exists; **no** `templates/L4/<domain>/` directory by design. The catalog refuses to ship a frontend for server-to-server domains (identity-verification: CI/DI callback). See `practices/rules/spec-domain-mode-gates-frontend-trio.md` (R58) + the `l4_frontend_domain_mode_guard.sh` mechanical guard (R59).
 - **rules-as-code** — Special INFRA case. The `practices` directory ships as an L4 template for fork-receiver visibility but is not recipe-selectable — it IS the catalog enforcement system.
 
-## 21 L4 status (disk-verified 2026-05-30)
+## 22 L4 status (disk-verified 2026-05-30)
 
 | L4 domain | Backend Java | Frontend Next.js trio | `./gradlew test{Domain}` | Status |
 |---|---|---|---|---|
@@ -20,6 +20,7 @@
 | billing | ✅ R21 backend | ✅ trio | 17/17 GREEN | **full-trio** |
 | comment-thread | ✅ R36 closure | ✅ trio (R42) | 18/18 GREEN | **full-trio** |
 | crud | ✅ reference workload | ✅ trio | 7/7 GREEN | **full-trio** |
+| data-subject-rights | ✅ IMW6 backend (GDPR Art 15-20) | ✅ trio (IMW6 FMW: 7-route privacy console) | 15/15 GREEN (10 compliance + 5 ViolationProof) | **full-trio** |
 | email-outbox | ✅ R51 closure | ✅ trio (R51) | 24/24 GREEN incl PII helper | **full-trio** |
 | favorites-bookmarks | ✅ R34 closure | ✅ trio (R46+R55) | 17/17 GREEN | **full-trio** |
 | feature-flags | ✅ R20 backend | ✅ trio | 11/11 GREEN | **full-trio** |
@@ -27,7 +28,7 @@
 | multi-tenant | ✅ R39 README + R93 selectable stub (cross-cutting tenancy) | ❌ no `app/` (backend-only stub) | n/a — enforced via the 10+ tenant-scope hard guards (aop/callback/scheduled/realtime/broker/kafka*/webclient) | **backend-only stub** (R93 selectable) |
 | notification | ✅ R20 backend | ✅ trio | testNotification GREEN | **full-trio** |
 | payment | ✅ reference workload | ✅ trio | 29 items GREEN | **full-trio** |
-| practices | ✅ rules-as-code | ✅ trio | 107 rules GREEN | **rules-as-code** |
+| practices | ✅ rules-as-code | ✅ trio | 112 rules GREEN | **rules-as-code** |
 | scheduled-task | ✅ R20 closure | ✅ trio | 5/5 GREEN | **full-trio** |
 | search | ✅ R20 backend | ✅ trio | 8/8 GREEN | **full-trio** |
 | session-management | ✅ R33 closure | ✅ trio (R41) | 23/23 GREEN | **full-trio** |
@@ -40,7 +41,7 @@ Plus the spec-anchored backend-only domain (NOT on disk under `templates/L4/`):
 |---|---|---|---|---|
 | identity-verification | ✅ R54 closure | ❌ by design | 19/19 GREEN | **backend-only** (spec `domain_mode: backend_only`) |
 
-**Totals:** 21 disk L4 (19 full-trio + 1 rules-as-code + 1 backend-only stub: multi-tenant) + 1 backend-only spec-anchored domain (identity-verification, not on disk under `templates/L4/`).
+**Totals:** 22 disk L4 (20 full-trio + 1 rules-as-code + 1 backend-only stub: multi-tenant) + 1 backend-only spec-anchored domain (identity-verification, not on disk under `templates/L4/`).
 
 ## Shared client primitives (cross-cutting layers)
 

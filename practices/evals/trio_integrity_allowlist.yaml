@@ -25,6 +25,7 @@ domains:
   search: full_trio             # SP26: full-text search + typeahead + Cmd+K palette + charts L2
   feature-flags: full_trio      # SP28: runtime feature toggles, admin CRUD, FeatureGate + FeatureFlagToggle L2
   billing: full_trio            # SP30: subscription lifecycle, plan management, invoice listing, billing event history
+  data-subject-rights: full_trio    # IMW6 FMW: GDPR DSR self-service console (access/rectify/erase/restrict/portability + SLA tracking)
   identity-verification: backend_only  # SP31: KISA 본인인증 callback storage (CI/DI tokens); no frontend UI in scope
   webhook: backend_only         # SP45 R9: outbound webhook-emit + HMAC-SHA256 signing + idempotent retries + dead-letter + circuit-breaker; no frontend UI in scope
   multi-tenant: backend_only    # R93: cross-cutting tenancy enforcement runtime; no first-class UI (every L4's tenant_model cites specs/multi-tenant-l0.yaml)

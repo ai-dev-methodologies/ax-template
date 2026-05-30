@@ -1,0 +1,117 @@
+# specs/data-subject-rights-frontend-l0.yaml
+# Page Compliance Spec — data-subject-rights domain, full_trio mode.
+#
+# Every item's backend_operation_id resolves to
+# contracts/data-subject-rights-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in
+# specs/data-subject-rights-l0.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+#
+# Coverage: all 8 backend operationIds (dsrOpenAccess / dsrRectify / dsrErasure /
+# dsrPortability / dsrRestrict / dsrLiftRestriction / dsrGetRequest /
+# dsrExtendRequest) are referenced — 100% operationId coverage.
+
+domain: data-subject-rights
+domain_mode: full_trio
+backend_spec_ref: specs/data-subject-rights-l0.yaml
+frontend_required: true
+
+items:
+  - id: DSR-FE-001
+    requirement: "Privacy dashboard lists the subject's DSR requests with status + SLA due date by tracking each request via the dsrGetRequest endpoint"
+    backend_operation_id: dsrGetRequest
+    backend_spec_ref: DSR-SLA-001
+    static_source_ref: []
+    test_method: "data-subject-rights/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/data-subject-rights-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: DSR-FE-002
+    requirement: "Access page submits a subject-access request via dsrOpenAccess and renders the returned export bundle download handle"
+    backend_operation_id: dsrOpenAccess
+    backend_spec_ref: DSR-ACCESS-001
+    static_source_ref: []
+    test_method: "data-subject-rights/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/data-subject-rights-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: DSR-FE-003
+    requirement: "Rectify page renders a field-level correction form (field_path / current_value / corrected_value / justification) and calls dsrRectify, surfacing per-field validation errors"
+    backend_operation_id: dsrRectify
+    backend_spec_ref: DSR-RECTIFY-001
+    static_source_ref: []
+    test_method: "data-subject-rights/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/data-subject-rights-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: DSR-FE-004
+    requirement: "Erasure page guards the destructive request behind a confirm-dialog and calls dsrErasure on confirmation, rendering the resulting (partial or full) erasure manifest"
+    backend_operation_id: dsrErasure
+    backend_spec_ref: DSR-ERASURE-001
+    static_source_ref: []
+    test_method: "data-subject-rights/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/data-subject-rights-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: DSR-FE-005
+    requirement: "Portability page lets the subject choose json/csv format and calls dsrPortability, exposing the DSR-Schema-Version pinned download"
+    backend_operation_id: dsrPortability
+    backend_spec_ref: DSR-PORTABILITY-001
+    static_source_ref: []
+    test_method: "data-subject-rights/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/data-subject-rights-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: DSR-FE-006
+    requirement: "Restrict page guards the processing-freeze behind a confirm-dialog and calls dsrRestrict, reflecting the resulting restricted status"
+    backend_operation_id: dsrRestrict
+    backend_spec_ref: DSR-RESTRICT-001
+    static_source_ref: []
+    test_method: "data-subject-rights/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/data-subject-rights-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: DSR-FE-007
+    requirement: "Restrict page offers a lift-restriction action requiring a justification and calls dsrLiftRestriction"
+    backend_operation_id: dsrLiftRestriction
+    backend_spec_ref: DSR-RESTRICT-001
+    static_source_ref: []
+    test_method: "data-subject-rights/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/data-subject-rights-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: DSR-FE-008
+    requirement: "Request detail page shows a single request's tracking envelope (status, received_at, due_at, closed_at, SLA breach) via dsrGetRequest"
+    backend_operation_id: dsrGetRequest
+    backend_spec_ref: DSR-SLA-001
+    static_source_ref: []
+    test_method: "data-subject-rights/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/data-subject-rights-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: DSR-FE-009
+    requirement: "Request detail page offers an extend-window action (extensionDays + extensionReason) and calls dsrExtendRequest, refreshing the tracking envelope"
+    backend_operation_id: dsrExtendRequest
+    backend_spec_ref: DSR-SLA-001
+    static_source_ref: []
+    test_method: "data-subject-rights/composition.spec.ts"
+    verification_type: e2e_test
+    policy_ref: "blueprints/data-subject-rights-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false

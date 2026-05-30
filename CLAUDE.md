@@ -38,7 +38,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (21 L4 domains + 11 active recipes + 112 Java rules + 86 React rules + 7 ESLint rules + 63 hard guards + AGENTS.md sentinel)
+    ↓ (22 L4 domains + 11 active recipes + 112 Java rules + 86 React rules + 7 ESLint rules + 63 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -263,14 +263,14 @@ ax-template/
 │   │                          # (use-caller-id / parse-error / entity-key)
 │   ├── L2/blocks/             # 30+ reusable widgets (rate-limit-banner R56,
 │   │                          # confirm-dialog, offline-banner, toast 등)
-│   └── L4/                    # 21 domain verticals (full-trio 19 + INFRA 1 + backend-only stub 1: multi-tenant)
+│   └── L4/                    # 22 domain verticals (full-trio 20 + INFRA 1 + backend-only stub 1: multi-tenant)
 ├── backend/                   # Spring Boot reference workload (skill의 self-application)
 │   └── src/main/java/com/ax/template/authblueprint/
 │       ├── common/            # R67 — backend cross-cutting helpers (AuditPiiHelper)
 │       └── <domain>/          # 20 domain modules + identity-verification (backend_only)
 ├── frontend/                  # React reference workload
 ├── docs/
-│   ├── IMPLEMENTATION-STATUS.md  # 21 L4 status taxonomy (refreshed 2026-05-30)
+│   ├── IMPLEMENTATION-STATUS.md  # 22 L4 status taxonomy (refreshed 2026-05-30)
 │   └── dogfood-ledger/           # R71 — classified findings per dogfood iteration
 ├── verify/                    # 검증 스크립트 (선택적 — fork받은 팀이 채택 여부 결정)
 └── docs/archive/              # 과거 거버넌스 문서 (참고용)

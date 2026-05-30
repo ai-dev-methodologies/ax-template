@@ -104,6 +104,20 @@ tiers:
         active_recipes: ["api-gateway-relay", "b2b-admin", "booking", "cms",
                          "community", "crm", "e-commerce", "internal-it",
                          "lms", "marketplace"]
+      # IMW6 FMW (2026-05-30): data-subject-rights completed to full_trio.
+      # Backend (DsrController + DsrService + DSR-{ACCESS,RECTIFY,ERASURE,
+      # PORTABILITY,RESTRICT,SLA,OBSERVABILITY}-001) + frontend Spec Trio +
+      # L4 Next.js privacy console (templates/L4/data-subject-rights/) all
+      # present. Generic GDPR Art 15-20 self-service surface; recipe-orphan
+      # until a personal-data recipe adopts it via override_allowed.add.
+      - name: "data-subject-rights"
+        recipe_orphan: true
+        rationale: >
+          Cross-cutting GDPR data-subject-rights console (access / rectify /
+          erase / restrict / portability + 30-day SLA tracking). On disk with
+          full_trio + in schema enum; awaiting recipe activation by any
+          fork-receiver processing identifiable personal data.
+        active_recipes: []
       - name: "feature-flags"
         active_recipes: ["b2b-admin", "booking", "saas-subscription"]
       - name: "file-storage"
