@@ -124,3 +124,48 @@ export function useUrlListState(options: UseUrlListStateOptions = {}): UrlListSt
       ),
   }
 }
+
+export interface ListStateToQueryOptions {
+  /** Page size considered the default (omitted unless `includeDefaults`). Default 20. */
+  defaultPageSize?: number
+  /**
+   * Emit `page`/`pageSize` even at their defaults. Off by default so the
+   * produced query string matches what the hook would put in the URL (defaults
+   * stay implicit → clean, shareable links).
+   */
+  includeDefaults?: boolean
+}
+
+/**
+ * listStateToQuery — the INVERSE of the hook's query-string read: serialise a
+ * {@link ListState} back into a query string. The hook owns query → state
+ * (reading the live URL); this owns state → query for the cases the hook does
+ * not cover — building a shareable link, a saved-view permalink, or a
+ * server-side prefetch URL — WITHOUT mounting the hook. Default values are
+ * omitted (matching the hook's clean-URL convention) unless `includeDefaults`.
+ *
+ * `listStateToQuery({ page: 2, pageSize: 20, filters: { status: 'ACTIVE' } })`
+ *   -> `'page=2&status=ACTIVE'`  (pageSize=20 is the default → omitted)
+ */
+export function listStateToQuery(
+  state: ListState,
+  options: ListStateToQueryOptions = {},
+): string {
+  const { defaultPageSize = DEFAULT_PAGE_SIZE, includeDefaults = false } = options
+  const params = new URLSearchParams()
+
+  if (includeDefaults || state.page > 1) params.set('page', String(Math.max(1, state.page)))
+  if (includeDefaults || state.pageSize !== defaultPageSize) {
+    params.set('pageSize', String(Math.max(1, state.pageSize)))
+  }
+  if (state.search) params.set('search', state.search)
+  if (state.sortField) {
+    params.set('sortField', state.sortField)
+    params.set('sortDirection', state.sortDirection ?? 'asc')
+  }
+  for (const [key, value] of Object.entries(state.filters)) {
+    if (value) params.set(key, value)
+  }
+
+  return params.toString()
+}

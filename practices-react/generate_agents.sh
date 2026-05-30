@@ -49,6 +49,45 @@ COUNT="${#SORTED[@]}"
   printf '3. **Codex consensus** — independent second opinion via `codex exec -s read-only`.\n'
   printf '4. **Continuous refresh** — each rule has `next_review_by`; time_decay_guard BLOCKs on stale.\n\n'
   printf 'See `practices-react/pilot/pilot-report.md` for the full audit trail.\n\n'
+
+  # ── Kit index (FMW4b) ───────────────────────────────────────────────────────
+  # FDW2 found a context-0 AI entering via this sentinel never learned the L0
+  # fork-receiver-kit exists (grep=1). Surface it here. The L0 list is GLOBBED
+  # from disk so the existence claim is disk-truth; descriptions are curated
+  # with a graceful fallback so a newly-added primitive still lists honestly.
+  printf '## Fork-receiver kit (L0) + key data-flow blocks (L2)\n\n'
+  printf 'Cross-cutting client primitives every L4 frontend trio needs but the\n'
+  printf 'catalog refuses to duplicate. The L0 kit sits BELOW L1 (pure TS, no JSX);\n'
+  printf 'import via the absolute-style path `templates/L0/fork-receiver-kit/<file>`.\n'
+  printf 'Full table + trade-offs: `templates/L0/fork-receiver-kit/README.md`.\n\n'
+  printf '### L0 — fork-receiver-kit\n\n'
+  for f in ../templates/L0/fork-receiver-kit/*.ts; do
+    base="$(basename "$f" .ts)"
+    case "$base" in
+      use-caller-id) desc="useCallerId / useCallerRole / normalizeUserId / sameUser — caller identity (prod hard-stop + dev warn)";;
+      parse-error) desc="parseError (RFC 9457 unwrap + Korean PII deny-list) + CodedError + sanitizeStoredError";;
+      entity-key) desc="assertSafeEntityRef — path-segment defense for polymorphic entity refs";;
+      parse-field-errors) desc="parseFieldErrors / extractFieldErrors — ProblemDetail per-field array -> Record<field,message> for setError";;
+      use-url-list-state) desc="useUrlListState + listStateToQuery — typed page/sort/search/filter <-> query string (the URL-as-state easy path)";;
+      use-idempotency-key) desc="useIdempotencyKey -> { key, regenerate } — Idempotency-Key lifecycle (pairs with backend IdempotencyKeyStore)";;
+      money) desc="toMinorUnits / toMajorUnits / parseMinor / serializeMinor / fractionDigitsFor — integer minor units, no float, JSON wire-type";;
+      use-conflict-resolution) desc="useConflictResolution / parseConflict / classifyConflict — 428/412/409 optimistic-lock conflict -> read-fresh-then-reconcile";;
+      *) desc="(see templates/L0/fork-receiver-kit/README.md)";;
+    esac
+    printf -- '- `%s` — %s\n' "$base" "$desc"
+  done
+  printf '\n### L2 — data-flow seam blocks (mirror a backend contract)\n\n'
+  printf 'Presentational halves of a backend contract — prop-driven, used beside the L0 hook:\n\n'
+  for pair in \
+    "bulk-result-panel|render a backend BulkResult (207 partial success): succeeded/failed + per-item errors" \
+    "conflict-banner|present a useConflictResolution ConflictState: your-value vs server-value vs validator + reload/overwrite"; do
+    blk="${pair%%|*}"; d="${pair#*|}"
+    if [ -f "../templates/L2/blocks/${blk}.tsx" ]; then
+      printf -- '- `%s` — %s\n' "$blk" "$d"
+    fi
+  done
+  printf '\nThe full L2 catalog (90+ blocks: data-table, filter-bar, pagination, crud-*-form, ...) lives in `templates/L2/blocks/`.\n\n'
+
   for f in "${SORTED[@]}"; do
     printf -- '<!-- @source %s -->\n\n' "$f"
     cat "$f"

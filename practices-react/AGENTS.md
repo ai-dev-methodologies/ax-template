@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "619061d15e20f2bb2700b7c78512492458340028b273ac9b35544fd705ef4218"
+  source_concat_sha256: "026a5508a6abb834d2321b30c298e1019d908aa2b59d6ecd86e627da7c5ed208"
   rule_count: 86
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -20,6 +20,33 @@ Every rule below shipped through a 4-phase curation pipeline:
 4. **Continuous refresh** — each rule has `next_review_by`; time_decay_guard BLOCKs on stale.
 
 See `practices-react/pilot/pilot-report.md` for the full audit trail.
+
+## Fork-receiver kit (L0) + key data-flow blocks (L2)
+
+Cross-cutting client primitives every L4 frontend trio needs but the
+catalog refuses to duplicate. The L0 kit sits BELOW L1 (pure TS, no JSX);
+import via the absolute-style path `templates/L0/fork-receiver-kit/<file>`.
+Full table + trade-offs: `templates/L0/fork-receiver-kit/README.md`.
+
+### L0 — fork-receiver-kit
+
+- `entity-key` — assertSafeEntityRef — path-segment defense for polymorphic entity refs
+- `money` — toMinorUnits / toMajorUnits / parseMinor / serializeMinor / fractionDigitsFor — integer minor units, no float, JSON wire-type
+- `parse-error` — parseError (RFC 9457 unwrap + Korean PII deny-list) + CodedError + sanitizeStoredError
+- `parse-field-errors` — parseFieldErrors / extractFieldErrors — ProblemDetail per-field array -> Record<field,message> for setError
+- `use-caller-id` — useCallerId / useCallerRole / normalizeUserId / sameUser — caller identity (prod hard-stop + dev warn)
+- `use-conflict-resolution` — useConflictResolution / parseConflict / classifyConflict — 428/412/409 optimistic-lock conflict -> read-fresh-then-reconcile
+- `use-idempotency-key` — useIdempotencyKey -> { key, regenerate } — Idempotency-Key lifecycle (pairs with backend IdempotencyKeyStore)
+- `use-url-list-state` — useUrlListState + listStateToQuery — typed page/sort/search/filter <-> query string (the URL-as-state easy path)
+
+### L2 — data-flow seam blocks (mirror a backend contract)
+
+Presentational halves of a backend contract — prop-driven, used beside the L0 hook:
+
+- `bulk-result-panel` — render a backend BulkResult (207 partial success): succeeded/failed + per-item errors
+- `conflict-banner` — present a useConflictResolution ConflictState: your-value vs server-value vs validator + reload/overwrite
+
+The full L2 catalog (90+ blocks: data-table, filter-bar, pagination, crud-*-form, ...) lives in `templates/L2/blocks/`.
 
 <!-- @source rules/advanced-event-handler-refs.md -->
 
@@ -4288,7 +4315,7 @@ verification:
   type: eslint
   rule_id: "ax/no-array-includes-in-loop"
   status: shipped
-  notes: "Custom ESLint rule planned: flag `array.includes(...)` or `array.find(...)` inside an iteration callback (.filter / .map / for-of / while) when the same array is closed over and not mutated in the loop. Until shipped: peer review checkpoint."
+  notes: "Shipped as ax/no-array-includes-in-loop: flags `array.includes/.find/.findIndex/.indexOf(...)` inside an iterator callback (.filter / .map / .forEach / .some / .every / .reduce) or a for-of body when the array is closed over and not the one being iterated. Plain for/while are intentionally NOT covered (ambiguous iteration count → false-positive risk; the rule's contract is false-negatives-OK, false-positives-not)."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -4388,7 +4415,7 @@ cacheById.has(1)       // true
 
 ### Verification
 
-- Static check (planned): custom ESLint rule `ax/no-array-includes-in-loop`. Flags `arr.includes(x)` or `arr.find(...)` inside `.filter`, `.map`, `for-of`, or `while` when the array is closed over and not mutated inside the loop.
+- Static check (shipped): ESLint rule `ax/no-array-includes-in-loop`. Flags `arr.includes(x)` or `arr.find(...)` inside an iterator callback (`.filter`/`.map`/`.forEach`/`.some`/`.every`/`.reduce`) or a `for-of` body when the array is closed over and not the one being iterated. Plain `for`/`while` are intentionally excluded (ambiguous iteration count → false-positive risk).
 - Manual: bundle/profiler review for hot iteration sites.
 
 Sources for this rule:
@@ -4410,7 +4437,7 @@ verification:
   type: lint
   rule_id: "ax/no-array-mutate-on-state"
   status: shipped
-  notes: "Custom ESLint rule planned: flag arr.sort()/arr.reverse()/arr.splice() where arr is a prop or state-derived value."
+  notes: "Shipped as ax/no-array-mutate-on-state: flags .sort/.reverse/.splice (suggest .toSorted/.toReversed/.toSpliced), the no-immutable-variant mutators .push/.pop/.shift/.unshift/.fill, and arr[i]=v index assignment, where arr is a prop or state-derived value (FMW1 closed the doc-vs-impl gap on .push/arr[i]=v)."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -9528,9 +9555,18 @@ protects_template_id: templates/L2/blocks/saved-view.tsx
 failing_fixture_path: practices/evals/fixtures/saved-view-must-be-url-state-or-server-persisted/fail_saved_view_localstorage_only/
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-URL-STATE-001"
 verification:
-  type: review
-  status: manual
-  notes: "Any component using SavedView or managing table view config must route persistence through URL search params or a server API endpoint. Usage of localStorage.setItem / localStorage.getItem for view config triggers this rule."
+  type: script
+  status: automated
+  notes: |
+    saved_view_url_state_guard.sh (FMW4b) — binary, two checks:
+      (1) Any file importing the saved-view block (templates/L2/blocks/saved-view)
+          must NOT reference localStorage — the rule's forbidden persistence mode.
+      (2) The L4 crud list reference (templates/L4/crud/app/(crud)/items/page.tsx)
+          must drive page/sort/filter through useUrlListState (the L0 URL-state
+          primitive), so the catalog dogfoods its own URL-as-state mandate.
+    Replaces the prior manual review. Scoped to saved-view consumers + one pinned
+    reference path, so it does not false-positive on unrelated useState (the FMW4a
+    lesson: name-based checks need shape/scope guards).
 evidence:
   - source_type: external
     citation: "web.dev URL as state — encoding application state in the URL makes it shareable, bookmarkable, and resilient to session loss. localStorage state is invisible to the server and breaks link sharing."
@@ -9576,33 +9612,44 @@ export function ProductTableToolbar() {
 }
 ```
 
-### Correct — URL state (shareable, no server round-trip)
+### Correct — URL state via the catalog primitives (shareable, no server round-trip)
+
+Do NOT hand-roll `URLSearchParams` page/sort/filter plumbing. The catalog ships
+the canonical seam: `useUrlListState` (L0) reads the live view state from the
+query string, and `listStateToQuery` serialises a state back into a permalink —
+so "save this view" is just capturing the current querystring as a named
+bookmark. localStorage never enters the picture.
 
 ```typescript
-// ✅ CORRECT — persistence: 'url' — view config encoded in URL search params
+// ✅ CORRECT — persistence: 'url' — live view state lives in the query string
 "use client";
-import { useRouter, useSearchParams } from "next/navigation";
-import { SavedView, type SavedViewConfig } from "templates/L2/blocks/saved-view";
+import { useRouter } from "next/navigation";
+import {
+  useUrlListState,
+  listStateToQuery,
+} from "templates/L0/fork-receiver-kit/use-url-list-state";
+import { SavedView } from "templates/L2/blocks/saved-view";
 
 export function ProductTableToolbar() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  // Page / sort / search / filter are URL-backed — shareable + back-button-correct.
+  const list = useUrlListState({ filterKeys: ["status", "category"] });
 
-  // Views are bookmarks: each is a URL with ?view=<base64-config>
-  const views = parseViewsFromSearchParams(searchParams);
-
-  function handleSave(name: string, config: SavedViewConfig) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("savedViews", encodeViews([...views, { id: crypto.randomUUID(), name, config }]));
-    router.push(`?${params.toString()}`);
+  function handleSave(name: string) {
+    // Capture the CURRENT view as a permalink (inverse serializer) — a named
+    // bookmark, not localStorage. Persist the querystring however you like
+    // (URL param, server prefs); here we push it as a shareable link.
+    const query = listStateToQuery(list);
+    router.push(`?${query}`);
+    // …append { id: crypto.randomUUID(), name, query, persistence: "url" } to your view set
   }
 
   return (
     <SavedView
-      items={views.map(v => ({ ...v, persistence: "url" }))}  // persistence: 'url' ✅
+      items={savedViews}                                    // persistence: 'url' ✅
       onSave={handleSave}
-      onLoad={view => applyViewFromConfig(view.config, router)}
-      onDelete={id => removeViewFromUrl(id, router)}
+      onLoad={view => router.push(`?${view.query}`)}         // re-applying a view = navigating to its querystring
+      onDelete={deleteView}
     />
   );
 }

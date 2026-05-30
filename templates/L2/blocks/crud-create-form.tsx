@@ -7,13 +7,18 @@ evidence:
   - source_type: internal
     rationale: "L2 CRUD block — generic create form driven by a field schema; domain-specific fields passed as props."
 dependencies: [button, input, label, select, textarea]
-imports_from: [L1]
+imports_from: [L0, L1]
 imports_forbidden: [L4, app/, lib/]
 ---
 */
 import * as React from 'react'
+import {
+  fractionDigitsFor,
+  serializeMinor,
+  toMinorUnits,
+} from 'templates/L0/fork-receiver-kit/money'
 
-export type FieldType = 'text' | 'email' | 'password' | 'number' | 'textarea' | 'select'
+export type FieldType = 'text' | 'email' | 'password' | 'number' | 'textarea' | 'select' | 'money'
 
 export interface FieldDef {
   key: string
@@ -22,6 +27,10 @@ export interface FieldDef {
   placeholder?: string
   required?: boolean
   options?: Array<{ value: string; label: string }>
+  /** Money fields only: ISO 4217 code (default 'KRW'). Sizes the minor-unit conversion. */
+  currency?: string
+  /** Money fields only: override the minor-unit width (default derived from `currency`). */
+  fractionDigits?: number
 }
 
 export interface CrudCreateFormProps {
@@ -52,6 +61,9 @@ export default function CrudCreateForm({
   const [values, setValues] = React.useState<Record<string, string>>(() =>
     Object.fromEntries(fields.map(f => [f.key, '']))
   )
+  // Client-side money parse errors (RangeError from toMinorUnits) — merged with
+  // the server `fieldErrors` prop for display. FMW4d.
+  const [moneyErrors, setMoneyErrors] = React.useState<Record<string, string>>({})
 
   function set(key: string, value: string) {
     setValues(prev => ({ ...prev, [key]: value }))
@@ -59,13 +71,38 @@ export default function CrudCreateForm({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    onSubmit(values)
+    // Emit `money` fields as integer minor units (no float). A non-decimal
+    // value throws RangeError → it lands on the field instead of corrupting
+    // the payload (FMW4d). Non-money fields pass through as typed strings.
+    const errors: Record<string, string> = {}
+    const payload: Record<string, unknown> = { ...values }
+    for (const field of fields) {
+      if (field.type !== 'money') continue
+      const raw = (values[field.key] ?? '').trim()
+      if (raw === '') {
+        if (field.required) errors[field.key] = 'Required'
+        else payload[field.key] = undefined
+        continue
+      }
+      const digits = field.fractionDigits ?? fractionDigitsFor(field.currency ?? 'KRW')
+      try {
+        payload[field.key] = serializeMinor(toMinorUnits(raw, digits))
+      } catch {
+        errors[field.key] = 'Enter a valid amount'
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setMoneyErrors(errors)
+      return
+    }
+    setMoneyErrors({})
+    onSubmit(payload)
   }
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
       {fields.map(field => {
-        const fieldError = fieldErrors[field.key]
+        const fieldError = fieldErrors[field.key] ?? moneyErrors[field.key]
         const errorId = fieldError ? `ccf-${field.key}-error` : undefined
         return (
         <div key={field.key} className="space-y-2">
@@ -110,6 +147,25 @@ export default function CrudCreateForm({
                 </option>
               ))}
             </select>
+          ) : field.type === 'money' ? (
+            <div className="flex items-center gap-2">
+              <input
+                id={`ccf-${field.key}`}
+                type="text"
+                inputMode="decimal"
+                required={field.required}
+                disabled={isLoading}
+                aria-invalid={fieldError ? true : undefined}
+                aria-describedby={errorId}
+                value={values[field.key] ?? ''}
+                onChange={e => set(field.key, e.target.value)}
+                placeholder={field.placeholder}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-right text-sm tabular-nums shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <span aria-hidden="true" className="shrink-0 text-sm text-muted-foreground">
+                {field.currency ?? 'KRW'}
+              </span>
+            </div>
           ) : (
             <input
               id={`ccf-${field.key}`}

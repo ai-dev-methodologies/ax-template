@@ -966,6 +966,17 @@ echo "[56] lint_own_blocks_guard.sh (FMW1 — FDW1: the catalog must lint its OW
 run_guard "lint_own_blocks/live" 0 \
     bash "$SCRIPT_DIR/../../practices-react/evals/lint_own_blocks_guard.sh"
 
+echo ""
+echo "[57] saved_view_url_state_guard.sh (FMW4b — FDW2: upgrade saved-view rule from manual review to a binary guard; localStorage forbidden in saved-view files + L4 crud ref must dogfood useUrlListState)"
+run_guard "saved_view_url_state/live" 0 \
+    bash "$SCRIPT_DIR/saved_view_url_state_guard.sh"
+run_guard "saved_view_url_state/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/saved_view_url_state_guard.sh" --check-fixture \
+    "$SCRIPT_DIR/fixtures/saved-view-must-be-url-state-or-server-persisted/fail_saved_view_localstorage_only"
+run_guard "saved_view_url_state/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/saved_view_url_state_guard.sh" --check-fixture \
+    "$SCRIPT_DIR/fixtures/saved-view-must-be-url-state-or-server-persisted/pass"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

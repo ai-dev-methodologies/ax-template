@@ -22,6 +22,22 @@ imports_forbidden: [L1, L2, L3, L4, app/, lib/]
  *
  * `toMinorUnits('19.99')  -> 1999n`
  * `toMajorUnits(1999n)     -> '19.99'`
+ *
+ * ## Wire type at the JSON boundary (FMW4d)
+ *
+ * Three representations exist; do NOT confuse them:
+ *
+ * | Stage            | Type        | Why |
+ * |------------------|-------------|-----|
+ * | On the wire      | JSON number | Backend money is a Java `long` (integer minor units). Over JSON that arrives as a JS `number`, exact for integers up to `Number.MAX_SAFE_INTEGER` (2^53−1 ≈ 9.0e15 — 9 quadrillion 원). |
+ * | In client math   | `bigint`    | `parseMinor(wire)` lifts the wire value into a `bigint` so additions/multiplications cannot overflow or pick up float error. ALL money arithmetic happens in `bigint`. |
+ * | User-facing text | `string`    | `toMajorUnits` / `Intl.NumberFormat` at the very edge only. |
+ *
+ * NEVER store money as a JS `number` you do arithmetic on (the `19.99 * 100 =
+ * 1998.9999…` float bug), and NEVER `JSON.stringify` a `bigint` directly (it
+ * throws) — use {@link serializeMinor} to choose the wire form. For magnitudes
+ * beyond `Number.MAX_SAFE_INTEGER` the only lossless wire form is a decimal
+ * string; `serializeMinor` returns one and your API contract must accept it.
  */
 
 /**
@@ -69,4 +85,62 @@ export function toMajorUnits(minor: bigint | number, fractionDigits = 2): string
   const fracPart = digits.slice(cut)
   const body = fractionDigits > 0 ? `${intPart}.${fracPart}` : intPart
   return negative ? `-${body}` : body
+}
+
+/**
+ * parseMinor — lift an integer minor-unit value off the JSON wire into a
+ * `bigint` for safe arithmetic. The backend sends minor units as a JSON
+ * number (Java `long`); a contract that exceeds 2^53 sends a string instead.
+ * Accepts either, plus a `bigint` pass-through. Throws `RangeError` on a
+ * non-integer (e.g. a stray decimal that means someone leaked major units onto
+ * the wire) rather than silently truncating.
+ *
+ * `parseMinor(1999)    -> 1999n`
+ * `parseMinor('1999')  -> 1999n`
+ */
+export function parseMinor(value: number | string | bigint): bigint {
+  if (typeof value === 'bigint') return value
+  if (typeof value === 'number') {
+    if (!Number.isInteger(value)) {
+      throw new RangeError(`parseMinor: minor units must be an integer, got ${value}`)
+    }
+    return BigInt(value)
+  }
+  const trimmed = value.trim()
+  if (!/^[+-]?\d+$/.test(trimmed)) {
+    throw new RangeError(`parseMinor: not an integer minor-unit string: ${JSON.stringify(value)}`)
+  }
+  return BigInt(trimmed)
+}
+
+/**
+ * serializeMinor — choose the lossless JSON wire form for a minor-unit
+ * `bigint`. Returns a `number` when the value fits in `Number.MAX_SAFE_INTEGER`
+ * (so `JSON.stringify` emits a plain number), and a decimal `string` otherwise
+ * — because `JSON.stringify(bigint)` throws and `Number(hugeBigint)` would lose
+ * precision. Your API contract for the large-value case must accept a string.
+ *
+ * `serializeMinor(1999n)                 -> 1999`
+ * `serializeMinor(9_007_199_254_740_993n) -> '9007199254740993'`
+ */
+export function serializeMinor(minor: bigint): number | string {
+  const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER)
+  if (minor <= MAX_SAFE && minor >= -MAX_SAFE) return Number(minor)
+  return minor.toString()
+}
+
+/** ISO 4217 currencies with 0 minor-unit decimal places (no fractional unit). */
+const ZERO_DECIMAL_CURRENCIES: ReadonlySet<string> = new Set([
+  'BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW',
+  'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
+])
+
+/**
+ * fractionDigitsFor — the conventional minor-unit width for an ISO 4217 code:
+ * 0 for zero-decimal currencies (KRW 원, JPY 円, …), 2 otherwise. Use this to
+ * size {@link toMinorUnits} / {@link toMajorUnits} so a KRW '1500' becomes
+ * `1500n` (not `150000n`) — the bug a hard-coded `2` would cause for 원/円.
+ */
+export function fractionDigitsFor(currency: string): number {
+  return ZERO_DECIMAL_CURRENCIES.has(currency.trim().toUpperCase()) ? 0 : 2
 }
