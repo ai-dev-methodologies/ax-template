@@ -14,6 +14,7 @@ protects_template_id: specs/recipes/*.yaml
 failing_fixture_path: practices/evals/fixtures/recipe-invariants-must-resolve/fail_unresolvable_spec_ref/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-ARCH-003"
 verification:
+  guard: recipe_governance_guard.sh
   type: script
   notes: |
     recipe_governance_guard.sh (SP37) and recipe_spec_referential_integrity_guard.sh (SP35)

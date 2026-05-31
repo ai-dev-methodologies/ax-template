@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "d70b4ff8dd2bfb826e11c88f4c646321a9f3950dfad4a0b9ecf0bb799ea36f44"
+  source_concat_sha256: "eff7939d23a57ade84af6b1331cc91f8a03943322c968c17a991d965fdbd7b07"
   rule_count: 112
   generated_by: "practices/generate_agents.sh"
 ---
@@ -765,6 +765,7 @@ tags:
   - 개인정보보호법
 spec_ref: "specs/email-outbox-l0.yaml#EMAIL-ADMIN-001"
 verification:
+  type: review
   source: "backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java"
   pattern: "AUDIT.info(\"verb=ADMIN_RETRY id={} recipientHash={}\", id, EmailPiiHelper.recipientHash(row.getRecipient()))"
 upstream:
@@ -890,6 +891,7 @@ tags:
   - aria-busy
 spec_ref: "specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001"
 verification:
+  guard: background_poll_refresh_state_guard.sh
   source: "practices/evals/background_poll_refresh_state_guard.sh (R82b — 44th hard guard)"
   pattern: "useQuery({ refetchInterval, ... }) — every match MUST be paired with a dataUpdatedAt reference in the same React function body; every mutation button on the same page MUST set aria-busy until settled"
 upstream:
@@ -1833,6 +1835,7 @@ tags:
   - optimistic-update
 spec_ref: "specs/activity-feed-l0.yaml#ACT-READ-001"
 verification:
+  type: review
   source: "templates/L4/activity-feed/app/(activities)/page.tsx"
   pattern: "pendingReadIds Set<string> in component state — cache only ever carries backend's readAt or null; no `new Date().toISOString()` written into cache"
 upstream:
@@ -2453,6 +2456,7 @@ tags:
   - incident-prevention
 spec_ref: "specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001"
 verification:
+  type: review
   source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L4/scheduled-task/app/(admin)/scheduled-tasks/page.tsx, templates/L4/favorites-bookmarks/app/(favorites)/page.tsx"
   pattern: "window.confirm with verbatim enumeration of downstream side effects (HTTP POST to partner / db writes / notifications / audit-trail invalidation / quota voided) BEFORE the mutation fires"
 upstream:
@@ -2550,6 +2554,7 @@ tags:
   - technical-debt
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-DOGFOOD-LEDGER-001"
 verification:
+  guard: dogfood_finding_expiry_trigger_guard.sh
   source: "practices/evals/dogfood_finding_expiry_trigger_guard.sh (R85b — 45th hard guard)"
   pattern: "Every docs/dogfood-ledger/*.yaml entry where classification=scope_deferral MUST contain at least one of the anchored expiry-trigger marker phrases in its finding text: 'expiry trigger:', 're-opens when', 're-opens before', 'reopens when', 'reopens before', 'defer until', 'deferred until', 'expires on', 'sunsets on', 'before the fork-receiver', 'before the first', 'before the cap'. Bare 'before a' / 'before any' are intentionally excluded as too lenient (accidental prose can match). Markers are case-insensitive substring matches."
 upstream:
@@ -2627,6 +2632,7 @@ tags:
   - git
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-DOGFOOD-LEDGER-002"
 verification:
+  guard: dogfood_finding_real_bug_closure_commit_guard.sh
   source: "practices/evals/dogfood_finding_real_bug_closure_commit_guard.sh (R86b — 46th hard guard)"
   pattern: "Every docs/dogfood-ledger/*.yaml entry where classification=real_bug MUST carry a closure_commit_sha field whose value (a) is non-empty, (b) matches ^[0-9a-f]{7,40}$, AND (c) resolves to an existing commit in the local repository (git cat-file -e <sha>^{commit})."
 upstream:
@@ -2702,6 +2708,7 @@ tags:
   - test-coverage
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-DOGFOOD-LEDGER-003"
 verification:
+  guard: dogfood_finding_real_bug_test_coverage_guard.sh
   source: "practices/evals/dogfood_finding_real_bug_test_coverage_guard.sh (R87b — 47th hard guard)"
   pattern: "Every docs/dogfood-ledger/*.yaml entry where classification=real_bug MUST carry AT LEAST ONE of: closure_test_method (Java test method following practices_*_camelCase), closure_test_commit_sha (a valid git sha resolvable locally), closure_test_path (relative path to a regression test file that exists on disk), OR closure_verification_ref + closure_verification_reason (escape hatch for doc-only / comment-contract / config-only / external-system / fork-receiver-owned closures)."
 upstream:
@@ -2863,6 +2870,7 @@ tags:
   - aria-live
 spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-CRUD-001"
 verification:
+  type: review
   source: "templates/L4/favorites-bookmarks/app/favorite-toggle.tsx"
   pattern: "title={ariaLabel} only; error.message rendered in a separate role='alert' aria-live span next to the button"
 upstream:
@@ -3080,6 +3088,7 @@ tags:
   - render-correctness
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-001"
 verification:
+  type: review
   source: "templates/L4/approval-workflow/app/(approvals)/[id]/page.tsx"
   pattern: "all useQuery / useMutation / useState / useMemo calls above the `if (isLoading) return …` / `if (error) return …` / `if (!data) return …` block"
 upstream:
@@ -3550,6 +3559,7 @@ tags:
   - data-freshness
 spec_ref: "specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001"
 verification:
+  type: review
   source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/page.tsx"
   pattern: "useQuery with refetchInterval + refetchIntervalInBackground:true + visible dataUpdatedAt timestamp + manual Refresh button"
 upstream:
@@ -4688,6 +4698,7 @@ tags:
   - mutation
 spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-CRUD-001"
 verification:
+  type: review
   source: "templates/L4/favorites-bookmarks/app/favorite-toggle.tsx"
   pattern: "aria-busy + aria-disabled set during isPending; onClick guards with `if (busy) return`; native `disabled` attribute NOT used for in-flight state"
 upstream:
@@ -4772,6 +4783,7 @@ tags:
   - distributed-lock
 spec_ref: "specs/scheduled-task-l0.yaml#SCHED-LOCK-001"
 verification:
+  type: review
   source: "templates/L4/scheduled-task/app/(admin)/scheduled-tasks/page.tsx"
   pattern: "trigger.onSuccess sets triggerOutcome state; render differentiates executed=true (green) vs executed=false (amber + reason string from server) instead of collapsing both into one success banner"
 upstream:
@@ -5490,6 +5502,7 @@ tags:
   - cache-coherence
 spec_ref: "specs/activity-feed-l0.yaml#ACT-MARK-001"
 verification:
+  type: review
   source: "templates/L4/favorites-bookmarks/app/favorite-toggle.tsx, templates/L4/favorites-bookmarks/app/(favorites)/page.tsx"
   pattern: "onMutate snapshot + setQueryData optimistic write + onError ctx.previous rollback + onSettled invalidate"
 upstream:
@@ -6131,6 +6144,7 @@ tags:
   - polymorphic-entity
 spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-VALID-001"
 verification:
+  type: review
   source: "templates/L4/favorites-bookmarks/app/entity-key.ts"
   pattern: "assertSafeEntityRef(entityType, entityId) rejects values containing '/', '?', '#', '\\0', '\\', or a leading '.' — called by every fetch that emits the pair as a path segment"
 upstream:
@@ -6483,6 +6497,7 @@ tags:
   - refactor-discipline
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-TEST-001"
 verification:
+  type: review
   source: "backend/src/main/java/com/ax/template/authblueprint/common/AuditPiiHelper.java"
   pattern: "AuditPiiHelper was inline EmailPiiHelper until 7 modules adopted it; R67 lifted it to common/ once the rule-of-three threshold was satisfied. Inline-duplicate copies are gone; one canonical version, every adopter imports it."
 upstream:
@@ -6822,6 +6837,7 @@ tags:
   - dev-stub
 spec_ref: "specs/tag-categorization-l0.yaml#TAG-AUTHZ-001"
 verification:
+  type: review
   source: "templates/L4/tag-categorization/app/use-caller-id.ts"
   pattern: "useCallerRole() returns 'user' in dev by default; admin path requires explicit `NEXT_PUBLIC_DEV_AS_ADMIN=1` env opt-in"
 upstream:
@@ -6907,6 +6923,7 @@ protects_template_id: specs/recipes/*.yaml
 failing_fixture_path: practices/evals/fixtures/recipe-invariants-must-resolve/fail_unresolvable_spec_ref/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-ARCH-003"
 verification:
+  guard: recipe_governance_guard.sh
   type: script
   notes: |
     recipe_governance_guard.sh (SP37) and recipe_spec_referential_integrity_guard.sh (SP35)
@@ -7021,6 +7038,7 @@ tags:
   - webhook
 spec_ref: "specs/api-key-l0.yaml#KEY-STORAGE-001"
 verification:
+  type: review
   source: "templates/L4/webhook/app/(admin)/webhooks/page.tsx (SecretRevealPanel), templates/L4/api-key/app/(api-key)/page.tsx (catalog plaintext-shown-once flow)"
   pattern: "useEffect(() => { window.addEventListener('beforeunload', handler) ... }, []) inside the panel component that holds the secret in React state, with returnValue assignment to trigger the native prompt"
 upstream:
@@ -7293,6 +7311,7 @@ tags:
   - korean-enterprise
 spec_ref: "specs/email-outbox-l0.yaml#EMAIL-SEND-002"
 verification:
+  type: review
   source: "backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java"
   pattern: "row.markFailure(EmailPiiHelper.sanitizeReason(trimmed), now, ...) — sender exception scrubbed BEFORE persist, not only at render"
 upstream:
@@ -7670,6 +7689,7 @@ tags:
   - domain-mode
 spec_ref: "specs/identity-verification-l0.yaml#L5"
 verification:
+  guard: l4_frontend_domain_mode_guard.sh
   source: "specs/identity-verification-l0.yaml"
   pattern: "domain_mode: backend_only declared at the top of the spec; templates/L4/identity-verification/ intentionally does NOT exist on disk; the catalog refuses to create a frontend trio for this domain even when an AI agent or master plan asks for one"
 upstream:
@@ -7794,6 +7814,7 @@ tags:
   - screen-share-leak
 spec_ref: "specs/webhook-l0.yaml#WEBHOOK-DEAD-LETTER-002"
 verification:
+  type: review
   source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L4/scheduled-task/app/parse-error.ts (sanitizeStoredError helper)"
   pattern: "sanitize helper applied to any server-stored error field (lastError on Delivery, errorMessage on JobHistory) before inline render; regex deny-list includes email / Bearer / JWT / IPv4 / .internal/.local / Korean RRN / Korean mobile / PEM headers / GitHub PAT"
 upstream:
@@ -8245,8 +8266,8 @@ protects_template_id: templates/backend/global-exception-handler/GlobalException
 failing_fixture_path: practices/evals/fixtures/traceid-in-error-response/fail_no_traceid/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-ERR-001"
 verification:
-  gradle_task: testPractices
-  notes: "Assert ProblemDetail response body for every 4xx/5xx handler contains a non-null 'traceId' property."
+  type: review
+  notes: "Reviewer-checked (no running assertion today): ProblemDetail response body for every 4xx/5xx handler should carry a non-null 'traceId'. The prior gradle_task:testPractices claim had NO backing @Tag test asserting traceId — declared review-tier honestly until a traceId probe test is added (failing_fixture at failing_fixture_path documents the intended check)."
 evidence:
   - upstream_id: rfc-7807
     section: "Problem Details for HTTP APIs — extension members"

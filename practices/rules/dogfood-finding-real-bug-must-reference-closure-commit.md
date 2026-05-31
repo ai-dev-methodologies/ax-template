@@ -11,6 +11,7 @@ tags:
   - git
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-DOGFOOD-LEDGER-002"
 verification:
+  guard: dogfood_finding_real_bug_closure_commit_guard.sh
   source: "practices/evals/dogfood_finding_real_bug_closure_commit_guard.sh (R86b — 46th hard guard)"
   pattern: "Every docs/dogfood-ledger/*.yaml entry where classification=real_bug MUST carry a closure_commit_sha field whose value (a) is non-empty, (b) matches ^[0-9a-f]{7,40}$, AND (c) resolves to an existing commit in the local repository (git cat-file -e <sha>^{commit})."
 upstream:

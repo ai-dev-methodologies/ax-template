@@ -9,6 +9,7 @@ tags:
   - distributed-lock
 spec_ref: "specs/scheduled-task-l0.yaml#SCHED-LOCK-001"
 verification:
+  type: review
   source: "templates/L4/scheduled-task/app/(admin)/scheduled-tasks/page.tsx"
   pattern: "trigger.onSuccess sets triggerOutcome state; render differentiates executed=true (green) vs executed=false (amber + reason string from server) instead of collapsing both into one success banner"
 upstream:

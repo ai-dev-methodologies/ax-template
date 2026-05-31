@@ -11,6 +11,7 @@ tags:
   - test-coverage
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-DOGFOOD-LEDGER-003"
 verification:
+  guard: dogfood_finding_real_bug_test_coverage_guard.sh
   source: "practices/evals/dogfood_finding_real_bug_test_coverage_guard.sh (R87b — 47th hard guard)"
   pattern: "Every docs/dogfood-ledger/*.yaml entry where classification=real_bug MUST carry AT LEAST ONE of: closure_test_method (Java test method following practices_*_camelCase), closure_test_commit_sha (a valid git sha resolvable locally), closure_test_path (relative path to a regression test file that exists on disk), OR closure_verification_ref + closure_verification_reason (escape hatch for doc-only / comment-contract / config-only / external-system / fork-receiver-owned closures)."
 upstream:

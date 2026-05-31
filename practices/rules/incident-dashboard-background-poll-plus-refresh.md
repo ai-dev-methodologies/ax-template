@@ -10,6 +10,7 @@ tags:
   - data-freshness
 spec_ref: "specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001"
 verification:
+  type: review
   source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/page.tsx"
   pattern: "useQuery with refetchInterval + refetchIntervalInBackground:true + visible dataUpdatedAt timestamp + manual Refresh button"
 upstream:

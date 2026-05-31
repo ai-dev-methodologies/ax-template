@@ -10,6 +10,7 @@ tags:
   - 개인정보보호법
 spec_ref: "specs/email-outbox-l0.yaml#EMAIL-ADMIN-001"
 verification:
+  type: review
   source: "backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java"
   pattern: "AUDIT.info(\"verb=ADMIN_RETRY id={} recipientHash={}\", id, EmailPiiHelper.recipientHash(row.getRecipient()))"
 upstream:

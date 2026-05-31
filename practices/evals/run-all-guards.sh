@@ -1012,6 +1012,11 @@ echo "[64] rule_tag_binding_guard.sh (A1 closure — every practices rule's veri
 run_guard "rule_tag_binding/live" 0 \
     bash "$SCRIPT_DIR/rule_tag_binding_guard.sh"
 
+echo ""
+echo "[65] rule_verification_binding_guard.sh (A1 tail closure — generalizes [64] to ALL verification forms: every rule's verification MUST resolve to gradle_task+tag / guard / pattern+fixture, OR declare type:review; no rule may claim verification it lacks)"
+run_guard "rule_verification_binding/live" 0 \
+    bash "$SCRIPT_DIR/rule_verification_binding_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

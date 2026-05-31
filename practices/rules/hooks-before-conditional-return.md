@@ -9,6 +9,7 @@ tags:
   - render-correctness
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-001"
 verification:
+  type: review
   source: "templates/L4/approval-workflow/app/(approvals)/[id]/page.tsx"
   pattern: "all useQuery / useMutation / useState / useMemo calls above the `if (isLoading) return …` / `if (error) return …` / `if (!data) return …` block"
 upstream:

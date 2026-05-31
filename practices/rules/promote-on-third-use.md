@@ -10,6 +10,7 @@ tags:
   - refactor-discipline
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-TEST-001"
 verification:
+  type: review
   source: "backend/src/main/java/com/ax/template/authblueprint/common/AuditPiiHelper.java"
   pattern: "AuditPiiHelper was inline EmailPiiHelper until 7 modules adopted it; R67 lifted it to common/ once the rule-of-three threshold was satisfied. Inline-duplicate copies are gone; one canonical version, every adopter imports it."
 upstream:

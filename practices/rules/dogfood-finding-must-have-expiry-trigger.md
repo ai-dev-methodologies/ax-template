@@ -11,6 +11,7 @@ tags:
   - technical-debt
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-DOGFOOD-LEDGER-001"
 verification:
+  guard: dogfood_finding_expiry_trigger_guard.sh
   source: "practices/evals/dogfood_finding_expiry_trigger_guard.sh (R85b — 45th hard guard)"
   pattern: "Every docs/dogfood-ledger/*.yaml entry where classification=scope_deferral MUST contain at least one of the anchored expiry-trigger marker phrases in its finding text: 'expiry trigger:', 're-opens when', 're-opens before', 'reopens when', 'reopens before', 'defer until', 'deferred until', 'expires on', 'sunsets on', 'before the fork-receiver', 'before the first', 'before the cap'. Bare 'before a' / 'before any' are intentionally excluded as too lenient (accidental prose can match). Markers are case-insensitive substring matches."
 upstream:

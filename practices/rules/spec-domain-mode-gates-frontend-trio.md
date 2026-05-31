@@ -10,6 +10,7 @@ tags:
   - domain-mode
 spec_ref: "specs/identity-verification-l0.yaml#L5"
 verification:
+  guard: l4_frontend_domain_mode_guard.sh
   source: "specs/identity-verification-l0.yaml"
   pattern: "domain_mode: backend_only declared at the top of the spec; templates/L4/identity-verification/ intentionally does NOT exist on disk; the catalog refuses to create a frontend trio for this domain even when an AI agent or master plan asks for one"
 upstream:

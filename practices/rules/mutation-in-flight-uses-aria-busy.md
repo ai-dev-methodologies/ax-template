@@ -9,6 +9,7 @@ tags:
   - mutation
 spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-CRUD-001"
 verification:
+  type: review
   source: "templates/L4/favorites-bookmarks/app/favorite-toggle.tsx"
   pattern: "aria-busy + aria-disabled set during isPending; onClick guards with `if (busy) return`; native `disabled` attribute NOT used for in-flight state"
 upstream:

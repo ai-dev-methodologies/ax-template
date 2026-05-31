@@ -9,6 +9,7 @@ tags:
   - polymorphic-entity
 spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-VALID-001"
 verification:
+  type: review
   source: "templates/L4/favorites-bookmarks/app/entity-key.ts"
   pattern: "assertSafeEntityRef(entityType, entityId) rejects values containing '/', '?', '#', '\\0', '\\', or a leading '.' — called by every fetch that emits the pair as a path segment"
 upstream:

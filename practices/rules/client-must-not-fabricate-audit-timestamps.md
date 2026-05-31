@@ -9,6 +9,7 @@ tags:
   - optimistic-update
 spec_ref: "specs/activity-feed-l0.yaml#ACT-READ-001"
 verification:
+  type: review
   source: "templates/L4/activity-feed/app/(activities)/page.tsx"
   pattern: "pendingReadIds Set<string> in component state — cache only ever carries backend's readAt or null; no `new Date().toISOString()` written into cache"
 upstream:

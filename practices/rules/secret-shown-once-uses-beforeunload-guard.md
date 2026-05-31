@@ -11,6 +11,7 @@ tags:
   - webhook
 spec_ref: "specs/api-key-l0.yaml#KEY-STORAGE-001"
 verification:
+  type: review
   source: "templates/L4/webhook/app/(admin)/webhooks/page.tsx (SecretRevealPanel), templates/L4/api-key/app/(api-key)/page.tsx (catalog plaintext-shown-once flow)"
   pattern: "useEffect(() => { window.addEventListener('beforeunload', handler) ... }, []) inside the panel component that holds the secret in React state, with returnValue assignment to trigger the native prompt"
 upstream:

@@ -9,6 +9,7 @@ tags:
   - incident-prevention
 spec_ref: "specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001"
 verification:
+  type: review
   source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L4/scheduled-task/app/(admin)/scheduled-tasks/page.tsx, templates/L4/favorites-bookmarks/app/(favorites)/page.tsx"
   pattern: "window.confirm with verbatim enumeration of downstream side effects (HTTP POST to partner / db writes / notifications / audit-trail invalidation / quota voided) BEFORE the mutation fires"
 upstream:

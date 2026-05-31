@@ -10,6 +10,7 @@ tags:
   - screen-share-leak
 spec_ref: "specs/webhook-l0.yaml#WEBHOOK-DEAD-LETTER-002"
 verification:
+  type: review
   source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L4/scheduled-task/app/parse-error.ts (sanitizeStoredError helper)"
   pattern: "sanitize helper applied to any server-stored error field (lastError on Delivery, errorMessage on JobHistory) before inline render; regex deny-list includes email / Bearer / JWT / IPv4 / .internal/.local / Korean RRN / Korean mobile / PEM headers / GitHub PAT"
 upstream:

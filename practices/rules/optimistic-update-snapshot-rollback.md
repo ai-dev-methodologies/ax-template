@@ -9,6 +9,7 @@ tags:
   - cache-coherence
 spec_ref: "specs/activity-feed-l0.yaml#ACT-MARK-001"
 verification:
+  type: review
   source: "templates/L4/favorites-bookmarks/app/favorite-toggle.tsx, templates/L4/favorites-bookmarks/app/(favorites)/page.tsx"
   pattern: "onMutate snapshot + setQueryData optimistic write + onError ctx.previous rollback + onSettled invalidate"
 upstream:

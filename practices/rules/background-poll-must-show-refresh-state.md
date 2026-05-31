@@ -11,6 +11,7 @@ tags:
   - aria-busy
 spec_ref: "specs/scheduled-task-l0.yaml#SCHED-EXECUTE-001"
 verification:
+  guard: background_poll_refresh_state_guard.sh
   source: "practices/evals/background_poll_refresh_state_guard.sh (R82b — 44th hard guard)"
   pattern: "useQuery({ refetchInterval, ... }) — every match MUST be paired with a dataUpdatedAt reference in the same React function body; every mutation button on the same page MUST set aria-busy until settled"
 upstream:

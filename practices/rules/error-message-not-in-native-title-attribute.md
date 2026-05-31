@@ -9,6 +9,7 @@ tags:
   - aria-live
 spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-CRUD-001"
 verification:
+  type: review
   source: "templates/L4/favorites-bookmarks/app/favorite-toggle.tsx"
   pattern: "title={ariaLabel} only; error.message rendered in a separate role='alert' aria-live span next to the button"
 upstream:

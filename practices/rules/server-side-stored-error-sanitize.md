@@ -10,6 +10,7 @@ tags:
   - korean-enterprise
 spec_ref: "specs/email-outbox-l0.yaml#EMAIL-SEND-002"
 verification:
+  type: review
   source: "backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java"
   pattern: "row.markFailure(EmailPiiHelper.sanitizeReason(trimmed), now, ...) — sender exception scrubbed BEFORE persist, not only at render"
 upstream:

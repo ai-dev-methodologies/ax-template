@@ -13,8 +13,8 @@ protects_template_id: templates/backend/global-exception-handler/GlobalException
 failing_fixture_path: practices/evals/fixtures/traceid-in-error-response/fail_no_traceid/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-ERR-001"
 verification:
-  gradle_task: testPractices
-  notes: "Assert ProblemDetail response body for every 4xx/5xx handler contains a non-null 'traceId' property."
+  type: review
+  notes: "Reviewer-checked (no running assertion today): ProblemDetail response body for every 4xx/5xx handler should carry a non-null 'traceId'. The prior gradle_task:testPractices claim had NO backing @Tag test asserting traceId — declared review-tier honestly until a traceId probe test is added (failing_fixture at failing_fixture_path documents the intended check)."
 evidence:
   - upstream_id: rfc-7807
     section: "Problem Details for HTTP APIs — extension members"
