@@ -18,7 +18,10 @@ This is enforced mechanically by:
 - `practices/evals/completion_checklist_recency_guard.sh` (49th hard guard;
   pre-push hook BLOCKS the push if no recent audit log entry matches HEAD)
 
-No `--skip` flags. No "I'll run it later." The catalog enforces the loop.
+No `--skip` flags. No `--no-verify` blanket bypass — an emergency `git commit
+--no-verify` does NOT exempt R25; `verify-completion.sh` MUST still PASS at HEAD
+before the task is declared done (the pre-push recency guard enforces this for
+pushes). No "I'll run it later." The catalog enforces the loop.
 
 Optional retry orchestrator for AI agents:
 ```bash
