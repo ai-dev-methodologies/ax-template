@@ -7,8 +7,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.ax.template.authblueprint.common.PageEnvelope;
+
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -24,16 +25,10 @@ public class ItemService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> list(UUID ownerId, int page, int size) {
+    public PageEnvelope<ItemResponse> list(UUID ownerId, int page, int size) {
         int safeSize = Math.min(size, MAX_PAGE_SIZE);
         Page<ItemEntity> result = itemRepository.findByOwnerIdAndDeletedFalse(ownerId, PageRequest.of(page, safeSize));
-        return Map.of(
-            "content", result.getContent().stream().map(ItemResponse::from).toList(),
-            "totalElements", result.getTotalElements(),
-            "totalPages", result.getTotalPages(),
-            "page", result.getNumber(),
-            "size", result.getSize()
-        );
+        return PageEnvelope.from(result, ItemResponse::from);
     }
 
     public ItemResponse create(UUID ownerId, String createdBy, CreateItemRequest request) {

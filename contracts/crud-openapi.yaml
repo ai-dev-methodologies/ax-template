@@ -25,15 +25,21 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data, pagination]
                 properties:
-                  content:
+                  data:
                     type: array
                     items:
                       $ref: '#/components/schemas/Item'
-                  totalElements: { type: integer }
-                  totalPages: { type: integer }
-                  page: { type: integer }
-                  size: { type: integer }
+                  pagination:
+                    type: object
+                    required: [page, pageSize, totalElements, totalPages, hasMore]
+                    properties:
+                      page: { type: integer, description: "0-based page index" }
+                      pageSize: { type: integer }
+                      totalElements: { type: integer }
+                      totalPages: { type: integer }
+                      hasMore: { type: boolean }
     post:
       operationId: createItem
       summary: "Create item"

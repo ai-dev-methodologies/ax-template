@@ -34,7 +34,7 @@ items:
     backend_only_marker: false
 
   - id: CRUD-FE-003
-    requirement: "Items list page renders Pagination controls reflecting totalPages from the listItems response"
+    requirement: "Items list page renders Pagination controls reflecting pagination.totalPages from the listItems PageEnvelope response (canonical common/PageEnvelope shape: { data, pagination:{ page, pageSize, totalElements, totalPages, hasMore } })"
     backend_operation_id: listItems
     backend_spec_ref: CRUD-PAG-1
     static_source_ref: []

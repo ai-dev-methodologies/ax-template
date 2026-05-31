@@ -148,8 +148,11 @@ class CrudSecurityTest {
                 .andExpect(status().isOk())
                 .andReturn();
         var json = mapper.readTree(result.getResponse().getContentAsString());
-        int returnedSize = json.get("content").size();
+        // Canonical PageEnvelope (common/PageEnvelope): items under `data`, page
+        // metadata under `pagination` — NOT the stale Spring { content, size } shape.
+        int returnedSize = json.get("data").size();
         assertThat(returnedSize).isLessThanOrEqualTo(50);
+        assertThat(json.get("pagination").get("pageSize").asInt()).isLessThanOrEqualTo(50);
     }
 
     @Test @Tag("CRUD") @Tag("CRUD-DEL-1")
