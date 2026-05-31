@@ -1421,3 +1421,70 @@ trip — the previously-undocumented half.
   staleness and evidence-validity invariants mechanically; this appendix is the human/agent
   response procedure when they fire, anchored to those two guards.
 
+## Adding a new backend language / stack (NestJS / Kotlin / Go / …)
+
+ax-template's Java/Spring catalog was the FIRST stack; the same pattern extends to other
+backend languages. The catalog system is already **multi-catalog** — `practices-react/` is
+a second rules catalog with its own `rules/` + `upstream/` + `evals/` + `AGENTS.md`
+sentinel, wired into the SAME hard gates via the `--catalog` flag (e.g.
+`evidence_guard.sh --catalog practices-react`). A new backend language follows that proven
+precedent; this is the procedure + the invariants it must satisfy.
+
+### When (timing)
+
+Only after stack #1 (Spring Boot) reaches the dual north-star property (enforcement +
+completeness) AND `specs/` is frozen v1. Adding stack #2 while stack #1 is still converging
+(per the current verification verdict, it is) splits effort and destabilizes the shared
+contract. Until then a new stack is **record-only** (note the intent, don't scaffold).
+
+### What is SHARED (stack-neutral — never duplicated per language)
+
+- `specs/` (compliance contracts) + `contracts/` (OpenAPI) + `blueprints/` (policy
+  manifests) — language-agnostic.
+- the frontend layer (`practices-react/` + `templates/` + `frontend/`).
+- `METHODOLOGY.md` (the 5-step + these appendices), the verification harness, the dogfood apps.
+
+Keep `specs/` strictly stack-neutral NOW so a later stack is purely additive
+(`backend-<lang>/` + `practices-<lang>/`) without touching the shared contract/frontend layers.
+
+### What is RE-AUTHORED per language
+
+- `backend-<lang>/` — reference implementation of the SAME domains against the shared specs.
+- `practices-<lang>/` — framework rules, mirroring `practices/` layout
+  (`rules/` + `upstream/` + `evals/` + `AGENTS.md` + `generate_agents.sh`).
+- enforcement toolchain — the language's binary per-domain verification (the equivalent of
+  `./gradlew test{Domain}`) plus the 4 hard gates run with `--catalog practices-<lang>`.
+
+### The invariants the new stack MUST satisfy (same bar as stack #1)
+
+- Same **4 hard gates** (`spec_ref` / `substance` / `time_decay` / `evidence`) on
+  `practices-<lang>` — they already take `--catalog`, so NO new gate code.
+- Same **Spec Trio discipline** (no spec, no merge).
+- Same **per-domain binary verification** + ViolationProof tests.
+- Same **AGENTS.md sentinel** (sha-anchored) + the doc-truth headline guard extended to the
+  new catalog's counts.
+- Same **dual-property target**, proven by re-running the SAME industry dogfoods on the new
+  stack (not a fresh proof method — the existing one transfers).
+
+### Procedure
+
+1. Freeze `specs/` v1.
+2. Scaffold `backend-<lang>/` + `practices-<lang>/` (mirror `practices/` layout).
+3. Author framework rules in `practices-<lang>` with `evidence` anchored to that stack's
+   upstream (snapshotted under `practices-<lang>/upstream/`).
+4. Build the reference impl for the same domains in `backend-<lang>/` against the shared specs.
+5. Wire the enforcement toolchain; extend `run-all-guards.sh` (`--catalog practices-<lang>`)
+   and the doc-truth headline counts.
+6. Re-run the industry dogfoods (B2B tracker / e-commerce / food delivery / EMR) on the new
+   stack → prove dual-property holds for stack #2.
+7. Update `specs/l4-domain-classification.yaml` + headline docs to advertise N stacks — both
+   **equal active partners**, never archive stack #1.
+
+### Effort + no new guard
+
+Roughly **20–40% of stack #1**: methodology, contracts, apps, and the frontend all transfer;
+only the framework rules + enforcement toolchain + reference impl are re-authored. **No new
+gate is added** — the 4 hard gates + `run-all-guards.sh` already parameterize by `--catalog`
+(`practices-react` is the living precedent); onboarding a stack extends them, it does not add
+a gate.
+
