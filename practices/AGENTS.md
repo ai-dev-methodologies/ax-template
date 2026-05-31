@@ -9113,6 +9113,7 @@ Reference: [RFC 2104 — HMAC: Keyed-Hashing for Message Authentication](https:/
 - **notification** — applied by: api-gateway-relay, booking, cms, community, crm, e-commerce, internal-it, lms, marketplace, saas-subscription
 - **payment** — applied by: booking, e-commerce, marketplace
 - **practices** — applied by: (none)
+- **ratelimit** — applied by: (none)
 - **scheduled-task** — applied by: api-gateway-relay, cms, internal-it, lms
 - **search** — applied by: b2b-admin, cms, community, crm, e-commerce, marketplace
 - **session-management** — applied by: (none)

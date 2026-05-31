@@ -82,11 +82,11 @@ join_cs() { awk 'NR>1{printf ", "} {printf "%s", $0} END{if (NR>0) print ""}'; }
   printf '\n'
 } > "$OUT"
 
-# Inline disk-truth assertions (i18n-policy promotion: 23 L4 = 22 prior + i18n-policy backend_only / 11 recipes / 13 verdicts)
+# Inline disk-truth assertions (ratelimit promotion: 24 L4 = 23 prior + ratelimit backend_only / 11 recipes / 13 verdicts)
 L4_COUNT=$(ls -d ../templates/L4/*/ 2>/dev/null | wc -l | tr -d ' ')
 REC_COUNT=$(printf '%s\n' "$MANIFEST_ROWS" | grep -c '|' || true)
 VER_COUNT=$(ls ../skills/_tests/sealed-verdict/*.md 2>/dev/null | grep -v README | wc -l | tr -d ' ')
-[[ "$L4_COUNT"  == "23" ]] || { echo "ASSERT FAIL: L4 $L4_COUNT != 23"  >&2; exit 1; }
+[[ "$L4_COUNT"  == "24" ]] || { echo "ASSERT FAIL: L4 $L4_COUNT != 24"  >&2; exit 1; }
 [[ "$REC_COUNT" == "11" ]] || { echo "ASSERT FAIL: recipes $REC_COUNT != 11" >&2; exit 1; }
 [[ "$VER_COUNT" == "13" ]] || { echo "ASSERT FAIL: verdicts $VER_COUNT != 13" >&2; exit 1; }
 echo "wrote $OUT — $COUNT rules, sha=$SHA, TOC: $L4_COUNT L4 / $REC_COUNT recipes / $VER_COUNT verdicts"

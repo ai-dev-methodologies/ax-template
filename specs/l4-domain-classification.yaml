@@ -60,9 +60,9 @@
 #     the schema; in that case the schema enum MUST be updated in the
 #     same commit (guard catches mismatch as I2 violation).
 #
-# Snapshot — i18n-policy promotion cut (2026-05-31)
-#   disk:   23 dirs (1 INFRA + 22 SELECTABLE)
-#   schema: 26 entries (22 SELECTABLE + 4 FUTURE_ADD)
+# Snapshot — ratelimit promotion cut (2026-05-31)
+#   disk:   24 dirs (1 INFRA + 23 SELECTABLE)
+#   schema: 26 entries (23 SELECTABLE + 3 FUTURE_ADD)
 #   recipes union: 10 distinct domains; recipe_orphan SELECTABLE domains
 #                  (file-storage, email-outbox, data-subject-rights,
 #                  multi-tenant, i18n-policy) await recipe activation.
@@ -201,6 +201,18 @@ tiers:
           recipe_orphan until a multilingual recipe adopts it via
           override_allowed.add.
         active_recipes: []
+      # ratelimit promoted future_add → selectable (2026-05-31). Backend already
+      # realized at backend/.../ratelimit/ (RateLimitFilter + Config + PingController
+      # + Properties) + Spec Trio + ./gradlew testRateLimit GREEN (4 RFC 6585 §4 items);
+      # templates/L4/ratelimit/README.md promotes the existing domain to the L4 surface.
+      - name: "ratelimit"
+        recipe_orphan: true
+        rationale: >
+          Protective cross-cutting rate-limiting (RFC 6585 §4 429 + Retry-After).
+          Backend reference workload + Spec Trio on disk and testRateLimit GREEN;
+          recipe_orphan until a recipe (e.g. api-gateway-relay) adopts it as a
+          first-class feature via override_allowed.add.
+        active_recipes: []
 
   future_add:
     description: >
@@ -240,7 +252,6 @@ tiers:
                in the same commit).
           Each step has guard implications — re-run
           `bash practices/evals/run-all-guards.sh` after each.
-      - name: "ratelimit"
-        intended_use: "API rate-limiting policy + counter store."
+      # ratelimit promoted to selectable (2026-05-31) — see selectable tier above.
       - name: "realtime-policy"
         intended_use: "WebSocket / SSE channel auth + back-pressure policy."
