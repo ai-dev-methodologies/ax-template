@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.billing;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -61,6 +62,28 @@ class BillingArchitectureTest {
         ArchRule rule = noClasses()
             .that().resideInAPackage("..payment..")
             .should().dependOnClassesThat().resideInAPackage("..billing..")
+            .allowEmptyShould(true);
+        rule.check(CLASSES);
+    }
+
+    @Test
+    @Tag("BILLING-CUR-001")
+    void billingAmountFieldsMustBeIntegerMinorUnits() {
+        // BILLING-CUR-001 / currency-amount-precision-explicit: monetary fields
+        // (amount/price/fee/cost) in the billing package MUST be integer minor units —
+        // never the float family (double/float/BigDecimal), which causes silent
+        // rounding (10.1 KRW -> 10.0999...). long and boxed Long are both integer-safe;
+        // request DTOs box to Long for @NotNull validation, so the rule forbids the
+        // float family rather than mandating the long primitive (which would wrongly
+        // reject a DTO's @NotNull Long amount).
+        ArchRule rule = fields()
+            .that().areDeclaredInClassesThat().resideInAPackage("..billing..")
+            .and().haveNameMatching(".*([Aa]mount|[Pp]rice|[Ff]ee|[Cc]ost).*")
+            .should().notHaveRawType(double.class)
+            .andShould().notHaveRawType(Double.class)
+            .andShould().notHaveRawType(float.class)
+            .andShould().notHaveRawType(Float.class)
+            .andShould().notHaveRawType(java.math.BigDecimal.class)
             .allowEmptyShould(true);
         rule.check(CLASSES);
     }

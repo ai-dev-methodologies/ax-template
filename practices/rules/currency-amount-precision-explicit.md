@@ -13,16 +13,16 @@ protects_template_id: templates/backend/billing/Plan.java
 failing_fixture_path: practices/evals/fixtures/currency-amount-precision/fail_float_amount/
 spec_ref: "specs/billing-l0.yaml#BILLING-CUR-001"
 verification:
-  type: archunit
+  gradle_task: testBilling
+  tag: BILLING-CUR-001
   notes: |
-    ArchUnit rule:
-    fields().that().areDeclaredInClassesThat().resideInAPackage("..billing..")
-    .and().haveNameMatching(".*[Aa]mount.*|.*[Pp]rice.*|.*[Ff]ee.*|.*[Cc]ost.*")
-    .should().haveRawType(long.class)
-    Controller validation:
-    POST endpoints that accept amount fields use @RequestBody with a record type;
-    if the field is typed as double/float in the JSON, Jackson rejects it with 400.
-    Failing fixture: any billing entity field named *amount*/*price*/*fee*/*cost* typed as double/float/BigDecimal.
+    Enforced by BillingArchitectureTest.billingAmountFieldsMustBeIntegerMinorUnits
+    (@Tag BILLING-CUR-001): fields named *amount*/*price*/*fee*/*cost* in ..billing..
+    MUST NOT have raw type double/float/BigDecimal (the float family -> silent
+    rounding). long AND boxed Long are both integer minor units and allowed — request
+    DTOs box to Long for @NotNull validation, so mandating the long primitive would
+    wrongly reject them (this corrects the prior note's literal haveRawType(long)).
+    Failing fixture: practices/evals/fixtures/currency-amount-precision/fail_float_amount/.
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
