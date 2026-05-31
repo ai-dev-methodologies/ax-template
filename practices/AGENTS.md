@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "910cbd29fadeb9c1cec6d2b582ff687b23677d13cd51e95d5cc5783e62c019d5"
+  source_concat_sha256: "d70b4ff8dd2bfb826e11c88f4c646321a9f3950dfad4a0b9ecf0bb799ea36f44"
   rule_count: 112
   generated_by: "practices/generate_agents.sh"
 ---
@@ -4892,8 +4892,11 @@ protects_template_id: templates/backend/billing/BillingService.java
 failing_fixture_path: practices/evals/fixtures/no-billing-cross-import-from-payment/fail_billing_imports_payment/
 spec_ref: "specs/billing-l0.yaml#BILLING-BOUNDARY-001"
 verification:
-  type: archunit
+  gradle_task: testBilling
+  tag: BILLING-BOUNDARY-001
   notes: |
+    Enforced by BillingArchitectureTest.billingMustNotImportPayment +
+    paymentMustNotImportBilling (@Tag BILLING-BOUNDARY-001).
     ArchUnit rules (two directional):
     noClasses().that().resideInAPackage("..billing..")
         .should().dependOnClassesThat().resideInAPackage("..payment..")
@@ -7891,15 +7894,14 @@ protects_template_id: templates/backend/billing/Subscription.java
 failing_fixture_path: practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/
 spec_ref: "specs/billing-l0.yaml#BILLING-STATE-001"
 verification:
-  type: archunit
+  gradle_task: testBilling
+  tag: BILLING-STATE-001
   notes: |
-    ArchUnit rule:
-    noClasses().that().areNotAssignableTo(SubscriptionStateMachine.class)
-    .should().callMethodWhere(
-      target().hasName("applyStatusTransition")
-      .and(owner().isAssignableTo(Subscription.class))
-    )
-    Failing fixture: any class besides SubscriptionStateMachine calling applyStatusTransition().
+    Enforced by BillingArchitectureTest.onlyStateMachineMutatesSubscriptionStatus
+    (@Tag BILLING-STATE-001): no class in ..billing.. other than SubscriptionStateMachine
+    (or Subscription itself) may call Subscription.setStatus(SubscriptionStatus) — the
+    package-private status mutator that gates every lifecycle transition.
+    Failing fixture: any other billing class calling setStatus(...).
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05

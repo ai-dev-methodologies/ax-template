@@ -13,15 +13,14 @@ protects_template_id: templates/backend/billing/Subscription.java
 failing_fixture_path: practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/
 spec_ref: "specs/billing-l0.yaml#BILLING-STATE-001"
 verification:
-  type: archunit
+  gradle_task: testBilling
+  tag: BILLING-STATE-001
   notes: |
-    ArchUnit rule:
-    noClasses().that().areNotAssignableTo(SubscriptionStateMachine.class)
-    .should().callMethodWhere(
-      target().hasName("applyStatusTransition")
-      .and(owner().isAssignableTo(Subscription.class))
-    )
-    Failing fixture: any class besides SubscriptionStateMachine calling applyStatusTransition().
+    Enforced by BillingArchitectureTest.onlyStateMachineMutatesSubscriptionStatus
+    (@Tag BILLING-STATE-001): no class in ..billing.. other than SubscriptionStateMachine
+    (or Subscription itself) may call Subscription.setStatus(SubscriptionStatus) — the
+    package-private status mutator that gates every lifecycle transition.
+    Failing fixture: any other billing class calling setStatus(...).
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05

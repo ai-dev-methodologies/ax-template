@@ -14,8 +14,11 @@ protects_template_id: templates/backend/billing/BillingService.java
 failing_fixture_path: practices/evals/fixtures/no-billing-cross-import-from-payment/fail_billing_imports_payment/
 spec_ref: "specs/billing-l0.yaml#BILLING-BOUNDARY-001"
 verification:
-  type: archunit
+  gradle_task: testBilling
+  tag: BILLING-BOUNDARY-001
   notes: |
+    Enforced by BillingArchitectureTest.billingMustNotImportPayment +
+    paymentMustNotImportBilling (@Tag BILLING-BOUNDARY-001).
     ArchUnit rules (two directional):
     noClasses().that().resideInAPackage("..billing..")
         .should().dependOnClassesThat().resideInAPackage("..payment..")
