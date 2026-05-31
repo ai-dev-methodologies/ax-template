@@ -1002,6 +1002,11 @@ echo "[62] randomport_contextcache_dirtiescontext_guard.sh (R22 lever — any ba
 run_guard "randomport_contextcache_dirtiescontext/live" 0 \
     bash "$SCRIPT_DIR/randomport_contextcache_dirtiescontext_guard.sh"
 
+echo ""
+echo "[63] liveness_probe_no_downstream_guard.sh (health-check-l0 HEALTH-LIVENESS-001 — a liveness health group that gates on a downstream dependency (db/redis/kafka/…) restart-loops the fleet on a dependency blip; dependencies belong in readiness)"
+run_guard "liveness_probe_no_downstream/live" 0 \
+    bash "$SCRIPT_DIR/liveness_probe_no_downstream_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

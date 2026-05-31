@@ -62,4 +62,32 @@ management:
 
 Verification: `./gradlew testPractices --tests "*KubernetesProbes*"` starts the app on a random port and asserts `/actuator/health/liveness` and `/actuator/health/readiness` both return 200 with UP/DOWN status.
 
-Reference: [Spring Boot — Kubernetes Probes](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.kubernetes-probes)
+### Liveness MUST NOT gate on a downstream dependency
+
+Exposing the probes is only half the contract (`specs/health-check-l0.yaml#HEALTH-LIVENESS-001`). The liveness group MUST stay `livenessState`-only — never add a dependency health indicator (`db`, `redis`, `mongo`, `kafka`, …) to it. A liveness failure restarts the pod; if liveness gates on the database, a transient DB blip flips liveness DOWN, Kubernetes restarts every pod, the restarts hammer the recovering DB, and a recoverable outage becomes a self-amplifying one. Dependency checks belong in the **readiness** group (a DOWN readiness drains traffic without a restart).
+
+**Incorrect — a dependency in the liveness group restart-loops the fleet on a DB blip:**
+
+```yaml
+management:
+  endpoint:
+    health:
+      group:
+        liveness:
+          include: livenessState, db   # ← DB outage now restarts every pod
+```
+
+**Correct — liveness is process-only; dependencies gate readiness:**
+
+```yaml
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState, db   # ← DB outage drains traffic, no restart
+```
+
+Spring Boot's default liveness group is already `livenessState`-only, so the safe posture needs no config. `practices/evals/liveness_probe_no_downstream_guard.sh` (run-all-guards [63]) scans `application*.yml` and BLOCKS the push if a `liveness` group `include` lists any downstream indicator.
+
+Reference: [Spring Boot — Kubernetes Probes](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.kubernetes-probes) · [Kubernetes — Liveness/Readiness/Startup Probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)
