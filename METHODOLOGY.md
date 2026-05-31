@@ -1195,3 +1195,54 @@ next IDW on the HARDENED catalog → validate the IMW worked (personas now REUSE
 - The IMW sub-waves land as ordinary verified+pushed commits; the next IDW is the
   regression test that the improvement actually took.
 
+## Test Context Isolation — the ContextCache lever (R22)
+
+A failure mode that recurs every time the catalog grows a new `@SpringBootTest`
+class, costs an afternoon to diagnose, and is invisible to per-domain test runs.
+Codified here so a fork-receiver inherits the fix instead of re-discovering it.
+
+### The hazard
+
+Spring's TestContext framework caches loaded `ApplicationContext`s in an LRU keyed
+by the test's context configuration, capped by default at **32**
+(`spring.test.context.cache.maxSize`). Once the suite boots more than 32 *distinct*
+context configurations, the LRU starts evicting. An evicted context has its
+singletons torn down — including the Hikari pool — so a **sibling** test class that
+was relying on a cached context can find it shut down before its own methods run.
+The symptom is bizarre: a class that passes in isolation, and passes under its own
+`./gradlew test{Domain}` task, fails (often `UndeclaredThrowableException` at an SPI
+proxy, or a dead-port `401`) only in the **full `./gradlew test` aggregate** — and
+the *trigger* is some unrelated, newly-added `@SpringBootTest` that tipped the cache
+past its cap. The failing class and the culprit class have nothing to do with each
+other; that is what makes it expensive.
+
+### The lever
+
+Annotate the affected class with
+`@DirtiesContext(classMode = ClassMode.BEFORE_CLASS)` (or `AFTER_CLASS`). That forces
+a fresh context boot for the class and removes it from cache reuse, so eviction can no
+longer pull the rug out from under it. It is a one-annotation, **production-neutral**
+change (the test's behavior is identical; it just no longer shares a cached context).
+Applied across this catalog to `BillingFlowIT`, `FeatureFlagFlowIT`,
+`ApiKeyComplianceTest`, `I18nPolicyComplianceTest`, `ReportExportComplianceTest`,
+`SessionRevocationCheckTest`, and the `RealtimePolicyComplianceTest` whose addition
+triggered the latest eviction.
+
+**Apply it to the victim, not the trigger.** Stash-test to confirm which class
+actually fails, and harden *that* class. Annotating the newly-added trigger is often
+insufficient (it does not change which sibling gets evicted); the victim is the one
+that must stop relying on a cacheable context.
+
+### The mechanical contract
+
+`practices/evals/randomport_contextcache_dirtiescontext_guard.sh` (run-all-guards
+[62]) makes the lesson binary: **any backend test source that NAMES the ContextCache
+hazard (contains the literal token `ContextCache`) MUST also carry `@DirtiesContext`.**
+Naming the hazard in a comment without mitigating it is the exact regression that
+returns the spurious aggregate failures, so the guard refuses the push. The contract
+is self-describing and generalizes — a fork-receiver whose suite outgrows the cache cap
+documents the hazard once and the guard enforces the mitigation from then on.
+
+Reference: Spring Framework Reference — [Context Caching](https://docs.spring.io/spring-framework/reference/testing/testcontext-framework/ctx-management/caching.html)
+· [@DirtiesContext](https://docs.spring.io/spring-framework/reference/testing/annotations/integration-spring/annotation-dirtiescontext.html).
+

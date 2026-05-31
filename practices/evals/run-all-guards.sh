@@ -997,6 +997,11 @@ echo "[61] money_boundary_seam_guard.sh (#39 money-l0 reconcile — block raw Bi
 run_guard "money_boundary_seam/live" 0 \
     bash "$SCRIPT_DIR/money_boundary_seam_guard.sh"
 
+echo ""
+echo "[62] randomport_contextcache_dirtiescontext_guard.sh (R22 lever — any backend test that NAMES the Spring TestContext ContextCache cap-32 eviction hazard MUST carry @DirtiesContext, else the aggregate flakes return in a sibling class)"
+run_guard "randomport_contextcache_dirtiescontext/live" 0 \
+    bash "$SCRIPT_DIR/randomport_contextcache_dirtiescontext_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
