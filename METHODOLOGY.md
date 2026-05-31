@@ -1316,3 +1316,54 @@ design (the client-facing surface, when any, is an L2 block such as
 a distinct `domain_mode` change (`backend_only` → `full_trio`) gated by the **Frontend Spec
 Trio additions** in Appendix B, not part of this promotion.
 
+## Adversarial re-verification of sub-agent output (green ≠ correct)
+
+When a sub-agent delivers a substantial change (an L4 lift, a domain backend, a
+multi-file refactor) it almost always reports its own gate GREEN — build passes,
+`./gradlew test<Domain>` passes, `run-all-guards.sh` all-PASS. **Do not commit on that
+signal alone.** A passing suite proves the cases it encodes; it does not prove the
+absence of plausible-but-wrong logic. Before trusting sub-agent output, run a
+**read-only, refute-by-default adversarial review**, fix the survivors, and only then
+commit.
+
+### Why a green self-verify is not enough — this session's evidence
+
+Two sub-agent deliverables this cycle passed their full self-verify and were still
+wrong; the adversarial pass caught real defects the green suite missed:
+
+- **realtime-policy** (sub-agent reported testRealtime GREEN + run-all-guards 104/0):
+  the review found (1) a **metric-cardinality DoS** — an unbounded `{topic}` path
+  variable became an unbounded Micrometer label, (2) a **disconnect-reason CAS race**
+  between the backpressure path and the drain-error path double-counting the
+  active-subscriber gauge, (3) a hardcoded tenant scope that would silently cross-tenant
+  leak in a multi-tenant fork. All three shipped *green*.
+- **IMW6 data-subject-rights** (sub-agent reported 15/15 GREEN): the review found the
+  restriction gate **failing OPEN** on access + erase (consulted only on
+  rectify/portability), a gate evaluated *after* format-validation instead of before, and
+  an erasure idempotency hole that re-collected on re-request. Three real bugs behind a
+  green 15/15.
+
+In both cases the tests passed because they encoded the happy path; the bugs lived in
+the seams the author did not think to test — exactly what an adversary looks for.
+
+### The protocol
+
+1. **Sub-agent builds + self-verifies** to GREEN and reports — but does NOT commit/push.
+2. **Independent adversarial review** (a second agent, or a `Workflow` of parallel
+   skeptics) reads the diff **read-only** with a refute-by-default stance: each reviewer's
+   job is to find a way the change is wrong, and to **default to "defective" when
+   uncertain** rather than rubber-stamping. Give diverse lenses (correctness, security,
+   concurrency, does-it-actually-reproduce) rather than N identical passes.
+3. **Triage**: keep only findings that survive scrutiny (an over-eager refutation that is
+   itself wrong is discarded — the review is adversarial in both directions).
+4. **Fix the survivors** + add a regression test that locks each one, so the next green is
+   meaningfully greener.
+5. **Then** commit → `verify-completion.sh` → push.
+
+This is a process discipline, not a mechanical guard (you cannot grep for "did someone
+think hard enough"). It is cheap relative to what it prevents: every defect above would
+otherwise have been a shipped, green, *catalog-endorsed* bug — the worst kind, because the
+catalog's whole promise is "inside the rules = safe". Apply it to any sub-agent-produced
+substantive change before merge; skip it only for trivial mechanical edits a human can
+fully read in one pass.
+
