@@ -41,7 +41,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 112 Java rules + 86 React rules + 7 ESLint rules + 68 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 112 Java rules + 86 React rules + 7 ESLint rules + 70 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -204,6 +204,10 @@ task 전 GREEN + aggregate `./gradlew test` 는 advisory PortabilityCyclic
 | `./gradlew testCommentThread`  | GREEN    | 18/18 PASS (R36 + iter1 violation proof). R36 backend impl: Comment entity (polymorphic via entity_type/entity_id + parentCommentId reply hierarchy + body NULLABLE for soft-delete) + CommentEdit (immutable edit history) + CommentService (author-only edit, author-or-admin delete, IDOR-safe 404 history visibility) + CommentController (6 endpoints). 12 spec items / 4 families (CRUD × 3, THREAD × 3, AUTHZ × 3, HISTORY × 3) + CommentViolationProofTest (6 structural assertions). Soft-delete masks body as '[deleted]'; admin CANNOT edit (only delete). Edit history preserved across soft-delete (audit posture). |
 | `./gradlew testEmailOutbox`    | GREEN    | 24/24 PASS (R51 + R60 dogfood iter1 closure + R67 helper lift). R51 backend impl: EmailOutbox (PENDING/RETRY/SENT/DLQ enum, content columns @Column(updatable=false), MAX_RETRIES=3 terminal, exponential backoff (1L << retryCount) * 30L seconds) + EmailTemplate ({{var}} substitution) + EmailOutboxService (sole mutator + SLF4J audit.email-outbox structured logger) + EmailOutboxAdminController (@PreAuthorize ROLE_ADMIN + CacheControl.noStore + 409 EMAIL_OUTBOX_INVALID_TRANSITION on SENT row retry) + LoggingEmailSenderService (@ConditionalOnMissingBean default; refuses prod profile unless explicit opt-in). 8 spec items / 5 families (QUEUE × 2, SEND × 2, RETRY × 2, TEMPLATE × 1, ADMIN × 1) + 4 ViolationProof (immutable columns, no public setters, MAX_RETRIES constant, exponential formula) + 12 PiiHelper (R60). R60 dogfood F1/F2/F3/F6/F8/F9/F11 HIGH/MEDIUM closures: recipient hash on AUDIT, sanitizeReason on lastError storage path, processQueue batch summary, OutboxPage pagination metadata, distinct ADMIN_DELETE vs ADMIN_DELETE_ABSENT audit verbs. R67 helper lifted to common.AuditPiiHelper (cross-cutting). |
 | `./gradlew testDsr`            | GREEN    | 15/15 PASS (IMW6 — IDW4 regulated-axis #6 closure). data-subject-rights backend lift composing specs/data-subject-rights-l0.yaml (GDPR Art 15-20): DsrRequest entity + DsrRequestStateMachine (sole mutator) + PersonalDataProvider SPI + DsrService (sole orchestrator: ACCESS/RECTIFY/ERASURE/PORTABILITY/RESTRICT/SLA) + DsrRestrictionGate (fail-closed 423) + DsrMetrics (3 bounded {tenant,type} Micrometer meters) + DsrSlaSweeper (@Scheduled 30-day SLA) + V030. 7 spec items / 10 compliance + 5 ViolationProof. Adversarial review closed 3 real bugs pre-merge: restriction gate now consulted on access+erase (not just rectify/portability), portability gate precedes format-validation, erasure idempotency persists the manifest (re-request returns it verbatim, no re-erase). full_trio spec realized backend-only (frontend trio deferred). |
+| `./gradlew testI18n`           | GREEN    | 7/7 PASS (i18n-policy backend-only L4; 5 spec items / 4 families — LOCALE-NEG, MESSAGE-SOURCE, TIMEZONE, FORMATTING + 2 adversarial-closure). 새 @SpringBootTest 는 @DirtiesContext(BEFORE_CLASS) 적용 (R22 ContextCache lever) |
+| `./gradlew testRealtime`       | GREEN    | 6/6 PASS (realtime-policy backend-only L4; SSE-first via MVC SseEmitter — RT-CHANNEL-AUTH/FANOUT/BACKPRESSURE/RECONNECT; RT-PROTOCOL-001 review-only) |
+| `./gradlew testEcommerce`      | GREEN    | 11/11 PASS (R23 e-commerce capstone — EcommerceE2ETest composes crud + payment + notification + audit-log + search; ECOM-CART/CHECKOUT/INV/STATE/AUTHZ) |
+| `./gradlew testCommonPrimitives` | GREEN | cross-cutting common/* primitives (BreakGlass/BulkResult/CallerScope/Consent/Idempotency/PageEnvelope/ParticipantScope) + MDC correlation-id IT. 2026-06-01 audit 가 @Tag→per-domain-task hard-gate escape 를 닫으며 신설 (guard [66]) |
 | `./gradlew testPortability`    | advisory | 외부 fixture (spring-realworld-example-app) 에 cycle 있음. fork-receiver의 코드가 아니라 외부 reference 코드의 결함 |
 
 전체 `./gradlew test` aggregate 도 **PortabilityCyclic advisory 1건을 제외하면
@@ -256,7 +260,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 112룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 68 hard guards
+│   ├── evals/                 # 4 hard gates + 70 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md

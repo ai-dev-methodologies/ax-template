@@ -14,8 +14,9 @@ protects_template_id: templates/backend/global-exception-handler/GlobalException
 failing_fixture_path: practices/evals/fixtures/no-rrn-logging/fail_rrn_in_log/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-OBS-003"
 verification:
-  type: review
-  notes: "Static analysis: grep -rn 'log\\.' --include='*.java' | grep -i 'rrn\\|주민' must return zero matches in production code."
+  guard: no_rrn_in_log_guard.sh
+  source: "practices/evals/no_rrn_in_log_guard.sh (2026-06-01 audit — mechanizes this CRITICAL rule)"
+  pattern: "no log.<level>(...) statement references a raw RRN — bare token rrn (word-bounded, so rrnHash/rrnMasked/rrnToken are allowed) or 주민. Self-tested against practices/evals/fixtures/no-rrn-logging/{pass,fail_rrn_in_log}."
 evidence:
   - source_type: external
     citation: "개인정보보호법 제24조 — 고유식별정보의 처리 제한 (Korean Personal Information Protection Act §24 — Restrictions on Processing Unique Identification Information)"

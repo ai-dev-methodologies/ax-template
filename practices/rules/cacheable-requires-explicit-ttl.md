@@ -8,12 +8,11 @@ tags:
   - caffeine
   - redis
   - security
-spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-CACHE-003"
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-CACHE-004"
 verification:
-  gradle_task: testPractices
-  tag: PRACTICES-CACHE-003
-failing_fixture_path: "practices/evals/fixtures/cacheable_ttl/fail_no_ttl"
-passing_fixture_path: "practices/evals/fixtures/cacheable_ttl/pass"
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/practices/CacheConfig.java"
+  pattern: "Every CacheManager bean declares provider TTL — Caffeine .expireAfterWrite(LOOKUP_TTL), machine-checked by CacheCaffeineExpirationTest (PRACTICES-CACHE-002); Redis .entryTtl(...) reviewed (the reference backend ships a Caffeine-only CacheConfig — no Redis manager to assert against)"
 protects_template_ids:
   - "templates/backend/cache/CaffeineConfig.java"
   - "templates/backend/cache/RedisCacheConfig.java"
@@ -105,6 +104,6 @@ See reference templates:
 - `templates/backend/cache/CaffeineConfig.java` — process-local cache with per-cache TTL map
 - `templates/backend/cache/RedisCacheConfig.java` — distributed cache with per-cache TTL map
 
-Verification: `./gradlew testPractices --tests "*CacheableTtl*"` asserts that every `@Cacheable`-enabled `CacheManager` bean declares a non-zero TTL.
+Verification (review): inspect every `CacheManager` bean. The Caffeine slice (`expireAfterWrite`) is machine-checked by `./gradlew testPractices --tests "*CaffeineExpiration*"` (PRACTICES-CACHE-002, asserts `CacheConfig.LOOKUP_TTL > Duration.ZERO`); the Redis `entryTtl` slice is review-only, because the reference backend ships a Caffeine-only `CacheConfig` with no Redis cache manager to assert against.
 
 Reference: [Caffeine Wiki — Eviction](https://github.com/ben-manes/caffeine/wiki/Eviction) | [Spring Cache Abstraction](https://docs.spring.io/spring-framework/reference/integration/cache.html)

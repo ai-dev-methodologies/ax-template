@@ -301,6 +301,19 @@ tasks.register<Test>("testCommonAdvice") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testCommonPrimitives") {
+    useJUnitPlatform {
+        includeTags(
+            "COMMON_BREAK_GLASS", "COMMON_BULK_RESULT", "COMMON_CALLER_SCOPE",
+            "COMMON_CONSENT", "COMMON_IDEMPOTENCY", "COMMON_PAGE_ENVELOPE",
+            "COMMON_PARTICIPANT_SCOPE", "OBSERVABILITY"
+        )
+    }
+    description = "Run the cross-cutting backend tests not owned by a single domain vertical: common/* primitives (BreakGlass, BulkResult, CallerScope, Consent, Idempotency, PageEnvelope, ParticipantScope) + the MDC correlation-id observability IT. Closes the @Tag→per-domain-task hard-gate escape (2026-06-01 audit)."
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Test>("testI18n") {
     useJUnitPlatform {
         includeTags("I18N")

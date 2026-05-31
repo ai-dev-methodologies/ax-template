@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "eff7939d23a57ade84af6b1331cc91f8a03943322c968c17a991d965fdbd7b07"
+  source_concat_sha256: "58d68865458af9664231b5c179a58e19feba8ce60fde5c5ff7104f3b89f35650"
   rule_count: 112
   generated_by: "practices/generate_agents.sh"
 ---
@@ -1559,12 +1559,11 @@ tags:
   - caffeine
   - redis
   - security
-spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-CACHE-003"
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-CACHE-004"
 verification:
-  gradle_task: testPractices
-  tag: PRACTICES-CACHE-003
-failing_fixture_path: "practices/evals/fixtures/cacheable_ttl/fail_no_ttl"
-passing_fixture_path: "practices/evals/fixtures/cacheable_ttl/pass"
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/practices/CacheConfig.java"
+  pattern: "Every CacheManager bean declares provider TTL — Caffeine .expireAfterWrite(LOOKUP_TTL), machine-checked by CacheCaffeineExpirationTest (PRACTICES-CACHE-002); Redis .entryTtl(...) reviewed (the reference backend ships a Caffeine-only CacheConfig — no Redis manager to assert against)"
 protects_template_ids:
   - "templates/backend/cache/CaffeineConfig.java"
   - "templates/backend/cache/RedisCacheConfig.java"
@@ -1656,7 +1655,7 @@ See reference templates:
 - `templates/backend/cache/CaffeineConfig.java` — process-local cache with per-cache TTL map
 - `templates/backend/cache/RedisCacheConfig.java` — distributed cache with per-cache TTL map
 
-Verification: `./gradlew testPractices --tests "*CacheableTtl*"` asserts that every `@Cacheable`-enabled `CacheManager` bean declares a non-zero TTL.
+Verification (review): inspect every `CacheManager` bean. The Caffeine slice (`expireAfterWrite`) is machine-checked by `./gradlew testPractices --tests "*CaffeineExpiration*"` (PRACTICES-CACHE-002, asserts `CacheConfig.LOOKUP_TTL > Duration.ZERO`); the Redis `entryTtl` slice is review-only, because the reference backend ships a Caffeine-only `CacheConfig` with no Redis cache manager to assert against.
 
 Reference: [Caffeine Wiki — Eviction](https://github.com/ben-manes/caffeine/wiki/Eviction) | [Spring Cache Abstraction](https://docs.spring.io/spring-framework/reference/integration/cache.html)
 
@@ -5215,8 +5214,9 @@ protects_template_id: templates/backend/global-exception-handler/GlobalException
 failing_fixture_path: practices/evals/fixtures/no-rrn-logging/fail_rrn_in_log/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-OBS-003"
 verification:
-  type: review
-  notes: "Static analysis: grep -rn 'log\\.' --include='*.java' | grep -i 'rrn\\|주민' must return zero matches in production code."
+  guard: no_rrn_in_log_guard.sh
+  source: "practices/evals/no_rrn_in_log_guard.sh (2026-06-01 audit — mechanizes this CRITICAL rule)"
+  pattern: "no log.<level>(...) statement references a raw RRN — bare token rrn (word-bounded, so rrnHash/rrnMasked/rrnToken are allowed) or 주민. Self-tested against practices/evals/fixtures/no-rrn-logging/{pass,fail_rrn_in_log}."
 evidence:
   - source_type: external
     citation: "개인정보보호법 제24조 — 고유식별정보의 처리 제한 (Korean Personal Information Protection Act §24 — Restrictions on Processing Unique Identification Information)"

@@ -23,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+@Tag("ASVS")  // class-level: route the OAuth full-flow IT into testAsvs (its auth-domain hard gate) — methods keep @Tag("OAUTH-FLOW")
 class OAuthFullFlowTest {
 
     @Autowired MockMvc mockMvc;

@@ -143,6 +143,9 @@ checklist:
       - command: "./gradlew testCommonAdvice"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testCommonPrimitives"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testI18n"
         working_directory: "backend"
         expected_exit: 0

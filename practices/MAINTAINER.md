@@ -274,16 +274,18 @@ they fail-close on catalog quality without further configuration.
 Git-workflow / branch protection / PR-required policy is **out of skill scope** and is
 fork-받은 팀이 정함. See `DECISIONS-P3.md` for the scope-corrected enforcement table.
 
-### Snapshot limitation (current; tracked)
+### ~~Snapshot limitation~~ — RESOLVED 2026-05-15 (see `DECISIONS.md`)
 
-The two snapshots in `practices/upstream/` (`spring-boot-3.5.snapshot.md`,
-`spring-security-6.x.snapshot.md`) were fetched from the `htmlsingle/index.html` Spring
-reference landing pages. Those pages are navigation indexes, not the full reference body
-— the topic-keyword `JOIN FETCH`, `constructor injection`, etc. do not match. Therefore
-the current 7 rules all use the `source_type: external` shape rather than the
-`upstream_id` shape. Backlog item: `fetch.sh` URL list to point at the deep reference
-pages so the `upstream_id` shape becomes usable. See `DECISIONS.md` for the recorded
-limitation.
+Historical note: an early concern held that the `practices/upstream/` snapshots were
+fetched from `htmlsingle/index.html` navigation landing pages whose topic keywords
+(`JOIN FETCH`, `constructor injection`, …) did not match, forcing rules onto the
+`source_type: external` shape instead of `upstream_id`. **That was resolved 2026-05-15.**
+`practices/upstream/` now holds 61 deep-reference `*.snapshot.md` files, and of the 112
+rules, 70 carry the `upstream_id` evidence shape (resolving against a real snapshot +
+section + quoted substring) — enforced binary by `evidence_guard.sh`. The two filenames
+referenced in the original note (`spring-boot-3.5.snapshot.md`,
+`spring-security-6.x.snapshot.md`) never existed on disk. See `DECISIONS.md` §"Snapshot
+bodies are navigation indexes — RESOLVED" for the recorded resolution.
 
 ---
 

@@ -57,7 +57,7 @@ Plus the spec-anchored backend-only domain (NOT on disk under `templates/L4/`):
 
 2. **Sealed verdict PASS validates AI-agent self-discoverability**, not production readiness. Sealed verdicts confirm the catalog can be picked up by a context-0 AI agent. Per-domain `./gradlew test{Domain}` GREEN is the additional binary signal of catalog-level correctness; fork-receivers still own production hardening (load testing, ops runbooks, RBAC integration with their identity provider, etc.).
 
-3. **METHODOLOGY.md 5-step is the playbook for ADDING new domains.** Existing 20 L4 are already through the playbook. For a fork-receiver introducing a 21st domain not in the catalog, follow Spec Trio + TDD + `./gradlew test{Domain}` cycle.
+3. **METHODOLOGY.md 5-step is the playbook for ADDING new domains.** Existing 25 L4 are already through the playbook. For a fork-receiver introducing a 26th domain not in the catalog, follow Spec Trio + TDD + `./gradlew test{Domain}` cycle.
 
 4. **Estimated effort per L4 customization** (composition kit assumes you fork, not greenfield):
    - Wiring identity provider into existing auth module: ~1-2 days

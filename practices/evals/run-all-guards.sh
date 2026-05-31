@@ -1017,6 +1017,20 @@ echo "[65] rule_verification_binding_guard.sh (A1 tail closure — generalizes [
 run_guard "rule_verification_binding/live" 0 \
     bash "$SCRIPT_DIR/rule_verification_binding_guard.sh"
 
+echo ""
+echo "[66] test_tag_task_coverage_guard.sh (2026-06-01 audit — class-centric @Tag→per-domain-task binding: a test class whose every @Tag is consumed by NO includeTags(...) escapes every hard gate and runs only under the advisory aggregate; complements [58] task↔checklist and [64] rule.tag→@Tag)"
+run_guard "test_tag_task_coverage/live" 0 \
+    bash "$SCRIPT_DIR/test_tag_task_coverage_guard.sh"
+
+echo ""
+echo "[67] no_rrn_in_log_guard.sh (2026-06-01 audit — mechanizes CRITICAL rule no-rrn-logging: no log.<level>(...) may reference a raw RRN (rrn word-bounded / 주민); rrnHash/rrnMasked allowed. phi_in_logs_guard does NOT cover it — that keys on @Phi getters, of which the backend has zero)"
+run_guard "no_rrn_in_log/live" 0 \
+    bash "$SCRIPT_DIR/no_rrn_in_log_guard.sh"
+run_guard "no_rrn_in_log/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/no_rrn_in_log_guard.sh" --root "$SCRIPT_DIR/fixtures/no-rrn-logging/fail_rrn_in_log"
+run_guard "no_rrn_in_log/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/no_rrn_in_log_guard.sh" --root "$SCRIPT_DIR/fixtures/no-rrn-logging/pass"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

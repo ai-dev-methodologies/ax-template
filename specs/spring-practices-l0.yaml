@@ -259,6 +259,14 @@ items:
     applicable: true
     notes: "Review every @RestController class: no @Cacheable, @CachePut, @CacheEvict on the class or any of its methods. Anchored to OWASP API1:2023 BOLA + Spring Framework Reference §Cache Abstraction — Best Practices."
 
+  - id: "PRACTICES-CACHE-004"
+    chapter: "Caching"
+    requirement: "@Cacheable-backing CacheManager beans MUST configure an explicit TTL on every cache — Caffeine via expireAfterWrite (or expireAfterAccess), Redis via entryTtl. Spring's cache abstraction enforces no TTL of its own; a CacheManager built without provider TTL keeps entries until process restart, so secret rotations and feature-flag flips silently fail to take effect. Rule body: practices/rules/cacheable-requires-explicit-ttl.md."
+    test_method: "practices_CACHE_004_cacheManagerDeclaresExplicitTtl"
+    verification_type: "review"
+    applicable: true
+    notes: "Review every CacheManager bean: Caffeine builders declare .expireAfterWrite(Duration); Redis cache configs declare .entryTtl(Duration). The Caffeine slice is additionally machine-checked by CacheCaffeineExpirationTest (PRACTICES-CACHE-002); the Redis slice is review-only in this reference (Caffeine-only backend). Anchored to Caffeine Wiki §Eviction + Spring Framework Reference §Cache Abstraction."
+
   - id: "PRACTICES-CONFIG-001"
     chapter: "Configuration"
     requirement: "Application configuration must be bound through @ConfigurationProperties record types, not scattered @Value('${...}') injections. A typed contract concentrates the application-yml-vs-code coupling in one place, gives the IDE rename-safety, and lets Spring's relaxed-binding rules apply uniformly. Rule body: practices/rules/config-typed-properties.md."
