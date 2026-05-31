@@ -15,8 +15,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * SESS-REVOKE-003 — fail-closed SPI semantics.
  */
+// R22 aggregate-test isolation: with 88+ @SpringBootTest classes the TestContext ContextCache
+// (cap 32) churns its LRU; this default-properties MOCK context can be evicted (its Hikari pool
+// shut down) before its methods run, surfacing as 4x UndeclaredThrowableException at SPI proxy
+// invocation. The realtime-policy RANDOM_PORT compliance test (added 2026-05-31) is the trigger
+// that tips the eviction onto THIS class specifically. BEFORE_CLASS forces a fresh context boot
+// immediately before this class's methods — the documented surgical R22 lever already applied to
+// BillingFlowIT / FeatureFlagFlowIT / ApiKeyComplianceTest / I18nPolicyComplianceTest. No
+// production change; this class's behavior is identical, it just no longer reuses an evicted context.
 @SpringBootTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Tag("SESSION")
 class SessionRevocationCheckTest {
 

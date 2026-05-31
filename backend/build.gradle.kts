@@ -310,6 +310,15 @@ tasks.register<Test>("testI18n") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testRealtime") {
+    useJUnitPlatform {
+        includeTags("REALTIME")
+    }
+    description = "Run realtime-policy domain compliance tests (backend_only, SSE via MVC SseEmitter: 6 testable items / 5 families — CHANNEL-AUTH x2, FANOUT, BACKPRESSURE, RECONNECT, OBSERVABILITY; PROTOCOL is review-only)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

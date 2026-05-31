@@ -1,4 +1,4 @@
-# Implementation Status — 24 L4 Domains (R63 baseline · R93 multi-tenant · IMW6 DSR full-stack · i18n-policy + ratelimit promote · 2026-05-31)
+# Implementation Status — 25 L4 Domains (R63 baseline · R93 multi-tenant · IMW6 DSR full-stack · i18n-policy + ratelimit + realtime-policy promote · 2026-05-31)
 
 > **Fork-receiver expectation alignment.** This doc closes the gap between catalog promises and runnable code. Persona simulation (R15 옵션A) revealed that fork-receivers consistently confuse `templates/L4/<domain>/` (catalog reference template + Next.js stub) with `backend/src/main/java/com/ax/template/authblueprint/<domain>/` (actual Java reference workload). The two layers are different by design — this table makes the boundary explicit.
 
@@ -8,7 +8,7 @@
 - **backend-only** — `specs/<domain>-l0.yaml` declares `domain_mode: backend_only`. Backend exists; **no** `templates/L4/<domain>/` directory by design. The catalog refuses to ship a frontend for server-to-server domains (identity-verification: CI/DI callback). See `practices/rules/spec-domain-mode-gates-frontend-trio.md` (R58) + the `l4_frontend_domain_mode_guard.sh` mechanical guard (R59).
 - **rules-as-code** — Special INFRA case. The `practices` directory ships as an L4 template for fork-receiver visibility but is not recipe-selectable — it IS the catalog enforcement system.
 
-## 24 L4 status (disk-verified 2026-05-31)
+## 25 L4 status (disk-verified 2026-05-31)
 
 | L4 domain | Backend Java | Frontend Next.js trio | `./gradlew test{Domain}` | Status |
 |---|---|---|---|---|
@@ -31,6 +31,7 @@
 | payment | ✅ reference workload | ✅ trio | 29 items GREEN | **full-trio** |
 | practices | ✅ rules-as-code | ✅ trio | 112 rules GREEN | **rules-as-code** |
 | ratelimit | ✅ realized (RateLimitFilter + Config + PingController + Properties; Caffeine RFC 6585 §4) | ❌ no `app/` (backend-only; client half = L2 rate-limit-banner) | testRateLimit 4/4 GREEN | **backend-only** (future_add→selectable, backend realized) |
+| realtime-policy | ✅ promote (RealtimeChannelService SSE registry + audience-fan-out + backpressure-disconnect + Last-Event-ID replay + RealtimeMetrics 3 meters + RealtimeController SseEmitter; SSE-FIRST via MVC, WebSocket documented as parallel path; cross-cutting, additive) | ❌ no `app/` (backend-only stub) | testRealtime 6/6 GREEN (6 spec items; RT-PROTOCOL-001 review-only) | **backend-only stub** (future_add→selectable) |
 | scheduled-task | ✅ R20 closure | ✅ trio | 5/5 GREEN | **full-trio** |
 | search | ✅ R20 backend | ✅ trio | 8/8 GREEN | **full-trio** |
 | session-management | ✅ R33 closure | ✅ trio (R41) | 23/23 GREEN | **full-trio** |
@@ -43,7 +44,7 @@ Plus the spec-anchored backend-only domain (NOT on disk under `templates/L4/`):
 |---|---|---|---|---|
 | identity-verification | ✅ R54 closure | ❌ by design | 19/19 GREEN | **backend-only** (spec `domain_mode: backend_only`) |
 
-**Totals:** 24 disk L4 (20 full-trio + 1 rules-as-code + 3 backend-only: multi-tenant, i18n-policy, ratelimit) + 1 backend-only spec-anchored domain (identity-verification, not on disk under `templates/L4/`).
+**Totals:** 25 disk L4 (20 full-trio + 1 rules-as-code + 4 backend-only: multi-tenant, i18n-policy, ratelimit, realtime-policy) + 1 backend-only spec-anchored domain (identity-verification, not on disk under `templates/L4/`).
 
 ## Shared client primitives (cross-cutting layers)
 
@@ -72,6 +73,6 @@ See each `recipes/<pattern>/RECIPE.md` for an inline "Backend Implementation Sta
 
 - **Done (R20-R63 sequence)**: audit-log / billing / feature-flags / file-storage / notification / search / scheduled-task / webhook backend impl shipped; R29-R36 closed 8 backend-only L4 stubs; R40-R45 + R51 promoted them to full-trio; R47-R63 hardened with dogfood + PII discipline + L0 / L2 layers.
 - **Next candidates** (NOT shipped):
-  - Additional L4 domains for niche enterprise patterns (i18n-policy, multi-tenant, realtime-policy, ratelimit) reserved in the schema enum via `future_add` tier of `specs/l4-domain-classification.yaml`. Each requires sub-ralplan + Spec Trio + TDD before any disk presence.
+  - Additional L4 domains for niche enterprise patterns (bulk-import, identity-verification disk slot) reserved in the schema enum via the `future_add` tier of `specs/l4-domain-classification.yaml`. Each requires sub-ralplan + Spec Trio + TDD before any disk presence. (multi-tenant, i18n-policy, ratelimit, realtime-policy have been promoted future_add→selectable and are now on disk as backend-only L4s.)
   - 2-persona dogfood iter2 on R51 email-outbox (iter1 closed 8 findings via R60; iter2 looks for residuals after the multi-module PII adoption).
   - Generalize EmailPiiHelper into a backend `common` package when a 6th+ module needs it (current adoption: emailoutbox / activityfeed / scheduledtask / reportexport / webhook / auditlog / notification = 7 already). The promotion trigger is now satisfied; deferred for a focused refactor commit.

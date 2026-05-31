@@ -93,9 +93,11 @@ for dpath in "$BACKEND_DOMAINS_DIR"/*/; do
     # AuditPiiHelper out of emailoutbox; `i18n` is the cross-cutting Spring
     # i18n CONFIG + policy package — LocaleResolver/MessageSource/stateless
     # time-policy helper, no entity → ViolationProofTest is not applicable,
-    # same category as observability/security/common).
+    # same category as observability/security/common; `realtime` is the
+    # cross-cutting SSE channel-policy package — in-memory SseEmitter registry +
+    # metrics, no entity → ViolationProofTest is not applicable).
     case "$dname_camel" in
-        importer|integration|observability|security|user|common|i18n) continue ;;
+        importer|integration|observability|security|user|common|i18n|realtime) continue ;;
     esac
 
     # Derive kebab-case domain name candidates for ledger lookup.

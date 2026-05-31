@@ -56,7 +56,7 @@ checklist:
 
   # ── 2. Per-domain test tasks (the catalog's binary pass/fail surface) ───────
   - id: per-domain-tests
-    title: "Per-domain ./gradlew test{Domain} suite (29 tasks)"
+    title: "Per-domain ./gradlew test{Domain} suite (30 tasks)"
     parallel: false  # gradle daemon serializes anyway; keep stderr deterministic
     # The 25-domain matrix + the R22 BEFORE_CLASS DirtiesContext on hot
     # @SpringBootTest classes pushes cumulative wall-clock past the global
@@ -144,6 +144,9 @@ checklist:
         working_directory: "backend"
         expected_exit: 0
       - command: "./gradlew testI18n"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testRealtime"
         working_directory: "backend"
         expected_exit: 0
       - command: "./gradlew testIntegration"

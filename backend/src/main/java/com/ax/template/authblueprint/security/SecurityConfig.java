@@ -172,6 +172,13 @@ public class SecurityConfig {
                 // authorization decision. permitAll keeps the compliance test black-box
                 // and the wiring additive (it claims a NEW path prefix only).
                 .requestMatchers("/api/i18n/**").permitAll()
+                // realtime-policy domain (specs/realtime-policy-l0.yaml): SSE subscribe is
+                // a plain chunked HTTP GET, so the EXISTING chain authenticates it — an
+                // unauthenticated subscribe is rejected 401 here BEFORE the controller runs
+                // (RT-CHANNEL-AUTH-001; there is no "WebSocket bypass" because there is no
+                // protocol switch). Cross-tenant topic rejection (RT-CHANNEL-AUTH-002, 403)
+                // is enforced inside RealtimeController against Authentication.getName().
+                .requestMatchers("/api/realtime/**").authenticated()
                 // PRACTICES-INTEG-001: webhook endpoints are HMAC-authenticated, not JWT.
                 // External systems (GitHub, Stripe, etc.) POST raw payloads with HMAC-SHA256
                 // signatures — they do not carry Bearer tokens. The WebhookReceiver.verify()

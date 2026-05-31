@@ -60,12 +60,13 @@
 #     the schema; in that case the schema enum MUST be updated in the
 #     same commit (guard catches mismatch as I2 violation).
 #
-# Snapshot — ratelimit promotion cut (2026-05-31)
-#   disk:   24 dirs (1 INFRA + 23 SELECTABLE)
-#   schema: 26 entries (23 SELECTABLE + 3 FUTURE_ADD)
+# Snapshot — realtime-policy promotion cut (2026-05-31)
+#   disk:   25 dirs (1 INFRA + 24 SELECTABLE)
+#   schema: 26 entries (24 SELECTABLE + 2 FUTURE_ADD)
 #   recipes union: 10 distinct domains; recipe_orphan SELECTABLE domains
 #                  (file-storage, email-outbox, data-subject-rights,
-#                  multi-tenant, i18n-policy) await recipe activation.
+#                  multi-tenant, i18n-policy, ratelimit, realtime-policy)
+#                  await recipe activation.
 
 generated: "2026-05-20"
 task: "P2 R12 — 3-source coherence enforcement"
@@ -213,6 +214,24 @@ tiers:
           recipe_orphan until a recipe (e.g. api-gateway-relay) adopts it as a
           first-class feature via override_allowed.add.
         active_recipes: []
+      # realtime-policy promoted future_add → selectable (2026-05-31). Backend-only
+      # SSE channel runtime at backend/.../realtime/ (RealtimeChannelService +
+      # RealtimeController SseEmitter + RealtimeMetrics + RealtimeProperties +
+      # RealtimeProblemAdvice) verified by ./gradlew testRealtime (6 testable items).
+      # Realized SSE-FIRST (MVC SseEmitter — plain HTTP through the existing security
+      # chain, RestAssured-testable); the WebSocket path is documented as the parallel
+      # option in templates/L4/realtime-policy/README.md. Spec
+      # (specs/realtime-policy-l0.yaml, domain_mode: backend_only) + blueprint were
+      # already in the catalog; this commit makes the namespace selectable.
+      - name: "realtime-policy"
+        recipe_orphan: true
+        rationale: >
+          Cross-cutting server-push channel policy (auth-on-subscribe, tenant-scoped
+          fan-out, backpressure-disconnect, Last-Event-ID resume, 3 canonical metrics).
+          On disk with backend-only SSE runtime + in schema enum; recipe_orphan until a
+          recipe (e.g. notification-livetail) flips a live surface from polling to
+          server-push via override_allowed.add.
+        active_recipes: []
 
   future_add:
     description: >
@@ -253,5 +272,5 @@ tiers:
           Each step has guard implications — re-run
           `bash practices/evals/run-all-guards.sh` after each.
       # ratelimit promoted to selectable (2026-05-31) — see selectable tier above.
-      - name: "realtime-policy"
-        intended_use: "WebSocket / SSE channel auth + back-pressure policy."
+      # realtime-policy promoted to selectable (2026-05-31) — see selectable tier above;
+      # backend-only SSE runtime on disk + verified by ./gradlew testRealtime.

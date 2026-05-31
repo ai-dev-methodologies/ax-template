@@ -1,4 +1,10 @@
 version: "0.1.0"
+domain_mode: backend_only   # cross-cutting SSE/WebSocket channel policy + runtime; no entity, no UI.
+                            # No templates/L4/realtime-policy/app/ — l4_frontend_domain_mode_guard
+                            # is satisfied. Mirrors i18n-policy / multi-tenant (backend_only).
+                            # Realized SSE-FIRST (MVC SseEmitter — plain HTTP, goes through the
+                            # existing Spring Security chain, RestAssured-testable). The WebSocket
+                            # path is documented as the parallel option in templates/L4/realtime-policy/README.md.
 scope: "realtime-policy-l0 — WebSocket / SSE channel authentication, tenant-scoped fan-out, back-pressure policy, and reconnect-resume contract for fork-receivers that need server-pushed realtime UX (notification dashboards, activity-feed live tail, multi-user collaboration)"
 stack: "Spring WebSocket (STOMP optional) / Spring Reactive WebFlux SSE + Project Reactor backpressure / Jackson JSON over WS frames"
 standard: "RFC 6455 (WebSocket Protocol) + W3C Server-Sent Events + IETF WebSocket Subprotocol Registry + RFC 6750 (Bearer Token usage — same auth as HTTP, applied to WS upgrade handshake)"
