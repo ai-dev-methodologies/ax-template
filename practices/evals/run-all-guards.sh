@@ -1007,6 +1007,11 @@ echo "[63] liveness_probe_no_downstream_guard.sh (health-check-l0 HEALTH-LIVENES
 run_guard "liveness_probe_no_downstream/live" 0 \
     bash "$SCRIPT_DIR/liveness_probe_no_downstream_guard.sh"
 
+echo ""
+echo "[64] rule_tag_binding_guard.sh (A1 closure — every practices rule's verification.tag MUST resolve to a real @Tag in backend/src/test; a phantom-tag rule must not pass the gates claiming verification it lacks)"
+run_guard "rule_tag_binding/live" 0 \
+    bash "$SCRIPT_DIR/rule_tag_binding_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
