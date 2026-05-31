@@ -35,12 +35,12 @@ const plugin = {
 plugin.configs.recommended = {
   plugins: { ax: plugin },
   rules: {
-    'ax/react-async-parallel': 'warn',
-    'ax/no-broad-barrel-imports': 'warn',
+    'ax/react-async-parallel': 'error',
+    'ax/no-broad-barrel-imports': 'error',
     'ax/no-falsy-numeric-render': 'error',
-    'ax/no-array-includes-in-loop': 'warn',
+    'ax/no-array-includes-in-loop': 'error',
     'ax/no-array-mutate-on-state': 'error',
-    'ax/prefer-functional-setstate': 'warn',
+    'ax/prefer-functional-setstate': 'error',
     'ax/no-inline-component-definition': 'error',
   },
 }
