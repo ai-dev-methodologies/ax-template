@@ -60,11 +60,12 @@
 #     the schema; in that case the schema enum MUST be updated in the
 #     same commit (guard catches mismatch as I2 violation).
 #
-# Snapshot — dogfood-12 cut (2026-05-20)
-#   disk:   12 dirs (1 INFRA + 11 SELECTABLE)
-#   schema: 17 entries (11 SELECTABLE + 6 FUTURE_ADD)
-#   recipes union: 10 distinct domains (10 of 11 SELECTABLE active;
-#                  file-storage is recipe_orphan)
+# Snapshot — i18n-policy promotion cut (2026-05-31)
+#   disk:   23 dirs (1 INFRA + 22 SELECTABLE)
+#   schema: 26 entries (22 SELECTABLE + 4 FUTURE_ADD)
+#   recipes union: 10 distinct domains; recipe_orphan SELECTABLE domains
+#                  (file-storage, email-outbox, data-subject-rights,
+#                  multi-tenant, i18n-policy) await recipe activation.
 
 generated: "2026-05-20"
 task: "P2 R12 — 3-source coherence enforcement"
@@ -183,6 +184,23 @@ tiers:
           as recipe_orphan until the b2b-admin recipe's `tenant_model:
           multi` adopts it via override_allowed.
         active_recipes: []
+      # i18n-policy promoted future_add → selectable. Backend-only Spring i18n
+      # CONFIG + policy runtime at backend/.../i18n/ (LocaleResolver + MessageSource
+      # + UTC-Instant time policy + locale-aware formatting) verified by
+      # ./gradlew testI18n (5 testable items). templates/L4/i18n-policy/README.md
+      # reserves the on-disk slot (backend-only stub, mirrors multi-tenant).
+      # Spec (specs/i18n-policy-l0.yaml, domain_mode: backend_only) + blueprint
+      # were already in the catalog; this commit makes the namespace selectable.
+      - name: "i18n-policy"
+        recipe_orphan: true
+        rationale: >
+          Cross-cutting locale + message-source + time/number/currency
+          formatting policy (the canonical Spring wiring fork-receivers
+          compose when a recipe declares supported_locales with more than
+          one entry). On disk with backend-only runtime + in schema enum;
+          recipe_orphan until a multilingual recipe adopts it via
+          override_allowed.add.
+        active_recipes: []
 
   future_add:
     description: >
@@ -193,8 +211,8 @@ tiers:
       authorises the name so no schema patch is required by the fork.
     items:
       # email-outbox promoted to selectable in R51 (see selectable tier above).
-      - name: "i18n-policy"
-        intended_use: "Locale + currency + RTL policy enforcement."
+      # i18n-policy promoted to selectable (see selectable tier above) — backend-only
+      # Spring i18n runtime on disk + verified by ./gradlew testI18n.
       - name: "identity-verification"
         intended_use: "KYC / document verification pipeline."
       # multi-tenant promoted to selectable in R93 (see selectable tier above).

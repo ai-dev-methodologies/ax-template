@@ -301,6 +301,15 @@ tasks.register<Test>("testCommonAdvice") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testI18n") {
+    useJUnitPlatform {
+        includeTags("I18N")
+    }
+    description = "Run i18n-policy domain compliance tests (backend_only: 5 testable items / 4 families — LOCALE-NEG, MESSAGE-SOURCE, TIMEZONE, FORMATTING)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

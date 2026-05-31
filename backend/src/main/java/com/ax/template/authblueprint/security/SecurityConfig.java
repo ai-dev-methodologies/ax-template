@@ -166,6 +166,12 @@ public class SecurityConfig {
                 .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers("/practices/demo/**").permitAll()
                 .requestMatchers("/api/ratelimit/**").permitAll()
+                // i18n-policy domain (specs/i18n-policy-l0.yaml): the probe surface is a
+                // stateless policy demonstrator (locale negotiation / message bundle /
+                // currency formatting / UTC time round-trip) — no user data, no
+                // authorization decision. permitAll keeps the compliance test black-box
+                // and the wiring additive (it claims a NEW path prefix only).
+                .requestMatchers("/api/i18n/**").permitAll()
                 // PRACTICES-INTEG-001: webhook endpoints are HMAC-authenticated, not JWT.
                 // External systems (GitHub, Stripe, etc.) POST raw payloads with HMAC-SHA256
                 // signatures — they do not carry Bearer tokens. The WebhookReceiver.verify()

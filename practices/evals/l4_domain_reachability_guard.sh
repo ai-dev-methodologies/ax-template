@@ -90,9 +90,12 @@ for dpath in "$BACKEND_DOMAINS_DIR"/*/; do
     dname_camel="$(basename "$dpath")"
     # Skip non-domain directories (e.g. configuration packages, cross-
     # cutting shared utility packages — `common` added by R67 lift of
-    # AuditPiiHelper out of emailoutbox).
+    # AuditPiiHelper out of emailoutbox; `i18n` is the cross-cutting Spring
+    # i18n CONFIG + policy package — LocaleResolver/MessageSource/stateless
+    # time-policy helper, no entity → ViolationProofTest is not applicable,
+    # same category as observability/security/common).
     case "$dname_camel" in
-        importer|integration|observability|security|user|common) continue ;;
+        importer|integration|observability|security|user|common|i18n) continue ;;
     esac
 
     # Derive kebab-case domain name candidates for ledger lookup.

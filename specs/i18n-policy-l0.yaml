@@ -1,4 +1,7 @@
 version: "0.1.0"
+domain_mode: backend_only   # cross-cutting Spring i18n CONFIG + policy; no entity, no UI.
+                            # No templates/L4/i18n-policy/app/ — l4_frontend_domain_mode_guard
+                            # is satisfied. Mirrors multi-tenant (backend_only).
 scope: "i18n-policy-l0 — locale negotiation, message-source contract, timezone/number/currency formatting policy for fork-receivers that ship in more than one language"
 stack: "Spring Boot 3.2.x MessageSource / LocaleResolver + Java 21 java.time + ICU MessageFormat (optional escape hatch)"
 standard: "IETF BCP 47 (RFC 5646 — language tag syntax) + RFC 7231 §5.3.5 (Accept-Language) + Unicode CLDR (locale data) + JEP 252 (Use CLDR Locale Data by Default)"

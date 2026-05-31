@@ -29,5 +29,6 @@ domains:
   identity-verification: backend_only  # SP31: KISA 본인인증 callback storage (CI/DI tokens); no frontend UI in scope
   webhook: backend_only         # SP45 R9: outbound webhook-emit + HMAC-SHA256 signing + idempotent retries + dead-letter + circuit-breaker; no frontend UI in scope
   multi-tenant: backend_only    # R93: cross-cutting tenancy enforcement runtime; no first-class UI (every L4's tenant_model cites specs/multi-tenant-l0.yaml)
+  i18n-policy: backend_only     # cross-cutting Spring i18n CONFIG + policy (LocaleResolver/MessageSource/UTC-Instant/formatting); no first-class UI
   # security: backend_only  # no specs/security-*.yaml yet — add when backend domain is scaffolded
   # user: backend_only      # no specs/user-*.yaml yet — add when backend domain is scaffolded
