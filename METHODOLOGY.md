@@ -1246,3 +1246,73 @@ documents the hazard once and the guard enforces the mitigation from then on.
 Reference: Spring Framework Reference — [Context Caching](https://docs.spring.io/spring-framework/reference/testing/testcontext-framework/ctx-management/caching.html)
 · [@DirtiesContext](https://docs.spring.io/spring-framework/reference/testing/annotations/integration-spring/annotation-dirtiescontext.html).
 
+## Promoting a backend-only cross-cutting policy domain (future_add → selectable)
+
+A *cross-cutting policy domain* is an L4 that enforces a server-side concern with **no
+first-class UI** — tenancy, locale/i18n, rate limiting, realtime channel policy. Unlike
+a feature vertical it ships as a filter / interceptor / AOP advice / config that every
+other L4 composes with, so it is registered `domain_mode: backend_only` and deliberately
+ships no `templates/L4/<domain>/app/`. This playbook is the exact sequence run four times
+this catalog cycle — **multi-tenant, i18n-policy, ratelimit, realtime-policy** — to move
+such a domain from the `future_add` tier (a reserved enum slot) to `selectable` (a
+discoverable, recipe-adoptable L4).
+
+### The sequence — every step is already mechanically enforced
+
+This is a worked variant of Appendix C's 12-step procedure. What makes it safe is that
+**no step relies on reviewer memory**: each lands an artifact that an existing hard guard
+refuses to let drift. The playbook is therefore an *index over enforcement*, not a new
+checklist to police — and that is why this wave added **no new guard** (a "promotion
+completeness" guard would only duplicate the seven below).
+
+1. **Spec Trio, backend-only.** Author `specs/<domain>-l0.yaml` with
+   `domain_mode: backend_only`, plus `contracts/<domain>-openapi.yaml` and
+   `blueprints/<domain>-manifest.yaml`. The manifest holds the tunable policy values so a
+   fork-receiver configures, never hardcodes.
+   → *enforced by* `spec_ref_guard.sh` (R88 item-id matching) + `l4_frontend_domain_mode_guard.sh` [41]
+   (if an `app/` ever appears for a `backend_only` spec, the push is BLOCKED).
+2. **Reference backend** under `backend/src/main/java/.../<domain>/` — the filter/AOP/
+   interceptor + supporting beans. Additive only; it composes with the existing security
+   chain and the other cross-cutting runtimes (e.g. tenancy) by reference, never by rewrite.
+   → *enforced by* `controller_repository_shell_guard.sh` + the layering/entity guards.
+3. **`@Tag`-tagged compliance test** (`<Domain>ComplianceTest`, RestAssured black-box) +
+   a per-domain Gradle task `tasks.register<Test>("test<Domain>") { includeTags("<TAG>") }`.
+   → *enforced by* `verification_checklist_task_coverage_guard.sh` [58] — the new
+   `test<Domain>` task MUST also be listed in `practices/verification-checklist.yaml`, so
+   it joins the verify-completion hard gate, not just the ad-hoc developer run.
+   (Heed the **ContextCache lever** appendix above: a new RANDOM_PORT `@SpringBootTest`
+   can tip the cap-32 cache and need `@DirtiesContext` — guard [62] enforces the mitigation.)
+4. **Tier move** in `specs/l4-domain-classification.yaml`: `future_add` → `selectable`,
+   and create `templates/L4/<domain>/` on disk (README only — no `app/`).
+   → *enforced by* `l4_domain_enum_sync_guard.sh` [19] — validates 3-source coherence
+   (disk dirs / schema enum / recipe lists) against the classification, so a tier move
+   without the matching disk dir (or vice-versa) BLOCKS.
+5. **Fork-receiver README** at `templates/L4/<domain>/README.md` declaring
+   `**Tenant model**:` (citing `specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001`)
+   and the composition contract (how to wire the filter, what to replace for multi-tenant).
+   → *enforced by* `l4_readme_tenant_model_declaration_guard.sh`.
+6. **`backend_only` registration** in `practices/evals/trio_integrity_allowlist.yaml`.
+   → *enforced by* `trio_integrity_guard.sh` — skips the frontend-trio check for the
+   domain and refuses an unlisted on-disk L4.
+7. **Sentinel + headline sync.** Re-run `practices/generate_agents.sh` (its inline assert
+   bumps the L4 count and regenerates `practices/AGENTS.md`); bump the L4-domain count in
+   the README hero + CLAUDE.md vision line; add the `IMPLEMENTATION-STATUS.md` row.
+   → *enforced by* `agents_md_toc_disk_truth_guard.sh` (re-runs the generator + diffs) +
+   `doc_headline_count_guard.sh` [60] (headline L4 count MUST equal disk).
+
+### Definition of done
+
+`./gradlew test<Domain>` GREEN · `run-all-guards.sh` all-PASS · the seven guards above
+each green · `verify-completion.sh` exit 0 · pushed. Because every artifact is guarded,
+"done" is binary and survives a fork: a receiver who edits one half of the promotion
+(drops the README line, forgets the allowlist entry, skews a headline count) gets a
+BLOCKED push, not a silent half-promotion.
+
+### Frontend is a separate, later decision
+
+`backend_only` is not a downgrade — SSE/i18n/tenancy/rate-limit have no first-class UI by
+design (the client-facing surface, when any, is an L2 block such as
+`templates/L2/blocks/rate-limit-banner.tsx`). If a fork-receiver later wants a UI, that is
+a distinct `domain_mode` change (`backend_only` → `full_trio`) gated by the **Frontend Spec
+Trio additions** in Appendix B, not part of this promotion.
+
