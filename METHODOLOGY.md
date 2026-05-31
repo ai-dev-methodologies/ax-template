@@ -1367,3 +1367,57 @@ catalog's whole promise is "inside the rules = safe". Apply it to any sub-agent-
 substantive change before merge; skip it only for trivial mechanical edits a human can
 fully read in one pass.
 
+## Catalog currency — keeping implementation, templates, and rules up to date
+
+Every rule anchors to an external source (Spring docs / React-Next docs / RFC / JEP /
+OWASP), snapshotted under `practices/upstream/` (61 snapshots) and
+`practices-react/upstream/` (42 snapshots), each recorded in `_MANIFEST.yaml` with
+`source` URL + `fetched_at` + `sha` + `bytes`. Upstream evolves (Spring Boot minors,
+React/Next majors, RFC/JEP revisions); if the snapshots are never refreshed, a rule's
+evidence silently rots and the "inside the rules = safe" promise weakens. This is the
+procedure for keeping the catalog **current** — refreshing what exists, NOT adding new
+rules.
+
+### The mechanism already enforces the floor — do not reinvent it
+
+- **`time_decay_guard.sh`** (drift-axis hard gate) BLOCKS the build when any snapshot's
+  `fetched_at` is older than `TIME_DECAY_THRESHOLD_DAYS` (default **90**). It is the
+  staleness tripwire — run per catalog: `bash practices/evals/time_decay_guard.sh
+  --catalog practices` / `--catalog practices-react`.
+- **`evidence_guard.sh`** re-validates that every rule's `evidence` block still resolves
+  (quoted substring present in the named snapshot section; no placeholder).
+- `_MANIFEST.yaml` is the snapshot registry the two guards read.
+
+The guards detect *that* the catalog is stale; the steps below are *what to do* when they
+trip — the previously-undocumented half.
+
+### The refresh procedure (per stale snapshot, or on a known upstream release)
+
+1. **Detect.** `time_decay_guard` flags snapshots past 90d; additionally watch for upstream
+   *events* (a Spring Boot minor, a React/Next major, a new/updated RFC·JEP·OWASP doc a
+   rule cites) and refresh proactively rather than waiting for the 90d floor.
+2. **Re-fetch.** Pull the snapshot's `source` URL fresh; recompute `sha` + `bytes`.
+3. **Diff.** If `sha` is unchanged → the content is stable; just bump `fetched_at` (re-anchor
+   the date) and you are done. If `sha` changed → diff old vs new snapshot content.
+4. **Re-anchor evidence.** For every rule whose `evidence.upstream_id` points at the changed
+   snapshot, confirm its quoted substring + `section` still exist in the new content.
+   - quote moved/reworded but guidance same → update the rule's `quote`/`section`;
+   - upstream *guidance itself* changed (new default, deprecated API, version bump) → update
+     the rule body **and** its reference implementation **and** its `@Tag` test together, so
+     the rule, the code, and the test stay in lockstep (never refresh the doc quote while
+     leaving a now-contradicted impl).
+5. **Re-verify.** `evidence_guard` (quote resolves) + the rule's `@Tag` test / guard +
+   `run-all-guards.sh` + `verify-completion.sh`.
+6. **Land.** Commit the `_MANIFEST.yaml` delta (`fetched_at`/`sha`/`bytes`) together with any
+   rule/impl/test edits in one wave; push. Mirror the same loop for `practices-react/upstream`.
+
+### Cadence + scope
+
+- The 90-day `time_decay` threshold is the **hard cadence floor**; run a **proactive
+  quarterly sweep** plus **event-driven** refreshes on major upstream releases.
+- This procedure refreshes **existing** rules/impl/snapshots for currency. It is distinct
+  from adding a new rule/domain (METHODOLOGY 5-step) — currency is maintenance, not growth.
+- **No new guard is added**: `time_decay_guard` + `evidence_guard` already enforce the
+  staleness and evidence-validity invariants mechanically; this appendix is the human/agent
+  response procedure when they fire, anchored to those two guards.
+
