@@ -22,9 +22,9 @@ evidence:
     quote: "Personal data shall be: accurate and, where necessary, kept up to date; every reasonable step must be taken to ensure that personal data that are inaccurate, having regard to the purposes for which they are processed, are erased or rectified without delay (accuracy)."
     quoted_at: "2026-05-25"
   - source_type: external
-    citation: "OWASP ASVS V8 — Data Protection (logging accuracy + integrity)"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that authentication and session events are logged including admin login, user login, password change, and other security-relevant events."
+    citation: "OWASP ASVS v4.0.3 — V7.1.3 Error Handling and Logging"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x15-V7-Error-Logging.md"
+    quote: "Verify that the application logs security relevant events including successful and failed authentication events, access control failures, deserialization failures and input validation failures."
     quoted_at: "2026-05-25"
 ---
 

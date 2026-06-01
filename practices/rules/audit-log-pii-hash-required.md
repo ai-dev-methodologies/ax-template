@@ -18,9 +18,9 @@ upstream:
   - "https://www.rfc-editor.org/rfc/rfc6234"
 evidence:
   - source_type: external
-    citation: "OWASP ASVS V7 — Error Handling and Logging"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the application does not log credentials, payment details, or other sensitive data."
+    citation: "OWASP ASVS v4.0.3 — V7.1.1 Error Handling and Logging"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x15-V7-Error-Logging.md"
+    quote: "Verify that the application does not log credentials or payment details. Session tokens should only be stored in logs in an irreversible, hashed form."
     quoted_at: "2026-05-26"
   - source_type: external
     citation: "RFC 6234 — US Secure Hash Algorithms (SHA-256 deterministic hash for correlation tokens)"

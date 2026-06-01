@@ -20,7 +20,7 @@ evidence:
   - source_type: external
     citation: "OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization"
     url: "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
-    quote: "Authorization checks for a function or resource are usually managed via configuration, and sometimes at the code level. Implementing proper checks can be a confusing task, since modern applications can contain many types of roles or groups and complex user hierarchy (e.g., sub-users, users with more than one role)."
+    quote: "Authorization checks for a function or resource are usually managed via configuration or code level. Implementing proper checks can be a confusing task since modern applications can contain many types of roles, groups, and complex user hierarchies (e.g. sub-users, or users with more than one role)."
     quoted_at: "2026-05-25"
 ---
 

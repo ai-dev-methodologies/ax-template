@@ -16,14 +16,9 @@ upstream:
   - "https://owasp.org/www-project-application-security-verification-standard/"
 evidence:
   - source_type: external
-    citation: "OWASP API Security Top 10 (2023) — API1:2023 Broken Object Level Authorization (BOLA)"
-    url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
-    quote: "Object level authorization is an access control mechanism that is usually implemented at the code level to validate that one user can only access objects that they should have access to."
-    quoted_at: "2026-05-22"
-  - source_type: external
-    citation: "OWASP ASVS V4.2.1 — Verify that the application uses a single vetted access control mechanism for accessing protected data and resources"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the application uses a single vetted access control mechanism for accessing protected data and resources."
+    citation: "OWASP ASVS 4.0.3 — V1.4.4 Access Control Architecture"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x10-V1-Architecture.md"
+    quote: "Verify the application uses a single and well-vetted access control mechanism for accessing protected data and resources."
     quoted_at: "2026-05-22"
 ---
 

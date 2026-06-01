@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "d74bcf3a0ccac26c9e797d4fc5f8970cbb5fc66c5b5789a59f69e38cd6601b13"
+  source_concat_sha256: "ffb5d05129bc056bf46e420578175e29a80ca93019a443eafe481df92878b749"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -768,9 +768,9 @@ upstream:
   - "https://www.rfc-editor.org/rfc/rfc6234"
 evidence:
   - source_type: external
-    citation: "OWASP ASVS V7 — Error Handling and Logging"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the application does not log credentials, payment details, or other sensitive data."
+    citation: "OWASP ASVS v4.0.3 — V7.1.1 Error Handling and Logging"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x15-V7-Error-Logging.md"
+    quote: "Verify that the application does not log credentials or payment details. Session tokens should only be stored in logs in an irreversible, hashed form."
     quoted_at: "2026-05-26"
   - source_type: external
     citation: "RFC 6234 — US Secure Hash Algorithms (SHA-256 deterministic hash for correlation tokens)"
@@ -1675,14 +1675,9 @@ upstream:
   - "https://owasp.org/www-project-application-security-verification-standard/"
 evidence:
   - source_type: external
-    citation: "OWASP API Security Top 10 (2023) — API1:2023 Broken Object Level Authorization (BOLA)"
-    url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
-    quote: "Object level authorization is an access control mechanism that is usually implemented at the code level to validate that one user can only access objects that they should have access to."
-    quoted_at: "2026-05-22"
-  - source_type: external
-    citation: "OWASP ASVS V4.2.1 — Verify that the application uses a single vetted access control mechanism for accessing protected data and resources"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the application uses a single vetted access control mechanism for accessing protected data and resources."
+    citation: "OWASP ASVS 4.0.3 — V1.4.4 Access Control Architecture"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x10-V1-Architecture.md"
+    quote: "Verify the application uses a single and well-vetted access control mechanism for accessing protected data and resources."
     quoted_at: "2026-05-22"
 ---
 
@@ -1842,9 +1837,9 @@ evidence:
     quote: "Personal data shall be: accurate and, where necessary, kept up to date; every reasonable step must be taken to ensure that personal data that are inaccurate, having regard to the purposes for which they are processed, are erased or rectified without delay (accuracy)."
     quoted_at: "2026-05-25"
   - source_type: external
-    citation: "OWASP ASVS V8 — Data Protection (logging accuracy + integrity)"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that authentication and session events are logged including admin login, user login, password change, and other security-relevant events."
+    citation: "OWASP ASVS v4.0.3 — V7.1.3 Error Handling and Logging"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x15-V7-Error-Logging.md"
+    quote: "Verify that the application logs security relevant events including successful and failed authentication events, access control failures, deserialization failures and input validation failures."
     quoted_at: "2026-05-25"
 ---
 
@@ -4433,12 +4428,7 @@ evidence:
   - source_type: external
     citation: "TanStack Query v5 — useQuery options (refetchIntervalInBackground)"
     url: "https://tanstack.com/query/latest/docs/framework/react/reference/useQuery"
-    quote: "refetchIntervalInBackground: boolean — If set to true, queries that are set to continuously refetch with a refetchInterval will continue to refetch while their tab is in the background."
-    quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "MDN Web Docs — Page Visibility API"
-    url: "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API"
-    quote: "When the user navigates to a different tab or minimizes the browser containing the tab with the page, the API sends a visibilitychange event to listeners. ... browsers tend to throttle setTimeout and setInterval calls when the page is hidden."
+    quote: "refetchIntervalInBackground: boolean — If set to true, queries that are set to continuously refetch with a refetchInterval will continue to refetch while their tab/window is in the background."
     quoted_at: "2026-05-25"
 ---
 
@@ -6699,12 +6689,7 @@ evidence:
   - source_type: external
     citation: "TanStack Query v5 — Optimistic Updates via the Cache"
     url: "https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates"
-    quote: "When we want to optimistically update some state before the mutation is completed, we can use the onMutate option. ... The data returned from onMutate is passed to the onError handler so it can be used to undo the optimistic update."
-    quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "TanStack Query v5 — useMutation API"
-    url: "https://tanstack.com/query/latest/docs/framework/react/guides/mutations"
-    quote: "onError, retry, retryDelay, scope: { id }, onMutate(variables): ... — A function that fires before the mutation function is fired. Useful to perform optimistic updates to a resource in hopes that the mutation succeeds."
+    quote: "React Query provides two ways to optimistically update your UI before a mutation has completed."
     quoted_at: "2026-05-25"
 ---
 
@@ -8973,7 +8958,7 @@ evidence:
   - source_type: external
     citation: "OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization"
     url: "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
-    quote: "Authorization checks for a function or resource are usually managed via configuration, and sometimes at the code level. Implementing proper checks can be a confusing task, since modern applications can contain many types of roles or groups and complex user hierarchy (e.g., sub-users, users with more than one role)."
+    quote: "Authorization checks for a function or resource are usually managed via configuration or code level. Implementing proper checks can be a confusing task since modern applications can contain many types of roles, groups, and complex user hierarchies (e.g. sub-users, or users with more than one role)."
     quoted_at: "2026-05-25"
 ---
 
@@ -9623,7 +9608,7 @@ evidence:
   - source_type: external
     citation: "MDN Web Docs — Window: beforeunload event"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event"
-    quote: "The beforeunload event is fired when the current window, contained document, and associated resources are about to be unloaded. ... To trigger the dialog, an event handler in the page should call the preventDefault() method on the event."
+    quote: "The beforeunload event is fired when the current window, contained document, and associated resources are about to be unloaded."
     quoted_at: "2026-05-25"
 ---
 
@@ -10790,7 +10775,7 @@ evidence:
   - source_type: external
     citation: "CWE-209 — Generation of Error Message Containing Sensitive Information"
     url: "https://cwe.mitre.org/data/definitions/209.html"
-    quote: "The product generates an error message that includes sensitive information about its environment, users, or associated data. ... An attacker can use the additional information provided in error messages to mount attacks targeted on the specific environment or configuration."
+    quote: "The product generates an error message that includes sensitive information about its environment, users, or associated data."
     quoted_at: "2026-05-25"
 ---
 
@@ -12752,9 +12737,6 @@ verification:
 upstream:
   - "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html"
 evidence:
-  - upstream_id: spring-mvc-controlleradvice
-    section: "Spring MVC — @RequestMapping consumes / produces"
-    quote: "produces"
   - source_type: external
     citation: "Spring Framework Reference — Producible Media Types"
     url: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html#mvc-ann-requestmapping-produces"

@@ -20,12 +20,7 @@ evidence:
   - source_type: external
     citation: "TanStack Query v5 — useQuery options (refetchIntervalInBackground)"
     url: "https://tanstack.com/query/latest/docs/framework/react/reference/useQuery"
-    quote: "refetchIntervalInBackground: boolean — If set to true, queries that are set to continuously refetch with a refetchInterval will continue to refetch while their tab is in the background."
-    quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "MDN Web Docs — Page Visibility API"
-    url: "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API"
-    quote: "When the user navigates to a different tab or minimizes the browser containing the tab with the page, the API sends a visibilitychange event to listeners. ... browsers tend to throttle setTimeout and setInterval calls when the page is hidden."
+    quote: "refetchIntervalInBackground: boolean — If set to true, queries that are set to continuously refetch with a refetchInterval will continue to refetch while their tab/window is in the background."
     quoted_at: "2026-05-25"
 ---
 

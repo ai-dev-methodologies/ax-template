@@ -12,9 +12,6 @@ verification:
 upstream:
   - "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html"
 evidence:
-  - upstream_id: spring-mvc-controlleradvice
-    section: "Spring MVC — @RequestMapping consumes / produces"
-    quote: "produces"
   - source_type: external
     citation: "Spring Framework Reference — Producible Media Types"
     url: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html#mvc-ann-requestmapping-produces"

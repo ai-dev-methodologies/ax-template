@@ -20,7 +20,7 @@ evidence:
   - source_type: external
     citation: "CWE-209 — Generation of Error Message Containing Sensitive Information"
     url: "https://cwe.mitre.org/data/definitions/209.html"
-    quote: "The product generates an error message that includes sensitive information about its environment, users, or associated data. ... An attacker can use the additional information provided in error messages to mount attacks targeted on the specific environment or configuration."
+    quote: "The product generates an error message that includes sensitive information about its environment, users, or associated data."
     quoted_at: "2026-05-25"
 ---
 

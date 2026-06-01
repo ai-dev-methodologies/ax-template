@@ -19,12 +19,7 @@ evidence:
   - source_type: external
     citation: "TanStack Query v5 — Optimistic Updates via the Cache"
     url: "https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates"
-    quote: "When we want to optimistically update some state before the mutation is completed, we can use the onMutate option. ... The data returned from onMutate is passed to the onError handler so it can be used to undo the optimistic update."
-    quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "TanStack Query v5 — useMutation API"
-    url: "https://tanstack.com/query/latest/docs/framework/react/guides/mutations"
-    quote: "onError, retry, retryDelay, scope: { id }, onMutate(variables): ... — A function that fires before the mutation function is fired. Useful to perform optimistic updates to a resource in hopes that the mutation succeeds."
+    quote: "React Query provides two ways to optimistically update your UI before a mutation has completed."
     quoted_at: "2026-05-25"
 ---
 

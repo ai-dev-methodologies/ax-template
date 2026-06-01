@@ -21,7 +21,7 @@ evidence:
   - source_type: external
     citation: "MDN Web Docs — Window: beforeunload event"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event"
-    quote: "The beforeunload event is fired when the current window, contained document, and associated resources are about to be unloaded. ... To trigger the dialog, an event handler in the page should call the preventDefault() method on the event."
+    quote: "The beforeunload event is fired when the current window, contained document, and associated resources are about to be unloaded."
     quoted_at: "2026-05-25"
 ---
 
