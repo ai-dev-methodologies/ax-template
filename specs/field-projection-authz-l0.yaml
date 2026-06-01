@@ -1,0 +1,104 @@
+version: "0.1.0"
+scope: "field-projection-authz-l0 — role/relationship-GRADED field-level projection contract for fork-receivers exposing a single resource whose VISIBLE FIELD SET differs per caller (a manager sees a report's salary; a peer sees only name+title; the employee sees their own salary). The server decides which fields are serialized from the caller's role/relationship, and unauthorized fields are OMITTED from the response DTO — never loaded-then-nulled, never client-filtered. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic HR-comp / healthcare record-section / marketplace seller-vs-buyer / social profile-visibility-tier applicable."
+stack: "Spring Boot 3.2.x + Spring Security (Authentication / @PreAuthorize) + Jackson (per-caller DTO selection, NOT @JsonView-only) + Spring Data JPA + RFC 9457 Problem Details"
+standard: "OWASP API Security Top 10 (2023) API3:2023 Broken Object Property Level Authorization (merges 2019 API3 Excessive Data Exposure + API6 Mass Assignment) + OWASP ASVS v4.0.3 §4.1 Access Control (V4.1.3 least privilege) + OWASP ASVS v4.0.3 §4.2 Operation Level Access Control (V4.2.1 IDOR protection)"
+domain_mode: backend_only
+introduced_at: "IDW8 2026-06-01 HR-payroll dogfood"
+
+# OPT-IN field-level (object PROPERTY level) authorization catalog. Adopted by
+# any recipe where DIFFERENT callers see DIFFERENT FIELDS of the SAME row.
+# This is object-PROPERTY-level authorization (OWASP API3:2023), distinct from
+# the two adjacent catalog axes:
+#
+#   - relationship-authz-l0 (ROW level): "may I see this row AT ALL" — a grant
+#     lookup decides whole-object access. Once access is granted there, THIS
+#     spec decides WHICH FIELDS of that granted row each caller may read.
+#   - pii-masked-at-dto-boundary (UNIFORM mask): every caller gets the SAME
+#     masked value (last IP octet "xxx", UA summary). That is privacy-by-design
+#     applied identically to all. THIS spec is role-GRADED: a manager sees the
+#     real salary, a peer sees no salary field at all — the difference is the
+#     CALLER's authorization, not a blanket redaction.
+#
+# The HR-payroll dogfood (IDW8) surfaced the gap: the catalog had row-level
+# ReBAC and uniform PII masking, but no pattern for "the server picks the field
+# SET per caller, and unauthorized fields are absent from the wire". Generic
+# pattern; zero Korean law cite (R102+ generic catalog principle).
+#
+# Composition note: layers OVER row-level access (relationship-authz-l0 /
+# owner-equality decides the row; this spec decides the fields of the row the
+# caller already reached) and is ORTHOGONAL to uniform DTO masking
+# (pii-masked-at-dto-boundary may still apply uniformly to whatever fields a
+# caller IS authorized to see).
+#
+# ── Adopt in order (earlier items are foundational) ──
+#   1. FIELD-PROJECTION-001     (server decides the field set per caller)
+#   2. FIELD-OMIT-NOT-NULL-001  (unauthorized fields OMITTED, not loaded-then-nulled)
+
+items:
+  - id: "FIELD-PROJECTION-001"
+    chapter: "Server-decided field set per caller"
+    requirement: >
+      When the SAME resource row is visible to callers in different
+      authorization classes (owner / role / relationship), the SET of fields
+      serialized into the response MUST be decided SERVER-SIDE from the caller's
+      authenticated role/relationship — not by the client and not by returning
+      every property and trusting the consumer to hide some. The caller's
+      authorization class MUST be derived from Authentication (role claim and/or
+      a relationship/grant lookup), never from a client-supplied parameter that
+      could widen the visible field set. The server MUST select a per-class
+      projection (a distinct response DTO / projection per authorization class,
+      e.g. ManagerCompView exposes salary, PeerProfileView exposes only name +
+      title, SelfCompView exposes the caller's own salary), so that two callers
+      GETting the same row receive responses whose field sets differ exactly by
+      what each is authorized to read. The invariant — the visible field set is
+      a SERVER-SIDE function of the caller's authorization, decided before
+      serialization, never delegated to the client.
+    test_method: "RestAssured integration test"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Object-PROPERTY-level authorization (OWASP API3:2023): for each exposed
+      property the server must confirm THIS caller may read it. Anchored to
+      OWASP API3:2023
+      (https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/):
+      "When exposing an object using an API endpoint, always make sure that the
+      user should have access to the object's properties you expose." and to the
+      2019 Excessive Data Exposure failure mode it replaced: "APIs rely on
+      clients to perform the data filtering." — which this item forbids.
+      Distinct from relationship-authz-l0 (row-level: may I see the row at all)
+      and pii-masked-at-dto-boundary (uniform mask for every caller). Review
+      tier: the per-class projection map is a human-judgment policy that a
+      reviewer confirms against the authorization model, not a single @Tag.
+  - id: "FIELD-OMIT-NOT-NULL-001"
+    chapter: "Unauthorized fields OMITTED at the boundary"
+    requirement: >
+      Fields the caller is NOT authorized to read MUST be OMITTED from the
+      response representation at the serialization boundary — the unauthorized
+      property MUST be ABSENT from the response body, not present-with-a-null /
+      present-with-a-placeholder, and the sensitive value MUST NOT be loaded
+      into the response object at all when the caller is unauthorized. The
+      catalog forbids the "load-then-null" anti-pattern (populate the full
+      object, then set unauthorized fields to null just before returning),
+      because the sensitive value still transits the response object and leaks
+      through over-broad logging, exception payloads, debug serializers, or a
+      future DTO that forgets to re-null it; a field that was never put on the
+      DTO cannot leak. Concretely: the per-class DTO (FIELD-PROJECTION-001)
+      simply has no member for the unauthorized field, so it is structurally
+      impossible to serialize. The invariant — an unauthorized field is absent
+      from the DTO type, not nulled on a shared DTO instance.
+    test_method: "RestAssured integration test"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Omission-by-construction beats redaction-by-assignment: a null is still a
+      property the serializer/logger can observe; an absent member cannot leak.
+      Anchored to OWASP API3:2023 prevention
+      (https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/):
+      "Avoid using generic methods such as `to_json()` and `to_string()`.
+      Instead, cherry-pick specific object properties you specifically want to
+      return." and "Keep returned data structures to the bare minimum, according
+      to the business/functional requirements for the endpoint." Review tier:
+      the structural absence (distinct DTO without the member vs a nulled shared
+      DTO) is confirmed by a reviewer against the projection types. Distinct
+      from pii-masked-at-dto-boundary, where the field IS present but uniformly
+      masked for every caller.

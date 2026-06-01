@@ -150,3 +150,37 @@ items:
       verbatim quote — the cited page constrains specific attributes to
       low cardinality per-metric rather than carrying a single blanket
       sentence prohibiting unbounded-cardinality labels).
+
+  - id: "OPTLOCK-REPARENT-CYCLE-001"
+    chapter: "Self-referential reparent acyclicity"
+    requirement: >
+      Moving a node in a MUTABLE self-referential tree/hierarchy (org chart,
+      category/taxonomy tree, folder tree, BOM, threaded comment, GL account
+      tree) by setting node.parent = target MUST reject any reparent that would
+      introduce a CYCLE. The target parent MUST NOT be the node itself, NOR any
+      of the node's own descendants; persisting such a move would detach the
+      node's subtree into an unreachable cycle and break every recursive
+      descendant traversal of the tree. The check target NOT IN ({node} UNION
+      descendants(node)) MUST be evaluated server-side, inside the SAME
+      transaction as the parent write (so a concurrent reparent cannot slip a
+      cycle through the check-to-write window), and a violating move MUST be
+      rejected with 409 Conflict or 422 Unprocessable Entity carrying an RFC
+      9457 body of type=urn:problem:tree-cycle — never silently applied. The
+      invariant: the parent relation of a self-referential hierarchy MUST
+      remain a directed acyclic graph (a forest) across every reparent.
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Pairs with OPTLOCK-IFMATCH-001 + OPTLOCK-VERSION-001 — concurrent
+      reparents race the same node's parent column, so the acyclicity check
+      MUST run under the optimistic-lock guard, not before it. Generic across
+      org chart, category/taxonomy, folder/file tree, BOM explosion, threaded
+      comments and GL account trees. Descendant computation is a transitive
+      closure over the parent edges (PostgreSQL WITH RECURSIVE, a closure
+      table, or an in-memory walk). Anchored to the directed-acyclic-graph
+      definition (no directed cycles) and the PostgreSQL recursive-CTE
+      hierarchical-traversal docs. Negative test: reparent a node under one of
+      its own descendants -> assert 409/422 + tree-cycle problem type + parent
+      column unchanged; positive test: reparent under an unrelated subtree ->
+      assert 200/204 + acyclic forest preserved.

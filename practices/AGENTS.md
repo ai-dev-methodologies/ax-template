@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "6c38e81244460572d88964041e1050555f19981e2990bfd2249d673cfcee92e1"
-  rule_count: 139
+  source_concat_sha256: "15f72141c4a61806d88405c90cf14322e43d8bc0d32f11ec0a313e9cee1b5371"
+  rule_count: 144
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -3507,6 +3507,113 @@ Reference: [RFC 7518 — JSON Web Algorithms (JWA), §3.1 alg values and §3.6 U
 Reference: [RFC 8037 — EdDSA for JOSE](https://www.rfc-editor.org/rfc/rfc8037)
 
 Reference: [OWASP JSON Web Token Cheat Sheet — None algorithm + explicit algorithm enforcement](https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
+
+
+<!-- @source rules/field-level-projection-authz-omits-not-nulls.md -->
+
+---
+title: Field-level projection MUST be server-decided per caller and OMIT unauthorized fields — never load-then-null
+impact: HIGH
+impactDescription: "A caller-graded field set that nulls (instead of omitting) unauthorized fields leaks the sensitive value through logs, exception payloads, and over-broad DTOs — OWASP API3:2023 Broken Object Property Level Authorization"
+tags:
+  - authz
+  - object-property-level-authz
+  - data-exposure
+  - dto
+  - field-projection
+  - least-privilege
+spec_ref: "specs/field-projection-authz-l0.yaml#FIELD-PROJECTION-001"
+verification:
+  type: review
+  source: "specs/field-projection-authz-l0.yaml"
+  pattern: "A reviewer confirms each authorization class has a DISTINCT response DTO/projection whose members are exactly the fields that class may read; unauthorized fields are ABSENT from the DTO type (no member), never a nulled field on a shared DTO; the caller's class is derived from Authentication, not a client parameter"
+upstream:
+  - "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
+  - "https://owasp.org/API-Security/editions/2019/en/0xa3-excessive-data-exposure/"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+evidence:
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2023) — API3:2023 Broken Object Property Level Authorization (prevention guidance)"
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
+    quote: "When exposing an object using an API endpoint, always make sure that the user should have access to the object's properties you expose."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2019) — API3:2019 Excessive Data Exposure (the failure mode merged into API3:2023)"
+    url: "https://owasp.org/API-Security/editions/2019/en/0xa3-excessive-data-exposure/"
+    quote: "APIs rely on clients to perform the data filtering."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP ASVS v4.0.3 — V4.1.3 Access Control (least privilege)"
+    url: "https://owasp.org/www-project-application-security-verification-standard/"
+    quote: "Verify that the principle of least privilege exists - users should only be able to access functions, data files, URLs, controllers, services, and other resources, for which they possess specific authorization."
+    quoted_at: "2026-06-01"
+---
+
+## Field-level projection MUST be server-decided per caller and OMIT unauthorized fields — never load-then-null
+
+**Impact: HIGH — a load-then-null projection still ships the sensitive value into the response object, where logs, exception payloads, and the next over-broad DTO leak it.**
+
+Some resources are seen by callers in different authorization classes, and the SAME row must reveal DIFFERENT fields to each. A manager reading a direct report's record sees the salary; a peer sees only name and title; the employee reading their own record sees their own salary. A patient record's clinical-notes section is visible to the care team but not to billing. A marketplace order shows the buyer their shipping address and the seller their payout split — each hidden from the other. A social profile grades email/phone/birthday visibility by follower tier.
+
+This is **object-PROPERTY-level authorization** (OWASP API3:2023), and it is distinct from the two adjacent catalog axes:
+
+- **relationship-authz-l0 is ROW level** — "may I see this row at all". A grant lookup decides whole-object access. Once a caller is authorized for the row, *this* rule decides which of its FIELDS they may read.
+- **pii-masked-at-dto-boundary is a UNIFORM mask** — every caller gets the SAME masked value (`203.0.113.xxx`, `Chrome on Windows`). That is privacy-by-design applied identically to all. This rule is **role-GRADED**: the manager sees the real salary, the peer sees no salary field at all. The difference is the *caller's authorization*, not a blanket redaction.
+
+Two invariants:
+
+1. **The visible field set is decided SERVER-SIDE** from the caller's authenticated role/relationship — never by the client, and never by returning every property and trusting the consumer to hide some. The 2019 Excessive Data Exposure failure mode was exactly this: *"APIs rely on clients to perform the data filtering."* Derive the caller's class from `Authentication` (role claim and/or a grant lookup); never from a request parameter that could widen the field set.
+2. **Unauthorized fields are OMITTED, not loaded-then-nulled.** Give each authorization class a DISTINCT DTO whose members are exactly the fields it may read. A field that was never declared on the DTO cannot leak — through logging, through an exception serializer, through a future endpoint that forgets to re-null it.
+
+**Incorrect — one shared DTO, fields nulled for unauthorized callers (load-then-null):**
+
+```java
+public record ReportView(UUID id, String name, String title, BigDecimal salary) {
+    public static ReportView of(Employee e, boolean callerMaySeeComp) {
+        return new ReportView(
+            e.getId(), e.getName(), e.getTitle(),
+            callerMaySeeComp ? e.getSalary() : null   // ❌ salary still loaded onto the object
+        );
+    }
+}
+// The real salary is read from the entity and lives on the response object even for a peer.
+// It leaks via: log.info("returning {}", view), an exception that serializes the object,
+// a /debug echo, or a sibling endpoint that maps the entity without the null branch.
+// And the `salary` JSON key is PRESENT as null — a property-level oracle the peer can see.
+```
+
+**Correct — server picks a per-class projection; the unauthorized field is ABSENT from the type:**
+
+```java
+// Each authorization class has its OWN DTO. The peer DTO simply has no salary member,
+// so it is structurally impossible to serialize the salary to a peer.
+public record PeerProfileView(UUID id, String name, String title) {}
+public record ManagerCompView(UUID id, String name, String title, BigDecimal salary) {}
+public record SelfCompView(UUID id, String name, String title, BigDecimal salary) {}
+
+@GetMapping("/api/employees/{id}")
+public ResponseEntity<?> getEmployee(@PathVariable UUID id, Authentication auth) {
+    Employee e = service.requireReadable(id, auth);            // ROW-level gate (relationship-authz)
+    return switch (projectionFor(e, auth)) {                   // FIELD-level: class from Authentication
+        case SELF    -> ResponseEntity.ok(SelfCompView.of(e));     // own salary
+        case MANAGER -> ResponseEntity.ok(ManagerCompView.of(e));  // report's salary
+        case PEER    -> ResponseEntity.ok(PeerProfileView.of(e));  // ✅ no salary member at all
+    };
+}
+// projectionFor() derives the class from auth (role claim + manager-of grant lookup),
+// NEVER from a client parameter. The salary is fetched only when the chosen DTO has a slot
+// for it; a peer's response object never holds the value, so nothing downstream can leak it.
+```
+
+Apply this when the same resource exposes a caller-graded field set: HR compensation, healthcare record sections, marketplace seller-vs-buyer views, social profile visibility tiers. Pick the DTO from the caller's authorization class server-side, and let an unauthorized field be *absent from the DTO type* rather than *null on a shared instance*.
+
+**Verification (review tier):** a reviewer confirms each authorization class has a distinct projection DTO whose members are exactly the readable fields, that unauthorized fields are absent from the DTO type (not nulled on a shared DTO), and that the caller's class is derived from `Authentication` rather than a client-supplied parameter. There is no single `@Tag` because the per-class projection map is a human-judgment policy checked against the authorization model.
+
+Reference: [OWASP API Security Top 10 (2023) — API3:2023 Broken Object Property Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/)
+
+Reference: [OWASP API Security Top 10 (2019) — API3:2019 Excessive Data Exposure](https://owasp.org/API-Security/editions/2019/en/0xa3-excessive-data-exposure/)
+
+Reference: [OWASP ASVS v4.0.3 — V4.1.3 Access Control (least privilege)](https://owasp.org/www-project-application-security-verification-standard/)
 
 
 <!-- @source rules/hooks-before-conditional-return.md -->
@@ -9562,6 +9669,102 @@ Verification: `./gradlew testPractices --tests "*StatelessSession*"` reads `Secu
 Reference: [Spring Security — Session Management](https://docs.spring.io/spring-security/reference/servlet/authentication/session-management.html)
 
 
+<!-- @source rules/self-referential-tree-reparent-rejects-cycle.md -->
+
+---
+title: Reparenting a node in a mutable self-referential tree MUST reject a move that creates a cycle — the parent relation stays a DAG
+impact: HIGH
+impactDescription: "Setting node.parent to the node itself or to one of its own descendants detaches that subtree into an unreachable cycle: recursive descendant traversals (org-chart rollups, category breadcrumbs, BOM explosion, folder paths, comment threads, GL account sums) loop indefinitely or silently drop the orphaned ring"
+tags:
+  - tree
+  - hierarchy
+  - self-referential
+  - acyclicity
+  - referential-integrity
+  - reparent
+spec_ref: "specs/optimistic-locking-l0.yaml#OPTLOCK-REPARENT-CYCLE-001"
+verification:
+  type: review
+  source: "specs/optimistic-locking-l0.yaml#OPTLOCK-REPARENT-CYCLE-001"
+  pattern: "The move/reparent handler of any mutable self-referential hierarchy (entity with a parent_id pointing at its own table) MUST, inside the SAME @Transactional unit as the parent write, compute descendants(node) (transitive closure over parent edges via recursive CTE, closure table, or in-memory walk) and reject the move when target == node OR target ∈ descendants(node), returning a 409/422 RFC 9457 ProblemDetail of type=urn:problem:tree-cycle and leaving the parent column unchanged — never an unconditional node.setParent(target); save(node). The check MUST run under the optimistic-lock guard (If-Match / @Version) so a concurrent reparent cannot slip a cycle through the check-to-write window."
+upstream:
+  - "https://en.wikipedia.org/wiki/Directed_acyclic_graph"
+  - "https://www.postgresql.org/docs/current/queries-with.html"
+evidence:
+  - source_type: external
+    citation: "Wikipedia — Directed acyclic graph (definition: a directed graph with no directed cycles)"
+    url: "https://en.wikipedia.org/wiki/Directed_acyclic_graph"
+    quote: "That is, it consists of vertices and edges (also called arcs), with each edge directed from one vertex to another, such that following those directions will never form a closed loop."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "PostgreSQL Documentation — 7.8 WITH Queries (Common Table Expressions), Recursive Queries"
+    url: "https://www.postgresql.org/docs/current/queries-with.html"
+    quote: "When working with recursive queries it is important to be sure that the recursive part of the query will eventually return no tuples, or else the query will loop indefinitely."
+    quoted_at: "2026-06-01"
+decided_at: "2026-06-01"
+---
+
+## Reparenting a node in a mutable self-referential tree MUST reject a move that creates a cycle — the parent relation stays a DAG
+
+**Impact: HIGH — a reparent into a descendant detaches a subtree into an unreachable cycle, and every recursive traversal of the tree either loops forever or silently loses the orphaned ring**
+
+A *self-referential* hierarchy is any entity whose `parent_id` points back at its own table: an org chart (employee → manager), a category/taxonomy tree, a folder/file tree, a bill-of-materials (assembly → sub-assembly), a threaded comment (reply → parent comment), a GL account tree (sub-account → account). Its parent relation is meant to be a **directed acyclic graph** — a forest. As a directed acyclic graph, *following those directions will never form a closed loop*. The moment a `move(node, target)` sets `node.parent = target` where `target` **is** the node itself, or **is one of the node's own descendants**, that invariant breaks: the node's subtree points back into itself, severing from the root. The node and its descendants form a ring reachable from nobody.
+
+The damage is not theoretical — it is exactly the failure PostgreSQL warns about for the traversal that reads such a tree: *when working with recursive queries it is important to be sure that the recursive part of the query will eventually return no tuples, or else the query will loop indefinitely.* A category breadcrumb walk, an org-chart headcount rollup, a BOM explosion, a folder full-path resolve, a comment-thread render, a GL account-sum query — each climbs or descends the parent edges with a recursive CTE (or an in-memory walk). Introduce one cycle and that traversal spins until a `LIMIT`, a `CYCLE` clause, or a stack-overflow stops it. The write that *created* the cycle returned 200; the corruption surfaces later as a hung query or a subtree that vanished from every listing.
+
+The rule: before any reparent of a self-referential node, **compute the node's descendant set and reject the move if the target is the node or any of its descendants**, inside the same transaction as the parent write.
+
+**1. Compute `descendants(node)` as a transitive closure over the parent edges.** A recursive CTE (`WITH RECURSIVE`, *typically used to deal with hierarchical or tree-structured data*), a closure table, or a bounded in-memory walk from `node` down its children. The forbidden target set is `{node} ∪ descendants(node)`.
+
+**2. Reject `target ∈ {node} ∪ descendants(node)`.** A self-parent (`target == node`) or a descendant-parent both create a cycle. Reject with `409 Conflict` (or `422 Unprocessable Entity`) + RFC 9457 ProblemDetail of `type=urn:problem:tree-cycle`, and leave the parent column **unchanged**. Never apply then repair.
+
+**3. Run the check under the optimistic-lock guard, in the SAME transaction as the write.** Two admins reparenting nodes of the same tree concurrently can each pass an acyclicity check computed on a stale snapshot, then both commit — together forming a cycle neither created alone. The descendant check MUST be evaluated inside the same `@Transactional` unit as the `setParent` write, behind the If-Match / `@Version` optimistic-lock guard (`specs/optimistic-locking-l0.yaml#OPTLOCK-VERSION-001`), so a concurrent reparent loses on the version bump rather than slipping a cycle through the check-to-write window.
+
+**Incorrect — unconditional reparent; a move under a descendant creates a cycle that hangs the next tree walk:**
+
+```java
+@Transactional
+public void move(UUID nodeId, UUID targetParentId) {
+    Node node = nodeRepo.findById(nodeId).orElseThrow();
+    node.setParent(targetParentId);   // ❌ no check: target may be node itself
+    nodeRepo.save(node);              //    or one of node's own descendants → cycle
+}
+```
+
+**Correct — descendant closure computed in-transaction; self/descendant target rejected 409 tree-cycle; parent left unchanged:**
+
+```java
+@Transactional
+public void move(UUID nodeId, UUID targetParentId) {
+    Node node = nodeRepo.findById(nodeId)
+        .orElseThrow(() -> new ResourceNotFoundException("node", nodeId));
+
+    // transitive closure over parent edges, inside this txn (recursive CTE,
+    // closure table, or in-memory walk). target must not be node nor below it.
+    if (targetParentId.equals(nodeId)
+            || nodeRepo.descendantIds(nodeId).contains(targetParentId)) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+            HttpStatus.CONFLICT,
+            "Cannot move a node under itself or one of its descendants — it would create a cycle.");
+        pd.setType(URI.create("urn:problem:tree-cycle"));
+        pd.setProperty("node_id", nodeId);
+        pd.setProperty("target_parent_id", targetParentId);
+        throw new ErrorResponseException(HttpStatus.CONFLICT, pd, null);
+    }
+    node.setParent(targetParentId);   // ✅ parent relation stays a DAG (forest)
+    nodeRepo.save(node);              //    @Version bump rejects a racing reparent
+}
+```
+
+**When to apply**: any mutable entity with a self-referential `parent_id` whose parent is re-assignable at runtime — org chart, category/taxonomy tree, folder/file tree, BOM, threaded comments, GL account tree. **When NOT to apply**: append-only hierarchies where a node's parent is set once at creation and is immutable (no reparent path exists, so no cycle can be introduced), or flat lists with no self-reference. Pair with `destructive-remove-checks-inbound-references.md` (the delete side of structural integrity) and `specs/optimistic-locking-l0.yaml#OPTLOCK-VERSION-001` (the concurrent-reparent guard).
+
+Verification: review-tier. Tree acyclicity under reparent is a cross-row runtime invariant of the move handler with no compile-time signal — a single happy-path move test passes on a handler that omits the descendant check entirely, and the cycle only manifests as a later hung recursive query. Verify by review against `specs/optimistic-locking-l0.yaml#OPTLOCK-REPARENT-CYCLE-001`: the reparent path computes `descendants(node)` and rejects `target ∈ {node} ∪ descendants(node)` with a 409/422 `tree-cycle` ProblemDetail, inside the same transaction as the parent write and under the optimistic-lock guard. When a fork-receiver wires a real `@Tag("OPTLOCK-REPARENT-CYCLE-001")` negative IT (reparent under a descendant → 409 + parent unchanged), this rule's verification block may be upgraded from review to gradle_task+tag.
+
+Reference: [Wikipedia — Directed acyclic graph (a directed graph with no directed cycles)](https://en.wikipedia.org/wiki/Directed_acyclic_graph)
+
+Reference: [PostgreSQL — 7.8 WITH Queries: Recursive Queries (hierarchical/tree traversal; must terminate or loop indefinitely)](https://www.postgresql.org/docs/current/queries-with.html)
+
+
 <!-- @source rules/server-side-stored-error-sanitize.md -->
 
 ---
@@ -10270,6 +10473,106 @@ Reference: [Chris Richardson — Pattern: Transactional outbox (the dual-write p
 Reference: [AWS — Deleting Amazon S3 objects (S3 Lifecycle reclaim + idempotent delete)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeletingObjects.html)
 
 
+<!-- @source rules/stored-blob-carries-content-digest-verified-on-read.md -->
+
+---
+title: A stored blob MUST carry a write-time content digest (SHA-256) that the read path re-verifies — a mismatch is a fail-closed error, never a silent serve
+impact: HIGH
+impactDescription: "An object store can return bit-rotted, partially-written, tampered, or simply the WRONG object's bytes, and without a digest captured at write time and re-checked at read time the application streams the corrupt bytes to the user as if they were authentic — a silent integrity failure that no presence/orphan reconciliation sweep can catch"
+tags:
+  - storage
+  - integrity
+  - checksum
+  - sha-256
+  - object-store
+  - fail-closed
+spec_ref: "specs/file-storage-l0.yaml#FILE-INTEGRITY-001"
+verification:
+  type: review
+  source: "specs/file-storage-l0.yaml#FILE-INTEGRITY-001"
+  pattern: "At write time the SHA-256 of the FINAL persisted byte stream is computed and stored in an immutable contentSha256 column in the SAME transaction as the storage key; the read/download path streams the served bytes through a DigestInputStream (or equivalent) and compares the recomputed SHA-256 against the stored digest BEFORE the bytes reach the client, aborting with an integrity error (no partial/corrupt body flushed) on mismatch. Confirm by inspection that (a) the digest column exists and is non-null + non-updatable, (b) the digest is computed over the bytes that are actually persisted (post re-encode/strip, not the raw upload), and (c) no read path can serve bytes without the comparison succeeding."
+upstream:
+  - "https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html"
+  - "https://cwe.mitre.org/data/definitions/353.html"
+evidence:
+  - source_type: external
+    citation: "AWS — Checking object integrity in Amazon S3 (Amazon S3 User Guide), overview section on checksum validation"
+    url: "https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html"
+    quote: "With Amazon S3, you can use checksum values to verify the integrity of the data that you upload or download."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "MITRE — CWE-353: Missing Support for Integrity Check, Extended Description (first paragraph)"
+    url: "https://cwe.mitre.org/data/definitions/353.html"
+    quote: "If integrity check values or 'checksums' are omitted from a protocol, there is no way of determining if data has been corrupted in transmission."
+    quoted_at: "2026-06-01"
+---
+
+## A stored blob MUST carry a write-time content digest (SHA-256) that the read path re-verifies — a mismatch is a fail-closed error, never a silent serve
+
+**Impact: HIGH — without a digest captured at write time and re-checked at read time, an object store that returns bit-rotted, truncated, tampered, or simply the wrong object's bytes is indistinguishable from one returning the authentic file, and the application streams the corruption to the user as genuine.**
+
+Applications routinely persist a binary artifact in an external object store (S3 / MinIO / GCS / Azure Blob) and a referencing row in the relational DB: an uploaded document, a generated report export, a payslip or receipt PDF, an avatar image. The presence/orphan reconciliation sweep (`storage-reconciliation-l0.yaml`, `RECON-*`) answers *does the blob still exist and is it still referenced* — but it says nothing about whether the bytes are the **right, unaltered** bytes. Object storage can silently corrupt data in ways that leave the key perfectly present: undetected bit-rot on the underlying media, a partial or truncated write that completed without surfacing an error, a multi-tenant key collision or pipeline bug that returns a *different* object under this key, or deliberate at-rest tampering. CWE-353 (Missing Support for Integrity Check) names this class directly: with no checksum, there is no way to determine whether the data has been altered between write and read. A reconciliation sweep will report everything healthy while the read path streams the corrupt bytes to the user as authentic.
+
+The fix is a content digest bound to the bytes themselves. At write time, compute the SHA-256 of the **final persisted byte stream** — after any re-encode / EXIF-strip transform (`FILE-UPLOAD-004`), so the digest matches what is actually served, not the pre-transform input — and store it in an immutable `contentSha256` column written in the *same* transaction as the storage key. On every read/download, stream the bytes through a `DigestInputStream` and compare the recomputed SHA-256 against the stored digest **before** the body reaches the client. A mismatch is fail-closed: abort with an integrity error (no partial or corrupt body flushed), flag the file for review, and never serve the bytes. The stored-bytes-are-served-iff-their-SHA-256-still-equals-the-write-time-digest invariant is what makes silent corruption *loud*.
+
+**Incorrect — the blob is stored and served with no integrity binding; corruption, truncation, or a wrong-object swap is streamed to the client as authentic:**
+
+```java
+@Transactional
+public StoredFile store(MultipartFile upload, UUID ownerId) {
+    byte[] bytes = reEncodeAndStripExif(upload);   // FILE-UPLOAD-004
+    String key = storageKeyFactory.newKey(ownerId);
+    objectStore.put(bucket, key, bytes);
+    return repo.save(new StoredFile(ownerId, key, bytes.length));  // ❌ no digest recorded
+}
+
+public ResponseEntity<StreamingResponseBody> download(UUID fileId, UUID callerId) {
+    StoredFile f = repo.findByIdAndOwner(fileId, callerId).orElseThrow();
+    InputStream in = objectStore.open(bucket, f.getStorageKey());
+    // ❌ whatever the store returns — rotted, truncated, the wrong object — is
+    //    streamed straight to the user; the app has no way to know it is wrong
+    return ResponseEntity.ok().body(out -> in.transferTo(out));
+}
+```
+
+**Correct — SHA-256 captured at write time in the same transaction; the read path re-verifies before flushing and fails closed on mismatch:**
+
+```java
+@Transactional
+public StoredFile store(MultipartFile upload, UUID ownerId) {
+    byte[] bytes = reEncodeAndStripExif(upload);            // final persisted bytes
+    String sha256 = HexFormat.of().formatHex(
+            MessageDigest.getInstance("SHA-256").digest(bytes));  // (1) digest of FINAL bytes
+    String key = storageKeyFactory.newKey(ownerId);
+    objectStore.put(bucket, key, bytes);
+    // (2) digest persisted in the SAME tx as the key, immutable column
+    return repo.save(new StoredFile(ownerId, key, bytes.length, sha256));
+}
+
+public ResponseEntity<StreamingResponseBody> download(UUID fileId, UUID callerId) {
+    StoredFile f = repo.findByIdAndOwner(fileId, callerId).orElseThrow();
+    byte[] served = objectStore.getBytes(bucket, f.getStorageKey());
+    String actual = HexFormat.of().formatHex(
+            MessageDigest.getInstance("SHA-256").digest(served));   // (3) re-hash served bytes
+    if (!MessageDigest.isEqual(actual.getBytes(UTF_8),
+                               f.getContentSha256().getBytes(UTF_8))) {
+        f.markIntegrityFailed();                                   // (4) fail-closed:
+        throw new BlobIntegrityException(f.getId());               //     500 ProblemDetail,
+        //     corrupt bytes are NEVER streamed to the caller
+    }
+    return ResponseEntity.ok().body(out -> out.write(served));     // verified → serve
+}
+```
+
+The `contentSha256` column is `@Column(updatable=false, nullable=false)` so the recorded digest can never be rewritten to match drifted bytes after the fact. The digest is computed over the bytes that are actually persisted (post re-encode/strip), not the raw upload, so a verified read is an honest statement about the served representation. This composes *under* reconciliation rather than replacing it: `RECON-MISSING-001` catches a row whose blob has vanished, while `FILE-INTEGRITY-001` catches a blob that is present but wrong — the two together cover both existence drift and content drift.
+
+Verification (review-tier): confirm by inspection that (a) a non-null, non-updatable `contentSha256` (or equivalent) column is written in the **same** `@Transactional` boundary as the storage key; (b) the digest is computed over the FINAL persisted byte stream, after any re-encode/strip transform; (c) every read/download path re-hashes the bytes it is about to serve and compares against the stored digest before any body is flushed; and (d) a mismatch aborts with an integrity error and never streams a partial or corrupt body. This is a structural write-then-verify-on-read property spanning the persistence and streaming seams, not a single assertable runtime scalar — hence `type: review`, bound per `rule_verification_binding_guard.sh`.
+
+Reference: [AWS — Checking object integrity in Amazon S3 (SHA-256 checksum validation)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html)
+
+Reference: [MITRE — CWE-353: Missing Support for Integrity Check](https://cwe.mitre.org/data/definitions/353.html)
+
+
 <!-- @source rules/stored-server-error-sanitize-at-render-layer.md -->
 
 ---
@@ -10556,6 +10859,131 @@ Verification: review the entry mapping and the sole-writer/verify routine — co
 Reference: [RFC 6962 — Certificate Transparency (append-only Merkle/hash-chained log)](https://datatracker.ietf.org/doc/html/rfc6962)
 
 Reference: [NIST SP 800-92 — Guide to Computer Security Log Management §5.2 (message-digest detection of log alteration)](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf)
+
+
+<!-- @source rules/temporal-validity-record-non-overlap.md -->
+
+---
+title: Effective-dated records MUST forbid overlapping validity windows with a DB range-exclusion constraint — never a pre-insert overlap SELECT
+impact: HIGH
+impactDescription: "A service-layer 'does this window overlap?' SELECT before INSERT is a CWE-367 TOCTOU race: two concurrent effective-dating writes each see no overlap and both insert, corrupting the history so a point-in-time query returns two conflicting rows for one instant"
+tags:
+  - temporal
+  - effective-dated
+  - interval-overlap
+  - cwe-367
+  - toctou
+  - postgres-exclude
+spec_ref: "specs/temporal-validity-l0.yaml#TEMPORAL-NON-OVERLAP-001"
+verification:
+  type: review
+  source: "specs/temporal-validity-l0.yaml#TEMPORAL-NON-OVERLAP-001"
+  pattern: "A scope-keyed effective-dated table (employee salary/title/manager history, price-over-time, coverage periods, config-over-time, shift rosters, leases) MUST carry a DB range-exclusion constraint — EXCLUDE USING gist (scope_key WITH =, tstzrange(valid_from, valid_to, '[)') WITH &&) requiring btree_gist — as the AUTHORITATIVE non-overlap guard. Reject any handler whose ONLY overlap defense is a service-layer 'SELECT ... WHERE ranges overlap; if none, INSERT' — that read-check-then-insert window is the CWE-367 TOCTOU race. The range MUST be half-open '[)' so touching windows (end == next start) do not collide. Violation MUST map to a deterministic 409 INTERVAL_OVERLAP, distinct from 409 CAPACITY_EXHAUSTED (bounded-capacity-claim) and 412 (optimistic-locking). This is a runtime concurrency property with no compile-time signal, so it is verified by review against the spec, not by a static @Tag test."
+upstream:
+  - "https://www.postgresql.org/docs/current/ddl-constraints.html"
+  - "https://www.postgresql.org/docs/current/btree-gist.html"
+  - "https://cwe.mitre.org/data/definitions/367.html"
+  - "https://en.wikipedia.org/wiki/Temporal_database"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL Documentation — 5.4 Constraints (Exclusion Constraints, EXCLUDE USING gist)"
+    url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    quote: "Exclusion constraints ensure that if any two rows are compared on the specified columns or expressions using the specified operators, at least one of these operator comparisons will return false or null."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "PostgreSQL Documentation — F.10 btree_gist (B-tree equivalent GiST operator classes for exclusion constraints)"
+    url: "https://www.postgresql.org/docs/current/btree-gist.html"
+    quote: "In addition to the typical B-tree search operators, btree_gist also provides index support for <> (\"not equals\"). This may be useful in combination with an exclusion constraint, as described below."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition"
+    url: "https://cwe.mitre.org/data/definitions/367.html"
+    quote: "The product checks the state of a resource before using that resource, but the resource's state can change between the check and the use in a way that invalidates the results of the check."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Temporal database — Wikipedia (valid time semantics)"
+    url: "https://en.wikipedia.org/wiki/Temporal_database"
+    quote: "Valid time is the time period during or event time at which a fact is true in the real world."
+    quoted_at: "2026-06-01"
+decided_at: "2026-06-01"
+---
+
+## Effective-dated records MUST forbid overlapping validity windows with a DB range-exclusion constraint — never a pre-insert overlap SELECT
+
+**Impact: HIGH — An effective-dated table is any history where a fact is true only over a bounded period: an employee's salary/title/manager over time, a product's price-over-time, an insurance coverage period, a config value over time, a shift roster, a lease. Each row carries a [validFrom, validTo) validity window under a scope key (employeeId, productId, policyId). The invariant is that no two rows for the same scope key may have overlapping windows — otherwise a point-in-time query for one instant returns two conflicting facts. The trap is to enforce that invariant in application code with a 'does this window overlap an existing one?' SELECT just before the INSERT. That is a time-of-check/time-of-use race (CWE-367): between the overlap SELECT and the INSERT a concurrent transaction can commit a colliding window the first transaction's SELECT never saw, so both pass the check and both insert. The history is now corrupt, and the corruption is invisible until someone asks 'what was the salary in force on 2026-01-14' and gets two answers.**
+
+The failure is CWE-367: the code checks the state of a resource (no overlapping window exists) before using it (inserting), but the resource's state can change between the check and the use in a way that invalidates the check. A single-threaded test never reveals it — the pre-insert SELECT looks correct — but two concurrent effective-dating writes (a payroll batch and an HR admin editing the same employee, two price-update jobs on the same SKU) each take their snapshot before the other commits, each see no overlap, and both insert.
+
+The authoritative fix moves the non-overlap check INTO the database as a range-exclusion constraint, so the check and the write are one atomic operation evaluated at COMMIT — no application-visible window exists to race. PostgreSQL exclusion constraints "ensure that if any two rows are compared on the specified columns or expressions using the specified operators, at least one of these operator comparisons will return false or null." For effective-dating the operators are `=` on the scope key (same entity) and `&&` (range overlap) on the validity window; the constraint rejects any pair where the scope keys are equal AND the windows overlap. The equality side requires the `btree_gist` extension, which provides "GiST index operator classes that implement B-tree equivalent behavior" so the scope-key `=` can sit in the same GiST index as the range `&&`.
+
+Two supporting invariants make the geometry correct. The range MUST be **half-open** `[validFrom, validTo)` — `tstzrange(valid_from, valid_to, '[)')` — so two adjacent windows that touch at a shared instant (window A ending 12:00, window B starting 12:00) are contiguous WITHOUT overlapping; a closed-closed `[]` range would make 12:00 belong to both and trip a false collision. And a violation MUST surface as a deterministic **409 INTERVAL_OVERLAP**, distinct from the 409 CAPACITY_EXHAUSTED of `bounded-capacity-claim` (a shared-counter exhaustion, not interval geometry) and the 412 Precondition Failed of `optimistic-locking` (a stale If-Match validator) — three different conflicts a client branches on differently.
+
+**Incorrect — service-layer pre-insert overlap SELECT: two concurrent effective-dating writes both pass the check and both insert (CWE-367 TOCTOU):**
+
+```java
+@Transactional
+public SalaryRecord setSalary(long employeeId, BigDecimal amount, Instant validFrom, Instant validTo) {
+    // VIOLATION: check the state ...
+    List<SalaryRecord> overlapping = salaryRepo.findOverlapping(employeeId, validFrom, validTo);
+    if (!overlapping.isEmpty()) {
+        throw new IntervalOverlapException(employeeId);
+    }
+    // ... then use it. Between the SELECT above and this INSERT a concurrent
+    // transaction can commit a colliding window this snapshot never saw —
+    // both see "no overlap", both insert, the history now overlaps at one instant.
+    return salaryRepo.save(new SalaryRecord(employeeId, amount, validFrom, validTo));
+}
+```
+
+**Correct — DB range-exclusion constraint is the authoritative guard; the overlap check and the write are one atomic step at COMMIT, no window to race:**
+
+```sql
+-- migration (Vxxx): the exclusion constraint IS the invariant
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+CREATE TABLE salary_record (
+    id          BIGSERIAL PRIMARY KEY,
+    employee_id BIGINT      NOT NULL,          -- the scope key
+    amount      NUMERIC(19,4) NOT NULL,
+    valid_from  TIMESTAMPTZ NOT NULL,
+    valid_to    TIMESTAMPTZ,                   -- NULL == open-ended current row
+    -- no two rows for the SAME employee may have OVERLAPPING half-open windows.
+    -- '=' on employee_id (btree_gist) + '&&' on the tstzrange (GiST).
+    EXCLUDE USING gist (
+        employee_id WITH =,
+        tstzrange(valid_from, valid_to, '[)') WITH &&
+    )
+);
+```
+
+```java
+@Transactional
+public SalaryRecord setSalary(long employeeId, BigDecimal amount, Instant validFrom, Instant validTo) {
+    try {
+        // No pre-insert SELECT. The DB exclusion constraint decides atomically
+        // at COMMIT; a concurrent colliding window loses deterministically.
+        return salaryRepo.saveAndFlush(new SalaryRecord(employeeId, amount, validFrom, validTo));
+    } catch (DataIntegrityViolationException e) {
+        if (isExclusionViolation(e)) {                        // SQLSTATE 23P01
+            temporalMetrics.intervalOverlap("salary");         // TEMPORAL-OBSERVABILITY-001
+            throw new IntervalOverlapException(employeeId);    // → 409 INTERVAL_OVERLAP
+        }
+        throw e;
+    }
+}
+```
+
+**This is distinct from capacity and from optimistic-locking.** `bounded-capacity-claim` (CLAIM-ATOMIC-001) serializes claimants over a cardinality COUNTER — `taken < capacity` — which is set cardinality, not interval geometry; its loser gets 409 CAPACITY_EXHAUSTED. `optimistic-locking` (OPTLOCK-CONFLICT-001) rejects a stale validator with 412. This rule is interval geometry: no two windows for one scope key may overlap, enforced by a range-exclusion constraint, loser gets 409 INTERVAL_OVERLAP. A recipe whose invariant is "must not double-book overlapping time windows" (e.g. booking) belongs here — on `TEMPORAL-NON-OVERLAP-001` — NOT on the capacity counter, because double-booking is two intervals colliding, not a counter exhausting.
+
+Verification: review-tier. Non-overlap under concurrency is a runtime property — a single-threaded test passes even when the only guard is the broken pre-insert SELECT, and no compile-time signal exists. Verify by review against `specs/temporal-validity-l0.yaml#TEMPORAL-NON-OVERLAP-001`: confirm the effective-dated table carries the `EXCLUDE USING gist (... WITH =, tstzrange(...,'[)') WITH &&)` constraint and `CREATE EXTENSION btree_gist`, and that no handler relies on a pre-insert overlap SELECT as its sole guard. Prove it with a concurrent-insert race harness (two parallel writers submitting overlapping windows for one scope key) asserting exactly one success + one 409 INTERVAL_OVERLAP + a final history with zero overlapping rows. When a fork-receiver wires a real `@Tag("TEMPORAL-NON-OVERLAP-001")` concurrency IT, this rule's verification block may be upgraded from review to gradle_task+tag.
+
+Reference: [PostgreSQL — Constraints (Exclusion Constraints, EXCLUDE USING gist)](https://www.postgresql.org/docs/current/ddl-constraints.html)
+
+Reference: [PostgreSQL — btree_gist (B-tree equivalent GiST operator classes)](https://www.postgresql.org/docs/current/btree-gist.html)
+
+Reference: [CWE-367 — Time-of-check Time-of-use (TOCTOU) Race Condition](https://cwe.mitre.org/data/definitions/367.html)
+
+Reference: [Temporal database — valid time (Wikipedia)](https://en.wikipedia.org/wiki/Temporal_database)
 
 
 <!-- @source rules/testing-archunit-layer-boundary.md -->
@@ -10930,6 +11358,147 @@ Reference: [java.time.Clock — Java SE 21 API documentation](https://docs.oracl
 Reference: [OWASP ASVS 4.0.3 — V11.1.6 Business Logic (TOCTOU / race conditions)](https://github.com/OWASP/ASVS/blob/v4.0.3/4.0/en/0x19-V11-BusLogic.md)
 
 Reference: [CWE-639: Authorization Bypass Through User-Controlled Key](https://cwe.mitre.org/data/definitions/639.html)
+
+
+<!-- @source rules/time-proportional-accrual-prorates-partial-period.md -->
+
+---
+title: A quantity earned over time must be accrued as rate × elapsed-fraction-of-period and a partial period MUST be prorated on a declared day-count basis — never granted or charged a full period
+impact: HIGH
+impactDescription: "Granting or charging a whole period for a partial one (mid-period join/leave/plan-change) over-pays or over-bills; an ad-hoc, undeclared day-count basis makes two call sites disagree on the same partial period; and splitting a period without conserving the whole double-grants or loses a unit at the boundary"
+tags:
+  - lang
+  - accrual
+  - proration
+  - time
+  - bigdecimal
+  - conservation
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-LANG-006"
+verification:
+  type: review
+  source: "practices/rules/time-proportional-accrual-prorates-partial-period.md (Correct example) + siblings practices/rules/time-gated-decisions-read-injected-clock.md, practices/rules/rounded-split-conserves-total-largest-remainder.md, practices/rules/lang-bigdecimal-for-measured-decimals.md"
+  pattern: "Any quantity EARNED over time — leave accrual, subscription fee, depreciation, interest, SaaS seat-day billing — is computed as rate × (elapsed ÷ period) where the elapsed and period day-counts are produced by a SINGLE declared day-count basis (e.g. actual/actual or 30/360, named once as a constant/enum, never re-derived ad-hoc per call site); a PARTIAL period (mid-period join/leave/plan-change) is PRORATED by that fraction and NEVER billed/granted as a full period; when one period is SPLIT at a boundary (old plan part + new plan part), the prorated parts are produced by a conserving allocation so they sum back to the whole period exactly (no double-grant, no lost unit) — composing PRACTICES-LANG-005 (largest-remainder) for the rounding. The anti-patterns rejected: charging/granting a full period for a partial one; computing elapsed-fraction with an undeclared/ad-hoc divisor that differs between call sites; and rounding each split part independently so the parts no longer sum to the whole."
+upstream:
+  - "https://en.wikipedia.org/wiki/Day_count_convention"
+  - "https://en.wikipedia.org/wiki/Accrual"
+  - "https://en.wikipedia.org/wiki/Matching_principle"
+evidence:
+  - source_type: external
+    citation: "Wikipedia — Day count convention (the standardised basis that determines how a quantity accrues over a period; actual/actual vs 30/360 must be the declared, agreed basis — not ad-hoc)"
+    url: "https://en.wikipedia.org/wiki/Day_count_convention"
+    quote: "In finance, a day count convention determines how interest accrues over time for a variety of investments, including bonds, notes, loans, mortgages, medium-term notes, swaps, and forward rate agreements (FRAs)."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Wikipedia — Day count convention, comparison of 30/360 and Actual methods (the two bases produce different day counts for the SAME interval, which is why the basis must be declared once and used consistently)"
+    url: "https://en.wikipedia.org/wiki/Day_count_convention"
+    quote: "Treating a month as 30 days and a year as 360 days was devised for its ease of calculation by hand compared with manually calculating the actual days between two dates."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Wikipedia — Accrual (accounting recognises an amount earned/incurred over a period of time, independent of when cash moves — the matching basis a time-proportional accrual implements)"
+    url: "https://en.wikipedia.org/wiki/Accrual"
+    quote: "In accounting and finance, an accrual is an asset or liability that represents revenue or expenses that are receivable or payable but which have not yet been paid."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Wikipedia — Matching principle (an amount earned/incurred is recognised in the period it belongs to; a partial period gets the partial amount, not a full period's)"
+    url: "https://en.wikipedia.org/wiki/Matching_principle"
+    quote: "the matching principle (or expense recognition principle) dictates that an expense should be reported in the same period as the corresponding revenue is earned."
+    quoted_at: "2026-06-01"
+---
+
+## A quantity earned over time must be accrued as rate × elapsed-fraction-of-period and a partial period MUST be prorated on a declared day-count basis — never granted or charged a full period
+
+**Impact: HIGH — granting or charging a whole period for a partial one over-pays/over-bills; an undeclared day-count basis makes two call sites disagree on the same interval; and splitting a period without conserving the whole double-grants or loses a unit at the boundary**
+
+Many domains produce a quantity that is *earned over time* rather than at a single instant: leave/PTO accrual (days earned per month of tenure), a subscription or SaaS fee (charged per billing period), depreciation (cost spread over a useful life), interest (accrued per day on a principal), and seat-day or usage billing (charged per active seat-day). For every one of these the correct quantity for an interval is **`rate × elapsed-fraction-of-period`**, where the elapsed fraction is `elapsed-units ÷ period-units` under a **declared day-count basis**. This is the accounting matching basis made executable — *the matching principle (or expense recognition principle) dictates that an expense should be reported in the same period as the corresponding revenue is earned* — and an accrual is precisely *an asset or liability that represents revenue or expenses that are receivable or payable but which have not yet been paid*. The amount belongs to the slice of time in which it was earned, so a slice that is shorter than a full period earns a proportionally smaller amount.
+
+Three defects recur on these paths, and one rule closes all three.
+
+**Defect 1 — a partial period billed/granted as a full period.** When someone joins on the 20th, cancels mid-month, or changes plan on day 10, the period is *partial*. Charging the full month's fee, granting the full month's accrual, or depreciating a full period's slice over-states the quantity. The partial period MUST be prorated: `fullPeriodAmount × (partialDays ÷ periodDays)`. Granting/charging the full period for a partial one is forbidden.
+
+**Defect 2 — an ad-hoc, undeclared day-count basis.** The *fraction* is only well-defined once you fix what a "day" and a "period" count as. Finance names this explicitly: *a day count convention determines how interest accrues over time*. The two common bases give **different** answers for the same interval — *treating a month as 30 days and a year as 360 days was devised for its ease of calculation by hand compared with manually calculating the actual days between two dates* — so 30/360 and actual/actual disagree on, say, a 28-day February slice. If one call site divides by 30 and another divides by the real days in the month, the same partial period prorates to two different amounts and the books drift. The basis (actual/actual, 30/360, actual/365-fixed, …) MUST be **declared once** as a named constant/enum and used by every site; it is a policy decision, not a per-call improvisation.
+
+**Defect 3 — a split period that does not conserve the whole.** A mid-period plan change splits ONE period into an old-plan part and a new-plan part. The two prorated parts MUST sum back to exactly one whole period — no day counted twice (double-grant at the boundary) and no day dropped. That is the conservation property of `rounded-split-conserves-total-largest-remainder.md`: floor each part, then distribute the leftover minor unit(s) to the largest fractional remainders so `Σ parts == whole` exactly. Independently rounding each part of the split silently loses or conjures a unit at the boundary.
+
+Carry every monetary or measured amount on these paths as `BigDecimal` with an explicit scale and rounding applied **once** at the boundary (see `lang-bigdecimal-for-measured-decimals.md`), read "now" and the period bounds from an injected `Clock` so the proration is deterministically testable (see `time-gated-decisions-read-injected-clock.md`), and never trust a client-supplied join/leave timestamp for the cutoff.
+
+**Incorrect — full period charged for a partial one; ad-hoc divisor; split parts not conserved:**
+
+```java
+// Subscription proration + a mid-month plan change.
+BigDecimal chargeForJoinMidMonth(BigDecimal monthlyFee, LocalDate joinDate) {
+    // ❌ DEFECT 1: ignores that the member joined mid-month — bills a whole month
+    return monthlyFee;
+}
+
+BigDecimal proratePart(BigDecimal monthlyFee, int activeDays) {
+    // ❌ DEFECT 2: divisor is an ad-hoc literal 30; another method here divides by
+    //    the real days in the month — the SAME 28-day slice prorates two different ways
+    return monthlyFee.multiply(BigDecimal.valueOf(activeDays))
+                     .divide(BigDecimal.valueOf(30), 2, RoundingMode.HALF_UP);
+}
+
+List<BigDecimal> splitForPlanChange(BigDecimal monthlyFee, int oldDays, int newDays) {
+    // ❌ DEFECT 3: each part rounded independently — oldPart + newPart ≠ monthlyFee
+    BigDecimal old = monthlyFee.multiply(BigDecimal.valueOf(oldDays))
+            .divide(BigDecimal.valueOf(oldDays + newDays), 2, RoundingMode.HALF_UP);
+    BigDecimal neu = monthlyFee.multiply(BigDecimal.valueOf(newDays))
+            .divide(BigDecimal.valueOf(oldDays + newDays), 2, RoundingMode.HALF_UP);
+    return List.of(old, neu);   // 30.00 split 10:20 → [10.00, 20.00]? often [10.00,20.01] or sums to 29.99
+}
+```
+
+**Correct — partial period prorated; one declared day-count basis; split conserved:**
+
+```java
+/** The ONE declared day-count basis for this domain (policy, named once). */
+enum DayCount {
+    ACTUAL_ACTUAL,   // real elapsed days ÷ real days in the period
+    THIRTY_360;      // month = 30, year = 360
+}
+static final DayCount BASIS = DayCount.ACTUAL_ACTUAL;   // declared, not ad-hoc
+
+private final Clock clock;   // ✅ injected — proration is deterministically testable
+
+/** elapsed ÷ period under the declared basis — the single source of the fraction. */
+BigDecimal elapsedFraction(LocalDate start, LocalDate endExclusive, YearMonth period) {
+    long elapsed = ChronoUnit.DAYS.between(start, endExclusive);
+    long periodDays = (BASIS == DayCount.THIRTY_360) ? 30 : period.lengthOfMonth();
+    return BigDecimal.valueOf(elapsed)
+            .divide(BigDecimal.valueOf(periodDays), 10, RoundingMode.HALF_UP);
+}
+
+/** ✅ DEFECT 1 closed: a partial period earns rate × fraction, never a full period. */
+BigDecimal accrue(BigDecimal ratePerPeriod, LocalDate start, LocalDate endExclusive, YearMonth period) {
+    return ratePerPeriod.multiply(elapsedFraction(start, endExclusive, period))
+            .setScale(2, RoundingMode.HALF_UP);   // ✅ scale+round once at the boundary
+}
+
+/** ✅ DEFECT 3 closed: a plan-change split conserves the whole period exactly. */
+List<BigDecimal> splitForPlanChange(BigDecimal periodFee, int oldDays, int newDays) {
+    // Delegate to the largest-remainder conserving allocation (PRACTICES-LANG-005):
+    List<BigDecimal> parts = allocate(periodFee,
+            List.of(BigDecimal.valueOf(oldDays), BigDecimal.valueOf(newDays)), 2);
+    assert parts.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                 .compareTo(periodFee) == 0;   // ✅ Σ parts == whole period, exactly
+    return parts;
+}
+```
+
+The shape that triggers this rule is *a quantity that grows with elapsed time*: PTO days per month of service, a recurring fee per billing cycle, an asset's cost over its useful life, interest per day on a balance, or seat-days of usage. Wherever that shape appears, the per-interval amount MUST be `rate × (elapsed ÷ period)` under a day-count basis that is **declared once** (actual/actual or 30/360, not re-invented per call site), a partial period MUST be prorated by that fraction (never billed/granted whole), and a split of one period across a boundary MUST conserve the whole (`Σ parts == whole`, via the largest-remainder allocation).
+
+Verification (review-tier): inspect every path that earns a quantity over time (leave accrual, subscription/SaaS fee, depreciation, interest, seat-day billing). Confirm (1) the amount is computed as `rate × elapsed-fraction`, not a flat full-period amount when the period is partial; (2) the elapsed and period day-counts come from a SINGLE declared day-count basis (a named constant/enum — actual/actual, 30/360, …), not an ad-hoc divisor that differs between call sites; (3) when one period is split at a join/leave/plan-change boundary, the parts are produced by a conserving allocation (largest-remainder) and a post-condition asserts `Σ parts == whole period`. The canonical per-path regression test a fork-receiver writes pins a `Clock.fixed(...)`, prorates a mid-period join (e.g. join on day 20 of a 30-day month → `fee × 10/30`, not the full fee), and asserts a plan-change split of a fee across a 10:20 day boundary sums back to the whole period fee exactly (`compareTo == 0`).
+
+Reference: [Wikipedia — Day count convention (actual/actual vs 30/360 — the declared basis)](https://en.wikipedia.org/wiki/Day_count_convention)
+
+Reference: [Wikipedia — Accrual (an amount earned/incurred over a period)](https://en.wikipedia.org/wiki/Accrual)
+
+Reference: [Wikipedia — Matching principle (the amount belongs to the period it is earned in)](https://en.wikipedia.org/wiki/Matching_principle)
+
+Reference (sibling — conserve the split, do not conflate): [practices/rules/rounded-split-conserves-total-largest-remainder.md](rounded-split-conserves-total-largest-remainder.md)
+
+Reference (sibling — scale/round the amount once, do not conflate): [practices/rules/lang-bigdecimal-for-measured-decimals.md](lang-bigdecimal-for-measured-decimals.md)
+
+Reference (sibling — read the clock + period bounds from an injected Clock): [practices/rules/time-gated-decisions-read-injected-clock.md](time-gated-decisions-read-injected-clock.md)
 
 
 <!-- @source rules/traceid-in-error-response.md -->

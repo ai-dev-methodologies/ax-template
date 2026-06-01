@@ -1,0 +1,208 @@
+version: "0.1.0"
+scope: "temporal-validity-l0 — effective-dated / validity-windowed record contract for fork-receivers persisting any history that is true only over a bounded period: salary/title/manager history, price-over-time, insurance coverage periods, config-over-time, shift rosters, leases, tax-rate schedules. Every such record carries a [validFrom, validTo) validity window and a scope key (the entity the window belongs to — employeeId, productId, policyId). Cross-cutting, jurisdiction-agnostic + framework-agnostic. Distinct from content-versioning (SEQUENTIAL supersession via is_current with no [from,to) window — cannot answer 'value in force on date X'), from value-provenance PROVENANCE-PINNED-INPUT (single-row reproducibility of a derived value), and from bounded-capacity-claim (a cardinality COUNTER, not interval geometry)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA) + PostgreSQL (EXCLUDE USING gist range-exclusion constraint, btree_gist, tstzrange) + RFC 9457 Problem Details + Micrometer metrics"
+standard: "PostgreSQL 'Constraints' (Exclusion Constraints — EXCLUDE USING gist) + PostgreSQL 'btree_gist' (B-tree equivalent GiST operator classes for the scope-key equality side of the exclusion) + CWE-367 (Time-of-check Time-of-use TOCTOU race condition) + Temporal database 'valid time' semantics + Slowly Changing Dimension Type 2 (effective/expiry interval + open-ended current row) + RFC 9457 (Problem Details for HTTP APIs) + RFC 9110 §15.5.10 (409 Conflict)"
+domain_mode: backend_only
+introduced_at: "IDW8 2026-06-01 HR-payroll dogfood"
+
+# OPT-IN temporal-validity catalog. Adopted by any recipe that persists
+# effective-dated / validity-windowed history — a record that is in force
+# only over a bounded interval and is superseded (not deleted) when a new
+# value takes effect: salary/title/manager history, price-over-time,
+# coverage periods, config-over-time, shift rosters, leases, tax schedules.
+# The IDW8 HR-payroll dogfood found 7 personas independently reaching for
+# effective-dated state and each hand-rolling a service-layer "does this
+# overlap an existing window?" SELECT before insert — the exact CWE-367
+# read-check-then-insert TOCTOU race. This spec supplies the missing
+# primitives: validity is a HALF-OPEN [validFrom, validTo) interval (so
+# touching windows do not collide), non-overlap is enforced by an
+# AUTHORITATIVE DB range-exclusion constraint (never a pre-insert SELECT),
+# point-in-time queries return EXACTLY the one row in force at date X, and
+# at most ONE open-ended current row exists per scope key. This MERGES two
+# sub-patterns the dogfood found tangled — effective-dating and
+# temporal-interval-overlap — into one contract.
+# Generic pattern; zero Korean law cite (R102+ generic catalog principle).
+
+# ── Priority order for fork-receivers ──
+# Adopt in order; earlier items are foundational.
+#   1. TEMPORAL-HALF-OPEN-001     (the interval convention — [validFrom, validTo))
+#   2. TEMPORAL-NON-OVERLAP-001   (DB range-exclusion backstop — the keystone)
+#   3. TEMPORAL-POINT-IN-TIME-001 (as-of query returns exactly the row in force)
+#   4. TEMPORAL-OPEN-CURRENT-001  (at most one open-ended current row per scope)
+#   5. TEMPORAL-OBSERVABILITY-001 (optional — bounded-cardinality counter)
+
+# ── RECIPE.md frontmatter example ──
+#   ---
+#   recipe: <pattern>
+#   temporal_validity_enabled: true
+#   temporal_interval_convention: half_open   # [validFrom, validTo)
+#   temporal_non_overlap_backstop: db_exclude_gist
+#   temporal_open_current: true               # valid_to NULL == in force now
+#   ---
+
+# ── Composition note ──
+# Distinct from content-versioning-l0 (SEQUENTIAL supersession via is_current,
+# NO [from,to) window — answers 'what is current' but NOT 'value in force on
+# date X'), from value-provenance PROVENANCE-PINNED-INPUT (single-row derived
+# value reproducibility), and from bounded-capacity-claim (a cardinality
+# COUNTER over a shared row — 'taken < capacity' — which is set-cardinality,
+# NOT interval geometry). booking-recipe BOOKING-INV-001 ('must not
+# double-book overlapping time windows') is interval geometry and belongs
+# here (TEMPORAL-NON-OVERLAP-001), NOT on the capacity counter.
+
+items:
+  - id: "TEMPORAL-HALF-OPEN-001"
+    chapter: "Validity is a HALF-OPEN [validFrom, validTo) interval"
+    requirement: >
+      A validity-windowed record MUST model its in-force period as a HALF-OPEN
+      interval [validFrom, validTo): the lower bound validFrom is INCLUSIVE
+      (the value is in force AT validFrom) and the upper bound validTo is
+      EXCLUSIVE (the value is NOT in force AT validTo — validTo is the instant
+      the NEXT value takes over). The persisted range MUST be expressed with
+      half-open bounds — in PostgreSQL, tstzrange(valid_from, valid_to, '[)').
+      A closed-closed [validFrom, validTo] convention is FORBIDDEN because it
+      makes two adjacent windows that touch at a shared instant (window A ending
+      12:00, window B starting 12:00) overlap at exactly 12:00, producing a
+      false collision and an ambiguous point-in-time answer (two rows claim
+      12:00). With half-open bounds the touching instant 12:00 belongs to
+      exactly ONE window (B), so adjacent rows are contiguous WITHOUT
+      overlapping and every instant maps to at most one in-force record. The
+      invariant: for a single scope key, the validity windows MUST tile time as
+      a set of non-overlapping half-open intervals where one window's validTo
+      equals the next window's validFrom.
+    test_method: "RestAssured integration test + adjacency boundary assertion (end == next start does NOT collide)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Half-open [) is the canonical temporal convention precisely so that
+      touching is not overlapping. Anchored to the Temporal database 'valid
+      time' semantics + PostgreSQL range types.
+      Quote anchor (Temporal database — valid time): "Valid time is the time
+      period during or event time at which a fact is true in the real world."
+      (https://en.wikipedia.org/wiki/Temporal_database)
+  - id: "TEMPORAL-NON-OVERLAP-001"
+    chapter: "No two records sharing a scope key may overlap — DB range-exclusion is the authoritative backstop"
+    requirement: >
+      For a given scope key (the entity the window belongs to — employee_id,
+      product_id, policy_id, resource_id), no two validity-windowed records may
+      have OVERLAPPING [validFrom, validTo) intervals. The AUTHORITATIVE
+      enforcement MUST be a database range-exclusion constraint, NOT a
+      service-layer pre-insert overlap SELECT. In PostgreSQL this is an
+      exclusion constraint — EXCLUDE USING gist (scope_key WITH =,
+      tstzrange(valid_from, valid_to, '[)') WITH &&) — which requires the
+      btree_gist extension so the scope_key equality (=) side can sit in the
+      same GiST index as the range overlap (&&) side. A service-layer
+      'SELECT ... WHERE ranges overlap; if none, INSERT' is FORBIDDEN as the
+      sole guard because it is a CWE-367 time-of-check/time-of-use race: between
+      the overlap SELECT and the INSERT a concurrent transaction can commit a
+      colliding window the first transaction's SELECT never saw, so both insert
+      and the history overlaps. The DB exclusion constraint closes the race in
+      one atomic check at COMMIT. A violation MUST surface as a deterministic
+      409 Conflict with an RFC 9457 body type=urn:problem:interval-overlap,
+      title=Validity interval overlaps an existing record, and a machine code
+      member INTERVAL_OVERLAP. This 409 INTERVAL_OVERLAP MUST be DISTINCT from
+      the 409 CAPACITY_EXHAUSTED of bounded-capacity-claim (a shared-counter
+      exhaustion, not interval geometry) and from the 412 Precondition Failed of
+      optimistic-locking (a stale If-Match validator) — three different
+      conflicts a client branches on differently.
+    test_method: "RestAssured integration test (overlapping insert → 409 INTERVAL_OVERLAP) + concurrent-insert race harness proving the DB EXCLUDE — not a pre-SELECT — is the guard"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The keystone invariant — a single-threaded test passes even on a broken
+      pre-insert SELECT; only the DB exclusion constraint closes the
+      concurrent TOCTOU window. Anchored to PostgreSQL Exclusion Constraints +
+      btree_gist + CWE-367.
+      Quote anchor (PostgreSQL 'Constraints' — Exclusion Constraints):
+      "Exclusion constraints ensure that if any two rows are compared on the
+      specified columns or expressions using the specified operators, at least
+      one of these operator comparisons will return false or null."
+      (https://www.postgresql.org/docs/current/ddl-constraints.html)
+      Quote anchor (PostgreSQL 'btree_gist'): "In addition to the typical
+      B-tree search operators, btree_gist also provides index support for <>
+      ('not equals'). This may be useful in combination with an exclusion
+      constraint, as described below."
+      (https://www.postgresql.org/docs/current/btree-gist.html)
+      Quote anchor (CWE-367): "The product checks the state of a resource
+      before using that resource, but the resource's state can change between
+      the check and the use in a way that invalidates the results of the
+      check." (https://cwe.mitre.org/data/definitions/367.html)
+  - id: "TEMPORAL-POINT-IN-TIME-001"
+    chapter: "Point-in-time (as-of) query returns EXACTLY the one row in force at date X"
+    requirement: >
+      An as-of / point-in-time query for a scope key at instant X MUST return
+      EXACTLY ONE record — the one whose half-open window contains X:
+      valid_from <= X AND (valid_to IS NULL OR X < valid_to). Because the
+      windows are non-overlapping (TEMPORAL-NON-OVERLAP-001) and half-open
+      (TEMPORAL-HALF-OPEN-001), this predicate matches at most one row; if X
+      precedes the earliest validFrom it matches zero rows (no value was yet in
+      force) and the API returns 404 / empty, never a guessed row. The query
+      MUST use the strict less-than on the upper bound (X < valid_to), never
+      X <= valid_to, so the instant a window closes belongs to its successor,
+      not to both. This is the capability content-versioning CANNOT provide: a
+      sequential is_current flag answers 'what is the value NOW' but cannot
+      answer 'what was the value in force on 2026-01-14', because it retains no
+      [from,to) window per historical row. Effective-dated temporal records can
+      reconstruct the value in force at any past, present, or future instant.
+    test_method: "RestAssured integration test (as-of X across boundary instants returns exactly one row; X before earliest returns empty)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      As-of reconstruction is the whole point of valid-time history. Anchored
+      to Temporal database 'valid time' + SCD Type 2.
+      Quote anchor (Slowly changing dimension — Type 2): "This method tracks
+      historical data by creating multiple records for a given natural key in
+      the dimensional tables with separate surrogate keys and/or different
+      version numbers." (https://en.wikipedia.org/wiki/Slowly_changing_dimension)
+  - id: "TEMPORAL-OPEN-CURRENT-001"
+    chapter: "At most ONE open-ended current row per scope key"
+    requirement: >
+      For each scope key there MUST be at most ONE open-ended current row — a
+      record whose valid_to IS NULL, meaning 'in force from valid_from with no
+      scheduled end, currently in force'. Writing a new effective record MUST
+      CLOSE the prior open row by setting its valid_to to the new record's
+      valid_from (the supersession is a single transaction: close-prior +
+      insert-new), so the two windows are contiguous half-open intervals and
+      never both NULL. A NULL valid_to is the open-ended sentinel; a
+      standardized far-future end date (e.g. 9999-12-31) is an acceptable
+      alternative encoding when the schema prefers a non-null upper bound, but
+      whichever sentinel is chosen, exactly one row per scope key may carry it.
+      The 'at most one open current' invariant SHOULD be backed by a partial
+      unique index — UNIQUE (scope_key) WHERE valid_to IS NULL — so the
+      database, not application code, forbids two simultaneously-open rows. A
+      future-dated effective record (valid_from in the future) is permitted and
+      does NOT close the current row until its validFrom arrives; the close is
+      scheduled by setting the current row's valid_to = future validFrom in the
+      same transaction.
+    test_method: "RestAssured integration test (insert effective record closes prior open row; partial unique index rejects two open rows for one scope key)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Open-ended current row is the SCD Type 2 'current tuple' marker.
+      Anchored to Slowly Changing Dimension Type 2.
+      Quote anchor (Slowly changing dimension — Type 2, current-row marker):
+      "The null End_Date in row two indicates the current tuple version."
+      (https://en.wikipedia.org/wiki/Slowly_changing_dimension)
+  - id: "TEMPORAL-OBSERVABILITY-001"
+    chapter: "관측 (bounded-cardinality temporal-write counter)"
+    requirement: >
+      Temporal-validity implementations SHOULD expose a single canonical
+      Micrometer counter temporal_write_total{record, outcome} where record is
+      a fixed entity-type enum (e.g. salary, price, coverage, config) and
+      outcome in {applied, interval_overlap}. The interval_overlap count is the
+      contention / data-quality signal a fork-receiver alerts on — a spike
+      means concurrent effective-dating collisions or a client sending
+      overlapping windows. Labels MUST exclude scope_key / entity_id / the
+      validFrom / validTo timestamps (no PII, no high-cardinality, no unbounded
+      temporal labels). SLO/alert wiring is a fork-receiver concern.
+    test_method: "Micrometer registry assertion"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Optional item — bounded labels keep the time-series count finite
+      (record is an enum, outcome is a 2-value enum). Anchored to OpenTelemetry
+      Semantic Conventions for HTTP metrics (low-cardinality attribute
+      guidance). Reference: OTel HTTP metrics semantic conventions
+      (https://opentelemetry.io/docs/specs/semconv/http/http-metrics/).
+      The cited page constrains specific attributes to low cardinality
+      per-metric; the record + outcome enums satisfy that constraint.

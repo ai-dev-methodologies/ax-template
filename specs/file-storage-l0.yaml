@@ -196,3 +196,42 @@ items:
       Reference: CWE-212 (Improper Removal of Sensitive Information Before Storage or Transfer),
       CWE-200, OWASP File Upload Cheat Sheet (image rewriting), OWASP ASVS V12.1.
     policy_ref: "blueprints/file-storage-manifest.yaml#upload"
+
+  - id: "FILE-INTEGRITY-001"
+    chapter: "INTEGRITY"
+    requirement: >
+      Every stored binary artifact (uploaded document, generated report export,
+      payslip/receipt PDF, avatar image) MUST record a content digest — the
+      SHA-256 of the exact persisted bytes — captured AT WRITE TIME and stored
+      alongside the storage key as an immutable column, and the download/read
+      path MUST be able to re-hash the bytes it is about to serve and compare
+      them against that stored digest, so that silent bit-rot, a partial/truncated
+      write, a wrong-object-returned mix-up, or at-rest tampering is DETECTED.
+      A digest mismatch on read is fail-closed: it is surfaced as an integrity
+      error (HTTP 500 with an RFC 7807 ProblemDetail, the corrupt bytes are NOT
+      streamed to the caller and the file is flagged for review), never a silent
+      serve. The invariant: stored bytes are served if and only if their SHA-256
+      still equals the digest recorded when they were written.
+    test_method: "RestAssured integration test"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Distinct from storage-reconciliation-l0 (RECON-* presence/orphan sweep —
+      does the blob still EXIST and is it still referenced): this item is about
+      INTEGRITY — are the bytes the right, unaltered bytes. Reconciliation can
+      report a blob present and a row pointing at it while the bytes have rotted
+      or been swapped; only a stored-at-write digest re-verified on read catches
+      that. Implementation: StoredFile carries a contentSha256 column written in
+      the same transaction as the storage key (immutable, @Column(updatable=false));
+      the upload pipeline computes the digest over the FINAL persisted byte stream
+      (after any re-encode/EXIF-strip from FILE-UPLOAD-004, so the digest matches
+      what is served, not the pre-transform input); the download path streams
+      through a DigestInputStream and aborts before flushing to the client if the
+      computed SHA-256 ≠ stored contentSha256. The digest is metadata only and is
+      never exposed in client-facing DTOs as a tamper oracle beyond an opaque
+      integrity-verified flag. Review-tier because the property is a structural
+      write-then-verify-on-read seam across the persistence + streaming layers,
+      not a single assertable runtime scalar. Reference: AWS S3 — Checking object
+      integrity (SHA-256 checksum validation), CWE-353 (Missing Support for
+      Integrity Check), OWASP ASVS V4.
+    policy_ref: "blueprints/file-storage-manifest.yaml#storage"
