@@ -20,7 +20,7 @@ upstream:
   - "https://datatracker.ietf.org/doc/html/rfc4122#section-6"
 evidence:
   - source_type: external
-    citation: "OWASP IDOR Prevention Cheat Sheet — Use of Complex, Random Identifiers"
+    citation: "OWASP IDOR Prevention Cheat Sheet — Mitigation (replace enumerable IDs with complex random identifiers)"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
     quote: "As an additional defense-in-depth measure, replace enumerable numeric identifiers with more complex, random identifiers."
     quoted_at: "2026-06-01"

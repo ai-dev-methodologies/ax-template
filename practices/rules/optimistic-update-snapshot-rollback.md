@@ -17,7 +17,7 @@ upstream:
   - "https://tanstack.com/query/latest/docs/framework/react/guides/mutations"
 evidence:
   - source_type: external
-    citation: "TanStack Query v5 — Optimistic Updates via the Cache"
+    citation: "TanStack Query v5 — Optimistic Updates (page introduction: two ways to optimistically update)"
     url: "https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates"
     quote: "React Query provides two ways to optimistically update your UI before a mutation has completed."
     quoted_at: "2026-05-25"

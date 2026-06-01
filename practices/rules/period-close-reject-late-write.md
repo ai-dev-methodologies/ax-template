@@ -19,7 +19,7 @@ upstream:
   - "https://cwe.mitre.org/data/definitions/367.html"
 evidence:
   - source_type: external
-    citation: "Wikipedia — Trial balance (closing the books / period close convention)"
+    citation: "Wikipedia — Trial balance, Normal Balances section (the act of closing the books)"
     url: "https://en.wikipedia.org/wiki/Trial_balance"
     quote: "The act of \"closing the books\" refers to zeroing out all the revenue and expense amounts at the end of an accounting period (typically a fiscal year) and adding the difference to the retained earnings account."
     quoted_at: "2026-06-01"

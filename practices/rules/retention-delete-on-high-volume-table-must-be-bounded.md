@@ -21,7 +21,7 @@ evidence:
     quote: "Dropping an individual partition using DROP TABLE, or doing ALTER TABLE DETACH PARTITION, is far faster than a bulk operation. These commands also entirely avoid the VACUUM overhead caused by a bulk DELETE."
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "PostgreSQL 16 Documentation — 5.12.1 Overview (Table Partitioning), planning data removal"
+    citation: "PostgreSQL 16 Documentation — 5.12.6 Best Practices for Declarative Partitioning (design so data removed at once sits in one partition for fast DETACH)"
     url: "https://www.postgresql.org/docs/current/ddl-partitioning.html"
     quote: "An entire partition can be detached fairly quickly, so it may be beneficial to design the partition strategy in such a way that all data to be removed at once is located in a single partition."
     quoted_at: "2026-06-01"

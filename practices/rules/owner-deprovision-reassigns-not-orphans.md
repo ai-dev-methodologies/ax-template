@@ -18,7 +18,7 @@ upstream:
   - "https://github.com/OWASP/ASVS/blob/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
 evidence:
   - source_type: external
-    citation: "NIST SP 800-53 Rev.5 — AC-2 Account Management (Discussion: account management aligned with personnel transfer/termination)"
+    citation: "NIST SP 800-53 Rev.5 — AC-2 Account Management (Control Statement item l / ac-2_smt.l: align account management with personnel transfer/termination)"
     url: "https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-2/"
     quote: "Align account management processes with personnel termination and transfer processes."
     quoted_at: "2026-06-01"

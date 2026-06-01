@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "385620f36b1ece99e78263c2bd827e225416a8b872ec74915d129972cf3e8fff"
+  source_concat_sha256: "72db3b0cf7e3c009fd53623036427b342b839d6af8792cc96894b7be356f82b3"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -6678,7 +6678,7 @@ upstream:
   - "https://tanstack.com/query/latest/docs/framework/react/guides/mutations"
 evidence:
   - source_type: external
-    citation: "TanStack Query v5 — Optimistic Updates via the Cache"
+    citation: "TanStack Query v5 — Optimistic Updates (page introduction: two ways to optimistically update)"
     url: "https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates"
     quote: "React Query provides two ways to optimistically update your UI before a mutation has completed."
     quoted_at: "2026-05-25"
@@ -6907,7 +6907,7 @@ upstream:
   - "https://github.com/OWASP/ASVS/blob/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
 evidence:
   - source_type: external
-    citation: "NIST SP 800-53 Rev.5 — AC-2 Account Management (Discussion: account management aligned with personnel transfer/termination)"
+    citation: "NIST SP 800-53 Rev.5 — AC-2 Account Management (Control Statement item l / ac-2_smt.l: align account management with personnel transfer/termination)"
     url: "https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-2/"
     quote: "Align account management processes with personnel termination and transfer processes."
     quoted_at: "2026-06-01"
@@ -7279,7 +7279,7 @@ upstream:
   - "https://cwe.mitre.org/data/definitions/367.html"
 evidence:
   - source_type: external
-    citation: "Wikipedia — Trial balance (closing the books / period close convention)"
+    citation: "Wikipedia — Trial balance, Normal Balances section (the act of closing the books)"
     url: "https://en.wikipedia.org/wiki/Trial_balance"
     quote: "The act of \"closing the books\" refers to zeroing out all the revenue and expense amounts at the end of an accounting period (typically a fiscal year) and adding the difference to the retained earnings account."
     quoted_at: "2026-06-01"
@@ -8325,7 +8325,7 @@ evidence:
     quote: "The CYCLE clause specifies first the list of columns to track for cycle detection, then a column name that will show whether a cycle has been detected, and finally the name of another column that will track the path."
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "PostgreSQL Documentation — 7.8. WITH Queries (Common Table Expressions), §7.8.4 Limiting Recursion Depth"
+    citation: "PostgreSQL Documentation — 7.8. WITH Queries (Common Table Expressions), §7.8.2.2 Cycle Detection (LIMIT-in-parent loop-testing trick)"
     url: "https://www.postgresql.org/docs/current/queries-with.html"
     quote: "A helpful trick for testing queries when you are not certain if they might loop is to place a LIMIT in the parent query."
     quoted_at: "2026-06-01"
@@ -8444,7 +8444,7 @@ upstream:
   - "https://datatracker.ietf.org/doc/html/rfc4122#section-6"
 evidence:
   - source_type: external
-    citation: "OWASP IDOR Prevention Cheat Sheet — Use of Complex, Random Identifiers"
+    citation: "OWASP IDOR Prevention Cheat Sheet — Mitigation (replace enumerable IDs with complex random identifiers)"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
     quote: "As an additional defense-in-depth measure, replace enumerable numeric identifiers with more complex, random identifiers."
     quoted_at: "2026-06-01"
@@ -9258,7 +9258,7 @@ evidence:
     quote: "Dropping an individual partition using DROP TABLE, or doing ALTER TABLE DETACH PARTITION, is far faster than a bulk operation. These commands also entirely avoid the VACUUM overhead caused by a bulk DELETE."
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "PostgreSQL 16 Documentation — 5.12.1 Overview (Table Partitioning), planning data removal"
+    citation: "PostgreSQL 16 Documentation — 5.12.6 Best Practices for Declarative Partitioning (design so data removed at once sits in one partition for fast DETACH)"
     url: "https://www.postgresql.org/docs/current/ddl-partitioning.html"
     quote: "An entire partition can be detached fairly quickly, so it may be beneficial to design the partition strategy in such a way that all data to be removed at once is located in a single partition."
     quoted_at: "2026-06-01"
@@ -10959,7 +10959,7 @@ evidence:
     quote: "The append-only property of each log is technically achieved using Merkle Trees, which can be used to show that any particular version of the log is a superset of any particular previous version."
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "NIST SP 800-92 — Guide to Computer Security Log Management, §3.2 Functions — Storage group, p.3-3 (Log file integrity checking bullet)"
+    citation: "NIST SP 800-92 — Guide to Computer Security Log Management, §3.2 Functions — Storage group (Log file integrity checking bullet)"
     url: "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf"
     quote: "If the log file is modified and its message digest is recalculated, it will not match the original message digest, indicating that the file has been altered."
     quoted_at: "2026-06-01"
@@ -11013,7 +11013,7 @@ Verification: review the entry mapping and the sole-writer/verify routine — co
 
 Reference: [RFC 6962 — Certificate Transparency (append-only Merkle/hash-chained log)](https://datatracker.ietf.org/doc/html/rfc6962)
 
-Reference: [NIST SP 800-92 — Guide to Computer Security Log Management §3.2 Storage, p.3-3 (message-digest detection of log alteration)](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf)
+Reference: [NIST SP 800-92 — Guide to Computer Security Log Management §3.2 Storage (message-digest detection of log alteration)](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf)
 
 
 <!-- @source rules/temporal-validity-record-non-overlap.md -->

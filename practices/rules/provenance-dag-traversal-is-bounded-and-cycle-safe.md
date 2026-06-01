@@ -27,7 +27,7 @@ evidence:
     quote: "The CYCLE clause specifies first the list of columns to track for cycle detection, then a column name that will show whether a cycle has been detected, and finally the name of another column that will track the path."
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "PostgreSQL Documentation — 7.8. WITH Queries (Common Table Expressions), §7.8.4 Limiting Recursion Depth"
+    citation: "PostgreSQL Documentation — 7.8. WITH Queries (Common Table Expressions), §7.8.2.2 Cycle Detection (LIMIT-in-parent loop-testing trick)"
     url: "https://www.postgresql.org/docs/current/queries-with.html"
     quote: "A helpful trick for testing queries when you are not certain if they might loop is to place a LIMIT in the parent query."
     quoted_at: "2026-06-01"
