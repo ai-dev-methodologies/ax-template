@@ -26,7 +26,7 @@ evidence:
     quote: "An entire partition can be detached fairly quickly, so it may be beneficial to design the partition strategy in such a way that all data to be removed at once is located in a single partition."
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "GitLab Development Documentation — Iterating tables in batches (EachBatch), bounded iteration keeps each step within the statement timeout"
+    citation: "GitLab Development Documentation — Iterating tables in batches, the 'Slow iteration' subsection (under 'Improve filtering with each_batch'): PK-index iteration is safe from statement timeouts"
     url: "https://docs.gitlab.com/development/database/iterating_tables_in_batches/"
     quote: "The iteration uses the primary key index (on the id column) which makes it safe from statement timeouts."
     quoted_at: "2026-06-01"
