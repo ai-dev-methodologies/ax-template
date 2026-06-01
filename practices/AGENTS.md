@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "8fe41dad88a03b58433e73af0c582da46192db996b66eb606446680fe270e124"
-  rule_count: 126
+  source_concat_sha256: "3f4f2e2ef2c4257d78323773f6751891ded289218c68220e550f8a9e082603b8"
+  rule_count: 128
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -6307,6 +6307,132 @@ Reference: [Figma Engineering — Realtime editing of ordered sequences (fractio
 Reference: [CWE-362 — Race Condition](https://cwe.mitre.org/data/definitions/362.html)
 
 
+<!-- @source rules/owner-deprovision-reassigns-not-orphans.md -->
+
+---
+title: Deprovisioning a record owner MUST reassign their rows to a named successor — never orphan them
+impact: HIGH
+impactDescription: "When a principal is offboarded, any row that still points at them via owner_id / created_by / assignee becomes unreachable: no live owner can list, edit, or govern it, and it silently evades owner-scoped authorization and retention sweeps. The records do not disappear — they become un-owned liabilities."
+tags:
+  - ownership-transfer
+  - offboarding
+  - account-lifecycle
+  - authz
+  - data-integrity
+spec_ref: "specs/ownership-transfer-l0.yaml#TRANSFER-REASSIGN-001"
+verification:
+  type: review
+  source: "specs/ownership-transfer-l0.yaml#TRANSFER-REASSIGN-001"
+  pattern: "Deprovision handler reassigns every owner_id == departing-principal row to an explicitly-named active successor in one @Transactional; a request without a successor is rejected (400 TRANSFER_SUCCESSOR_REQUIRED); post-transfer zero rows remain owned by the departed principal. owner_id is never nulled and never left pointing at the inactive principal."
+upstream:
+  - "https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-2/"
+  - "https://github.com/OWASP/ASVS/blob/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
+evidence:
+  - source_type: external
+    citation: "NIST SP 800-53 Rev.5 — AC-2 Account Management (Discussion: account management aligned with personnel transfer/termination)"
+    url: "https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-2/"
+    quote: "Align account management processes with personnel termination and transfer processes."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP ASVS v4.0.3 — V4.1.3 General Access Control Design (principle of least privilege)"
+    url: "https://github.com/OWASP/ASVS/blob/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
+    quote: "Verify that the principle of least privilege exists - users should only be able to access functions, data files, URLs, controllers, services, and other resources, for which they possess specific authorization."
+    quoted_at: "2026-06-01"
+---
+
+## Deprovisioning a record owner MUST reassign their rows to a named successor — never orphan them
+
+**Impact: HIGH — orphaned-on-departure rows are silent, unreachable liabilities**
+
+Many domains attach a record to the principal who owns it: a course to its
+author, an approval line to its manager, a ticket to its agent, a listing to
+its seller. The owner reference (`owner_id` / `created_by` / `assignee`) is
+what owner-scoped authorization, owner-filtered list queries, and ownership
+retention sweeps all key on. When that principal is offboarded, deactivated,
+or moved out of the tenant, the records they owned do not move with them.
+If the deprovision path forgets them, they are left pointing at a principal
+who can no longer act — un-owned, unreachable, and outside every governance
+loop that assumed a live owner.
+
+The two tempting wrong fixes are both defects. **Nulling `owner_id`** turns
+the rows into genuine orphans that no owner-scoped query will ever surface.
+**Leaving `owner_id` pointing at the now-inactive principal** keeps the rows
+out of any active owner's reach and breaks owner-based authorization (the
+gate evaluates against a principal who is gone). The correct handoff is a
+*reassignment to a named, active successor*: the caller MUST say where the
+records go, and the server moves all of them in one transaction.
+
+NIST SP 800-53 AC-2 ties account lifecycle directly to personnel transfer —
+account management must be aligned with the transfer process, not an
+afterthought triggered later. The least-privilege principle (ASVS V4.1.3)
+adds the second constraint: the successor inherits exactly the records being
+handed off, named explicitly, never a wildcard sweep that widens their
+access beyond the departing owner's set.
+
+This rule is the REASSIGN keystone of `specs/ownership-transfer-l0.yaml`
+(`backend_only`). It is distinct from data-subject-rights: there the leaver
+is the data *subject* exercising rights over *their own* personal data; here
+the leaver is the record *owner* and the obligation is to keep the business
+records they owned reachable under a successor.
+
+**Incorrect — deprovision nulls the owner (orphans) or leaves the dead owner in place:**
+
+```java
+// ❌ Orphans every owned row — no live owner-scoped query will find them again.
+@Transactional
+public void deprovision(UUID departingId) {
+    courseRepo.clearOwner(departingId);   // UPDATE course SET owner_id = NULL WHERE owner_id = ?
+    // approvals, tickets, listings owned by departingId are simply forgotten.
+}
+
+// ❌ Or: deactivate the principal but leave owner_id pointing at them.
+// The rows now belong to a principal who can never act on them again,
+// and owner-based @PreAuthorize evaluates against a ghost.
+principalRepo.deactivate(departingId);    // owned rows untouched
+```
+
+**Correct — reassign every owned row to a named, active successor in one transaction:**
+
+```java
+@Transactional
+public OwnershipTransferResult deprovision(UUID departingId, UUID successorId, Principal actor) {
+    // 1. A successor MUST be named — refuse to proceed without one.
+    if (successorId == null) {
+        throw new OwnershipTransferException(SUCCESSOR_REQUIRED); // -> 400 TRANSFER_SUCCESSOR_REQUIRED
+    }
+    // 2. Successor must be active + same tenant + not the leaver (TRANSFER-AUTHZ-001).
+    Principal successor = principalRepo.findActiveInTenant(successorId, tenantOf(departingId))
+        .orElseThrow(() -> new OwnershipTransferException(SUCCESSOR_INACTIVE_OR_FOREIGN));
+    if (successor.id().equals(departingId)) {
+        throw new OwnershipTransferException(SUCCESSOR_IS_LEAVER);
+    }
+    // 3. Reassign ALL owned rows across every owning module — one transaction.
+    int moved = 0;
+    moved += courseRepo.reassignOwner(departingId, successorId);
+    moved += approvalRepo.reassignOwner(departingId, successorId);
+    moved += listingRepo.reassignOwner(departingId, successorId);
+    // 4. Audit inside the SAME transaction (from/to/actor/count) — never PII.
+    auditLog.record("OWNERSHIP_TRANSFER", Map.of(
+        "from_owner", departingId.toString(),
+        "to_owner",   successorId.toString(),
+        "actor",      actor.getName(),
+        "count",      moved));
+    // 5. Invariant: zero rows may remain owned by the departed principal.
+    assert courseRepo.countByOwner(departingId) == 0;
+    return new OwnershipTransferResult(departingId, successorId, moved);
+}
+```
+
+Verification: review that the deprovision handler reassigns every
+`owner_id == departing-principal` row to an explicitly-named active successor
+in one `@Transactional`, rejects a successor-less request with 400, and
+leaves zero rows owned by the departed principal — `owner_id` is never nulled
+and never left on the inactive principal (`specs/ownership-transfer-l0.yaml#TRANSFER-REASSIGN-001`).
+
+Reference: [NIST SP 800-53 Rev.5 — AC-2 Account Management](https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-2/)
+Reference: [OWASP ASVS v4.0.3 — V4.1 Access Control](https://github.com/OWASP/ASVS/blob/v4.0.3/4.0/en/0x12-V4-Access-Control.md)
+
+
 <!-- @source rules/payment-iso-4217-currency.md -->
 
 ---
@@ -6393,6 +6519,169 @@ Reference: [ISO 4217 — Codes for the representation of currencies](https://www
 
 Reference: [java.util.Currency — Java SE 21 API documentation](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Currency.html)
 
+
+<!-- @source rules/per-subject-marker-entity-idempotent.md -->
+
+---
+title: A per-(subject, target) marker / junction entity MUST be idempotent on its natural key — UNIQUE constraint + no-op duplicate-create + no-op absent-delete
+impact: HIGH
+impactDescription: "Without a DB UNIQUE(subject, target) constraint two concurrent toggles double-insert the marker, breaking COUNT-based UI and read-state. Returning 409 on a duplicate create or 404 on an absent delete turns the idempotent toggle into a stateful protocol the client must track, and the toggle silently fails under retry."
+tags:
+  - idempotency
+  - junction-entity
+  - marker-entity
+  - unique-constraint
+  - findOrCreate
+  - on-conflict-do-nothing
+  - retry-safety
+spec_ref: "specs/idempotency-l0.yaml#IDEMPOTENCY-MARKER-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/favoritesbookmarks/Favorite.java"
+  pattern: "@Table(uniqueConstraints = @UniqueConstraint(columnNames = {user_id, entity_type, entity_id})); FavoriteService.add() is find-or-create returning the existing row (200) on a duplicate, not 409; DELETE issues a row-count-ignoring delete that returns 204 whether or not a row existed. Same shape verifiable in SessionRecord (UNIQUE(user_id, jti)), ActivityRead, TagAttachment."
+upstream:
+  - "https://www.postgresql.org/docs/current/sql-insert.html"
+  - "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
+  - "https://www.oreilly.com/library/view/the-pragmatic-programmer/020161622X/"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL Documentation — INSERT, ON CONFLICT clause. DO NOTHING avoids inserting a row when an arbiter unique constraint or unique index named by conflict_target is violated, making a duplicate insert a silent no-op."
+    url: "https://www.postgresql.org/docs/current/sql-insert.html"
+    quote: "ON CONFLICT DO NOTHING simply avoids inserting a row as its alternative action."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "IETF draft-ietf-httpapi-idempotency-key-header-07 — The Idempotency-Key HTTP Header Field, Introduction. Establishes that an idempotency key is a unique value the resource uses to recognize retries; a per-(subject,target) marker uses its natural key as that recognizer instead of a client-supplied header."
+    url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
+    quote: "An idempotency key is a unique value generated by the client which the resource uses to recognize subsequent retries of the same request."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Hunt & Thomas — The Pragmatic Programmer (2nd ed) §7 The Evils of Duplication. The rule of three (extract on the third copy) justifies promoting this invariant to a named catalog rule after ~17 independent L4 implementations converged on the same marker shape."
+    url: "https://www.oreilly.com/library/view/the-pragmatic-programmer/020161622X/"
+    quote: "Every piece of knowledge must have a single, unambiguous, authoritative representation within a system."
+    quoted_at: "2026-06-01"
+---
+
+## A per-(subject, target) marker / junction entity MUST be idempotent on its natural key — UNIQUE constraint + no-op duplicate-create + no-op absent-delete
+
+**Impact: HIGH — a marker toggle that is not idempotent on its natural key silently corrupts counts and fails under the retries it is most likely to receive**
+
+A *marker* or *junction* entity records that one subject stands in a binary
+relationship to one target: a read-receipt (user read notification),
+a favorite/bookmark (user saved article), an RSVP (user attending event),
+a vote/like (user upvoted comment), a progress-marker (user completed lesson),
+a watch/follow (user follows author), a session-record (login bound to a JWT
+`jti`). The entity carries **no mutable business state beyond its own
+existence** — existence *is* the payload. That single fact dictates its
+concurrency and HTTP semantics, and they differ from both a header-keyed
+idempotent POST (IDEMPOTENCY-CONCURRENT-001) and a mutable-resource
+optimistic-lock (OPTLOCK-*): here the **natural key is the idempotency key**.
+
+This invariant has been re-implemented ~17 times across the L4 catalog —
+`Favorite` on `UNIQUE(user_id, entity_type, entity_id)`, `ActivityRead`,
+`SessionRecord` on `UNIQUE(user_id, jti)`, `TagAttachment`, comment-read,
+vote — each converging on the same three obligations. Per the rule of three
+(`promote-on-third-use.md`), the shape is promoted here to one named rule so
+the next marker the catalog adds inherits it instead of re-deriving it.
+
+Three obligations, none optional:
+
+1. **DB-level `UNIQUE(subject_id, target_type, target_id)`.** The unique
+   constraint — not a service-layer `existsBy...` check — is the race
+   backstop. Two concurrent toggles both pass an application-level
+   existence check and both `INSERT`; only the DB constraint stops the
+   double-row. (When the target is monomorphic the pair collapses, e.g.
+   `UNIQUE(user_id, jti)`.)
+2. **Duplicate create is an idempotent no-op.** find-or-create /
+   `INSERT ... ON CONFLICT DO NOTHING` / upsert: the second create returns
+   the existing row with the **same success status** as the first
+   (200/201), never **409 Conflict**. 409 would force the client to track
+   marker state and branch on it — the opposite of a toggle.
+3. **Delete is an idempotent no-op.** Deleting an absent marker returns
+   **204**, never **404** (RFC 9110 §9.3.5: DELETE is idempotent). The
+   delete filters by `(subject, target)` and ignores the affected-row
+   count.
+
+**Incorrect — service-layer existence check (racy), 409 on duplicate, 404 on absent delete:**
+
+```java
+@Entity
+public class ReadReceipt {           // ❌ no UNIQUE(user_id, notification_id) — two toggles double-insert
+    @Id @GeneratedValue Long id;
+    String userId;
+    String notificationId;
+}
+
+public ReadReceipt mark(String userId, String notificationId) {
+    if (repo.existsByUserIdAndNotificationId(userId, notificationId)) {
+        throw new ConflictException();        // ❌ duplicate create → 409; retry of a dropped 200 now fails
+    }
+    return repo.save(new ReadReceipt(userId, notificationId)); // ❌ check-then-act race: both threads reach here
+}
+
+public void unmark(String userId, String notificationId) {
+    ReadReceipt r = repo.findByUserIdAndNotificationId(userId, notificationId)
+        .orElseThrow(NotFoundException::new); // ❌ absent delete → 404; double-tap unmark fails
+    repo.delete(r);
+}
+```
+
+**Correct — DB UNIQUE is the backstop; duplicate create is a no-op 2xx; absent delete is a no-op 204:**
+
+```java
+@Entity
+@Table(
+    name = "read_receipts",
+    uniqueConstraints = @UniqueConstraint(            // ✅ the race backstop lives in the DB
+        name = "uq_read_receipts_user_notification",
+        columnNames = {"user_id", "notification_id"}))
+public class ReadReceipt {
+    @Id @GeneratedValue Long id;
+    @Column(name = "user_id", nullable = false, updatable = false)      String userId;
+    @Column(name = "notification_id", nullable = false, updatable = false) String notificationId;
+    @Column(nullable = false, updatable = false) Instant markedAt;
+}
+
+public ReadReceipt mark(String userId, String notificationId) {
+    // find-or-create: second call returns the existing row, SAME status as first (no 409)
+    return repo.findByUserIdAndNotificationId(userId, notificationId)
+        .orElseGet(() -> repo.save(new ReadReceipt(userId, notificationId, Instant.now())));
+    // Concurrent racers that both miss the find still cannot double-insert:
+    // the UNIQUE constraint rejects the loser (catch + re-read, or rely on
+    // INSERT ... ON CONFLICT DO NOTHING at the SQL layer).
+}
+
+public void unmark(String userId, String notificationId) {
+    // row-count-ignoring delete: 204 whether or not a row existed (no 404)
+    repo.deleteByUserIdAndNotificationId(userId, notificationId);
+}
+```
+
+At the SQL layer the same guarantee is one statement:
+
+```sql
+INSERT INTO read_receipts (user_id, notification_id, marked_at)
+VALUES (:userId, :notificationId, now())
+ON CONFLICT (user_id, notification_id) DO NOTHING;   -- second insert is a silent no-op
+```
+
+The marker holds no mutable field beyond its existence, so there is no
+lost-update window and **no** `@Version` / `If-Match` precondition is needed
+— that machinery (OPTLOCK-*) is for resources whose body changes. Conversely,
+if a "marker" grows a mutable business field (e.g. an RSVP gains a
+`+1 guest count`), it stops being a pure marker and the optimistic-locking
+rules apply to that field; the natural-key idempotence still governs its
+creation.
+
+Verification: review `backend/.../favoritesbookmarks/Favorite.java` — the
+entity declares `@UniqueConstraint(columnNames = {user_id, entity_type, entity_id})`,
+`FavoriteService.add()` is find-or-create returning 200 (not 409) on the
+second call, and DELETE returns 204 regardless of prior existence; the same
+three-part shape is verifiable in `SessionRecord` (`UNIQUE(user_id, jti)`),
+`ActivityRead`, and `TagAttachment`.
+
+Reference: [PostgreSQL — INSERT, ON CONFLICT clause](https://www.postgresql.org/docs/current/sql-insert.html)
+Reference: [IETF draft-ietf-httpapi-idempotency-key-header — The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
+Reference: [Hunt & Thomas — The Pragmatic Programmer (2nd ed) §7 The Evils of Duplication](https://www.oreilly.com/library/view/the-pragmatic-programmer/020161622X/)
 
 <!-- @source rules/persistence-batch-inserts.md -->
 

@@ -125,3 +125,39 @@ items:
     notes: >
       OBSERVABILITY-002 standard item candidate (10-wave streak —
       9+1 with pagination-l0 R102 dual emission).
+
+
+  - id: "IDEMPOTENCY-MARKER-001"
+    chapter: "Per-(subject,target) marker / junction entity idempotence"
+    requirement: >
+      A per-(subject, target) marker / junction entity — read-receipt,
+      favorite/bookmark, RSVP, vote, progress-marker, watch/follow,
+      session-record, like — MUST be idempotent on its natural key, NOT on
+      a client-supplied Idempotency-Key. Three obligations: (a) the table
+      MUST carry a DB-level `UNIQUE(subject_id, target_type, target_id)`
+      constraint (the polymorphic pair `target_type/target_id` collapses
+      to a single column pair when the target is monomorphic, e.g.
+      `UNIQUE(user_id, jti)`); the constraint — not application code — is
+      the race backstop. (b) A duplicate create MUST be an idempotent
+      no-op: find-or-create / `INSERT ... ON CONFLICT DO NOTHING` / upsert
+      so the second create returns the existing row with the SAME success
+      status as a fresh create (200/201), NEVER 409 Conflict. (c) Delete
+      MUST be idempotent: deleting an absent marker is a 204 no-op, NEVER
+      404 (RFC 9110 §9.3.5 DELETE semantics). The marker carries no
+      mutable business state beyond its existence + timestamps, so there
+      is no lost-update window to protect — existence is the whole payload.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Distinct from IDEMPOTENCY-CONCURRENT-001 (header-keyed write-once)
+      and from OPTLOCK-* (mutable-resource lost-update). Here the natural
+      key IS the idempotency key. Anchored to PostgreSQL INSERT ... ON
+      CONFLICT (https://www.postgresql.org/docs/current/sql-insert.html)
+      + RFC 9110 §9.3.5 (DELETE idempotence)
+      (https://datatracker.ietf.org/doc/html/rfc9110#section-9.3.5).
+      Quote anchor (PostgreSQL INSERT, ON CONFLICT clause): "ON CONFLICT
+      DO NOTHING simply avoids inserting a row as its alternative action."
+      Reference implementations (rule-of-three satisfied ~17x across L4):
+      Favorite UNIQUE(user_id, entity_type, entity_id), ActivityRead,
+      SessionRecord UNIQUE(user_id, jti), TagAttachment.
