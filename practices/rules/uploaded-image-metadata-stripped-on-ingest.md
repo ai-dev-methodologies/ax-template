@@ -23,11 +23,6 @@ evidence:
     url: "https://cwe.mitre.org/data/definitions/212.html"
     quote: "Some formats have well-defined fields that could contain private data, such as Exchangeable image file format (Exif), which can contain potentially sensitive metadata such as geolocation, date, and time."
     quoted_at: "2026-06-01"
-  - source_type: external
-    citation: "OWASP File Upload Cheat Sheet — File Content Validation (image rewriting)"
-    url: "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
-    quote: "For images, applying image rewriting techniques destroys any kind of malicious content injected in an image - this could be done with randomization."
-    quoted_at: "2026-06-01"
 ---
 
 ## Strip embedded metadata from accepted raster images by re-encoding on ingest

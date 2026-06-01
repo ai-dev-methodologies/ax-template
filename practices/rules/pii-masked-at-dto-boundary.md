@@ -18,7 +18,7 @@ evidence:
   - source_type: external
     citation: "OWASP API Security Top 10 (2023) — API3:2023 Broken Object Property Level Authorization (replaces 2019's Excessive Data Exposure)"
     url: "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
-    quote: "Lack of or improper authorization validation at the object property level. This leads to information exposure or manipulation by unauthorized parties."
+    quote: "Unauthorized access to private/sensitive object properties may result in data disclosure, data loss, or data corruption."
     quoted_at: "2026-05-22"
   - source_type: external
     citation: "GDPR Article 25 — Data protection by design and by default"

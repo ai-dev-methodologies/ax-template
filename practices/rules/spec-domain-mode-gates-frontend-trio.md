@@ -18,11 +18,6 @@ upstream:
   - "https://www.rfc-editor.org/rfc/rfc2119"
 evidence:
   - source_type: external
-    citation: "OWASP ASVS V4 §1.2 — Authentication Architecture: applicable to all components, modules, frameworks, platforms, and operating systems; the architecture must be documented and approved before development."
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the authentication architecture is documented and approved before development."
-    quoted_at: "2026-05-26"
-  - source_type: external
     citation: "RFC 2119 — Key words for use in RFCs to Indicate Requirement Levels"
     url: "https://www.rfc-editor.org/rfc/rfc2119"
     quote: "MUST. This word, or the terms REQUIRED or SHALL, mean that the definition is an absolute requirement of the specification."

@@ -22,11 +22,6 @@ evidence:
     url: "https://cwe.mitre.org/data/definitions/209.html"
     quote: "The product generates an error message that includes sensitive information about its environment, users, or associated data. ... An attacker can use the additional information provided in error messages to mount attacks targeted on the specific environment or configuration."
     quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "OWASP ASVS V14.3 — Unintended Security Disclosure"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the application does not output debug or error messages to console, logs, or HTTP responses that contain sensitive information such as session identifiers, credentials, or PII."
-    quoted_at: "2026-05-25"
 ---
 
 ## Server-supplied stored error strings MUST pass a PII / secret deny-list at the render layer

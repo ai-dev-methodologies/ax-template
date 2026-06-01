@@ -22,11 +22,6 @@ evidence:
     url: "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
     quote: "Authorization checks for a function or resource are usually managed via configuration, and sometimes at the code level. Implementing proper checks can be a confusing task, since modern applications can contain many types of roles or groups and complex user hierarchy (e.g., sub-users, users with more than one role)."
     quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "OWASP ASVS V4 — Access Control (least privilege principle)"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the principle of least privilege exists — users should only be able to access functions, data files, URLs, controllers, services, and other resources, for which they possess specific authorization."
-    quoted_at: "2026-05-25"
 ---
 
 ## RBAC role stub MUST default to least-privilege role — never 'admin' in dev

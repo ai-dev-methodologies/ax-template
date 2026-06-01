@@ -20,11 +20,6 @@ evidence:
     url: "https://gdpr-info.eu/art-5-gdpr/"
     quote: "Personal data shall be processed lawfully, fairly and in a transparent manner in relation to the data subject."
     quoted_at: "2026-05-22"
-  - source_type: external
-    citation: "OWASP ASVS V8.3.4 — Verify that sensitive personal information is subject to data retention classification"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that sensitive personal information is subject to data retention classification, such that old or out of date data is deleted automatically, on a schedule, or as the situation requires."
-    quoted_at: "2026-05-22"
 ---
 
 ## ROLE_ADMIN may MODERATE (delete) but MUST NOT rewrite user-authored content

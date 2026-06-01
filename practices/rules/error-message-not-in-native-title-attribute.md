@@ -21,11 +21,6 @@ evidence:
     url: "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
     quote: "In content implemented using markup languages, status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus."
     quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "OWASP ASVS V8.3 — Sensitive Private Data"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that sensitive information is not transmitted via URL parameters or hidden form fields and is sanitized or removed when no longer required."
-    quoted_at: "2026-05-25"
 ---
 
 ## Mutation error messages MUST NOT render in the native `title` tooltip

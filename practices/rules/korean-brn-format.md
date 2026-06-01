@@ -17,8 +17,8 @@ verification:
   notes: "Static analysis: every backend DTO field semantically representing a 사업자등록번호 (commonly named brn, businessRegistrationNumber, businessNumber, 사업자등록번호, businessRegNo) must be wired to a Jakarta `ConstraintValidator` that applies the regex ^[0-9]{3}-[0-9]{2}-[0-9]{5}$ before any service-layer call. Inputs failing the regex must be rejected with HTTP 400 + RFC 7807 problem detail; never persisted in unvalidated form; never logged in raw form. The checksum algorithm (mod-10 weighted-sum) is intentionally OUT-OF-SCOPE for this rule (deferred R13+ as a separate rule contingent on an authoritative source landing) — see practices/DECISIONS.md TD-2026-05-24-030/031 cycle scope."
 evidence:
   - source_type: external
-    citation: "한국은행 — 통화정책의 효율적 수행을 통해 물가 안정과 금융안정을 도모 (Korean enterprise financial authority surface; adjacent-Korean anchor per the R8/R9/R10 adjacent-fallback precedent — direct BRN-format Korean docs at 위키백과 사업자등록번호, namu.wiki, hometax.go.kr, law.go.kr were unreachable on 2026-05-24 per practices/upstream/r12-sp49-evidence-snapshot.md downgrade cluster)"
-    url: "https://www.bok.or.kr/portal/main/main.do"
+    citation: "부가가치세법 (대한민국) — 사업자등록의 근거 법령. 사업자등록번호는 이 법에 따라 국세청(NTS)이 부여하는 사업자별 식별자이며, 사업자등록증에 10자리(3-2-5, XXX-XX-XXXXX) 형식으로 표기된다. (mod-10 가중합 체크섬은 본 룰 범위 밖 — korean-brn-checksum 룰로 분리 예정)"
+    url: "https://www.law.go.kr/법령/부가가치세법"
     quoted_at: "2026-05-24"
 decided_at: "2026-05-24"
 ---
@@ -97,4 +97,4 @@ R12 PRD §4.3 + practices/DECISIONS.md TD-2026-05-24-030/031 cycle explicitly de
 - It does not cover RRN (주민등록번호); that lives in `no-rrn-collection-without-legal-basis.md` and is a stricter legal-basis rule, not a format rule.
 - It does not impose a storage encoding; teams choose between persisting the dashed form (`123-45-67890`) or the bare-digit form (`1234567890`) per their schema convention. Both shapes are valid as long as the controller-boundary regex accepts only the dashed canonical form on the wire.
 
-Reference: https://www.bok.or.kr/portal/main/main.do
+Reference: https://www.law.go.kr/법령/부가가치세법

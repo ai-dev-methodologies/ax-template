@@ -14,19 +14,19 @@ verification:
   source: "backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java"
   pattern: "row.markFailure(EmailPiiHelper.sanitizeReason(trimmed), now, ...) — sender exception scrubbed BEFORE persist, not only at render"
 upstream:
-  - "https://owasp.org/www-project-application-security-verification-standard/"
+  - "https://cwe.mitre.org/data/definitions/359.html"
   - "https://cwe.mitre.org/data/definitions/532.html"
 evidence:
   - source_type: external
-    citation: "OWASP ASVS V8 — Data Protection"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify the application minimizes the number of parameters in a request, such as hidden fields, AJAX variables, cookies and header values."
-    quoted_at: "2026-05-26"
+    citation: "CWE-359 — Exposure of Private Personal Information to an Unauthorized Actor"
+    url: "https://cwe.mitre.org/data/definitions/359.html"
+    quote: "The product does not properly prevent a person's private, personal information from being accessed by actors who either (1) are not explicitly authorized to access the information or (2) do not have the implicit consent of the person about whom the information is collected."
+    quoted_at: "2026-06-01"
   - source_type: external
     citation: "CWE-532 — Insertion of Sensitive Information into Log File"
     url: "https://cwe.mitre.org/data/definitions/532.html"
-    quote: "Information written to log files can be of a sensitive nature and give valuable guidance to an attacker or expose sensitive user information."
-    quoted_at: "2026-05-26"
+    quote: "The product writes sensitive information to a log file."
+    quoted_at: "2026-06-01"
 ---
 
 ## Stored error columns MUST be PII-sanitized at storage time — render-layer scrub alone is insufficient
@@ -93,7 +93,7 @@ catch (EmailSendException ex) {
 }
 ```
 
-Reference: [OWASP ASVS V8 — Data Protection](https://owasp.org/www-project-application-security-verification-standard/)
+Reference: [CWE-359 — Exposure of Private Personal Information to an Unauthorized Actor](https://cwe.mitre.org/data/definitions/359.html)
 Reference: [CWE-532 — Insertion of Sensitive Information into Log File](https://cwe.mitre.org/data/definitions/532.html)
 
 ## How to apply

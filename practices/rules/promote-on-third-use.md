@@ -19,13 +19,8 @@ upstream:
 evidence:
   - source_type: external
     citation: "Hunt & Thomas — The Pragmatic Programmer (2nd ed) §7 The Evils of Duplication: 'Every piece of knowledge must have a single, unambiguous, authoritative representation within a system.' The rule of three (extract on the third copy) is the practical operationalization."
-    url: "https://www.oreilly.com/library/view/the-pragmatic-programmer/020161622X/"
+    url: "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
     quote: "Every piece of knowledge must have a single, unambiguous, authoritative representation within a system."
-    quoted_at: "2026-05-26"
-  - source_type: external
-    citation: "Software Engineering at Google — Chapter 9 Code Review: review velocity drops when duplicate logic needs synchronized changes across multiple modules; consolidate when the parallel-edit cost crosses the maintenance threshold."
-    url: "https://abseil.io/resources/swe-book"
-    quote: "Code that is duplicated tends to drift; the cost of keeping copies in sync compounds with each call site that needs the same fix applied."
     quoted_at: "2026-05-26"
 ---
 

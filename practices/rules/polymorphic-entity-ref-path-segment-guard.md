@@ -17,11 +17,6 @@ upstream:
   - "https://cwe.mitre.org/data/definitions/22.html"
 evidence:
   - source_type: external
-    citation: "OWASP API Security Top 10 (2023) — API1:2023 Broken Object Level Authorization"
-    url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
-    quote: "Object level authorization is an access control mechanism that is usually implemented at the code level to validate that one user can only access objects that they should have access to."
-    quoted_at: "2026-05-25"
-  - source_type: external
     citation: "CWE-22 — Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
     url: "https://cwe.mitre.org/data/definitions/22.html"
     quote: "The product uses external input to construct a pathname that is intended to identify a file or directory that is located underneath a restricted parent directory, but the product does not properly neutralize special elements within the pathname that can cause the pathname to resolve to a location that is outside of the restricted directory."

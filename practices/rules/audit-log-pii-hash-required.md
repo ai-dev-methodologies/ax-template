@@ -25,7 +25,7 @@ evidence:
   - source_type: external
     citation: "RFC 6234 — US Secure Hash Algorithms (SHA-256 deterministic hash for correlation tokens)"
     url: "https://www.rfc-editor.org/rfc/rfc6234"
-    quote: "SHA-256 is a secure hash algorithm. The use of this algorithm enables determination of a message's integrity: any change to the message will, with a very high probability, result in a different message digest."
+    quote: "Any change to a message in transit will, with very high probability, result in a different message digest."
     quoted_at: "2026-05-26"
 ---
 

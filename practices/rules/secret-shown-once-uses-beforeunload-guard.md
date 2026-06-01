@@ -23,11 +23,6 @@ evidence:
     url: "https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event"
     quote: "The beforeunload event is fired when the current window, contained document, and associated resources are about to be unloaded. ... To trigger the dialog, an event handler in the page should call the preventDefault() method on the event."
     quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "OWASP ASVS V2.10 — Service Authentication Requirements"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that passwords are stored in a form that is resistant to offline attacks. ... Passwords SHALL be salted and hashed using an approved one-way key derivation."
-    quoted_at: "2026-05-25"
 ---
 
 ## One-time-revealed plaintext secrets MUST wire beforeunload guard for the duration of the reveal panel

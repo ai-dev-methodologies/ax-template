@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "4010ac623dfe1a6592de1d4fa26a848dfeeabadd9e351888f2cc2cce6fc6be19"
+  source_concat_sha256: "d74bcf3a0ccac26c9e797d4fc5f8970cbb5fc66c5b5789a59f69e38cd6601b13"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -261,11 +261,6 @@ evidence:
     citation: "GDPR Article 5(1)(a) — Lawfulness, fairness and transparency"
     url: "https://gdpr-info.eu/art-5-gdpr/"
     quote: "Personal data shall be processed lawfully, fairly and in a transparent manner in relation to the data subject."
-    quoted_at: "2026-05-22"
-  - source_type: external
-    citation: "OWASP ASVS V8.3.4 — Verify that sensitive personal information is subject to data retention classification"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that sensitive personal information is subject to data retention classification, such that old or out of date data is deleted automatically, on a schedule, or as the situation requires."
     quoted_at: "2026-05-22"
 ---
 
@@ -780,7 +775,7 @@ evidence:
   - source_type: external
     citation: "RFC 6234 — US Secure Hash Algorithms (SHA-256 deterministic hash for correlation tokens)"
     url: "https://www.rfc-editor.org/rfc/rfc6234"
-    quote: "SHA-256 is a secure hash algorithm. The use of this algorithm enables determination of a message's integrity: any change to the message will, with a very high probability, result in a different message digest."
+    quote: "Any change to a message in transit will, with very high probability, result in a different message digest."
     quoted_at: "2026-05-26"
 ---
 
@@ -3325,11 +3320,6 @@ evidence:
     url: "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
     quote: "In content implemented using markup languages, status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus."
     quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "OWASP ASVS V8.3 — Sensitive Private Data"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that sensitive information is not transmitted via URL parameters or hidden form fields and is sanitized or removed when no longer required."
-    quoted_at: "2026-05-25"
 ---
 
 ## Mutation error messages MUST NOT render in the native `title` tooltip
@@ -3671,11 +3661,6 @@ evidence:
     citation: "OWASP API Security Top 10 (2019) — API3:2019 Excessive Data Exposure (the failure mode merged into API3:2023)"
     url: "https://owasp.org/API-Security/editions/2019/en/0xa3-excessive-data-exposure/"
     quote: "APIs rely on clients to perform the data filtering."
-    quoted_at: "2026-06-01"
-  - source_type: external
-    citation: "OWASP ASVS v4.0.3 — V4.1.3 Access Control (least privilege)"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the principle of least privilege exists - users should only be able to access functions, data files, URLs, controllers, services, and other resources, for which they possess specific authorization."
     quoted_at: "2026-06-01"
 ---
 
@@ -4130,10 +4115,6 @@ evidence:
     citation: "Stripe API Reference — Idempotent requests: all POST requests accept an Idempotency-Key header to guarantee exactly-once delivery"
     url: "https://docs.stripe.com/api/idempotent_requests"
     quoted_at: "2026-05-18"
-  - source_type: external
-    citation: "AWS API Gateway — Idempotency tokens for preventing duplicate requests in stateful operations"
-    url: "https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-routes.html"
-    quoted_at: "2026-05-18"
 decided_at: "2026-05-18"
 ---
 
@@ -4543,8 +4524,8 @@ verification:
   notes: "Static analysis: every backend DTO field semantically representing a 사업자등록번호 (commonly named brn, businessRegistrationNumber, businessNumber, 사업자등록번호, businessRegNo) must be wired to a Jakarta `ConstraintValidator` that applies the regex ^[0-9]{3}-[0-9]{2}-[0-9]{5}$ before any service-layer call. Inputs failing the regex must be rejected with HTTP 400 + RFC 7807 problem detail; never persisted in unvalidated form; never logged in raw form. The checksum algorithm (mod-10 weighted-sum) is intentionally OUT-OF-SCOPE for this rule (deferred R13+ as a separate rule contingent on an authoritative source landing) — see practices/DECISIONS.md TD-2026-05-24-030/031 cycle scope."
 evidence:
   - source_type: external
-    citation: "한국은행 — 통화정책의 효율적 수행을 통해 물가 안정과 금융안정을 도모 (Korean enterprise financial authority surface; adjacent-Korean anchor per the R8/R9/R10 adjacent-fallback precedent — direct BRN-format Korean docs at 위키백과 사업자등록번호, namu.wiki, hometax.go.kr, law.go.kr were unreachable on 2026-05-24 per practices/upstream/r12-sp49-evidence-snapshot.md downgrade cluster)"
-    url: "https://www.bok.or.kr/portal/main/main.do"
+    citation: "부가가치세법 (대한민국) — 사업자등록의 근거 법령. 사업자등록번호는 이 법에 따라 국세청(NTS)이 부여하는 사업자별 식별자이며, 사업자등록증에 10자리(3-2-5, XXX-XX-XXXXX) 형식으로 표기된다. (mod-10 가중합 체크섬은 본 룰 범위 밖 — korean-brn-checksum 룰로 분리 예정)"
+    url: "https://www.law.go.kr/법령/부가가치세법"
     quoted_at: "2026-05-24"
 decided_at: "2026-05-24"
 ---
@@ -4623,7 +4604,7 @@ R12 PRD §4.3 + practices/DECISIONS.md TD-2026-05-24-030/031 cycle explicitly de
 - It does not cover RRN (주민등록번호); that lives in `no-rrn-collection-without-legal-basis.md` and is a stricter legal-basis rule, not a format rule.
 - It does not impose a storage encoding; teams choose between persisting the dashed form (`123-45-67890`) or the bare-digit form (`1234567890`) per their schema convention. Both shapes are valid as long as the controller-boundary regex accepts only the dashed canonical form on the wire.
 
-Reference: https://www.bok.or.kr/portal/main/main.do
+Reference: https://www.law.go.kr/법령/부가가치세법
 
 
 <!-- @source rules/korean-vat-10-percent-calculation.md -->
@@ -7175,11 +7156,6 @@ evidence:
     url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
     quote: "An idempotency key is a unique value generated by the client which the resource uses to recognize subsequent retries of the same request."
     quoted_at: "2026-06-01"
-  - source_type: external
-    citation: "Hunt & Thomas — The Pragmatic Programmer (2nd ed) §7 The Evils of Duplication. The rule of three (extract on the third copy) justifies promoting this invariant to a named catalog rule after ~17 independent L4 implementations converged on the same marker shape."
-    url: "https://www.oreilly.com/library/view/the-pragmatic-programmer/020161622X/"
-    quote: "Every piece of knowledge must have a single, unambiguous, authoritative representation within a system."
-    quoted_at: "2026-06-01"
 ---
 
 ## A per-(subject, target) marker / junction entity MUST be idempotent on its natural key — UNIQUE constraint + no-op duplicate-create + no-op absent-delete
@@ -7763,7 +7739,7 @@ evidence:
   - source_type: external
     citation: "OWASP API Security Top 10 (2023) — API3:2023 Broken Object Property Level Authorization (replaces 2019's Excessive Data Exposure)"
     url: "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
-    quote: "Lack of or improper authorization validation at the object property level. This leads to information exposure or manipulation by unauthorized parties."
+    quote: "Unauthorized access to private/sensitive object properties may result in data disclosure, data loss, or data corruption."
     quoted_at: "2026-05-22"
   - source_type: external
     citation: "GDPR Article 25 — Data protection by design and by default"
@@ -7860,11 +7836,6 @@ upstream:
   - "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
   - "https://cwe.mitre.org/data/definitions/22.html"
 evidence:
-  - source_type: external
-    citation: "OWASP API Security Top 10 (2023) — API1:2023 Broken Object Level Authorization"
-    url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
-    quote: "Object level authorization is an access control mechanism that is usually implemented at the code level to validate that one user can only access objects that they should have access to."
-    quoted_at: "2026-05-25"
   - source_type: external
     citation: "CWE-22 — Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
     url: "https://cwe.mitre.org/data/definitions/22.html"
@@ -8215,13 +8186,8 @@ upstream:
 evidence:
   - source_type: external
     citation: "Hunt & Thomas — The Pragmatic Programmer (2nd ed) §7 The Evils of Duplication: 'Every piece of knowledge must have a single, unambiguous, authoritative representation within a system.' The rule of three (extract on the third copy) is the practical operationalization."
-    url: "https://www.oreilly.com/library/view/the-pragmatic-programmer/020161622X/"
+    url: "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
     quote: "Every piece of knowledge must have a single, unambiguous, authoritative representation within a system."
-    quoted_at: "2026-05-26"
-  - source_type: external
-    citation: "Software Engineering at Google — Chapter 9 Code Review: review velocity drops when duplicate logic needs synchronized changes across multiple modules; consolidate when the parallel-edit cost crosses the maintenance threshold."
-    url: "https://abseil.io/resources/swe-book"
-    quote: "Code that is duplicated tends to drift; the cost of keeping copies in sync compounds with each call site that needs the same fix applied."
     quoted_at: "2026-05-26"
 ---
 
@@ -9009,11 +8975,6 @@ evidence:
     url: "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
     quote: "Authorization checks for a function or resource are usually managed via configuration, and sometimes at the code level. Implementing proper checks can be a confusing task, since modern applications can contain many types of roles or groups and complex user hierarchy (e.g., sub-users, users with more than one role)."
     quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "OWASP ASVS V4 — Access Control (least privilege principle)"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the principle of least privilege exists — users should only be able to access functions, data files, URLs, controllers, services, and other resources, for which they possess specific authorization."
-    quoted_at: "2026-05-25"
 ---
 
 ## RBAC role stub MUST default to least-privilege role — never 'admin' in dev
@@ -9097,10 +9058,6 @@ evidence:
   - source_type: external
     citation: "OWASP ASVS — every security requirement must reference a testable control; untestable requirements provide false assurance and cannot be verified in a security audit"
     url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quoted_at: "2026-05-18"
-  - source_type: external
-    citation: "arc42 — Architecture Decisions: requirements must be traceable to their sources; orphaned requirements cannot be prioritized, evolved, or removed safely"
-    url: "https://arc42.org/overview/"
     quoted_at: "2026-05-18"
   - source_type: external
     citation: "토스 기술 블로그 — 요구사항 추적성: 비즈니스 불변식은 반드시 검증 가능한 스펙이나 룰에 연결되어야 합니다. 연결되지 않은 불변식은 사문화됩니다"
@@ -9668,11 +9625,6 @@ evidence:
     url: "https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event"
     quote: "The beforeunload event is fired when the current window, contained document, and associated resources are about to be unloaded. ... To trigger the dialog, an event handler in the page should call the preventDefault() method on the event."
     quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "OWASP ASVS V2.10 — Service Authentication Requirements"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that passwords are stored in a form that is resistant to offline attacks. ... Passwords SHALL be salted and hashed using an approved one-way key derivation."
-    quoted_at: "2026-05-25"
 ---
 
 ## One-time-revealed plaintext secrets MUST wire beforeunload guard for the duration of the reveal panel
@@ -10029,19 +9981,19 @@ verification:
   source: "backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java"
   pattern: "row.markFailure(EmailPiiHelper.sanitizeReason(trimmed), now, ...) — sender exception scrubbed BEFORE persist, not only at render"
 upstream:
-  - "https://owasp.org/www-project-application-security-verification-standard/"
+  - "https://cwe.mitre.org/data/definitions/359.html"
   - "https://cwe.mitre.org/data/definitions/532.html"
 evidence:
   - source_type: external
-    citation: "OWASP ASVS V8 — Data Protection"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify the application minimizes the number of parameters in a request, such as hidden fields, AJAX variables, cookies and header values."
-    quoted_at: "2026-05-26"
+    citation: "CWE-359 — Exposure of Private Personal Information to an Unauthorized Actor"
+    url: "https://cwe.mitre.org/data/definitions/359.html"
+    quote: "The product does not properly prevent a person's private, personal information from being accessed by actors who either (1) are not explicitly authorized to access the information or (2) do not have the implicit consent of the person about whom the information is collected."
+    quoted_at: "2026-06-01"
   - source_type: external
     citation: "CWE-532 — Insertion of Sensitive Information into Log File"
     url: "https://cwe.mitre.org/data/definitions/532.html"
-    quote: "Information written to log files can be of a sensitive nature and give valuable guidance to an attacker or expose sensitive user information."
-    quoted_at: "2026-05-26"
+    quote: "The product writes sensitive information to a log file."
+    quoted_at: "2026-06-01"
 ---
 
 ## Stored error columns MUST be PII-sanitized at storage time — render-layer scrub alone is insufficient
@@ -10108,7 +10060,7 @@ catch (EmailSendException ex) {
 }
 ```
 
-Reference: [OWASP ASVS V8 — Data Protection](https://owasp.org/www-project-application-security-verification-standard/)
+Reference: [CWE-359 — Exposure of Private Personal Information to an Unauthorized Actor](https://cwe.mitre.org/data/definitions/359.html)
 Reference: [CWE-532 — Insertion of Sensitive Information into Log File](https://cwe.mitre.org/data/definitions/532.html)
 
 ## How to apply
@@ -10523,11 +10475,6 @@ upstream:
   - "https://www.rfc-editor.org/rfc/rfc2119"
 evidence:
   - source_type: external
-    citation: "OWASP ASVS V4 §1.2 — Authentication Architecture: applicable to all components, modules, frameworks, platforms, and operating systems; the architecture must be documented and approved before development."
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the authentication architecture is documented and approved before development."
-    quoted_at: "2026-05-26"
-  - source_type: external
     citation: "RFC 2119 — Key words for use in RFCs to Indicate Requirement Levels"
     url: "https://www.rfc-editor.org/rfc/rfc2119"
     quote: "MUST. This word, or the terms REQUIRED or SHALL, mean that the definition is an absolute requirement of the specification."
@@ -10844,11 +10791,6 @@ evidence:
     citation: "CWE-209 — Generation of Error Message Containing Sensitive Information"
     url: "https://cwe.mitre.org/data/definitions/209.html"
     quote: "The product generates an error message that includes sensitive information about its environment, users, or associated data. ... An attacker can use the additional information provided in error messages to mount attacks targeted on the specific environment or configuration."
-    quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "OWASP ASVS V14.3 — Unintended Security Disclosure"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the application does not output debug or error messages to console, logs, or HTTP responses that contain sensitive information such as session identifiers, credentials, or PII."
     quoted_at: "2026-05-25"
 ---
 
@@ -12245,11 +12187,6 @@ evidence:
     citation: "CWE-212: Improper Removal of Sensitive Information Before Storage or Transfer"
     url: "https://cwe.mitre.org/data/definitions/212.html"
     quote: "Some formats have well-defined fields that could contain private data, such as Exchangeable image file format (Exif), which can contain potentially sensitive metadata such as geolocation, date, and time."
-    quoted_at: "2026-06-01"
-  - source_type: external
-    citation: "OWASP File Upload Cheat Sheet — File Content Validation (image rewriting)"
-    url: "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
-    quote: "For images, applying image rewriting techniques destroys any kind of malicious content injected in an image - this could be done with randomization."
     quoted_at: "2026-06-01"
 ---
 

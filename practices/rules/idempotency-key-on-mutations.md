@@ -25,10 +25,6 @@ evidence:
     citation: "Stripe API Reference — Idempotent requests: all POST requests accept an Idempotency-Key header to guarantee exactly-once delivery"
     url: "https://docs.stripe.com/api/idempotent_requests"
     quoted_at: "2026-05-18"
-  - source_type: external
-    citation: "AWS API Gateway — Idempotency tokens for preventing duplicate requests in stateful operations"
-    url: "https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-routes.html"
-    quoted_at: "2026-05-18"
 decided_at: "2026-05-18"
 ---
 

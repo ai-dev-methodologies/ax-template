@@ -29,11 +29,6 @@ evidence:
     url: "https://owasp.org/API-Security/editions/2019/en/0xa3-excessive-data-exposure/"
     quote: "APIs rely on clients to perform the data filtering."
     quoted_at: "2026-06-01"
-  - source_type: external
-    citation: "OWASP ASVS v4.0.3 — V4.1.3 Access Control (least privilege)"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that the principle of least privilege exists - users should only be able to access functions, data files, URLs, controllers, services, and other resources, for which they possess specific authorization."
-    quoted_at: "2026-06-01"
 ---
 
 ## Field-level projection MUST be server-decided per caller and OMIT unauthorized fields — never load-then-null
