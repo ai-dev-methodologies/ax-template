@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "edc42e41a68c4458566dbc2a612d0a6e8c353c4a02fc8b0fba7fc8f7ea5348c3"
+  source_concat_sha256: "c8697898e3a761a66bd7bd4a886f5dbbb9abaccc9d1278aff13ece6533d09f3f"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -10959,7 +10959,7 @@ evidence:
     quote: "The append-only property of each log is technically achieved using Merkle Trees, which can be used to show that any particular version of the log is a superset of any particular previous version."
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "NIST SP 800-92 — Guide to Computer Security Log Management, §5.1.2 Log Storage and Disposal (log file integrity checking)"
+    citation: "NIST SP 800-92 — Guide to Computer Security Log Management, §3.2 Functions — Storage group, p.3-3 (Log file integrity checking bullet)"
     url: "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf"
     quote: "If the log file is modified and its message digest is recalculated, it will not match the original message digest, indicating that the file has been altered."
     quoted_at: "2026-06-01"
@@ -11013,7 +11013,7 @@ Verification: review the entry mapping and the sole-writer/verify routine — co
 
 Reference: [RFC 6962 — Certificate Transparency (append-only Merkle/hash-chained log)](https://datatracker.ietf.org/doc/html/rfc6962)
 
-Reference: [NIST SP 800-92 — Guide to Computer Security Log Management §5.1.2 (message-digest detection of log alteration)](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf)
+Reference: [NIST SP 800-92 — Guide to Computer Security Log Management §3.2 Storage, p.3-3 (message-digest detection of log alteration)](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf)
 
 
 <!-- @source rules/temporal-validity-record-non-overlap.md -->
