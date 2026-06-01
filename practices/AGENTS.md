@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "ffb5d05129bc056bf46e420578175e29a80ca93019a443eafe481df92878b749"
+  source_concat_sha256: "864757f43bb20c9bf4c7d2d85257681be2054c3ce8689adc5a02fc4dccda8472"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -954,9 +954,9 @@ const retryMutation = useMutation({ mutationFn: retryRow })
 
 <button
   type="button"
-  aria-busy={retryMutation.isPending}
-  disabled={retryMutation.isPending}
-  onClick={() => retryMutation.mutate(row.id)}
+  aria-busy={retryMutation.isPending || undefined}
+  aria-disabled={retryMutation.isPending || undefined}
+  onClick={() => { if (retryMutation.isPending) return; retryMutation.mutate(row.id); }}
 >
   {retryMutation.isPending ? 'Retrying…' : 'Retry'}
 </button>
@@ -1267,10 +1267,6 @@ evidence:
   - source_type: external
     citation: "Spring Modulith reference — @ApplicationModule annotation makes module membership explicit and machine-verifiable; undeclared module boundaries are enforced to fail loudly"
     url: "https://docs.spring.io/spring-modulith/reference/fundamentals.html"
-    quoted_at: "2026-05-18"
-  - source_type: external
-    citation: "카카오페이 기술 블로그 — 도메인 레이어 설계: 도메인 간 의존 관계를 명시적으로 선언하고 리뷰 시 추적 가능하게 유지합니다"
-    url: "https://tech.kakaopay.com/post/kakaopay-msa-platform/"
     quoted_at: "2026-05-18"
 decided_at: "2026-05-18"
 ---
@@ -2677,12 +2673,7 @@ evidence:
   - source_type: external
     citation: "WCAG 2.2 — Success Criterion 3.3.4 Error Prevention (Legal, Financial, Data) (Level AA)"
     url: "https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html"
-    quote: "For Web pages that cause legal commitments or financial transactions for the user to occur, that modify or delete user-controllable data in data storage systems, or that submit user test responses, at least one of the following is true: submissions are reversible, data is checked for input errors, or a mechanism is available for reviewing, confirming, and correcting information before finalizing the submission."
-    quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "OWASP ASVS V14.3 — Unintended Security Disclosure / Error Prevention"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify the application has defenses against destructive operations being performed without intent, including but not limited to confirmation prompts for irreversible changes."
+    quote: "A mechanism is available for reviewing, confirming, and correcting information before finalizing the submission."
     quoted_at: "2026-05-25"
 ---
 
@@ -9044,10 +9035,6 @@ evidence:
     citation: "OWASP ASVS — every security requirement must reference a testable control; untestable requirements provide false assurance and cannot be verified in a security audit"
     url: "https://owasp.org/www-project-application-security-verification-standard/"
     quoted_at: "2026-05-18"
-  - source_type: external
-    citation: "토스 기술 블로그 — 요구사항 추적성: 비즈니스 불변식은 반드시 검증 가능한 스펙이나 룰에 연결되어야 합니다. 연결되지 않은 불변식은 사문화됩니다"
-    url: "https://toss.tech/article/requirements-traceability"
-    quoted_at: "2026-05-18"
 decided_at: "2026-05-18"
 ---
 
@@ -10216,11 +10203,6 @@ evidence:
     citation: "GDPR Article 17 — Right to erasure ('right to be forgotten')"
     url: "https://gdpr-info.eu/art-17-gdpr/"
     quote: "The data subject shall have the right to obtain from the controller the erasure of personal data concerning him or her without undue delay. ... [The controller shall] take account of available technology and the cost of implementation."
-    quoted_at: "2026-05-22"
-  - source_type: external
-    citation: "OWASP ASVS V8.3.5 — Verify that sensitive information is sanitized or removed when no longer required"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that sensitive information is sanitized or removed when no longer required (e.g., data retention)."
     quoted_at: "2026-05-22"
 ---
 

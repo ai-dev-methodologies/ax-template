@@ -29,10 +29,6 @@ evidence:
     citation: "OWASP ASVS — every security requirement must reference a testable control; untestable requirements provide false assurance and cannot be verified in a security audit"
     url: "https://owasp.org/www-project-application-security-verification-standard/"
     quoted_at: "2026-05-18"
-  - source_type: external
-    citation: "토스 기술 블로그 — 요구사항 추적성: 비즈니스 불변식은 반드시 검증 가능한 스펙이나 룰에 연결되어야 합니다. 연결되지 않은 불변식은 사문화됩니다"
-    url: "https://toss.tech/article/requirements-traceability"
-    quoted_at: "2026-05-18"
 decided_at: "2026-05-18"
 ---
 

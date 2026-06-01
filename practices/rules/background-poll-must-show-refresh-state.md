@@ -79,9 +79,9 @@ const retryMutation = useMutation({ mutationFn: retryRow })
 
 <button
   type="button"
-  aria-busy={retryMutation.isPending}
-  disabled={retryMutation.isPending}
-  onClick={() => retryMutation.mutate(row.id)}
+  aria-busy={retryMutation.isPending || undefined}
+  aria-disabled={retryMutation.isPending || undefined}
+  onClick={() => { if (retryMutation.isPending) return; retryMutation.mutate(row.id); }}
 >
   {retryMutation.isPending ? 'Retrying…' : 'Retry'}
 </button>

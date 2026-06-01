@@ -20,11 +20,6 @@ evidence:
     url: "https://gdpr-info.eu/art-17-gdpr/"
     quote: "The data subject shall have the right to obtain from the controller the erasure of personal data concerning him or her without undue delay. ... [The controller shall] take account of available technology and the cost of implementation."
     quoted_at: "2026-05-22"
-  - source_type: external
-    citation: "OWASP ASVS V8.3.5 — Verify that sensitive information is sanitized or removed when no longer required"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify that sensitive information is sanitized or removed when no longer required (e.g., data retention)."
-    quoted_at: "2026-05-22"
 ---
 
 ## Soft-delete via status flip preserves audit trail — hard-delete forbidden when audit matters

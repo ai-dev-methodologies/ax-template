@@ -19,12 +19,7 @@ evidence:
   - source_type: external
     citation: "WCAG 2.2 — Success Criterion 3.3.4 Error Prevention (Legal, Financial, Data) (Level AA)"
     url: "https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html"
-    quote: "For Web pages that cause legal commitments or financial transactions for the user to occur, that modify or delete user-controllable data in data storage systems, or that submit user test responses, at least one of the following is true: submissions are reversible, data is checked for input errors, or a mechanism is available for reviewing, confirming, and correcting information before finalizing the submission."
-    quoted_at: "2026-05-25"
-  - source_type: external
-    citation: "OWASP ASVS V14.3 — Unintended Security Disclosure / Error Prevention"
-    url: "https://owasp.org/www-project-application-security-verification-standard/"
-    quote: "Verify the application has defenses against destructive operations being performed without intent, including but not limited to confirmation prompts for irreversible changes."
+    quote: "A mechanism is available for reviewing, confirming, and correcting information before finalizing the submission."
     quoted_at: "2026-05-25"
 ---
 

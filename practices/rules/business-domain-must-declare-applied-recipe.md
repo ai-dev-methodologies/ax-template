@@ -29,10 +29,6 @@ evidence:
     citation: "Spring Modulith reference — @ApplicationModule annotation makes module membership explicit and machine-verifiable; undeclared module boundaries are enforced to fail loudly"
     url: "https://docs.spring.io/spring-modulith/reference/fundamentals.html"
     quoted_at: "2026-05-18"
-  - source_type: external
-    citation: "카카오페이 기술 블로그 — 도메인 레이어 설계: 도메인 간 의존 관계를 명시적으로 선언하고 리뷰 시 추적 가능하게 유지합니다"
-    url: "https://tech.kakaopay.com/post/kakaopay-msa-platform/"
-    quoted_at: "2026-05-18"
 decided_at: "2026-05-18"
 ---
 
