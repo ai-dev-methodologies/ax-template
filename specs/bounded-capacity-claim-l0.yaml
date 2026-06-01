@@ -1,0 +1,112 @@
+version: "0.1.0"
+scope: "bounded-capacity-claim-l0 — atomic shared-counter claim contract for any recipe whose business invariant asserts a bounded resource must not be over-allocated: 'taken < capacity' (seats, slots, inventory units, enrollment caps, ticket allotments, reservation windows). Cross-cutting, jurisdiction-agnostic + framework-agnostic. Distinct from idempotency: idempotency dedupes a RETRY of the SAME caller's SAME key; this contract serializes TWO DIFFERENT claimants racing one shared 'remaining > 0' precondition. The two compose — idempotency for retry-dedupe, atomic-claim for cross-claimant race."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA) + PostgreSQL (row-level FOR UPDATE / conditional UPDATE) + RFC 9457 Problem Details + Micrometer metrics"
+standard: "PostgreSQL 'Explicit Locking' (row-level FOR UPDATE) + PostgreSQL 'Transaction Isolation' (Read Committed WHERE re-evaluation) + CWE-362 (Concurrent Execution using Shared Resource with Improper Synchronization — race condition) + RFC 9457 (Problem Details for HTTP APIs) + RFC 9110 §15.5.10 (409 Conflict) + SQL:2016 isolation semantics"
+domain_mode: backend_only
+introduced_at: "IDW5 2026-06-01 LMS dogfood"
+
+# OPT-IN bounded-capacity-claim catalog. Adopted by any recipe that
+# asserts a no-oversell / no-double-book invariant over a shared counter:
+# booking-recipe BOOKING-INV-001 (no double-book a resource/time window),
+# lms-recipe LMS-INV-005 (enrollment cap), marketplace ticket allotment,
+# e-commerce limited-stock checkout. The IDW5 LMS dogfood found these
+# invariants bound ONLY to idempotency-key-on-mutations.md, which dedupes a
+# retry of the same key but does NOT stop two DIFFERENT claimants from each
+# reading 'taken < capacity == true' and both inserting — the classic
+# read-then-insert race (CWE-362). This spec supplies the missing primitive:
+# the claim MUST be a single atomic statement (conditional UPDATE asserting
+# affected-rows==1, OR a pessimistic SELECT ... FOR UPDATE on the capacity
+# row in the same transaction), backstopped by a DB CHECK(taken<=capacity).
+# Generic pattern; zero Korean law cite (R102+ generic catalog principle).
+
+# ── Priority order for fork-receivers ──
+# Adopt in order; earlier items are foundational.
+#   1. CLAIM-ATOMIC-001        (the primitive — single atomic claim statement)
+#   2. CLAIM-OVERSELL-001      (negative concurrency proof — N+1 races on N)
+#   3. CLAIM-REJECT-001        (deterministic 409 CAPACITY_EXHAUSTED for losers)
+#   4. CLAIM-OBSERVABILITY-001 (bounded-cardinality claim_total{resource,outcome})
+
+# ── RECIPE.md frontmatter example ──
+#   ---
+#   recipe: <pattern>
+#   capacity_claim_enabled: true
+#   capacity_claim_mode: conditional_update   # OR pessimistic_lock
+#   capacity_db_check_backstop: true          # CHECK(taken<=capacity)
+#   ---
+
+# ── Composition note ──
+# Idempotency (idempotency-key-on-mutations.md) and atomic-claim are
+# orthogonal and BOTH required for a side-effecting claim POST:
+#   idempotency  → same caller retries same key → return cached grant (no double-grant to ONE caller)
+#   atomic-claim → two callers race the last unit → exactly one grant, one reject (no oversell ACROSS callers)
+# A recipe that ships only idempotency is still oversell-vulnerable; a recipe
+# that ships only atomic-claim double-charges a retried winner. Ship both.
+
+items:
+  - id: "CLAIM-ATOMIC-001"
+    chapter: "Claim is a single atomic statement (no read-then-insert)"
+    requirement: "A claim against a bounded counter MUST be expressed as ONE atomic database statement, never as a read-the-count-then-insert-if-room sequence in application code. Exactly two implementations are permitted: (a) a conditional single-statement UPDATE — `UPDATE capacity SET taken = taken + 1 WHERE resource_id = ? AND taken < capacity` — whose affected-row count is checked: affected-rows == 1 ⇒ granted, affected-rows == 0 ⇒ rejected (no room); or (b) a pessimistic `SELECT ... FOR UPDATE` on the single capacity row inside the SAME transaction that then performs the bounded UPDATE/INSERT, so the row lock serializes concurrent claimants. The capacity counter MUST live on ONE row (a `capacity` aggregate row), not be derived by `COUNT(*)` of child rows read in a separate statement. Read-then-insert across two statements is FORBIDDEN: under Read Committed a concurrent committed claim is invisible to the first claimant's earlier SELECT, so both pass the check and oversell. The conditional UPDATE is race-safe precisely because Read Committed re-evaluates the WHERE clause against the freshly-committed row version: the loser's `taken < capacity` predicate is re-checked against the bumped count and fails atomically, yielding affected-rows == 0."
+    test_method: "RestAssured integration test + concurrent-claim harness"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Single-statement conditional UPDATE or row-level FOR UPDATE — never
+      application-side check-then-act. Anchored to PostgreSQL Transaction
+      Isolation (Read Committed WHERE re-evaluation) +
+      Explicit Locking (FOR UPDATE).
+      Quote anchor (PostgreSQL 'Transaction Isolation' — Read Committed):
+      "The search condition of the command (the WHERE clause) is
+      re-evaluated to see if the updated version of the row still matches
+      the search condition. If so, the second updater proceeds with its
+      operation using the updated version of the row."
+      (https://www.postgresql.org/docs/current/transaction-iso.html)
+      Quote anchor (PostgreSQL 'Explicit Locking' — FOR UPDATE):
+      "FOR UPDATE causes the rows retrieved by the SELECT statement to be
+      locked as though for update. This prevents them from being locked,
+      modified or deleted by other transactions until the current
+      transaction ends."
+      (https://www.postgresql.org/docs/current/explicit-locking.html)
+  - id: "CLAIM-OVERSELL-001"
+    chapter: "No-oversell concurrency proof + DB CHECK backstop"
+    requirement: "The contract MUST be proven by a negative concurrency test, not asserted: fire N+1 (or more) concurrent claims against a resource of capacity N from a thread pool / parallel callers; assert EXACTLY N succeed and the remaining claims are rejected — never N+1 grants. Final persisted `taken` MUST equal N (never exceed capacity). As a defense-in-depth backstop independent of application code, the capacity row MUST carry a database constraint `CHECK (taken <= capacity)` (and `CHECK (taken >= 0)`), so that even a future code path that bypasses the atomic-claim primitive cannot persist an oversell — the INSERT/UPDATE fails at the DB. The race this closes (two claimants both reading `taken < capacity` and both inserting) is CWE-362: a timing window in which a shared resource is modified by a concurrent code sequence."
+    test_method: "Concurrent-claim integration test (N+1 racing claims) + DB CHECK assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The keystone invariant — a single-threaded test passes even on a
+      broken read-then-insert; only a true concurrency test surfaces the
+      oversell. DB CHECK is the last line of defense. Anchored to CWE-362.
+      Quote anchor (CWE-362): "The product contains a concurrent code
+      sequence that requires temporary, exclusive access to a shared
+      resource, but a timing window exists in which the shared resource
+      can be modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)
+  - id: "CLAIM-REJECT-001"
+    chapter: "Deterministic 409 CAPACITY_EXHAUSTED for the loser"
+    requirement: "A claim that loses the race (affected-rows == 0, or the FOR UPDATE path finds taken == capacity) MUST return a deterministic 409 Conflict with an RFC 9457 problem body `type=urn:problem:capacity-exhausted`, `title=Capacity exhausted`, and a machine-readable `code` member equal to `CAPACITY_EXHAUSTED`. This outcome MUST be DISTINCT from the optimistic-lock 412 Precondition Failed (specs/optimistic-locking-l0.yaml#OPTLOCK-CONFLICT-001): 412 means the caller's supplied validator (If-Match ETag) was stale, whereas 409 CAPACITY_EXHAUSTED means the precondition was a shared-counter exhaustion the caller could not have pre-conditioned on. The response MUST NOT carry `Retry-After` (more capacity is not promised by elapsed time) and MUST be free of a partial side effect (no row inserted for the loser — the atomic statement either granted or did nothing)."
+    test_method: "RestAssured integration test (loser asserts 409 + code body)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      409 (state conflict) not 412 (stale validator) — the two MUST be
+      distinguishable by status code so clients branch correctly.
+      Anchored to RFC 9110 §15.5.10 (409 Conflict) + RFC 9457.
+      Quote anchor (RFC 9110 §15.5.10): "The 409 (Conflict) status code
+      indicates that the request could not be completed due to a conflict
+      with the current state of the target resource."
+      (https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.10)
+  - id: "CLAIM-OBSERVABILITY-001"
+    chapter: "관측 (bounded-cardinality claim counter)"
+    requirement: "Capacity-claim implementations MUST expose a single canonical Micrometer counter `claim_total{resource, outcome}` where `resource` is a fixed entity-type enum (e.g. `seat`, `enrollment`, `ticket`) and `outcome ∈ {granted, exhausted}`. Labels MUST exclude resource_id / user_id / capacity-value / remaining-count (no PII, no high-cardinality, no unbounded numeric labels). The `exhausted` count is the oversell-pressure signal a fork-receiver alerts on; the granted:exhausted ratio is the contention indicator. SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded labels keep the time-series count finite — resource is an
+      enum, outcome is a 2-value enum. Anchored to OpenTelemetry Semantic
+      Conventions for HTTP metrics (low-cardinality attribute guidance).
+      Reference: OTel HTTP metrics semantic conventions
+      (https://opentelemetry.io/docs/specs/semconv/http/http-metrics/).
+      The cited page constrains specific attributes to low cardinality
+      per-metric rather than carrying one blanket sentence; the resource +
+      outcome enums satisfy that constraint.

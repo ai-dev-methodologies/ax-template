@@ -35,6 +35,7 @@ l3_pages_used:
 business_invariants:
   - id: BOOKING-INV-001
     statement: "Reservation must not double-book a resource for overlapping time windows"
+    spec_ref: "specs/bounded-capacity-claim-l0.yaml#CLAIM-ATOMIC-001"
     rule_ref: "practices/rules/idempotency-key-on-mutations.md"
   - id: BOOKING-INV-002
     statement: "Cancellation within free-window does not charge deposit"

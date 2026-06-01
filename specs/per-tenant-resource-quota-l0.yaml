@@ -1,0 +1,112 @@
+version: "0.1.0"
+scope: "per-tenant-resource-quota-l0 — generic per-tenant ACCUMULATING resource-quota contract for any multi-tenant SaaS exposing a plan-bounded total of a consumable resource (total seats, total stored content GB, monthly job/export count, AI-token allowance). A tenant-level running-total cap that REJECTS a consume attempt when the new accumulated usage would exceed the plan limit. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / B2B-admin applicable."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA) + PostgreSQL conditional UPDATE / SELECT ... FOR UPDATE row lock + RFC 9457 Problem Details + Micrometer metrics"
+standard: "RFC 6585 (Additional HTTP Status Codes — 429 Too Many Requests) + RFC 9110 (HTTP Semantics — 402 Payment Required, reserved) + RFC 9457 (Problem Details for HTTP APIs) + OWASP API Security Top 10 2023 API4:2023 Unrestricted Resource Consumption + SaaS usage-metering / feature-entitlement practice (de-facto reference)"
+domain_mode: backend_only
+introduced_at: "IDW5 2026-06-01 LMS dogfood"
+
+# OPT-IN per-tenant accumulating-quota catalog. Adopted by any recipe
+# whose plan bounds a TOTAL of a consumable resource per tenant: seats,
+# stored content GB, monthly export/job count, AI-token allowance. This is
+# a running-total cap (used + delta <= limit), NOT a per-window rate limit
+# and NOT a single-user soft cap.
+#
+# ── Distinction from sibling catalogs (read FIRST — they do NOT overlap) ──
+#   * ratelimit-l0 (RFC 6585, RATELIMIT-1..4): per-WINDOW throttle. A token
+#     bucket REFILLS over time; "too many requests in a given amount of
+#     time". A 429 there is transient — wait and retry succeeds. This spec
+#     is an ACCUMULATING total that does NOT refill on the clock; it only
+#     resets on a billing-period rollover or an explicit release (seat
+#     freed, content deleted). Exceeding it is not transient — the tenant
+#     must upgrade the plan or free usage.
+#   * per-USER file/favorites quota (FavoriteService global-count cap): a
+#     single-subject cap scoped to one user_id. This spec is scoped to the
+#     TENANT (org) aggregate across all its users and is multi-resource.
+#   * bounded-capacity-claim (atomic conditional-UPDATE capacity pattern):
+#     QUOTA-ATOMIC-001 IS that pattern, specialised to a tenant-scoped,
+#     multi-resource accumulating counter. The claim primitive (conditional
+#     UPDATE WHERE used+delta<=limit, or row lock) is shared; the scope and
+#     the reset semantics are what this spec pins.
+#
+# Composition note: layers under existing L4 recipes (multi-tenant-l0 for
+# the tenant axis, billing/invoicing for the plan source-of-truth). Generic
+# pattern; zero Korean-law cite (R102+ generic catalog principle).
+
+# ── Priority order for fork-receivers (adopt in order) ──
+#   1. QUOTA-ATOMIC-001        (the keystone — atomic check-and-increment)
+#   2. QUOTA-REJECT-001        (deterministic over-limit response)
+#   3. QUOTA-RECONCILE-001     (counter reconcilable against source rows)
+#   4. QUOTA-OBSERVABILITY-001 (bounded-cardinality usage gauge)
+
+# ── RECIPE.md frontmatter example ──
+#   ---
+#   recipe: generic-per-tenant-quota
+#   tenant_quota_enabled: true
+#   tenant_quota_resources: [seats, content_gb, monthly_jobs, ai_tokens]
+#   tenant_quota_claim_mode: conditional_update  # or row_lock
+#   tenant_quota_over_limit_status: 429           # 402 only if a billing paywall is the intended semantic
+#   ---
+
+items:
+  - id: "QUOTA-ATOMIC-001"
+    chapter: "Atomic check-and-increment claim"
+    requirement: "Consuming N units of a tenant-scoped accumulating resource MUST check the tenant's current accumulated usage against the plan limit AND increment it in a SINGLE atomic step that no concurrent consumer can interleave — either a conditional `UPDATE tenant_quota SET used = used + :delta WHERE tenant_id = :t AND resource = :r AND used + :delta <= limit_value` whose affected-row-count of 0 means the claim was refused, or a `SELECT ... FOR UPDATE` row lock that reads, validates `used + delta <= limit`, then writes under the same transaction. A read-then-write across two statements (check `used < limit`, then a separate `+= delta`) is FORBIDDEN — it admits a TOCTOU race where two consumers each pass the check and the committed total exceeds the limit. Exactly one of two concurrent claims that would tip the total over the limit MUST succeed; the other MUST be refused with zero increment. This is the tenant-scoped, multi-resource specialisation of the bounded-capacity-claim primitive."
+    test_method: "RestAssured integration test (2 concurrent consume calls against a tenant at limit-1; assert exactly one 2xx + one rejection + final persisted used == limit, never limit+1)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The accumulating total does NOT refill on the clock (that is
+      ratelimit-l0); it only changes on consume / release / billing-period
+      reset. Anchored to OWASP API Security Top 10 2023 — API4:2023
+      Unrestricted Resource Consumption
+      (https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/).
+      Quote anchor (API4:2023, threat): "Satisfying API requests requires
+      resources such as network bandwidth, CPU, memory, and storage." The
+      atomic claim is the enforcement point that bounds that consumption
+      per tenant.
+  - id: "QUOTA-REJECT-001"
+    chapter: "Deterministic over-limit response"
+    requirement: "When a claim is refused because `used + delta > limit`, the server MUST respond deterministically with an RFC 9457 Problem Details body of `type=urn:problem:quota-exceeded`, `title=\"Quota exceeded\"`, and members carrying the machine-readable facts: `resource`, `limit`, `current_usage`, and `requested` (delta). The status code MUST be 429 Too Many Requests by default (RFC 6585) — the canonical 'you have consumed your allowance' signal — UNLESS the recipe explicitly models the cap as a billing paywall, in which case 402 Payment Required MAY be used. Because 402 is reserved/non-standard (RFC 9110 / MDN), a recipe choosing 402 MUST document it in DECISIONS.md and MUST still carry the same `urn:problem:quota-exceeded` body so clients branch on `type`, not status. The response MUST NOT silently truncate the consume to the remaining headroom or apply last-write-wins; refusal is total. A `Retry-After` header MUST NOT be sent (recovery is upgrade-or-release, not time-based) unless the resource is a billing-period-resetting count and the reset instant is known."
+    test_method: "RestAssured integration test (consume that exceeds limit → assert chosen status + RFC 9457 type=urn:problem:quota-exceeded + limit/current_usage/requested members present + no partial consume)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      429 is the default because the failure is 'allowance consumed', not
+      'request malformed'. Anchored to RFC 6585 §4
+      (https://datatracker.ietf.org/doc/html/rfc6585#section-4).
+      Quote anchor (RFC 6585 §4): "The 429 status code indicates that the
+      user has sent too many requests in a given amount of time (\"rate
+      limiting\")." 402 is reserved — MDN HTTP 402: "This status code was
+      created to enable digital cash or (micro) payment systems and would
+      indicate that requested content is not available until the client
+      makes a payment." — hence 402 is opt-in and must still ship the
+      typed body.
+  - id: "QUOTA-RECONCILE-001"
+    chapter: "Reconcilable usage counter (drift detection)"
+    requirement: "The denormalised accumulated-usage counter MUST be reconcilable against the source-of-truth rows it summarises (count of active seats / SUM of stored object bytes / count of jobs in the billing period). A reconciliation routine MUST be able to recompute the authoritative total from the source rows and compare it to the stored counter; a non-zero difference is DRIFT and MUST be surfaced (logged at WARN with `resource`, `tenant_id`, `counter_value`, `recomputed_value`, `drift`) and corrected by writing the recomputed value as the new authoritative counter. The counter MUST be adjusted on the RELEASE path too (seat removed, content deleted, period rollover) — a consume-only counter that never decrements is a guaranteed drift source and is FORBIDDEN. Reconciliation MUST be idempotent and MUST NOT be the hot-path claim (it is a scheduled/triggered sweep)."
+    test_method: "Integration test: consume + release a known mix, run reconcile, assert counter == recomputed; then poke a deliberate drift and assert reconcile detects + repairs it"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The counter is an optimisation over COUNT/SUM-on-read; without
+      reconciliation it silently diverges and either over-bills or lets a
+      tenant exceed the plan. Anchored to OWASP API4:2023
+      (https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/).
+      Quote anchor (API4:2023): "An API is vulnerable if at least one of
+      the following limits is missing or set inappropriately (e.g. too
+      low/high)." A drifted counter is an effectively-mis-set limit.
+  - id: "QUOTA-OBSERVABILITY-001"
+    chapter: "관측 (bounded-cardinality usage gauge)"
+    requirement: "Per-tenant quota implementations MUST expose a bounded-cardinality Micrometer gauge `quota_usage{tenant_bucket, resource}` reporting the fraction (or absolute used vs limit) of plan consumed, PLUS a `quota_rejected_total{resource}` counter for refused claims. The `tenant_bucket` label MUST be a coarse bounded enum (e.g. usage band `lt50|50-80|80-100|over` or a hashed shard), NEVER the raw tenant_id — a per-tenant time-series would be unbounded cardinality. The `resource` label MUST be a fixed resource-type enum. Labels MUST exclude tenant_id, user_id, plan_id-as-freeform, or any unbounded key. Alert/SLO wiring (e.g. notify a tenant at 80%) is a fork-receiver concern."
+    test_method: "Micrometer registry assertion (gauge + counter present with only the bounded label keys; assert raw tenant_id never appears as a label value)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded labels keep the time-series count finite even with millions
+      of tenants. Reference: SaaS feature-entitlement / usage-metering
+      practice — Lago, "What are feature entitlements"
+      (https://getlago.com/blog/feature-entitlements). Quote anchor:
+      "Feature entitlements control who gets which capabilities in your
+      product, under what conditions, and for how long." The gauge makes
+      the 'under what conditions' (plan headroom) observable without
+      leaking tenant identity into the metric cardinality.

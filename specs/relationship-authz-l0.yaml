@@ -1,0 +1,68 @@
+version: "0.1.0"
+scope: "relationship-authz-l0 — relationship/grant-scoped (ReBAC) access control contract for fork-receivers exposing resources a NON-owner may legitimately reach through a membership/grant relationship (course-staff, project-member, care-team, shared-doc collaborator). Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic SaaS / collaboration / B2B-admin applicable. Complements — does NOT replace — owner-equality (caller-authentication-only-no-userid-param) and tenant-equality (multi-tenant-l0 ISOLATION-001/003): owner-equality answers 'is this MY row', tenant-equality answers 'is this MY tenant's row', and ReBAC answers 'has someone GRANTED me a relation to this row I do not own'."
+stack: "Spring Boot 3.2.x + Spring Security (Authentication.getName()) + Spring Data JPA (grant/membership join-table + parameterized @Query) + RFC 9457 Problem Details"
+standard: "OWASP API Security Top 10 (2023) API1:2023 Broken Object Level Authorization (BOLA) + OWASP ASVS V4 §4.1 Access Control (V4.1.1 trusted service layer / V4.1.3 least privilege / V4.1.5 fail securely) + Google Zanzibar relationship-based access control (ReBAC) tuple model (USENIX ATC 2019, de facto reference)"
+domain_mode: backend_only
+introduced_at: "IDW5 2026-06-01 LMS dogfood"
+
+# OPT-IN relationship-scoped authorization catalog. Adopted by any recipe
+# where access to subject A's resource is granted to caller B through a
+# stored relationship row (a join-table membership / grant), NOT through
+# owner-equality and NOT through a static global role. The LMS dogfood
+# (IDW5) surfaced this gap: a course-staff member (non-owner, non-admin)
+# must read every enrolled learner's submissions, but the catalog had no
+# pattern for 'authorization = a LOOKUP against a grant row'. Generic
+# pattern; zero Korean law cite (R102+ generic catalog principle).
+#
+# Composition note: layers UNDER existing owner-scoped recipes. The owner
+# path stays exactly as caller-authentication-only-no-userid-param.md
+# mandates (no userId parameter, derive from Authentication). ReBAC adds a
+# SECOND legitimate accessor class — the grantee — resolved by a join-table
+# lookup, never by trusting a client-supplied subject id.
+#
+# ── Adopt in order (earlier items are foundational) ──
+#   1. REBAC-LOOKUP-001        (the grant-lookup gate itself)
+#   2. REBAC-404-001           (missing grant denies as 404, not 403)
+#   3. REBAC-LIST-PREFILTER-001 (collections pre-filtered IN THE QUERY)
+
+items:
+  - id: "REBAC-LOOKUP-001"
+    chapter: "Grant-lookup authorization gate"
+    requirement: "When an authenticated caller who is NEITHER the resource owner NOR a global-role principal (e.g. ROLE_ADMIN) requests another subject's resource, authorization MUST be decided by a LOOKUP against a persisted grant/membership join-table row keyed by (callerId, resourceScope[, relation]) — never by owner-equality and never by a static role check. The grant row is the single source of truth: its presence authorizes, its absence denies. The caller id used in the lookup MUST be derived from Authentication.getName() server-side; a subject/owner identifier supplied by the client MUST NOT widen access. The authorization decision is therefore: caller is owner → allow; OR an applicable grant row exists for (callerId, resourceScope) → allow with the relation's scope; OTHERWISE deny. The grant lookup MUST run on the trusted service layer for every accessor of the object, so the gate cannot be bypassed by a client."
+    test_method: "RestAssured integration test"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      This is the keystone: a non-owner accessor is legitimate ONLY because
+      a relationship was granted, and that relationship is a row, not a
+      role. Anchored to OWASP API1:2023 BOLA — every endpoint receiving an
+      object id must run an object-level check validating the logged-in
+      user has permission on THAT object
+      (https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)
+      and to ASVS V4.1.1 (trusted service layer). The grant row IS that
+      per-object check, expressed as data instead of branching code.
+  - id: "REBAC-404-001"
+    chapter: "Existence-hiding on missing grant"
+    requirement: "When no grant row authorizes the caller for the requested resource AND the caller is not the owner/admin, the endpoint MUST respond 404 Not Found (existence-hiding) — NOT 403 Forbidden — with an RFC 9457 body `type=urn:problem:not-found` that does NOT reveal whether the resource exists. A 403 leaks that the object exists and lets an attacker enumerate resource ids by distinguishing 403 (exists, no access) from 404 (does not exist); for relationship-scoped objects the catalog default collapses both into an indistinguishable 404. (Exception: a recipe MAY opt into 403 for a surface where existence is already public via `rebac_reveal_existence=true`, default false.) The 404 MUST be byte-indistinguishable between 'resource absent' and 'resource present but no grant'."
+    test_method: "RestAssured integration test"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Existence-hiding is the BOLA-hardening posture: deny-by-default plus
+      no oracle. Anchored to ASVS V4.1.3 (least privilege — access only
+      what you possess specific authorization for) and V4.1.5 (access
+      controls fail securely). Negative proof pairs with REBAC-LOOKUP-001:
+      same request returns 404 with no grant, 200 once a grant row exists.
+  - id: "REBAC-LIST-PREFILTER-001"
+    chapter: "Pre-filtered collection queries"
+    requirement: "LIST / collection endpoints over relationship-scoped resources MUST be PRE-FILTERED by the caller's grant set INSIDE THE QUERY (a parameterized JOIN/WHERE against the grant table bound to the caller id), returning only rows the caller is granted. Post-filtering — fetching a broad result set and dropping unauthorized rows in application code after the query — is FORBIDDEN, because it leaks total counts / pagination metadata, risks an over-broad query that ships unauthorized rows when the filter is forgotten, and is structurally fragile. The query MUST bind the caller id from Authentication, MUST NOT accept a client-supplied subject filter that widens the grant set, and pagination totals MUST reflect only the pre-filtered (granted) rows. A missing grant for a row means that row is absent from the result, never present-then-stripped."
+    test_method: "RestAssured integration test"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Pre-filter-in-query is the list-shaped mirror of the single-object
+      404: an ungranted row is simply not selected. Anchored to OWASP
+      API1:2023 BOLA (object-level checks for every accessor) +
+      ASVS V4.1.1 (enforce on the trusted service layer). Test: caller has
+      a grant to 1 of 3 subjects → GET list returns exactly that 1 + total=1;
+      revoke the grant → list returns 0; the other 2 are never observable.

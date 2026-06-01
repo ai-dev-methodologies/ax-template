@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "58d68865458af9664231b5c179a58e19feba8ce60fde5c5ff7104f3b89f35650"
-  rule_count: 112
+  source_concat_sha256: "c4a94ee74323697a33fb213d6708a5197824a16fd18d5f2e6f5882ab2d7f78f7"
+  rule_count: 117
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -6643,6 +6643,129 @@ if adopter_count >= 3:
   receive the post-lift state; no semver to honor.
 
 
+<!-- @source rules/published-edition-immutable-copy-on-write.md -->
+
+---
+title: Published content editions are immutable copy-on-write snapshots — never edit a live edition in place
+impact: HIGH
+impactDescription: "Editing a published course/terms/pricing/API-spec row in place silently rewrites what every already-pinned consumer sees — the lost-history anomaly: there is no way to prove what a user actually agreed to, enrolled in, or was charged"
+tags:
+  - content-versioning
+  - copy-on-write
+  - immutability
+  - jpa
+  - append-only
+  - event-sourcing
+spec_ref: "specs/content-versioning-l0.yaml#PUBLISH-SNAPSHOT-001"
+verification:
+  type: review
+  source: "specs/content-versioning-l0.yaml#PUBLISH-SNAPSHOT-001 (PublishedEdition entity contract) + #PUBLISH-TRANSITION-001 (sole-mutator publish)"
+  pattern: "Published-edition entity maps every content column @Column(updatable=false); publish INSERTs a new edition (next version_no) and supersedes the prior one without rewriting it; the working draft is a separate mutable row; no code path UPDATEs a published edition's content columns"
+upstream:
+  - "https://semver.org/"
+  - "https://martinfowler.com/eaaDev/EventSourcing.html"
+  - "https://www.postgresql.org/docs/current/mvcc-intro.html"
+evidence:
+  - source_type: external
+    citation: "Semantic Versioning 2.0.0 — Specification §3 (released-version immutability)"
+    url: "https://semver.org/"
+    quote: "Once a versioned package has been released, the contents of that version MUST NOT be modified. Any modifications MUST be released as a new version."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Martin Fowler — Event Sourcing (martinfowler.com)"
+    url: "https://martinfowler.com/eaaDev/EventSourcing.html"
+    quote: "Capture all changes to an application state as a sequence of events."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "PostgreSQL Documentation — Introduction to MVCC (Multiversion Concurrency Control)"
+    url: "https://www.postgresql.org/docs/current/mvcc-intro.html"
+    quote: "This means that each SQL statement sees a snapshot of data (a database version) as it was some time ago, regardless of the current state of the underlying data."
+    quoted_at: "2026-06-01"
+---
+
+## Published content editions are immutable copy-on-write snapshots — never edit a live edition in place
+
+**Impact: HIGH — editing a published edition in place silently rewrites what every pinned consumer sees, and destroys the proof of what they actually agreed to**
+
+A fork-receiver building an LMS course, a terms-of-service page, a pricing plan, or a published API spec reaches a moment where someone edits *live* content. The naive model stores one mutable row per logical item and `UPDATE`s it on every edit. That row is also what enrolled students, accepted-terms users, and active subscribers are reading. So a single edit retroactively rewrites history for everyone: the student who enrolled in "Course v1" is now silently looking at v3, the user who clicked "I accept" on the old terms is now legally pinned to terms they never saw, and the customer on a grandfathered price sees the new price. There is no row that still says what v1 *was* — the history is gone, and with it any ability to answer "what did this consumer actually agree to?".
+
+The correct model is copy-on-write editions. Publishing INSERTs a **new** immutable edition row holding a frozen copy of the content; it never mutates a previously published edition. Every content-bearing column on the published-edition entity is mapped `@Column(updatable=false)`, so the persistence provider physically cannot emit an `UPDATE` against a published row — the table is append-only. Authoring happens on a **separate** mutable draft row that no consumer reads. A publish is a single atomic transition (one sole-mutator service, `@Transactional`) that freezes the draft into a new edition, assigns the next `version_no`, and supersedes the prior current edition by flipping a pointer — *without deleting the prior edition*. Consumers pin to the edition id current at join time, so a new publish is invisible to them until they explicitly re-accept. This is the same discipline SemVer mandates for released packages and the same append-forward posture as event sourcing: you never rewrite the past, you publish a new version.
+
+**Incorrect — one mutable row; editing it rewrites every pinned consumer's view and erases history:**
+
+```java
+@Entity
+public class Course {
+    @Id @GeneratedValue private Long id;
+    private String title;          // mutable — students read THIS row
+    @Lob private String body;      // editing body rewrites it for everyone
+    private BigDecimal price;
+}
+
+@Service
+class CourseService {
+    @Transactional
+    public void editCourse(Long id, CourseEdit e) {
+        Course c = repo.findById(id).orElseThrow();
+        c.setTitle(e.title());     // ❌ in-place UPDATE on the live row
+        c.setBody(e.body());       // ❌ every enrolled student now sees the new body
+        c.setPrice(e.price());     // ❌ grandfathered subscribers silently re-priced
+        // v1 is gone: no row remembers what the student actually enrolled in
+    }
+}
+```
+
+**Correct — immutable published edition (copy-on-write) + separate mutable draft + sole-mutator publish:**
+
+```java
+@Entity
+public class PublishedCourseEdition {
+    @Id @GeneratedValue private Long id;
+    @Column(updatable = false) private Long courseId;
+    @Column(updatable = false) private int versionNo;        // write-once, monotonic
+    @Column(updatable = false) private String title;         // frozen at publish
+    @Lob @Column(updatable = false) private String body;     // frozen at publish
+    @Column(updatable = false) private BigDecimal price;     // frozen at publish
+    @Column(updatable = false) private Instant publishedAt;
+    private boolean current;   // the ONLY mutable column: the supersede pointer
+}
+
+@Entity
+public class CourseDraft {            // separate mutable row — no consumer reads this
+    @Id @GeneratedValue private Long id;
+    private Long courseId;
+    private String title;
+    @Lob private String body;
+    private BigDecimal price;
+}
+
+@Service
+class CoursePublishService {          // SOLE mutator of published editions
+    @Transactional
+    public PublishedCourseEdition publish(Long courseId) {
+        CourseDraft draft = drafts.findByCourseId(courseId).orElseThrow();
+        int next = editions.maxVersionNo(courseId) + 1;        // prior_max + 1
+        editions.findCurrent(courseId).ifPresent(prev -> prev.setCurrent(false)); // supersede, keep
+        PublishedCourseEdition fresh = PublishedCourseEdition.freeze(draft, next); // INSERT, never UPDATE
+        fresh.setCurrent(true);
+        return editions.save(fresh);   // prior edition row retained, byte-identical
+    }
+}
+// A consumer stores editionId at enrollment and is served THAT edition forever
+// until an explicit, audited re-acceptance moves them forward.
+```
+
+The `@Column(updatable=false)` mapping is what makes this mechanical rather than aspirational: the provider omits those columns from every generated `UPDATE`, so even a stray `edition.setTitle(...)` is a silent no-op at flush time rather than a history-destroying write. Pair this rule with `optimistic-locking-l0` (apply `@Version` + If-Match to the *draft* row, where concurrent authors actually race) — published editions need no optimistic lock because they are never updated. Reserve all mutation for the draft; treat every published edition as append-only.
+
+Verification: review-tier — `specs/content-versioning-l0.yaml#PUBLISH-SNAPSHOT-001` defines the immutable-edition contract and `#PUBLISH-TRANSITION-001` the sole-mutator publish. A fork-receiver realizing this domain asserts the mapping in a ViolationProofTest (reflect over the `PublishedCourseEdition` fields; assert every content column carries `@Column(updatable=false)`) and asserts publish-twice yields two distinct rows with the first edition's content unchanged. No `@Tag` test ships in ax-template for this generic pattern yet, so this rule is honestly verification:review, not gradle+tag.
+
+Reference: [Semantic Versioning 2.0.0 — §3 released-version immutability](https://semver.org/)
+
+Reference: [Martin Fowler — Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html)
+
+Reference: [PostgreSQL — Introduction to MVCC](https://www.postgresql.org/docs/current/mvcc-intro.html)
+
+
 <!-- @source rules/quality-no-system-streams.md -->
 
 ---
@@ -6821,6 +6944,102 @@ public final class PiiRedactor {
 Verification: `./gradlew testPractices --tests "*UtilityClassShape*"` reflects on `PiiRedactor` and asserts the class is final, has exactly one declared constructor, that constructor takes no arguments, and is private.
 
 Reference: Effective Java Item 4 · [JLS §8.8.10](https://docs.oracle.com/javase/specs/jls/se21/html/jls-8.html)
+
+
+<!-- @source rules/quota-atomic-tenant-claim.md -->
+
+---
+title: Per-tenant accumulating quota MUST be claimed atomically — never check-then-increment
+impact: HIGH
+impactDescription: "A read-then-write quota check admits a TOCTOU race where two concurrent consumers each pass `used < limit` and the committed total exceeds the plan cap — the tenant gets free over-allowance and the counter silently over-runs"
+tags:
+  - quota
+  - multi-tenant
+  - concurrency
+  - toctou
+  - resource-consumption
+spec_ref: "specs/per-tenant-resource-quota-l0.yaml#QUOTA-ATOMIC-001"
+verification:
+  type: review
+  source: "specs/per-tenant-resource-quota-l0.yaml#QUOTA-ATOMIC-001"
+  pattern: "Quota consume claims headroom in ONE atomic statement — a conditional `UPDATE ... WHERE used + :delta <= limit_value` whose 0-affected-rows means refusal, or `SELECT ... FOR UPDATE` then validate-and-write in the same transaction. No code path reads `used` and writes `used + delta` in two separate statements."
+upstream:
+  - "https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/"
+  - "https://datatracker.ietf.org/doc/html/rfc6585#section-4"
+evidence:
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2023) — API4:2023 Unrestricted Resource Consumption"
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/"
+    quote: "Satisfying API requests requires resources such as network bandwidth, CPU, memory, and storage."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "RFC 6585 — Additional HTTP Status Codes, Section 4 (429 Too Many Requests)"
+    url: "https://datatracker.ietf.org/doc/html/rfc6585#section-4"
+    quote: "The 429 status code indicates that the user has sent too many requests in a given amount of time (\"rate limiting\")."
+    quoted_at: "2026-06-01"
+---
+
+## Per-tenant accumulating quota MUST be claimed atomically — never check-then-increment
+
+**Impact: HIGH — a read-then-write quota check is a TOCTOU race that lets a tenant exceed its plan cap under concurrency**
+
+A per-tenant accumulating quota (total seats, total stored content GB, monthly job count, AI-token allowance) is a running total bounded by the plan: `used + delta <= limit`. The naive implementation reads the current `used`, compares it in application code, and — if it fits — writes `used + delta` in a second statement. Under any concurrency this loses. Two consume requests for the last seat both `SELECT used` and both see `used = limit - 1`, both pass the in-memory `used < limit` check, and both `UPDATE` — the committed total is `limit + 1`. The tenant got a free seat the plan never sold, and the denormalised counter now over-runs the cap permanently. This is the classic time-of-check-to-time-of-use (TOCTOU) defect, and it is exactly the unbounded-consumption hole OWASP API4:2023 warns about: the cap exists in the schema but is not actually *enforced* because the check and the mutation are not one indivisible operation.
+
+The fix is to make the check and the increment a single atomic step that the database serialises. Two equivalent forms: (1) a **conditional UPDATE** whose `WHERE` clause carries the limit predicate, so the database itself refuses the write and returns 0 affected rows when there is no headroom; or (2) a **`SELECT ... FOR UPDATE`** row lock that forces concurrent claimers to queue, then validate-and-write inside the held lock. Either way, exactly one of two racing claims for the last unit wins; the other is refused with zero increment. The application never holds a stale `used` value across a decision boundary.
+
+This is distinct from a per-window rate limit (`ratelimit-l0`, RFC 6585 token bucket that *refills* over time — a 429 there is transient and retry succeeds) and from a per-user soft cap (single `user_id` subject). Here the subject is the **tenant aggregate** and the total does not refill on the clock — it only changes on consume, release, or billing-period reset. When the claim is refused, return 429 with an RFC 9457 `type=urn:problem:quota-exceeded` body (see `QUOTA-REJECT-001`).
+
+**Incorrect — check-then-increment across two statements; two concurrent consumers both pass and the total exceeds the plan cap:**
+
+```java
+@Transactional
+public void consume(UUID tenantId, Resource resource, long delta) {
+    TenantQuota q = quotaRepo.findByTenantAndResource(tenantId, resource); // read used
+    if (q.getUsed() + delta > q.getLimit()) {                              // ❌ check
+        throw new QuotaExceededException(resource, q.getLimit(), q.getUsed(), delta);
+    }
+    q.setUsed(q.getUsed() + delta);   // ❌ separate write — TOCTOU: the row another
+    quotaRepo.save(q);                //    transaction is also mutating is read stale
+}
+// Two consume(last-seat) calls interleave: both read used = limit-1, both pass the
+// check, both write limit. Final committed used = limit+1. Cap silently breached.
+```
+
+**Correct — single conditional UPDATE; the database enforces the predicate; 0 rows = refused:**
+
+```java
+public interface TenantQuotaRepository extends JpaRepository<TenantQuota, UUID> {
+    @Modifying
+    @Query("""
+        UPDATE TenantQuota q
+           SET q.used = q.used + :delta
+         WHERE q.tenantId = :tenantId
+           AND q.resource = :resource
+           AND q.used + :delta <= q.limit
+        """)
+    int tryClaim(UUID tenantId, Resource resource, long delta); // affected rows
+}
+
+@Transactional
+public void consume(UUID tenantId, Resource resource, long delta) {
+    int claimed = quotaRepo.tryClaim(tenantId, resource, delta);
+    if (claimed == 0) {                       // ✅ DB refused: no headroom OR lost the race
+        TenantQuota q = quotaRepo.findByTenantAndResource(tenantId, resource);
+        throw new QuotaExceededException(resource, q.getLimit(), q.getUsed(), delta);
+    }
+}
+// The check (`used + :delta <= limit`) and the increment are ONE statement the
+// database serialises per row. Exactly one of two racing last-seat claims gets
+// affected-rows = 1; the other gets 0 and is refused. used can never reach limit+1.
+```
+
+The `SELECT ... FOR UPDATE` variant is equivalent and preferable when the consume must also touch sibling rows in the same critical section: lock the quota row, re-read `used`, validate, write, all inside the held lock. Pair this rule with `QUOTA-REJECT-001` (deterministic 429 + RFC 9457 `urn:problem:quota-exceeded`) and `QUOTA-RECONCILE-001` (the counter must be reconcilable against the source-of-truth rows and must decrement on release).
+
+Verification (review-tier): there is no static @Tag test that proves an atomic claim — atomicity is a runtime property of the SQL statement and the transaction, not a structurally-detectable shape. A reviewer confirms every quota-consume path issues the limit predicate inside a single conditional UPDATE (0-rows = refused) or a held `SELECT ... FOR UPDATE`, and that no path reads `used` and writes `used + delta` in two separate statements. The behavioural proof is the `QUOTA-ATOMIC-001` integration test: fire two concurrent consume calls against a tenant at `limit - 1` and assert exactly one 2xx + one rejection + final persisted `used == limit` (never `limit + 1`).
+
+Reference: [OWASP API Security Top 10 (2023) — API4:2023 Unrestricted Resource Consumption](https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/)
+
+Reference: [RFC 6585 §4 — 429 Too Many Requests](https://datatracker.ietf.org/doc/html/rfc6585#section-4)
 
 
 <!-- @source rules/rbac-stub-default-fail-closed.md -->
@@ -7021,6 +7240,127 @@ See: `practices/evals/fixtures/recipe-invariants-must-resolve/fail_unresolvable_
 See: `practices/evals/fixtures/recipe-invariants-must-resolve/pass/recipe.yaml` — all `business_invariants` reference `specs/billing-l0.yaml` which exists.
 
 Reference: https://owasp.org/www-project-application-security-verification-standard/
+
+
+<!-- @source rules/relationship-scoped-authz-via-grant-lookup.md -->
+
+---
+title: Non-owner access to another subject's resource MUST be a grant-table lookup — not owner-equality, not a static role
+impact: HIGH
+impactDescription: "A relationship-scoped resource guarded by owner-equality (or a global role) either locks out legitimate grantees or fails open to anyone holding the role; the structural fix is a join-table lookup whose missing row denies as 404"
+tags:
+  - authz
+  - rebac
+  - bola
+  - grant
+  - least-privilege
+spec_ref: "specs/relationship-authz-l0.yaml#REBAC-LOOKUP-001"
+verification:
+  type: review
+  source: "templates/L0/fork-receiver-kit/use-caller-id.ts"
+  pattern: "caller id derives from Authentication (server-side, never a client-supplied subject param); non-owner access resolved by a parameterized lookup against a grant/membership join-table; missing grant row → 404 existence-hiding; LIST endpoints PRE-FILTER by the caller's grant set inside the @Query (no post-filter)"
+upstream:
+  - "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+  - "https://en.wikipedia.org/wiki/Google_Zanzibar"
+evidence:
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2023) — API1:2023 Broken Object Level Authorization (BOLA)"
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+    quote: "Every API endpoint that receives an ID of an object, and performs any action on the object, should implement object-level authorization checks."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP ASVS v4.0.3 — V4.1.3 General Access Control Design (principle of least privilege)"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
+    quote: "Verify that the principle of least privilege exists - users should only be able to access functions, data files, URLs, controllers, services, and other resources, for which they possess specific authorization."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Google Zanzibar — relationship-based access control (ReBAC) tuple model (USENIX ATC 2019)"
+    url: "https://en.wikipedia.org/wiki/Google_Zanzibar"
+    quote: "It processes access control queries from client applications and stores access control lists (ACLs) expressed as relationship tuples under a relationship-based access control (ReBAC) model."
+    quoted_at: "2026-06-01"
+---
+
+## Non-owner access to another subject's resource MUST be a grant-table lookup — not owner-equality, not a static role
+
+**Impact: HIGH — relationship-scoped resources are the blind spot between owner-equality and tenant-equality**
+
+The catalog already covers three authorization shapes. Owner-equality (`caller-authentication-only-no-userid-param.md`) answers *"is this MY row"* by deriving the caller from `Authentication` and never accepting a `userId` parameter. Tenant-equality (`multi-tenant-l0` ISOLATION-001/003) answers *"is this MY tenant's row"*. Single-designated-principal (`approval-workflow` WF-AUTHZ-003) answers *"am I the one approver named on this step"*. None of them answers the fourth, extremely common question: **"has someone GRANTED me a relation to a resource I do not own?"** — the course-staff member who must read every enrolled learner's submissions, the project member added to someone else's board, the clinician on a patient's care team, the collaborator on a shared document.
+
+Guarding that resource with owner-equality locks the legitimate grantee out. Guarding it with a static global role (`hasAuthority("ROLE_STAFF")`) fails open — *every* staff member can now read *every* learner, not just the ones they were granted. The structural answer, the one Google's Zanzibar popularized as ReBAC, is to make authorization **a lookup against a stored relationship row**, not a branch in code and not a role bit: access is data. The grant/membership join-table row is the single source of truth — its presence authorizes, its absence denies — and the caller id fed into that lookup still comes from `Authentication.getName()` server-side, never from a client-supplied subject id.
+
+Three invariants follow, and they are testable:
+
+1. **The gate is a lookup.** A non-owner, non-admin accessor is authorized iff a grant row exists for `(callerId, resourceScope)`. No grant row → denied. This runs on the trusted service layer for *every* accessor of the object (ASVS V4.1.1; OWASP BOLA requires an object-level check on every endpoint that receives an object id).
+2. **A missing grant denies as 404, not 403.** Returning 403 tells the attacker the object exists and turns id-enumeration into an oracle (403 = exists-no-access vs 404 = absent). The catalog default collapses both into an indistinguishable 404 — existence-hiding, deny-by-default, fail-secure (ASVS V4.1.5).
+3. **LIST endpoints pre-filter in the query.** Collections JOIN the grant table and bind the caller id *inside the `@Query`*, returning only granted rows. Post-filtering a broad result set in application code is forbidden: it leaks counts/pagination, and the day someone forgets the post-filter the endpoint ships every row.
+
+**Incorrect — owner-equality on a relationship-scoped resource (locks out grantees) or a global role (fails open), plus 403 + post-filtered list:**
+
+```java
+@GetMapping("/api/submissions/{id}")
+public Submission get(Authentication auth, @PathVariable Long id) {
+    Submission s = repo.findById(id).orElseThrow();
+    // owner-equality: the assigned course-staff grader can NEVER read it
+    if (!s.getOwnerId().equals(auth.getName())) {
+        throw new AccessDeniedException("forbidden");   // ❌ 403 leaks existence
+    }
+    return s;
+}
+
+@GetMapping("/api/submissions")
+public List<Submission> list(Authentication auth) {
+    return repo.findAll().stream()                      // ❌ fetches EVERY row
+        .filter(s -> canSee(auth.getName(), s))         // ❌ post-filter; forget it → leak
+        .toList();
+}
+// Swapping the owner check for hasAuthority("ROLE_STAFF") is no better:
+// it fails OPEN — every staffer reads every learner, not the granted ones.
+```
+
+**Correct — grant-table lookup; missing grant → 404; list pre-filtered inside the query:**
+
+```java
+// Grant join-table: one row = "callerId has <relation> to <resourceScope>".
+interface GrantRepository extends JpaRepository<Grant, Long> {
+    boolean existsByGranteeIdAndScopeId(String granteeId, Long scopeId);
+
+    // LIST pre-filter: the JOIN happens IN the query, bound to the caller.
+    @Query("""
+        select s from Submission s
+        join Grant g on g.scopeId = s.courseId
+        where g.granteeId = :caller
+    """)
+    Page<Submission> findGranted(@Param("caller") String caller, Pageable page);
+}
+
+@GetMapping("/api/submissions/{id}")
+public Submission get(Authentication auth, @PathVariable Long id) {
+    String caller = auth.getName();                       // server-side identity
+    Submission s = repo.findById(id).orElseThrow(NotFound::new);   // 404
+    boolean owner = s.getOwnerId().equals(caller);
+    boolean granted = grants.existsByGranteeIdAndScopeId(caller, s.getCourseId());
+    if (!owner && !granted) {
+        throw new NotFound();    // ✅ 404 existence-hiding — never 403, no oracle
+    }
+    return s;
+}
+
+@GetMapping("/api/submissions")
+public Page<Submission> list(Authentication auth, Pageable page) {
+    return repo.findGranted(auth.getName(), page);        // ✅ only granted rows; total reflects them
+}
+```
+
+The negative test that proves the invariant: with no grant row, `GET /api/submissions/{id}` returns **404** and the list returns **0**; INSERT one grant row for `(caller, courseId)` and the *same* `GET` flips to **200** and the list returns **1**; DELETE the grant row and it flips back to 404 / 0. The authorization decision moved entirely into the presence/absence of a relationship row — that 404→200→404 flip on a single INSERT/DELETE is the signature of correct ReBAC. Verify that the admin path (`/api/admin/...` gated by `hasAuthority("ROLE_ADMIN")`) remains the *only* place a global role substitutes for a grant, and that no endpoint accepts a client-supplied `granteeId`/subject filter that could widen the grant set.
+
+Verification: review-tier. A reviewer confirms (a) non-owner access is decided by a `Grant`/membership repository lookup keyed on `Authentication.getName()`, not owner-equality and not a bare `hasAuthority`; (b) the no-grant branch throws the 404/NotFound path, never a 403; (c) every collection endpoint binds the caller into a grant-joined `@Query` and contains no post-`findAll()` `.filter(...)` over authorization. The caller-identity seam this composes with ships at `templates/L0/fork-receiver-kit/use-caller-id.ts`. No `@Tag` test is claimed because the runtime grant table and its 404→200 flip are recipe-instantiated, not present as a generic backend module in this template.
+
+Reference: [OWASP API Security Top 10 (2023) — API1:2023 BOLA](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)
+
+Reference: [OWASP ASVS v4.0.3 — V4 Access Control](https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md)
+
+Reference: [Google Zanzibar — relationship-based access control (ReBAC)](https://en.wikipedia.org/wiki/Google_Zanzibar)
 
 
 <!-- @source rules/secret-shown-once-uses-beforeunload-guard.md -->
@@ -7428,6 +7768,118 @@ modules converge to justify a shared library.
 - "We trust the sender adapter to throw clean errors" — sender adapters
   bubble up upstream library exceptions (JavaMail, AWS SES SDK, SendGrid
   client) whose error strings the catalog cannot control.
+
+
+<!-- @source rules/shared-counter-claim-must-be-atomic.md -->
+
+---
+title: A claim against a bounded shared counter MUST be a single atomic statement — never read-then-insert
+impact: CRITICAL
+impactDescription: "Two claimants each reading 'taken < capacity == true' and both inserting oversells the resource; idempotency-key dedup does NOT close this cross-claimant race — only an atomic conditional UPDATE or pessimistic row lock does"
+tags:
+  - concurrency
+  - capacity
+  - race-condition
+  - cwe-362
+  - atomic-claim
+  - no-oversell
+spec_ref: "specs/bounded-capacity-claim-l0.yaml#CLAIM-ATOMIC-001"
+verification:
+  type: review
+  source: "specs/bounded-capacity-claim-l0.yaml#CLAIM-ATOMIC-001"
+  pattern: "A claim handler against a bounded counter MUST resolve room-and-increment in ONE statement: either (a) conditional `UPDATE capacity SET taken = taken + 1 WHERE resource_id = ? AND taken < capacity` with an affected-rows==1 check, or (b) `SELECT ... FOR UPDATE` on the single capacity row inside the same @Transactional method before the bounded write. Reject any handler that reads the count (COUNT(*) or a separate SELECT) in one statement and inserts/updates in another — that read-then-insert window is the oversell race. A DB `CHECK (taken <= capacity)` backstop MUST exist. This is a runtime concurrency property with no compile-time signal, so it is verified by review against the spec, not by a static @Tag test."
+upstream:
+  - "https://www.postgresql.org/docs/current/explicit-locking.html"
+  - "https://www.postgresql.org/docs/current/transaction-iso.html"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL Documentation — 13.3 Explicit Locking (Row-Level Locks, FOR UPDATE)"
+    url: "https://www.postgresql.org/docs/current/explicit-locking.html"
+    quote: "FOR UPDATE causes the rows retrieved by the SELECT statement to be locked as though for update. This prevents them from being locked, modified or deleted by other transactions until the current transaction ends."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "PostgreSQL Documentation — 13.2 Transaction Isolation (Read Committed Isolation Level)"
+    url: "https://www.postgresql.org/docs/current/transaction-iso.html"
+    quote: "The search condition of the command (the WHERE clause) is re-evaluated to see if the updated version of the row still matches the search condition. If so, the second updater proceeds with its operation using the updated version of the row."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition')"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-01"
+decided_at: "2026-06-01"
+---
+
+## A claim against a bounded shared counter MUST be a single atomic statement — never read-then-insert
+
+**Impact: CRITICAL — Two claimants racing the last unit of a bounded resource (the last seat, the last enrollment slot, the last ticket) will BOTH succeed if the claim is coded as read-the-count-then-insert-if-room. Idempotency-Key protection does not help: idempotency dedupes a RETRY of the SAME caller's SAME key, but two DIFFERENT claimants supply two DIFFERENT keys and both pass the stale precondition. The result is an oversell — a double-booked room, an over-enrolled course, a ticket sold twice — that no amount of retry-dedup catches.**
+
+The failure is CWE-362, a race condition: a code sequence needs temporary exclusive access to a shared resource (the capacity counter), but a timing window exists where a concurrent claimant modifies it. Under PostgreSQL Read Committed (the default), a row committed by transaction B *after* transaction A took its snapshot for the `SELECT count` is invisible to A's earlier read — so A and B both observe `taken < capacity == true` and both insert. The counter ends at `capacity + 1`.
+
+There are exactly two correct primitives. Both collapse the check-and-increment into ONE atomic step so the database — not application code — serializes the race.
+
+**Primitive (a): conditional single-statement UPDATE.** Put the precondition *inside* the write. `UPDATE ... SET taken = taken + 1 WHERE id = ? AND taken < capacity` returns the affected-row count: `1` means you won the unit, `0` means there was no room. This is race-safe because Read Committed re-evaluates the `WHERE` clause against the freshly-committed row version — the loser's `taken < capacity` is re-checked against the bumped count and fails, yielding `0` rows.
+
+**Primitive (b): pessimistic `SELECT ... FOR UPDATE`.** Lock the single capacity row at the top of the transaction; the row lock blocks the second claimant until the first commits, so the second reads the already-incremented value.
+
+A `CHECK (taken <= capacity)` on the capacity row is the mandatory backstop: even a future code path that forgets the primitive cannot persist an oversell.
+
+**Incorrect — read-then-insert: two concurrent claimants both pass the check and oversell (CWE-362):**
+
+```java
+@Transactional
+public Seat claimSeat(long showId, long userId) {
+    // VIOLATION: read in one statement ...
+    long taken = seatRepo.countByShowId(showId);
+    Capacity cap = capacityRepo.findByShowId(showId);
+    if (taken >= cap.getCapacity()) {
+        throw new CapacityExhaustedException(showId);
+    }
+    // ... act in another. Between the read and this insert a concurrent
+    // transaction can commit its own claim — both see room, both insert.
+    return seatRepo.save(new Seat(showId, userId)); // oversell: capacity+1
+}
+```
+
+**Correct — conditional single-statement UPDATE; affected-rows decides grant vs reject; one atomic step, no window:**
+
+```java
+public interface CapacityRepository extends JpaRepository<Capacity, Long> {
+    // Precondition lives INSIDE the write. Read Committed re-checks the
+    // WHERE against the freshly-committed row, so the loser gets 0 rows.
+    @Modifying
+    @Query("UPDATE Capacity c SET c.taken = c.taken + 1 "
+         + "WHERE c.resourceId = :rid AND c.taken < c.capacity")
+    int tryClaim(@Param("rid") long resourceId);
+}
+
+@Transactional
+public Seat claimSeat(long showId, long userId) {
+    int granted = capacityRepository.tryClaim(showId); // 1 = won, 0 = no room
+    if (granted == 0) {
+        claimMetrics.exhausted("seat");                 // CLAIM-OBSERVABILITY-001
+        throw new CapacityExhaustedException(showId);   // → 409 CAPACITY_EXHAUSTED
+    }
+    claimMetrics.granted("seat");
+    return seatRepo.save(new Seat(showId, userId));
+}
+// DDL backstop (independent of code): the capacity row carries
+//   CHECK (taken <= capacity) AND CHECK (taken >= 0)
+// so even a path that bypasses tryClaim() cannot persist an oversell.
+```
+
+The pessimistic alternative is equally correct: a derived-query `findByResourceIdForUpdate` annotated `@Lock(LockModeType.PESSIMISTIC_WRITE)` that locks the single capacity row before the bounded UPDATE inside the same transaction. Choose conditional-UPDATE for the lowest-contention path (no lock wait on the happy path) and FOR UPDATE when the claim must read additional locked state in the same transaction.
+
+**This is orthogonal to idempotency — ship both.** `idempotency-key-on-mutations.md` makes a single caller's *retry* return the cached grant (no double-grant to ONE caller). This rule makes two *distinct* callers racing the last unit resolve to exactly one grant and one reject (no oversell ACROSS callers). A claim POST that ships only idempotency is still oversell-vulnerable; one that ships only atomic-claim double-charges a retried winner. The catalog requires both on a side-effecting bounded-resource claim.
+
+Verification: review-tier. A claim is a runtime concurrency property — a single-threaded test passes even on the broken read-then-insert, and no compile-time signal exists. Verify by review against `specs/bounded-capacity-claim-l0.yaml#CLAIM-ATOMIC-001`, and prove it with the negative concurrency test mandated by `#CLAIM-OVERSELL-001` (fire N+1 concurrent claims at capacity N; assert exactly N grants + 1 reject + final `taken == N`). When a fork-receiver wires a real `@Tag("CLAIM-OVERSELL-001")` concurrency IT, this rule's verification block may be upgraded from review to gradle_task+tag.
+
+Reference: [PostgreSQL — Explicit Locking (FOR UPDATE row-level locks)](https://www.postgresql.org/docs/current/explicit-locking.html)
+
+Reference: [PostgreSQL — Transaction Isolation (Read Committed WHERE re-evaluation)](https://www.postgresql.org/docs/current/transaction-iso.html)
+
+Reference: [CWE-362 — Race Condition (Concurrent Execution using Shared Resource with Improper Synchronization)](https://cwe.mitre.org/data/definitions/362.html)
 
 
 <!-- @source rules/soft-delete-audit-trail.md -->
@@ -8247,6 +8699,129 @@ class UserApiTest {
 Verification: `./gradlew testPractices --tests "*RestAssured*"` hits `/actuator/health` over a real port and asserts the test class itself contains no MockMvc references.
 
 Reference: [RestAssured](https://rest-assured.io/) · [Spring Boot Testing](https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#features.testing.spring-boot-applications)
+
+
+<!-- @source rules/time-gated-decisions-read-injected-clock.md -->
+
+---
+title: Time-gated decisions must read an injected Clock and compare a server-stored instant — never a client timestamp
+impact: HIGH
+impactDescription: "Untestable Instant.now() hides expiry/deadline bugs; trusting a client-supplied timestamp lets the caller forge their way past any window or cutoff (authorization bypass)"
+tags:
+  - time
+  - clock
+  - authz
+  - security
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-TIME-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/sessionmanagement/SessionService.java"
+  pattern: "Time-gated path injects `private final Clock clock`, computes `Instant now = Instant.now(clock)`, and decides against a server-stored instant (`request.expiresAt().isAfter(now)`); no `Instant.now()` without a clock argument and no comparison against a request-body/header timestamp appears on any expiry/deadline/window path"
+upstream:
+  - "https://cwe.mitre.org/data/definitions/367.html"
+  - "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/time/Clock.html"
+  - "https://github.com/OWASP/ASVS/blob/v4.0.3/4.0/en/0x19-V11-BusLogic.md"
+  - "https://cwe.mitre.org/data/definitions/639.html"
+evidence:
+  - source_type: external
+    citation: "CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition — MITRE Common Weakness Enumeration"
+    url: "https://cwe.mitre.org/data/definitions/367.html"
+    quote: "The product checks the state of a resource before using that resource, but the resource's state can change between the check and the use in a way that invalidates the results of the check."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "java.time.Clock — Java SE 21 API documentation (Oracle)"
+    url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/time/Clock.html"
+    quote: "Best practice for applications is to pass a Clock into any method that requires the current instant and time-zone. A dependency injection framework is one way to achieve this:"
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP Application Security Verification Standard 4.0.3 — V11.1.6 Business Logic Security"
+    url: "https://github.com/OWASP/ASVS/blob/v4.0.3/4.0/en/0x19-V11-BusLogic.md"
+    quote: "Verify that the application does not suffer from \"Time Of Check to Time Of Use\" (TOCTOU) issues or other race conditions for sensitive operations."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "CWE-639: Authorization Bypass Through User-Controlled Key — MITRE Common Weakness Enumeration"
+    url: "https://cwe.mitre.org/data/definitions/639.html"
+    quote: "The system's authorization functionality does not prevent one user from gaining access to another user's data or record by modifying the key value identifying the data."
+    quoted_at: "2026-06-01"
+---
+
+## Time-gated decisions must read an injected Clock and compare a server-stored instant — never a client timestamp
+
+**Impact: HIGH — Untestable `Instant.now()` hides expiry/deadline bugs; trusting a client-supplied timestamp lets the caller forge their way past any window or cutoff (authorization bypass)**
+
+A *time-gated decision* is any authorization or lifecycle outcome whose result depends on "what time is it now" relative to a moment the server owns: a token TTL, a session `expiresAt`, a coupon/enrolment window, a submission deadline, a scheduled cutoff, a grace period, a retry-backoff gate, or a server-written `createdAt` / `revokedAt` / soft-delete `deleted_at` audit timestamp. Two defects recur across these paths, and one rule closes both.
+
+**Defect 1 — `Instant.now()` with no clock is untestable.** `Instant.now()`, `System.currentTimeMillis()`, `LocalDate.now()`, and `new Date()` read the JVM wall clock at the exact instant the line executes. A test cannot pin them, cannot advance them past a deadline, and cannot assert that the decision *flips* when the deadline is crossed. So the most security-relevant branch — the one that fires only after a window closes — is never exercised, and a wrong comparison (`isBefore` vs `isAfter`, `<=` vs `<`) ships GREEN. The Java platform's own answer is to inject a `java.time.Clock`: *"Best practice for applications is to pass a Clock into any method that requires the current instant and time-zone. A dependency injection framework is one way to achieve this."* With an injected clock a test substitutes `Clock.fixed(...)`, advances it one tick past a stored expiry, and proves the predicate changes.
+
+**Defect 2 — trusting a client timestamp is an authorization bypass.** If the server decides "is the window still open?" by reading a timestamp the *client* put in the request body, a query parameter, or a header, the caller simply sends a timestamp inside the window and walks past the cutoff. That is CWE-639 generalised from a user-controlled *key* to a user-controlled *time value*: "The system's authorization functionality does not prevent one user from gaining access … by modifying the [client-supplied] value." The window decision must compare the **server's clock** to an instant the **server stored** (a persisted `expiresAt` column, a computed `start + ttl`), and must ignore any time the client claims.
+
+**Defect 3 — expiry is a predicate, not a stored boolean.** Persisting `boolean expired` (or `boolean windowOpen`) snapshots a decision that immediately goes stale: the row says `expired = false` forever until something re-writes it, so a resource silently stays valid past its deadline (a TOCTOU gap — *"the resource's state can change between the check and the use"*, CWE-367). Store the *instant* (`expiresAt`) and evaluate `now(clock).isAfter(expiresAt)` at read time. The truth is recomputed on every access from the live clock, so there is no stale snapshot to exploit.
+
+**Incorrect — wall-clock `now()` (untestable) + trusting the client's timestamp (forgeable) + a stale boolean:**
+
+```java
+@Service
+public class EnrollmentService {
+    // ❌ no injected Clock — every decision below is unpinnable in a test
+
+    public void enroll(EnrollRequest req) {
+        // ❌ DEFECT 2: the cutoff is read from the REQUEST BODY — the caller
+        //    sends submittedAt = course.openUntil.minusSeconds(1) and is always "on time"
+        if (req.getSubmittedAt().isBefore(course.getDeadline())) {
+            seat.setExpired(false);           // ❌ DEFECT 3: stored boolean snapshot, never recomputed
+            seatRepository.save(seat);
+            grant(req);
+        }
+    }
+
+    public boolean isStillValid(Seat seat) {
+        // ❌ DEFECT 1: Instant.now() — a test cannot advance time past the deadline,
+        //    so the "expired" branch is never proven to fire
+        return Instant.now().isBefore(seat.getDeadline());
+    }
+}
+```
+
+**Correct — injected `Clock`, decision compares server clock to a server-stored instant, expiry as a live predicate:**
+
+```java
+@Service
+public class EnrollmentService {
+    private final Clock clock;                 // ✅ dependency-injected (Spring @Bean Clock.systemUTC())
+
+    public EnrollmentService(Clock clock, SeatRepository seatRepository) {
+        this.clock = clock;
+    }
+
+    public void enroll(EnrollRequest req) {
+        Instant now = Instant.now(clock);      // ✅ DEFECT 1 closed: pinnable in tests
+        // ✅ DEFECT 2 closed: compare the SERVER clock to the SERVER-STORED deadline;
+        //    req carries no usable time value — anything the client claims is ignored
+        if (now.isAfter(course.getDeadline())) {
+            throw new DeadlinePassedException("enrolment window closed at " + course.getDeadline());
+        }
+        grant(req);
+    }
+
+    public boolean isStillValid(Seat seat) {
+        // ✅ DEFECT 3 closed: expiry is a predicate recomputed from the live clock,
+        //    not a stored boolean that goes stale
+        return Instant.now(clock).isBefore(seat.getDeadline());
+    }
+}
+```
+
+This is exactly the shape the reference workload already runs: `SessionService.register()` injects `private final Clock clock`, computes `Instant now = Instant.now(clock)`, and gates on `request.expiresAt().isAfter(now)` — server clock versus server-stored instant, with no client-supplied time anywhere on the path. The same discipline covers `DsrSlaSweeper` (30-day SLA), `ApiKeyService` rotation, `EmailOutbox` exponential backoff, and the `@SQLDelete ... SET deleted_at = CURRENT_TIMESTAMP` soft-delete column — all server-clock-owned. A client timestamp, where one is genuinely needed (e.g. an event's *display* time), is data to store, never an input to an authorization predicate.
+
+Verification: review-tier. There is no single static `@Tag` test that owns this runtime property, so a reviewer (or a fork-receiver's grep gate) confirms on every time-gated path: (1) the bean holds an injected `Clock` and reads `Instant.now(clock)` — never a bare `Instant.now()` / `System.currentTimeMillis()` / `new Date()`; (2) the deadline/window comparison is against a server-stored instant, with no request-body/query/header timestamp feeding the predicate; (3) expiry is evaluated as a live `now(clock).isAfter(stored)` predicate, not persisted as a boolean. The canonical per-path proof a fork-receiver writes is a `Clock.fixed(...)` unit test that advances one tick past the stored deadline and asserts the decision flips from allow to deny.
+
+Reference: [CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition](https://cwe.mitre.org/data/definitions/367.html)
+
+Reference: [java.time.Clock — Java SE 21 API documentation](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/time/Clock.html)
+
+Reference: [OWASP ASVS 4.0.3 — V11.1.6 Business Logic (TOCTOU / race conditions)](https://github.com/OWASP/ASVS/blob/v4.0.3/4.0/en/0x19-V11-BusLogic.md)
+
+Reference: [CWE-639: Authorization Bypass Through User-Controlled Key](https://cwe.mitre.org/data/definitions/639.html)
 
 
 <!-- @source rules/traceid-in-error-response.md -->
