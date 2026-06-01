@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "864757f43bb20c9bf4c7d2d85257681be2054c3ce8689adc5a02fc4dccda8472"
+  source_concat_sha256: "edc42e41a68c4458566dbc2a612d0a6e8c353c4a02fc8b0fba7fc8f7ea5348c3"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -3832,7 +3832,7 @@ evidence:
   - source_type: external
     citation: "RFC 9110 §9.3.5 — HTTP DELETE method idempotency"
     url: "https://www.rfc-editor.org/rfc/rfc9110.html#name-delete"
-    quote: "The DELETE method requests that the origin server remove the association between the target resource and its current functionality. ... The methods defined as idempotent are PUT, DELETE, and the safe request methods."
+    quote: "The DELETE method requests deletion of the resource identified by the request target."
     quoted_at: "2026-05-22"
   - source_type: external
     citation: "RFC 9110 §9.2.2 — Idempotent Methods"
@@ -10959,7 +10959,7 @@ evidence:
     quote: "The append-only property of each log is technically achieved using Merkle Trees, which can be used to show that any particular version of the log is a superset of any particular previous version."
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "NIST SP 800-92 — Guide to Computer Security Log Management, §5.2 Log File Integrity Checking"
+    citation: "NIST SP 800-92 — Guide to Computer Security Log Management, §5.1.2 Log Storage and Disposal (log file integrity checking)"
     url: "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf"
     quote: "If the log file is modified and its message digest is recalculated, it will not match the original message digest, indicating that the file has been altered."
     quoted_at: "2026-06-01"
@@ -11013,7 +11013,7 @@ Verification: review the entry mapping and the sole-writer/verify routine — co
 
 Reference: [RFC 6962 — Certificate Transparency (append-only Merkle/hash-chained log)](https://datatracker.ietf.org/doc/html/rfc6962)
 
-Reference: [NIST SP 800-92 — Guide to Computer Security Log Management §5.2 (message-digest detection of log alteration)](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf)
+Reference: [NIST SP 800-92 — Guide to Computer Security Log Management §5.1.2 (message-digest detection of log alteration)](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf)
 
 
 <!-- @source rules/temporal-validity-record-non-overlap.md -->
@@ -11046,7 +11046,7 @@ evidence:
     quote: "Exclusion constraints ensure that if any two rows are compared on the specified columns or expressions using the specified operators, at least one of these operator comparisons will return false or null."
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "PostgreSQL Documentation — F.10 btree_gist (B-tree equivalent GiST operator classes for exclusion constraints)"
+    citation: "PostgreSQL Documentation — F.8 btree_gist (GiST operator classes with B-tree behavior)"
     url: "https://www.postgresql.org/docs/current/btree-gist.html"
     quote: "In addition to the typical B-tree search operators, btree_gist also provides index support for <> (\"not equals\"). This may be useful in combination with an exclusion constraint, as described below."
     quoted_at: "2026-06-01"
@@ -11134,7 +11134,7 @@ Verification: review-tier. Non-overlap under concurrency is a runtime property �
 
 Reference: [PostgreSQL — Constraints (Exclusion Constraints, EXCLUDE USING gist)](https://www.postgresql.org/docs/current/ddl-constraints.html)
 
-Reference: [PostgreSQL — btree_gist (B-tree equivalent GiST operator classes)](https://www.postgresql.org/docs/current/btree-gist.html)
+Reference: [PostgreSQL — btree_gist (F.8 — GiST operator classes with B-tree behavior)](https://www.postgresql.org/docs/current/btree-gist.html)
 
 Reference: [CWE-367 — Time-of-check Time-of-use (TOCTOU) Race Condition](https://cwe.mitre.org/data/definitions/367.html)
 

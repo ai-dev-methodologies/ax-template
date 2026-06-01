@@ -17,7 +17,7 @@ evidence:
   - source_type: external
     citation: "RFC 9110 §9.3.5 — HTTP DELETE method idempotency"
     url: "https://www.rfc-editor.org/rfc/rfc9110.html#name-delete"
-    quote: "The DELETE method requests that the origin server remove the association between the target resource and its current functionality. ... The methods defined as idempotent are PUT, DELETE, and the safe request methods."
+    quote: "The DELETE method requests deletion of the resource identified by the request target."
     quoted_at: "2026-05-22"
   - source_type: external
     citation: "RFC 9110 §9.2.2 — Idempotent Methods"

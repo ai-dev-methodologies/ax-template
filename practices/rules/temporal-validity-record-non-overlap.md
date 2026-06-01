@@ -26,7 +26,7 @@ evidence:
     quote: "Exclusion constraints ensure that if any two rows are compared on the specified columns or expressions using the specified operators, at least one of these operator comparisons will return false or null."
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "PostgreSQL Documentation — F.10 btree_gist (B-tree equivalent GiST operator classes for exclusion constraints)"
+    citation: "PostgreSQL Documentation — F.8 btree_gist (GiST operator classes with B-tree behavior)"
     url: "https://www.postgresql.org/docs/current/btree-gist.html"
     quote: "In addition to the typical B-tree search operators, btree_gist also provides index support for <> (\"not equals\"). This may be useful in combination with an exclusion constraint, as described below."
     quoted_at: "2026-06-01"
@@ -114,7 +114,7 @@ Verification: review-tier. Non-overlap under concurrency is a runtime property �
 
 Reference: [PostgreSQL — Constraints (Exclusion Constraints, EXCLUDE USING gist)](https://www.postgresql.org/docs/current/ddl-constraints.html)
 
-Reference: [PostgreSQL — btree_gist (B-tree equivalent GiST operator classes)](https://www.postgresql.org/docs/current/btree-gist.html)
+Reference: [PostgreSQL — btree_gist (F.8 — GiST operator classes with B-tree behavior)](https://www.postgresql.org/docs/current/btree-gist.html)
 
 Reference: [CWE-367 — Time-of-check Time-of-use (TOCTOU) Race Condition](https://cwe.mitre.org/data/definitions/367.html)
 
