@@ -162,3 +162,32 @@ items:
       referenced row." Quote anchor (Jakarta Persistence 3.1 §2.10):
       "Note that it is the application that bears responsibility for
       maintaining the consistency of runtime relationships."
+
+  - id: "SOFTDELETE-REVERSAL-001"
+    chapter: "Correction-by-reversal for POSTED immutable records (append, never edit/delete)"
+    requirement: "A record that has been POSTED/committed as an immutable fact (ledger entry, inventory stock-take adjustment, payroll line, finalized domain event) MUST NOT be UPDATEd or physically DELETEd to fix a mistake. Its value columns MUST be mapped `@Column(updatable=false)` and the owning service MUST expose no edit/delete mutator for a posted row. A correction MUST instead APPEND a NEW reversing record that compensates the original (equal-and-opposite difference form) and carries `reversal_of = original_id` back-referencing the record it reverses; when a different value was actually intended the service MUST ALSO append a fresh correct record. After a correction a read of the chain MUST show the original (still visible) + the reversal (which nets it out) + the optional correction, so the full history is preserved and auditable and the net equals the intended value — value is conserved, nothing is hidden, nothing is erased. This is DISTINCT from SOFTDELETE-MARK-001 (a tombstone HIDES a row; reversal keeps the original VISIBLE and offsets it) and from content-versioning (a new edition of mutable content; here the original is an immutable fact and the reversal is a separate offsetting fact). Negative test: post a record with a wrong value; attempt to UPDATE/DELETE the posted row via the service → assert no such mutator exists (or it is rejected); then call the correct() path → assert the original row is unchanged and still resolvable, a reversal row exists with reversal_of = original_id and the equal-and-opposite value, an optional correction row exists, and the summed net over the chain equals the intended value."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Generic + cross-cutting value-CONSERVATION primitive — accounting
+      reversal entry, inventory stock-take adjustment, loyalty points
+      reverse-and-regrant, gradebook correction. Composes the append-only /
+      retain posture of this spec (never physically erase a record that must
+      survive) with tamper-evident-log-l0 (the chain of entries stays intact
+      and verifiable). Realizes practices rule
+      immutable-record-corrected-by-reversal-not-edit.md. Anchored to Martin
+      Fowler — Event Sourcing (eaaDev) §Reversing Events
+      (https://martinfowler.com/eaaDev/EventSourcing.html) and the accounting
+      reversing/correcting-entry principle (a correction is journalized as a
+      new entry; the posted entry is reversed, never erased). Quote anchor
+      (Fowler, Reversing Events): "Reversal is the most straightforward when
+      the event is cast in the form of a difference. An example of this would
+      be 'add $10 to Martin's account' as opposed to 'set Martin's account to
+      $110'." Quote anchor (AccountingTools — reversing entry,
+      https://www.accountingtools.com/articles/what-is-a-reversing-entry.html):
+      "A reversing entry is a journal entry made in an accounting period,
+      which reverses selected entries made in the immediately preceding
+      period." Quote anchor (Patriot Software — correcting entries,
+      https://www.patriotsoftware.com/blog/accounting/what-is-correcting-entries-journal-examples/):
+      "A correcting entry in accounting fixes a mistake posted in your books."

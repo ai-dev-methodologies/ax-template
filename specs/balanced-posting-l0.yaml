@@ -1,0 +1,116 @@
+version: "0.1.0"
+scope: "balanced-posting-l0 — double-entry / conservation-of-quantity contract for any recipe whose business invariant is that a value-MOVING operation must neither MINT nor DESTROY value: the signed amounts of all legs persisted for one operation MUST net to exactly zero. Cross-cutting, jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / ledger applicable: inventory transfer (units leave warehouse A == units enter warehouse B), points / voucher / loyalty transfer (debit sender == credit receiver), energy / credit / quota allocation (drawn from pool == granted to consumer), classic double-entry accounting (debits == credits). Distinct from bounded-capacity-claim-l0 (which serializes claimants racing ONE one-sided shared counter — that primitive prevents OVER-allocation of a single counter; this one prevents an ASYMMETRIC multi-leg posting that conserves no total). Distinct from payment refund-cap (a single-axis cumulative ceiling: refunded <= captured); balanced-posting is a two-sided net-zero conservation invariant across the legs of ONE operation, not a one-axis monotone bound."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA, single @Transactional unit) + PostgreSQL (table-level CHECK / trigger backstop) + BigDecimal signed amounts + RFC 9457 Problem Details + Micrometer metrics"
+standard: "Double-entry bookkeeping (Martin Fowler — Accounting Patterns / Accounting Transaction, conservation rule 'all entries must sum to zero') + PostgreSQL 'Data Definition — Constraints' (CHECK constraint enforcing a Boolean condition on stored rows) + RFC 9457 (Problem Details for HTTP APIs) + RFC 9110 §15.5.21 (422 Unprocessable Content) + IEEE 754 / BigDecimal exact-decimal arithmetic"
+domain_mode: backend_only
+introduced_at: "IDW7 2026-06-01 fintech-ledger dogfood"
+
+# OPT-IN balanced-posting catalog. Adopted by any recipe that moves value
+# between two or more accounts / buckets / locations in one operation and
+# must conserve the total: ledger-recipe LEDGER-INV-001 (every posting
+# balances), inventory-transfer TRANSFER-INV-002 (units out == units in),
+# points-transfer POINTS-INV-003 (sender debit == receiver credit),
+# energy/credit allocation ALLOC-INV-004 (pool draw == grant). The IDW7
+# fintech-ledger dogfood found these invariants had NO catalog primitive:
+# six independent personas each reached for a conservation-of-quantity rule
+# and found the catalog had only one-sided counters (bounded-capacity-claim)
+# and one-axis ceilings (payment refund-cap) — nothing asserting that the
+# SIGNED legs of one operation net to zero. A handler that credits the
+# receiver but (on a partial failure, a dropped leg, a wrong sign, a
+# rounding split that does not re-add) forgets or skews the debit MINTS
+# value out of nothing; the mirror skews DESTROY it. This spec supplies the
+# missing primitive: every leg of one operation persisted in ONE
+# @Transactional unit, tagged with the SAME operation id, signed amounts
+# summing to exactly zero by BigDecimal compareTo, backstopped by a
+# structural DB constraint that makes an asymmetric write impossible.
+# Generic pattern; zero Korean law cite (R102+ generic catalog principle).
+
+# ── Priority order for fork-receivers ──
+# Adopt in order; earlier items are foundational.
+#   1. CONSERVATION-LEGS-NET-ZERO-001  (the primitive — legs net to zero in one txn)
+#   2. CONSERVATION-BACKSTOP-001       (structural DB / pre-commit backstop)
+#   3. CONSERVATION-OBSERVABILITY-001  (optional — bounded-cardinality posting counter)
+
+# ── RECIPE.md frontmatter example ──
+#   ---
+#   recipe: <pattern>
+#   balanced_posting_enabled: true
+#   posting_legs_min: 2
+#   posting_net_zero_backstop: db_check   # OR db_trigger OR service_assert
+#   posting_amount_type: bigdecimal       # signed; scale = ISO-4217 currency or unit scale
+#   ---
+
+# ── Composition note ──
+# balanced-posting composes with, but is DISTINCT from, three neighbours:
+#   persistence-state-machine-atomic → all legs move through ONE sole-mutator,
+#       ONE @Transactional unit, so a half-posted operation can never commit.
+#   transaction-propagation (transaction-propagation-requires-new.md) → the
+#       multi-leg write MUST share ONE transaction; legs MUST NOT be split
+#       across independent REQUIRES_NEW sub-transactions, or a crash between
+#       them leaves an unbalanced, half-committed posting.
+#   bounded-capacity-claim-l0 (#CLAIM-ATOMIC-001) → prevents OVER-allocation of
+#       a SINGLE one-sided counter under a race; balanced-posting prevents an
+#       ASYMMETRIC two-sided posting under a logic/partial-failure fault. A
+#       transfer recipe wants BOTH: atomic-claim so the source is not
+#       over-drawn, balanced-posting so the drawn amount equals the granted.
+# A recipe that ships only one of these is still corruptible on the other axis.
+
+items:
+  - id: "CONSERVATION-LEGS-NET-ZERO-001"
+    chapter: "Legs of one operation net to exactly zero in a single transaction"
+    requirement: "A value-moving operation that posts two or more signed-amount legs (e.g. a transfer's debit leg + credit leg; a multi-split allocation's source draw + N grants) MUST persist ALL of its legs inside ONE `@Transactional` unit through a single sole-mutator, with every leg carrying the SAME operation / transfer id (a non-null foreign key or correlation column shared by exactly the legs of that one operation). Before the transaction commits, the service MUST assert that the signed amounts of all legs for that operation id sum to exactly zero — computed with `BigDecimal` and compared via `BigDecimal::compareTo` against `BigDecimal.ZERO` (NEVER `equals`, which is scale-sensitive: `0.00` is not `equals` to `0` but IS `compareTo`-equal). All leg amounts MUST share one signed `BigDecimal` representation at one fixed scale (the ISO-4217 currency scale, or the unit scale for non-money quantities) so the sum is exact; debits are negative, credits positive (or the inverse, consistently). An operation whose legs do NOT net to zero (an asymmetric, skewed, dropped, or wrong-signed leg) MUST be REJECTED before commit with HTTP 422 Unprocessable Content + an RFC 9457 problem body `type=urn:problem:unbalanced-posting`, `code=UNBALANCED_POSTING`, and a `imbalance` member carrying the non-zero residual — never silently persisted, never partially committed. This conserves total value: no value is minted (positive residual) or destroyed (negative residual) by the operation."
+    test_method: "RestAssured integration test + sum-of-legs invariant assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The keystone conservation invariant — debits == credits for every
+      operation, the same rule physicists apply to energy. Anchored to
+      Martin Fowler's Accounting Transaction pattern
+      (https://martinfowler.com/eaaDev/AccountingTransaction.html).
+      Quote anchor (Fowler, Accounting Transaction): "Link two (or more)
+      entries together so that the total of all entries in a transaction is
+      zero." And: "A multi-legged transaction allows any number of entries,
+      but with still the overall rule that all the entries must sum to
+      zero, thus conserving money." The single-@Transactional-unit + shared
+      operation-id requirement composes persistence-state-machine-atomic
+      (one sole-mutator) and transaction-propagation-requires-new.md (legs
+      MUST NOT be split across independent sub-transactions). compareTo (not
+      equals) is mandated because BigDecimal equality is scale-sensitive.
+  - id: "CONSERVATION-BACKSTOP-001"
+    chapter: "Structural backstop makes an asymmetric / dropped-leg write impossible"
+    requirement: "The net-zero invariant MUST NOT rest on application code alone: a structural backstop independent of the service path MUST make a non-conserving posting impossible to persist. Exactly two implementations are permitted: (a) a database backstop — a deferred-constraint trigger or a table CHECK that, at COMMIT, asserts the SUM of all leg `signed_amount` rows sharing one `operation_id` equals zero (e.g. a `BEFORE`/constraint trigger raising on `SUM(signed_amount) <> 0 GROUP BY operation_id`, or a CHECK on a per-operation rollup row asserting `net_amount = 0`); or (b) a service-level pre-commit assertion that re-reads the just-written legs for the operation id and re-sums them with `BigDecimal::compareTo`, throwing (and rolling back the whole transaction) before commit if the residual is non-zero. The backstop MUST be defense-in-depth: it MUST catch a non-conserving posting even if a FUTURE code path bypasses the CONSERVATION-LEGS-NET-ZERO-001 service check — the way `CHECK (taken <= capacity)` backstops bounded-capacity-claim. A posting that violates the backstop MUST fail the whole transaction (no partial commit), surfacing as 422 `UNBALANCED_POSTING` (service path) or a constraint-violation translated to 422 (DB path)."
+    test_method: "Integration test forcing an asymmetric write + DB constraint / pre-commit assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The last line of defense — a single-path code review passes even on a
+      handler that will skew a leg under a future refactor; only a
+      structural backstop catches the bypass. Anchored to PostgreSQL
+      'Constraints' (CHECK enforcing a Boolean condition on stored rows)
+      (https://www.postgresql.org/docs/current/ddl-constraints.html).
+      Quote anchor (PostgreSQL — Constraints): "A check constraint is the
+      most generic constraint type. It allows you to specify that the value
+      in a certain column must satisfy a Boolean (truth-value)
+      expression." And (multi-column / table constraint): "A check
+      constraint can also refer to several columns." And: "If a user
+      attempts to store data in a column that would violate a constraint,
+      an error is raised." A per-leg-row CHECK cannot by itself sum across
+      sibling rows, so the DB form uses a deferred trigger or a per-operation
+      rollup row carrying CHECK (net_amount = 0); the service form re-sums
+      the legs pre-commit. Both make the conserved total structural.
+  - id: "CONSERVATION-OBSERVABILITY-001"
+    chapter: "관측 (bounded-cardinality posting counter)"
+    requirement: "Balanced-posting implementations SHOULD expose a single canonical Micrometer counter `posting_total{operation_type, outcome}` where `operation_type` is a fixed enum (e.g. `transfer`, `allocation`, `journal`) and `outcome ∈ {balanced, rejected_unbalanced}`. Labels MUST exclude operation_id / account_id / user_id / the residual amount (no PII, no high-cardinality, no unbounded numeric labels). The `rejected_unbalanced` count is the value-leak-pressure signal a fork-receiver alerts on — a non-zero rate means application code is generating asymmetric postings and the backstop is catching them; a sustained non-zero rate is a correctness regression, not normal contention. SLO/alert wiring is a fork-receiver concern. This item is OPTIONAL (SHOULD, not MUST): a fork-receiver MAY adopt only items 1–2."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded labels keep the time-series count finite — operation_type is
+      an enum, outcome is a 2-value enum. Anchored to OpenTelemetry Semantic
+      Conventions for HTTP metrics (low-cardinality attribute guidance).
+      Reference: OTel HTTP metrics semantic conventions
+      (https://opentelemetry.io/docs/specs/semconv/http/http-metrics/).
+      The cited page constrains specific attributes to low cardinality
+      per-metric; the operation_type + outcome enums satisfy that
+      constraint. Optional item — distinct from the two mandatory
+      conservation primitives above.

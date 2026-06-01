@@ -1,0 +1,156 @@
+version: "0.1.0"
+scope: "sealed-period-l0 — closed/sealed aggregation-period gate for fork-receivers running any periodic close: accounting period close, billing-cycle close, payroll-run close, end-of-day cutoff, finalized inventory count, locked sprint/timesheet. Once a PERIOD is sealed, a write whose EFFECTIVE/VALUE date falls inside the sealed window MUST be rejected (409/422 PERIOD_CLOSED) or routed to the next OPEN period — never silently mutated into the sealed window. The close is a one-way monotonic gate; reopening requires an explicit, audited action. Cross-cutting catalog pattern, jurisdiction-agnostic + domain-agnostic (NOT fintech-only, NOT Korea-specific)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer metrics"
+standard: "Double-entry accounting period-close / 'closing the books' convention (closing entries finalize a period) + RFC 9457 (Problem Details for HTTP APIs) + CWE-367 (TOCTOU: the sealed watermark must be read inside the same transaction that applies the write) + monotonicity (a sealed-through watermark only advances)"
+domain_mode: backend_only
+introduced_at: "IDW7 2026-06-01 fintech-ledger dogfood"
+
+# Cross-cutting value-CONSERVATION primitive. Composes
+# specs/spring-practices-l0.yaml#PRACTICES-TIME-001 (server-stored window,
+# server-injected clock — the sealed-through watermark is a server-owned
+# instant, never a client-supplied date) and a tamper-evident posture
+# (specs/tamper-evident-log-l0.yaml — every close / reopen is an audited,
+# append-only fact). DISTINCT from PRACTICES-TIME-001: that rule guards a
+# PER-RECORD deadline (this one row's expiresAt). HERE a SEALED AGGREGATE
+# (the whole period) rejects any late write whose effective date targets the
+# already-finalized window — the gate protects statements/reports already
+# issued from that aggregate, not a single record's TTL. Also DISTINCT from
+# optimistic-locking-l0 (that guards a concurrent read-modify-write on ONE
+# row via ETag/If-Match) and from monotonic-event-ingest-l0 (that rejects a
+# stale event that would roll ONE projected row backward): here the watermark
+# is a PERIOD boundary, and the rejected write is one that would mutate a
+# period already closed and reported on.
+
+# ── Priority order for fork-receivers ──
+# Adopt in order; earlier items are foundational.
+#   1. SEALED-REJECT-LATE-001   (the gate itself)
+#   2. SEALED-MONOTONIC-001     (one-way close + audited reopen)
+#   3. SEALED-OBSERVABILITY-001 (관측)
+
+# ── RECIPE.md frontmatter example ──
+#   ---
+#   recipe: generic-period-close
+#   sealed_period_enabled: true
+#   sealed_reject_status: 422        # or 409
+#   sealed_late_write_policy: reject # reject | reroute-next-open
+#   sealed_reopen_requires_audit: true
+#   ---
+
+items:
+  - id: "SEALED-REJECT-LATE-001"
+    chapter: "Late-write rejection at the sealed watermark"
+    requirement: >
+      Every write that posts a value into a periodic aggregate (a ledger entry,
+      a billing line, a payroll item, an inventory adjustment, a timesheet
+      entry) carries a server-resolved EFFECTIVE/VALUE date that decides which
+      period it belongs to. The aggregate persists a server-owned
+      `sealed_through` watermark — the inclusive upper bound of every period
+      already closed. On every write the service MUST, inside the SAME
+      transaction that would apply the write (read the watermark and apply
+      under one consistent snapshot so the period cannot be sealed between the
+      check and the use — CWE-367), compare the write's effective date against
+      `sealed_through`. A write whose effective date is at-or-before the
+      watermark (`effectiveDate <= sealed_through`) targets a sealed window and
+      MUST NOT silently mutate it: the service MUST either (a) REJECT it with
+      HTTP 422 (or 409) + RFC 9457 body `type=urn:problem:period-closed`,
+      `title=PERIOD_CLOSED`, carrying the offending `effective_date` and the
+      `sealed_through` watermark; or (b) deterministically REROUTE it to the
+      next OPEN period (effective date moved forward to the first open day,
+      recorded as a forward-dated correction) when the recipe opts in via
+      `sealed_late_write_policy=reroute-next-open`. The default policy is
+      `reject`. The EFFECTIVE date MUST be server-resolved (per PRACTICES-TIME-001)
+      and MUST NOT be a client-supplied value that the caller could backdate to
+      smuggle a write into a sealed window. The invariant: no write ever
+      silently mutates a period that has been closed and reported on — a late
+      write targeting a sealed window is rejected or forward-routed, never
+      applied in place.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Closing the books finalizes a period; a statement/report issued from that
+      aggregate must stay reproducible, so a back-dated write into it is
+      forbidden. Anchored to the double-entry 'closing the books' convention
+      (Wikipedia Trial balance: "The act of \"closing the books\" refers to
+      zeroing out all the revenue and expense amounts at the end of an
+      accounting period ...") and CWE-367 (the watermark read and the write
+      apply must share one transactional snapshot, else a close racing a write
+      lets a late write slip into a just-sealed period). Canonical proof a
+      fork-receiver writes: seal period P (sealed_through = end-of-P), then POST
+      a write with effective date inside P -> assert 422 PERIOD_CLOSED with the
+      watermark echoed AND assert the sealed aggregate's persisted total is
+      unchanged (byte-for-byte). Composes specs/spring-practices-l0.yaml#PRACTICES-TIME-001
+      (server-stored window + injected clock). DISTINCT from PRACTICES-TIME-001:
+      this is a SEALED AGGREGATE rejecting late writes to its window, not a
+      per-record deadline. Rule body: practices/rules/period-close-reject-late-write.md.
+
+  - id: "SEALED-MONOTONIC-001"
+    chapter: "One-way close + audited reopen"
+    requirement: >
+      The `sealed_through` watermark is a one-way monotonic gate: a close
+      operation MUST only ADVANCE it forward (`new_sealed_through >
+      old_sealed_through`); a close attempt that would move it backward or
+      leave it unchanged MUST be rejected (no-op / 409). Closing a period MUST
+      be idempotent on the watermark value (re-closing an already-sealed period
+      returns the existing watermark and emits no new state). REOPENING a sealed
+      period — the only way to move the watermark backward — MUST be an EXPLICIT,
+      separate, privileged action (a distinct endpoint / command, never a side
+      effect of an ordinary write), and BOTH close and reopen MUST append a
+      tamper-evident audit fact recording actor id, server timestamp (injected
+      clock), the old and new watermark, and a required human justification on
+      reopen. After a reopen, the previously-sealed window is OPEN again and
+      ordinary SEALED-REJECT-LATE-001 rules resume for it; re-closing re-seals.
+      The invariant: the watermark advances by default and can only retreat
+      through an explicit, audited, justified reopen — there is no silent path
+      that un-seals a period.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      A period close is a closing-entry boundary that finalizes temporary
+      balances for the next period; quietly rolling that boundary backward
+      would invalidate every report already issued. Anchored to monotonicity
+      (Wikipedia Monotonic function: "A function is termed monotonically
+      increasing ... if for all x and y such that x <= y one has f(x) <= f(y),
+      so f preserves the order.") and the closing-entries convention (Wikipedia
+      Closing entries: "Closing entries are journal entries made at the end of
+      an accounting period to transfer temporary accounts to permanent
+      accounts."). Composes the tamper-evident posture
+      (specs/tamper-evident-log-l0.yaml) — close/reopen are append-only audited
+      facts, never in-place edits. Canonical proof: close P1 then P2
+      (watermark advances), assert a close request that would lower the
+      watermark is a 409 no-op, assert reopen P2 requires the privileged
+      endpoint + justification and writes an audit fact with old/new watermark,
+      assert reopen without justification is rejected.
+
+  - id: "SEALED-OBSERVABILITY-001"
+    chapter: "관측 (3 canonical metrics)"
+    requirement: >
+      Sealed-period implementations MUST expose exactly 3 canonical Micrometer
+      metrics with bounded-cardinality labels: (1)
+      `sealed_period_late_write_total{aggregate, disposition}` — disposition ∈
+      {rejected, rerouted}; (2) `sealed_period_close_total{aggregate, op}` — op
+      ∈ {close, reopen}; (3) `sealed_period_watermark_lag_seconds{aggregate}`
+      (gauge — server-clock now minus `sealed_through`, surfacing a close that
+      is overdue / a reopen that left a window un-resealed). The `aggregate`
+      label MUST be a fixed enum of period-aggregate types (e.g.
+      ledger / billing_cycle / payroll_run / inventory_count); labels MUST
+      exclude period_id / effective_date / actor_id / tenant raw values (no
+      PII, no high-cardinality). A rejected or rerouted late write MUST
+      increment metric (1) so a backdating attempt or a clock-skew incident is
+      visible; SLO/alert wiring is a fork-receiver concern. The invariant:
+      every late-write rejection, every close, and every reopen is countable on
+      a finite, low-cardinality time-series.
+    test_method: "Micrometer registry assertion"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Bounded labels keep the time-series count finite while still making a
+      silent backdating attempt or an overdue close observable. Reviewer/source
+      anchor: assert the registry exposes the 3 named meters after a seal +
+      late-write + reopen sequence and that no meter carries period_id /
+      effective_date / actor_id as a tag. Mirrors the bounded-cardinality
+      observability discipline already used by
+      optimistic-locking-l0#OPTLOCK-OBSERVABILITY-001 and
+      data-subject-rights metrics. Review-tier (registry-shape property; no
+      single static @Tag test owns the full label-cardinality invariant).

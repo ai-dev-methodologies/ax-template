@@ -55,3 +55,32 @@ items:
       the controller, to express his or her point of view and to contest
       the decision." A recompute that clobbers a human override
       structurally erases that human intervention.
+
+  - id: "PROVENANCE-PINNED-INPUT-001"
+    chapter: "Pinned time-varying input for a derived value"
+    requirement: "Any stored value DERIVED from a point-in-time external or volatile input — an FX conversion rate, a tax/VAT rate, a unit price, an interest rate, a tariff/duty rate — MUST persist, AT THE MOMENT OF THE WRITE, the three facts needed to re-derive it: the input VALUE actually applied (`appliedRate` / `appliedUnitPrice`, exact `BigDecimal`/minor-units, never a float), an AS-OF timestamp pinning when that input was effective (`rateAsOf`), and the input SOURCE/provider that supplied it (`rateSource` — the FX feed name, the tax-table version, the price-list id, the rate-card revision). The stored derived value (converted amount, tax amount, line total, accrued interest) MUST remain exactly re-derivable from the persisted input + the persisted operand: re-running the SAME computation over the SAME pinned inputs MUST reproduce the SAME stored result. A derived value MUST NEVER be recomputed later against the CURRENT rate — doing so silently rewrites history, breaks reconciliation, and makes the same row return different totals on different days. Negative review: pin a row at rate r0 (asOf t0, source S0), then move the live rate to r1; re-open / re-render / re-export the row → assert the stored derived value still equals operand×r0 (NOT operand×r1), and that appliedRate/rateAsOf/rateSource are byte-identical to the write-time values. The invariant: a reader can re-derive every historical derived value from facts pinned at write time, with zero dependency on today's rate."
+    test_method: "RestAssured integration test (pin-then-shift re-derivation) + JPA structural assertion that rate/asOf/source columns are non-null and @Column(updatable=false)"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Distinct from PROVENANCE-SOURCE-001 (which tracks the
+      machine-vs-human SOURCE of a field and whether a human overrode it)
+      and from spring-practices PRACTICES-TIME-001 (server clock as the
+      authority for a DECISION instant). THIS item pins a time-varying
+      EXTERNAL FACTOR so a derived monetary value stays re-derivable —
+      it is value-CONSERVATION across time, not provenance of authorship
+      and not the decision clock. Anchored to the accounting
+      historical/transaction-date rate principle (IAS 21 ¶21) +
+      computational reproducibility. Quote anchor (IAS 21 ¶21): "A
+      foreign currency transaction shall be recorded, on initial
+      recognition in the functional currency, by applying to the foreign
+      currency amount the spot exchange rate between the functional
+      currency and the foreign currency at the date of the transaction."
+      The spot rate AT THE DATE is pinned to the transaction forever;
+      later rate movement does not re-price the recorded transaction.
+      Reproducibility anchor (Wikipedia, Reproducibility): "results
+      obtained by an experiment or an observational study or in a
+      statistical analysis of a data set should be achieved again with a
+      high degree of reliability when the study is replicated" — the
+      stored derived value is exactly such a result; pinning its inputs
+      is what makes the re-derivation reproducible.

@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "27933d73c9259289ff857dd1862af5260f4b98343fbd1efe14da9538514ae0dc"
-  rule_count: 134
+  source_concat_sha256: "6c38e81244460572d88964041e1050555f19981e2990bfd2249d673cfcee92e1"
+  rule_count: 139
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -2442,6 +2442,98 @@ See: `practices/evals/fixtures/currency-amount-precision/fail_float_amount/Billi
 See: `practices/evals/fixtures/currency-amount-precision/pass_integer_amount/BillingPlanLongAmount.java` — correct `private long amount`.
 
 
+<!-- @source rules/derived-value-pins-its-time-varying-input.md -->
+
+---
+title: A value derived from a time-varying input MUST pin that input for re-derivability
+impact: HIGH
+impactDescription: "Recomputing a stored derived value against the CURRENT rate silently rewrites history and breaks reconciliation; the only safe form pins the rate value + as-of + source at write time"
+tags:
+  - provenance
+  - money
+  - reproducibility
+  - fx
+  - tax
+  - re-derivability
+spec_ref: "specs/value-provenance-l0.yaml#PROVENANCE-PINNED-INPUT-001"
+verification:
+  type: review
+  source: "specs/value-provenance-l0.yaml#PROVENANCE-PINNED-INPUT-001"
+  pattern: "Derived monetary field stores appliedRate + rateAsOf + rateSource at write time (all @Column(updatable=false)); re-derivation over pinned inputs reproduces the stored value; no path recomputes it with a current rate"
+evidence:
+  - source_type: external
+    citation: "IAS 21 — The Effects of Changes in Foreign Exchange Rates, paragraph 21 (initial recognition of a foreign currency transaction)"
+    url: "https://www.readyratios.com/reference/accounting/ias_21_the_effects_of_changes_in_foreign_exchange_rates.html"
+    quote: "A foreign currency transaction shall be recorded, on initial recognition in the functional currency, by applying to the foreign currency amount the spot exchange rate between the functional currency and the foreign currency at the date of the transaction."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Reproducibility — Wikipedia (definition of a reproducible result)"
+    url: "https://en.wikipedia.org/wiki/Reproducibility"
+    quote: "For the findings of a study to be reproducible means that results obtained by an experiment or an observational study or in a statistical analysis of a data set should be achieved again with a high degree of reliability when the study is replicated."
+    quoted_at: "2026-06-01"
+---
+
+## A value derived from a time-varying input MUST pin that input for re-derivability
+
+**Impact: HIGH — recomputing a stored derived value against the CURRENT rate silently rewrites history and breaks reconciliation; the only safe form pins the rate value + as-of timestamp + source at the moment of the write.**
+
+A derived value is any amount you compute from a *volatile, point-in-time* input: a converted amount from an FX rate, a tax amount from a VAT/sales-tax rate, a line total from a unit price on a rate-card, accrued interest from an interest rate, a duty from a tariff schedule. The input is not a constant — it moves. The trap is to store only the derived result (the converted total) and, later, when you need to display, export, or reconcile that row, recompute it from the *current* rate. That silently rewrites history: a January invoice that converted at 1,300 KRW/USD now re-renders at June's 1,380, the order's stored total no longer equals its line items, and the reconciliation job reports a phantom drift that did not exist when the row was written.
+
+Accounting has codified the correct posture for a century: the rate is pinned to the transaction at the date of the transaction and never re-applied later. IAS 21 ¶21 states a foreign currency transaction is recorded on initial recognition *by applying the spot exchange rate at the date of the transaction* — not the rate that prevails when you later look at it. The software invariant is the same and it is generic across FX, tax, price, and interest: at write time, persist the three facts that make the derived value re-derivable — the **rate VALUE actually applied**, an **as-of timestamp**, and the **rate SOURCE/provider** — and treat the derived value as a reproducible function of those pinned facts. Reproducibility (Wikipedia) requires that a result "should be achieved again with a high degree of reliability when the study is replicated"; re-running the same conversion over the same pinned inputs MUST reproduce the same stored total, on any day, forever.
+
+**Incorrect — stores only the derived total; recomputes against the live rate on read, silently rewriting history:**
+
+```java
+public class InvoiceLine {
+    private BigDecimal foreignAmount;   // 100.00 USD
+    private BigDecimal convertedTotal;  // 130000 KRW at write time
+    // no appliedRate, no rateAsOf, no rateSource persisted
+}
+
+// later — export / re-render / reconcile:
+BigDecimal shown = line.getForeignAmount()
+        .multiply(fxService.currentRate("USD", "KRW")); // ❌ today's rate
+// January's invoice now re-prices at June's rate; convertedTotal no longer
+// matches; recon job reports a drift that never happened.
+```
+
+**Correct — pins rate value + as-of + source at write time; derived value stays exactly re-derivable from the pinned facts:**
+
+```java
+public class InvoiceLine {
+    private BigDecimal foreignAmount;                         // 100.00 USD
+
+    @Column(name = "applied_rate", updatable = false, nullable = false)
+    private BigDecimal appliedRate;        // 1300.00 — the rate USED, pinned
+    @Column(name = "rate_as_of", updatable = false, nullable = false)
+    private Instant rateAsOf;              // 2026-01-14T09:00:00Z — when it was effective
+    @Column(name = "rate_source", updatable = false, nullable = false)
+    private String rateSource;             // "ecb-daily-2026-01-14" — provider/version
+
+    @Column(name = "converted_total", updatable = false, nullable = false)
+    private BigDecimal convertedTotal;     // foreignAmount × appliedRate, pinned
+
+    public static InvoiceLine pin(BigDecimal foreignAmount, FxQuote q) {
+        BigDecimal total = foreignAmount.multiply(q.rate());
+        return new InvoiceLine(foreignAmount, q.rate(), q.asOf(), q.source(), total);
+    }
+
+    /** Re-derivation MUST reproduce the stored total — never uses a current rate. */
+    public BigDecimal reDerive() {
+        return foreignAmount.multiply(appliedRate); // == convertedTotal, always
+    }
+}
+```
+
+The `updatable = false` columns make the pinned inputs immutable after the write, so no later code path can quietly swap in a fresh rate. This rule is **distinct** from `value-provenance` (`PROVENANCE-SOURCE-001` tracks whether a field's value came from the machine or a human, and guards against clobbering a human override) and from `PRACTICES-TIME-001` (server clock as the authority for a *decision* instant). Here the concern is value-CONSERVATION across time: pinning a *time-varying external factor* so a *monetary* result remains re-derivable. The same shape applies to tax (`appliedTaxRate` + `taxTableVersion` + `taxAsOf`), unit price (`appliedUnitPrice` + `priceListId`), interest (`appliedApr` + `rateAsOf`), and tariff (`appliedDutyRate` + `tariffScheduleRev`).
+
+Verification (review-tier): assert each derived monetary field carries its `appliedRate`/`rateAsOf`/`rateSource` triple as non-null `@Column(updatable=false)`; write a pin-then-shift test that pins a row at rate r0, moves the live rate to r1, then re-opens/re-exports the row and asserts the stored derived value still equals `operand × r0` (NOT `operand × r1`) and the three pinned columns are byte-identical to write time. Grep the read/export/reconcile paths for any call to a `currentRate(...)` / live-rate lookup on a row that already has a pinned rate — that is the canonical violation.
+
+Reference: [IAS 21 — The Effects of Changes in Foreign Exchange Rates, ¶21](https://www.readyratios.com/reference/accounting/ias_21_the_effects_of_changes_in_foreign_exchange_rates.html)
+
+Reference: [Reproducibility — Wikipedia](https://en.wikipedia.org/wiki/Reproducibility)
+
+
 <!-- @source rules/destructive-action-confirm-with-side-effects.md -->
 
 ---
@@ -3885,6 +3977,113 @@ See: `practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/P
 Reference: [IETF draft — The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
 
 Reference: [Stripe API Reference — Idempotent requests](https://docs.stripe.com/api/idempotent_requests)
+
+
+<!-- @source rules/immutable-record-corrected-by-reversal-not-edit.md -->
+
+---
+title: A posted immutable record is corrected by APPENDING a reversing entry — never by editing or deleting the original
+impact: HIGH
+impactDescription: "Once a record is POSTED/committed (ledger entry, inventory adjustment, payroll line, finalized event), editing or deleting it to fix a mistake destroys the audit trail and silently rewrites history. The correction posture is append-only: keep the original visible and append a compensating reversal that nets it out, so original + reversal (+ fresh correction) all survive and reconcile."
+tags:
+  - audit
+  - immutability
+  - append-only
+  - correction
+  - reversal
+  - value-conservation
+spec_ref: "specs/soft-delete-l0.yaml#SOFTDELETE-REVERSAL-001"
+verification:
+  type: review
+  source: "backend correction path for any POSTED immutable record (ledger/inventory/payroll/finalized-event service) + entity mapping"
+  pattern: "The posted record has no edit/delete mutator and its value columns are @Column(updatable=false); a correction appends a NEW reversing record carrying reversal_of = original_id (and, when a different value is wanted, a fresh correct record), so a read of the chain shows original + reversal (+ correction) and the net is the intended value — the original row is never UPDATEd or physically DELETEd."
+upstream:
+  - "https://martinfowler.com/eaaDev/EventSourcing.html"
+  - "https://www.accountingtools.com/articles/what-is-a-reversing-entry.html"
+  - "https://www.patriotsoftware.com/blog/accounting/what-is-correcting-entries-journal-examples/"
+evidence:
+  - source_type: external
+    citation: "Martin Fowler — Event Sourcing (eaaDev), §Reversing Events"
+    url: "https://martinfowler.com/eaaDev/EventSourcing.html"
+    quote: "Reversal is the most straightforward when the event is cast in the form of a difference. An example of this would be 'add $10 to Martin's account' as opposed to 'set Martin's account to $110'. In the former case I can reverse by just subtracting $10, but in the latter case I don't have enough information to recreate the past value of the account."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "AccountingTools — What is a reversing entry?"
+    url: "https://www.accountingtools.com/articles/what-is-a-reversing-entry.html"
+    quote: "A reversing entry is a journal entry made in an accounting period, which reverses selected entries made in the immediately preceding period."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Patriot Software — How to Make Correcting Entries in Accounting"
+    url: "https://www.patriotsoftware.com/blog/accounting/what-is-correcting-entries-journal-examples/"
+    quote: "A correcting entry in accounting fixes a mistake posted in your books."
+    quoted_at: "2026-06-01"
+---
+
+## A posted immutable record is corrected by APPENDING a reversing entry — never by editing or deleting the original
+
+**Impact: HIGH — Once a record is POSTED/committed, editing or deleting it to fix a mistake destroys the audit trail and silently rewrites history. The correction posture is append-only: keep the original visible and append a compensating reversal that nets it out, so original + reversal (+ fresh correction) all survive and reconcile.**
+
+Some records are *posted*: a ledger entry, an inventory stock-take adjustment, a payroll line, a finalized domain event. After posting they represent a fact that *happened* — and facts are not edited away. The naive fix for a wrong posted amount is `UPDATE ledger SET amount = ... WHERE id = ...` or a `DELETE` of the bad row. Both are wrong for the same reason: they make the mistake disappear instead of recording that it was corrected. An auditor reading the table afterward sees a clean history that never contained the error — exactly the rewrite the audit trail exists to prevent. This is the centuries-old accounting rule: a correcting entry is *journalized* (a new entry is recorded); the erroneous posted entry is left in place and reversed, never erased.
+
+The correct mechanism is **correction-by-reversal**. To fix a posted record you APPEND a NEW *reversing* record that compensates the original (equal and opposite — the difference form Fowler describes), carrying `reversal_of = original_id` so the two are linked. If a different value was actually intended, you ALSO append a fresh correct record. After the correction the chain reads: original (visible) + reversal (nets it to zero) + correction (the intended value). Value is conserved and every step is auditable. Nothing was hidden and nothing was destroyed — the read just sums to the right answer.
+
+This is **distinct** from two neighbouring patterns and must not be conflated with either:
+
+- **Soft-delete (tombstone)** *hides* a row (`deleted_at` set, default-excluded from queries). Reversal does the opposite: the original STAYS visible; a compensating entry nets it out. You do not tombstone a posted ledger entry — you reverse it.
+- **Content versioning** produces a new *edition* of mutable content (a wiki page, a draft), superseding the prior text. A posted record is not content being re-edited; it is an immutable fact, and the reversal is a separate fact that offsets it, not a new version of the same fact.
+
+The pattern is **generic and cross-cutting** — not fintech-only, not Korea-specific. It shows up wherever value or a finalized fact must be conserved: an accounting **reversal entry**; an inventory **stock-take adjustment** (you append a +N or −N adjustment, you don't retype the on-hand count); **loyalty points** reverse-and-regrant (reverse the wrong grant, grant the correct one); a **gradebook correction** (append a regrade that supersedes-by-offset while the original mark stays on the record). In every case the invariant is the same: original + reversal (+ correction) survive together and reconcile.
+
+**Incorrect — posted record edited/deleted in place; the mistake vanishes and the audit trail is rewritten:**
+
+```java
+@Entity
+public class LedgerEntry {
+  @Id @GeneratedValue Long id;
+  BigDecimal amount;        // mutable — wrong
+}
+
+// "Fix" the wrong amount by mutating or deleting the posted row:
+ledgerRepository.findById(id).ifPresent(e -> {
+  e.setAmount(correctedAmount);   // ❌ rewrites a posted fact; original error is now invisible
+});
+// or worse:
+ledgerRepository.deleteById(id);  // ❌ posted fact physically erased — reconciliation can never explain it
+```
+
+**Correct — original stays immutable and visible; a reversal (and, if needed, a fresh correction) is appended:**
+
+```java
+@Entity
+public class LedgerEntry {
+  @Id @GeneratedValue Long id;
+  @Column(updatable = false) BigDecimal amount;     // posted value is immutable
+  @Column(updatable = false) Instant postedAt;
+  @Column(updatable = false) Long reversalOf;       // null = original; set = this entry reverses #reversalOf
+}
+
+// LedgerService is the sole writer; it never UPDATEs or DELETEs a posted row.
+public void correct(Long originalId, BigDecimal intendedAmount) {
+  LedgerEntry original = repo.findById(originalId).orElseThrow();
+  // 1. append the reversal (equal-and-opposite difference — Fowler's reversal form)
+  repo.save(LedgerEntry.reversalOf(original, original.getAmount().negate()));
+  // 2. append the fresh correct entry (only if a different value was intended)
+  if (intendedAmount != null) {
+    repo.save(LedgerEntry.posted(intendedAmount));
+  }
+  // chain now reads: original (visible) + reversal (nets to 0) + correction (intended) — value conserved, fully auditable
+}
+```
+
+Keep this layered with the surrounding posture: the original carries the append-only / immutable-columns posture (`@Column(updatable=false)`, no edit/delete mutator) so the only way to change the net is to append another entry; pairs with `soft-delete-l0` (retain — never physically erase a record that must survive) and with `tamper-evident-log-l0` (the chain of entries stays intact and verifiable). The difference from soft-delete is precise: soft-delete hides; reversal compensates while the original stays visible.
+
+Verification: review the posted entity and its correction path — confirm value columns are `@Column(updatable=false)`, the service exposes no edit/delete mutator for a posted record, and `correct()` appends a reversing record (`reversal_of = original_id`, equal-and-opposite) plus an optional fresh correct record, so a read of the chain yields original + reversal (+ correction) and the net equals the intended value while the original row is never UPDATEd or DELETEd.
+
+Reference: [Martin Fowler — Event Sourcing (eaaDev), Reversing Events](https://martinfowler.com/eaaDev/EventSourcing.html)
+
+Reference: [AccountingTools — What is a reversing entry?](https://www.accountingtools.com/articles/what-is-a-reversing-entry.html)
+
+Reference: [Patriot Software — Correcting Entries in Accounting](https://www.patriotsoftware.com/blog/accounting/what-is-correcting-entries-journal-examples/)
 
 
 <!-- @source rules/in-doubt-outbound-call-holding-state.md -->
@@ -6878,6 +7077,106 @@ Reference: [PostgreSQL — INSERT, ON CONFLICT clause](https://www.postgresql.or
 Reference: [IETF draft-ietf-httpapi-idempotency-key-header — The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
 Reference: [Hunt & Thomas — The Pragmatic Programmer (2nd ed) §7 The Evils of Duplication](https://www.oreilly.com/library/view/the-pragmatic-programmer/020161622X/)
 
+<!-- @source rules/period-close-reject-late-write.md -->
+
+---
+title: A write into a sealed/closed aggregation period MUST be rejected or rerouted — never silently mutate a finalized period
+impact: HIGH
+impactDescription: "Once a period is closed and a statement/report has been issued from it, a back-dated write that silently mutates the sealed window makes already-distributed reports irreproducible and breaks reconciliation — the corruption surfaces months later when the period total no longer matches the issued statement"
+tags:
+  - period-close
+  - sealed-period
+  - value-conservation
+  - watermark
+  - monotonic
+  - audit
+spec_ref: "specs/sealed-period-l0.yaml#SEALED-REJECT-LATE-001"
+verification:
+  type: review
+  source: "specs/sealed-period-l0.yaml#SEALED-REJECT-LATE-001"
+  pattern: "the write path reads a server-owned sealed_through watermark inside the same transaction that applies the write, compares the server-resolved effective date against it, and for effectiveDate <= sealed_through either rejects with 422/409 PERIOD_CLOSED (RFC 9457) or deterministically reroutes to the next open period — the sealed aggregate's persisted total is provably unchanged on a late write"
+upstream:
+  - "https://en.wikipedia.org/wiki/Trial_balance"
+  - "https://cwe.mitre.org/data/definitions/367.html"
+evidence:
+  - source_type: external
+    citation: "Wikipedia — Trial balance (closing the books / period close convention)"
+    url: "https://en.wikipedia.org/wiki/Trial_balance"
+    quote: "The act of \"closing the books\" refers to zeroing out all the revenue and expense amounts at the end of an accounting period (typically a fiscal year) and adding the difference to the retained earnings account."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Wikipedia — Closing entries (period-end finalization for the next period)"
+    url: "https://en.wikipedia.org/wiki/Closing_entries"
+    quote: "Closing entries are journal entries made at the end of an accounting period to transfer temporary accounts to permanent accounts."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "CWE-367 — Time-of-check Time-of-use (TOCTOU) Race Condition"
+    url: "https://cwe.mitre.org/data/definitions/367.html"
+    quote: "The product checks the state of a resource before using that resource, but the resource's state can change between the check and the use in a way that invalidates the results of the check."
+    quoted_at: "2026-06-01"
+---
+
+## A write into a sealed/closed aggregation period MUST be rejected or rerouted — never silently mutate a finalized period
+
+**Impact: HIGH — a back-dated write into a closed period invalidates already-issued statements and breaks reconciliation**
+
+Periodic systems close a window and report on it: an accounting period is closed and a financial statement is issued; a billing cycle is closed and invoices are sent; a payroll run is finalized and pay slips are distributed; an end-of-day cutoff is taken and a daily settlement file is produced; an inventory count is finalized and a stock report is signed off. The double-entry convention calls this "closing the books" — at the end of a period the figures are zeroed out and rolled forward, and the closing entries finalize that period so the next one can start clean. Once a statement has been issued from a closed window, that window's total is a fact that downstream consumers have already trusted. A write whose effective date falls *inside* that closed window — a forgotten expense back-dated to last month, a correction stamped with an old value date, a clock-skewed event — that silently mutates the sealed aggregate makes the issued report irreproducible: re-running the period total no longer matches the statement that went out the door, and reconciliation breaks. The break is silent at write time and only surfaces in an audit months later.
+
+The fix is a sealed-through watermark on the aggregate plus a transactional gate on every write. The aggregate persists a server-owned `sealed_through` instant — the inclusive upper bound of every period already closed. Every write carries a **server-resolved** effective/value date (never a client-supplied date the caller could back-date — see PRACTICES-TIME-001: server clock + server-stored window decide the outcome). Inside the same transaction that would apply the write, the service reads the watermark and compares: a write strictly *after* the watermark posts normally; a write *at or before* the watermark targets a sealed window and MUST NOT be applied in place. It is either **rejected** (422 / 409 + RFC 9457 `type=urn:problem:period-closed`, `title=PERIOD_CLOSED`, echoing the offending effective date and the watermark) or **deterministically rerouted** to the next open period (forward-dated correction) when the recipe opts into `sealed_late_write_policy=reroute-next-open`. Reading the watermark and applying the write under one snapshot is not optional: per CWE-367, a check-then-act split lets a close racing a write slip a late write into a just-sealed period (time-of-check ≠ time-of-use).
+
+This is **distinct** from a per-record deadline (PRACTICES-TIME-001 guards *one row's* `expiresAt`), from optimistic locking (ETag/If-Match guards a concurrent read-modify-write on *one row*), and from monotonic event ingest (rejects a stale event that would roll *one projected row* backward). Here the gate is a **period boundary**, and the rejected write is one that would mutate an aggregate that has already been closed and reported on. The close itself is one-way monotonic and reopening is an explicit, audited action (SEALED-MONOTONIC-001) — there is no silent path that un-seals a period.
+
+**Incorrect — last-write-wins by effective date; a back-dated entry silently mutates a closed, already-reported period:**
+
+```java
+@PostMapping("/ledger/entries")
+public ResponseEntity<Void> postEntry(@RequestBody LedgerEntry in) {
+    // effective date taken straight from the client body — forgeable, back-datable
+    Period p = periods.findContaining(in.effectiveDate()).orElseThrow();
+    p.addAmount(in.amount());        // ❌ no sealed check: posts into a CLOSED period
+    periods.save(p);                 // ❌ the issued statement for p no longer reproduces
+    return ResponseEntity.ok().build();
+}
+```
+
+**Correct — server-resolved effective date compared to the sealed-through watermark inside one transaction; late write rejected:**
+
+```java
+@Transactional
+public PostResult postEntry(LedgerCommand cmd) {
+    // 1. effective date is SERVER-resolved (clock-injected), never the raw client value
+    LocalDate effectiveDate = effectiveDateResolver.resolve(cmd, clock);
+
+    // 2. read the server-owned watermark INSIDE this txn (same snapshot — CWE-367)
+    LocalDate sealedThrough = ledgerAggregate.sealedThrough();   // inclusive close watermark
+
+    // 3. at-or-before the watermark => targets a sealed, already-reported window
+    if (!effectiveDate.isAfter(sealedThrough)) {
+        lateWrites.increment("ledger", "rejected");
+        throw new PeriodClosedException(effectiveDate, sealedThrough); // -> 422 PERIOD_CLOSED (RFC 9457)
+        // (or, when sealed_late_write_policy=reroute-next-open:
+        //   effectiveDate = ledgerAggregate.firstOpenDayAfter(sealedThrough);
+        //   lateWrites.increment("ledger", "rerouted");  // forward-dated correction)
+    }
+
+    Period p = periods.findContaining(effectiveDate).orElseThrow();
+    p.addAmount(cmd.amount());        // ✅ only ever mutates an OPEN period
+    periods.save(p);
+    return PostResult.applied(p.id());
+}
+```
+
+The keystone invariant a fork-receiver proves: seal period P (watermark = end-of-P), POST a write with an effective date inside P, assert `422 PERIOD_CLOSED` (with the watermark echoed) **and** assert the sealed aggregate's persisted total is byte-for-byte unchanged. A closed period is a finalized fact; the only correct disposition for a late write is reject-or-reroute, never in-place mutation.
+
+Verification: review the write path against `specs/sealed-period-l0.yaml#SEALED-REJECT-LATE-001` — confirm the server-resolved effective date is compared to a server-owned `sealed_through` watermark inside the apply transaction, and that an at-or-before-watermark write mutates nothing (rejected with PERIOD_CLOSED or forward-routed). Cross-check that the effective date is server-resolved per PRACTICES-TIME-001 (no client-supplied back-dating) and that close/reopen monotonicity holds per SEALED-MONOTONIC-001.
+
+Reference: [Wikipedia — Trial balance (closing the books)](https://en.wikipedia.org/wiki/Trial_balance)
+
+Reference: [Wikipedia — Closing entries](https://en.wikipedia.org/wiki/Closing_entries)
+
+Reference: [CWE-367 — Time-of-check Time-of-use (TOCTOU) Race Condition](https://cwe.mitre.org/data/definitions/367.html)
+
+
 <!-- @source rules/persistence-batch-inserts.md -->
 
 ---
@@ -8870,6 +9169,123 @@ Verification: review-tier. A reviewer confirms (a) a single `@Bean RoleHierarchy
 Reference: [Spring Security Reference — Authorization Architecture / Hierarchical Roles](https://docs.spring.io/spring-security/reference/servlet/authorization/architecture.html)
 
 Reference: [OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/)
+
+
+<!-- @source rules/rounded-split-conserves-total-largest-remainder.md -->
+
+---
+title: A rounded total split across N buckets MUST be allocated so the parts sum back to the total exactly — never round each part independently
+impact: HIGH
+impactDescription: "Independently rounding each share of one rounded total loses or creates a residual unit (a 'penny'); the N parts no longer sum to the original and value is silently destroyed or conjured on every proration, fee split, tax allocation, or FX fan-out"
+tags:
+  - lang
+  - precision
+  - bigdecimal
+  - allocation
+  - conservation
+  - largest-remainder
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-LANG-005"
+verification:
+  type: review
+  source: "practices/rules/rounded-split-conserves-total-largest-remainder.md (Correct example) + siblings practices/rules/lang-bigdecimal-for-money.md and practices/rules/lang-bigdecimal-for-measured-decimals.md"
+  pattern: "Any code that divides ONE rounded total across N buckets (proration, fee distribution, revenue/cost share, tax allocation, FX fan-out, installment split) computes the parts with a conserving allocation — round every part DOWN to the target scale, sum the rounded-down parts, then distribute the leftover minor units one-by-one to the buckets with the largest fractional remainders (largest-remainder method) OR delegates to Money.allocate(); a post-condition asserts sum(parts) == total exactly. The anti-pattern — calling setScale(scale, RoundingMode.HALF_UP) (or .divide(n, scale, mode)) on each share independently and summing the results — is rejected because the residual is unconserved."
+upstream:
+  - "https://en.wikipedia.org/wiki/Largest_remainder_method"
+  - "https://martinfowler.com/eaaCatalog/money.html"
+  - "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
+evidence:
+  - source_type: external
+    citation: "Wikipedia — Largest remainder method (apportionment: integer floor allocation, then distribute leftover units to the largest fractional remainders)"
+    url: "https://en.wikipedia.org/wiki/Largest_remainder_method"
+    quote: "To apportion these seats, the parties are then ranked on the basis of their fractional remainders, and the parties with the largest remainders are each allocated one additional seat until all seats have been allocated."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Martin Fowler — Patterns of Enterprise Application Architecture, Money pattern (the rounding hazard that a conserving allocate() exists to prevent)"
+    url: "https://martinfowler.com/eaaCatalog/money.html"
+    quote: "The more subtle problem is with rounding. Monetary calculations are often rounded to the smallest currency unit. When you do this it's easy to lose pennies (or your local equivalent) because of rounding errors."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "java.math.BigDecimal — Java SE 21 API documentation (unscaled value + scale; setScale + RoundingMode.FLOOR is the per-bucket round-down primitive the allocation builds on)"
+    url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
+    quote: "A BigDecimal consists of an arbitrary precision integer unscaled value and a 32-bit integer scale. If the scale is zero or positive, the scale is the number of digits to the right of the decimal point."
+    quoted_at: "2026-06-01"
+---
+
+## A rounded total split across N buckets MUST be allocated so the parts sum back to the total exactly — never round each part independently
+
+**Impact: HIGH — independently rounding each share of one rounded total loses or creates a residual unit; the parts stop summing to the total and value is silently destroyed or conjured**
+
+The sibling rule `lang-bigdecimal-for-money.md` governs how a *single* amount is **represented** (use `BigDecimal`, or a committed `long` minor-units model — never `double`). The sibling rule `lang-bigdecimal-for-measured-decimals.md` governs how a *single* aggregated non-money decimal is **scaled and compared** at an aggregation boundary. This rule governs a third, orthogonal correctness property that neither of those covers: **conservation across a split**. When you take ONE total — itself already exact at its target scale — and divide it across N buckets, the sum of the N rounded parts MUST equal the original total *exactly*. This is a property of the *division*, not of any single number's type or scale, which is why it needs its own rule.
+
+The failure is mechanical, not a floating-point artifact (it happens even with perfect `BigDecimal` arithmetic). Split `$100.00` three ways. The exact share is `33.3333…`; rounded to cents each part becomes `33.33`; `33.33 × 3 = 99.99`. One cent has vanished. Split a `100원`-scale total or a 12-month installment plan and the same residual appears with the opposite sign just as easily (`33.34 × 3 = 100.02` if you round half-up). Over a reconciliation run of thousands of prorations, fee distributions, revenue/cost shares, tax allocations, FX fan-outs, or installment splits, these stray units accumulate into a drift that breaks the books — exactly the hazard the Money pattern was built to stop: *Monetary calculations are often rounded to the smallest currency unit. When you do this it's easy to lose pennies (or your local equivalent) because of rounding errors.*
+
+The canonical fix is a **conserving allocation** — the apportionment algorithm political science calls the **largest-remainder method**. Round every bucket's exact share *down* to the target scale (`RoundingMode.FLOOR`), which can only ever leave a non-negative leftover of whole minor units; compute that leftover as `total − Σ floor(share)`; then hand the leftover units out one at a time, in rank order of the fractional remainders that the floor discarded — *the parties are then ranked on the basis of their fractional remainders, and the parties with the largest remainders are each allocated one additional seat until all seats have been allocated.* Because exactly `leftover` units are added back, `Σ parts == total` is guaranteed by construction, and the rounding residual lands on the buckets that were closest to the next unit (the least-arbitrary place to put it). Martin Fowler's `Money.allocate(...)` is the off-the-shelf embodiment of this for currency; prefer it over hand-rolling when a `Money` type is available.
+
+**Incorrect — each share rounded independently; the parts do not sum back to the total:**
+
+```java
+// Split one rounded total across N buckets by rounding each share on its own.
+List<BigDecimal> split(BigDecimal total, int n) {
+    BigDecimal share = total.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP);
+    List<BigDecimal> parts = new ArrayList<>();
+    for (int i = 0; i < n; i++) parts.add(share);   // each part rounded the same way
+    return parts;
+}
+// split(new BigDecimal("100.00"), 3)
+//   → [33.33, 33.33, 33.33], sum = 99.99  ❌  one cent destroyed
+// HALF_UP on 33.3333 → 33.33; the discarded 0.0033 × 3 is simply lost.
+// The same shape over fee shares / tax allocation / FX fan-out drifts the ledger.
+```
+
+**Correct — largest-remainder allocation; the parts are conserved to sum exactly to the total:**
+
+```java
+static final RoundingMode FLOOR = RoundingMode.FLOOR;
+
+/** Split `total` across `weights` so the parts sum back to `total` exactly. */
+List<BigDecimal> allocate(BigDecimal total, List<BigDecimal> weights, int scale) {
+    BigDecimal unit = BigDecimal.ONE.movePointLeft(scale);          // smallest unit, e.g. 0.01
+    BigDecimal weightSum = weights.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    // 1. Floor every share to the target scale (never over-allocates).
+    List<BigDecimal> parts = new ArrayList<>();
+    BigDecimal allocated = BigDecimal.ZERO;
+    for (BigDecimal w : weights) {
+        BigDecimal exact = total.multiply(w).divide(weightSum, scale + 10, FLOOR);
+        BigDecimal floored = exact.setScale(scale, FLOOR);
+        parts.add(floored);
+        allocated = allocated.add(floored);
+    }
+
+    // 2. Leftover = total − Σ floored, in whole minor units (always >= 0).
+    long leftover = total.subtract(allocated).divide(unit).longValueExact();
+
+    // 3. Hand the leftover units to the largest fractional remainders, one each.
+    List<Integer> order = remainderRankDescending(total, weights, weightSum, scale);
+    for (int k = 0; k < leftover; k++) {
+        int b = order.get(k);
+        parts.set(b, parts.get(b).add(unit));
+    }
+    return parts;                                                   // Σ parts == total, exactly
+}
+// allocate(new BigDecimal("100.00"), List.of(ONE, ONE, ONE), 2)
+//   → [33.34, 33.33, 33.33], sum = 100.00  ✅  the stray cent is conserved, not lost
+//
+// When a Money type is on the classpath, prefer it instead of hand-rolling:
+//   Money[] parts = total.allocate(new long[]{1, 1, 1});  // Fowler Money.allocate — same invariant
+```
+
+This is **distinct** from the money-representation rule (which only decides the *type* of one amount) and from the measured-decimal rule (which only decides the *scale and compareTo* of one aggregate). A program can obey both of those and still leak a penny on every split. The marker that this rule applies is the shape *one rounded total → N rounded parts*: proration of a charge over a period, distribution of a fee across line items, revenue/cost share across partners, tax allocation across positions, FX conversion fanned out across sub-accounts, or an amount split into installments. Wherever that shape appears, the parts MUST be produced by a conserving allocation and a post-condition MUST assert `sum(parts).compareTo(total) == 0`.
+
+Verification (review-tier): inspect every site that divides a single rounded total across multiple buckets. Confirm it does NOT round each share independently (`setScale(..., HALF_UP)` per part, or `divide(n, scale, mode)` reused for every bucket) and then sum; confirm it instead floors every share, computes the integer leftover as `total − Σ floor`, and distributes the leftover units to the largest fractional remainders (largest-remainder method) or delegates to `Money.allocate(...)`. The canonical regression test a fork-receiver writes per split path feeds an indivisible total (e.g. `100.00 / 3`, `0.10 / 3`, a weighted `7 : 2 : 1` fee split) and asserts the returned parts sum back to the input total *exactly* (`compareTo == 0`) for both even and remainder-bearing divisions.
+
+Reference: [Wikipedia — Largest remainder method](https://en.wikipedia.org/wiki/Largest_remainder_method)
+
+Reference: [Martin Fowler — Money pattern (eaaCatalog)](https://martinfowler.com/eaaCatalog/money.html)
+
+Reference (sibling — single-amount representation, do not conflate): [practices/rules/lang-bigdecimal-for-money.md](lang-bigdecimal-for-money.md)
+
+Reference (sibling — single-aggregate scale/compare, do not conflate): [practices/rules/lang-bigdecimal-for-measured-decimals.md](lang-bigdecimal-for-measured-decimals.md)
 
 
 <!-- @source rules/secret-shown-once-uses-beforeunload-guard.md -->
@@ -11235,6 +11651,116 @@ public User update(@PathVariable Long id, @RequestBody @Valid UserUpdateDto dto)
 Verification: `./gradlew testPractices --tests "*MassAssignment*"` asserts that direct entity binding propagates the attacker's `role` field, while DTO-mediated binding preserves the server default `USER`.
 
 Reference: [Spring MVC — @ModelAttribute method arguments](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/modelattrib-method-args.html)
+
+
+<!-- @source rules/value-transfer-must-be-balanced.md -->
+
+---
+title: A value-moving operation MUST post balanced legs that net to exactly zero — conserve, never mint or destroy
+impact: CRITICAL
+impactDescription: "A transfer / allocation that credits the receiver but skews, drops, or wrong-signs the debit MINTS value out of nothing (positive residual) or DESTROYS it (negative residual); idempotency, optimistic locking, and atomic-claim do NOT close this — only a net-zero-sum invariant across the legs of one operation does"
+tags:
+  - ledger
+  - double-entry
+  - conservation
+  - bigdecimal
+  - transactional
+  - value-integrity
+spec_ref: "specs/balanced-posting-l0.yaml#CONSERVATION-LEGS-NET-ZERO-001"
+verification:
+  type: review
+  source: "specs/balanced-posting-l0.yaml#CONSERVATION-LEGS-NET-ZERO-001"
+  pattern: "A value-moving handler (transfer, allocation, journal posting) MUST persist ALL legs of one operation inside ONE @Transactional unit through a single sole-mutator, every leg carrying the SAME operation id, and MUST assert before commit that the signed BigDecimal leg amounts sum to exactly zero via BigDecimal::compareTo(ZERO) (NEVER equals — scale-sensitive). Reject any handler that writes a credit leg without its mirror debit, splits the legs across independent REQUIRES_NEW sub-transactions, mixes amount scales, or skips the sum==0 check — an unbalanced operation MUST be rejected with 422 UNBALANCED_POSTING, never partially committed. A structural backstop (DB deferred-constraint trigger / per-operation rollup CHECK(net_amount=0), or a service-level pre-commit re-sum) MUST exist (CONSERVATION-BACKSTOP-001). This is a value-conservation correctness property with no compile-time signal, so it is verified by review against the spec, not by a static @Tag test."
+upstream:
+  - "https://martinfowler.com/eaaDev/AccountingTransaction.html"
+  - "https://www.postgresql.org/docs/current/ddl-constraints.html"
+evidence:
+  - source_type: external
+    citation: "Martin Fowler — Accounting Transaction (Patterns of Enterprise Application Architecture, eaaDev / Accounting Patterns)"
+    url: "https://martinfowler.com/eaaDev/AccountingTransaction.html"
+    quote: "A multi-legged transaction allows any number of entries, but with still the overall rule that all the entries must sum to zero, thus conserving money."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Martin Fowler — Accounting Transaction (intent / summary)"
+    url: "https://martinfowler.com/eaaDev/AccountingTransaction.html"
+    quote: "Link two (or more) entries together so that the total of all entries in a transaction is zero"
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "PostgreSQL Documentation — 5.4 Constraints (Check Constraints)"
+    url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    quote: "A check constraint is the most generic constraint type. It allows you to specify that the value in a certain column must satisfy a Boolean (truth-value) expression."
+    quoted_at: "2026-06-01"
+decided_at: "2026-06-01"
+---
+
+## A value-moving operation MUST post balanced legs that net to exactly zero — conserve, never mint or destroy
+
+**Impact: CRITICAL — A value-moving operation (a transfer between accounts, an inventory move between warehouses, a points/voucher transfer between users, an allocation drawn from a pool) posts two or more signed legs. If the handler writes one leg but skews, drops, or wrong-signs its mirror — on a partial failure, a rounding split that does not re-add, a wrong sign, a forgotten leg under a refactor — the operation MINTS value out of nothing (positive residual) or DESTROYS it (negative residual). Reconciliation breaks, an audit invariant fails, and the corruption surfaces months later as a balance that does not foot. Idempotency does not catch it (the operation is not a retry), optimistic locking does not catch it (no concurrent writer), and atomic-claim does not catch it (no shared counter raced) — only a net-zero-sum invariant across the legs of one operation does.**
+
+This is the double-entry / conservation-of-quantity principle, the same one physicists apply to energy: you cannot create value, you can only move it around. Martin Fowler's Accounting Transaction pattern states the rule directly — *all the entries must sum to zero, thus conserving money*. The catalog's neighbouring primitives do NOT cover this axis:
+
+- **bounded-capacity-claim (`#CLAIM-ATOMIC-001`)** serializes claimants racing ONE one-sided shared counter — it prevents OVER-allocation of a single counter. It says nothing about whether a draw on the source equals the grant to the destination.
+- **payment refund-cap** is a single-axis cumulative ceiling (`refunded <= captured`) — one monotone bound on one axis. Balanced-posting is a two-sided net-zero conservation across the legs of ONE operation, not a one-axis monotone bound.
+
+There are three load-bearing requirements, and they compose with — but are distinct from — `persistence-state-machine-atomic` and `transaction-propagation-requires-new.md`.
+
+**1. All legs in ONE transaction, ONE operation id.** Every leg of the operation is persisted inside a single `@Transactional` unit through one sole-mutator, each leg carrying the same `operation_id`. The legs MUST NOT be split across independent `REQUIRES_NEW` sub-transactions — a crash between them would leave a half-committed, unbalanced posting. This is exactly why `transaction-propagation-requires-new.md` matters here: the multi-leg write shares ONE transaction.
+
+**2. Signed amounts sum to exactly zero, by `compareTo`.** All leg amounts share one signed `BigDecimal` representation at one fixed scale (the ISO-4217 currency scale, or the unit scale for non-money quantities). Debits are negative, credits positive (consistently). The pre-commit check is `sum.compareTo(BigDecimal.ZERO) == 0` — **never** `equals`, which is scale-sensitive (`new BigDecimal("0.00").equals(BigDecimal.ZERO)` is `false`, but `compareTo` is `0`).
+
+**3. Reject unbalanced before commit.** An operation whose legs do not net to zero is rejected with `422 UNBALANCED_POSTING` (RFC 9457, `imbalance` carrying the residual) — never silently persisted, never partially committed.
+
+**Incorrect — credits the receiver, skews the debit; the operation mints value out of nothing:**
+
+```java
+@Transactional
+public Transfer transfer(long fromId, long toId, BigDecimal amount) {
+    // VIOLATION 1: a fee is netted out of the debit but NOT mirrored by a
+    // matching fee leg — the two legs no longer sum to zero.
+    BigDecimal fee = amount.multiply(new BigDecimal("0.01"));
+    ledger.save(new Leg(fromId, amount.add(fee).negate()));  // debit -(amount+fee)
+    ledger.save(new Leg(toId,   amount));                     // credit +amount
+    // residual = -fee  →  value DESTROYED; no balance check, commits anyway.
+    // VIOLATION 2 (latent): had these two saves been split across two
+    // REQUIRES_NEW methods, a crash between them commits ONE leg alone.
+    return new Transfer(fromId, toId, amount);
+}
+```
+
+**Correct — every leg shares one operation id; signed legs are asserted net-zero via compareTo before commit; unbalanced is rejected 422:**
+
+```java
+@Transactional
+public Transfer post(PostingOperation op) {           // one sole-mutator, one txn
+    List<Leg> legs = op.legs();                       // e.g. debit + credit + fee + fee-income
+    BigDecimal residual = legs.stream()
+        .map(Leg::signedAmount)                       // all at the ISO-4217 / unit scale
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (residual.compareTo(BigDecimal.ZERO) != 0) {   // compareTo, NOT equals
+        postingMetrics.rejectedUnbalanced(op.type());  // CONSERVATION-OBSERVABILITY-001
+        throw new UnbalancedPostingException(residual); // → 422 UNBALANCED_POSTING
+    }
+    long operationId = ledger.nextOperationId();
+    legs.forEach(leg -> ledger.save(leg.withOperationId(operationId))); // SAME op id
+    postingMetrics.balanced(op.type());
+    return Transfer.of(op, operationId);
+}
+// Structural backstop (CONSERVATION-BACKSTOP-001), independent of this code:
+//   a deferred-constraint trigger raising on  SUM(signed_amount) <> 0
+//   GROUP BY operation_id,  OR a per-operation rollup row carrying
+//   CHECK (net_amount = 0)  — so even a path that bypasses this service
+//   check cannot persist an asymmetric posting.
+```
+
+**Generic across domains — this is value conservation, not accounting-only.** Inventory transfer: units leaving warehouse A (negative leg) equal units entering warehouse B (positive leg). Points / voucher / loyalty transfer: the sender's debit equals the receiver's credit. Energy / credit / quota allocation: the amount drawn from the pool equals the sum granted to consumers. Classic double-entry: debits equal credits. In every case the legs of one operation sum to zero or the system has minted or destroyed quantity it had no right to.
+
+**Orthogonal to the catalog's other conservation-adjacent rules — ship the ones the operation needs.** A transfer that draws on a bounded source wants BOTH atomic-claim (`#CLAIM-ATOMIC-001`, so the source is not over-drawn under a race) AND balanced-posting (so the drawn amount equals the granted). A multi-currency posting wants `lang-bigdecimal-for-money.md` (exact decimal arithmetic) under it. None of these substitutes for the net-zero invariant.
+
+Verification: review-tier. Value conservation is a correctness property of the posting logic with no compile-time signal — a single-path test on a happy transfer passes even on a handler that will skew a leg under a future refactor, and the corruption only shows up when a balance fails to foot. Verify by review against `specs/balanced-posting-l0.yaml#CONSERVATION-LEGS-NET-ZERO-001`, prove it with a positive sum-of-legs invariant test (every persisted operation: `sum(legs.signedAmount).compareTo(ZERO) == 0`) plus a negative test (a deliberately skewed leg → 422 `UNBALANCED_POSTING`, no rows committed), and require the structural backstop of `#CONSERVATION-BACKSTOP-001`. When a fork-receiver wires a real `@Tag("CONSERVATION-LEGS-NET-ZERO-001")` invariant IT, this rule's verification block may be upgraded from review to gradle_task+tag.
+
+Reference: [Martin Fowler — Accounting Transaction (entries must sum to zero, conserving money)](https://martinfowler.com/eaaDev/AccountingTransaction.html)
+
+Reference: [PostgreSQL — Constraints (CHECK constraint enforcing a Boolean condition on stored rows)](https://www.postgresql.org/docs/current/ddl-constraints.html)
 
 
 <!-- @source rules/waitlist-promotion-is-atomic-fifo.md -->
