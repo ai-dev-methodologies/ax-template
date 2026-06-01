@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "b9957f0f3e6319557df3cd3f239bb94aeb8ef58d7fb7964b4dbab58d4021427d"
+  source_concat_sha256: "1a67381d2c4d0286022ceaae1583c09a1b0a98d929333544cf4ac741aec9aa8d"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -8161,7 +8161,7 @@ upstream:
   - "https://abseil.io/resources/swe-book"
 evidence:
   - source_type: external
-    citation: "Hunt & Thomas — The Pragmatic Programmer (2nd ed) §7 The Evils of Duplication: 'Every piece of knowledge must have a single, unambiguous, authoritative representation within a system.' The rule of three (extract on the third copy) is the practical operationalization."
+    citation: "Wikipedia — Don't repeat yourself (lead section), stating the DRY principle as formulated by Hunt & Thomas in The Pragmatic Programmer ('The Evils of Duplication'): 'Every piece of knowledge must have a single, unambiguous, authoritative representation within a system.' The rule of three (extract on the third copy) is the practical operationalization."
     url: "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
     quote: "Every piece of knowledge must have a single, unambiguous, authoritative representation within a system."
     quoted_at: "2026-05-26"
@@ -8237,7 +8237,7 @@ import com.ax.template.authblueprint.common.AuditPiiHelper;
 // ... AuditPiiHelper.piiHash(phone) ...
 ```
 
-Reference: [Hunt & Thomas — The Pragmatic Programmer (2nd ed) §7 The Evils of Duplication](https://www.oreilly.com/library/view/the-pragmatic-programmer/020161622X/)
+Reference: [Hunt & Thomas — The Pragmatic Programmer (2nd ed), The Evils of Duplication](https://www.oreilly.com/library/view/the-pragmatic-programmer/020161622X/)
 Reference: [Software Engineering at Google — Code Review chapter](https://abseil.io/resources/swe-book)
 
 ## When to defer the lift (explicit deferral discipline)
