@@ -103,3 +103,47 @@ items:
       Implementation: SearchBackend interface resolved by SearchBackendConfig @ConditionalOnProperty(ax.search.backend).
       Default (when property absent): PostgresFtsAdapter is activated.
     policy_ref: "blueprints/search-manifest.yaml#backend"
+
+  - id: "SEARCH-RANK-001"
+    chapter: "Result ordering / relevance"
+    requirement: "Search results MUST be returned in deterministic, page-stable order: primary sort relevance DESC (ts_rank for the Postgres FTS default; the backend-native relevance score otherwise), with id as the MANDATORY tiebreaker when scores are equal — relevance scores are non-unique, so a relevance-only sort does NOT establish a unique row sequence and would let equally-ranked hits reshuffle between requests. The same query+page MUST therefore return the same hits with no duplicates and no gaps across page boundaries."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: index 5 documents where >=2 share an identical relevance score for
+      query "hello"; POST /api/v1/search {query: "hello", page: 0, size: 2}
+      then {page: 1, size: 2} → the union of hits across pages contains every
+      matching id exactly once (no duplicate id, no missing id), and repeating
+      the identical request yields a byte-identical hit ordering.
+      Implementation: PostgresFtsAdapter orders by `ts_rank(tsv, query) DESC,
+      id ASC`; non-Postgres backends order by `<native_score> DESC, id ASC`.
+      PageRequestNormalizer composes the (relevance, id) sort — id is appended
+      unconditionally so the sort is total even when every score collides.
+
+      Cross-spec binding: this is the search-domain realization of
+      pagination-l0.yaml#PAGE-STABLE-SORT-001 ("Pagination MUST be over a
+      stable sort — at least one tiebreaker column"). Relevance is the
+      non-unique leading key here; id is the unique tiebreaker that makes the
+      ordering deterministic and therefore page-stable.
+
+      Evidence (external):
+      - PostgreSQL 16 Documentation, "Controlling Text Search" §12.3.3
+        (Ranking Search Results),
+        https://www.postgresql.org/docs/current/textsearch-controls.html
+        (quoted_at: 2026-06-01) — verbatim: "Ranking attempts to measure how
+        relevant documents are to a particular query, so that when there are
+        many matches the most relevant ones can be shown first." and
+        "ts_rank ... Ranks vectors based on the frequency of their matching
+        lexemes." This is the source of the primary relevance-DESC sort; it
+        produces a non-unique score, which is why a tiebreaker is required.
+      - Markus Winand, "Fetch the Next Page" (Use The Index, Luke!),
+        https://use-the-index-luke.com/sql/partial-results/fetch-next-page
+        (quoted_at: 2026-06-01) — verbatim: "Paging requires a deterministic
+        sort order." and "The problem is that the `order by` clause does not
+        establish a deterministic row sequence. That is, however, prerequisite
+        to using a simple range condition for the page breaks." and "If this
+        still does not yield a deterministic sort order, just add any unique
+        column(s) and extend the index accordingly." This is the rationale for
+        appending the unique id tiebreaker to the non-unique relevance key.
+    policy_ref: "blueprints/search-manifest.yaml#query"

@@ -1,0 +1,57 @@
+version: "0.1.0"
+scope: "value-provenance-l0 — provenance + non-clobber contract for any entity field that is machine-computed yet human-overridable. When a system writes a value (fraud score, suggested tag, ML label, auto-grade, risk tier, predicted category) AND a human is allowed to correct it, the field MUST record WHO last set it (SYSTEM vs USER) and a recompute/batch job MUST NOT overwrite a value a human deliberately set. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / admin-CRUD / LMS / moderation applicable."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA) + RFC 9457 Problem Details. Provenance is a column-level concern (valueSource enum + override audit columns); no framework lock-in."
+standard: "GDPR Art 22 (automated individual decision-making — right to obtain human intervention) + OWASP ASVS V7 Error Handling & Logging (security-relevant event logging) + Fowler Audit-Log / value-source provenance pattern (de facto reference)"
+domain_mode: full_trio
+introduced_at: "IDW5 2026-06-01 LMS dogfood"
+
+# OPT-IN provenance catalog. Adopted by any recipe whose entity carries a
+# field the system computes but a human may override: auto-fraud-score →
+# manual analyst review, auto-tag → human fix, ML suggestion → reviewer
+# approval, auto-grade → instructor override, risk-tier → ops adjustment.
+# Two invariants, both keystone:
+#   PROVENANCE-SOURCE-001     — every overridable computed field tracks its source + override audit.
+#   PROVENANCE-NO-RECLOBBER-001 — a recompute/batch job MUST SKIP rows whose source == USER.
+# Generic pattern; zero Korean law cite (R102+ generic catalog principle,
+# memory feedback_prefer_generic_catalog). GDPR Art 22 is the only
+# regulatory anchor and it is EU-wide, not Korean.
+
+# ── Adopt in order (earlier is foundational) ──
+#   1. PROVENANCE-SOURCE-001       (the column model)
+#   2. PROVENANCE-NO-RECLOBBER-001 (the recompute guard)
+
+items:
+  - id: "PROVENANCE-SOURCE-001"
+    chapter: "Override provenance columns"
+    requirement: "Any entity field that is machine-computed AND human-overridable MUST carry provenance alongside the value: a `valueSource` enum (`SYSTEM` | `USER`, non-null, DB default `SYSTEM`), an `overriddenByActorId` (non-null exactly when valueSource == USER, else null), an `overriddenAt` timestamp (set when, and only when, a human override is applied), and the prior machine value preserved (`machineValue` / `priorSystemValue`) so the system-computed baseline is never destroyed by the override. The transition `SYSTEM → USER` MUST be performed by a single mutator that stamps actorId + overriddenAt + machineValue in one atomic write and emits an audit event (who, when, old→new, valueSource change); a USER value MUST NOT be silently downgraded back to SYSTEM except by an explicit \"revert to system value\" action that is itself audited. The invariant: a reader can always answer \"is this value the machine's or a human's, and if a human's, whose and when\"."
+    test_method: "RestAssured integration test + JPA structural assertion"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Provenance is what makes a human correction defensible and
+      auditable. Anchored to OWASP ASVS V7 (security-relevant event
+      logging) + GDPR Art 22(3) (human intervention on automated
+      decisions). Quote anchor (OWASP ASVS V7 §7.1.3): "Verify that the
+      application logs security relevant events including successful and
+      failed authentication events, access control failures,
+      deserialization failures and input validation failures." — the
+      override of a machine value is exactly such a security-relevant,
+      access-controlled mutation and MUST be logged with its actor.
+  - id: "PROVENANCE-NO-RECLOBBER-001"
+    chapter: "Recompute MUST skip human overrides"
+    requirement: "A recompute path — a scheduled batch job, an event-driven re-scoring, a model-version migration, or a bulk re-tagging — that rewrites the machine-computed value MUST SKIP every row whose `valueSource == USER`; it MUST NEVER clobber a human correction with a freshly computed machine value. The recompute MUST update only `valueSource == SYSTEM` rows (and the preserved `machineValue` baseline of USER rows, WITHOUT touching their live value). Negative review: feed the recompute a row a human set to a different value than the model now produces → assert the live value is UNCHANGED, valueSource stays USER, overriddenByActorId/overriddenAt are preserved, and a `provenance_reclobber_skipped_total` metric (or audit line) records the skip. A recompute that overwrites a USER row is a lost human correction and a silent automated-decision override — the exact harm GDPR Art 22 guards against."
+    test_method: "RestAssured integration test (recompute skip) + Micrometer registry assertion"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      This is the keystone invariant — without the SKIP, every nightly
+      re-score silently reverts every analyst correction. Anchored to
+      GDPR Art 22(1)+(3). Quote anchor (GDPR Art 22(1)): "The data
+      subject shall have the right not to be subject to a decision based
+      solely on automated processing, including profiling, which
+      produces legal effects concerning him or her or similarly
+      significantly affects him or her." Quote anchor (GDPR Art 22(3)):
+      "...at least the right to obtain human intervention on the part of
+      the controller, to express his or her point of view and to contest
+      the decision." A recompute that clobbers a human override
+      structurally erases that human intervention.

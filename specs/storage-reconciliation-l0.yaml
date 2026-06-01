@@ -1,0 +1,132 @@
+version: "0.1.0"
+scope: "storage-reconciliation-l0 — DB↔object-store reconciliation contract for any fork-receiver whose domain stores a blob in an external object store (S3 / MinIO / GCS / Azure Blob) and a referencing row in the relational DB. Closes the dual-write gap: a write that must atomically (a) commit a DB row and (b) put/delete a blob cannot be made atomic without 2PC, so the two stores drift. This spec defines the reconciliation sweeps that converge them back. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / LMS / file-storage applicable."
+stack: "Spring Boot 3.2.x + JPA + S3-compatible object store + @Scheduled sweep + DB-row distributed lock (scheduled-task LockingPolicy) + soft-delete grace window + Micrometer metrics"
+standard: "Transactional Outbox / dual-write inconsistency (microservices.io, Chris Richardson) + AWS S3 DeletingObjects (delete idempotency + S3 Lifecycle reclaim) + RFC 9457 Problem Details + 12-Factor App Factor XI (Logs/observability)"
+domain_mode: backend_only
+introduced_at: "IDW5 2026-06-01 LMS dogfood"
+
+# OPT-IN reconciliation catalog. Adopted by any recipe that performs a
+# DUAL WRITE — committing a DB row AND putting/deleting a blob in an
+# external object store within the same logical operation. Because the
+# DB transaction and the object-store call cannot be wrapped in one
+# atomic commit without 2PC (microservices.io dual-write problem), a
+# crash / network failure between the two steps leaks one of two
+# inconsistencies: (1) an ORPHAN blob (object store has the bytes, no
+# live DB row references it) or (2) a MISSING blob (DB row references a
+# key the object store no longer has). This spec mandates the bounded
+# reconciliation sweeps that converge the two stores, composing the
+# existing scheduled-task distributed lock (SCHED-LOCK-001) for
+# single-flight execution and the soft-delete grace window for safety.
+#
+# Composition note: layers under existing L4 recipes that store blobs —
+# file-storage-l0 (StoredFile.storageKey) and report-export-l0
+# (ExportJob output key) MAY adopt these sweeps WITHOUT changing their
+# resource model. backend_only: reconciliation is a server-side
+# convergence concern with no client-facing surface; the fork-receiver
+# owns any admin UI. Generic pattern; zero Korean law cite (R102+
+# generic catalog principle).
+
+# ── Priority order for fork-receivers (adopt in order) ──
+#   1. RECON-DELETE-001        (reclaim-on-purge — close the leak at the source)
+#   2. RECON-IDEMPOTENT-001    (make every sweep safe to re-run — lock + grace)
+#   3. RECON-ORPHAN-001        (reverse sweep — purge leaked blobs)
+#   4. RECON-MISSING-001       (forward sweep — quarantine dangling rows)
+#   5. RECON-OBSERVABILITY-001 (the orphan/missing/reclaimed metric triple)
+
+# ── RECIPE.md frontmatter example ──
+#   ---
+#   recipe: generic-storage-reconciliation
+#   reconciliation_enabled: true
+#   recon_orphan_grace_seconds: 86400   # 24h bounded grace before a no-referent blob is purged
+#   recon_sweep_cron: "0 0 3 * * ?"     # off-peak
+#   recon_reclaim_queue: db             # reclaim queue backing (db row / outbox)
+#   ---
+
+items:
+  - id: "RECON-DELETE-001"
+    chapter: "Reclaim-on-purge (close the leak at source)"
+    requirement: "When a DB row that owns a blob is purged (hard-deleted), the operation MUST NOT depend on the inline object-store delete succeeding for the DB transaction to commit. The blob key MUST be enqueued for reclaim in the SAME local DB transaction that removes the row (a reclaim queue row / transactional-outbox entry), so that an inline storage-delete failure is eventually reconciled by an asynchronous reclaim worker rather than silently leaking an orphan. The inline delete MAY be attempted as a fast path, but its failure MUST be swallowed-then-enqueued, never propagated as a 500 that rolls back the row removal. The reclaim worker MUST treat an object-store delete of an already-absent key as success (idempotent reclaim)."
+    test_method: "RestAssured integration test + JPA reclaim-queue assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      This is the keystone: it removes the dual-write atomicity
+      requirement entirely. The DB commit and the reclaim-queue insert
+      are ONE local transaction (atomic); the actual object-store delete
+      becomes an at-least-once async step whose failure is harmless
+      because the queue row survives a retry. Anchored to the
+      dual-write / transactional-outbox problem statement
+      (https://microservices.io/patterns/data/transactional-outbox.html).
+      Quote anchor (microservices.io — Transactional outbox, Context):
+      "But without using 2PC, sending a message in the middle of a
+      transaction is not reliable. There's no guarantee that the
+      transaction will commit. Similarly, if a service sends a message
+      after committing the transaction there's no guarantee that it
+      won't crash before sending the message." The reclaim S3 delete is
+      idempotent: AWS S3 DeletingObjects permits deleting by key and an
+      absent key is a no-op success
+      (https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeletingObjects.html).
+  - id: "RECON-ORPHAN-001"
+    chapter: "Reverse sweep — purge no-referent blobs"
+    requirement: "A scheduled reverse sweep MUST enumerate object-store keys under the domain prefix and purge any blob that has NO live DB referent AND whose last-modified timestamp is older than a bounded grace window (`recon_orphan_grace_seconds`, default 86400s / 24h). The grace window is mandatory: a blob uploaded seconds before its referencing row commits (write-then-commit ordering) MUST NOT be mistaken for an orphan and purged mid-flight. The sweep MUST query the live DB referent set (not soft-deleted rows) to decide; a key referenced only by a soft-deleted-but-within-grace row is NOT an orphan yet. Purge MUST route through the same idempotent reclaim path as RECON-DELETE-001."
+    test_method: "RestAssured integration test + seeded orphan fixture"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The reverse sweep is the safety net for RECON-DELETE-001 reclaim
+      failures and for orphans created by aborted uploads. The bounded
+      grace window prevents the sweep from racing in-flight writes.
+      Anchored to AWS S3 DeletingObjects + S3 Lifecycle reclaim
+      (https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeletingObjects.html).
+      Quote anchor (AWS S3 — Deleting Amazon S3 objects): "If you want
+      to delete a large number of objects, or for programmatically
+      deleting objects based on object creation date, set a S3 Lifecycle
+      configuration on your bucket." Composition: the sweep itself runs
+      under the scheduled-task distributed lock — see
+      blueprints/scheduled-task-manifest.yaml#lock and
+      specs/scheduled-task-l0.yaml SCHED-LOCK-001.
+  - id: "RECON-MISSING-001"
+    chapter: "Forward sweep — quarantine dangling rows (never 500)"
+    requirement: "A scheduled forward sweep MUST enumerate live DB rows that own a blob and, for each, probe the object store for the referenced key. A row whose blob is MISSING MUST be transitioned to a terminal QUARANTINED / DEGRADED status (a state-machine transition, recorded), NOT deleted and NOT left to fail at read time. Any read-path request for a row whose blob is missing MUST return a controlled RFC 9457 response (404 / 422 with `type=urn:problem:blob-missing`) — it MUST NEVER surface the raw object-store NoSuchKey as an unhandled 500. The forward sweep MUST be read-only against the object store (a HEAD/exists probe), never a destructive operation."
+    test_method: "RestAssured integration test + seeded missing-blob fixture"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      MISSING is the inverse drift of ORPHAN: the DB promised a blob the
+      store no longer has (a reclaim that ran too early, an out-of-band
+      console delete, replication lag). Quarantine + a controlled 404/422
+      keeps the failure observable and bounded instead of a runtime 500
+      storm. Anchored to the dual-write inconsistency framing
+      (https://microservices.io/patterns/data/transactional-outbox.html)
+      and RFC 9457 Problem Details for the controlled read-path error.
+  - id: "RECON-IDEMPOTENT-001"
+    chapter: "Sweep idempotency (lock + grace composition)"
+    requirement: "Both sweeps MUST be idempotent and safe to run concurrently across nodes by COMPOSING two existing catalog primitives: (1) the scheduled-task distributed lock (SCHED-LOCK-001 — DB-row lock with TTL, SELECT ... FOR UPDATE SKIP LOCKED) so only one node sweeps per cycle and a crashed holder's stale lock is re-acquirable after the TTL; and (2) the soft-delete grace window so a re-run within the grace period reaches the IDENTICAL purge/quarantine decision (no double-purge, no flapping a row in and out of QUARANTINED). Re-running either sweep with no new drift MUST be a no-op that mutates nothing and emits zero purge/quarantine counts. The sweep MUST NOT invent its own lock — it reuses the scheduled-task LockingPolicy."
+    test_method: "JUnit 5 unit test with Mockito + scheduled-task LockingPolicy"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Idempotency here is a COMPOSITION property, not new code: lock
+      (single-flight) + grace window (stable decision) ⇒ a re-run
+      converges to the same state. This is a structural/composition
+      review item — it asserts the sweep wires the existing primitives
+      rather than re-implementing them. Anchored to the existing
+      scheduled-task lock pattern: specs/scheduled-task-l0.yaml
+      SCHED-LOCK-001 ("executeWithLock() acquires a distributed lock
+      before running a task; if the lock is already held by another
+      node, the execution is skipped for this cycle") and SCHED-LOCK-002
+      (TTL-expiry of stale locks), and to the dual-write reliability
+      framing (https://microservices.io/patterns/data/transactional-outbox.html).
+  - id: "RECON-OBSERVABILITY-001"
+    chapter: "관측 (the orphan/missing/reclaimed metric triple)"
+    requirement: "Reconciliation MUST expose exactly 3 canonical Micrometer counters with bounded-cardinality labels: (1) `storage_recon_orphan_total{domain}` — blobs purged by the reverse sweep (no live referent, past grace); (2) `storage_recon_missing_total{domain}` — rows quarantined by the forward sweep (referenced blob absent); (3) `storage_recon_reclaimed_total{domain}` — reclaim-queue keys whose object-store delete succeeded (including idempotent already-absent successes). The `domain` label MUST be a fixed entity-type enum; labels MUST exclude storage_key / blob_key / row_id / user_id (no PII, no high-cardinality). A persistently nonzero orphan or missing count is the fork-receiver's drift signal; SLO/alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The triple makes drift measurable: orphan (store-leads) + missing
+      (db-leads) + reclaimed (convergence throughput). Bounded {domain}
+      label keeps the time-series count finite. Anchored to 12-Factor
+      App Factor XI (treat logs/telemetry as event streams) and to the
+      dual-write inconsistency framing this whole spec converges
+      (https://microservices.io/patterns/data/transactional-outbox.html).

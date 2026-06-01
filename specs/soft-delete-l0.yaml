@@ -140,3 +140,25 @@ items:
       Anchored to OpenTelemetry Semantic Conventions for metrics
       (https://opentelemetry.io/docs/specs/semconv/general/metrics/).
       Quote anchor (OTel Attribute Requirement Levels, opentelemetry.io/docs/specs/semconv/general/attribute-requirement-level/): "Metric attributes that may have high cardinality can only be defined with `Opt-In` level."
+
+  - id: "SOFTDELETE-REFERENTIAL-001"
+    chapter: "Inbound-reference guard before destructive remove"
+    requirement: "Before a hard-delete (physical DELETE) or a hierarchy-cascade tombstone of a STRUCTURAL entity that other aggregates point at by foreign key (e.g. a category referenced by products, a tag referenced by attachments, a team referenced by members, a parent node referenced by children), the domain service MUST first count live inbound references from those OTHER aggregates — replicating FK `ON DELETE RESTRICT` semantics at the application layer when no DB-level RESTRICT exists. With a non-zero live dependent count the service MUST NOT proceed; it MUST instead either (a) refuse with 409 Conflict + RFC 9457 body `type=urn:problem:referential-conflict` carrying a `dependent_count` member (and SHOULD carry a bounded `dependent_resource` label naming the blocking aggregate type), or (b) convert the operation to a retire/tombstone (SOFTDELETE-MARK-001) that keeps the node resolvable for historical reads of the dependents — never silently orphan dependents by leaving dangling foreign keys. The reference count MUST be evaluated inside the same transaction as the delete (read-then-delete under one @Transactional) so a concurrent insert of a new dependent cannot slip through the check-to-delete window. Negative test: create a structural entity, attach one live dependent from another aggregate, attempt hard-delete → assert 409 + dependent_count >= 1 + the structural row still resolvable; then detach the dependent and re-attempt → assert success."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Pairs with destructive-action-confirm-with-side-effects.md (UI
+      confirmation) and the retire mechanism of SOFTDELETE-MARK-001
+      (option b). The application-layer count mirrors FK ON DELETE
+      RESTRICT for stores/entities that do not declare a DB-level RESTRICT
+      (e.g. polymorphic attachment tables keyed by entity_type/entity_id
+      where no real FK exists). Anchored to PostgreSQL DDL Constraints —
+      Foreign Keys (https://www.postgresql.org/docs/current/ddl-constraints.html)
+      and Jakarta Persistence 3.1 §2.10 Entity Relationships
+      (https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1.html).
+      Quote anchor (PostgreSQL §5.4 Foreign Keys, RESTRICT): "RESTRICT is
+      a stricter setting than NO ACTION. It prevents deletion of a
+      referenced row." Quote anchor (Jakarta Persistence 3.1 §2.10):
+      "Note that it is the application that bears responsibility for
+      maintaining the consistency of runtime relationships."

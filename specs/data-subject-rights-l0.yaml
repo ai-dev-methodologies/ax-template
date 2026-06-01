@@ -149,3 +149,30 @@ items:
       Reference: OTel Metrics Data Model, "Timeseries Model" / temporality
       sections (see source; no verbatim quote — the cited general/metrics
       page carries no cardinality clause).
+
+  - id: "DSR-LEGALHOLD-001"
+    chapter: "법적 보존의무 게이트 (Legal-hold / retention-obligation gate)"
+    requirement: "A legal-hold / retention-obligation MUST be a FIRST-CLASS, independently-enforced, FAIL-CLOSED gate that BOTH the DSR erasure path (DSR-ERASURE-001) AND the soft-delete retention PURGE path (soft-delete-l0 SOFTDELETE-PURGE-001) consult BEFORE any physical or logical removal. The gate answers one question per subject/record category — `isHeld(subjectId, category)` — sourced from an explicit hold registry (litigation hold, tax/records-retention schedule, regulatory preservation order), NOT from prose in the erasure handler. When a hold covers the targeted subject or record category, erase/purge for that category MUST be BLOCKED: the record is RETAINED, the DSR request is PARKED (status held, not failed) with a partial-erasure manifest listing {category, hold_reason, earliest_release_at}, and the work resumes automatically only after the hold lifts. The gate MUST default to BLOCK when the hold lookup is unavailable or errors (fail-closed: an unreachable hold registry means 'assume held', never 'assume clear') — a delete path that cannot prove the absence of a hold MUST NOT delete. The gate MUST be consulted by EVERY deletion entrypoint (scheduled retention purge, on-demand erasure, admin force-purge); a path that skips the gate is the defect, not a silent allow."
+    test_method: "review (gate-consultation reachability + fail-closed default) — RestAssured negative test when a concrete hold registry exists"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Erasure is NOT unconditional. GDPR Art 17(3)(b) exempts erasure where
+      processing is necessary "for compliance with a legal obligation" and
+      Art 17(3)(e) where necessary "for the establishment, exercise or
+      defence of legal claims" — the very situations a litigation hold or a
+      statutory records-retention schedule encodes. The reference workload
+      already ships the sibling fail-closed pattern in
+      backend/.../dsr/DsrRestrictionGate.java (Art 18 restriction): a
+      default-deny gate the processing path MUST consult, where a path that
+      forgets to consult is the bug. LegalHoldGate is the same shape applied
+      to the two delete paths. Anchored to GDPR Art 17(3)
+      (https://gdpr-info.eu/art-17-gdpr/) for the erasure exception and to
+      US FRCP Rule 37(e) (https://www.law.cornell.edu/rules/frcp/rule_37)
+      for the preservation/spoliation obligation a hold discharges.
+      Quote anchor (GDPR Art 17(3)): "Paragraphs 1 and 2 shall not apply to
+      the extent that processing is necessary: ... (e) for the
+      establishment, exercise or defence of legal claims."
+      Composition: DSR-ERASURE-001 + SOFTDELETE-PURGE-001 both call this
+      gate; the partial-erasure manifest already specified by DSR-ERASURE-001
+      is the carrier for the held-category list.

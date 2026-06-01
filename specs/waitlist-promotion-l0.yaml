@@ -1,0 +1,138 @@
+version: "0.1.0"
+scope: "waitlist-promotion-l0 — a capacity-gated overflow waitlist for any recipe whose bounded resource (seats, enrollment slots, ticket allotment, reservation windows) is full: a claimant who cannot win an atomic seat is enqueued, and when a held seat is released the LONGEST-waiting entry is promoted into the freed seat in ONE transaction (FIFO by enqueue position). Cross-cutting, jurisdiction-agnostic + framework-agnostic. Composes specs/bounded-capacity-claim-l0.yaml (the atomic seat-claim primitive the waitlist sits behind), specs/optimistic-locking-l0.yaml (the released-seat / promoted-entry state transitions are guarded by @Version), and specs/transactional-outbox-l0.yaml (the promotion notification is emitted reliably, not lost). Distinct from bounded-capacity-claim: that spec answers 'who gets the last seat now'; this spec answers 'who gets the NEXT seat, and in what order, when one frees up'."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA @Version) + PostgreSQL (row-level FOR UPDATE on the freed capacity row + ordered SELECT of the head-of-line waiter) + transactional-outbox relay (RabbitMQ OR Kafka) + RFC 9457 Problem Details + Micrometer metrics"
+standard: "FIFO / first-in-first-out queue service discipline (RFC 970 — On Packet Switches With Infinite Storage, J. Nagle) + PostgreSQL 'Explicit Locking' (row-level FOR UPDATE serializes the release+promote critical section) + Jakarta Persistence 3.1 @Version (optimistic locking for the state machine) + Transactional Outbox pattern (microservices.io) + CWE-362 (race condition on a shared resource) + RFC 9110 §15.5.10 (409 Conflict) + RFC 9457 (Problem Details for HTTP APIs)"
+domain_mode: backend_only
+introduced_at: "IDW5 2026-06-01 LMS dogfood"
+
+# OPT-IN overflow-waitlist catalog. Adopted by any recipe that already
+# guards a bounded counter with bounded-capacity-claim-l0 (CLAIM-ATOMIC-001)
+# and wants a fair queue for the claimants who lose the last seat instead of
+# a hard 409. The IDW5 LMS dogfood found enrollment-cap recipes either
+# hard-rejected over-capacity learners (no second chance) OR re-implemented an
+# ad-hoc waitlist that promoted by INSERT timestamp read in a separate
+# statement — the same read-then-act race CLAIM-ATOMIC-001 closes for the
+# seat, re-opened one layer up for the promotion. This spec supplies the
+# missing primitive: a sole-mutator state machine (waiting → enrolled →
+# dropped) whose seat claim composes CLAIM-ATOMIC-001 and whose promotion is a
+# SINGLE transaction that locks the freed capacity row (FOR UPDATE), selects
+# the longest-waiting entry by a monotonic enqueue position (FIFO, never
+# wall-clock), flips it enrolled, and emits the promotion via the
+# transactional outbox. Generic pattern; zero Korean law cite (R102+ generic
+# catalog principle).
+
+# ── Priority order for fork-receivers ──
+# Adopt in order; earlier items are foundational. FSM + CLAIM are the
+# keystone — without a sole-mutator state machine and an atomic seat claim,
+# promotion / notify / position are undefined.
+#   1. WAITLIST-FSM-001       — waiting → enrolled → dropped, sole mutator
+#   2. WAITLIST-CLAIM-001     — atomic seat claim (composes bounded-capacity-claim CLAIM-ATOMIC-001)
+#   3. WAITLIST-PROMOTE-001   — release-a-seat → promote LONGEST-waiting in ONE transaction (FIFO)
+#   4. WAITLIST-NOTIFY-001    — promotion emits via transactional-outbox (no lost notification)
+#   5. WAITLIST-POSITION-001  — position query is owner-or-admin (IDOR-safe)
+
+# ── RECIPE.md frontmatter example ──
+#   ---
+#   recipe: generic-waitlist-promotion
+#   waitlist_enabled: true
+#   waitlist_order: fifo                 # enqueue-position monotonic sequence (NOT wall-clock)
+#   waitlist_promote_on_release: true    # releasing a held seat promotes head-of-line
+#   waitlist_promote_lock_mode: for_update  # lock the freed capacity row across release+promote
+#   waitlist_notify_via_outbox: true     # composes transactional-outbox-l0
+#   ---
+
+# ── Composition note ──
+# bounded-capacity-claim-l0 (CLAIM-ATOMIC-001) and waitlist-promotion are a
+# layered pair, BOTH required for a fair capacity-gated enrollment:
+#   bounded-capacity-claim → exactly one of the racing claimants wins the last open seat (no oversell)
+#   waitlist-promotion     → the losers are enqueued FIFO, and a freed seat promotes the head, atomically
+# A recipe that ships only bounded-capacity-claim hard-rejects overflow with
+# no recovery; a recipe that ships only an ad-hoc waitlist re-opens the
+# oversell race on the promote step. Ship both, and emit the promotion via
+# transactional-outbox-l0 so the promoted user is reliably notified.
+
+items:
+  - id: "WAITLIST-FSM-001"
+    chapter: "waiting → enrolled → dropped state machine (sole mutator)"
+    requirement: "A waitlist entry MUST move only through the closed state machine waiting → enrolled → dropped (a waiting entry MAY also go waiting → dropped on cancel/expiry). State transitions MUST flow through a SINGLE sole-mutator service method (a WaitlistStateMachine) — no controller, repository caller, scheduler, or test may write the status column directly. Each entry MUST carry a JPA @Version column so a concurrent transition loses the optimistic race (composes specs/optimistic-locking-l0.yaml#OPTLOCK-VERSION-001): two transactions both attempting waiting → enrolled on the same entry MUST resolve to exactly ONE success and one OptimisticLockException-derived 409. Illegal transitions (enrolled → waiting, dropped → enrolled, dropped → dropped) MUST be rejected with an invalid-transition error, never silently no-op'd."
+    test_method: "RestAssured integration test + sole-mutator structural assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Sole-mutator + @Version makes the lifecycle the only writer and makes
+      a double-promote of one entry impossible. The @Version optimistic
+      column is the canonical mechanism. Anchored to Jakarta Persistence 3.1
+      §3.4.2 Version Attributes via specs/optimistic-locking-l0.yaml#OPTLOCK-VERSION-001
+      (in-catalog cross-link).
+      Quote anchor (Jakarta Persistence 3.1 §3.4.2 Version Attributes): "The
+      version attribute is updated by the persistence provider runtime when
+      the object is written to the database."
+      (https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1#a2059)
+  - id: "WAITLIST-CLAIM-001"
+    chapter: "Atomic seat claim before enqueue (composes bounded-capacity-claim)"
+    requirement: "Before an entry is enqueued as waiting, the request MUST first attempt an atomic seat claim against the bounded capacity row using the primitive contracted in specs/bounded-capacity-claim-l0.yaml#CLAIM-ATOMIC-001 — a single conditional UPDATE (`UPDATE capacity SET taken = taken + 1 WHERE resource_id = ? AND taken < capacity`, affected-rows checked) OR a pessimistic SELECT ... FOR UPDATE + bounded UPDATE in the same transaction. If the claim is granted (affected-rows == 1), the entry is created directly as enrolled and NOT enqueued. Only when the claim is rejected (affected-rows == 0 — no room) MUST the entry be created as waiting and appended to the queue. The waitlist MUST NOT derive 'is there room' by a separate COUNT(*) read-then-decide — that re-opens the CWE-362 read-then-insert race the composed primitive exists to close. The capacity counter MUST live on ONE aggregate row backstopped by a DB `CHECK (taken <= capacity)`."
+    test_method: "RestAssured integration test + concurrent-claim harness (N+1 racing claims on capacity N)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The enqueue decision is gated by the SAME atomic claim that prevents
+      oversell — never a separate count. Composes
+      specs/bounded-capacity-claim-l0.yaml#CLAIM-ATOMIC-001 (in-catalog
+      cross-link) and is backstopped against CWE-362.
+      Quote anchor (CWE-362): "The product contains a concurrent code
+      sequence that requires temporary, exclusive access to a shared
+      resource, but a timing window exists in which the shared resource
+      can be modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)
+  - id: "WAITLIST-PROMOTE-001"
+    chapter: "Release a seat → promote the LONGEST-waiting entry in ONE transaction (FIFO)"
+    requirement: "When a held seat is released (an enrolled entry transitions to dropped, freeing one unit of capacity), the SAME transaction that frees the seat MUST promote the single longest-waiting entry into the freed seat — atomically, with no window in which the seat is free but unassigned. The transaction MUST: (1) lock the freed capacity row with `SELECT ... FOR UPDATE` so concurrent releases serialize; (2) select the head-of-line waiting entry ordered by a MONOTONIC enqueue position (an auto-increment sequence / ordinal assigned at enqueue), NEVER by wall-clock `created_at` (clock skew, equal timestamps, and DST make wall-clock non-total) — FIFO means first-enqueued is first-promoted; (3) flip that entry waiting → enrolled via the WAITLIST-FSM-001 sole mutator (its @Version guards against a concurrent promote of the same entry); (4) leave `taken` unchanged net (the released seat is immediately re-taken by the promotee — release-then-promote nets zero capacity change, which is why it MUST be one transaction). If the queue is empty the released seat returns to free capacity (`taken` decremented) and the DB `CHECK (taken >= 0)` backstops underflow. Promotion MUST be exactly-one: N concurrent releases against a queue of M waiting entries (M ≥ N) MUST promote EXACTLY N distinct entries — never the same entry twice, never zero for a non-empty queue."
+    test_method: "RestAssured integration test + concurrent-release harness (N concurrent releases promote N distinct FIFO heads)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The keystone invariant: release + promote is one atomic critical
+      section, ordered by enqueue position (FIFO), serialized by a row lock
+      on the freed capacity row. FIFO discipline anchored to RFC 970
+      (J. Nagle); the single-statement row lock anchored to PostgreSQL
+      'Explicit Locking' (FOR UPDATE).
+      Quote anchor (RFC 970 — On Packet Switches With Infinite Storage,
+      J. Nagle): "Initially, we will assume that queues are managed in a
+      first in, first out manner."
+      (https://www.rfc-editor.org/rfc/rfc970)
+      Quote anchor (PostgreSQL 'Explicit Locking' — FOR UPDATE): "FOR UPDATE
+      causes the rows retrieved by the SELECT statement to be locked as
+      though for update."
+      (https://www.postgresql.org/docs/current/explicit-locking.html)
+  - id: "WAITLIST-NOTIFY-001"
+    chapter: "Promotion emits via transactional-outbox (no lost notification)"
+    requirement: "A successful promotion (WAITLIST-PROMOTE-001) MUST emit a `waitlist.promoted` event so the promoted user is told a seat is now held for them — and that emission MUST go through the transactional outbox contracted in specs/transactional-outbox-l0.yaml#OUTBOX-WRITE-001: the outbox row insert MUST occur in the SAME local transaction as the promote (the waiting → enrolled flip), so a crash between the DB commit and the broker publish cannot lose the notification (the dual-write problem). Direct broker publish from the promote request/transaction path is FORBIDDEN. The outbox row MUST carry a stable immutable `message_id` (specs/transactional-outbox-l0.yaml#OUTBOX-IDEMPOTENT-001) so an at-least-once redelivery is deduped by the consumer — a promoted user MUST NOT be notified twice for one promotion even though the relay is at-least-once. A promotion that commits MUST always have its outbox row committed with it; a promotion that rolls back MUST leave no outbox row."
+    test_method: "RestAssured integration test (assert outbox row committed in the promote transaction; no direct publish)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      The notification rides the same transaction as the state change, so it
+      is never lost relative to the committed promotion. Composes
+      specs/transactional-outbox-l0.yaml#OUTBOX-WRITE-001 +
+      #OUTBOX-IDEMPOTENT-001 (in-catalog cross-links). Anchored to the
+      microservices.io Transactional Outbox pattern.
+      Quote anchor (microservices.io Transactional Outbox, Solution): "The
+      solution is for the service that sends the message to first store the
+      message in the database as part of the transaction that updates the
+      business entities."
+      (https://microservices.io/patterns/data/transactional-outbox.html)
+  - id: "WAITLIST-POSITION-001"
+    chapter: "Position query is owner-or-admin (IDOR-safe)"
+    requirement: "A waitlist entry's position query (GET /api/waitlist/{resourceId}/position or equivalent — 'you are number K in line') MUST be authorized owner-or-admin: the authenticated caller MUST be either the user who owns the entry OR hold ROLE_ADMIN. A caller requesting another user's position MUST receive 404 Not Found (IDOR-safe — never 403, which would confirm the entry exists), so position numbers are not enumerable by non-owners. Position MUST be computed from the same monotonic enqueue ordinal used by WAITLIST-PROMOTE-001 (count of waiting entries with a strictly smaller ordinal, +1), so the number a user sees matches the order they will actually be promoted in. A dropped or already-enrolled entry's position query MUST return a terminal state, not a stale queue number."
+    test_method: "RestAssured integration test (non-owner → 404; owner/admin → position; ordinal-consistent)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Owner-or-admin with 404-on-mismatch prevents queue-position
+      enumeration (BOLA/IDOR) and keeps the displayed number consistent with
+      the FIFO promote order. Anchored to OWASP API Security Top 10 (2023)
+      API1:2023 Broken Object Level Authorization.
+      Quote anchor (OWASP API1:2023 BOLA): "APIs tend to expose endpoints
+      that handle object identifiers, creating a wide attack surface of
+      Object Level Access Control issues."
+      (https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)

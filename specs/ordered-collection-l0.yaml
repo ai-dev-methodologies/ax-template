@@ -1,0 +1,119 @@
+version: "0.1.0"
+scope: "ordered-collection-l0 — generic persisted ORDERED sibling-collection + atomic reorder contract for any recipe that renders an explicitly user-orderable list of sibling rows under a parent (LMS course → ordered lessons / modules, kanban column → ordered cards, playlist → ordered tracks, form-builder → ordered fields, menu → ordered items, approval-line → ordered steps). The order is a first-class persisted fact (an explicit position / sort_key column), NOT insertion order or created_at, and a move/reorder is a single atomic transaction that cannot interleave with a concurrent reorder of the same parent. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / admin-CRUD applicable."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA @Version optimistic lock OR PostgreSQL SELECT ... FOR UPDATE row lock on the parent) + PostgreSQL UNIQUE(parent_id, position) constraint + RFC 9457 Problem Details + Micrometer metrics"
+standard: "PostgreSQL 'Explicit Locking' (row-level FOR UPDATE serialization) + Jakarta Persistence 3.1 §3.4.2 @Version (optimistic locking) + CWE-362 (Concurrent Execution using Shared Resource with Improper Synchronization — race condition) + RFC 9110 §15.5.10 (409 Conflict) + RFC 9457 (Problem Details for HTTP APIs) + fractional/positional indexing practice (Figma 'realtime editing of ordered sequences', de-facto reference)"
+domain_mode: backend_only
+introduced_at: "IDW5 2026-06-01 LMS dogfood"
+
+# OPT-IN ordered-sibling-collection catalog. Adopted by any recipe that
+# renders a USER-ORDERABLE list of sibling rows under a parent and persists
+# that order as a first-class fact: LMS lessons under a module, kanban cards
+# in a column, playlist tracks, form-builder fields, nav-menu items. The
+# IDW5 LMS dogfood found a 'reorder lessons' feature implemented by sorting
+# on created_at with no persisted position and no concurrency control — two
+# instructors dragging the same module's lessons at once silently clobbered
+# each other and the list re-sorted nondeterministically. This spec pins the
+# missing contract: an explicit position column, an atomic single-transaction
+# renumber, serialized concurrent reorders, a deterministic 409 on conflict,
+# and a UNIQUE(parent, position) scope. Generic pattern; zero Korean-law cite
+# (R102+ generic catalog principle).
+#
+# ── Distinction from sibling catalogs (read FIRST — they do NOT overlap) ──
+#   * optimistic-locking-l0 (OPTLOCK-*): the GENERIC ETag/If-Match + @Version
+#     conditional-write contract for a SINGLE mutable resource. This spec
+#     REUSES that @Version-on-the-parent mechanism but adds the COLLECTION
+#     semantics optimistic-locking-l0 does not pin: a persisted sibling
+#     ordering, a multi-row renumber that MUST be one transaction, and the
+#     UNIQUE(parent, position) invariant. ORDER-REORDER-ATOMIC-001 says
+#     'serialize via @Version on the PARENT or a positional-gap strategy' —
+#     it composes ON TOP of optimistic-locking-l0, it does not duplicate it.
+#   * bounded-capacity-claim-l0 (CLAIM-*): a single shared COUNTER claim
+#     ('taken < capacity'). That is a scalar over-allocation guard; this spec
+#     is about the RELATIVE ORDER of N sibling rows, a different invariant.
+#   * approval-workflow-l0 ApprovalStep ordering: a CONSUMER of this pattern
+#     (sequential 결재선 is an ordered sibling collection), not a peer.
+#
+# Composition note: layers under existing L4 CRUD recipes — any parent→children
+# resource model MAY adopt the position column + atomic-reorder endpoint
+# without changing its other fields.
+
+# ── Priority order for fork-receivers (adopt in order) ──
+# Adopt in order; earlier items are foundational.
+#   1. ORDER-POSITION-001          (explicit persisted position column)
+#   2. ORDER-REORDER-ATOMIC-001    (the keystone — one-transaction renumber, serialized)
+#   3. ORDER-CONFLICT-001          (deterministic 409 on concurrent-reorder conflict + retry)
+#   4. ORDER-SCOPE-001             (UNIQUE(parent, position) within a level)
+
+# ── RECIPE.md frontmatter example ──
+#   ---
+#   recipe: generic-ordered-collection
+#   ordered_collection_enabled: true
+#   order_position_column: position        # explicit sort_key, not created_at
+#   order_reorder_strategy: parent_version # parent_version | positional_gap
+#   order_unique_scope: [parent_id, position]
+#   ---
+
+items:
+  - id: "ORDER-POSITION-001"
+    chapter: "Explicit persisted position column (not insertion order)"
+    requirement: "Sibling rows under a parent that are user-orderable MUST carry an EXPLICIT position / sort_key column whose value alone determines render order — `ORDER BY position` MUST be the sole sort key. The order MUST NOT be derived from `created_at`, `id`, insertion order, or any incidental field, because those cannot express a deliberate move (dragging item C above item A leaves created_at unchanged). The position MUST be a stored, queryable, non-null column (a dense integer rank `0,1,2,...`, OR a sparse/fractional sort_key string per the positional-gap strategy). A NULL or duplicate-default position is FORBIDDEN — every sibling MUST hold a deterministic position the moment it is inserted. Read endpoints MUST sort by this column server-side; clients MUST NOT re-sort."
+    test_method: "RestAssured integration test (insert 3 siblings out of created_at order, reorder, GET list, assert response order == position order, not created_at order)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Insertion order cannot represent a deliberate reorder; a first-class
+      position column is the only honest representation. Anchored to Figma
+      'Realtime editing of ordered sequences'
+      (https://www.figma.com/blog/realtime-editing-of-ordered-sequences/).
+      Quote anchor: "Every object has a real number as an index and the
+      order of the children for an element of the tree is determined by
+      sorting all children by their index." The position column is that
+      index made a persisted, queryable fact.
+  - id: "ORDER-REORDER-ATOMIC-001"
+    chapter: "Atomic, serialized renumber (one transaction)"
+    requirement: "A move/reorder that shifts an item to a new position MUST renumber every AFFECTED sibling in ONE transaction — never an item-by-item sequence of separate UPDATE round-trips that another reader could observe mid-shift (a half-renumbered list with a gap or a duplicate). Two concurrent reorders of the SAME parent's collection MUST be SERIALIZED; a naive read-all-then-write-all is a CWE-362 race (both readers compute new positions from the same stale snapshot and the second commit silently overwrites the first). Exactly ONE of two implementations is required: (a) OPTIMISTIC — a `@Version` (or `version` column) on the PARENT row is read at reorder entry and asserted unchanged at commit, so the loser's flush raises OptimisticLockException; or (b) PESSIMISTIC/POSITIONAL — `SELECT ... FOR UPDATE` the parent row (serializing the whole reorder under a row lock) OR adopt a positional-gap / fractional sort_key so a single move rewrites only the moved row's key (no sibling renumber, no cross-row race). The dense-integer renumber MUST take path (a) or the FOR UPDATE variant of (b); the fractional-key variant of (b) is the touch-one-row alternative. A read-modify-write across two statements with no parent @Version and no row lock is FORBIDDEN."
+    test_method: "RestAssured integration test + concurrent-reorder harness (2 concurrent reorders of the same parent from the identical starting order; assert serialization — one applies, the other either conflicts (ORDER-CONFLICT-001) or applies on the fresh state, never a torn half-renumbered list)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The renumber is multi-row and must be all-or-nothing AND serialized.
+      Anchored to PostgreSQL 'Explicit Locking — Row-Level Locks'
+      (https://www.postgresql.org/docs/current/explicit-locking.html).
+      Quote anchor: "FOR UPDATE causes the rows retrieved by the SELECT
+      statement to be locked as though for update. This prevents them from
+      being locked, modified or deleted by other transactions until the
+      current transaction ends." The parent-row FOR UPDATE (or @Version on
+      the parent) is what serializes two concurrent reorders. Optimistic
+      parent-version path anchored to Jakarta Persistence 3.1 §3.4.2.
+  - id: "ORDER-CONFLICT-001"
+    chapter: "Deterministic 409 on concurrent-reorder conflict + retry"
+    requirement: "When a reorder loses the concurrency race — the parent @Version was bumped by a committed concurrent reorder, or the FOR UPDATE / conditional renumber observes the collection changed under it — the server MUST respond 409 Conflict + an RFC 9457 Problem Details body of `type=urn:problem:reorder-conflict`, `title=\"Collection was reordered concurrently\"`, carrying the machine-readable facts needed for a safe retry: the parent id and the authoritative current ordering (or its version/etag) so the client can re-GET the fresh order, re-apply its intended move onto it, and re-submit. The server MUST NOT auto-merge, MUST NOT last-write-wins, and MUST NOT partially apply the losing reorder. The response MUST be free of `Retry-After` (recovery is conditional re-GET-then-retry, not time-based); the recipe documents a bounded client retry budget (default `order_reorder_retry_max=3`)."
+    test_method: "RestAssured integration test (force a concurrent commit between the loser's read and write; assert 409 + type=urn:problem:reorder-conflict + current-ordering/version member present + losing reorder NOT applied)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      409 = a race lost during commit, recoverable by read-modify-write.
+      Anchored to RFC 9110 §15.5.10
+      (https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.10) for
+      the 409 semantics and CWE-362
+      (https://cwe.mitre.org/data/definitions/362.html) for the race being
+      prevented. Quote anchor (CWE-362): "The product contains a concurrent
+      code sequence that requires temporary, exclusive access to a shared
+      resource, but a timing window exists in which the shared resource can
+      be modified by another code sequence operating concurrently." The 409
+      is the honest signal that this window was hit and the write refused.
+  - id: "ORDER-SCOPE-001"
+    chapter: "Position is unique within (parent, level)"
+    requirement: "The position MUST be UNIQUE within its sibling scope — a database `UNIQUE(parent_id, position)` constraint (extended to `UNIQUE(parent_id, level, position)` when the collection is hierarchical/nested, e.g. modules vs lessons). The DB constraint is the backstop that makes a torn or buggy renumber FAIL LOUDLY (constraint violation → rolled-back transaction → ORDER-CONFLICT-001 / 500) rather than silently persisting two siblings claiming position 3. Application code MUST NOT rely on application-level uniqueness checks alone (they are TOCTOU-racy — CWE-362). When the dense-integer strategy temporarily collides mid-renumber, the renumber MUST run inside the single transaction so the constraint is evaluated only at commit (deferred / single-statement bulk shift), or use a positional-gap strategy where new keys never collide by construction. Position uniqueness MUST be scoped to the parent only — two DIFFERENT parents may each have a sibling at position 0."
+    test_method: "Integration test (attempt to persist two siblings of the same parent at the same position → assert DB constraint rejects it; assert two different parents may each hold position 0)"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      The UNIQUE(parent, position) constraint is the structural backstop a
+      buggy renumber cannot defeat. Anchored to CWE-362
+      (https://cwe.mitre.org/data/definitions/362.html): "The product
+      contains a concurrent code sequence that requires temporary,
+      exclusive access to a shared resource, but a timing window exists in
+      which the shared resource can be modified by another code sequence
+      operating concurrently." An application-only uniqueness check sits
+      inside exactly that timing window; the DB constraint does not.

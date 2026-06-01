@@ -153,3 +153,39 @@ items:
       Reference: OpenTelemetry Semantic Conventions, general metrics
       guidelines (see source; no verbatim quote — the cited page does
       not contain a low-cardinality / user-ID statement at this section).
+
+  - id: "CONSENT-CAPACITY-001"
+    chapter: "미성년자 동의 능력 — 보호자 대리 동의 (capacity / guardian proxy)"
+    requirement: "When the consent subject is below a recipe-declared `consent_age_of_digital_consent` (jurisdiction-agnostic integer; default OFF — when unset the rule is inert and adult-only forks see NO behavior change), a SELF-grant for the requested purpose MUST be rejected → 400 CONSENT_SUBJECT_LACKS_CAPACITY, and the grant MUST instead be made by a VERIFIED GUARDIAN PROXY (the holder of parental responsibility) acting on the minor's behalf. A guardian-proxy grant MUST carry `guardian_subject_id` (the verified guardian's identity, distinct from the minor `subject_id`) AND a proxy legal-basis marker (`legal_basis: GUARDIAN_PROXY`) on the consent record; a proxy grant missing either field is REJECTED → 400 CONSENT_PROXY_INCOMPLETE. The guardian's identity MUST be verified (reuse identity-verification-l0 posture or an equivalent recipe-declared verification gate) — an unverified or self-asserted guardian → 400 CONSENT_GUARDIAN_UNVERIFIED. The demonstrate-consent history (GET /api/consent/{purpose}/history, CONSENT-RECORD-001) MUST surface the proxy actor: each proxy row exposes both the minor `subject_id` and the acting `guardian_subject_id` plus the `legal_basis` marker, so the trail proves WHO consented on whose behalf. Withdrawal of a proxy grant follows the same proxy path (guardian acts; CONSENT-WITHDRAW-001 symmetry preserved)."
+    test_method: "RestAssured integration test (minor self-grant rejection + guardian-proxy grant record-shape + history proxy-actor surfacing)"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Capacity gate is OFF by default: forks that do not declare
+      `consent_age_of_digital_consent` in RECIPE.md frontmatter keep the
+      adult-only flow unchanged (no minor branch, no proxy fields). When a
+      recipe DOES declare the age, sub-threshold subjects cannot self-consent;
+      a verified guardian proxy supplies the grant and the record carries
+      guardian_subject_id + legal_basis: GUARDIAN_PROXY, surfaced in the
+      demonstrate-consent trail. The age value is recipe-owned (no hard-coded
+      16 or 13) so each fork pins its own jurisdiction's threshold.
+      Composition: reuses CONSENT-CAPTURE-001 (affirmative act — the guardian
+      performs it), CONSENT-RECORD-001 (append-only proxy row, immutable),
+      CONSENT-WITHDRAW-001 (guardian-path symmetry), and identity-verification-l0
+      (guardian verification gate).
+      Anchored to GDPR Art 8(1) (age of digital consent / parental authorisation,
+      https://gdpr-info.eu/art-8-gdpr/).
+      Quote anchor (GDPR Art 8(1)): "Where the child is at least 16 years old"
+      processing is lawful under Article 6(1)(a); for a child below that age
+      "such processing shall be lawful only if and to the extent that consent
+      is given or authorised by the holder of parental responsibility over the
+      child", and "Member States may provide by law for a lower age for those
+      purposes provided that such lower age is not below 13 years" — hence the
+      recipe-declared (not hard-coded) threshold.
+      Optional COPPA aside (US, children under 13) — 16 CFR 312.3(b)
+      (https://www.law.cornell.edu/cfr/text/16/312.3): an operator must
+      "Obtain verifiable parental consent prior to any collection, use, and/or
+      disclosure of personal information from children"; the GUARDIAN_PROXY
+      legal-basis marker is the catalog's framework-agnostic expression of
+      this same verified-guardian requirement.
+      quoted_at: "2026-06-01"

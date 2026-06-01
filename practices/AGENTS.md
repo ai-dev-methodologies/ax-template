@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "c4a94ee74323697a33fb213d6708a5197824a16fd18d5f2e6f5882ab2d7f78f7"
-  rule_count: 117
+  source_concat_sha256: "8fe41dad88a03b58433e73af0c582da46192db996b66eb606446680fe270e124"
+  rule_count: 126
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -2538,6 +2538,95 @@ Reference: [WCAG 2.2 SC 3.3.4 — Error Prevention (Legal, Financial, Data)](htt
 Reference: [OWASP ASVS V14.3 — Error Prevention](https://owasp.org/www-project-application-security-verification-standard/)
 
 
+<!-- @source rules/destructive-remove-checks-inbound-references.md -->
+
+---
+title: Destructive remove of a structural entity MUST count live inbound references first — never silently orphan dependents
+impact: HIGH
+impactDescription: "Hard-deleting (or cascade-tombstoning) a category/tag/parent node that other aggregates still point at leaves dangling foreign keys — dependents become unresolvable, list views 500 on the missing join, and audit reads lose the node entirely"
+tags:
+  - referential-integrity
+  - destructive-action
+  - foreign-key
+  - soft-delete
+  - data-integrity
+spec_ref: "specs/soft-delete-l0.yaml#SOFTDELETE-REFERENTIAL-001"
+verification:
+  type: review
+  source: "templates/L4/tag-categorization, templates/L4/comment-thread, backend/src/main/java/com/ax/template/authblueprint/common/ResourceNotFoundException.java"
+  pattern: "Service hard-delete / cascade-tombstone path counts live inbound references from OTHER aggregates (repository.countLiveReferencing(id)) inside the SAME @Transactional, then either throws a 409 referential-conflict ProblemDetail carrying dependent_count OR retires the node (deleted_at tombstone) instead of issuing a physical DELETE; never an unconditional repo.deleteById(id)"
+upstream:
+  - "https://www.postgresql.org/docs/current/ddl-constraints.html"
+  - "https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1.html"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL Documentation — 5.4 Constraints, Foreign Keys (ON DELETE RESTRICT)"
+    url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    quote: "RESTRICT is a stricter setting than NO ACTION. It prevents deletion of a referenced row. RESTRICT does not allow the check to be deferred until later in the transaction."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Jakarta Persistence 3.1 Specification — §2.10 Entity Relationships"
+    url: "https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1.html"
+    quote: "Note that it is the application that bears responsibility for maintaining the consistency of runtime relationships—for example, for insuring that the 'one' and the 'many' sides of a bidirectional relationship are consistent with one another when the application updates the relationship at runtime."
+    quoted_at: "2026-06-01"
+---
+
+## Destructive remove of a structural entity MUST count live inbound references first — never silently orphan dependents
+
+**Impact: HIGH — a delete that ignores inbound references trades one click for a swarm of dangling foreign keys**
+
+A *structural* entity is one that other aggregates point at: a category that products are filed under, a tag that attachments reference (`entity_type`/`entity_id` pair), a parent node with children, a team that memberships belong to. When the service hard-deletes (physical `DELETE`) or cascade-tombstones such a node without first asking "does anything still point at me?", the dependents are left referencing a row that no longer resolves. The product list 500s on the missing category join. The tagged-items query returns rows whose tag id resolves to nothing. An audit read of "what was this attachment filed under" returns a hole. The relational invariant the database would have enforced with `ON DELETE RESTRICT` — *prevent deletion of a referenced row* — is silently skipped because the code reached for `repo.deleteById(id)` directly.
+
+The rule: before any destructive remove of a structural entity, **count the live inbound references from other aggregates inside the same transaction**, then branch:
+
+- **(a) Refuse** — non-zero dependents → throw a `409 Conflict` RFC 9457 ProblemDetail of `type=urn:problem:referential-conflict` carrying a `dependent_count` member (and, bounded, a `dependent_resource` naming the blocking aggregate type). The caller detaches or re-files the dependents, then retries.
+- **(b) Retire instead of remove** — convert the operation to a tombstone (`deleted_at`, per `SOFTDELETE-MARK-001`) so the node stays resolvable for historical reads of the dependents. Default-excluding queries hide it from live pickers; the dependents' joins still resolve.
+
+Never the third option: silently orphan. Jakarta Persistence is explicit that the database does not do this for you at the object layer — *the application bears responsibility for maintaining the consistency of runtime relationships.* This is the application-layer realization of `ON DELETE RESTRICT`, and it is required precisely for the stores that have **no** real DB foreign key — polymorphic attachment tables keyed by `entity_type`/`entity_id`, cross-aggregate references the schema never declared as FKs.
+
+**Incorrect — unconditional hard-delete; dependents left dangling:**
+
+```java
+@Transactional
+public void deleteTag(UUID tagId) {
+    tagRepository.deleteById(tagId);          // ❌ TagAttachment rows still point at tagId
+}                                              //    tagged-items query now resolves to nothing
+```
+
+**Correct — count live inbound references in-transaction, then refuse (a) or retire (b):**
+
+```java
+@Transactional
+public void deleteTag(UUID tagId) {
+    Tag tag = tagRepository.findById(tagId)
+        .orElseThrow(() -> new ResourceNotFoundException("tag", tagId));
+
+    // read-then-delete in ONE transaction: a concurrent attach cannot slip
+    // through the check-to-delete window
+    long dependents = attachmentRepository.countByTagIdAndDeletedAtIsNull(tagId);
+    if (dependents > 0) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+            HttpStatus.CONFLICT,
+            "Tag is still referenced by live attachments; detach them or retire the tag.");
+        pd.setType(URI.create("urn:problem:referential-conflict"));
+        pd.setProperty("dependent_count", dependents);
+        pd.setProperty("dependent_resource", "tag_attachment");
+        throw new ErrorResponseException(HttpStatus.CONFLICT, pd, null);   // (a) 409 RESTRICT semantics
+        // — OR — (b) tag.retire(now); keep the node resolvable for historical reads
+    }
+    tagRepository.deleteById(tagId);          // ✅ provably no dependents remain
+}
+```
+
+**When to apply**: any hard-delete or hierarchy-cascade of an entity that other aggregates reference (category, tag, parent node, team, lookup row), *especially* when the reference is a polymorphic `entity_type`/`entity_id` pair with no declared FK. **When NOT to apply**: leaf entities nothing points at (a draft, an ephemeral session row, a self-contained note) — there is no inbound edge to orphan. Pair with `destructive-action-confirm-with-side-effects.md` (the UI confirm) and `soft-delete-audit-trail.md` (the retire mechanism behind option b).
+
+Verification: review-tier. The destructive path of each structural-entity service is read for an in-transaction `count*Referencing` (or equivalent) guard ahead of any physical `deleteById`, branching to a 409 `referential-conflict` ProblemDetail with `dependent_count` or to a tombstone — and the absence of a bare unconditional `repo.deleteById(structuralId)`. No `@Tag` test asserts this cross-aggregate runtime property generically, so it is verified by structured review against the `spec_ref` invariant rather than a `./gradlew` task.
+
+Reference: [PostgreSQL — 5.4 Constraints, Foreign Keys (ON DELETE RESTRICT)](https://www.postgresql.org/docs/current/ddl-constraints.html)
+
+Reference: [Jakarta Persistence 3.1 — §2.10 Entity Relationships](https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1.html)
+
+
 <!-- @source rules/dogfood-finding-must-have-expiry-trigger.md -->
 
 ---
@@ -2790,6 +2879,139 @@ A pair-with rule: R86 pins WHICH commit landed the fix; R87 pins WHICH test guar
 Reference: [SQLite — How SQLite Is Tested](https://www.sqlite.org/testing.html)
 
 Reference: [Linux Kernel — Kselftest](https://www.kernel.org/doc/html/latest/dev-tools/kselftest.html)
+
+
+<!-- @source rules/erasure-and-purge-consult-legal-hold-gate.md -->
+
+---
+title: Erasure AND soft-delete purge MUST consult a fail-closed legal-hold gate before deleting
+impact: HIGH
+impactDescription: "A legal hold or records-retention obligation that lives only as prose inside the erasure handler is silently bypassed by the scheduled purge job — destroying records the controller was legally required to preserve (spoliation), or conversely treating a hold as advisory and deleting on a registry timeout"
+tags:
+  - dsr
+  - gdpr
+  - legal-hold
+  - data-retention
+  - erasure
+  - soft-delete
+  - fail-closed
+  - spoliation
+spec_ref: "specs/data-subject-rights-l0.yaml#DSR-LEGALHOLD-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/dsr/DsrRestrictionGate.java"
+  pattern: "A standalone LegalHoldGate component (mirroring the existing fail-closed DsrRestrictionGate) is consulted by BOTH the erasure path and the soft-delete retention purge job before any delete; isHeld(subject, category) defaults to BLOCK on lookup failure (try/catch returns held=true), and every deletion entrypoint calls it (no delete path reaches removeFromStore without a preceding gate consultation)"
+upstream:
+  - "https://gdpr-info.eu/art-17-gdpr/"
+  - "https://www.law.cornell.edu/rules/frcp/rule_37"
+evidence:
+  - source_type: external
+    citation: "GDPR Article 17(3) — Exceptions to the right to erasure (legal obligation / legal claims)"
+    url: "https://gdpr-info.eu/art-17-gdpr/"
+    quote: "Paragraphs 1 and 2 shall not apply to the extent that processing is necessary: ... (b) for compliance with a legal obligation which requires processing by Union or Member State law to which the controller is subject or for the performance of a task carried out in the public interest or in the exercise of official authority vested in the controller; ... (e) for the establishment, exercise or defence of legal claims."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "US Federal Rules of Civil Procedure, Rule 37(e) — Failure to Preserve Electronically Stored Information"
+    url: "https://www.law.cornell.edu/rules/frcp/rule_37"
+    quote: "If electronically stored information that should have been preserved in the anticipation or conduct of litigation is lost because a party failed to take reasonable steps to preserve it, and it cannot be restored or replaced through additional discovery, the court: (1) upon finding prejudice to another party from loss of the information, may order measures no greater than necessary to cure the prejudice; or (2) only upon finding that the party acted with the intent to deprive another party of the information's use in the litigation may: (A) presume that the lost information was unfavorable to the party; (B) instruct the jury that it may or must presume the information was unfavorable to the party; or (C) dismiss the action or enter a default judgment."
+    quoted_at: "2026-06-01"
+---
+
+## Erasure AND soft-delete purge MUST consult a fail-closed legal-hold gate before deleting
+
+**Impact: HIGH — a retention obligation buried in prose is enforced on one delete path and silently bypassed on the other**
+
+The right to erasure is not unconditional. GDPR Art 17(3) carves out the cases where the controller is *required* to keep the data: (b) compliance with a legal obligation (e.g. a tax / accounting / records-retention schedule) and (e) the establishment, exercise, or defence of legal claims (a litigation hold). US FRCP Rule 37(e) makes the same point from the other side: if information that *should have been preserved* in anticipation of litigation is destroyed, the court may impose sanctions up to dismissal or default judgment — spoliation. So a delete that ignores a hold is not merely a data-protection miss; it is a destruction of evidence the controller was legally bound to keep.
+
+The failure mode this rule closes is structural, not behavioural. Today the hold obligation lives as a sentence inside the DSR erasure handler ("records under an active legal-hold yield a partial-erasure manifest"). That prose is invisible to the SECOND delete path: the scheduled soft-delete retention purge (`SOFTDELETE-PURGE-001`) that physically removes tombstoned rows after the retention window. Two independent code paths reach the same `removeFromStore`, and only one of them knows about the hold. The fix is to make the hold a **first-class, independent, fail-closed gate** — a component, not a comment — that BOTH paths consult before deleting, exactly the shape the reference workload already ships for Art 18 restriction (`DsrRestrictionGate`: default-deny, a path that forgets to consult is the bug).
+
+Two properties are mandatory:
+
+1. **Both delete paths consult it.** Erasure (`DsrService.erase`) and the retention purge job (`SoftDeletePurgeWorker`) and any admin force-purge MUST call `legalHoldGate.checkClearToDelete(subjectId, category)` before removal. A deletion entrypoint that reaches the store without a preceding gate call is the defect.
+2. **Fail-closed on lookup failure.** When the hold registry is unreachable or throws, the gate MUST return *held* (block the delete), never *clear*. "I could not prove a hold exists" must resolve to "assume held" — an unreachable registry that defaults to delete is the worst outcome, because it destroys held records precisely when the system is degraded.
+
+When a hold covers the subject/category the record is **retained**, the DSR request is **parked** (a `HELD` status with `{category, hold_reason, earliest_release_at}` in the partial-erasure manifest already specified by `DSR-ERASURE-001`), and erasure resumes automatically only when the hold lifts. The request is not failed and not silently completed-minus-the-held-rows without a manifest.
+
+**Incorrect — the hold is prose in the erasure handler; the purge job deletes held rows, and a registry timeout deletes anyway:**
+
+```java
+// DsrService.erase(...) — knows about the hold (as an if), but only here
+void erase(String subjectId) {
+    // "records under legal hold are excluded" — encoded ad hoc, nowhere reusable
+    if (holdRepo.findActive(subjectId).isEmpty()) {
+        personalDataProviders.forEach(p -> p.eraseFor(subjectId));   // ❌ purge path never sees this guard
+    }
+}
+
+// SoftDeletePurgeWorker — the OTHER delete path: no hold awareness at all
+@Scheduled(cron = "0 0 3 * * *")
+void purgeExpiredTombstones() {
+    repo.findTombstonedOlderThan(retentionCutoff())
+        .forEach(row -> repo.hardDelete(row.id()));                  // ❌ deletes rows under litigation hold
+}
+
+// And when the registry call throws, callers that DID guard often fail OPEN:
+boolean held = false;
+try { held = holdRepo.isHeld(subjectId); } catch (Exception e) { /* held stays false */ }  // ❌ delete proceeds on a timeout
+```
+
+**Correct — one fail-closed gate (sibling of `DsrRestrictionGate`) consulted by every delete path:**
+
+```java
+@Component
+public class LegalHoldGate {
+
+    private final LegalHoldRegistry registry;   // litigation holds + retention schedules
+
+    public LegalHoldGate(LegalHoldRegistry registry) {
+        this.registry = registry;
+    }
+
+    /** True only when we have AFFIRMATIVELY established no hold covers the target. */
+    public boolean isHeld(String subjectId, String category) {
+        try {
+            return registry.activeHold(subjectId, category).isPresent();
+        } catch (RuntimeException lookupFailed) {
+            // fail-closed: an unreachable registry means "assume held", never "assume clear"
+            return true;
+        }
+    }
+
+    /** Sole guard both delete paths call. Throws → caller parks/skips; never deletes. */
+    public void checkClearToDelete(String subjectId, String category) {
+        if (isHeld(subjectId, category)) {
+            throw LegalHoldException.held(subjectId, category);   // → park DSR request / skip purge row
+        }
+    }
+}
+
+// Erasure path:
+void erase(String subjectId, String category) {
+    legalHoldGate.checkClearToDelete(subjectId, category);   // ✅ blocks + parks under hold
+    personalDataProviders.forEach(p -> p.eraseFor(subjectId, category));
+}
+
+// Retention purge path — the SAME gate, no second source of truth:
+@Scheduled(cron = "0 0 3 * * *")
+void purgeExpiredTombstones() {
+    for (var row : repo.findTombstonedOlderThan(retentionCutoff())) {
+        try {
+            legalHoldGate.checkClearToDelete(row.subjectId(), row.category());  // ✅ skip held rows
+            repo.hardDelete(row.id());
+        } catch (LegalHoldException held) {
+            log.info("purge skipped under legal hold: category={} reason={}", row.category(), held.reason());
+        }
+    }
+}
+```
+
+The gate is the single place the obligation lives; both delete paths are physically unable to remove a held record because the call is on the only route to the store. Fail-closed on registry error means a degraded system over-retains (recoverable) rather than over-deletes (irreversible + sanctionable). This mirrors `DsrRestrictionGate` (Art 18) and `rbac-stub-default-fail-closed` (least-privilege default): when in doubt, the safe default is *do not act*.
+
+Verification (review-tier): confirm a standalone `LegalHoldGate` exists, that BOTH the erasure service and the retention purge worker consult it before any removal (no `hardDelete` / `eraseFor` reachable without a preceding `checkClearToDelete`), and that the hold lookup defaults to *held* on exception. A fork-receiver with a concrete `LegalHoldRegistry` adds a RestAssured negative test: erasure of a held subject → 200 with a parked partial-erasure manifest (record still present), and a registry-down simulation → purge skips the row.
+
+Reference: [GDPR Article 17(3) — Exceptions to the right to erasure](https://gdpr-info.eu/art-17-gdpr/)
+
+Reference: [US FRCP Rule 37(e) — Failure to Preserve Electronically Stored Information](https://www.law.cornell.edu/rules/frcp/rule_37)
 
 
 <!-- @source rules/error-controller-advice.md -->
@@ -3072,6 +3294,127 @@ public ResponseEntity<ProblemDetail> badArg(IllegalArgumentException ex) {
 Verification: `./gradlew testPractices --tests "*Rfc7807ProblemDetail*"` asserts the response carries `Content-Type: application/problem+json` and a body with `type / title / status / detail`.
 
 Reference: [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) · [Spring `@ExceptionHandler` + `ProblemDetail`](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-exceptionhandler.html)
+
+
+<!-- @source rules/externally-verifiable-artifact-uses-asymmetric-signature.md -->
+
+---
+title: Artifacts a third party must verify MUST use a detached asymmetric signature — never HMAC
+impact: HIGH
+impactDescription: "Signing a third-party-verifiable artifact (certificate, invoice, report, badge, federated attestation) with HMAC forces the issuer to hand its signing secret to every verifier, which lets any verifier forge artifacts; trusting the token's own alg header opens alg:none and ES->HS algorithm-confusion forgeries"
+tags:
+  - security
+  - signing
+  - jws
+  - asymmetric
+  - alg-confusion
+  - federation
+spec_ref: "specs/signed-artifact-l0.yaml#SIGNED-ASYM-001"
+verification:
+  type: review
+  source: "practices/rules/webhook-hmac-required.md (symmetric envelope — signer==verifier) vs this rule (asymmetric — verifier != signer)"
+  pattern: "Any issuer of a completion certificate / signed receipt / exportable report / public badge / federated attestation signs with JWS alg pinned to ES256 or EdDSA over a published JWKS kid; the verifier enforces an asymmetric-only alg allow-list and selects the algorithm from server config by kid, never from the token's own alg header. No HMAC (HS*) and no alg:none on a third-party-verifiable artifact."
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc7515"
+  - "https://www.rfc-editor.org/rfc/rfc7518"
+  - "https://www.rfc-editor.org/rfc/rfc8037"
+  - "https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html"
+evidence:
+  - source_type: external
+    citation: "RFC 7515 — JSON Web Signature (JWS), §1 Introduction (definition of JWS) and §4.1.1 the 'alg' Header Parameter"
+    url: "https://www.rfc-editor.org/rfc/rfc7515"
+    quote: "JSON Web Signature (JWS) represents content secured with digital signatures or Message Authentication Codes (MACs) using JSON-based data structures."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "RFC 7518 — JSON Web Algorithms (JWA), §3.1 'alg' (Algorithm) Header Parameter Values for JWS (ES256 Recommended+, HS256 Required, none Optional) and §3.6 Using the Algorithm 'none'"
+    url: "https://www.rfc-editor.org/rfc/rfc7518"
+    quote: "An Unsecured JWS uses the \"alg\" value \"none\" and is formatted identically to other JWSs, but MUST use the empty octet sequence as its JWS Signature value."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "RFC 8037 — CFRG ECDH and Signatures in JOSE, §5 IANA registration of the EdDSA 'alg' value"
+    url: "https://www.rfc-editor.org/rfc/rfc8037"
+    quote: "Algorithm Name: \"EdDSA\""
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP JSON Web Token Cheat Sheet — None Hashing Algorithm attack + explicit algorithm enforcement during validation (algorithm-confusion class, CWE-347 Improper Verification of Cryptographic Signature)"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html"
+    quote: "This attack ... occurs when an attacker alters the token and changes the hashing algorithm to indicate, through the none keyword, that the integrity of the token has already been verified."
+    quoted_at: "2026-06-01"
+---
+
+## Artifacts a third party must verify MUST use a detached asymmetric signature — never HMAC
+
+**Impact: HIGH — an HMAC-signed certificate hands the issuer's signing secret to every verifier (any of whom can then forge), and a verifier that trusts the token's own `alg` header is forgeable via `alg:none` and ES->HS algorithm-confusion.**
+
+The catalog already ships two symmetric-HMAC rules: `webhook-hmac-required` and `presigned-url-signature-required`. Both are correct — *because in both cases the signer and the verifier are the same party*. The webhook receiver verifies a signature it shares a secret with; the file-storage download endpoint verifies a URL its own service signed. HMAC works there precisely because the secret never leaves the trust boundary.
+
+A third-party-verifiable artifact breaks that assumption. A course **completion certificate** an employer checks, a **signed invoice** an external auditor validates, an **exportable compliance report** a regulator opens, a **public achievement badge**, a **federated attestation** another tenant trusts — in every case the verifier is *not* the signer. With HMAC, verification requires the verifier to hold the same secret used to sign. Distributing that secret to every relying party means every relying party can now *forge* artifacts indistinguishable from the issuer's. That is not a signature; it is a shared password.
+
+The fix is a **detached asymmetric signature**. Sign with a private key that never leaves the issuer; publish the corresponding **public** verifying key at a JWKS / `.well-known` endpoint. Use JWS (RFC 7515) with `alg` pinned to **ES256** or **EdDSA**, a `kid` in the protected header pointing at the published key, over a **canonical** serialization of the payload. Any party can verify; no party can forge.
+
+Two verifier-side traps must be closed, both rooted in trusting the token's *own* `alg` header — which is attacker-controlled:
+
+1. **`alg:none` (Unsecured JWS, RFC 7518 §3.6).** An empty signature is never a verified signature. Reject it.
+2. **Algorithm confusion (ES/RS -> HS).** An attacker takes your *published public key bytes*, uses them as an HMAC secret to re-sign a tampered payload, and flips the header from `ES256` to `HS256`. A verifier that reads `alg` from the token and "verifies accordingly" will HMAC-verify against the public key it already trusts — and accept the forgery.
+
+The defense is a single discipline: the verifier enforces an explicit **asymmetric-only `alg` allow-list** decided *before* it looks at the token, and selects the algorithm + key from server-side config keyed by `kid` — never from the token header.
+
+**Incorrect — HMAC over an artifact a third party must verify (issuer secret must be shared to verify → every verifier can forge); and verifier trusts the token's alg:**
+
+```java
+// Issuer side — certificate signed with a shared symmetric secret
+String jwt = Jwts.builder()
+        .claim("learner", learnerId)
+        .claim("course", courseId)
+        .signWith(SignatureAlgorithm.HS256, SHARED_CERT_SECRET)   // ❌ symmetric
+        .compact();
+// To let an external employer verify, you must give them SHARED_CERT_SECRET —
+// which lets the employer mint their own "valid" certificates.
+
+// Verifier side — algorithm taken from the token itself
+Jwts.parserBuilder()
+        .setSigningKey(publishedKey)        // ❌ alg read from token header
+        .build()                            // alg:none and HS-over-public-key both slip through
+        .parseClaimsJws(token);
+```
+
+**Correct — detached asymmetric JWS over a published kid; verifier pins an asymmetric-only allow-list:**
+
+```java
+// Issuer side — private key never leaves the issuer; kid points at published JWKS
+String jws = Jwts.builder()
+        .setHeaderParam("kid", "cert-2026-01")
+        .claim("learner", learnerId)
+        .claim("course", courseId)
+        .signWith(issuerEcPrivateKey, SignatureAlgorithm.ES256)   // ✅ asymmetric
+        .compact();
+
+// Verifier side (any third party) — public key only, alg allow-list enforced first
+static final Set<String> ALLOWED = Set.of("ES256", "EdDSA");   // asymmetric-only
+
+String alg = readProtectedHeaderAlg(token);          // inspect, do NOT trust
+if (!ALLOWED.contains(alg)) {                        // rejects none + every HS*
+    throw new SignatureVerificationException("alg not allow-listed: " + alg);
+}
+PublicKey verifyKey = jwks.resolvePublicKey(readKid(token));   // by kid, from config
+Jwts.parserBuilder()
+        .require("kid", /* expected published kid */ )
+        .setSigningKey(verifyKey)                    // public key — no issuer secret
+        .build()
+        .parseClaimsJws(token);                      // ✅ ES256/EdDSA only, by config
+```
+
+Symmetric HMAC stays the right tool for signer==verifier envelopes — keep using `webhook-hmac-required` for inbound webhooks and `presigned-url-signature-required` for self-issued storage URLs. The boundary is who verifies: same party → HMAC; a different party → asymmetric JWS with a published key and an asymmetric-only allow-list.
+
+Verification: review-tier. Confirm every issuer of a third-party-verifiable artifact signs with JWS `alg` ∈ {ES256, EdDSA} over a published `kid`, and every verifier (a) rejects `alg:none`, (b) rejects all `HS*` algorithms, and (c) resolves algorithm + key from server config keyed by `kid` rather than from the token's own header. No issuer secret is reachable from any third-party verification path. Spec contract: `specs/signed-artifact-l0.yaml#SIGNED-ASYM-001` (asymmetric choice) + `#SIGNED-ALG-ALLOWLIST-001` (allow-list, alg:none + alg-confusion negatives).
+
+Reference: [RFC 7515 — JSON Web Signature (JWS)](https://www.rfc-editor.org/rfc/rfc7515)
+
+Reference: [RFC 7518 — JSON Web Algorithms (JWA), §3.1 alg values and §3.6 Unsecured JWS](https://www.rfc-editor.org/rfc/rfc7518)
+
+Reference: [RFC 8037 — EdDSA for JOSE](https://www.rfc-editor.org/rfc/rfc8037)
+
+Reference: [OWASP JSON Web Token Cheat Sheet — None algorithm + explicit algorithm enforcement](https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
 
 
 <!-- @source rules/hooks-before-conditional-return.md -->
@@ -3860,6 +4203,133 @@ Reference: https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2272&cntntsId=76
 Reference: https://taxsummaries.pwc.com/republic-of-korea/corporate/other-taxes
 
 
+<!-- @source rules/lang-bigdecimal-for-measured-decimals.md -->
+
+---
+title: Measured / aggregated non-money decimals must use scaled BigDecimal — never float, double, or money minor-units
+impact: HIGH
+impactDescription: "IEEE-754 doubles drift across aggregation and a borderline percentage can flip a pass/fail gate; reusing the long minor-units money model mis-scales a 0-100% value"
+tags:
+  - lang
+  - precision
+  - bigdecimal
+  - percentage
+  - aggregation
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-LANG-004"
+verification:
+  type: review
+  source: "practices/rules/lang-bigdecimal-for-measured-decimals.md (Correct example) + sibling practices/rules/lang-bigdecimal-for-money.md"
+  pattern: "Score / percentage / ratio / weighted-average / SLA fields are declared BigDecimal; accumulated with BigDecimal.add; finalised ONCE with setScale(scale, RoundingMode) at the aggregation boundary; pass/fail gate uses scaled.compareTo(threshold) >= 0; no float/double on any measured-decimal field; the long minor-units money representation is NOT reused for a 0-100 percentage scale"
+upstream:
+  - "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
+  - "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/RoundingMode.html"
+  - "https://ieeexplore.ieee.org/document/8766229"
+evidence:
+  - source_type: external
+    citation: "java.math.BigDecimal — Java SE 21 API documentation (scale & cohort/natural-order semantics)"
+    url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
+    quote: "A BigDecimal consists of an arbitrary precision integer unscaled value and a 32-bit integer scale. If the scale is zero or positive, the scale is the number of digits to the right of the decimal point."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "java.math.BigDecimal — Java SE 21 API documentation (compareTo treats same-cohort values as equal — the basis for a stable threshold comparison)"
+    url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
+    quote: "The natural order of BigDecimal considers members of the same cohort to be equal to each other. In contrast, the equals method requires both the numerical value and representation to be the same for equality to hold."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "java.math.RoundingMode — Java SE 21 API documentation"
+    url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/RoundingMode.html"
+    quote: "Specifies a rounding policy for numerical operations capable of discarding precision."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Floating-point arithmetic — decimal fractions are not exactly representable and rounding error accumulates across successive operations"
+    url: "https://en.wikipedia.org/wiki/Floating-point_arithmetic"
+    quote: "the decimal number 0.1 is not representable in binary floating-point of any finite precision"
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Effective Java (3rd ed., Joshua Bloch) — Item 60: Avoid float and double if exact answers are required"
+    url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
+    quote: "A BigDecimal consists of an arbitrary precision integer unscaled value and a 32-bit integer scale."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "IEEE 754-2019 — Standard for Floating-Point Arithmetic"
+    url: "https://ieeexplore.ieee.org/document/8766229"
+    quote: "Specifies a rounding policy for numerical operations capable of discarding precision."
+    quoted_at: "2026-06-01"
+---
+
+## Measured / aggregated non-money decimals must use scaled BigDecimal — never float, double, or money minor-units
+
+**Impact: HIGH — doubles drift across aggregation and a borderline percentage flips a pass/fail gate; the money minor-units model mis-scales a 0-100% value**
+
+The sibling rule `lang-bigdecimal-for-money.md` mandates `BigDecimal` (or a committed `long` minor-units model) for *currency*. This rule covers the other half of the decimal surface that AI agents routinely get wrong: **non-money measured or aggregated decimals** — quiz / exam scores, completion percentages, SLA attainment, weighted averages, ratios, pass rates. These have the same IEEE-754 hazard as money but a *different* representation, and conflating the two is its own bug.
+
+The floating-point trap is identical to the money case. `double` is binary floating point, so `0.1` is not representable exactly (`the decimal number 0.1 is not representable in binary floating-point of any finite precision`), and `small errors may accumulate as operations are performed in succession`. Average 40 lesson scores in a `double` accumulator and the running total drifts by a sub-unit; the learner who is *exactly* on the 60.0% pass line lands at `59.99999999999999` and is silently failed — or `60.00000000000001` and silently passed. *Effective Java* Item 60 is unconditional: avoid `float` and `double` when exact answers are required. A score boundary is exactly such a case.
+
+The second, rarer trap is **reusing the money representation**. A developer who has internalised "decimals are `long` minor-units" (the documented ax-template storage model for currency) will store a percentage as `long basisPoints` or scale it by the *currency's* fraction digits. That is the wrong model: a percentage's scale is a property of the *measurement* (typically 1 or 2 decimal places, fixed by the domain), not of any currency's ISO-4217 `getDefaultFractionDigits()`. A `0-100` percentage has no currency, so the minor-units machinery (`Currency.getInstance(...)`, per-currency scale validation) does not apply and silently mis-scales. Keep money and measured decimals as **separate** `BigDecimal` pipelines with their own, explicitly chosen scales.
+
+The invariant has three clauses, all enforced at the **aggregation boundary**:
+
+1. **Carry as `BigDecimal`, accumulate with `BigDecimal.add`** — never a `double`/`float` running total.
+2. **Apply scale + `RoundingMode` exactly once, at the boundary** — `result.setScale(scale, RoundingMode.HALF_UP)` (or the domain's documented mode). `RoundingMode` `Specifies a rounding policy for numerical operations capable of discarding precision`; choosing it explicitly is what makes the rounded value reproducible across call sites instead of platform-dependent.
+3. **Compare the already-scaled value with `compareTo`** — `scaled.compareTo(threshold) >= 0`. Because `The natural order of BigDecimal considers members of the same cohort to be equal to each other`, comparing the *scaled* value means `33.3` decided here equals `33.3` decided anywhere else; a raw-`double` borderline like `33.333...` can round to `33.3` at one call site and `33.4` at another and flip the verdict.
+
+**Incorrect — double accumulator drifts and a borderline score flips the pass gate:**
+
+```java
+public class ScoreService {
+    double averagePercent(List<Double> scores) {
+        double sum = 0.0;
+        for (double s : scores) sum += s;          // IEEE-754 drift accumulates
+        return (sum / scores.size()) * 100.0;       // 59.99999999999999 on the 60.0 line
+    }
+
+    boolean passed(List<Double> scores) {
+        return averagePercent(scores) >= 60.0;      // borderline flips between call sites
+    }
+
+    long completionBasisPoints(int done, int total) {
+        // ❌ reuses a money-style minor-units integer for a 0-100% scale
+        return Math.round((double) done / total * 10_000);
+    }
+}
+```
+
+**Correct — BigDecimal accumulated, scaled once with an explicit RoundingMode, compared with compareTo:**
+
+```java
+public class ScoreService {
+    private static final int PERCENT_SCALE = 1;                 // domain-chosen, not a currency's
+    private static final RoundingMode MODE = RoundingMode.HALF_UP;
+    private static final BigDecimal PASS_THRESHOLD =
+            new BigDecimal("60.0").setScale(PERCENT_SCALE, MODE);
+
+    BigDecimal averagePercent(List<BigDecimal> scores) {
+        BigDecimal sum = scores.stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);       // exact accumulation
+        return sum.divide(BigDecimal.valueOf(scores.size()), 10, MODE)
+                .multiply(new BigDecimal("100"))
+                .setScale(PERCENT_SCALE, MODE);                  // scale ONCE at the boundary
+    }
+
+    boolean passed(List<BigDecimal> scores) {
+        return averagePercent(scores).compareTo(PASS_THRESHOLD) >= 0;  // cohort-stable verdict
+    }
+}
+```
+
+This is **not** the money rule and must not borrow its representation: a percentage carries a domain-fixed scale (here `1`), accumulates as `BigDecimal`, and never passes through `Currency.getInstance(...)` or a `long` minor-units field. If a value is currency, use `lang-bigdecimal-for-money.md` and its ISO-4217 scale path; if it is a measured percentage / score / ratio, use this rule's domain-fixed scale path. Mixing the two — e.g. storing a completion percentage in a `long amountCents`-shaped field — is the cross-domain mistake this rule exists to stop.
+
+Verification (review-tier): inspect every service that averages, ratios, or computes a percentage of user-visible numbers. Each measured-decimal field is `BigDecimal` (no `float`/`double`); accumulation uses `BigDecimal.add`; the result is finalised with a single `setScale(scale, RoundingMode)` at the aggregation boundary; the pass/fail gate uses `compareTo` on the scaled value; and no measured percentage is routed through the currency/minor-units machinery. A fixed-input regression test that feeds scores summing to exactly the threshold and asserts the verdict does not flip is the canonical proof a fork-receiver writes per measured-decimal path.
+
+Reference: [java.math.BigDecimal — Java SE 21 API documentation](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html)
+
+Reference: [java.math.RoundingMode — Java SE 21 API documentation](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/RoundingMode.html)
+
+Reference: [IEEE 754-2019 — Standard for Floating-Point Arithmetic](https://ieeexplore.ieee.org/document/8766229)
+
+Reference (sibling — money, do not conflate): [practices/rules/lang-bigdecimal-for-money.md](lang-bigdecimal-for-money.md)
+
+
 <!-- @source rules/lang-bigdecimal-for-money.md -->
 
 ---
@@ -4115,6 +4585,121 @@ String describe(PaymentResult r) {
 Verification: `./gradlew testPractices --tests "*SealedResultHierarchy*"` asserts `PaymentResult.class.isSealed()`, that all `getPermittedSubclasses()` are records, and that an exhaustive `switch` over the type compiles.
 
 Reference: [JEP 409 — Sealed Classes (Final)](https://openjdk.org/jeps/409)
+
+
+<!-- @source rules/machine-computed-value-tracks-override-provenance.md -->
+
+---
+title: A machine-computed but human-overridable field MUST track override provenance — and recompute MUST skip human overrides
+impact: HIGH
+impactDescription: "Without a valueSource flag, a nightly recompute silently reverts every human correction (analyst fraud-review, instructor grade override, reviewer ML fix) — a lost human decision GDPR Art 22 explicitly protects"
+tags:
+  - provenance
+  - audit
+  - automated-decision
+  - human-override
+  - data-integrity
+  - gdpr
+spec_ref: "specs/value-provenance-l0.yaml#PROVENANCE-NO-RECLOBBER-001"
+verification:
+  type: review
+  source: "specs/value-provenance-l0.yaml"
+  pattern: "Entity field that is machine-computed AND human-overridable carries valueSource(SYSTEM|USER) + overriddenByActorId + overriddenAt + preserved machineValue; the recompute/batch path filters `where valueSource = SYSTEM` (or skips USER rows) so a human override is never clobbered"
+upstream:
+  - "https://gdpr-info.eu/art-22-gdpr/"
+  - "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x15-V7-Error-Logging.md"
+evidence:
+  - source_type: external
+    citation: "GDPR — Article 22 (Automated individual decision-making, including profiling) §1 and §3"
+    url: "https://gdpr-info.eu/art-22-gdpr/"
+    quote: "The data subject shall have the right not to be subject to a decision based solely on automated processing, including profiling, which produces legal effects concerning him or her or similarly significantly affects him or her."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP ASVS V7 — Error Handling and Logging, requirement 7.1.3 (log security relevant events)"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x15-V7-Error-Logging.md"
+    quote: "Verify that the application logs security relevant events including successful and failed authentication events, access control failures, deserialization failures and input validation failures."
+    quoted_at: "2026-06-01"
+---
+
+## A machine-computed but human-overridable field MUST track override provenance — and recompute MUST skip human overrides
+
+**Impact: HIGH — a value the system computes and a human can correct is two values wearing one column; without provenance the machine wins every recompute and the human correction is silently lost**
+
+Lots of fields are *both* machine-computed *and* human-overridable: an auto-assigned fraud score an analyst can downgrade, an ML-suggested tag a reviewer can fix, a predicted category a human approves or rewrites, an auto-computed grade an instructor overrides, a risk tier ops can adjust. The field looks like one column, but it carries two possible authorities — the model and the person. The moment you let a human override the model, you have created a question the row must be able to answer: *is this current value the machine's, or did a human deliberately set it?* If the column cannot answer that, two failures follow. First, you cannot audit or defend the value (who changed the fraud score, and when?). Second — and this is the silent one — the next time the recompute job runs (nightly batch, new model version, event-driven re-score), it overwrites the human's correction with a fresh machine value, because nothing told it to stop. The analyst's careful downgrade, the instructor's grade fix, the reviewer's tag correction — all reverted overnight, with no error and no trace. Under GDPR Art 22 that is precisely the harm regulated: an automated decision silently displacing a human intervention.
+
+The fix is a small, generic provenance shape attached to the overridable field: a `valueSource` enum (`SYSTEM` | `USER`, default `SYSTEM`), an `overriddenByActorId` + `overriddenAt` stamped atomically when a human overrides, and the prior machine value preserved (so the baseline is never destroyed). Then one rule binds the recompute path: **a recompute MUST skip rows whose `valueSource == USER`.** It may refresh `SYSTEM` rows and may update the preserved `machineValue` baseline, but it MUST NOT touch the live value of a row a human owns. This is review-tier because it is a runtime/structural property of the write paths, not something a single compiled assertion can fully prove — the reviewer confirms (a) the four provenance members exist, (b) the override mutator stamps actor + timestamp + audit event in one write, and (c) every recompute query carries the `valueSource = SYSTEM` filter.
+
+**Incorrect — one column, no provenance; the nightly recompute clobbers every human correction:**
+
+```java
+@Entity
+class Transaction {
+    @Id Long id;
+    BigDecimal fraudScore;   // computed by the model AND editable by an analyst — but which is it now?
+}
+
+// analyst manually downgrades a false positive
+tx.setFraudScore(new BigDecimal("0.05"));   // human correction, no marker left behind
+repo.save(tx);
+
+// nightly batch — re-scores EVERYTHING, including the row the analyst just fixed
+@Scheduled(cron = "0 0 3 * * *")
+void recompute() {
+    for (Transaction t : repo.findAll()) {        // ❌ no valueSource filter
+        t.setFraudScore(model.score(t));          // ❌ silently reverts the analyst's 0.05 back to 0.92
+        repo.save(t);
+    }
+}
+```
+
+**Correct — provenance columns + an override mutator that stamps the actor + a recompute that SKIPS human-owned rows:**
+
+```java
+enum ValueSource { SYSTEM, USER }
+
+@Entity
+class Transaction {
+    @Id Long id;
+    BigDecimal fraudScore;                       // the live value
+    @Enumerated(EnumType.STRING) @Column(nullable = false)
+    ValueSource fraudScoreSource = ValueSource.SYSTEM;
+    Long fraudScoreOverriddenBy;                 // non-null iff source == USER
+    Instant fraudScoreOverriddenAt;
+    BigDecimal fraudScoreMachineValue;           // preserved model baseline — never destroyed by an override
+}
+
+// sole mutator for a human override — atomic stamp + audit
+@Transactional
+void override(Long txId, BigDecimal newValue, Long actorId) {
+    Transaction t = repo.findById(txId).orElseThrow();
+    t.fraudScoreMachineValue = t.fraudScoreSource == ValueSource.SYSTEM ? t.fraudScore : t.fraudScoreMachineValue;
+    t.fraudScore = newValue;
+    t.fraudScoreSource = ValueSource.USER;
+    t.fraudScoreOverriddenBy = actorId;
+    t.fraudScoreOverriddenAt = Instant.now();
+    audit.record("FRAUD_SCORE_OVERRIDE", actorId, txId, t.fraudScoreMachineValue, newValue); // ASVS V7 7.1.3
+}
+
+@Scheduled(cron = "0 0 3 * * *")
+@Transactional
+void recompute() {
+    for (Transaction t : repo.findByFraudScoreSource(ValueSource.SYSTEM)) {  // ✅ USER rows excluded by query
+        t.fraudScore = model.score(t);
+        t.fraudScoreMachineValue = t.fraudScore;
+    }
+    // USER rows: only the preserved machineValue baseline may refresh; the live value is untouched.
+    meterRegistry.counter("provenance_reclobber_skipped_total",
+        "resource", "transaction.fraud_score").increment(repo.countByFraudScoreSource(ValueSource.USER));
+}
+```
+
+The shape is identical for every instance of the pattern: auto-tag (`tagSource`), ML label (`labelSource`), auto-grade (`gradeSource`), risk tier (`riskTierSource`). Rename the field, keep the four provenance members and the `valueSource = SYSTEM` recompute filter. The cheapest way to get this wrong is to add the override path first and the recompute filter never — the override works in the demo, and the data quietly reverts in production a day later.
+
+Verification: review-tier. Confirm (1) the overridable field declares `valueSource` (`SYSTEM`|`USER`, default `SYSTEM`, non-null) plus `overriddenBy` / `overriddenAt` / preserved `machineValue`; (2) the override is performed by one atomic mutator that stamps actor + timestamp and emits an audit event (ASVS V7 §7.1.3); (3) every recompute / batch / re-score query carries the `valueSource = SYSTEM` filter (or an explicit per-row `if (source == USER) continue;` skip) so a human override is never overwritten, with the skip counted by `provenance_reclobber_skipped_total`. Spec: `specs/value-provenance-l0.yaml#PROVENANCE-NO-RECLOBBER-001`.
+
+Reference: [GDPR Article 22 — Automated individual decision-making, including profiling](https://gdpr-info.eu/art-22-gdpr/)
+
+Reference: [OWASP ASVS V7 — Error Handling and Logging (7.1.3)](https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x15-V7-Error-Logging.md)
 
 
 <!-- @source rules/messaging-payload-record.md -->
@@ -5606,6 +6191,120 @@ The "no fabricated timestamps" rule (`client-must-not-fabricate-audit-timestamps
 Reference: [TanStack Query v5 — Optimistic Updates](https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates)
 
 Reference: [TanStack Query v5 — Mutations](https://tanstack.com/query/latest/docs/framework/react/guides/mutations)
+
+
+<!-- @source rules/ordered-siblings-reorder-atomic.md -->
+
+---
+title: Ordered sibling collections MUST persist an explicit position and renumber atomically under serialization
+impact: HIGH
+impactDescription: "A reorder that sorts on created_at or renumbers row-by-row with no parent @Version / row lock lets two concurrent reorders of the same parent silently clobber each other (CWE-362), producing a torn list with gaps or duplicate positions"
+tags:
+  - ordering
+  - concurrency
+  - jpa
+  - optimistic-locking
+  - race-condition
+  - collection
+spec_ref: "specs/ordered-collection-l0.yaml#ORDER-REORDER-ATOMIC-001"
+verification:
+  type: review
+  source: "specs/ordered-collection-l0.yaml#ORDER-REORDER-ATOMIC-001"
+  pattern: "A user-orderable sibling collection (a) sorts on an explicit non-null `position` column (never created_at/insertion order), and (b) renumbers all affected siblings in ONE @Transactional method whose concurrency is serialized by an optimistic `@Version` on the PARENT (or a SELECT ... FOR UPDATE on the parent row, or a positional/fractional sort_key that rewrites only the moved row). Reject: read-all-then-write-all reorder with no parent version/lock; per-item separate UPDATE round-trips; ORDER BY created_at as the ordering source."
+upstream:
+  - "https://www.postgresql.org/docs/current/explicit-locking.html"
+  - "https://www.figma.com/blog/realtime-editing-of-ordered-sequences/"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+  - "https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL 18 Documentation — 13.3.2 Row-Level Locks (FOR UPDATE)"
+    url: "https://www.postgresql.org/docs/current/explicit-locking.html"
+    quote: "FOR UPDATE causes the rows retrieved by the SELECT statement to be locked as though for update. This prevents them from being locked, modified or deleted by other transactions until the current transaction ends. That is, other transactions that attempt UPDATE, DELETE, SELECT FOR UPDATE, SELECT FOR NO KEY UPDATE, SELECT FOR SHARE or SELECT FOR KEY SHARE of these rows will be blocked until the current transaction ends; conversely, SELECT FOR UPDATE will wait for a concurrent transaction that has run any of those commands on the same row, and will then lock and return the updated row (or no row, if the row was deleted)."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Figma Engineering Blog — Realtime editing of ordered sequences (fractional indexing)"
+    url: "https://www.figma.com/blog/realtime-editing-of-ordered-sequences/"
+    quote: "Every object has a real number as an index and the order of the children for an element of the tree is determined by sorting all children by their index."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "CWE-362 — Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition')"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-01"
+---
+
+## Ordered sibling collections MUST persist an explicit position and renumber atomically under serialization
+
+**Impact: HIGH — a reorder with no persisted position and no parent-level serialization is a silent data-corruption race**
+
+When a feature lets a user drag siblings into a deliberate order — LMS lessons under a module, kanban cards in a column, playlist tracks, form-builder fields, an approval line — two mistakes compound into a HIGH-severity bug. First, ordering on `created_at` (or insertion order) cannot represent a move: dragging lesson C above lesson A changes neither row's `created_at`, so the new order is unrepresentable and the list re-sorts wrong on the next read. Second, renumbering the siblings with a plain read-all-then-write-all sequence — read the current positions, compute new ones in app code, write them back — is a textbook CWE-362 race: two instructors reordering the same module at once each compute from the same stale snapshot, and the second commit silently overwrites the first. The result is a torn list with gaps or two siblings both claiming position 3. No compiler and no single-threaded test catches this; only an explicit position column plus parent-level serialization closes it.
+
+The fix has two halves, both required. (1) Persist an explicit `position` column and make `ORDER BY position` the sole sort key. (2) Make the reorder one atomic `@Transactional` method whose concurrency is serialized by an optimistic `@Version` on the **parent** row (the loser's flush raises `OptimisticLockException` → map to 409, retry), OR by a `SELECT ... FOR UPDATE` on the parent row, OR by a positional / fractional sort_key strategy where a single move rewrites only the moved row's key and never renumbers siblings at all. Back the column with a `UNIQUE(parent_id, position)` constraint so a buggy renumber fails loudly instead of persisting a duplicate.
+
+**Incorrect — ordering on created_at; read-all-then-write-all renumber with no parent version or lock (CWE-362 race; two concurrent reorders clobber each other):**
+
+```java
+// Reads order from created_at — a deliberate move is unrepresentable
+List<Lesson> lessons =
+    lessonRepository.findByModuleIdOrderByCreatedAtAsc(moduleId);
+
+@Transactional
+public void reorder(Long moduleId, List<Long> newOrder) {
+    // No @Version on Module, no FOR UPDATE: two callers read the same
+    // snapshot and both write — the second commit silently wins.
+    int pos = 0;
+    for (Long lessonId : newOrder) {
+        Lesson l = lessonRepository.findById(lessonId).orElseThrow();
+        l.setPosition(pos++);          // per-item, observable mid-shift
+        lessonRepository.save(l);      // separate round-trips → torn list
+    }
+}
+```
+
+**Correct — explicit position; single-transaction renumber serialized by an optimistic @Version on the PARENT; conflict → 409 retry; UNIQUE(parent, position) backstop:**
+
+```java
+@Entity
+class Module {
+    @Id Long id;
+    @Version Long version;             // serializes concurrent reorders of THIS module
+}
+
+@Entity
+@Table(uniqueConstraints =
+    @UniqueConstraint(columnNames = {"module_id", "position"}))   // structural backstop
+class Lesson {
+    @Id Long id;
+    @Column(nullable = false) Integer position;   // ORDER BY position is the sole sort key
+}
+
+@Transactional
+public void reorder(Long moduleId, List<Long> newOrder) {
+    Module module = moduleRepository.findById(moduleId).orElseThrow();
+    // Touching module.version makes the persistence provider assert the
+    // parent row is unchanged at flush; a concurrent reorder bumps it and
+    // the loser's flush raises OptimisticLockException.
+    module.touch();
+    List<Lesson> lessons = lessonRepository.findByModuleId(moduleId);
+    Map<Long, Integer> rank = indexOf(newOrder);   // intended final order
+    lessons.forEach(l -> l.setPosition(rank.get(l.getId())));
+    // One transaction → UNIQUE(module_id, position) is evaluated at commit;
+    // the whole renumber is all-or-nothing.
+}
+// OptimisticLockException → @ExceptionHandler → 409 urn:problem:reorder-conflict
+// (ORDER-CONFLICT-001): client re-GETs the fresh order and retries (budget 3).
+```
+
+The positional/fractional alternative is equally valid and touches only one row per move: give each sibling a sparse sort_key and, to move an item, generate a new key strictly between its two new neighbors — no sibling renumber, no cross-row race (this is the Figma fractional-indexing technique). Either path satisfies `ORDER-REORDER-ATOMIC-001`; what the rule rejects is created_at ordering and an unserialized read-all-then-write-all renumber.
+
+Verification: review-tier (no `@Tag` test ships in the catalog reference workload for this generic pattern; a fork-receiver realizing the spec adds a concurrent-reorder RestAssured harness per `ORDER-REORDER-ATOMIC-001`). The reviewer confirms the orderable collection sorts on an explicit `position` column and that the reorder method serializes concurrency via a parent `@Version`, a parent-row `SELECT ... FOR UPDATE`, or a positional/fractional sort_key — and rejects any `ORDER BY created_at` ordering source or unserialized per-item renumber.
+
+Reference: [PostgreSQL — Explicit Locking, Row-Level Locks (FOR UPDATE)](https://www.postgresql.org/docs/current/explicit-locking.html)
+
+Reference: [Figma Engineering — Realtime editing of ordered sequences (fractional indexing)](https://www.figma.com/blog/realtime-editing-of-ordered-sequences/)
+
+Reference: [CWE-362 — Race Condition](https://cwe.mitre.org/data/definitions/362.html)
 
 
 <!-- @source rules/payment-iso-4217-currency.md -->
@@ -7363,6 +8062,112 @@ Reference: [OWASP ASVS v4.0.3 — V4 Access Control](https://raw.githubuserconte
 Reference: [Google Zanzibar — relationship-based access control (ReBAC)](https://en.wikipedia.org/wiki/Google_Zanzibar)
 
 
+<!-- @source rules/role-hierarchy-subsumes-lower-tiers.md -->
+
+---
+title: When >2 roles exist and higher tiers subsume lower tiers, declare a RoleHierarchy @Bean — never enumerate hasAnyRole(...)
+impact: HIGH
+impactDescription: "Without a single RoleHierarchy bean, every @PreAuthorize must list every superior role by hand; the day someone forgets to add ROLE_ADMIN to a hasAnyRole(...) the admin is silently locked out, and the day someone forgets to add a new tier the gate silently fails open"
+tags:
+  - rbac
+  - authz
+  - bfla
+  - role-hierarchy
+  - spring-security
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-SECURITY-004"
+verification:
+  type: review
+  source: "templates/backend/security/RoleHierarchyConfig.java"
+  pattern: "a single RoleHierarchy @Bean (RoleHierarchyImpl.withDefaultRolePrefix().role(\"ADMIN\").implies(\"MANAGER\")...) wired into a MethodSecurityExpressionHandler @Bean; @PreAuthorize/authorizeHttpRequests gates name ONLY the minimum tier (hasRole('MEMBER')) and rely on the hierarchy to admit superiors — no endpoint enumerates hasAnyRole('ADMIN','MANAGER','MEMBER')"
+upstream:
+  - "https://docs.spring.io/spring-security/reference/servlet/authorization/architecture.html"
+  - "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
+evidence:
+  - source_type: external
+    citation: "Spring Security Reference — Authorization Architecture / Hierarchical Roles (RoleHierarchyImpl)"
+    url: "https://docs.spring.io/spring-security/reference/servlet/authorization/architecture.html"
+    quote: "Here we have four roles in a hierarchy `ROLE_ADMIN ⇒ ROLE_STAFF ⇒ ROLE_USER ⇒ ROLE_GUEST`. A user who is authenticated with `ROLE_ADMIN`, will behave as if they have all four roles when security constraints are evaluated against any filter- or method-based rules."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization"
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
+    quote: "Authorization checks for a function or resource are usually managed via configuration or code level. Implementing proper checks can be a confusing task since modern applications can contain many types of roles, groups, and complex user hierarchies (e.g. sub-users, or users with more than one role)."
+    quoted_at: "2026-06-01"
+---
+
+## When >2 roles exist and higher tiers subsume lower tiers, declare a RoleHierarchy @Bean — never enumerate hasAnyRole(...)
+
+**Impact: HIGH — an enumerated superior-role list is the silent fail-open / fail-closed seam OWASP names as "complex user hierarchies"**
+
+The reference workload ships a flat authorization model: `ROLE_ADMIN` versus authenticated. That is correct for two tiers — `hasAuthority("ROLE_ADMIN")` on `/api/admin/**`, `.authenticated()` on everything else, and nothing in between. But the moment a fork-receiver introduces a *third* tier where the tiers form a subsumption chain (the canonical Korean-enterprise shape `ROLE_ADMIN > ROLE_MANAGER > ROLE_MEMBER`, where an admin can do everything a manager can and a manager everything a member can), the flat pattern stops scaling and a structural trap opens.
+
+The naive way to express "a manager-or-above may reach this endpoint" is to enumerate the superior roles at the gate: `@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")`. This is wrong for the same reason OWASP API5:2023 calls function-level authorization "a confusing task" once "modern applications can contain many types of roles, groups, and complex user hierarchies": the superior-role list is now copy-pasted across dozens of `@PreAuthorize` sites, and it drifts. The two failure modes are mirror images and both are silent:
+
+1. **Fail-closed drift.** Someone adds a manager-only endpoint and writes `hasRole('MANAGER')`, forgetting to also list `'ADMIN'`. Now an admin — who should be able to do *everything* a manager can — is **locked out** of that one endpoint. The compiler says nothing; the gap surfaces only when an admin hits a 403 in production.
+2. **Fail-open drift.** A new tier `ROLE_AUDITOR` is inserted between manager and member. Every gate that listed `hasAnyRole('ADMIN','MANAGER')` to mean "manager-and-above" must now be revisited to decide whether auditor counts — and the ones nobody revisits keep their stale list, **silently** admitting or excluding the new tier at the wrong boundary.
+
+Spring Security's answer is to declare the subsumption **once**, as data, in a single `RoleHierarchy` bean, and wire it into the `MethodSecurityExpressionHandler` (and the web `AuthorizationManager`). Then every gate names **only the minimum tier it requires** — `hasRole('MEMBER')` on a member-floor endpoint, `hasRole('MANAGER')` on a manager-floor endpoint — and the hierarchy admits all superiors automatically. Per the reference doc: *"A user who is authenticated with `ROLE_ADMIN`, will behave as if they have all four roles when security constraints are evaluated against any filter- or method-based rules."* The hierarchy lives in exactly one place; adding or reordering a tier is a one-line edit to the bean, not a hunt across every annotation.
+
+**Incorrect — superior roles enumerated at each gate; the list drifts and silently fails open or closed:**
+
+```java
+// No RoleHierarchy bean. Every gate hand-lists who is "or above".
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")           // manager-floor endpoint
+public Report managerReport() { ... }
+
+@PreAuthorize("hasRole('MANAGER')")                       // ❌ forgot 'ADMIN' →
+public void approve(Long id) { ... }                      //    admin is LOCKED OUT (fail-closed)
+
+// Insert ROLE_AUDITOR between MANAGER and MEMBER tomorrow, and every
+// hasAnyRole('ADMIN','MANAGER') above must be re-audited by hand — the
+// ones nobody touches keep a stale list (fail-open / fail-closed at random).
+```
+
+**Correct — declare the hierarchy ONCE as a bean; gates name only the minimum tier:**
+
+```java
+@Configuration
+@EnableMethodSecurity
+public class RoleHierarchyConfig {
+
+    // The subsumption chain, declared in ONE place. ROLE_ADMIN ⇒ ROLE_MANAGER ⇒ ROLE_MEMBER.
+    @Bean
+    static RoleHierarchy roleHierarchy() {
+        return RoleHierarchyImpl.withDefaultRolePrefix()
+            .role("ADMIN").implies("MANAGER")
+            .role("MANAGER").implies("MEMBER")
+            .build();
+    }
+
+    // Wire the hierarchy into method security so @PreAuthorize honors it.
+    @Bean
+    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        DefaultMethodSecurityExpressionHandler handler = new DefaultMethodSecurityExpressionHandler();
+        handler.setRoleHierarchy(roleHierarchy);
+        return handler;
+    }
+}
+
+// Gates now name ONLY the minimum tier; superiors are admitted by the hierarchy.
+@PreAuthorize("hasRole('MANAGER')")    // ✅ ADMIN admitted automatically — no enumeration
+public Report managerReport() { ... }
+
+@PreAuthorize("hasRole('MANAGER')")    // ✅ ADMIN can approve; never silently locked out
+public void approve(Long id) { ... }
+
+@PreAuthorize("hasRole('MEMBER')")     // ✅ MANAGER and ADMIN both admitted
+public List<Item> myItems() { ... }
+```
+
+The same `RoleHierarchy` bean is consulted by the web `authorizeHttpRequests` `AuthorizationManager` (Spring Security wires it automatically when the bean is present), so URL-based gates inherit the chain too — a fork-receiver does not maintain two hierarchies. The two-tier reference workload does **not** need this rule (a flat ADMIN-vs-authenticated split has no subsumption to express); it applies precisely when a fork-receiver crosses into three-or-more subsuming tiers.
+
+Verification: review-tier. A reviewer confirms (a) a single `@Bean RoleHierarchy` declares the full chain with `.role(X).implies(Y)` (or `RoleHierarchyImpl.fromHierarchy("ROLE_ADMIN > ROLE_MANAGER\nROLE_MANAGER > ROLE_MEMBER")`); (b) that bean is set on a `MethodSecurityExpressionHandler` bean (and, for URL gates, the web `AuthorizationManager` picks it up); (c) no `@PreAuthorize` or `authorizeHttpRequests` matcher enumerates a superior-role list (`hasAnyRole('ADMIN','MANAGER',...)`) to mean "or above" — every gate names only its minimum tier. No `@Tag` test is claimed: the subsumption is a runtime Spring-Security wiring property exercised only once a fork-receiver instantiates a multi-tier RBAC, not a generic backend module present in this two-tier template. The blessed bean ships at `templates/backend/security/RoleHierarchyConfig.java`.
+
+Reference: [Spring Security Reference — Authorization Architecture / Hierarchical Roles](https://docs.spring.io/spring-security/reference/servlet/authorization/architecture.html)
+
+Reference: [OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/)
+
+
 <!-- @source rules/secret-shown-once-uses-beforeunload-guard.md -->
 
 ---
@@ -8250,6 +9055,99 @@ tree exists but the matching `specs/<domain>-l0.yaml#domain_mode` is
 - "I'll just add the frontend; fork-receivers can delete it if they don't
   want it" — adding overrides the spec's design decision; deletion is a
   burden on every fork-receiver instead of zero burden if absent.
+
+
+<!-- @source rules/storage-reclaim-must-be-reconciled.md -->
+
+---
+title: Blob reclaim on row delete MUST be reconciled — never a fire-and-forget inline storage delete
+impact: HIGH
+impactDescription: "A DB row delete and an object-store blob delete cannot be made atomic without 2PC; an inline storage-delete that fails after the row is gone leaks an orphan blob, and one that throws BEFORE the row commits either rolls back the delete (500) or, if swallowed, leaves the bytes forever"
+tags:
+  - storage
+  - reconciliation
+  - dual-write
+  - object-store
+  - idempotency
+spec_ref: "specs/storage-reconciliation-l0.yaml#RECON-DELETE-001"
+verification:
+  type: review
+  source: "specs/storage-reconciliation-l0.yaml#RECON-DELETE-001"
+  pattern: "On row purge, the blob key is enqueued for reclaim in the SAME local DB transaction that removes the row (reclaim-queue / transactional-outbox row); the inline object-store delete is a swallowed-then-enqueued fast path, never a 500 that rolls back the row removal; an async reclaim worker (running under the scheduled-task LockingPolicy) drains the queue and treats an already-absent key as success."
+upstream:
+  - "https://microservices.io/patterns/data/transactional-outbox.html"
+  - "https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeletingObjects.html"
+evidence:
+  - source_type: external
+    citation: "Chris Richardson — Pattern: Transactional outbox (microservices.io), Context section (dual-write problem)"
+    url: "https://microservices.io/patterns/data/transactional-outbox.html"
+    quote: "But without using 2PC, sending a message in the middle of a transaction is not reliable. There's no guarantee that the transaction will commit. Similarly, if a service sends a message after committing the transaction there's no guarantee that it won't crash before sending the message."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "AWS — Deleting Amazon S3 objects (Amazon S3 User Guide), Best practices section"
+    url: "https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeletingObjects.html"
+    quote: "If you want to delete a large number of objects, or for programmatically deleting objects based on object creation date, set a S3 Lifecycle configuration on your bucket."
+    quoted_at: "2026-06-01"
+---
+
+## Blob reclaim on row delete MUST be reconciled — never a fire-and-forget inline storage delete
+
+**Impact: HIGH — a DB row delete and an object-store blob delete cannot be committed atomically without 2PC; the gap between them leaks orphan blobs or rolls back the delete as a 500**
+
+A huge number of domains store a blob in an external object store (S3 / MinIO / GCS / Azure Blob) and a referencing row in the relational DB: file-storage `StoredFile.storageKey`, report-export output keys, avatar images, generated PDFs. Deleting the entity is a **dual write** — remove the DB row *and* delete the blob — and these two stores live behind two independent transaction managers. There is no single atomic commit across them without a distributed (2PC) transaction, which almost nobody runs. So whatever order you choose, a crash or a network blip in the middle leaves drift: delete-the-blob-first then the row-delete rolls back and you have a live row pointing at bytes that are gone (a *missing* blob); delete-the-row-first then the storage call fails and you have bytes nobody references (an *orphan* blob) accumulating storage cost forever. The naive fix — call `s3.deleteObject(...)` inline inside the `@Transactional` service method — is the worst of both: if it throws, it either propagates as a 500 that rolls back the row removal (now the user can't delete their file at all) or it is silently swallowed and the orphan leaks anyway.
+
+The reconciled pattern removes the atomicity requirement entirely. On row purge, enqueue the blob key for reclaim **in the same local DB transaction that removes the row** — a reclaim-queue row (a transactional-outbox entry). That insert and the row delete are one atomic local commit. The actual object-store delete becomes an *at-least-once async step* drained by a reclaim worker that runs under the existing scheduled-task distributed lock (`SCHED-LOCK-001`, `blueprints/scheduled-task-manifest.yaml#lock`), and an object-store delete of an already-absent key is treated as success (idempotent). An inline delete MAY still be attempted as a fast path, but its failure is *swallowed-then-enqueued*, never surfaced as a 500.
+
+**Incorrect — fire-and-forget inline storage delete inside the transaction; a storage failure either 500s the row delete or silently leaks the blob:**
+
+```java
+@Transactional
+public void deleteFile(UUID fileId, UUID callerId) {
+    StoredFile f = repo.findByIdAndOwner(fileId, callerId)
+            .orElseThrow(() -> new EntityNotFoundException(fileId));
+    repo.delete(f);                       // DB row gone
+    s3.deleteObject(bucket, f.getStorageKey());  // ❌ dual write:
+    //  - if this throws → 500, the whole tx rolls back, user can never delete
+    //  - if you wrap it in try/catch and swallow → orphan blob leaks forever
+    //  - no record that the key still needs reclaiming
+}
+```
+
+**Correct — enqueue the reclaim key in the same local transaction; an async worker drains it idempotently under the scheduled-task lock:**
+
+```java
+@Transactional
+public void deleteFile(UUID fileId, UUID callerId) {
+    StoredFile f = repo.findByIdAndOwner(fileId, callerId)
+            .orElseThrow(() -> new EntityNotFoundException(fileId));
+    repo.delete(f);                                   // (1) row removed
+    reclaimQueue.save(BlobReclaim.of(f.getStorageKey()));  // (2) SAME local tx — atomic with (1)
+    // inline fast path is optional and its failure is harmless:
+    try { s3.deleteObject(bucket, f.getStorageKey()); reclaimQueue.markDone(f.getStorageKey()); }
+    catch (RuntimeException swallow) { /* left PENDING — the worker will reconcile */ }
+}
+
+// Async reclaim worker — runs under the scheduled-task distributed lock (SCHED-LOCK-001),
+// idempotent: an already-absent key is a no-op success.
+@Scheduled(cron = "${ax.recon.reclaim-cron:0 */5 * * * ?}")
+public void drainReclaimQueue() {
+    lockingPolicy.executeWithLock("blob-reclaim", () -> {
+        for (BlobReclaim r : reclaimQueue.findPending(BATCH)) {
+            s3.deleteObjectIfPresent(bucket, r.getKey());  // absent key → success (idempotent)
+            reclaimQueue.markDone(r.getKey());
+            metrics.counter("storage.recon.reclaimed.total", "domain", domain).increment();
+        }
+    });
+}
+```
+
+The reclaim worker is one half of reconciliation; the spec's reverse sweep (`RECON-ORPHAN-001`, purge no-referent blobs past a bounded grace window) and forward sweep (`RECON-MISSING-001`, quarantine rows whose blob is gone — never a raw `NoSuchKey` 500) close the remaining drift, all composing the same scheduled-task lock + soft-delete grace window for idempotency (`RECON-IDEMPOTENT-001`). The orphan/missing/reclaimed metric triple (`RECON-OBSERVABILITY-001`) makes residual drift measurable.
+
+Verification (review-tier): confirm by inspection that (a) the blob key is persisted to a reclaim queue in the **same** `@Transactional` boundary as `repo.delete(...)`; (b) no inline `s3.deleteObject` can propagate an exception that rolls back the row removal; (c) the reclaim worker runs under the scheduled-task `LockingPolicy` and treats an absent key as success. This is a structural/composition property of the persistence + scheduling seam, not a single assertable runtime value — hence `type: review`, bound per `rule_verification_binding_guard.sh`.
+
+Reference: [Chris Richardson — Pattern: Transactional outbox (the dual-write problem)](https://microservices.io/patterns/data/transactional-outbox.html)
+
+Reference: [AWS — Deleting Amazon S3 objects (S3 Lifecycle reclaim + idempotent delete)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeletingObjects.html)
 
 
 <!-- @source rules/stored-server-error-sanitize-at-render-layer.md -->
@@ -9456,6 +10354,109 @@ public User update(@PathVariable Long id, @RequestBody @Valid UserUpdateDto dto)
 Verification: `./gradlew testPractices --tests "*MassAssignment*"` asserts that direct entity binding propagates the attacker's `role` field, while DTO-mediated binding preserves the server default `USER`.
 
 Reference: [Spring MVC — @ModelAttribute method arguments](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/modelattrib-method-args.html)
+
+
+<!-- @source rules/waitlist-promotion-is-atomic-fifo.md -->
+
+---
+title: Waitlist promotion MUST be one atomic FIFO transaction — never read-then-promote
+impact: HIGH
+impactDescription: "Releasing a seat and promoting the next waiter in two statements re-opens the read-then-act race (CWE-362) one layer above the seat claim — two concurrent releases promote the same entry twice or skip a waiter, and wall-clock ordering silently breaks FIFO fairness"
+tags:
+  - waitlist
+  - concurrency
+  - fifo
+  - row-lock
+  - state-machine
+spec_ref: "specs/waitlist-promotion-l0.yaml#WAITLIST-PROMOTE-001"
+verification:
+  type: review
+  source: "specs/waitlist-promotion-l0.yaml (WAITLIST-PROMOTE-001 — release+promote single transaction, FOR UPDATE on freed capacity row, ordered by monotonic enqueue position)"
+  pattern: "Release-a-seat and promote-the-head-of-line execute in ONE @Transactional method that (1) SELECT ... FOR UPDATE locks the freed capacity row, (2) selects the longest-waiting entry by a monotonic enqueue ordinal (NOT created_at wall-clock), (3) flips it waiting->enrolled through the sole-mutator state machine. Reject any code path that reads the head outside the lock, promotes by timestamp, or splits release and promote across two transactions."
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc970"
+  - "https://www.postgresql.org/docs/current/explicit-locking.html"
+evidence:
+  - source_type: external
+    citation: "RFC 970 — On Packet Switches With Infinite Storage (J. Nagle, FACC Palo Alto, December 1985)"
+    url: "https://www.rfc-editor.org/rfc/rfc970"
+    quote: "Initially, we will assume that queues are managed in a first in, first out manner."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "PostgreSQL Documentation — 13.3. Explicit Locking (Row-Level Locks, FOR UPDATE)"
+    url: "https://www.postgresql.org/docs/current/explicit-locking.html"
+    quote: "FOR UPDATE causes the rows retrieved by the SELECT statement to be locked as though for update. This prevents them from being locked, modified or deleted by other transactions until the current transaction ends."
+    quoted_at: "2026-06-01"
+---
+
+## Waitlist promotion MUST be one atomic FIFO transaction — never read-then-promote
+
+**Impact: HIGH — the promote step re-opens the exact race the seat-claim primitive closed, one layer up**
+
+A capacity-gated waitlist has two atomic obligations, not one. The first — claiming the last open seat without overselling — is solved by `bounded-capacity-claim-l0` (`CLAIM-ATOMIC-001`): a single conditional `UPDATE` whose affected-row count decides winner vs. loser. But the moment a held seat is *released* and the next waiter must be *promoted* into it, a second race appears. If release-the-seat and promote-the-head-of-line are two separate statements — read the longest-waiting entry, then flip it `enrolled` — then two concurrent releases each read the *same* head-of-line waiter before either commits, and both promote that one entry: a double-promote that grants two seats to one person while a genuine waiter is silently skipped. This is `CWE-362` (a timing window in which a shared resource is mutated by a concurrent sequence), re-opened one layer above the seat claim.
+
+The correct shape is a single `@Transactional` critical section that (1) takes a `SELECT ... FOR UPDATE` row lock on the *freed capacity row* so concurrent releases serialize, (2) selects the head-of-line waiter ordered by a **monotonic enqueue ordinal** — an auto-increment sequence assigned at enqueue, *never* `created_at` wall-clock — and (3) flips it `waiting → enrolled` through the sole-mutator state machine whose `@Version` column rejects a concurrent promote of the same entry. Release and promote net zero capacity change (the freed seat is immediately re-taken by the promotee), which is precisely *why* they must commit together: any window in which the seat is free-but-unassigned is a window in which a fresh claimant can steal it ahead of the queue, breaking FIFO fairness.
+
+Wall-clock ordering deserves its own warning. `ORDER BY created_at` looks like FIFO but is not: equal millisecond timestamps under load are non-deterministic, clock skew across app nodes reorders entries, and a backward clock step (NTP correction, DST) can promote a later arrival first. FIFO — *first in, first out* — is defined over enqueue *position*, a strictly increasing ordinal, not over a timestamp that the database does not guarantee to be unique or monotonic.
+
+**Incorrect — release and promote split; head read outside the lock; wall-clock ordering:**
+
+```java
+@Transactional
+public void releaseSeat(Long entryId) {
+    WaitlistEntry held = repo.findById(entryId).orElseThrow();
+    fsm.transition(held, DROPPED);
+    capacityRepo.decrementTaken(held.getResourceId());   // seat is now free-but-unassigned
+}
+
+// ...later, a different transaction / scheduler tick:
+@Transactional
+public void promoteNext(Long resourceId) {
+    // ❌ no FOR UPDATE — two concurrent promotes read the same head
+    WaitlistEntry head = repo
+        .findFirstByResourceIdAndStatusOrderByCreatedAtAsc(resourceId, WAITING)  // ❌ wall-clock FIFO
+        .orElse(null);
+    if (head == null) return;
+    fsm.transition(head, ENROLLED);          // ❌ double-promote under concurrency; window before promote lets a fresh claimant steal the seat
+    capacityRepo.incrementTaken(resourceId);
+}
+```
+
+**Correct — one transaction; FOR UPDATE on the freed capacity row; ordered by monotonic enqueue ordinal; sole-mutator @Version transition:**
+
+```java
+@Transactional
+public void releaseAndPromote(Long enrolledEntryId) {
+    WaitlistEntry releasing = repo.findById(enrolledEntryId).orElseThrow();
+
+    // (1) serialize concurrent releases on the SAME freed capacity row
+    Capacity cap = capacityRepo.lockForUpdate(releasing.getResourceId());  // SELECT ... FOR UPDATE
+
+    fsm.transition(releasing, DROPPED);      // sole mutator; @Version guards the entry
+
+    // (2) head-of-line by MONOTONIC enqueue ordinal — never created_at
+    WaitlistEntry head = repo
+        .findFirstByResourceIdAndStatusOrderByEnqueueOrdinalAsc(cap.getResourceId(), WAITING)
+        .orElse(null);
+
+    if (head != null) {
+        fsm.transition(head, ENROLLED);      // (3) freed seat re-taken atomically — taken nets unchanged
+        // promotion notification rides the SAME tx via the transactional outbox
+    } else {
+        cap.decrementTaken();                // empty queue → seat returns to free capacity; CHECK(taken>=0) backstops
+    }
+}
+// release + promote commit together: no free-but-unassigned window, exactly-one promote per release,
+// strict FIFO by enqueue ordinal, double-promote impossible (row lock + @Version).
+```
+
+This composition is what makes the waitlist fair *and* safe: `bounded-capacity-claim-l0#CLAIM-ATOMIC-001` wins the seat without oversell, this rule promotes the next waiter without a double-grant or a stolen seat, and `transactional-outbox-l0#OUTBOX-WRITE-001` carries the promotion notice in the same transaction so the promoted user is reliably told. Drop any one and the chain leaks: ad-hoc promote re-opens `CWE-362`, direct broker publish loses the notification on a crash, wall-clock ordering breaks FIFO.
+
+Verification (review-tier): inspect the promote path and reject it unless release-and-promote share one `@Transactional` method, the freed capacity row is taken `FOR UPDATE`, the head-of-line query orders by a monotonic enqueue ordinal (not `created_at`), and the `waiting → enrolled` flip goes through the sole-mutator state machine. A concurrent-release harness (N parallel releases against a queue of M ≥ N waiters) MUST promote exactly N *distinct* FIFO heads — never the same entry twice, never zero for a non-empty queue.
+
+Reference: [RFC 970 — On Packet Switches With Infinite Storage (J. Nagle)](https://www.rfc-editor.org/rfc/rfc970)
+
+Reference: [PostgreSQL Documentation — 13.3. Explicit Locking (FOR UPDATE)](https://www.postgresql.org/docs/current/explicit-locking.html)
 
 
 <!-- @source rules/web-explicit-produces.md -->

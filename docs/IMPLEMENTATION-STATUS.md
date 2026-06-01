@@ -29,7 +29,7 @@
 | multi-tenant | ✅ R39 README + R93 selectable stub (cross-cutting tenancy) | ❌ no `app/` (backend-only stub) | n/a — enforced via the 10+ tenant-scope hard guards (aop/callback/scheduled/realtime/broker/kafka*/webclient) | **backend-only stub** (R93 selectable) |
 | notification | ✅ R20 backend | ✅ trio | testNotification GREEN | **full-trio** |
 | payment | ✅ reference workload | ✅ trio | 29 items GREEN | **full-trio** |
-| practices | ✅ rules-as-code | ✅ trio | 117 rules GREEN | **rules-as-code** |
+| practices | ✅ rules-as-code | ✅ trio | 126 rules GREEN | **rules-as-code** |
 | ratelimit | ✅ realized (RateLimitFilter + Config + PingController + Properties; Caffeine RFC 6585 §4) | ❌ no `app/` (backend-only; client half = L2 rate-limit-banner) | testRateLimit 4/4 GREEN | **backend-only** (future_add→selectable, backend realized) |
 | realtime-policy | ✅ promote (RealtimeChannelService SSE registry + audience-fan-out + backpressure-disconnect + Last-Event-ID replay + RealtimeMetrics 3 meters + RealtimeController SseEmitter; SSE-FIRST via MVC, WebSocket documented as parallel path; cross-cutting, additive) | ❌ no `app/` (backend-only stub) | testRealtime 6/6 GREEN (6 spec items; RT-PROTOCOL-001 review-only) | **backend-only stub** (future_add→selectable) |
 | scheduled-task | ✅ R20 closure | ✅ trio | 5/5 GREEN | **full-trio** |

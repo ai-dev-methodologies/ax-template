@@ -1,0 +1,67 @@
+version: "0.1.0"
+scope: "signed-artifact-l0 — detached-signature contract for any artifact that a party OTHER than the signer must independently verify (completion certificate, signed receipt / invoice, exportable report, public badge, federated attestation). Draws the bright line between third-party-verifiable artifacts (asymmetric, published verifying key) and signer==verifier integrity envelopes (symmetric HMAC: webhook-hmac, presigned-url). Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / LMS / B2B-federation applicable."
+stack: "JOSE / JWS (RFC 7515) + JWA alg registry (RFC 7518 / RFC 8037 EdDSA) + published JWKS verifying key (RFC 7517) + canonical payload (JCS RFC 8785 or a recipe-pinned canonicalization)"
+standard: "RFC 7515 (JSON Web Signature) + RFC 7518 (JSON Web Algorithms — alg values & implementation requirements) + RFC 8037 (EdDSA for JOSE) + OWASP JSON Web Token Cheat Sheet (alg:none + algorithm-confusion attack class)"
+domain_mode: full_trio
+introduced_at: "IDW5 2026-06-01 LMS dogfood"
+
+# OPT-IN signing catalog. Adopted by any recipe that emits an artifact a
+# relying party verifies WITHOUT possessing the issuer's secret: a course
+# completion certificate a third-party employer checks, a signed invoice an
+# auditor validates, an exportable compliance report a regulator opens, a
+# public achievement badge, a federated attestation another tenant trusts.
+# The keystone separation: an artifact verified by a party OTHER than the
+# signer MUST use an ASYMMETRIC signature over a published verifying key —
+# symmetric HMAC (webhook-hmac-required, presigned-url-signature-required)
+# is reserved for signer==verifier and would leak the issuer secret to every
+# verifier if reused here. Generic pattern; zero Korean law cite.
+
+# ── Priority order for fork-receivers (adopt in order) ──
+#   1. SIGNED-ASYM-001            (choose asymmetric for third-party artifacts)
+#   2. SIGNED-ALG-ALLOWLIST-001   (verifier enforces an alg allow-list)
+
+# ── RECIPE.md frontmatter example ──
+#   ---
+#   recipe: generic-completion-certificate
+#   signed_artifact_enabled: true
+#   signed_artifact_alg: ES256          # or EdDSA
+#   signed_artifact_kid: "cert-2026-01" # points at published JWKS entry
+#   signed_artifact_verifier_allowlist: [ES256, EdDSA]
+#   ---
+
+items:
+  - id: "SIGNED-ASYM-001"
+    chapter: "Asymmetric detached signature for third-party-verifiable artifacts"
+    requirement: "Any artifact that a party OTHER than the signer must independently verify (completion certificate, signed receipt / invoice, exportable report, public badge, federated attestation) MUST be secured with a DETACHED ASYMMETRIC signature — a JWS (RFC 7515) whose protected header pins `alg` to `ES256` or `EdDSA` (RFC 7518 / RFC 8037), carries a `kid` resolving to a PUBLISHED verifying key (a JWKS / .well-known endpoint), and signs a CANONICAL serialization of the payload so a re-serialized payload reproduces the byte sequence that was signed. The verifying (public) key MUST be distributable to every relying party while the signing (private) key never leaves the issuer. Symmetric HMAC (the `HS*` family) MUST NOT be used for these artifacts: HMAC verification requires the verifier to hold the same secret used to sign, so handing it to a third party leaks the issuer's signing capability and lets that party forge artifacts — symmetric HMAC is reserved for signer==verifier envelopes (webhook-hmac, presigned-url). The signed artifact requirement is satisfied only when verification succeeds against the published public key with no access to any issuer secret."
+    test_method: "RestAssured integration test — issue an artifact, verify the JWS against the published JWKS public key (no issuer secret in scope), assert success; assert that no symmetric/issuer-secret material is required for or reachable by the verification path"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Asymmetric is the only correct choice when the verifier is not the
+      signer: the verifier holds the public key, the issuer keeps the
+      private key. Anchored to RFC 7515
+      (https://www.rfc-editor.org/rfc/rfc7515). Quote anchor (RFC 7515 §1
+      Abstract/Introduction): "JSON Web Signature (JWS) represents content
+      secured with digital signatures or Message Authentication Codes
+      (MACs) using JSON-based data structures." EdDSA alg value anchored to
+      RFC 8037 §5 (Algorithm Name: "EdDSA"; Algorithm Description: EdDSA
+      signature algorithms).
+  - id: "SIGNED-ALG-ALLOWLIST-001"
+    chapter: "Verifier alg allow-list — reject none + reject HMAC (alg-confusion)"
+    requirement: "The verifier MUST enforce an explicit `alg` ALLOW-LIST of asymmetric algorithms (e.g. `{ES256, EdDSA}`) chosen by the relying party BEFORE inspecting the token, and MUST reject any artifact whose protected-header `alg` is outside that list. Specifically: (1) `alg: none` (the Unsecured JWS, RFC 7518 §3.6) MUST be rejected — an empty signature is never a verified signature; (2) ANY HMAC algorithm (`HS256` / `HS384` / `HS512`) MUST be rejected on a third-party-verifiable artifact even though it is a valid JWS alg — accepting it enables the algorithm-confusion attack where an attacker re-signs the payload with the PUBLIC key bytes as an HMAC secret and flips `alg` from `ES256` to `HS256`, forging a token the naive verifier accepts. The verifier MUST NOT derive the verification algorithm from the token's own `alg` header (attacker-controlled); the algorithm and key are selected from server-side configuration keyed by `kid`. Negative tests: a token with `alg:none` → rejected; a token HMAC-signed with the published public key as the secret and `alg` flipped to `HS256` → rejected."
+    test_method: "RestAssured integration test (negative) — forge alg:none and alg-confusion (HS256-over-public-key) variants, assert both rejected with a verification failure, never accepted as valid"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      The token's own alg header is attacker-controlled; trusting it is the
+      root of both the alg:none bypass and the RS/ES→HS confusion forgery.
+      Anchored to OWASP JSON Web Token Cheat Sheet
+      (https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html).
+      Quote anchor (OWASP JWT Cheat Sheet — None Hashing Algorithm): "This
+      attack ... occurs when an attacker alters the token and changes the
+      hashing algorithm to indicate, through the none keyword, that the
+      integrity of the token has already been verified." Prevention anchor
+      (same page): "during token validation, explicitly request that the
+      expected algorithm was used." alg:none formalization anchored to RFC
+      7518 §3.6: "An Unsecured JWS uses the 'alg' value 'none' ... but MUST
+      use the empty octet sequence as its JWS Signature value."
