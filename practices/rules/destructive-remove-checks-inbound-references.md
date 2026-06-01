@@ -18,7 +18,7 @@ upstream:
   - "https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1.html"
 evidence:
   - source_type: external
-    citation: "PostgreSQL Documentation — 5.4 Constraints, Foreign Keys (ON DELETE RESTRICT)"
+    citation: "PostgreSQL Documentation — 5.5.5 Foreign Keys (ON DELETE RESTRICT)"
     url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
     quote: "RESTRICT is a stricter setting than NO ACTION. It prevents deletion of a referenced row. RESTRICT does not allow the check to be deferred until later in the transaction."
     quoted_at: "2026-06-01"
@@ -80,6 +80,6 @@ public void deleteTag(UUID tagId) {
 
 Verification: review-tier. The destructive path of each structural-entity service is read for an in-transaction `count*Referencing` (or equivalent) guard ahead of any physical `deleteById`, branching to a 409 `referential-conflict` ProblemDetail with `dependent_count` or to a tombstone — and the absence of a bare unconditional `repo.deleteById(structuralId)`. No `@Tag` test asserts this cross-aggregate runtime property generically, so it is verified by structured review against the `spec_ref` invariant rather than a `./gradlew` task.
 
-Reference: [PostgreSQL — 5.4 Constraints, Foreign Keys (ON DELETE RESTRICT)](https://www.postgresql.org/docs/current/ddl-constraints.html)
+Reference: [PostgreSQL — 5.5.5 Foreign Keys (ON DELETE RESTRICT)](https://www.postgresql.org/docs/current/ddl-constraints.html)
 
 Reference: [Jakarta Persistence 3.1 — §2.10 Entity Relationships](https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1.html)

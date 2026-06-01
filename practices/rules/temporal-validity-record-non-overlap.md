@@ -21,7 +21,7 @@ upstream:
   - "https://en.wikipedia.org/wiki/Temporal_database"
 evidence:
   - source_type: external
-    citation: "PostgreSQL Documentation — 5.4 Constraints (Exclusion Constraints, EXCLUDE USING gist)"
+    citation: "PostgreSQL Documentation — 5.5.6 Exclusion Constraints (EXCLUDE USING gist)"
     url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
     quote: "Exclusion constraints ensure that if any two rows are compared on the specified columns or expressions using the specified operators, at least one of these operator comparisons will return false or null."
     quoted_at: "2026-06-01"

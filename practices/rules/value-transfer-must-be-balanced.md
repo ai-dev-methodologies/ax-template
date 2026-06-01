@@ -29,7 +29,7 @@ evidence:
     quote: "Link two (or more) entries together so that the total of all entries in a transaction is zero"
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "PostgreSQL Documentation — 5.4 Constraints (Check Constraints)"
+    citation: "PostgreSQL Documentation — 5.5.1 Check Constraints"
     url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
     quote: "A check constraint is the most generic constraint type. It allows you to specify that the value in a certain column must satisfy a Boolean (truth-value) expression."
     quoted_at: "2026-06-01"

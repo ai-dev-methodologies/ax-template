@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "72db3b0cf7e3c009fd53623036427b342b839d6af8792cc96894b7be356f82b3"
+  source_concat_sha256: "940810fa69bd998ddde3cf1d73b8cafa5fa18c6f2f5dd0e606942562ba8a6ed3"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -2763,7 +2763,7 @@ upstream:
   - "https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1.html"
 evidence:
   - source_type: external
-    citation: "PostgreSQL Documentation — 5.4 Constraints, Foreign Keys (ON DELETE RESTRICT)"
+    citation: "PostgreSQL Documentation — 5.5.5 Foreign Keys (ON DELETE RESTRICT)"
     url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
     quote: "RESTRICT is a stricter setting than NO ACTION. It prevents deletion of a referenced row. RESTRICT does not allow the check to be deferred until later in the transaction."
     quoted_at: "2026-06-01"
@@ -2825,7 +2825,7 @@ public void deleteTag(UUID tagId) {
 
 Verification: review-tier. The destructive path of each structural-entity service is read for an in-transaction `count*Referencing` (or equivalent) guard ahead of any physical `deleteById`, branching to a 409 `referential-conflict` ProblemDetail with `dependent_count` or to a tombstone — and the absence of a bare unconditional `repo.deleteById(structuralId)`. No `@Tag` test asserts this cross-aggregate runtime property generically, so it is verified by structured review against the `spec_ref` invariant rather than a `./gradlew` task.
 
-Reference: [PostgreSQL — 5.4 Constraints, Foreign Keys (ON DELETE RESTRICT)](https://www.postgresql.org/docs/current/ddl-constraints.html)
+Reference: [PostgreSQL — 5.5.5 Foreign Keys (ON DELETE RESTRICT)](https://www.postgresql.org/docs/current/ddl-constraints.html)
 
 Reference: [Jakarta Persistence 3.1 — §2.10 Entity Relationships](https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1.html)
 
@@ -11041,7 +11041,7 @@ upstream:
   - "https://en.wikipedia.org/wiki/Temporal_database"
 evidence:
   - source_type: external
-    citation: "PostgreSQL Documentation — 5.4 Constraints (Exclusion Constraints, EXCLUDE USING gist)"
+    citation: "PostgreSQL Documentation — 5.5.6 Exclusion Constraints (EXCLUDE USING gist)"
     url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
     quote: "Exclusion constraints ensure that if any two rows are compared on the specified columns or expressions using the specified operators, at least one of these operator comparisons will return false or null."
     quoted_at: "2026-06-01"
@@ -12523,7 +12523,7 @@ evidence:
     quote: "Link two (or more) entries together so that the total of all entries in a transaction is zero"
     quoted_at: "2026-06-01"
   - source_type: external
-    citation: "PostgreSQL Documentation — 5.4 Constraints (Check Constraints)"
+    citation: "PostgreSQL Documentation — 5.5.1 Check Constraints"
     url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
     quote: "A check constraint is the most generic constraint type. It allows you to specify that the value in a certain column must satisfy a Boolean (truth-value) expression."
     quoted_at: "2026-06-01"
