@@ -1,0 +1,89 @@
+version: "0.1.0"
+scope: "capability-token-l0 — possession-of-token (capability) authorization contract for fork-receivers exposing a PUBLIC, UNAUTHENTICATED read that is authorized SOLELY by holding an unguessable token in the request (parcel tracking-number lookup, guest order-status, share-by-link document view, e-receipt retrieval, one-click unsubscribe). The unguessable token IS the authorization; there is NO authenticated principal. This INVERTS relationship-authz-l0 (REBAC) and caller-authentication-only-no-userid-param, which all derive the accessor from Authentication.getName() and require a logged-in caller — here the capability is the request itself, and the bearer is anonymous by design. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / logistics / messaging applicable."
+stack: "Spring Boot 3.2.x + Spring Security (a permitAll() anonymous surface, NO Authentication on the capability endpoint) + Spring Data JPA (token column UNIQUE + indexed, DISTINCT from the PK) + java.security.SecureRandom + RFC 9457 Problem Details"
+standard: "OWASP IDOR Prevention Cheat Sheet (replace enumerable identifiers with complex random identifiers) + OWASP ASVS v4.0.3 §4.2.1 IDOR protection + §4.1.5 fail securely + RFC 4122 §6 Security Considerations (UUIDs are NOT capability tokens) + RFC 4086 randomness requirements for security (de facto reference)"
+domain_mode: backend_only
+introduced_at: "IDW6 2026-06-01 logistics dogfood"
+
+# OPT-IN capability-token catalog. Adopted by any recipe exposing a read
+# surface where the AUTHORIZATION is 'you hold the unguessable link', with
+# NO logged-in user: a parcel tracking-number page e-mailed to a consignee,
+# a guest order-status link, a share-by-link document, an e-receipt URL, a
+# one-click unsubscribe. The logistics dogfood (IDW6) surfaced this gap: a
+# consignee with no account must look up a shipment by the tracking number
+# printed on the label — there is no Authentication to derive an identity
+# from, so every existing authz pattern (owner-equality, tenant-equality,
+# ReBAC grant lookup) is structurally inapplicable. Generic pattern; zero
+# Korean law cite (R102+ generic catalog principle).
+#
+# Composition note: this is the PHOTOGRAPHIC NEGATIVE of relationship-authz-l0.
+#   relationship-authz-l0:  authenticated caller + grant-row lookup decides access.
+#   capability-token-l0:     NO caller; possession of a high-entropy token decides access.
+# REBAC-404-001 (existence-hiding 404) has a sibling here — CAPTOKEN-ENUM-404-001 —
+# that achieves the SAME no-existence-oracle posture with NO principal at all.
+# The two specs MUST NOT be confused: never accept a capability token on an
+# authenticated owner endpoint, and never derive an owner from a capability
+# token (the token authorizes the READ, it does not impersonate a principal).
+#
+# ── Adopt in order (earlier items are foundational) ──
+#   1. CAPTOKEN-UNGUESSABLE-001   (the token must be unguessable + distinct from the PK)
+#   2. CAPTOKEN-ENUM-404-001      (bad/absent/expired token → indistinguishable 404)
+#   3. CAPTOKEN-PROJECTION-001    (anonymous view is strictly narrower / PII-minimized)
+
+items:
+  - id: "CAPTOKEN-UNGUESSABLE-001"
+    chapter: "Unguessable, PK-distinct lookup token"
+    requirement: "The lookup token that authorizes the public read MUST be a high-entropy random value of at least 128 bits drawn from a cryptographically secure source (java.security.SecureRandom, NOT java.util.Random / Math.random / a timestamp / a counter), encoded URL-safe (e.g. base64url or base32, no padding), so it is non-sequential, collision-resistant, and computationally infeasible to enumerate. The token MUST be a SEPARATE column from the primary key — it MUST NOT be the database id, MUST NOT be derivable from the internal id, and the internal id MUST NEVER appear in the public URL or response. A version-4 random UUID is the FLOOR, not the ceiling: it is acceptable ONLY when generated from SecureRandom and treated as opaque, because a UUID is explicitly not a guaranteed-unguessable security capability. The token column MUST be UNIQUE + indexed. The invariant: the token IS the authorization, so an attacker who cannot guess the token cannot reach the resource — and the token must therefore carry the full entropy of the access decision."
+    test_method: "RestAssured integration test + entropy/source review"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      The token is the entire authorization surface; if it is predictable
+      (sequential, timestamp-seeded, PK-derived) the public endpoint becomes
+      an open enumeration of every record. Anchored to OWASP IDOR Prevention
+      Cheat Sheet
+      (https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html).
+      Quote anchor (OWASP IDOR Prevention Cheat Sheet): "As an additional
+      defense-in-depth measure, replace enumerable numeric identifiers with
+      more complex, random identifiers." Cross-anchor (RFC 4122 §6 Security
+      Considerations): "Do not assume that UUIDs are hard to guess; they
+      should not be used as security capabilities (identifiers whose mere
+      possession grants access), for example." — hence the SecureRandom
+      floor and the opaque-treatment requirement even when a UUID shape is used.
+  - id: "CAPTOKEN-ENUM-404-001"
+    chapter: "Existence-hiding 404 on bad / absent / expired token (no caller)"
+    requirement: "A request bearing a token that is malformed, absent, unknown, revoked, or expired MUST resolve to a 404 Not Found that is BYTE-INDISTINGUISHABLE from the 404 for a well-formed-but-never-issued token — same status, same RFC 9457 body type=urn:problem:not-found, same shape, no field that distinguishes 'token never existed' from 'token existed but is expired/revoked'. The lookup MUST NOT emit a different status (401/403/410/422) or a different message for the expired/revoked case, because any such difference is an existence oracle that lets an attacker confirm guesses and harvest live tokens. Token comparison SHOULD be constant-time (MessageDigest.isEqual on the hashed token, not String.equals on the raw value) so timing does not leak validity. Possession of a VALID, unexpired token is the SOLE authorization decision — there is NO authenticated principal, NO role check, and NO ownership check; the absence of a valid token is the ONLY denial path, and it always denies as an indistinguishable 404. This mirrors relationship-authz-l0 REBAC-404-001 existence-hiding, but with NO caller in the request at all."
+    test_method: "RestAssured integration test"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Deny-by-default with no oracle, achieved with zero principal. Anchored
+      to OWASP ASVS v4.0.3 §4.2.1 (IDOR protection) + §4.1.5 (fail securely)
+      (https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md).
+      Quote anchor (ASVS v4.0.3 §4.2.1): "Verify that sensitive data and APIs
+      are protected against Insecure Direct Object Reference (IDOR) attacks
+      targeting creation, reading, updating and deletion of records, such as
+      creating or updating someone else's record, viewing everyone's records,
+      or deleting all records." Quote anchor (ASVS v4.0.3 §4.1.5): "Verify
+      that access controls fail securely including when an exception occurs."
+      Negative proof: GET with a random 128-bit token → 404; GET with an
+      expired/revoked issued token → byte-identical 404; GET with the live
+      token → 200. The expired and never-issued 404s MUST be diff-equal.
+  - id: "CAPTOKEN-PROJECTION-001"
+    chapter: "PII-minimized anonymous projection"
+    requirement: "The representation returned to an anonymous token holder MUST be a strictly NARROWER, PII-minimized projection than the authenticated-owner representation of the same resource — a dedicated public DTO, never the owner entity serialized directly. Because the bearer is unauthenticated and the link may be forwarded, screenshotted, indexed, or sit in an e-mail an attacker reads, the public projection MUST exclude full PII (full name truncated/masked, full address reduced to city/region, e-mail/phone masked or omitted, internal ids / audit fields / pricing internals / other recipients removed) and MUST expose only the fields the use-case requires (e.g. shipment status + ETA + masked destination for a tracking lookup; order state + masked line summary for guest order-status). The owner/authenticated endpoint keeps the fuller view; the capability endpoint MUST NOT reach the owner DTO, MUST NOT accept a field-selection parameter that widens it, and MUST NOT leak the internal id used in CAPTOKEN-UNGUESSABLE-001. The invariant: anonymous-projection ⊊ owner-projection (a strict subset), enforced by a distinct serialization path, not by conditional field-stripping on the owner object."
+    test_method: "RestAssured integration test + DTO field review"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      An unauthenticated, forwardable link is the highest-exposure surface in
+      the app; its payload must carry the least PII that still serves the
+      use-case. Anchored to OWASP ASVS v4.0.3 §4.1.3 (least privilege)
+      (https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md).
+      Quote anchor (ASVS v4.0.3 §4.1.3): "Verify that the principle of least
+      privilege exists - users should only be able to access functions, data
+      files, URLs, controllers, services, and other resources, for which they
+      possess specific authorization." The anonymous bearer's 'specific
+      authorization' is exactly the narrow public view, nothing more. Test:
+      assert the public DTO's field set is a strict subset of the owner DTO's
+      and contains no internal id / no unmasked PII.

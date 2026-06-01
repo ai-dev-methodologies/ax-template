@@ -1,0 +1,94 @@
+version: "0.1.0"
+scope: "monotonic-event-ingest-l0 — generic guard for folding OUT-OF-ORDER / late-arriving external events into an authoritative current-state row. Any sensor / event-stream / webhook-driven state projection: shipment lifecycle from carrier webhooks, last-known GPS position from telemetry, device status from an IoT stream, order status from a payment-provider callback. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Distinct from optimistic-locking (client lost-update across an HTTP read-modify-write) and from PRACTICES-TIME-001 (server clock as the source of truth for decisions): here the ordering authority is the EVENT's own event-time / provider sequence, not the wall clock and not an HTTP precondition."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (a monotonic watermark column on the authoritative entity) + a dedup ledger table keyed on (stream, event_id) + Micrometer metrics. Inbound transport is transport-agnostic (webhook POST, queue consumer, Kafka record)."
+standard: "Stream-processing event-time + watermark model (Apache Flink 'Timely Stream Processing' / Google Dataflow event-time vs processing-time) + at-least-once delivery → Idempotent Consumer pattern (microservices.io) + Micrometer / OpenTelemetry bounded-cardinality metric conventions. Zero statute cite (R102+ generic catalog principle)."
+domain_mode: backend_only
+introduced_at: "IDW6 2026-06-01 logistics dogfood"
+
+# OPT-IN ingest-ordering catalog. Merges two IDW6 logistics-dogfood
+# findings into ONE generic guard: (1) a carrier webhook delivering a
+# 'shipment delivered' event BEFORE an earlier-emitted 'out for
+# delivery' event must NOT roll the authoritative shipment row
+# backwards; (2) a telemetry stream redelivering the same GPS fix
+# (at-least-once) must NOT be applied twice. Both reduce to: the
+# authoritative current-state row is a projection of an unordered,
+# at-least-once event stream, so it needs a monotonic watermark + an
+# idempotency ledger. Generic — applies to any external-event-driven
+# state, not just logistics. NOT Korea-specific.
+#
+# Composition note: layers UNDER any L4 recipe that owns a mutable
+# status/position row updated from an external callback (shipment,
+# payment-status, device-status). It is orthogonal to
+# optimistic-locking-l0 (that guards a human/client read-modify-write
+# over HTTP with ETag/If-Match; this guards a machine event stream with
+# an event-time watermark). A row MAY adopt BOTH: optimistic locking
+# for the admin-edit path, monotonic ingest for the webhook path.
+#
+# ── Priority order for fork-receivers (adopt in order) ──
+#   1. INGEST-WATERMARK-001     (the row remembers how far the stream has advanced)
+#   2. INGEST-REJECT-STALE-001  (reject anything at or behind the watermark)
+#   3. INGEST-IDEMPOTENT-APPLY-001 (dedup the exact-same event)
+#   4. INGEST-OBSERVABILITY-001 (count the drops)
+
+items:
+  - id: "INGEST-WATERMARK-001"
+    chapter: "Monotonic last-applied watermark"
+    requirement: "The authoritative current-state row that is driven by an inbound external event stream MUST persist a monotonic `last_applied` watermark for that stream — either an event-time `Instant` (the time the event occurred on its producing device / carrier system, NOT the local receive time) or a provider-supplied sequence number — recorded atomically in the same transaction that applies the event. The watermark column MUST be non-null after the first applied event and MUST be sourced from a field the provider stamps at emission, because processing-time (arrival order) is not a reliable proxy for event-time ordering on an at-least-once stream. The invariant: the persisted watermark equals the maximum event-time / sequence the row has ever applied, never the most-recently-received one."
+    test_method: "RestAssured integration test (POST two webhook events in reverse event-time order; assert the watermark column holds the LATER event-time, not the last-received one)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The watermark is the stream-processing notion of "how far event
+      time has advanced for this row". Anchored to the Apache Flink
+      event-time / watermark model
+      (https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/concepts/time/).
+      Quote anchor (Flink, Event Time and Watermarks): "Event time is
+      the time that each individual event occurred on its producing
+      device." The watermark column is the row-local materialization of
+      that progress so a later-arriving older event can be recognized.
+  - id: "INGEST-REJECT-STALE-001"
+    chapter: "Stale / out-of-order event rejection"
+    requirement: "An inbound event whose event-time / sequence is LESS THAN OR EQUAL TO the stored watermark (INGEST-WATERMARK-001) MUST be rejected: it MUST NOT mutate the authoritative current-state row and MUST NOT roll any field backwards. Out-of-order and late delivery is NORMAL for an at-least-once stream (a 'delivered' webhook can arrive before the 'out-for-delivery' webhook it logically follows), so a behind-the-watermark event is dropped silently-but-counted (INGEST-OBSERVABILITY-001), acknowledged to the transport as successfully received (so the provider does not redeliver forever), and never treated as an error to the upstream sender. Only an event strictly AHEAD of the watermark may advance the row and the watermark together. The keystone invariant: a fresher value already persisted is never clobbered by a staler late-arriving event."
+    test_method: "RestAssured integration test (apply event at event-time T2, then POST a late event at event-time T1 < T2; assert the row is unchanged, the watermark is still T2, and the late event is ack'd not 5xx'd)"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      A late element is one that arrives after event time has already
+      passed its timestamp; folding it in would move the row backward.
+      Anchored to the Flink watermark progress model
+      (https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/concepts/time/).
+      Quote anchor (Flink): "A Watermark(t) declares that event time has
+      reached time t in that stream, meaning that there should be no
+      more elements from the stream with a timestamp t' <= t (i.e.
+      events with timestamps older or equal to the watermark)." This
+      item is the rule-bound invariant (see
+      practices/rules/monotonic-ingest-reject-stale-event.md).
+  - id: "INGEST-IDEMPOTENT-APPLY-001"
+    chapter: "Idempotent apply (exact-duplicate dedup)"
+    requirement: "Applying the SAME event twice MUST be a no-op. At-least-once transports (webhooks with retry, queue redelivery, Kafka without exactly-once) WILL redeliver an already-applied event, so the consumer MUST dedup on the natural key `(stream, event_id)` — recording each processed event id in a dedup ledger (a `processed_event` table or a unique constraint on the watermark row) within the apply transaction. A redelivered event whose `(stream, event_id)` is already recorded MUST be discarded without re-running side effects (no second state mutation, no second downstream emission) and MUST be ack'd. Dedup is distinct from the watermark check: an exact replay of the CURRENT watermark event (event-time == watermark) is caught by dedup; an older distinct event is caught by INGEST-REJECT-STALE-001. Both paths converge on: the row reflects each distinct event's effect exactly once."
+    test_method: "RestAssured integration test (POST the identical event body twice; assert the second POST mutates nothing, emits no second downstream effect, and is ack'd; assert exactly one dedup-ledger row for that (stream, event_id))"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      This is the Idempotent Consumer pattern for at-least-once
+      delivery. Anchored to microservices.io Idempotent Consumer
+      (https://microservices.io/patterns/communication-style/idempotent-consumer.html).
+      Quote anchor: "Make a consumer idempotent by having it record the
+      IDs of processed messages in the database. When processing a
+      message, a consumer can detect and discard duplicates by querying
+      the database."
+  - id: "INGEST-OBSERVABILITY-001"
+    chapter: "관측 (dropped-event metric)"
+    requirement: "Stale / duplicate ingest drops MUST be observable: expose a Micrometer counter `stale_event_dropped_total{stream, reason}` where `reason` is a fixed low-cardinality enum ∈ {behind_watermark, duplicate}. The `stream` label MUST be a fixed stream-name / event-source enum; labels MUST exclude event_id / resource_id / event-time / actor (no high-cardinality, no PII). A non-zero `behind_watermark` rate is the normal-but-watch signal that out-of-order delivery is occurring; a spike is the alert that the provider's ordering or the watermark field changed. SLO / alert wiring is a fork-receiver concern."
+    test_method: "Micrometer registry assertion (drop one behind-watermark event + one duplicate; assert stale_event_dropped_total increments by 1 on each respective {reason} series and no unbounded label appears)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded labels keep the time-series count finite. Anchored to
+      OpenTelemetry Semantic Conventions for metric attributes
+      (https://opentelemetry.io/docs/specs/semconv/general/metrics/).
+      Reference: the metric name follows the gap-specified canonical
+      `stale_event_dropped_total`; the {stream, reason} labels are a
+      fixed enum to satisfy bounded-cardinality conventions (no verbatim
+      single-sentence prohibition on the cited page; it constrains
+      attribute cardinality per-metric).

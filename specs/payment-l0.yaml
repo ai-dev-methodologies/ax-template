@@ -516,3 +516,25 @@ items:
       manifest.callback.allowed_states_before_callback = [AUTHORIZED, UNKNOWN],
       manifest.callback.allowed_states_after_callback = [CAPTURED, FAILED].
     policy_ref: "blueprints/payment-manifest.yaml#callback"
+
+  - id: "PAYMENT-PROVIDER-008"
+    chapter: "PROVIDER"
+    requirement: "The payment UNKNOWN-state handling (PAYMENT-PROVIDER-001 timeout, PAYMENT-PROVIDER-005 network-reset) MUST conform to the generic in-doubt-outbound-call contract at specs/in-doubt-outbound-call-l0.yaml: a charge whose provider response is lost is the canonical concrete instance of a non-idempotent outbound call whose response is lost. Concretely: (a) the charge MUST enter the UNKNOWN holding state — never silently re-charge, never assume FAILED — per INDOUBT-HOLD-001; (b) UNKNOWN MUST be resolved by querying the provider's authoritative transaction status (reconcile-by-query), NOT by re-issuing the authorize/capture call, per INDOUBT-RECONCILE-001; (c) when the recipe retries instead of querying, it MUST reuse the original provider idempotency key (the same Idempotency-Key from PAYMENT-IDEMP-001 pushed OUTBOUND to the PSP) per INDOUBT-IDEMPOTENT-RETRY-001; (d) the reconciliation job MUST be double-effect-free — running it twice MUST NOT produce a second charge — per INDOUBT-NO-DOUBLE-EFFECT-001. This item binds the payment vertical to the generalized contract so the two specs cannot drift."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Composition / cross-reference item (IDW6 2026-06-01): the
+      payment-only UNKNOWN-limbo pattern was generalized into
+      specs/in-doubt-outbound-call-l0.yaml. This item is the back-link
+      that keeps payment conformant to the generic contract. Test: reuse
+      the existing PAYMENT-PROVIDER-001 (timeout → UNKNOWN) and
+      PAYMENT-PROVIDER-005 (reset → UNKNOWN) fixtures, then drive the
+      reconciliation job twice against the same UNKNOWN payment and
+      assert (1) exactly one Payment row, (2) exactly one CAPTURED ledger
+      event after a confirmed-applied reconcile, (3) the reconcile path
+      issues a status query, never a second authorize/capture. References
+      specs/in-doubt-outbound-call-l0.yaml#INDOUBT-HOLD-001 /
+      #INDOUBT-RECONCILE-001 / #INDOUBT-IDEMPOTENT-RETRY-001 /
+      #INDOUBT-NO-DOUBLE-EFFECT-001.
+    policy_ref: "blueprints/payment-manifest.yaml#provider"

@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "3f4f2e2ef2c4257d78323773f6751891ded289218c68220e550f8a9e082603b8"
-  rule_count: 128
+  source_concat_sha256: "27933d73c9259289ff857dd1862af5260f4b98343fbd1efe14da9538514ae0dc"
+  rule_count: 134
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -3887,6 +3887,111 @@ Reference: [IETF draft — The Idempotency-Key HTTP Header Field](https://datatr
 Reference: [Stripe API Reference — Idempotent requests](https://docs.stripe.com/api/idempotent_requests)
 
 
+<!-- @source rules/in-doubt-outbound-call-holding-state.md -->
+
+---
+title: A non-idempotent outbound call whose response is lost MUST enter a holding state — never silently retry, never assume failure
+impact: HIGH
+impactDescription: "Silently retrying a lost-response charge / label purchase / SMS double-applies the side effect; assuming failure loses a side effect that actually succeeded. Both corrupt the system of record."
+tags:
+  - distributed-systems
+  - idempotency
+  - reconciliation
+  - retry-safety
+  - in-doubt
+spec_ref: "specs/in-doubt-outbound-call-l0.yaml#INDOUBT-HOLD-001"
+verification:
+  type: review
+  source: "specs/in-doubt-outbound-call-l0.yaml"
+  pattern: "On a lost / timed-out / reset outbound response, the local record transitions to a terminal holding state (UNKNOWN / IN_DOUBT); resolution is by reconcile-by-query, not by an unconditional retry; the reconcile path is double-effect-free."
+upstream:
+  - "https://en.wikipedia.org/wiki/Two_Generals%27_Problem"
+  - "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+evidence:
+  - source_type: external
+    citation: "Two Generals' Problem — Wikipedia (Akkoyunlu, Ekanadham & Huber 1975; proven unsolvable)"
+    url: "https://en.wikipedia.org/wiki/Two_Generals%27_Problem"
+    quote: "The Two Generals' Problem was the first computer communication problem to be proven to be unsolvable."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "AWS Builders' Library — Making retries safe with idempotent APIs"
+    url: "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+    quote: "To overcome this dilemma the provisioning process has to perform a reconciliation to determine whether this workload is running or not."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Stripe — Error handling / low-level network errors"
+    url: "https://docs.stripe.com/error-low-level"
+    quote: "When intermittent problems occur, clients are usually left in a state where they don't know whether or not the server received the request."
+    quoted_at: "2026-06-01"
+---
+
+## A non-idempotent outbound call whose response is lost MUST enter a holding state — never silently retry, never assume failure
+
+**Impact: HIGH — a lost outbound response is the most dangerous state in a side-effecting system, because both naive recoveries are wrong**
+
+Every system that makes an outbound call with a real-world side effect — charging a card, purchasing a carrier shipping label, sending an SMS or email, booking a shipment, submitting an external job — eventually hits the same indeterminacy: the request leaves, and then the response (or its ACK) is lost to a timeout, a connection reset, or a dropped packet. You cannot know whether the side effect happened. The Two Generals' Problem proves this is not an engineering gap you can close — it is unsolvable over an unreliable channel, and exactly-once delivery is therefore impossible. The two intuitive recoveries are both corrupting:
+
+- **Silently retry** the call → if the first attempt *did* apply, you have now double-charged / double-shipped / double-sent. A non-idempotent call MUST NOT be blindly retried.
+- **Assume failure** and mark the record FAILED → if the first attempt *did* apply, you have lost the side effect in your system of record, and the user / accounting / carrier sees a charge or shipment you believe never happened.
+
+The only correct move is to park the local record in a dedicated terminal **holding state** (`UNKNOWN` / `IN_DOUBT` / terminal-`PENDING`) that means exactly "I do not know yet", and resolve it later by **querying the provider's authoritative status** (reconcile-by-query) — or, if and only if the call carried a provider-honored idempotency key, by a key-stable retry that the provider collapses to at-most-once. This generalizes the payment domain's UNKNOWN-state handling (`specs/payment-l0.yaml` PAYMENT-PROVIDER-001 timeout, PAYMENT-PROVIDER-005 network-reset) to any non-idempotent outbound call.
+
+**Incorrect — a lost response is silently retried (double-effect) or assumed-failed (lost effect):**
+
+```java
+public ShipmentLabel buyLabel(BookingRequest req) {
+    try {
+        return carrier.purchaseLabel(req);          // non-idempotent: charges + mints a label
+    } catch (TimeoutException | ConnectException e) {
+        // ❌ silent retry: the first attempt may have already minted + charged a label
+        return carrier.purchaseLabel(req);          // → two labels, two charges
+        // (or, equally wrong elsewhere:)
+        // record.markFailed();  return null;        // → a label that DOES exist is lost from our books
+    }
+}
+```
+
+**Correct — park in a holding state; resolve by reconcile-by-query; never re-issue the side effect on the recovery path:**
+
+```java
+public LabelResult buyLabel(BookingRequest req) {
+    String providerKey = idempotencyKeyFor(req);    // generated + persisted BEFORE the first attempt
+    record.setProviderKey(providerKey);
+    try {
+        ShipmentLabel label = carrier.purchaseLabel(req, providerKey);
+        record.markSuccess(label);
+        return LabelResult.applied(label);
+    } catch (TimeoutException | ConnectException e) {
+        record.setState(IN_DOUBT);                  // ✅ terminal holding state, not FAILED, not SUCCESS
+        return LabelResult.inDoubt(record.getId()); // caller sees "pending", not a fabricated outcome
+    }
+}
+
+@Scheduled(fixedDelayString = "${in-doubt.reconcile-interval-seconds:60}000")
+void reconcile() {
+    for (Record r : records.findInDoubtOlderThan(grace)) {
+        // STATUS QUERY ONLY — never carrier.purchaseLabel(...) again on this path
+        CarrierStatus s = carrier.queryStatus(r.getProviderKey());
+        switch (s) {
+            case APPLIED      -> r.markSuccess(s.label());   // catch up to reality; do NOT re-buy
+            case NOT_APPLIED  -> r.markFailed();             // now safe to retry as a NEW operation
+            case INDETERMINATE-> r.escalateIfOlderThan(maxAgeHours);  // age-out → human review
+        }
+    }
+}
+```
+
+The reconcile path is **double-effect-free by construction**: it queries status, it never re-issues the original side-effecting call, and on a confirmed-applied status it makes the *local state* catch up to reality rather than re-executing reality. Retrying is permissible only as a deliberate, declared alternative to querying, and only when the call carried a stable provider idempotency key reused across every attempt — at-least-once delivery plus an idempotent operation is what recovers effectively-once. A fresh key on retry, or a retry without provider idempotency support, reintroduces the double-effect this rule exists to prevent.
+
+Verification: review that every non-idempotent outbound call (a) maps lost/timeout/reset to a terminal holding state distinct from SUCCESS and FAILED, (b) is resolved by a scheduled reconcile-by-query keyed on the provider transaction id / idempotency key, and (c) has a negative test asserting the side-effect count increments by at most the single original intent when the reconciler runs twice or concurrently (`specs/in-doubt-outbound-call-l0.yaml#INDOUBT-NO-DOUBLE-EFFECT-001`).
+
+Reference: [Two Generals' Problem](https://en.wikipedia.org/wiki/Two_Generals%27_Problem)
+
+Reference: [AWS Builders' Library — Making retries safe with idempotent APIs](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/)
+
+Reference: [Stripe — low-level network error handling](https://docs.stripe.com/error-low-level)
+
+
 <!-- @source rules/incident-dashboard-background-poll-plus-refresh.md -->
 
 ---
@@ -5061,6 +5166,96 @@ src/main/resources/db/migration/
 Verification: `./gradlew testPractices --tests "*VersionedNaming*"` lists `db/migration/*.sql` and asserts each filename matches `^V[0-9]+(?:[._][0-9]+)*__[A-Za-z0-9_]+\.sql$`.
 
 Reference: [Flyway — Migration naming](https://documentation.red-gate.com/fd/migrations-271583622.html) · [Spring Boot — Flyway integration](https://docs.spring.io/spring-boot/reference/data/sql.html)
+
+
+<!-- @source rules/monotonic-ingest-reject-stale-event.md -->
+
+---
+title: A late / out-of-order external event MUST NOT clobber a fresher current-state row — reject at-or-behind the watermark
+impact: HIGH
+impactDescription: "On an at-least-once event stream, a 'delivered' webhook can physically arrive before the earlier 'out-for-delivery' webhook; a naive last-write-wins handler rolls the authoritative shipment/position/status row backwards to a stale value, corrupting the record every downstream consumer trusts"
+tags:
+  - event-ingest
+  - out-of-order
+  - watermark
+  - idempotency
+  - at-least-once
+  - state-projection
+spec_ref: "specs/monotonic-event-ingest-l0.yaml#INGEST-REJECT-STALE-001"
+verification:
+  type: review
+  source: "specs/monotonic-event-ingest-l0.yaml#INGEST-REJECT-STALE-001"
+  pattern: "the event apply path compares the inbound event-time/sequence against the persisted monotonic watermark; an event with event-time/sequence <= watermark is dropped (counted, ack'd) and never mutates the row"
+upstream:
+  - "https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/concepts/time/"
+  - "https://microservices.io/patterns/communication-style/idempotent-consumer.html"
+evidence:
+  - source_type: external
+    citation: "Apache Flink 1.18 — Timely Stream Processing: Event Time and Watermarks"
+    url: "https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/concepts/time/"
+    quote: "A Watermark(t) declares that event time has reached time t in that stream, meaning that there should be no more elements from the stream with a timestamp t' <= t (i.e. events with timestamps older or equal to the watermark)."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "microservices.io — Idempotent Consumer pattern (at-least-once delivery)"
+    url: "https://microservices.io/patterns/communication-style/idempotent-consumer.html"
+    quote: "Make a consumer idempotent by having it record the IDs of processed messages in the database. When processing a message, a consumer can detect and discard duplicates by querying the database."
+    quoted_at: "2026-06-01"
+---
+
+## A late / out-of-order external event MUST NOT clobber a fresher current-state row — reject at-or-behind the watermark
+
+**Impact: HIGH — on an at-least-once stream, arrival order is not event order; last-write-wins silently corrupts the authoritative row**
+
+When an authoritative current-state row is a projection of an external event stream — a shipment's lifecycle status folded from carrier webhooks, a vehicle's last-known position folded from a telemetry feed, an order's status folded from a payment-provider callback — the events do not arrive in the order they were emitted. At-least-once transports retry, reorder, and redeliver. A `delivered` webhook stamped at 14:05 can physically POST to your endpoint *before* the `out_for_delivery` webhook stamped at 13:50 that logically precedes it. A handler that blindly writes whatever it last received rolls the row backward from `delivered` to `out_for_delivery`, and every dashboard, SLA timer, and customer notification that reads the row now trusts a stale value.
+
+The fix is the stream-processing watermark applied to a single row. The row persists a monotonic `last_applied` watermark — the maximum event-time (or provider sequence number) it has ever applied. On each inbound event the handler compares the event's own event-time against the watermark. An event strictly ahead advances the row and the watermark together. An event at or behind the watermark is **rejected**: it does not mutate the row, it does not roll any field backward, it is counted (`stale_event_dropped_total{reason=behind_watermark}`), and it is acknowledged to the transport so the provider stops redelivering. Out-of-order delivery is normal, not an error — a behind-the-watermark event is a no-op, never a 5xx.
+
+This is distinct from optimistic locking (which guards a human read-modify-write over HTTP with ETag/If-Match) and from using the server clock for decisions (PRACTICES-TIME-001): here the ordering authority is the *event's own* event-time, and the row carries the watermark.
+
+**Incorrect — last-write-wins; a late `out_for_delivery` rolls `delivered` backward:**
+
+```java
+@PostMapping("/webhooks/carrier")
+public ResponseEntity<Void> onCarrierEvent(@RequestBody CarrierEvent ev) {
+    Shipment s = shipments.findByTrackingNo(ev.trackingNo()).orElseThrow();
+    s.setStatus(ev.status());          // ❌ whatever arrived last wins
+    s.setStatusAt(ev.occurredAt());    // ❌ a 13:50 event clobbers the 14:05 'delivered'
+    shipments.save(s);                 // row now reads a stale, earlier state
+    return ResponseEntity.ok().build();
+}
+```
+
+**Correct — compare event-time to the monotonic watermark; reject at-or-behind:**
+
+```java
+@PostMapping("/webhooks/carrier")
+public ResponseEntity<Void> onCarrierEvent(@RequestBody CarrierEvent ev) {
+    Shipment s = shipments.findByTrackingNo(ev.trackingNo()).orElseThrow();
+
+    // event-time of THIS event, stamped by the carrier at emission — not local receive time
+    Instant eventTime = ev.occurredAt();
+
+    // at or behind the watermark => late / out-of-order on an at-least-once stream: drop, count, ack
+    if (!eventTime.isAfter(s.getLastAppliedAt())) {
+        staleDropped.increment("carrier", "behind_watermark");
+        return ResponseEntity.ok().build();   // ✅ no mutation, no rollback, no redelivery storm
+    }
+
+    s.setStatus(ev.status());
+    s.setStatusAt(eventTime);
+    s.setLastAppliedAt(eventTime);            // ✅ watermark advances monotonically, same txn
+    shipments.save(s);
+    return ResponseEntity.ok().build();
+}
+```
+
+Pair this with idempotent dedup on `(stream, event_id)` (INGEST-IDEMPOTENT-APPLY-001) so an exact replay of the current event is also a no-op: the watermark check catches *older* events, dedup catches *identical* ones. Both converge on the invariant — a fresher persisted value is never clobbered, and each distinct event takes effect exactly once.
+
+Verification: review the apply path against `specs/monotonic-event-ingest-l0.yaml#INGEST-REJECT-STALE-001` — confirm the inbound event-time/sequence is compared to a persisted monotonic watermark and that an at-or-behind event mutates nothing.
+
+Reference: [Apache Flink — Event Time and Watermarks](https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/concepts/time/)
+
+Reference: [microservices.io — Idempotent Consumer](https://microservices.io/patterns/communication-style/idempotent-consumer.html)
 
 
 <!-- @source rules/multi-tenant-aop-guard-skeleton.md -->
@@ -7631,6 +7826,112 @@ if adopter_count >= 3:
   receive the post-lift state; no semver to honor.
 
 
+<!-- @source rules/public-lookup-token-is-unguessable-and-enumeration-resistant.md -->
+
+---
+title: A public possession-of-token read MUST use an unguessable, PK-distinct token and deny bad tokens as an indistinguishable 404 — the token IS the authorization
+impact: HIGH
+impactDescription: "A public unauthenticated lookup (parcel tracking, guest order-status, share-by-link, e-receipt, unsubscribe) whose token is sequential / PK-derived, or whose bad-token path returns a distinguishable error, turns the endpoint into an open enumeration of every record's PII"
+tags:
+  - authz
+  - capability-token
+  - idor
+  - existence-hiding
+  - pii-minimization
+  - anonymous-access
+spec_ref: "specs/capability-token-l0.yaml#CAPTOKEN-UNGUESSABLE-001"
+verification:
+  type: review
+  source: "specs/capability-token-l0.yaml"
+  pattern: "public lookup token is >=128-bit SecureRandom, URL-safe, non-sequential, a SEPARATE column from the PK and never derivable from the internal id; bad/absent/expired token → byte-indistinguishable 404 (no 401/403/410 oracle, constant-time compare); the anonymous projection is a strict subset of the owner projection (dedicated public DTO, no internal id, masked PII)"
+upstream:
+  - "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
+  - "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
+  - "https://datatracker.ietf.org/doc/html/rfc4122#section-6"
+evidence:
+  - source_type: external
+    citation: "OWASP IDOR Prevention Cheat Sheet — Use of Complex, Random Identifiers"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
+    quote: "As an additional defense-in-depth measure, replace enumerable numeric identifiers with more complex, random identifiers."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "RFC 4122 §6 — Security Considerations (UUIDs are not security capabilities)"
+    url: "https://datatracker.ietf.org/doc/html/rfc4122#section-6"
+    quote: "Do not assume that UUIDs are hard to guess; they should not be used as security capabilities (identifiers whose mere possession grants access), for example."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP ASVS v4.0.3 — V4.2.1 Operation Level Access Control (IDOR) + V4.1.5 (fail securely)"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
+    quote: "Verify that sensitive data and APIs are protected against Insecure Direct Object Reference (IDOR) attacks targeting creation, reading, updating and deletion of records, such as creating or updating someone else's record, viewing everyone's records, or deleting all records."
+    quoted_at: "2026-06-01"
+---
+
+## A public possession-of-token read MUST use an unguessable, PK-distinct token and deny bad tokens as an indistinguishable 404 — the token IS the authorization
+
+**Impact: HIGH — when there is no logged-in user, the token carries the ENTIRE access decision; a weak token or a leaky error path is a full data-enumeration hole**
+
+The catalog's authorization patterns all assume a logged-in principal. Owner-equality (`caller-authentication-only-no-userid-param.md`) derives the accessor from `Authentication.getName()`. Tenant-equality (`multi-tenant-l0`) scopes by the caller's tenant. Relationship-authz (`relationship-authz-l0` REBAC-LOOKUP-001) resolves a grant row keyed on the caller. Every one of them needs an `Authentication`. But a huge class of real endpoints has **no caller at all**: the parcel tracking page e-mailed to a consignee who has no account, the guest order-status link, the share-by-link document view, the e-receipt URL, the one-click unsubscribe. For these, the authorization is inverted — **possession of an unguessable token in the request IS the authorization**. There is no principal to check, no role, no ownership. This rule governs that surface, and it is the photographic negative of ReBAC: ReBAC asks "does a grant row exist for this caller?"; here we ask "is this request holding a valid capability token?" with nobody on the line.
+
+Three invariants make the inversion safe, and each is testable:
+
+1. **The token must be unguessable and distinct from the primary key.** It is at least 128 bits of `SecureRandom`, URL-safe-encoded, non-sequential, in a SEPARATE column — never the DB id, never derivable from the id, and the internal id never appears in the URL or response. A v4 UUID is the floor only, and only when it is `SecureRandom`-sourced and treated as opaque, because RFC 4122 itself says UUIDs "should not be used as security capabilities." If the token is sequential or PK-derived, the public endpoint becomes an open `for id in 1..N` enumeration of everyone's data.
+2. **A bad, absent, expired, or revoked token denies as a byte-indistinguishable 404.** Possession of a *valid, unexpired* token is the SOLE authorization decision; its absence is the ONLY denial path, and it always returns the same 404 — same status, same `urn:problem:not-found` body, same shape — whether the token was never issued or was issued-then-expired. Any divergence (401/403/410/422, or a different message for the expired case) is an existence oracle that confirms guesses and harvests live tokens. Compare in constant time (`MessageDigest.isEqual` on the hashed token), so timing does not leak validity. This is REBAC-404-001 existence-hiding achieved with NO caller in the request.
+3. **The anonymous projection is a strict subset of the owner projection.** The forwardable, screenshot-able, possibly-indexed link returns a dedicated public DTO that masks/omits PII (name, address, contact, internal ids, pricing internals, other parties) and exposes only what the use-case needs. It must never reach the owner entity, never accept a field-selection parameter that widens it, never leak the internal id.
+
+**Incorrect — PK-derived/sequential token, distinguishable expired-vs-missing error, owner entity serialized to the anonymous bearer:**
+
+```java
+// ❌ token IS the primary key — /track/1, /track/2, ... enumerates every shipment
+@GetMapping("/track/{id}")
+public Shipment track(@PathVariable Long id) {
+    Shipment s = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(NOT_FOUND));
+    if (s.getTrackingExpiresAt().isBefore(now())) {
+        // ❌ 410 GONE distinguishes 'real but expired' from 'never existed' → existence oracle
+        throw new ResponseStatusException(GONE, "tracking link expired");
+    }
+    return s;   // ❌ owner entity: consignee full name, full address, phone, price all leak
+}
+```
+
+**Correct — 128-bit SecureRandom token in its own column, indistinguishable 404 for any non-live token, dedicated masked public DTO:**
+
+```java
+@Entity
+class Shipment {
+    @Id @GeneratedValue Long id;                       // internal, never public
+    @Column(unique = true, updatable = false, nullable = false)
+    String trackingToken;                              // SEPARATE from the PK
+    Instant trackingExpiresAt;
+    // ... owner-only PII fields ...
+    static String newToken() {                         // >=128-bit, URL-safe, opaque
+        byte[] b = new byte[16];
+        new java.security.SecureRandom().nextBytes(b);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(b);
+    }
+}
+
+// permitAll() surface — NO Authentication parameter; the token is the authorization.
+@GetMapping("/track/{token}")
+public PublicTrackingView track(@PathVariable String token) {
+    Shipment s = repo.findByTrackingToken(token)                 // single indexed lookup
+        .filter(x -> x.getTrackingExpiresAt().isAfter(Instant.now()))
+        .orElseThrow(NotFound::new);   // ✅ missing OR expired OR revoked → identical 404
+    return PublicTrackingView.of(s);   // ✅ strict-subset DTO: status + ETA + masked city only
+}
+```
+
+The negative test that proves it: `GET /track/<random-128-bit>` → **404**; `GET /track/<an-issued-but-expired-token>` → a **byte-identical 404** (diff the two responses — they must be equal); `GET /track/<the-live-token>` → **200** carrying only the public view. Assert `PublicTrackingView`'s field set is a strict subset of the owner DTO's and contains no internal id and no unmasked PII. The whole access decision lives in the token's entropy and the indistinguishability of the deny path.
+
+Verification: review-tier. A reviewer confirms (a) the token is `SecureRandom`, >=128-bit, URL-safe, in a column distinct from the PK and not derivable from the internal id, with the internal id absent from the public URL/response; (b) malformed/absent/expired/revoked tokens all return the same 404 with no divergent status or message, and the compare is constant-time; (c) the anonymous response is a dedicated public DTO whose fields are a strict subset of the owner DTO with PII masked. No `@Tag` test is claimed because the public token surface and its 404/200 flip are recipe-instantiated, not present as a generic backend module in this template. This composes UNDER existing recipes as a separate `permitAll()` endpoint and MUST NOT be confused with the authenticated owner path: never accept a capability token on an owner endpoint, and never derive a principal from a capability token.
+
+Reference: [OWASP IDOR Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html)
+
+Reference: [RFC 4122 §6 — Security Considerations](https://datatracker.ietf.org/doc/html/rfc4122#section-6)
+
+Reference: [OWASP ASVS v4.0.3 — V4 Access Control](https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md)
+
+
 <!-- @source rules/published-edition-immutable-copy-on-write.md -->
 
 ---
@@ -8349,6 +8650,120 @@ Reference: [OWASP API Security Top 10 (2023) — API1:2023 BOLA](https://owasp.o
 Reference: [OWASP ASVS v4.0.3 — V4 Access Control](https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md)
 
 Reference: [Google Zanzibar — relationship-based access control (ReBAC)](https://en.wikipedia.org/wiki/Google_Zanzibar)
+
+
+<!-- @source rules/retention-delete-on-high-volume-table-must-be-bounded.md -->
+
+---
+title: Scheduled retention/purge on a high-volume table MUST drop partitions or batch the DELETE — never one unbounded DELETE ... WHERE created_at < cutoff
+impact: HIGH
+impactDescription: "A single unbounded age-based DELETE against an append-only / high-write table scans and locks an open-ended row set, bloats the table with dead tuples, holds one long transaction, and times out under statement_timeout — the retention sweep that was meant to reclaim space instead stalls writes and accumulates lock contention at scale."
+tags:
+  - persistence
+  - performance
+  - retention
+spec_ref: "specs/scheduled-task-l0.yaml#SCHED-RETENTION-001"
+verification:
+  type: review
+  source: "specs/scheduled-task-l0.yaml#SCHED-RETENTION-001"
+  pattern: "The scheduled retention job removes the aged range with DROP TABLE / DETACH PARTITION on a RANGE-partitioned-by-created_at table, OR a `DELETE ... LIMIT N` loop committing each batch — and contains no single open-ended `DELETE ... WHERE created_at < cutoff` against a high-write-volume table."
+upstream:
+  - "https://www.postgresql.org/docs/current/ddl-partitioning.html"
+  - "https://docs.gitlab.com/development/database/iterating_tables_in_batches/"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL 16 Documentation — 5.12.1 Overview (Table Partitioning), benefits of partitioning for bulk loads and deletes"
+    url: "https://www.postgresql.org/docs/current/ddl-partitioning.html"
+    quote: "Dropping an individual partition using DROP TABLE, or doing ALTER TABLE DETACH PARTITION, is far faster than a bulk operation. These commands also entirely avoid the VACUUM overhead caused by a bulk DELETE."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "PostgreSQL 16 Documentation — 5.12.1 Overview (Table Partitioning), planning data removal"
+    url: "https://www.postgresql.org/docs/current/ddl-partitioning.html"
+    quote: "An entire partition can be detached fairly quickly, so it may be beneficial to design the partition strategy in such a way that all data to be removed at once is located in a single partition."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "GitLab Development Documentation — Iterating tables in batches (EachBatch), bounded iteration keeps each step within the statement timeout"
+    url: "https://docs.gitlab.com/development/database/iterating_tables_in_batches/"
+    quote: "The iteration uses the primary key index (on the id column) which makes it safe from statement timeouts."
+    quoted_at: "2026-06-01"
+---
+
+## Scheduled retention/purge on a high-volume table MUST drop partitions or batch the DELETE — never one unbounded DELETE ... WHERE created_at < cutoff
+
+**Impact: HIGH — one open-ended age-based DELETE locks and bloats a hot table and times out at scale**
+
+This is the DELETE-path mirror of the chunked-import rule. Imports bound the *write* work set with per-chunk transactions; retention sweeps must bound the *delete* work set the same way. The dangerous shape is a scheduled job that reclaims space with a single statement:
+
+```sql
+DELETE FROM tracking_event WHERE created_at < now() - interval '90 days';
+```
+
+Against an append-only / high-write-volume table (tracking events, telemetry, audit rows, notifications, webhook deliveries) this one statement:
+
+1. **Scans and locks an open-ended row set** — the predicate matches everything older than the cutoff, which on a hot table can be tens of millions of rows in a single pass.
+2. **Holds one long transaction** — every matched row's lock and undo/WAL is held until the whole statement commits, blocking autovacuum and starving concurrent writers.
+3. **Bloats the table** — a bulk `DELETE` leaves dead tuples that VACUUM must later reclaim; the cleanup debt can exceed the space the delete freed.
+4. **Times out** — under a configured `statement_timeout` the sweep is killed mid-flight, having done work but committed nothing, and retries from the same unbounded cutoff next cycle.
+
+Bound the blast radius with one of two patterns.
+
+**Incorrect — one unbounded age-based DELETE against a high-volume table:**
+
+```java
+@Scheduled(cron = "0 0 3 * * *")
+@Transactional                                   // VIOLATION: whole purge in one transaction
+public void purgeOldEvents() {
+    Instant cutoff = Instant.now().minus(90, ChronoUnit.DAYS);
+    // VIOLATION: single open-ended DELETE — scans/locks every aged row at once
+    jdbc.update("DELETE FROM tracking_event WHERE created_at < ?", Timestamp.from(cutoff));
+}
+```
+
+**Correct (a) — drop whole time-range PARTITIONS (preferred for range-partitioned tables):**
+
+```sql
+-- tracking_event is RANGE-partitioned by created_at, one partition per month:
+--   CREATE TABLE tracking_event_2026_02 PARTITION OF tracking_event
+--     FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+-- Retention = drop the whole expired partition. Metadata-only, no row scan, no VACUUM debt.
+ALTER TABLE tracking_event DETACH PARTITION tracking_event_2026_02;
+DROP TABLE tracking_event_2026_02;
+```
+
+**Correct (b) — bounded batch DELETE in a loop (fallback for non-partitioned tables):**
+
+```java
+public static final int BATCH_SIZE = 5_000;
+public static final long BATCH_PAUSE_MS = 200L;
+
+@Scheduled(cron = "0 0 3 * * *")
+public void purgeOldEvents() throws InterruptedException {      // no outer @Transactional
+    Instant cutoff = Instant.now().minus(90, ChronoUnit.DAYS);
+    int deleted;
+    do {
+        deleted = deleteBatch(cutoff);                          // each batch is its own transaction
+        if (deleted > 0) Thread.sleep(BATCH_PAUSE_MS);          // let autovacuum / replicas catch up
+    } while (deleted == BATCH_SIZE);
+}
+
+@Transactional                                                  // CORRECT: scoped to one bounded batch
+public int deleteBatch(Instant cutoff) {
+    // LIMIT bounds the locked row set per transaction; commit between batches caps lock + bloat
+    return jdbc.update("""
+        DELETE FROM tracking_event
+         WHERE id IN (SELECT id FROM tracking_event
+                       WHERE created_at < ? ORDER BY id LIMIT ?)
+        """, Timestamp.from(cutoff), BATCH_SIZE);
+}
+```
+
+Prefer (a) when the table is RANGE-partitioned by `created_at` — dropping a partition is a catalog operation that scans no rows and incurs no VACUUM overhead. Use (b) when the table is not partitioned: a `LIMIT`-bounded loop with a commit and a short sleep between batches keeps each transaction's lock footprint and dead-tuple churn small enough to stay within `statement_timeout` and out of the way of concurrent writers. Either way, the invariant holds: a retention sweep on a high-volume table never issues one unbounded `DELETE ... WHERE created_at < cutoff`.
+
+Verification: review the scheduled retention job + table DDL — confirm a `DROP`/`DETACH PARTITION` path on a range-partitioned-by-`created_at` table, or a `DELETE ... LIMIT N` batch loop committing each iteration; flag any single open-ended `DELETE ... WHERE created_at < cutoff` against an append-only / high-write table (see `specs/scheduled-task-l0.yaml#SCHED-RETENTION-001`).
+
+Reference: [PostgreSQL — Table Partitioning: Bulk loads and deletes via dropping partitions](https://www.postgresql.org/docs/current/ddl-partitioning.html)
+
+Reference: [GitLab — Iterating tables in batches (EachBatch): bounded iteration stays safe from statement timeouts](https://docs.gitlab.com/development/database/iterating_tables_in_batches/)
 
 
 <!-- @source rules/role-hierarchy-subsumes-lower-tiers.md -->
@@ -9637,6 +10052,96 @@ static final ArchRule onlyStateMachineMutatesStatus = noClasses()
 See: `practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/BillingServiceDirectStatus.java` — a service method that calls `subscription.applyStatusTransition()` directly.
 
 
+<!-- @source rules/tamper-evident-log-hashchain.md -->
+
+---
+title: Tamper-EVIDENT logs MUST hash-chain each entry to its predecessor — app-immutability alone is not tamper-evidence
+impact: HIGH
+impactDescription: "A log marked @Column(updatable=false) only stops the APPLICATION from rewriting rows; a DBA, a compromised service account, or anyone with raw table access can still UPDATE a historical row and nobody can tell. Chain-of-custody, audit attestation, and compliance trails require that a retroactive edit be DETECTABLE, not merely 'not done by our code'."
+tags:
+  - audit
+  - integrity
+  - tamper-evidence
+  - chain-of-custody
+  - hash-chain
+  - append-only
+spec_ref: "specs/tamper-evident-log-l0.yaml#TAMPER-HASHCHAIN-001"
+verification:
+  type: review
+  source: "backend tamper-evident log writer (TamperEvidentLogService) + entity mapping"
+  pattern: "Each entry persists content_hash + prev_entry_hash (SHA-256+), chain_hash = H(prev_entry_hash || content_hash); hash columns @Column(updatable=false); a verify routine recomputes the chain from genesis and detects content-mismatch / gap / reorder; the head is anchored externally."
+upstream:
+  - "https://datatracker.ietf.org/doc/html/rfc6962"
+  - "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf"
+evidence:
+  - source_type: external
+    citation: "RFC 6962 — Certificate Transparency, §3 Log Format and Operation"
+    url: "https://datatracker.ietf.org/doc/html/rfc6962"
+    quote: "A log is a single, ever-growing, append-only Merkle Tree of such certificates."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "RFC 6962 — Certificate Transparency, §1 Informal Introduction"
+    url: "https://datatracker.ietf.org/doc/html/rfc6962"
+    quote: "The append-only property of each log is technically achieved using Merkle Trees, which can be used to show that any particular version of the log is a superset of any particular previous version."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "NIST SP 800-92 — Guide to Computer Security Log Management, §5.2 Log File Integrity Checking"
+    url: "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf"
+    quote: "If the log file is modified and its message digest is recalculated, it will not match the original message digest, indicating that the file has been altered."
+    quoted_at: "2026-06-01"
+---
+
+## Tamper-EVIDENT logs MUST hash-chain each entry to its predecessor — app-immutability alone is not tamper-evidence
+
+**Impact: HIGH — `@Column(updatable=false)` is APP-immutability, not tamper-EVIDENCE. It stops your code from rewriting a row; it does nothing against a DBA, a compromised service account, or anyone with raw table access who runs a plain `UPDATE`. For chain-of-custody, audit attestation, and compliance trails, the requirement is that a retroactive edit be *detectable* — not merely *not performed by the application*.**
+
+Teams reach for an immutable audit table and assume they have a tamper-evident log. They do not. Marking every column `updatable=false` and exposing only `save()` removes the application's ability to mutate history — that is `audit-log-l0`'s `AUDIT-RECORD-002`. But the database row is still a plain row. Anyone with direct write access (a privileged DBA, a leaked service credential, a backup-restore operator, an attacker who reached the database) can `UPDATE audit_log SET payload=... WHERE id=...` and the application is none the wiser. The auditor reading the table later sees a clean, internally-consistent record of a history that was silently rewritten.
+
+Tamper-EVIDENCE is a stronger property: any retroactive edit, deletion, or reorder must *break something verifiable*. Achieve it by hash-chaining. Each entry stores a content hash over its own canonical payload **and** the chain hash of the entry before it, with `chain_hash = H(prev_entry_hash || content_hash)` using SHA-256 or stronger. Entry N now cryptographically commits to entry N−1 and transitively to all prior entries — exactly the append-only Merkle property RFC 6962 relies on. Edit any past row and its recomputed content hash no longer matches what the next entry committed to: the chain breaks at that point and a verify pass detects it. (Add an external anchor of the head — `TAMPER-ANCHOR-001` — so even the log owner cannot rewrite-and-re-chain undetectably.)
+
+**Incorrect — "immutable" audit table mistaken for a tamper-evident log; a raw-DB edit is undetectable:**
+
+```java
+@Entity
+public class AuditEntry {
+  @Id @GeneratedValue Long id;
+  @Column(updatable = false) String payload;   // app cannot rewrite...
+  @Column(updatable = false) Instant at;
+  // ...but no link to the previous entry. A DBA UPDATE on a historical
+  //    row leaves a perfectly consistent table. Nothing detects the edit.
+}
+```
+
+**Correct — each entry commits to its predecessor; a retro edit breaks the chain and is detectable:**
+
+```java
+@Entity
+public class TamperEvidentEntry {
+  @Id @GeneratedValue Long id;
+  @Column(updatable = false) String payload;
+  @Column(updatable = false) Instant at;
+  @Column(updatable = false, length = 64) String contentHash;     // H(canonical payload)
+  @Column(updatable = false, length = 64) String prevEntryHash;   // predecessor's chainHash
+  @Column(updatable = false, length = 64) String chainHash;       // H(prevEntryHash || contentHash)
+}
+
+// Sole writer reads the current head, computes the chain hash, persists once.
+String contentHash = sha256(canonical(payload));
+String chainHash   = sha256(prevEntryHash + contentHash);   // commits to all prior entries
+// verify(): recompute from genesis; entry N.prevEntryHash MUST equal
+//   recomputed chainHash of N-1, and each contentHash MUST match its payload —
+//   else CONTENT_MISMATCH / CHAIN_GAP / REORDER. Compare head to the external anchor.
+```
+
+This is generic and cross-cutting: it applies to any chain-of-custody, attestation, or compliance trail, regardless of domain or jurisdiction. Keep it layered *under* an existing audit/event store — the audit table keeps recording; the hash chain plus external anchor add detectability on top.
+
+Verification: review the entry mapping and the sole-writer/verify routine — confirm `content_hash` + `prev_entry_hash` are persisted SHA-256+, `chain_hash = H(prev || content)`, hash columns are `updatable=false`, and a genesis-rooted verify routine surfaces content-mismatch / gap / reorder rather than silently passing.
+
+Reference: [RFC 6962 — Certificate Transparency (append-only Merkle/hash-chained log)](https://datatracker.ietf.org/doc/html/rfc6962)
+
+Reference: [NIST SP 800-92 — Guide to Computer Security Log Management §5.2 (message-digest detection of log alteration)](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf)
+
+
 <!-- @source rules/testing-archunit-layer-boundary.md -->
 
 ---
@@ -10363,6 +10868,93 @@ public void persistReport(Report r) throws IOException {
 Verification: `./gradlew testPractices --tests "*RollbackForChecked*"` asserts via reflection that the correct fixture declares `rollbackFor = Exception.class` and the anti-pattern fixture leaves it empty.
 
 Reference: [Spring Framework — Rolling back declarative transactions](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html)
+
+
+<!-- @source rules/uploaded-image-metadata-stripped-on-ingest.md -->
+
+---
+title: Strip embedded metadata from accepted raster images by re-encoding on ingest
+impact: HIGH
+impactDescription: "User-uploaded photos carry EXIF/XMP/IPTC blocks — GPS coordinates, device make/model/serial, capture timestamp — that leak personal-location and device PII the instant the image is served publicly; an in-place tag delete is fragile and the only durable fix is to re-encode the pixels and drop every metadata segment"
+tags:
+  - file-upload
+  - privacy
+  - exif
+  - metadata
+  - pii
+  - image-processing
+spec_ref: "specs/file-storage-l0.yaml#FILE-UPLOAD-004"
+verification:
+  type: review
+  source: "specs/file-storage-l0.yaml#FILE-UPLOAD-004"
+  pattern: "Accepted raster image (image/jpeg, image/png, image/webp) is decoded to a raw raster and re-encoded via ImageIO with no metadata segment before persistence; download bytes contain no EXIF/XMP/IPTC block (no GPSLatitude/GPSLongitude, Make/Model/SerialNumber, DateTimeOriginal)"
+upstream:
+  - "https://cwe.mitre.org/data/definitions/212.html"
+  - "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+evidence:
+  - source_type: external
+    citation: "CWE-212: Improper Removal of Sensitive Information Before Storage or Transfer"
+    url: "https://cwe.mitre.org/data/definitions/212.html"
+    quote: "Some formats have well-defined fields that could contain private data, such as Exchangeable image file format (Exif), which can contain potentially sensitive metadata such as geolocation, date, and time."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP File Upload Cheat Sheet — File Content Validation (image rewriting)"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+    quote: "For images, applying image rewriting techniques destroys any kind of malicious content injected in an image - this could be done with randomization."
+    quoted_at: "2026-06-01"
+---
+
+## Strip embedded metadata from accepted raster images by re-encoding on ingest
+
+**Impact: HIGH — a single accepted photo can leak the uploader's home GPS coordinates and exact device the moment the image is served**
+
+When a fork-receiver accepts user image uploads, the bytes that arrive are not just pixels. Cameras and phones embed EXIF, XMP, and IPTC blocks: GPS latitude/longitude of where the shot was taken, device make/model/serial number, lens, and the original-capture timestamp. CWE-212 calls this out by name — Exif "can contain potentially sensitive metadata such as geolocation, date, and time." If the server stores and re-serves the uploaded file verbatim, every one of those fields ships to anyone who can fetch the public download URL. A profile avatar can disclose the uploader's home address; an attached product photo can disclose a warehouse location and the exact camera used.
+
+The wrong fix is to enumerate and delete known EXIF tags in place. Metadata can live in multiple containers (EXIF, XMP, IPTC, maker-notes, thumbnails that carry their own EXIF copy — see CVE-2005-0406), and an in-place editor that misses one container leaves the PII intact. The durable fix is to **re-encode**: decode the accepted raster to a raw pixel buffer and write a fresh stream that has no metadata segment at all. The OWASP File Upload Cheat Sheet recommends exactly this image-rewriting approach, and it doubles as the polyglot/payload neutralizer — re-encoding destroys injected content as a side effect.
+
+Do this only for raster types already inside the upload allowlist (FILE-UPLOAD-001): `image/jpeg`, `image/png`, `image/webp`. Anything not in the raster allowlist is rejected upstream and never reaches the stripper. Run the re-encode on ingest — before the file is persisted or made downloadable — so no path serves the original bytes.
+
+**Incorrect — store the uploaded bytes verbatim; EXIF GPS + device serial ship on every public download:**
+
+```java
+// FileStorageService.store(...)
+byte[] raw = multipartFile.getBytes();
+String key = storageBackend.put(raw, contentType);   // ❌ EXIF/XMP/IPTC persisted intact
+StoredFile saved = repository.save(StoredFile.of(key, contentType, raw.length));
+// GET /api/files/{id}/download returns raw → GPSLatitude, Make/Model, DateTimeOriginal all exposed
+```
+
+**Correct — re-encode accepted raster images to a fresh metadata-free stream on ingest:**
+
+```java
+// ImageReEncodeService — invoked by FileStorageService BEFORE persistence
+private static final Set<String> RASTER_TYPES =
+    Set.of("image/jpeg", "image/png", "image/webp");
+
+byte[] strip(byte[] uploaded, String contentType) throws IOException {
+  if (!RASTER_TYPES.contains(contentType)) {
+    // out-of-allowlist types never reach here (FILE-UPLOAD-001 rejects them upstream)
+    throw new UnsupportedMediaTypeException(contentType);
+  }
+  BufferedImage pixels = ImageIO.read(new ByteArrayInputStream(uploaded));
+  if (pixels == null) {
+    throw new InvalidImageException("not a decodable raster image");
+  }
+  String format = contentType.substring("image/".length());   // jpeg | png | webp
+  ByteArrayOutputStream out = new ByteArrayOutputStream();
+  // ImageIO.write emits ONLY the pixel data — no EXIF/XMP/IPTC segment survives the decode→encode
+  if (!ImageIO.write(pixels, format, out)) {
+    throw new UnsupportedMediaTypeException(contentType);
+  }
+  return out.toByteArray();   // ✅ GPS, Make/Model/Serial, DateTimeOriginal all gone
+}
+```
+
+Verify positively: upload a JPEG whose EXIF carries real `GPSLatitude`/`GPSLongitude`, `Make`/`Model`/`SerialNumber`, and `DateTimeOriginal`, download it back, and assert the returned bytes contain no EXIF/XMP/IPTC block. This is FILE-UPLOAD-004's acceptance test.
+
+Verification: Decode-and-re-encode every accepted raster image (image/jpeg, image/png, image/webp) to a metadata-free stream on ingest; download bytes must contain no EXIF/XMP/IPTC fields (no GPSLatitude/GPSLongitude, Make/Model/SerialNumber, DateTimeOriginal) — see specs/file-storage-l0.yaml#FILE-UPLOAD-004.
+
+Reference: [CWE-212: Improper Removal of Sensitive Information Before Storage or Transfer](https://cwe.mitre.org/data/definitions/212.html), [CWE-200: Exposure of Sensitive Information to an Unauthorized Actor](https://cwe.mitre.org/data/definitions/200.html), [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)
 
 
 <!-- @source rules/validation-custom-constraint.md -->

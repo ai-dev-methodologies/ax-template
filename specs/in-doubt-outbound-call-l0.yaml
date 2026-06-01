@@ -1,0 +1,164 @@
+version: "0.1.0"
+scope: "in-doubt-outbound-call-l0 — terminal in-doubt / UNKNOWN holding-state contract for ANY non-idempotent side-effecting OUTBOUND call whose response is lost (provider timeout, connection reset, dropped ACK). Generalizes the payment-only 'UNKNOWN limbo' (payment-l0 PAYMENT-STATE / PAYMENT-PROVIDER) into a composable generic L0 for any fork-receiver making outbound calls with real-world side effects: carrier shipping-label purchase, SMS / email send, card charge, shipment booking, external job submission. Cross-cutting catalog pattern, jurisdiction-agnostic + provider-agnostic."
+stack: "Spring Boot 3.2.x + JPA (in-doubt record + holding-state column) + Spring @Scheduled reconciler + provider status-query SPI + Micrometer metrics"
+standard: "At-most-once vs at-least-once delivery semantics + the impossibility of exactly-once delivery over an unreliable channel (Two Generals' Problem, Akkoyunlu/Ekanadham/Huber 1975, proven unsolvable) + at-least-once + idempotent-operation = effectively-once (AWS Builders' Library, Making retries safe with idempotent APIs) + asynchronous reconciliation by querying the provider's authoritative status (AWS Builders' Library + Stripe error-handling guidance) + IETF draft-ietf-httpapi-idempotency-key-header (provider idempotency key making a retry safe) + RFC 9457 (Problem Details for HTTP APIs)"
+domain_mode: backend_only
+introduced_at: "IDW6 2026-06-01 logistics dogfood — generalized from payment-l0 UNKNOWN-state (PAYMENT-STATE-001, PAYMENT-PROVIDER-001/005) into a generic distributed-systems holding-state contract. P9 distributed-system lens active (exactly-once impossible; at-least-once + idempotent OR reconcile-by-query). P11 standards lens active (Two Generals' / AWS Builders' Library / Stripe / IETF idempotency-key). memory feedback_prefer_generic_catalog — generic + cross-cutting, NOT logistics-only, NOT Korea-specific, 0 Korean law cites."
+
+# WHY THIS IS GENERIC, NOT PAYMENT-ONLY:
+# A charge is just one instance of "a non-idempotent outbound call with a
+# real-world side effect". The same indeterminacy hits a carrier
+# label-purchase, an SMS send, a shipment booking, an external job submit:
+# the call left the building, then the response was lost (timeout / reset /
+# dropped ACK). You CANNOT know whether the side effect happened. The Two
+# Generals' Problem proves you can never be certain the far end received
+# (or acted on) your message over an unreliable channel; exactly-once
+# delivery is therefore impossible. The only correct moves are: (1) do NOT
+# silently retry a non-idempotent side effect (you may double-apply it),
+# (2) do NOT assume failure (the side effect may have succeeded), (3) park
+# the local record in a terminal-PENDING / UNKNOWN holding state, and (4)
+# resolve it later by QUERYING the provider's authoritative status
+# (reconcile-by-query) OR by retrying ONLY when the call carries a provider
+# idempotency key that makes the retry safe.
+#
+# OPT-IN. Any recipe making a non-idempotent outbound call SHOULD adopt.
+#
+# Composition note: composes idempotency-l0 (the provider idempotency key in
+# INDOUBT-IDEMPOTENT-RETRY-001 is the IETF Idempotency-Key contract pushed
+# OUTBOUND to the provider) + payment-l0 (payment UNKNOWN-state is the
+# canonical concrete instance — see the PAYMENT-PROVIDER-008 cross-reference
+# patch) + saga-orchestration-l0 (an in-doubt step blocks saga progress
+# until reconciled; the reconciler feeds the saga state machine) +
+# transactional-outbox-l0 (the OUTBOUND emit may itself be in-doubt).
+
+# ── Priority order for fork-receivers (P4 lens) ──
+# Adopt in order; earlier items are foundational. HOLD + RECONCILE are the
+# keystone — without them an in-doubt call is either silently retried
+# (double-effect) or silently failed (lost side effect).
+#   1. INDOUBT-HOLD-001              — terminal holding state (foundation)
+#   2. INDOUBT-RECONCILE-001         — reconcile-by-query resolution
+#   3. INDOUBT-IDEMPOTENT-RETRY-001  — retry ONLY with a provider idempotency key
+#   4. INDOUBT-NO-DOUBLE-EFFECT-001  — reconcile path must not double-apply
+#   5. INDOUBT-OBSERVABILITY-001     — in_doubt_total{outcome} metric
+
+# ── RECIPE.md frontmatter example (P5 lens) ──
+#   ---
+#   recipe: generic-in-doubt-outbound
+#   in_doubt_holding_state: UNKNOWN            # terminal-PENDING enum member
+#   in_doubt_resolution: reconcile-by-query    # OR idempotent-retry (exactly one default per call)
+#   in_doubt_reconcile_interval_seconds: 60
+#   in_doubt_reconcile_max_age_hours: 24       # age-out window before human escalation
+#   in_doubt_provider_idempotency_key: true    # set only if the provider honors one
+#   ---
+
+# ── F8 standards pin (P11 lens) ──
+# Default pinned: at-least-once delivery + idempotent operation OR
+# reconcile-by-query — NEVER at-most-once silent-retry of a non-idempotent
+# side effect. Exactly-once delivery is impossible (Two Generals'); the
+# holding state + reconciliation is how we recover effectively-once.
+
+items:
+  - id: "INDOUBT-HOLD-001"
+    chapter: "Terminal in-doubt holding state"
+    requirement: "When a non-idempotent side-effecting OUTBOUND call (charge, label purchase, SMS / email send, shipment booking, external job submit) does NOT return a definitive success/failure response — the call times out, the connection is reset, or the response / ACK is lost — the local record MUST transition to a dedicated terminal holding state (UNKNOWN / IN_DOUBT / terminal-PENDING) rather than FAILED or SUCCESS. The system MUST NOT silently retry the call (the side effect may already have happened — a blind retry double-applies it) and MUST NOT assume failure (the side effect may have succeeded). The holding state MUST be stored as a human-readable VARCHAR enum (not an ordinal) and MUST be exited only by the reconciliation path (INDOUBT-RECONCILE-001), never by an unconditional client retry. The invariant: a lost outbound response parks the record in a holding state — never silently retried, never assumed failed."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Indeterminacy is fundamental: over an unreliable channel you can
+      never know whether the far end acted on a message whose ACK was
+      lost — the Two Generals' Problem proves it is unsolvable. So the
+      ONLY safe local state is "I do not know". Anchored to the Two
+      Generals' Problem
+      (https://en.wikipedia.org/wiki/Two_Generals%27_Problem) and to
+      Stripe's network-error guidance
+      (https://docs.stripe.com/error-low-level).
+      Quote anchor (Two Generals' Problem): "The Two Generals' Problem was
+      the first computer communication problem to be proven to be
+      unsolvable."
+      Quote anchor (Stripe): "When intermittent problems occur, clients
+      are usually left in a state where they don't know whether or not
+      the server received the request."
+      Concrete instance: payment-l0 PAYMENT-PROVIDER-001 (timeout →
+      UNKNOWN) and PAYMENT-PROVIDER-005 (network reset → UNKNOWN) are this
+      requirement specialized to the charge side effect.
+  - id: "INDOUBT-RECONCILE-001"
+    chapter: "Reconcile-by-query resolution"
+    requirement: "A record in the in-doubt holding state MUST be resolved by QUERYING the provider's authoritative status — asynchronous reconciliation — NOT by re-issuing the original side-effecting call. The reconciler MUST be (a) idempotent: querying status has no side effect and re-running it converges to the same resolution; (b) scheduled / polled (e.g. Spring @Scheduled) so resolution does not depend on the original request thread surviving; (c) terminal-mapping: a confirmed-applied status moves the record to SUCCESS, a confirmed-not-applied status moves it to FAILED (now safe to retry as a NEW operation), and an indeterminate status keeps it in-doubt until a bounded age-out window (`in_doubt_reconcile_max_age_hours`, default 24h) elapses, after which it escalates for human / operator review rather than guessing. The query MUST target the same provider resource identity (provider transaction id / idempotency key / booking reference) the original call carried, so the reconciler asks about the exact operation that was in doubt."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Reconciliation is the distributed-systems-standard recovery for an
+      unknown outbound outcome: ask the system of record what actually
+      happened instead of guessing. Anchored to the AWS Builders'
+      Library, Making retries safe with idempotent APIs
+      (https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/).
+      Quote anchor (AWS Builders' Library): "To overcome this dilemma the
+      provisioning process has to perform a reconciliation to determine
+      whether this workload is running or not."
+      Concrete instance: payment-l0 PAYMENT-PROVIDER-001 notes "The
+      reconciliation job later resolves UNKNOWN by querying the provider
+      or aging out" — this item lifts that to the generic contract.
+  - id: "INDOUBT-IDEMPOTENT-RETRY-001"
+    chapter: "Retry only with a provider idempotency key"
+    requirement: "An in-doubt outbound call MAY be retried (rather than reconciled-by-query) ONLY when the original call carried a provider-honored idempotency key that makes the retry safe — i.e. the provider guarantees that a retry with the same key performs the side effect AT MOST ONCE and returns the original result. The recipe MUST declare `in_doubt_provider_idempotency_key: true` to enable this path; absent that declaration the system MUST fall back to reconcile-by-query (INDOUBT-RECONCILE-001) and MUST NOT retry. The idempotency key MUST be generated and persisted BEFORE the first outbound attempt (so the retry can present the identical key), and the same key MUST be reused for every retry of that one logical operation — a fresh key on retry creates a second side effect and defeats the contract. This is the IETF Idempotency-Key contract pushed OUTBOUND to the provider."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Retrying a non-idempotent call is only safe when the operation has
+      been MADE idempotent end-to-end via a stable client-generated key —
+      at-least-once delivery + an idempotent operation yields
+      effectively-once. Without the key, retry double-applies; with it,
+      retry is the cheaper recovery than a status query. Anchored to the
+      IETF Idempotency-Key draft
+      (https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header)
+      and Stripe idempotent requests
+      (https://docs.stripe.com/api/idempotent_requests).
+      Quote anchor (IETF draft): "An idempotency key is a unique value
+      generated by the client which the resource uses to recognize
+      subsequent retries of the same request."
+      Quote anchor (Stripe): "When creating or updating an object, use an
+      idempotency key. Then, if a connection error occurs, you can safely
+      repeat the request without risk of creating a second object or
+      performing the update twice."
+      Composes idempotency-l0 (same key contract, OUTBOUND direction).
+  - id: "INDOUBT-NO-DOUBLE-EFFECT-001"
+    chapter: "Reconcile path must not double-apply the side effect"
+    requirement: "The reconciliation / retry path MUST NOT cause the side effect to be applied a second time. Three obligations: (a) reconcile-by-query (INDOUBT-RECONCILE-001) performs a STATUS QUERY only — it MUST NOT contain any code path that re-issues the original side-effecting call; (b) when the resolution is 'confirmed-applied', the record transitions to SUCCESS WITHOUT performing the side effect again (the local state catches up to reality; it does not re-execute reality); (c) when the resolution is 'confirmed-not-applied' and the recipe retries, the retry MUST reuse the original provider idempotency key (INDOUBT-IDEMPOTENT-RETRY-001) so even a racing provider that DID apply the first attempt collapses the retry to a no-op. Negative test: drive a record into the holding state, run the reconciler twice (or concurrently), and assert the side effect's observable count (rows created, messages emitted, money moved) increments by AT MOST the single original intent — never twice. The invariant: from in-doubt to resolved, the side effect happens exactly the number of times the user intended (one), never more."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      This is the keystone safety invariant: the whole point of the
+      holding state is to AVOID the double-effect that a blind retry
+      would cause, so the recovery path itself must be double-effect-free.
+      Anchored to the AWS Builders' Library, Making retries safe with
+      idempotent APIs
+      (https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/).
+      Quote anchor (AWS Builders' Library): "An idempotent operation is
+      one where a request can be retransmitted or retried with no
+      additional side effects, a property that is very beneficial in
+      distributed systems."
+      Concrete instance: payment-l0 PAYMENT-PROVIDER-005 rationale
+      ("Marking FAILED could trigger a double-charge on retry") is this
+      item specialized to money movement.
+  - id: "INDOUBT-OBSERVABILITY-001"
+    chapter: "관측 (in_doubt_total{outcome} metric)"
+    requirement: "In-doubt handling MUST expose a canonical Micrometer counter `in_doubt_total{operation, outcome}` where `outcome` ∈ {entered_hold, reconciled_applied, reconciled_not_applied, retried_idempotent, aged_out_escalated} and `operation` is a fixed bounded enum of side-effect kinds (charge / label_purchase / sms_send / booking / job_submit / ...). A companion gauge `in_doubt_open_count{operation}` MUST report the current number of unresolved holding-state records so an operator can alert on a backlog. Labels MUST exclude record id / provider transaction id / idempotency key / user id / amount (no PII, no high cardinality). SLO / alert wiring (e.g. page when in_doubt_open_count stays non-zero past the age-out window) is a fork-receiver concern."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      `entered_hold` rising without matching `reconciled_*` is the
+      operator's early-warning that a provider is silently dropping
+      responses; `aged_out_escalated` rising means reconciliation cannot
+      resolve and humans must intervene. Bounded labels keep the
+      time-series count finite. Anchored to OpenTelemetry Semantic
+      Conventions for HTTP metrics
+      (https://opentelemetry.io/docs/specs/semconv/http/http-metrics/).
+      Reference: OTel metric semantic conventions constrain attributes to
+      low cardinality per-metric (no single verbatim blanket sentence is
+      quoted; the cited page governs per-attribute cardinality rather
+      than carrying one sentence prohibiting unbounded labels).

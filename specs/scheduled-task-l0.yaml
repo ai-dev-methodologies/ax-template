@@ -74,3 +74,35 @@ items:
       Implementation: triggerManual() calls executeWithLock() which uses LockingPolicy.tryAcquire().
       The atomic DB operation guarantees only one caller succeeds per lock TTL window.
     policy_ref: "blueprints/scheduled-task-manifest.yaml#idempotency"
+
+  - id: "SCHED-RETENTION-001"
+    chapter: "RETENTION"
+    requirement: >-
+      A scheduled retention / purge job that deletes rows by age from an
+      append-only or high-write-volume table (tracking events, telemetry,
+      audit rows, notifications, webhook deliveries) MUST NOT remove the aged
+      range with a single unbounded `DELETE ... WHERE created_at < cutoff`.
+      At scale that one statement scans and locks an open-ended row set,
+      bloats the table with dead tuples, holds a long transaction, and times
+      out under `statement_timeout`. The purge MUST instead bound its blast
+      radius via EITHER (a) dropping whole time-range PARTITIONS — declarative
+      RANGE partitioning by `created_at` so an expired partition is removed
+      with `DROP TABLE` / `DETACH PARTITION` (an O(1) catalog operation that
+      scans no rows and incurs no VACUUM debt), OR (b) deleting in bounded
+      batches — `DELETE ... WHERE ... LIMIT N` (or a key-ranged equivalent) in
+      a loop, committing each batch and sleeping between iterations so locks
+      and dead-tuple churn stay bounded. The invariant: no retention sweep
+      issues an unbounded single DELETE against a high-volume table.
+    test_method: "Manual review of the scheduled retention job + DDL: confirm either a DROP/DETACH PARTITION path on a RANGE-partitioned table or a bounded LIMIT-batch loop; reject any single open-ended DELETE ... WHERE created_at < cutoff against a high-write-volume table."
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Mirror of the import ingress rule (chunked-import-required-when-rowcount-gt-1000):
+      the same bound-the-work-set discipline applied to the DELETE egress path.
+      Partition-drop is preferred when the table is range-partitioned by time
+      (metadata-only, VACUUM-free); the batched-LIMIT loop is the fallback for
+      non-partitioned tables. Composes soft-delete-l0 SOFTDELETE-PURGE-001
+      (the purge timer) — this item constrains the *mechanism* of that purge,
+      not its policy. Both arms keep each transaction short so replication lag
+      and lock contention stay bounded on a hot table.
+    policy_ref: "blueprints/scheduled-task-manifest.yaml#retention"

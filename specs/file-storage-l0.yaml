@@ -175,3 +175,24 @@ items:
       meterRegistry.counter("files.uploaded.total").increment() and
       meterRegistry.counter("upload.bytes.total").increment(sizeBytes).
     policy_ref: "blueprints/file-storage-manifest.yaml#observability"
+
+  - id: "FILE-UPLOAD-004"
+    chapter: "UPLOAD"
+    requirement: "Embedded metadata is stripped from accepted raster images on ingest; the server re-encodes the accepted image's pixel data and DISCARDS all EXIF/XMP/IPTC blocks (GPS coordinates, device make/model/serial, original-capture timestamp) before the image is persisted or served."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: POST /api/files with a JPEG whose EXIF carries GPS coordinates and device make/model →
+      201, then GET /api/files/{id}/download and assert the returned bytes contain no EXIF/XMP/IPTC
+      block (no GPSLatitude/GPSLongitude, no Make/Model/SerialNumber, no DateTimeOriginal).
+      User-uploaded photos routinely carry geolocation + device PII that leaks the moment the image
+      is served publicly. Stripping is enforced by re-encoding, not by attempting to delete tags in
+      place: the ImageReEncodeService decodes accepted raster types (image/jpeg, image/png, image/webp)
+      to a raw raster and writes a fresh stream via ImageIO with no metadata segment, so EXIF/XMP/IPTC
+      cannot survive. Re-encoding doubles as the polyglot/payload neutralizer from FILE-UPLOAD-001
+      (image rewriting destroys injected content). Vector/non-raster types out of allowlist scope are
+      rejected upstream (FILE-UPLOAD-001); only raster images reach the stripper.
+      Reference: CWE-212 (Improper Removal of Sensitive Information Before Storage or Transfer),
+      CWE-200, OWASP File Upload Cheat Sheet (image rewriting), OWASP ASVS V12.1.
+    policy_ref: "blueprints/file-storage-manifest.yaml#upload"

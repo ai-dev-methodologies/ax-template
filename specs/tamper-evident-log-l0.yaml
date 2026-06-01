@@ -1,0 +1,150 @@
+version: "0.1.0"
+scope: "tamper-evident-log-l0 — a GENERIC cryptographically tamper-EVIDENT append-only log for chain-of-custody, audit attestation, and compliance trails. Distinct from audit-log-l0 (which delivers only APP-level immutability via @Column(updatable=false) — a privileged DB admin or anyone with raw row access can still rewrite a stored row UNDETECTABLY). This spec makes any retroactive edit, gap, or reorder CRYPTOGRAPHICALLY DETECTABLE by chaining each entry to its predecessor and anchoring the chain head externally. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Layers UNDER an existing audit/event store; does not replace it."
+stack: "Spring Boot 3.2.x + Jakarta Persistence + java.security.MessageDigest (SHA-256) + a pluggable external anchor sink (signed publish / notary / object-lock store) + Micrometer metrics"
+standard: "RFC 6962 Certificate Transparency (append-only Merkle/hash-chained log + Signed Tree Head + gossip detection) + NIST SP 800-92 §5.2 Log File Integrity Checking (message-digest detection of log alteration). Zero jurisdiction-specific law cited — generic cross-cutting integrity pattern."
+domain_mode: backend_only
+introduced_at: "IDW6 2026-06-01 logistics dogfood — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). Surfaced when chain-of-custody attestation was needed and audit-log-l0's @Column(updatable=false) immutability was found to be only APP-level (DB-admin-rewritable, not tamper-EVIDENT)."
+
+# OPT-IN tamper-evidence catalog. Adopted by any recipe that must PROVE a
+# record was not altered after the fact — chain-of-custody for regulated
+# events, security-relevant audit attestation, financial/compliance trails,
+# evidence logs. Composition note: this layers UNDER audit-log-l0 — the
+# audit store keeps recording entries; this spec adds a per-entry hash chain
+# plus an external anchor so a retro edit / deletion / reorder becomes
+# DETECTABLE rather than merely "not done by the application". Generic
+# pattern; zero jurisdiction-specific law cite (R102+ generic catalog
+# principle).
+#
+# WHY DISTINCT FROM audit-log-l0:
+#   audit-log-l0 AUDIT-RECORD-002 = "@Column(updatable=false), no UPDATE/DELETE
+#     from application code" → APP-level immutability only. A DBA, a
+#     compromised service account, or anyone with raw table access can still
+#     UPDATE a historical row and NOBODY can tell.
+#   tamper-evident-log-l0 = each entry commits to its predecessor via a hash
+#     chain AND the head is anchored externally → a retro edit breaks the
+#     chain and contradicts the published anchor, so it is DETECTABLE even
+#     when the editor has full DB write access.
+#
+# ── Priority order for fork-receivers (adopt in order; earlier is foundational) ──
+#   1. TAMPER-HASHCHAIN-001   (the chain itself)
+#   2. TAMPER-VERIFY-001      (detect a break)
+#   3. TAMPER-ANCHOR-001      (defeat the log owner rewriting + re-chaining)
+#   4. TAMPER-OBSERVABILITY-001 (optional)
+
+items:
+  - id: "TAMPER-HASHCHAIN-001"
+    chapter: "Per-entry hash chain (append-only commitment)"
+    requirement: >
+      Every tamper-evident log entry MUST persist (a) a deterministic content
+      hash over its own canonical serialized payload and (b) the prev_entry_hash
+      of the immediately preceding entry, both computed with a collision-resistant
+      algorithm of SHA-256 strength or stronger. Entry N's stored chain hash MUST
+      be computed as H(prev_entry_hash_N-1 || content_hash_N) so that entry N
+      cryptographically commits to entry N-1 and, transitively, to every entry
+      before it; the genesis entry's prev_entry_hash is the hash of the empty
+      string. The hash columns MUST be written exactly once at insert and never
+      mutated thereafter (mapped @Column(updatable=false)), and the application
+      MUST expose no method that recomputes or overwrites an existing entry's
+      chain hash. The invariant: any retroactive edit, deletion, or reordering of
+      a committed entry MUST change at least one stored content hash, breaking the
+      forward chain at that point and making the alteration cryptographically
+      detectable even by an editor holding full database write access.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The chain is what audit-log-l0's @Column(updatable=false) cannot provide:
+      app-immutability stops the APPLICATION from rewriting, the chain makes ANY
+      rewriter detectable. Test: append entries E1..E3; assert E2.prev_entry_hash
+      == E1.chain_hash and E3.prev_entry_hash == E2.chain_hash; then simulate a
+      raw-DB edit of E2's payload and assert a chain recomputation no longer
+      matches E3.prev_entry_hash. Implementation: TamperEvidentLogService is the
+      sole writer; it reads the current head, computes H(prevHash || contentHash)
+      via MessageDigest("SHA-256"), and persists an entry whose hash columns are
+      updatable=false. Anchored to RFC 6962 §2.1/§3 (SHA-256 append-only Merkle
+      hash-chained log; each version a superset of every prior version).
+  - id: "TAMPER-VERIFY-001"
+    chapter: "Chain verification (break / gap / reorder detection)"
+    requirement: >
+      The implementation MUST expose a verify operation that walks the persisted
+      entries in sequence order and recomputes the chain head from genesis,
+      recomputing each entry's content hash from its stored payload and asserting
+      that entry N.prev_entry_hash equals the recomputed chain hash of entry N-1.
+      The verify routine MUST report a typed failure that distinguishes the three
+      tamper classes: (1) CONTENT_MISMATCH — a stored content hash no longer
+      matches its recomputed payload (a row was edited); (2) CHAIN_GAP — an
+      expected predecessor hash is missing or unreferenced (a row was deleted);
+      (3) REORDER — entries do not form a single contiguous predecessor chain in
+      sequence order. A clean chain MUST verify OK and yield the current
+      recomputed head; the recomputed head MUST equal the most recently anchored
+      head (TAMPER-ANCHOR-001) when an anchor exists. The invariant: no silent
+      pass — any tampering, gap, or reorder MUST surface as one of the typed
+      failures rather than being absorbed.
+    test_method: "Verification routine review + RestAssured integration test"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Reviewed as a routine because the value is in COVERAGE of all three break
+      classes, not a single happy path. Review checklist: (a) verify recomputes
+      from genesis, not from a cached/trusted head; (b) all three failure classes
+      are reachable and individually asserted by tests; (c) the OK path returns a
+      head that is compared against the external anchor. Anchored to RFC 6962
+      §1/§7.3 (comparing tree roots / Signed Tree Heads efficiently detects a log
+      showing different things or violating append-only) and NIST SP 800-92 §5.2
+      (recomputing the message digest detects that a file has been altered).
+  - id: "TAMPER-ANCHOR-001"
+    chapter: "External anchoring of the chain head"
+    requirement: >
+      The current chain head (the latest entry's chain hash, optionally a signed
+      tree head over the whole log) MUST be periodically committed to a sink
+      OUTSIDE the log owner's unilateral write control, via a pluggable
+      TamperEvidentAnchor SPI. Acceptable anchors include: a detached signature
+      produced by a key the log-writing service cannot itself rotate or forge,
+      publication to an append-only/object-lock external store, submission to a
+      third-party notary / transparency service, or co-signing by an independent
+      party. Each anchoring MUST record the anchored head value and the anchor
+      timestamp. The invariant: even the log OWNER cannot rewrite history
+      undetectably — to alter a past entry they would have to re-chain every
+      subsequent entry AND retroactively replace every already-published anchor,
+      which the external sink (being outside their unilateral control) prevents or
+      makes evident. Anchoring cadence and sink choice are fork-receiver concerns;
+      a default cadence MUST be documented (e.g. anchor on every Nth append and on
+      a fixed interval).
+    test_method: "Anchor SPI contract review + RestAssured integration test"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      This is the item that defeats the strongest adversary — the log owner
+      themselves. App-immutability and even the hash chain alone do not stop an
+      owner who rewrites a row AND re-chains everything after it; an external
+      anchor does, because the rewritten head will not match the head already
+      published outside their control. Review checklist: (a) the signing key /
+      sink is genuinely outside the writer's unilateral control; (b) anchored
+      head + timestamp are recorded for later comparison by TAMPER-VERIFY-001;
+      (c) the SPI is pluggable so fork-receivers pick notary vs object-lock vs
+      co-sign. Anchored to RFC 6962 §3.5/§7.3 (the log signs the tree head; gossip
+      comparison of Signed Tree Heads detects append-only violations) and NIST SP
+      800-92 §5.2 (the reference digest must be stored securely / on protected
+      media so it cannot be altered alongside the data).
+  - id: "TAMPER-OBSERVABILITY-001"
+    chapter: "관측 (bounded-cardinality verification metrics) — OPTIONAL"
+    requirement: >
+      When adopted, tamper-evident-log implementations SHOULD expose
+      bounded-cardinality Micrometer metrics for chain health: (1)
+      tamper_chain_verify_total{result} — result ∈ {ok, content_mismatch,
+      chain_gap, reorder}; (2) tamper_anchor_total{outcome} — outcome ∈
+      {published, failed}; (3) tamper_chain_length (gauge, current committed
+      entry count). Labels MUST exclude entry payload, entry id, actor, and any
+      hash value (no PII, no high cardinality). Alert/SLO wiring (e.g. page on any
+      non-ok verify result, or on anchor staleness) is a fork-receiver concern.
+      This item is OPTIONAL — a conforming implementation MAY omit it.
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded labels keep the time-series count finite while still making a
+      detected tamper (content_mismatch / chain_gap / reorder) and a stale anchor
+      alertable. OPTIONAL per the gap brief — chain (HASHCHAIN), detection
+      (VERIFY), and external anchoring (ANCHOR) are the mandatory core. Anchored
+      to RFC 6962 §7.3 (continuous gossip/comparison of Signed Tree Heads is how
+      append-only violations surface operationally).
