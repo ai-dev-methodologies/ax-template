@@ -34,7 +34,7 @@ items:
     test_method: "RestAssured integration test"
     verification_type: "negative"
     applicable: true
-    rule_ref: "practices/rules/idempotency-key-on-mutations.md"
+    rule_ref: "practices/rules/temporal-validity-record-non-overlap.md"
     notes: >
       Test: create reservation A [t1,t2]; POST reservation B [t1+1h, t2+1h] → 409.
       Implementation: database range exclusion constraint (PostgreSQL tsrange EXCLUDE);

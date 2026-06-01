@@ -82,7 +82,7 @@ event, and service-booking products.
 
 | ID | Statement | Binding |
 |---|---|---|
-| BOOKING-INV-001 | Reservation must not double-book a resource for overlapping time windows | `rule_ref: practices/rules/idempotency-key-on-mutations.md` + `spec_ref: specs/recipes/booking-recipe-l0.yaml#BOOKING-INV-001` |
+| BOOKING-INV-001 | Reservation must not double-book a resource for overlapping time windows | `rule_ref: practices/rules/temporal-validity-record-non-overlap.md` + `spec_ref: specs/temporal-validity-l0.yaml#TEMPORAL-NON-OVERLAP-001` |
 | BOOKING-INV-002 | Cancellation within free-window does not charge deposit | `spec_ref: specs/payment-l0.yaml#PAYMENT-STATE-002` |
 | BOOKING-INV-003 | No-show triggers audit-log event with operator + timestamp | `spec_ref: specs/audit-log-l0.yaml#AUDIT-RECORD-001` |
 

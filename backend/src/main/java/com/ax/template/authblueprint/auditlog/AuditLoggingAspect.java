@@ -155,8 +155,14 @@ public class AuditLoggingAspect {
         if (req == null) return null;
         String forwarded = req.getHeader("X-Forwarded-For");
         if (forwarded != null && !forwarded.isBlank()) {
-            int comma = forwarded.indexOf(',');
-            return comma > 0 ? forwarded.substring(0, comma).trim() : forwarded.trim();
+            // Use the RIGHTMOST entry — the hop appended by the immediate trusted
+            // proxy. The leftmost X-Forwarded-For value is fully client-controllable
+            // (spoofable); only the right end is written by infrastructure you trust.
+            // Multi-proxy deployments MUST count trusted hops from the right, or use
+            // Spring's server.forward-headers-strategy / ForwardedHeaderFilter, to
+            // resolve the true client. Never trust the leftmost value for a security IP.
+            int lastComma = forwarded.lastIndexOf(',');
+            return lastComma >= 0 ? forwarded.substring(lastComma + 1).trim() : forwarded.trim();
         }
         return req.getRemoteAddr();
     }

@@ -38,16 +38,6 @@ evidence:
     url: "https://en.wikipedia.org/wiki/Floating-point_arithmetic"
     quote: "the decimal number 0.1 is not representable in binary floating-point of any finite precision"
     quoted_at: "2026-06-01"
-  - source_type: external
-    citation: "Effective Java (3rd ed., Joshua Bloch) — Item 60: Avoid float and double if exact answers are required"
-    url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
-    quote: "A BigDecimal consists of an arbitrary precision integer unscaled value and a 32-bit integer scale."
-    quoted_at: "2026-06-01"
-  - source_type: external
-    citation: "IEEE 754-2019 — Standard for Floating-Point Arithmetic"
-    url: "https://ieeexplore.ieee.org/document/8766229"
-    quote: "Specifies a rounding policy for numerical operations capable of discarding precision."
-    quoted_at: "2026-06-01"
 ---
 
 ## Measured / aggregated non-money decimals must use scaled BigDecimal — never float, double, or money minor-units

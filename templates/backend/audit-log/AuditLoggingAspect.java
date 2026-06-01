@@ -135,7 +135,12 @@ public class AuditLoggingAspect {
                 (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
             String forwarded = attrs.getRequest().getHeader("X-Forwarded-For");
             if (forwarded != null && !forwarded.isBlank()) {
-                return forwarded.split(",")[0].trim();
+                // Rightmost = the hop appended by the immediate trusted proxy. The
+                // leftmost X-Forwarded-For value is client-controllable (spoofable);
+                // never trust it for an audit/security IP. Multi-proxy: count trusted
+                // hops from the right, or use ForwardedHeaderFilter.
+                String[] hops = forwarded.split(",");
+                return hops[hops.length - 1].trim();
             }
             return attrs.getRequest().getRemoteAddr();
         } catch (Exception e) {

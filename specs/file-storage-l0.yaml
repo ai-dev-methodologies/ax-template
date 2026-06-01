@@ -188,7 +188,7 @@ items:
       block (no GPSLatitude/GPSLongitude, no Make/Model/SerialNumber, no DateTimeOriginal).
       User-uploaded photos routinely carry geolocation + device PII that leaks the moment the image
       is served publicly. Stripping is enforced by re-encoding, not by attempting to delete tags in
-      place: the ImageReEncodeService decodes accepted raster types (image/jpeg, image/png, image/webp)
+      place: the ImageReEncodeService decodes accepted raster types (image/jpeg, image/png)
       to a raw raster and writes a fresh stream via ImageIO with no metadata segment, so EXIF/XMP/IPTC
       cannot survive. Re-encoding doubles as the polyglot/payload neutralizer from FILE-UPLOAD-001
       (image rewriting destroys injected content). Vector/non-raster types out of allowlist scope are
