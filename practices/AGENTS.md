@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "15f72141c4a61806d88405c90cf14322e43d8bc0d32f11ec0a313e9cee1b5371"
-  rule_count: 144
+  source_concat_sha256: "c218e63083f5258bfebcb7b27aa762766d1aed5168875052b2a0cc73255669fd"
+  rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -2111,6 +2111,136 @@ public class SmtpSender {
 Verification: `./gradlew testPractices --tests "*TypedProperties*"` runs an ArchUnit rule that rejects any `@Value`-annotated field in the practices/ subtree, plus a reflective check that the `PracticesAppProperties` fixture is a record with an explicit `@ConfigurationProperties` namespace.
 
 Reference: [Spring Boot — Type-safe Configuration Properties](https://docs.spring.io/spring-boot/reference/features/external-config.html#features.external-config.typesafe-configuration-properties)
+
+
+<!-- @source rules/consume-path-consults-shared-fail-closed-blocking-gate.md -->
+
+---
+title: Consuming a referenced entity MUST consult one shared fail-closed blocking-status gate, re-read in-transaction
+impact: HIGH
+impactDescription: "An operation that ships, transacts, authorizes, publishes, or forwards a referenced entity off a stale not-blocked snapshot — or re-implements the blocking check per call site — eventually consumes an entity that was held / suspended / frozen / embargoed / deprecated / quarantined after the snapshot, releasing a blocked lot, charging a frozen card, or publishing an embargoed document"
+tags:
+  - eligibility-gate
+  - fail-closed
+  - blocking-status
+  - quality-hold
+  - account-suspension
+  - embargo
+  - default-deny
+  - access-control
+spec_ref: "specs/blocking-status-gate-l0.yaml#GATE-CONSULT-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/common/ConsentGate.java"
+  pattern: "A single shared gate component (sibling of the fail-closed common/ConsentGate and dsr/DsrRestrictionGate) exposes one requireNotBlocked(entityRef)/checkClearToConsume entrypoint that every consume/forward service calls; the gate re-reads the referenced entity's blocking status inside the same @Transactional consume method (not from a request-scoped snapshot or client payload), defaults to BLOCKED on lookup failure / unknown / null status (try/catch returns blocked=true), and no consume entrypoint reaches the forward/consume sink without a preceding gate call"
+upstream:
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+  - "https://owasp.org/www-community/Fail_securely"
+evidence:
+  - source_type: external
+    citation: "OWASP ASVS 4.0 — V4.1 General Access Control Design, requirement 4.1.5"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/master/4.0/en/0x12-V4-Access-Control.md"
+    quote: "Verify that access controls fail securely including when an exception occurs."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "OWASP — Fail securely (secure-design principle, default-deny on failure)"
+    url: "https://owasp.org/www-community/Fail_securely"
+    quote: "In general, you should design your security mechanism so that a failure will follow the same execution path as disallowing the operation."
+    quoted_at: "2026-06-01"
+---
+
+## Consuming a referenced entity MUST consult one shared fail-closed blocking-status gate, re-read in-transaction
+
+**Impact: HIGH — a stale not-blocked snapshot, or a per-call-site check, eventually forwards an entity that was blocked in the window**
+
+Many mutations do not just edit their own row — they CONSUME or FORWARD a *referenced* entity A: shipping picks a lot, a charge draws on a card, a publish releases a document, an outbound call targets an API version, a production step consumes an input batch. Each of those referenced entities can be independently put into a blocking state by a *different* actor at a *different* time: a quality engineer places a lot on hold, risk freezes a card, compliance embargoes a document, a vendor deprecates an API version, QA quarantines an input. The danger is the window: the consuming operation was composed (and A's status read) at time t1, but A is blocked at t2, and the operation commits at t3. If the consume trusts the t1 snapshot, it releases a held lot or charges a frozen card at t3 — exactly the action the block existed to stop.
+
+Two failure shapes recur, and both are structural rather than a one-off bug.
+
+First, **stale-read**: the status is read once early in the request (or trusted from the client payload) and not re-read at the decision point. The fix is to re-read A's authoritative blocking status *inside the same transaction* as the consuming write, so the operation observes A's status as of its own commit point. This is the same discipline the optimistic-lock and reparent-acyclicity rules apply: the guard runs under the write's transaction, not before it.
+
+Second, **fail-open on the unknown path**: the status lookup throws / times out / returns a status the code does not recognise, and the `catch` (or a missing `else`) lets the consume proceed. OWASP ASVS 4.1.5 is explicit — *access controls fail securely including when an exception occurs* — and the Fail Securely principle states the rule operationally: *a failure should follow the same execution path as disallowing the operation*. A blocking status is an eligibility control; "I could not prove A is unblocked" must resolve to *blocked*, never *allowed*. An unreachable status source that defaults to allow forwards a possibly-blocked entity precisely when the system is degraded — the worst possible time.
+
+The third property ties the first two together: there must be **exactly one shared gate component**, not a hand-rolled check per call site. A per-site reimplementation guarantees that one path eventually omits the re-read or the fail-closed default — and the omitted path is the breach. One gate is the single source of truth for what "blocked" means, for the in-transaction re-read, and for the default-deny, so those properties hold uniformly instead of drifting. This repo already ships this exact shape twice: `common/ConsentGate` (one derivation, absence-is-no-consent) and `dsr/DsrRestrictionGate` / the legal-hold gate (one component both delete paths consult, fail-closed on a registry timeout). This rule is the consumption-axis sibling.
+
+When A is blocked the consume MUST be rejected before any state change — 409 Conflict (incompatible state) or 423 Locked (explicit hold) with an RFC 9457 body of `type=urn:problem:entity-blocked` naming the entity ref, the block reason, and the earliest-eligible time — never a silent skip and never a partial apply.
+
+**Incorrect — status read from a stale snapshot, no shared gate, and the lookup failure falls through to a consume:**
+
+```java
+// ShippingService — trusts a status captured earlier in the request
+@Transactional
+void shipLot(ShipCommand cmd) {
+    // cmd.lotStatus was read when the pick list was built minutes ago
+    if ("RELEASED".equals(cmd.lotStatus())) {          // ❌ stale snapshot; lot may be on hold NOW
+        carrier.dispatch(cmd.lotId());                 // ❌ ships a held lot
+    }
+}
+
+// ChargeService — a SECOND consume path with its own ad-hoc check
+@Transactional
+void charge(ChargeCommand cmd) {
+    boolean frozen = false;
+    try {
+        frozen = cardClient.status(cmd.cardId()) == FROZEN;
+    } catch (RuntimeException e) {
+        // ❌ fail-OPEN: lookup failed, frozen stays false, charge proceeds
+    }
+    if (!frozen) gateway.capture(cmd.amount(), cmd.cardId());  // ❌ charges a possibly-frozen card on a timeout
+}
+```
+
+**Correct — one shared fail-closed gate, re-read in-transaction, every consume path routes through it:**
+
+```java
+@Component
+public class BlockingStatusGate {
+
+    private final BlockingStatusSource source;   // lot holds, card freezes, embargoes, deprecations
+
+    public BlockingStatusGate(BlockingStatusSource source) {
+        this.source = source;
+    }
+
+    /** True ONLY when we have affirmatively established the entity is not blocked. */
+    public boolean isBlocked(EntityRef ref) {
+        try {
+            BlockingStatus s = source.currentStatus(ref);   // authoritative re-read
+            // fail-closed: an unrecognised / null status is NOT a license to consume
+            return s == null || s.isBlocked() || s == BlockingStatus.UNKNOWN;
+        } catch (RuntimeException lookupFailed) {
+            return true;                                     // ✅ unreachable source ⇒ assume blocked
+        }
+    }
+
+    /** Sole guard every consume/forward path calls, INSIDE the consuming @Transactional method. */
+    public void requireNotBlocked(EntityRef ref) {
+        if (isBlocked(ref)) {
+            throw EntityBlockedException.of(ref);   // → 409/423 + urn:problem:entity-blocked
+        }
+    }
+}
+
+@Transactional
+void shipLot(ShipCommand cmd) {
+    blockingStatusGate.requireNotBlocked(EntityRef.lot(cmd.lotId()));  // ✅ re-read in-tx, fail-closed
+    carrier.dispatch(cmd.lotId());
+}
+
+@Transactional
+void charge(ChargeCommand cmd) {
+    blockingStatusGate.requireNotBlocked(EntityRef.card(cmd.cardId()));  // ✅ SAME gate, no second check
+    gateway.capture(cmd.amount(), cmd.cardId());
+}
+```
+
+The gate is the single place the blocking decision lives; every consume path is physically unable to forward a blocked entity because the call is on the only route to the sink. Fail-closed on an unknown or unreachable status means a degraded system over-blocks (recoverable: the operation retries when the source is healthy) rather than over-consumes (irreversible: a shipped held lot, a charged frozen card). This mirrors `dsr/DsrRestrictionGate` (Art 18 restriction), the legal-hold gate (destruction axis), and `common/ConsentGate` (purpose gate): when in doubt, the safe default is *do not act*. Note the distinct axis — the legal-hold gate stops DESTROYING the held entity; this gate stops CONSUMING a separate blocked entity that an operation references.
+
+Verification (review-tier): confirm a single `BlockingStatusGate`-style component exists (sibling of `common/ConsentGate`), that every consume/forward service calls it inside the same transaction as the write (no `dispatch`/`capture`/`publish`/`forward` sink reachable without a preceding `requireNotBlocked`), that the status lookup re-reads the source at the decision point rather than trusting a snapshot or client field, and that a lookup throw / null / unknown status returns *blocked*. A fork-receiver with a concrete `BlockingStatusSource` adds a RestAssured negative test: block entity A → consume → 409/423 with the `entity-blocked` problem type and A's consumers unchanged; and a source-down simulation → the consume is rejected, never applied.
+
+Reference: [OWASP ASVS 4.0 — V4.1.5 access controls fail securely](https://owasp.org/www-project-application-security-verification-standard/)
+
+Reference: [OWASP — Fail securely (default-deny on failure)](https://owasp.org/www-community/Fail_securely)
 
 
 <!-- @source rules/core-aop-proxy-no-final.md -->
@@ -8232,6 +8362,132 @@ if adopter_count >= 3:
   receive the post-lift state; no semver to honor.
 
 
+<!-- @source rules/provenance-dag-traversal-is-bounded-and-cycle-safe.md -->
+
+---
+title: Provenance / lineage / dependency-DAG traversal MUST be cycle-safe, depth-bounded and result-size-bounded
+impact: HIGH
+impactDescription: "A where-used / blast-radius / lineage / BOM-explosion read that walks a many-to-many derivation graph with no cycle guard and no depth/size cap will, on a dirty or pathological graph (a back-edge, a runaway fan-out), recurse forever — stack-overflow, OOM, or a query that never returns — turning a routine read into an outage. Cross-industry: recall blast-radius, data/ETL lineage, ML model provenance, dependency-impact analysis, BOM explosion + where-used, WBS / cost rollup, org headcount / comp rollup, nested kit / bundle pricing."
+tags:
+  - provenance
+  - lineage
+  - dag
+  - graph-traversal
+  - recursive-cte
+  - cycle-detection
+  - bounded-traversal
+  - blast-radius
+  - bom-explosion
+spec_ref: "specs/provenance-dag-l0.yaml#DAG-TRAVERSE-BOUNDED-001"
+verification:
+  type: review
+  source: "backend forward (where-used / blast-radius) and backward (what-went-into) provenance read path over the many-to-many edge set (recursive CTE service / repository or in-memory graph walk)"
+  pattern: "The recursive traversal carries an explicit cycle guard (PostgreSQL `CYCLE` clause or a visited-set / path-tracking set), a max-depth cap (or CTE LIMIT) and a result-size cap with pagination; on a graph that contains a back-edge or exceeds the bound the read degrades DETERMINISTICALLY to a truncation-marker (truncated=true + next-cursor) or 422 + RFC 9457 type=urn:problem:graph-traversal-bound, and a bounded-cardinality fan-out metric (nodes-visited / max-depth-reached) is emitted — it never hangs, OOMs, or stack-overflows"
+upstream:
+  - "https://www.postgresql.org/docs/current/queries-with.html"
+  - "https://en.wikipedia.org/wiki/Directed_acyclic_graph"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL Documentation — 7.8. WITH Queries (Common Table Expressions), §7.8.2.2 Cycle Detection"
+    url: "https://www.postgresql.org/docs/current/queries-with.html"
+    quote: "The CYCLE clause specifies first the list of columns to track for cycle detection, then a column name that will show whether a cycle has been detected, and finally the name of another column that will track the path."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "PostgreSQL Documentation — 7.8. WITH Queries (Common Table Expressions), §7.8.4 Limiting Recursion Depth"
+    url: "https://www.postgresql.org/docs/current/queries-with.html"
+    quote: "A helpful trick for testing queries when you are not certain if they might loop is to place a LIMIT in the parent query."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Wikipedia — Directed acyclic graph (graph theory)"
+    url: "https://en.wikipedia.org/wiki/Directed_acyclic_graph"
+    quote: "A directed acyclic graph is a directed graph that has no cycles."
+    quoted_at: "2026-06-01"
+---
+
+## Provenance / lineage / dependency-DAG traversal MUST be cycle-safe, depth-bounded and result-size-bounded
+
+**Impact: HIGH — a graph read with no cycle guard and no bound is a latent outage. The moment the underlying many-to-many derivation graph holds a single back-edge — a dirty import, a corrupted edge, a legitimately cyclic dependency someone recorded by mistake — an unbounded recursive walk recurses forever: stack-overflow, OOM, or a query that never returns. A routine "what did this part go into?" / "what feeds this dataset?" read becomes an incident.**
+
+Provenance, lineage, dependency and bill-of-materials data are all the same shape: a MANY-TO-MANY directed graph of input→output edges. One output derives from N inputs; one input feeds N outputs. The two reads everyone wants are FORWARD — *where-used / blast-radius*: every output reachable from this input (which finished lots used this recalled ingredient? which dashboards consume this column? which services depend on this library?) — and BACKWARD — *what-went-into*: every input of this output. Both are recursive transitive-closure walks, and both are unsafe by default. A directed acyclic graph is a directed graph that has no cycles — but nothing in your *data* guarantees acyclicity unless your *write side* enforces it, and even then a read path must survive a graph that was corrupted out-of-band. So the read itself must be the thing that is bounded.
+
+Three bounds are mandatory, together:
+
+1. **Cycle safety.** Track a visited-set / path so a back-edge cannot drive infinite recursion. In PostgreSQL this is the built-in `CYCLE` clause on a recursive CTE; in an in-memory walk it is an explicit visited `Set`. The `CYCLE` clause specifies the columns to track for cycle detection, a column that shows whether a cycle has been detected, and a column that tracks the path — exactly the state a safe walk needs.
+2. **Depth bound.** Cap recursion depth (a `WHERE depth < :max` term, or the parent-query `LIMIT` trick PostgreSQL documents for queries that might loop). A finite depth budget means even an acyclic-but-very-deep graph returns.
+3. **Result-size bound.** Cap the number of nodes returned and paginate. A wide fan-out (one popular input feeding millions of outputs) is a denial-of-service payload even with no cycle and shallow depth.
+
+When any bound is reached the read MUST degrade DETERMINISTICALLY — a truncation-marker (`truncated=true` + a next-cursor) or, when the graph is detected as cyclic or the bound is structurally exceeded, `422 Unprocessable Entity` + an RFC 9457 body of `type=urn:problem:graph-traversal-bound`. It must never hang, OOM, or stack-overflow. And it must emit a bounded-cardinality fan-out metric (nodes-visited, max-depth-reached) so an operator can see a blast-radius blow up before it hurts.
+
+This is **distinct** from the single-parent tree acyclicity rule (`OPTLOCK-REPARENT-CYCLE-001`): that rule guards the WRITE side of a *single-parent forest* (one mutable parent column) so a reparent cannot close a cycle. This rule guards the READ side of a *many-to-many* graph, where one node has many parents and many children and a single FK cannot even express the relation. The two compose: the reparent rule (and `DAG-ACYCLIC-PRECOND-001`) keep the graph acyclic at write time so a weighted rollup is well-defined; this rule keeps every *read* safe regardless, because data can be dirtied out-of-band.
+
+The pattern is **generic and cross-cutting** — not manufacturing-only, not Korea-specific. The identical bounded-traversal shows up in: recall / **blast-radius** (which shipments contain the recalled lot?), **data & ETL lineage** (which downstream tables/dashboards depend on this source?), **ML model provenance** (which models were trained on this dataset version?), **dependency-impact analysis** (what breaks if I bump this package?), **BOM explosion + where-used**, **WBS / cost rollup**, **org headcount / comp rollup**, and **nested kit / bundle pricing**. In every case the invariant is the same: the read terminates within a fixed depth and size budget no matter the graph's shape.
+
+**Incorrect — naive recursive walk: no cycle guard, no depth cap, no size cap; one back-edge = infinite recursion / stack overflow:**
+
+```java
+// Forward "where-used" read — walks input -> outputs with nothing bounding it.
+List<Long> whereUsed(Long inputId) {
+  List<Long> out = new ArrayList<>();
+  for (Edge e : edgeRepo.findBySourceId(inputId)) {
+    out.add(e.getTargetId());
+    out.addAll(whereUsed(e.getTargetId()));   // ❌ no visited-set: a back-edge recurses forever (StackOverflowError)
+  }                                            // ❌ no depth cap, no size cap: a wide fan-out OOMs the heap
+  return out;
+}
+```
+
+```sql
+-- Or the SQL form, equally unsafe: recursive CTE with no CYCLE clause and no bound.
+WITH RECURSIVE used(id) AS (
+  SELECT target_id FROM edge WHERE source_id = :inputId
+  UNION ALL
+  SELECT e.target_id FROM edge e JOIN used u ON e.source_id = u.id   -- ❌ a cycle never terminates
+)
+SELECT id FROM used;                                                  -- ❌ no LIMIT, no depth column
+```
+
+**Correct — cycle-safe (CYCLE clause / visited-set), depth-bounded, size-bounded; degrades to a truncation-marker or 422 graph-traversal-bound; emits a fan-out metric:**
+
+```sql
+-- PostgreSQL recursive CTE: CYCLE clause guards against back-edges,
+-- depth column + parent LIMIT bound the walk, pagination caps result size.
+WITH RECURSIVE used(id, depth) AS (
+    SELECT target_id, 1 FROM edge WHERE source_id = :inputId
+  UNION ALL
+    SELECT e.target_id, u.depth + 1
+    FROM edge e JOIN used u ON e.source_id = u.id
+    WHERE u.depth < :maxDepth                      -- ✅ depth bound
+) CYCLE id SET is_cycle USING path                  -- ✅ cycle detection (back-edge marked, not recursed)
+SELECT id, is_cycle FROM used
+WHERE NOT is_cycle
+LIMIT :pageSize + 1;                                 -- ✅ size bound + pagination (sentinel row -> truncated=true)
+```
+
+```java
+// Service: on a detected cycle or an exceeded bound, degrade deterministically.
+WhereUsedPage whereUsed(Long inputId, int maxDepth, int pageSize, Cursor cursor) {
+  TraversalResult r = traversalRepo.forward(inputId, maxDepth, pageSize, cursor);
+  metrics.summary("dag_traversal_nodes_visited", "operation", "where_used").record(r.visited());
+  if (r.cycleDetected()) {                           // ✅ never recurses a cycle
+    metrics.counter("dag_traversal_bound_hit_total", "operation", "where_used", "reason", "cycle").increment();
+    throw new GraphTraversalBoundException("urn:problem:graph-traversal-bound");   // ✅ -> 422 RFC 9457
+  }
+  boolean truncated = r.hitSizeCap() || r.hitDepthCap();
+  if (truncated) {
+    metrics.counter("dag_traversal_bound_hit_total", "operation", "where_used",
+                    "reason", r.hitDepthCap() ? "depth" : "size").increment();
+  }
+  return new WhereUsedPage(r.nodes(), truncated, r.nextCursor());   // ✅ truncation-marker, never a hang/OOM
+}
+```
+
+Verification: review the forward (where-used / blast-radius) and backward (what-went-into) provenance read paths — confirm the recursive traversal carries an explicit cycle guard (PostgreSQL `CYCLE` clause or an in-memory visited-set / path set), a max-depth cap (or CTE `LIMIT`) and a result-size cap with pagination; confirm that a fixture graph containing a back-edge yields a `422 urn:problem:graph-traversal-bound` (or a `truncated=true` marker) rather than a `StackOverflowError` / OOM / hang, that an oversize fan-out paginates rather than returning an unbounded payload, and that a bounded-cardinality fan-out metric is emitted per traversal.
+
+Reference: [PostgreSQL — WITH Queries (Common Table Expressions): Cycle Detection + Limiting Recursion Depth](https://www.postgresql.org/docs/current/queries-with.html)
+
+Reference: [Directed acyclic graph (graph theory)](https://en.wikipedia.org/wiki/Directed_acyclic_graph)
+
+
 <!-- @source rules/public-lookup-token-is-unguessable-and-enumeration-resistant.md -->
 
 ---
@@ -11853,6 +12109,124 @@ public void persistReport(Report r) throws IOException {
 Verification: `./gradlew testPractices --tests "*RollbackForChecked*"` asserts via reflection that the correct fixture declares `rollbackFor = Exception.class` and the anti-pattern fixture leaves it empty.
 
 Reference: [Spring Framework — Rolling back declarative transactions](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html)
+
+
+<!-- @source rules/unit-of-measure-conversion-is-exact-and-pinned.md -->
+
+---
+title: Cross-unit quantity conversion MUST use an exact, pinned, re-derivable factor — never an ad-hoc float multiply
+impact: HIGH
+impactDescription: "A quantity received in one unit and stored in another that converts through a scattered float literal drifts, loses or invents units on a non-even split, and cannot be reconstructed because the row never recorded which unit or factor it used"
+tags:
+  - lang
+  - precision
+  - bigdecimal
+  - unit-of-measure
+  - conversion
+  - conservation
+spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-LANG-007"
+verification:
+  type: review
+  source: "practices/rules/unit-of-measure-conversion-is-exact-and-pinned.md (Correct example) + siblings practices/rules/lang-bigdecimal-for-money.md, practices/rules/rounded-split-conserves-total-largest-remainder.md, specs/value-provenance-l0.yaml#PROVENANCE-PINNED-INPUT-001"
+  pattern: "Any path that receives/measures a quantity in one unit and stores or consumes it in another (cases↔eaches↔pallets, kg↔g, hours↔minutes, GB↔bytes, kWh↔Wh) declares the conversion factor ONCE as a pinned datum (a stored column or a versioned reference), converts with exact scaled BigDecimal (no float/double), conserves quantity across a round-trip (A→B→A == original) and across a non-even split (whole target units + remainder sum back to the source via the largest-remainder method of PRACTICES-LANG-005), and persists the unit + factor (or factor version) used so the original reading is reconstructable; an ad-hoc float multiply at the call site that stores only the converted value and discards the unit + factor is the rejected anti-pattern"
+upstream:
+  - "https://www.nist.gov/pml/owm/metric-si/si-units"
+  - "https://en.wikipedia.org/wiki/Conversion_of_units"
+  - "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
+evidence:
+  - source_type: external
+    citation: "NIST PML — SI Units (definition of a unit and of the value of a physical quantity)"
+    url: "https://www.nist.gov/pml/owm/metric-si/si-units"
+    quote: "The value of a physical quantity is the quantitative expression of a particular physical quantity as the product of a number and a unit, the number being its numerical value."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "Wikipedia — Conversion of units (a multiplicative conversion factor changes the unit without changing the quantity)"
+    url: "https://en.wikipedia.org/wiki/Conversion_of_units"
+    quote: "Conversion of units is the conversion of the unit of measurement in which a quantity is expressed, typically through a multiplicative conversion factor that changes the unit without changing the quantity."
+    quoted_at: "2026-06-01"
+  - source_type: external
+    citation: "java.math.BigDecimal — Java SE 21 API documentation (exact unscaled-value + scale representation float/double lack)"
+    url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
+    quote: "A BigDecimal consists of an arbitrary precision integer unscaled value and a 32-bit integer scale. If the scale is zero or positive, the scale is the number of digits to the right of the decimal point."
+    quoted_at: "2026-06-01"
+---
+
+## Cross-unit quantity conversion MUST use an exact, pinned, re-derivable factor — never an ad-hoc float multiply
+
+**Impact: HIGH — a unit change is a number change, and an unpinned float conversion drifts, leaks units on a non-even split, and cannot be reconstructed**
+
+The NIST definition is the whole reason this rule exists: `The value of a physical quantity is the quantitative expression of a particular physical quantity as the product of a number and a unit, the number being its numerical value.` Change the unit and you change the *number* that expresses the same physical quantity. So the moment a system receives a reading in one unit (a purchase order of `5 cases`) and stores or consumes it in another (`120 eaches` on hand), it has performed an arithmetic operation whose correctness is invisible to the type system — a `double quantity` field looks identical whether it holds cases or eaches, and the compiler cannot tell that `5 * 24.0` was meant to be a case→each expansion. Three failures follow, and AI agents routinely ship all three.
+
+**Failure 1 — the conversion is not exact.** A factor multiplied with `double` drifts: most decimal factors (a 0.45359237 kg/lb, a 3.78541 L/gal, a 1/3 cup) are not representable in binary floating point, so a round-trip `kg → lb → kg` over a few thousand line items no longer returns the original and reconciliation breaks. The fix is `java.math.BigDecimal`, whose exact model is the point of the type: `A BigDecimal consists of an arbitrary precision integer unscaled value and a 32-bit integer scale. If the scale is zero or positive, the scale is the number of digits to the right of the decimal point.` Convert with `source.multiply(factor)` (or `source.divide(factor, scale, mode)` for the inverse) and `setScale(targetScale, declaredMode)` once — never `(double) qty * 24`.
+
+**Failure 2 — the conversion is not pinned.** Wikipedia states the property a correct conversion must preserve: `Conversion of units is the conversion of the unit of measurement in which a quantity is expressed, typically through a multiplicative conversion factor that changes the unit without changing the quantity.` If the row stores only the *converted* number and discards the factor and the source unit, the quantity is no longer reconstructable — a later reader cannot tell whether `120` was `120 eaches` (5 cases × 24) or `120 cases`, and cannot replay the conversion if the packaging hierarchy is ever questioned. Pin the factor as a datum: store the source unit, the target unit, and the factor (or a *version* reference to a packaging-hierarchy / units table) on the row, exactly as `PROVENANCE-PINNED-INPUT-001` pins a time-varying rate. A UOM factor is usually static, but the pin-and-reconstruct discipline is identical — and static does not mean unversioned, because a supplier *can* re-pack a case from 24 to 12 next quarter, and old rows must still re-derive against the factor they were written with.
+
+**Failure 3 — the conversion does not conserve quantity on a non-even split.** A multiplicative factor `changes the unit without changing the quantity`; a split must obey the same conservation. Expanding `1 case → 24 eaches` is even, but the inverse direction (and most real splits) are not: `100 eaches` at `24/case` is `4 cases + 4 loose eaches`, and `100 / 24` rounded independently silently loses or invents a unit. When a conversion does not divide evenly, the remainder must be carried, not dropped — compose `rounded-split-conserves-total-largest-remainder.md` (PRACTICES-LANG-005) so the whole target units plus the remainder sum back to the source EXACTLY, and assert it with a post-condition.
+
+This applies cross-industry wherever one quantity is read in one unit and stored/consumed in another: inventory and packaging hierarchies (cases↔eaches↔pallets↔cartons), recipe and batch scaling (kg↔g, L↔mL), data-size accounting (GB↔MB↔bytes), time accounting (hours↔minutes↔seconds), and energy/utility metering (kWh↔Wh, m³↔L). It is **not** the money rule (`lang-bigdecimal-for-money.md` governs the TYPE one single amount uses, not a cross-unit conversion) and **not** the time-varying-rate rule (`PROVENANCE-PINNED-INPUT` pins an FX/tax rate that *moves*); a UOM factor is its own concern — a usually-static, exact, conserving, re-derivable unit change.
+
+**Incorrect — ad-hoc float multiply at the call site; only the converted number is stored; unit + factor lost; non-even split drops a unit:**
+
+```java
+public class ReceivingService {
+    // factor smeared as a literal at every call site, in double
+    private static final double EACHES_PER_CASE = 24.0;
+
+    StockLine receive(int cases) {
+        double eaches = cases * EACHES_PER_CASE;     // ❌ double drift; no exact replay
+        return new StockLine(eaches);                // ❌ stores only the number; unit + factor gone
+    }
+
+    // 100 eaches back to cases — non-even, silently loses the 4 loose units
+    int toCases(int eaches) {
+        return (int) (eaches / EACHES_PER_CASE);     // ❌ 100/24 → 4; the 4 loose eaches vanish
+    }
+}
+```
+
+**Correct — factor pinned on the row, exact BigDecimal conversion, round-trip + non-even split conserved, unit + factor stored:**
+
+```java
+public class ReceivingService {
+
+    StockLine receive(BigDecimal sourceQty, UnitOfMeasure sourceUnit, PackFactor pack) {
+        // pack is a pinned, versioned datum: { sourceUnit, targetUnit, factor, version }
+        BigDecimal eaches = sourceQty
+                .multiply(pack.factor())                       // exact: cases × 24
+                .setScale(0, RoundingMode.UNNECESSARY);        // expansion is exact for whole packs
+        // store BOTH the converted value AND the unit + factor version it used,
+        // so the original reading is reconstructable and a re-export reproduces it
+        return new StockLine(eaches, pack.targetUnit(), sourceUnit, pack.version());
+    }
+
+    /** Non-even inverse split: 100 eaches at 24/case → 4 cases + 4 loose, conserving every unit. */
+    Split toCasesAndRemainder(BigDecimal eaches, PackFactor pack) {
+        BigDecimal[] qr = eaches.divideAndRemainder(pack.factor());   // [4, 4]
+        BigDecimal wholeCases = qr[0];
+        BigDecimal looseEaches = qr[1];
+        // post-condition: reconstruct the source EXACTLY (largest-remainder conservation, PRACTICES-LANG-005)
+        BigDecimal reconstructed = wholeCases.multiply(pack.factor()).add(looseEaches);
+        if (reconstructed.compareTo(eaches) != 0) {
+            throw new IllegalStateException("UOM split lost a unit: " + reconstructed + " != " + eaches);
+        }
+        return new Split(wholeCases, looseEaches, pack.version());
+    }
+}
+```
+
+The loop is closed by a per-path regression test a fork-receiver writes: pin a factor (24 eaches/case), convert a quantity both directions and assert the round-trip is identity, then feed a non-even quantity (100 eaches) and assert `wholeUnits × factor + remainder == source` exactly. The structural half asserts the persisted row carries the source unit, target unit, and factor (or factor version) — never a bare converted number.
+
+Verification (review-tier): inspect every path that converts a quantity from one unit of measure to another. Confirm (1) the factor is declared ONCE as a pinned datum (a stored column or a versioned reference), not a literal smeared across call sites; (2) the arithmetic uses exact scaled `BigDecimal`, with no `float`/`double` on any cross-unit quantity field or in the conversion; (3) the conversion conserves quantity — a round-trip returns the original and a non-even split's whole units plus remainder sum back to the source exactly (composing the largest-remainder allocation of `PRACTICES-LANG-005`); and (4) the stored row records the unit + factor (or factor version) it used so the original reading is reconstructable and a re-export reproduces the same numbers.
+
+Reference: [NIST PML — SI Units (a quantity's value is a number times a unit)](https://www.nist.gov/pml/owm/metric-si/si-units)
+
+Reference: [Wikipedia — Conversion of units (a conversion factor changes the unit without changing the quantity)](https://en.wikipedia.org/wiki/Conversion_of_units)
+
+Reference: [java.math.BigDecimal — Java SE 21 API documentation](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html)
+
+Reference (sibling — money TYPE, do not conflate): [practices/rules/lang-bigdecimal-for-money.md](lang-bigdecimal-for-money.md)
+
+Reference (sibling — conserve a non-even split): [practices/rules/rounded-split-conserves-total-largest-remainder.md](rounded-split-conserves-total-largest-remainder.md)
 
 
 <!-- @source rules/uploaded-image-metadata-stripped-on-ingest.md -->

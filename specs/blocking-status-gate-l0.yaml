@@ -1,0 +1,132 @@
+version: "0.1.0"
+scope: "blocking-status-gate-l0 — a GENERIC cross-entity eligibility / blocking gate for any operation that CONSUMES or FORWARDS a referenced entity A (ship a held lot, transact on a suspended account, authorize on a frozen card, publish an embargoed document, call a deprecated API version, consume a quarantined input). Before the consuming mutation proceeds, the operation MUST re-read A's blocking/hold STATUS in the SAME transaction and REJECT (409/423) when A is blocked; the check is FAIL-CLOSED (a lookup error / unknown status resolves to blocked, never allowed); and EVERY consume path MUST route through ONE shared gate component so no call site can silently skip it. Jurisdiction-agnostic + framework-agnostic. Cross-industry: manufacturing quality holds, account suspension, payment-card freeze, content embargo, API deprecation, credit holds. Generalises the legal-hold gate OFF the DSR-erasure axis: legal-hold guards DESTRUCTION of the held subject; this gate guards CONSUMPTION / FORWARDING of any blocked referenced entity."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA) + Spring @Transactional + RFC 9457 Problem Details + Micrometer metrics"
+standard: "OWASP ASVS V4 Access Control 4.1.5 (access controls fail securely including when an exception occurs) + OWASP Fail Securely / default-deny secure-design principle + RFC 9110 §15.5.10 (409 Conflict) / §15.5.22 (423 Locked, via WebDAV RFC 4918) + RFC 9457 (Problem Details for HTTP APIs)"
+domain_mode: backend_only
+introduced_at: "IDW9 2026-06-01 manufacturing-MES dogfood — generalised from the legal-hold gate (DSR-erasure axis) into a generic cross-entity consume/forward eligibility gate. R102+ generic-catalog principle: zero industry lock-in, zero Korean-law cite."
+
+# OPT-IN cross-cutting catalog. Adopted by any recipe whose write CONSUMES or
+# FORWARDS a referenced entity that can independently be put into a blocking
+# state (held / suspended / frozen / embargoed / deprecated / quarantined).
+# The gate is the read-back-and-reject guard that prevents a stale, in-flight
+# operation from acting on an entity that was blocked AFTER the operation was
+# composed but BEFORE it committed. Composition note: layers under existing L4
+# recipes (billing, invoicing, approval-workflow, api-versioning) without
+# changing their resource model — the consuming service gains one gate call.
+#
+# ── Distinct-from map (IDW9 — do NOT merge these axes) ──
+#   DSR-LEGALHOLD-001 (data-subject-rights-l0): gates DESTRUCTION (DELETE/PURGE)
+#     of the HELD subject itself — erasure axis. This gate is the inverse
+#     consumption axis: A stays, but a DIFFERENT operation that consumes/forwards
+#     A must stop while A is blocked.
+#   destructive-remove-checks-inbound-references: inverse direction +
+#     destructive-only — counts INBOUND dependents before removing A. This gate
+#     reads A's OWN status before an operation forwards A outbound.
+#   sealed-period-l0 / temporal-validity-l0: gate the SAME entity against its own
+#     time watermark (a posting date vs a closed period). This gate reads a
+#     SEPARATE referenced entity's blocking flag, not a temporal bound.
+#
+# ── Priority order for fork-receivers (adopt earlier items first) ──
+#   1. GATE-SHARED-001        (build the one shared gate component first)
+#   2. GATE-CONSULT-001       (route every consume/forward path through it)
+#   3. GATE-FAIL-CLOSED-001   (make the unknown/error path resolve to blocked)
+
+items:
+  - id: "GATE-CONSULT-001"
+    chapter: "In-transaction re-read of the referenced entity's blocking status"
+    requirement: >
+      Any mutation that CONSUMES or FORWARDS a referenced entity A (ship a held
+      lot, transact on a suspended account, authorize on a frozen card, publish
+      an embargoed document, call a deprecated API version, consume a
+      quarantined input) MUST re-read A's authoritative blocking/hold STATUS
+      inside the SAME transaction as the consuming write — never trust a status
+      snapshot captured earlier in the request, in a prior read, or carried in
+      the client payload, because A may have been blocked in the window between
+      that snapshot and the commit. When the freshly re-read status is BLOCKED,
+      the operation MUST be REJECTED before any state change, with 409 Conflict
+      (the entity is in a state incompatible with the request) or 423 Locked
+      (the entity is explicitly held), carrying an RFC 9457 body of
+      type=urn:problem:entity-blocked that names the blocked entity ref, its
+      blocking reason, and (when known) the earliest-eligible time — never a
+      silent skip and never a partial apply. The re-read and the write MUST be
+      atomic so a concurrent block cannot slip through the check-to-write
+      window. The invariant: a consuming/forwarding mutation observes the
+      referenced entity's blocking status as of its own commit point, and a
+      blocked entity is never consumed.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Pairs with the optimistic-lock guard the same way reparent-acyclicity
+      does: the status re-read MUST run under the same transaction as the
+      write, not before it, so a block committed concurrently is observed.
+      Anchored to OWASP ASVS V4.1.5 (access controls fail securely) — the
+      blocking status is an access/eligibility control and must be re-evaluated
+      at the decision point. Positive test: block entity A, then attempt the
+      consuming mutation -> assert 409/423 + entity-blocked problem type + A's
+      consumers unchanged; control: with A unblocked the same mutation applies
+      (200/204). 409 vs 423 is a recipe choice (423 when the block is an
+      explicit hold/lock; 409 for a generic incompatible-state block).
+  - id: "GATE-FAIL-CLOSED-001"
+    chapter: "Fail-closed on unknown or unresolvable status"
+    requirement: >
+      The blocking-status gate MUST default to BLOCKED whenever it cannot
+      AFFIRMATIVELY establish that the referenced entity is clear: a lookup
+      that throws or times out, a referenced entity that does not resolve, a
+      status value the gate does not recognise, or a null/absent status all
+      MUST resolve to BLOCKED (reject the consume), never to ALLOWED. "I could
+      not prove the entity is unblocked" MUST be treated identically to "the
+      entity is blocked" — an unreachable status source that defaults to allow
+      is the worst outcome, because it forwards a possibly-blocked entity
+      precisely when the system is degraded. The gate MUST NOT swallow a lookup
+      failure into an allow, MUST NOT fall back to a cached/last-known
+      not-blocked value as authoritative, and MUST surface the rejection as
+      409/423 with the RFC 9457 entity-blocked problem type (or a 503-class
+      problem when the recipe distinguishes "blocked" from "cannot determine")
+      rather than letting the consuming write proceed. The invariant: the only
+      path to consuming the entity is an affirmative not-blocked reading; every
+      other resolution is a reject.
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      This is the keystone safety property. Anchored to OWASP ASVS V4.1.5
+      ("access controls fail securely including when an exception occurs") and
+      the OWASP Fail Securely principle (a failure follows the same execution
+      path as disallowing the operation). Mirrors the legal-hold gate's
+      fail-closed isHeld(...) (an unreachable hold registry means "assume
+      held") and ConsentGate's absence-is-no-consent default. Negative test:
+      stub the status source to throw -> assert the consuming mutation is
+      rejected (409/423/503-class) and A's consumers unchanged; never 200.
+  - id: "GATE-SHARED-001"
+    chapter: "One shared gate component, every consume path"
+    requirement: >
+      The blocking-status check MUST be implemented ONCE as a single shared gate
+      component (a BlockingStatusGate-style class with a checkClearToConsume /
+      requireNotBlocked entrypoint) that EVERY consume/forward path calls; it
+      MUST NOT be re-implemented or copy-pasted per call site, because a
+      hand-rolled check at each site guarantees that one path eventually omits
+      it — and the omitted path is the breach. The shared component is the
+      single source of truth for (a) what "blocked" means across statuses,
+      (b) the in-transaction re-read of GATE-CONSULT-001, and (c) the
+      fail-closed default of GATE-FAIL-CLOSED-001, so those properties hold
+      uniformly rather than drifting between call sites. A consume/forward
+      entrypoint that reaches the underlying mutation without a preceding call
+      to the shared gate is the defect, not an accepted variation; new consume
+      paths added later inherit the gate by calling the same component. The
+      invariant: there is exactly one place the blocking decision lives, and no
+      route to consuming a referenced entity bypasses it.
+    test_method: "Architecture / review-tier assertion (e.g. ArchUnit: no consume service reaches the forward/consume sink without routing through the gate component)"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Structural, not behavioural — the failure mode is a MISSED path, which a
+      per-call-site reimplementation guarantees over time. Mirrors the
+      legal-hold gate (one LegalHoldGate both delete paths consult) and the
+      common/ConsentGate single-derivation pattern. Anchored to OWASP Fail
+      Securely (centralising the deny decision so failure follows one
+      disallowing path). Review check: confirm a single gate component exists,
+      every consume/forward service depends on it, and no consume entrypoint
+      reaches the sink without a preceding gate call; a fork-receiver with a
+      concrete status source adds an ArchUnit/reachability assertion to make
+      the "no bypass" property build-enforced.

@@ -572,3 +572,57 @@ items:
     verification_type: "review"
     applicable: true
     notes: "Review-tier (structural / value-conservation property across a time slice; no single static @Tag test owns it). Reviewer/source anchor: any service that accrues leave per month of tenure, charges a recurring fee per billing cycle, depreciates a cost over a useful life, accrues interest per day, or bills seat-days computes the per-interval amount as ratePerPeriod.multiply(elapsedFraction) where elapsedFraction divides elapsed days by period days under ONE declared DayCount basis (actual/actual or 30/360), prorates a partial period by that fraction (a mid-month join earns fee × partialDays/periodDays, never the full fee), and splits a period at a plan-change boundary with a conserving allocation that asserts Σ parts == whole period. The Incorrect example bills a full month for a mid-month join, divides by an ad-hoc literal 30 while a sibling method divides by real month length, and rounds each split part independently so the parts miss the whole; the Correct example declares the basis once, prorates by elapsed-fraction, and delegates the split to the largest-remainder allocate(). Cross-linked to practices/rules/rounded-split-conserves-total-largest-remainder.md (conserve the split), practices/rules/lang-bigdecimal-for-measured-decimals.md (scale/round once), and practices/rules/time-gated-decisions-read-injected-clock.md (read now + period bounds from an injected Clock for deterministic proration tests). Anchored to Wikipedia 'Day count convention' (a day count convention determines how interest accrues over time; actual/actual vs 30/360 give different day counts for the same interval, so the basis must be declared) + Wikipedia 'Accrual' / 'Matching principle' (an amount earned or incurred is recognised in the period it belongs to, so a partial period earns the partial amount). Rule body: practices/rules/time-proportional-accrual-prorates-partial-period.md."
+
+  - id: "PRACTICES-LANG-007"
+    chapter: "Language / Unit-of-Measure Conversion"
+    requirement: >
+      A quantity RECEIVED, MEASURED, or ENTERED in one unit of measure and STORED or CONSUMED in ANOTHER
+      — cases↔eaches, pallets↔cartons↔units, kg↔g, L↔mL, hours↔minutes↔seconds, GB↔MB↔bytes,
+      kWh↔Wh — MUST convert through an EXACT, DECLARED, RE-DERIVABLE conversion factor, never an ad-hoc
+      literal multiply scattered at the call site. The factor is a PINNED DATUM: it is stored on (or
+      referenced by version from) the row, so the conversion can be replayed and the original reading
+      reconstructed. The arithmetic MUST use exact scaled java.math.BigDecimal (the converted value =
+      sourceQuantity multiplied/divided by the factor, then setScale(targetScale, declared RoundingMode));
+      float / double are FORBIDDEN because a binary double cannot represent most decimal factors exactly
+      and drifts across repeated conversion. The conversion MUST CONSERVE quantity: a round-trip
+      (A→B→A) must return the original, and a SPLIT of one source quantity into whole target units plus a
+      remainder (e.g. 1 case of 24 → 24 eaches, or 100 eaches → 4 cases + 4 loose) MUST NOT silently
+      create or lose units — when a conversion does not divide evenly, compose PRACTICES-LANG-005
+      (largest-remainder) so the parts sum back to the source EXACTLY. Finally, the stored row MUST record
+      WHICH unit and WHICH factor (or factor version) it used, so the original reading is reconstructable
+      and a later re-export reproduces the same numbers. This is distinct from lang-bigdecimal-for-money
+      (the TYPE one single amount uses) and from PROVENANCE-PINNED-INPUT (which pins a TIME-VARYING rate
+      such as FX/tax for a derived value); a UOM factor is usually STATIC, but the same pin-and-reconstruct
+      discipline applies so the stored quantity stays re-derivable from its declared unit and factor. The
+      invariant: every cross-unit quantity is converted by an exact pinned factor, conserves quantity
+      across round-trip and split, and stores the unit + factor it used so the original is reconstructable.
+      Rule body: practices/rules/unit-of-measure-conversion-is-exact-and-pinned.md.
+    test_method: "practices_LANG_007_uomConversionIsExactAndPinned"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      Review-tier (structural / value-conservation property across a unit change; no single static @Tag test
+      owns it). Reviewer/source anchor: any service that receives/measures a quantity in one unit and
+      stores or consumes it in another (inventory packaging hierarchies cases↔eaches↔pallets, recipe
+      scaling kg↔g, data-size accounting GB↔bytes, time accounting hours↔minutes, energy/utility metering
+      kWh↔Wh) declares the conversion factor ONCE as a pinned datum (a stored column or a versioned
+      reference), converts with exact scaled BigDecimal (never float/double), asserts a round-trip
+      (A→B→A == original) and a non-even split conserves units (Sigma parts == source via the
+      largest-remainder method of PRACTICES-LANG-005), and persists the unit + factor (or factor version)
+      used so the original reading is reconstructable. The Incorrect example multiplies by a hard-coded
+      double literal at the call site, stores only the converted value, loses the unit + factor, and drops
+      a unit on a non-even split; the Correct example pins the factor on the row, converts with BigDecimal,
+      conserves the split via Money/Quantity.allocate-style largest-remainder, and stores both the unit
+      and the factor version. Cross-linked to practices/rules/lang-bigdecimal-for-money.md (single-amount
+      TYPE, not the cross-unit conversion), practices/rules/rounded-split-conserves-total-largest-remainder.md
+      (PRACTICES-LANG-005, conserve a non-even split), and specs/value-provenance-l0.yaml#PROVENANCE-PINNED-INPUT-001
+      (which pins a TIME-VARYING rate; a UOM factor is usually static but shares the pin-and-reconstruct
+      discipline). Anchored to the NIST SI Units definition (the value of a physical quantity is the
+      product of a number and a unit, so changing the unit changes the number that expresses the same
+      quantity), Wikipedia 'Conversion of units' (a multiplicative conversion factor changes the unit
+      WITHOUT changing the quantity — the conservation property this item enforces), and the java.math.BigDecimal
+      Javadoc (a BigDecimal is an arbitrary-precision unscaled value and a 32-bit scale — the exact
+      representation that float/double lack). The canonical regression test a fork-receiver writes pins a
+      factor (e.g. 24 eaches per case), converts a quantity both directions and asserts the round-trip is
+      identity, and feeds a non-even split (100 eaches at 24/case) asserting the whole-units + remainder
+      sum back to 100 exactly.

@@ -1,0 +1,176 @@
+version: "0.1.0"
+scope: "provenance-dag-l0 — a generic MANY-TO-MANY provenance / lineage / dependency DAG contract for fork-receivers recording how outputs derive from inputs (recall / blast-radius, data & ETL lineage, ML model provenance, dependency-impact analysis, BOM explosion + where-used, WBS / cost rollup, org headcount / comp rollup, nested kit / bundle pricing). Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. DISTINCT from OPTLOCK-REPARENT-CYCLE-001 (single-parent TREE / forest, write-side acyclicity of one parent edge) and value-provenance-l0 (field-level authorship of one record): this contract is the many-to-many edge SET plus its bounded read traversal and weighted rollup."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (immutable append-only edge entity) + PostgreSQL recursive CTE (WITH RECURSIVE … CYCLE / visited-set, depth + LIMIT bound) + java.math.BigDecimal (scaled rollup) + RFC 9457 Problem Details + Micrometer metrics"
+standard: "PostgreSQL WITH Queries (Common Table Expressions) — recursive query evaluation + CYCLE clause + LIMIT bound (de facto reference) + Directed acyclic graph (graph-theory definition: a directed graph with no directed cycles; reachability is a partial order) + RFC 9457 (Problem Details for HTTP APIs)"
+domain_mode: backend_only
+introduced_at: "IDW9 2026-06-01 manufacturing-MES dogfood — promoted GENERIC. FLAGSHIP gap (11 personas converged on the provenance / lineage / dependency-DAG cluster). Cross-industry, not manufacturing-only, not Korea-specific."
+
+# OPT-IN provenance / lineage / dependency-DAG catalog. Adopted by any
+# recipe that must record a MANY-TO-MANY derivation graph — one output
+# derives from N inputs, one input feeds N outputs — and then read it
+# (where-used / what-went-into) or roll a quantity up it (BOM
+# explosion). Three tightly-coupled sub-patterns the dogfood found are
+# merged here: (A) STRUCTURE — append-only immutable edge set;
+# (B) BOUNDED READ TRAVERSAL — cycle-safe, depth-bounded,
+# result-size-bounded forward/backward reads; (C) WEIGHTED ROLLUP —
+# product-down-path / sum-across-paths cumulative quantity, well-defined
+# ONLY over an acyclic graph. The write-side acyclicity precondition is
+# delegated to OPTLOCK-REPARENT-CYCLE-001 (specs/optimistic-locking-l0.yaml)
+# — that rule keeps the single-parent reparent acyclic; DAG-ACYCLIC-PRECOND-001
+# below states that rollup correctness DEPENDS on that acyclicity holding
+# across the whole many-to-many edge set. Generic pattern; zero Korean
+# law cite (R102+ generic catalog principle).
+
+# ── Priority order for fork-receivers ──
+# Adopt in order; earlier items are foundational.
+#   1. DAG-EDGE-001            (STRUCTURE — append-only immutable edge set)
+#   2. DAG-TRAVERSE-BOUNDED-001 (BOUNDED READ — cycle-safe + depth + size bound)
+#   3. DAG-ACYCLIC-PRECOND-001 (rollup precondition — acyclicity over the whole set)
+#   4. DAG-ROLLUP-MULTIPLY-001 (WEIGHTED ROLLUP — product-down-path / sum-across-paths)
+#   5. DAG-OBSERVABILITY-001   (optional — bounded-cardinality fan-out metric)
+
+items:
+  - id: "DAG-EDGE-001"
+    chapter: "Append-only immutable many-to-many provenance edge set"
+    requirement: >
+      Provenance MUST be recorded as an IMMUTABLE, append-only set of directed
+      input→output edges, NOT as a single parent column. The edge entity carries
+      (source_id, target_id) plus an OPTIONAL weight/quantity (scaled BigDecimal,
+      e.g. how many of the input go into one output), and its columns MUST be
+      mapped @Column(updatable=false) with no edit/delete mutator exposed by the
+      service. The relation is genuinely many-to-many: one output MAY derive from
+      N distinct inputs and one input MAY feed N distinct outputs, so the model
+      MUST NOT collapse provenance into a single FK / parent pointer on the node.
+      Edges are NEVER mutated or physically deleted — a correction is itself a NEW
+      appended edge (a reversing / superseding edge), so the full derivation
+      history survives and reconciles. The invariant: the provenance of any output
+      is the complete, append-only, immutable set of its inbound edges; history is
+      never rewritten in place.
+    test_method: "RestAssured integration test + JPA mapping assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      DISTINCT from OPTLOCK-REPARENT-CYCLE-001 (single-parent tree: one mutable
+      parent column, a forest) and from value-provenance-l0 (field-level
+      authorship of ONE record). Here provenance is a many-to-many edge SET, so a
+      single FK cannot express it. The append-only / immutable-columns posture
+      mirrors the correction-by-reversal rule
+      (immutable-record-corrected-by-reversal-not-edit): fix by appending a new
+      edge, never by UPDATEing or DELETEing an existing one. Generic across recall
+      / blast-radius, data & ETL lineage, ML model provenance, dependency-impact,
+      BOM (bill of materials), WBS / cost rollup, org headcount / comp rollup, and
+      nested kit / bundle pricing.
+  - id: "DAG-TRAVERSE-BOUNDED-001"
+    chapter: "Bounded, cycle-safe forward/backward read traversal"
+    requirement: >
+      Reads that walk the provenance graph — FORWARD (where-used / blast-radius:
+      every output reachable from a given input) and BACKWARD (what-went-into:
+      every input of a given output) — MUST be cycle-safe, depth-BOUNDED and
+      result-size-BOUNDED. Cycle safety MUST be enforced explicitly: a recursive
+      CTE with a CYCLE clause (or an equivalent visited-set / path-tracking guard)
+      so a dirty or pathological graph that contains a back-edge can NEVER drive
+      infinite recursion or a stack overflow. The traversal MUST carry a max-depth
+      cap (or an equivalent CTE LIMIT) and a result-size cap with pagination; when
+      a cap is reached the response MUST degrade DETERMINISTICALLY to a
+      truncation-marker (e.g. truncated=true + next-cursor) or, when the graph is
+      detected as cyclic / the bound is structurally exceeded, to 422
+      Unprocessable Entity + an RFC 9457 body of type=urn:problem:graph-traversal-bound
+      — it MUST NOT hang, OOM, or stack-overflow. A bounded-cardinality fan-out
+      metric (e.g. nodes-visited, max-depth-reached) MUST be emitted per traversal.
+      The invariant: every provenance read terminates within a fixed depth and
+      size budget regardless of the graph's shape.
+    test_method: "RestAssured integration test (pathological cyclic + oversize-fan-out fixtures)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Termination is a property of the TRAVERSAL, not of the data: even when
+      DAG-ACYCLIC-PRECOND-001 holds at write time, a read path MUST stay safe
+      against a graph that has been corrupted out-of-band, so the CYCLE clause /
+      visited-set is mandatory rather than optional. Anchored to the PostgreSQL
+      recursive-CTE docs (CYCLE clause for cycle detection; LIMIT trick for
+      bounding a query that might loop) and the directed-acyclic-graph reachability
+      definition (the partial order u ≤ v iff a directed path u→v exists is what a
+      bounded forward/backward read computes a finite slice of). Negative test:
+      run a forward traversal over a fixture containing a back-edge → assert the
+      response is 422 graph-traversal-bound OR a truncation-marker, never a hang;
+      run a traversal over a fan-out wider than the size cap → assert pagination /
+      truncated=true rather than an unbounded payload.
+  - id: "DAG-ACYCLIC-PRECOND-001"
+    chapter: "Acyclicity precondition for a well-defined rollup"
+    requirement: >
+      A weighted rollup (DAG-ROLLUP-MULTIPLY-001) is mathematically well-defined
+      ONLY over an acyclic graph: a cycle in the input→output edges means a node
+      transitively depends on itself, so the product-down-path / sum-across-paths
+      accumulation has no fixed point and would not terminate. The contract MUST
+      therefore treat acyclicity as a PRECONDITION of any rollup: the rollup
+      service MUST either (a) be invoked only on a graph whose write side enforces
+      acyclicity — delegated to OPTLOCK-REPARENT-CYCLE-001 in
+      specs/optimistic-locking-l0.yaml, which rejects any edge that would close a
+      cycle within the same transaction as the write — or (b) defensively re-check
+      acyclicity (the same CYCLE-detecting traversal as DAG-TRAVERSE-BOUNDED-001)
+      at the start of the rollup and refuse with 422
+      type=urn:problem:graph-traversal-bound when a cycle is found, rather than
+      attempt to roll up a cyclic graph. The invariant: rollup runs against a DAG
+      (a directed graph with no directed cycles) or it does not run at all.
+    test_method: "RestAssured integration test + ArchUnit/structural assertion"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      This is the explicit seam between this spec and OPTLOCK-REPARENT-CYCLE-001:
+      that rule guards the WRITE side (no edge may close a cycle); this item
+      states that rollup CORRECTNESS depends on that guarantee and adds a
+      defensive read-side re-check so a graph corrupted out-of-band cannot silently
+      produce a non-terminating or wrong rollup. Anchored to the directed-acyclic-graph
+      definition (no directed cycles; a directed graph is a DAG iff it has a
+      topological ordering — the ordering a finite rollup accumulation relies on).
+  - id: "DAG-ROLLUP-MULTIPLY-001"
+    chapter: "Weighted product-down-path / sum-across-paths rollup (BOM explosion)"
+    requirement: >
+      A cumulative quantity rolled up through the provenance DAG MUST be computed as
+      the PRODUCT of the per-edge weights along each distinct path from the root to
+      a leaf (the classic BOM-explosion rule: 2 assemblies × 3 sub-parts × 4 screws
+      = 24 screws), and when the SAME leaf is reached via multiple distinct paths,
+      its contributions MUST be MERGED by SUMMING the per-path products (a part used
+      in two different sub-assemblies appears once, with its quantities added). The
+      accumulation MUST use scaled BigDecimal (fixed scale + an explicit
+      RoundingMode, never binary double) so fractional weights and currency / cost
+      rollups stay exact, and it MUST be depth-bounded by the same budget as
+      DAG-TRAVERSE-BOUNDED-001. The rollup MUST run only over an acyclic graph
+      (DAG-ACYCLIC-PRECOND-001). The invariant: cumulative quantity = Σ over paths
+      of (∏ edge-weights along the path), computed in exact scaled decimal within a
+      bounded depth.
+    test_method: "RestAssured integration test + unit test on the rollup accumulator"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Generic well beyond BOM: WBS / project cost rollup (sum child costs up the
+      work-breakdown DAG), org headcount / compensation rollup (sum reports up the
+      management DAG), nested kit / bundle pricing (a bundle that contains bundles),
+      and dependency-impact weighting. The product-down / sum-across rule is the
+      same in every case; only the unit of the weight changes (quantity, cost,
+      headcount, price). Positive test: a diamond graph (root → A,B → shared leaf L
+      with edge weights) asserts L's rolled-up quantity equals weight(root→A)·
+      weight(A→L) + weight(root→B)·weight(B→L), in exact BigDecimal scale.
+  - id: "DAG-OBSERVABILITY-001"
+    chapter: "관측 (bounded-cardinality fan-out metric)"
+    requirement: >
+      Provenance traversals and rollups MUST expose bounded-cardinality Micrometer
+      metrics so a pathological graph is visible before it degrades a read:
+      (1) dag_traversal_nodes_visited{operation} (operation ∈ {where_used,
+      what_went_into, rollup}) as a histogram of fan-out size; (2)
+      dag_traversal_bound_hit_total{operation, reason} (reason ∈ {depth, size,
+      cycle}) counting traversals that hit a bound and degraded. Labels MUST be
+      fixed enums and MUST exclude node_id / edge_id / tenant_id-as-free-text or
+      any other high-cardinality / PII value. SLO / alert wiring is a fork-receiver
+      concern. This item is OPTIONAL (applicable:true but advisory) — adopt when
+      the provenance graph is large enough that fan-out blow-ups need to be
+      observable.
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded labels keep the time-series count finite; the cardinality of
+      {operation} × {reason} is a small fixed product. Pairs with
+      DAG-TRAVERSE-BOUNDED-001 — the bound_hit counter is exactly the signal that a
+      traversal degraded to a truncation-marker or 422 rather than returning a full
+      result, which is the fan-out blast-radius an operator wants alerting on.
