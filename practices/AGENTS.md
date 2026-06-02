@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "b3af30c49620188ae43bc548dd0bd33669e9a4780fa1a0ad12cebfbcc621961b"
+  source_concat_sha256: "a067f83c253d358eae87994fc5f9b20595f44991401e079a715de40fe80203ea"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -7706,7 +7706,7 @@ public class WorkService {
 
 The `WorkStateMachine.next(state, event)` pure function returns the next state or `null` for an illegal transition. The exception handler maps `IllegalStateTransitionException` to HTTP 409 with an RFC 7807 `application/problem+json` body that includes `currentState` and `attemptedEvent` extensions, so clients can react programmatically.
 
-Verification: `./gradlew testPayment --tests "*StateMachine*"` exercises the legal-transition matrix (all defined transitions succeed; all undefined transitions throw `IllegalStateTransitionException`) and a concurrent-transition race test — two threads call `transition(CAPTURE)` on the same `AUTHORIZED` entity simultaneously; one succeeds, the other receives 409 via the optimistic-lock collision.
+Verification: `./gradlew testPayment --tests "*StateMachine*"` exercises the legal-transition matrix (all defined transitions succeed; all undefined transitions throw `IllegalStateTransitionException`) and an optimistic-lock check: JPA `@Version` is asserted to reject a stale-version re-transition (the test approximates the race sequentially; the full two-thread CAPTURE race is deferred to the US-011 concurrency suite). The optimistic-lock loser surfaces as a 409.
 
 Reference: [Spring Data JPA — Locking](https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html)
 
@@ -8063,7 +8063,7 @@ tags:
 provenance_class: internal_design
 protects_template_id: templates/backend/file-storage/PresignedUrlService.java
 failing_fixture_path: practices/evals/fixtures/presigned-url-signature-required/fail_no_signature/
-spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-CORE-001"
+spec_ref: "specs/file-storage-l0.yaml#FILE-AUTHZ-001"
 verification:
   type: review
   notes: "Every PresignedUrlService.generateDownloadUrl / generateUploadUrl must compute HMAC over (objectKey + expiry) and append sig + exp query parameters."

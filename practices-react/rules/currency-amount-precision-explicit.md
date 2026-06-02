@@ -100,7 +100,7 @@ function PricingCard({ plan }: { plan: Plan }) {
 
 ```tsx
 // ✅ CORRECT: use CurrencyInput for editable amount fields
-import CurrencyInput from '@/templates/L1/components/currency-input'
+import { CurrencyInput } from '@/templates/L1/components/currency-input'
 
 function PlanForm() {
   const [amount, setAmount] = useState<number>(0)  // minor units

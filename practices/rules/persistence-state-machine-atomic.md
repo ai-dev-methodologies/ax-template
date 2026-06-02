@@ -97,7 +97,7 @@ public class WorkService {
 
 The `WorkStateMachine.next(state, event)` pure function returns the next state or `null` for an illegal transition. The exception handler maps `IllegalStateTransitionException` to HTTP 409 with an RFC 7807 `application/problem+json` body that includes `currentState` and `attemptedEvent` extensions, so clients can react programmatically.
 
-Verification: `./gradlew testPayment --tests "*StateMachine*"` exercises the legal-transition matrix (all defined transitions succeed; all undefined transitions throw `IllegalStateTransitionException`) and a concurrent-transition race test — two threads call `transition(CAPTURE)` on the same `AUTHORIZED` entity simultaneously; one succeeds, the other receives 409 via the optimistic-lock collision.
+Verification: `./gradlew testPayment --tests "*StateMachine*"` exercises the legal-transition matrix (all defined transitions succeed; all undefined transitions throw `IllegalStateTransitionException`) and an optimistic-lock check: JPA `@Version` is asserted to reject a stale-version re-transition (the test approximates the race sequentially; the full two-thread CAPTURE race is deferred to the US-011 concurrency suite). The optimistic-lock loser surfaces as a 409.
 
 Reference: [Spring Data JPA — Locking](https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html)
 

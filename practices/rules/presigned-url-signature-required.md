@@ -12,7 +12,7 @@ tags:
 provenance_class: internal_design
 protects_template_id: templates/backend/file-storage/PresignedUrlService.java
 failing_fixture_path: practices/evals/fixtures/presigned-url-signature-required/fail_no_signature/
-spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-CORE-001"
+spec_ref: "specs/file-storage-l0.yaml#FILE-AUTHZ-001"
 verification:
   type: review
   notes: "Every PresignedUrlService.generateDownloadUrl / generateUploadUrl must compute HMAC over (objectKey + expiry) and append sig + exp query parameters."
