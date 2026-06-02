@@ -118,7 +118,7 @@ ci, di, verifiedIdentityNumber, externalId, connectingInfo, duplicateInfo
 See: `practices/evals/fixtures/no-rrn-collection-without-legal-basis/fail_rrn_no_legal_basis/`
 — A DTO with a field named `rrn` and no `@LegalBasis` annotation. Static analysis catches field name pattern.
 
-React companion rule: `practices-react/rules/no-rrn-collection-without-legal-basis.md`
+React companion rule: `practices-react/rules/no-rrn-display-without-legal-basis-gate.md`
 
 Reference: [개인정보보호법 제24조 — 고유식별정보의 처리 제한](https://www.law.go.kr/법령/개인정보보호법)
 

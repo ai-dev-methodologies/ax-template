@@ -1114,7 +1114,7 @@ date: 2026-05-18
 Two rules added to catalog:
 1. `practices/rules/no-rrn-collection-without-legal-basis.md` (Java) — guard matches
    `String.*rrn|String.*주민` in Java files without `@LegalBasis` annotation
-2. `practices-react/rules/no-rrn-collection-without-legal-basis.md` (React) — guard matches
+2. `practices-react/rules/no-rrn-display-without-legal-basis-gate.md` (React) — guard matches
    `rrn|주민번호|residentRegistration` field names in TS/TSX files; excludes `ci|di|verifiedIdentityNumber`
 
 `@LegalBasis` annotation pattern from pipa-article-24-2026-05.snapshot.md documents
@@ -1331,7 +1331,7 @@ internals evolve and breaks independent deployability.
 ### Consequences
 
 - Rule: `practices/rules/no-billing-cross-import-from-payment.md` (CRITICAL)
-- React rule: `practices-react/rules/no-billing-cross-import-from-payment.md`
+- React rule: `practices-react/rules/no-billing-payment-ui-boundary.md`
 
 ---
 

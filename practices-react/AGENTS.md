@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "4928812298eb2d7c57b9f6e4cb5ddd7874aedfbf25dab63e9e3ccc8a6901fe30"
+  source_concat_sha256: "bf0e70ef6358d27a9a9928e50da21a1baf9007b28ad0de44954d759ce103a858"
   rule_count: 86
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -6626,7 +6626,7 @@ evidence:
 decided_at: "2026-05-18"
 ---
 
-## prefer-recipe-composition-over-l4-cross-import (React/Next.js)
+## prefer-recipe-over-l4-page-cross-import (React/Next.js)
 
 **Impact: HIGH — Next.js L4 route segments are independent modules. A page that imports hooks and stores from 2+ sibling L4 domains to replicate a Recipe composition couples those segments and prevents per-route tree-shaking. The composition must be declared via `applied_recipe:` on the domain README.**
 
