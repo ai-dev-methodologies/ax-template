@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "026a5508a6abb834d2321b30c298e1019d908aa2b59d6ecd86e627da7c5ed208"
+  source_concat_sha256: "4928812298eb2d7c57b9f6e4cb5ddd7874aedfbf25dab63e9e3ccc8a6901fe30"
   rule_count: 86
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -663,7 +663,7 @@ async function handleRequest(userId: string, skipProcessing: boolean) {
 }
 ```
 
-### Correct — cheapest validation first, then independent work in parallel
+### Correct — cheapest validation first (guard before the dependent work it gates)
 
 ```typescript
 async function updateResource(resourceId: string, userId: string) {
@@ -856,7 +856,7 @@ verification:
   type: eslint
   rule_id: "ax/react-async-parallel"
   status: shipped
-  notes: "Custom ESLint rule planned; until shipped, peer-review checkpoint"
+  notes: "Shipped: custom ESLint rule ax/react-async-parallel is registered in the plugin and enabled (error in own-blocks/recommended, warn in frontend)"
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -1031,11 +1031,11 @@ const notices = settled[2].status === 'fulfilled' ? settled[2].value : []
 
 ### Verification
 
-- Static check (planned): custom ESLint rule `ax/react-async-parallel` flags two
+- Static check (shipped + enabled): custom ESLint rule `ax/react-async-parallel` flags two
   or more consecutive top-level `await` statements that share no `await`-bound
   identifiers, inside the same async function body, where each awaited expression
   is a call (i.e., independent network or DB I/O).
-- Manual: code review checkpoint until the ESLint rule ships.
+- Manual: code review complements the shipped ESLint rule for cases static analysis cannot see.
 
 
 <!-- @source rules/async-suspense-boundaries.md -->
@@ -1205,10 +1205,15 @@ function Bad() {
   const data = use(posts)
 }
 
-// GOOD: promise created in Server Component, passed down as a prop.
+// GOOD: promise created ONCE in the Server Component, passed down; the child consumes the
+// PASSED-IN promise with use() instead of recreating its own each render.
+function PostList({ posts }: { posts: Promise<Post[]> }) {
+  const list = use(posts)                 // consumes the prop — not a per-render new promise
+  return <ul>{list.map((p) => <li key={p.id}>{p.title}</li>)}</ul>
+}
 function Page() {
-  const posts = fetchPosts()
-  return <Bad posts={posts} />
+  const posts = fetchPosts()              // promise created once, in the Server Component
+  return <Suspense fallback={<Skeleton />}><PostList posts={posts} /></Suspense>
 }
 ```
 
@@ -1253,7 +1258,7 @@ verification:
   type: eslint
   rule_id: "ax/no-broad-barrel-imports"
   status: shipped
-  notes: "Custom ESLint rule planned: flag `import { ... } from 'X'` for X in a configurable allowlist of known-expensive packages, with an escape hatch for packages already auto-optimized by the project's bundler. Until shipped: peer-review checkpoint."
+  notes: "Shipped + enabled: ax/no-broad-barrel-imports flags `import { ... } from 'X'` for X in a configurable allowlist of known-expensive packages, with an escape hatch for bundler-auto-optimized packages; registered in the plugin and enforcing."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -1446,7 +1451,7 @@ per-module imports at build time. Use it when:
 
 ### Verification
 
-- Static check (planned): custom ESLint rule `ax/no-broad-barrel-imports`. Maintains
+- Static check (shipped + enabled): custom ESLint rule `ax/no-broad-barrel-imports`. Maintains
   an allowlist of packages already optimized by the project's bundler (read from
   `eslint.config.js` plugin options). Flags `import { ... } from 'X'` only when X
   is on the project's "known expensive, not auto-optimized" list and the import
@@ -2339,15 +2344,22 @@ const listeners = new Set<() => void>()
 let lastKey: string | null = null
 
 function getSnapshot() { return lastKey }
+// Named handler → removable (an inline closure could never be removeEventListener'd).
+function handleKeydown(e: KeyboardEvent) {
+  lastKey = e.key
+  listeners.forEach((fn) => fn())
+}
 function subscribe(notify: () => void) {
   if (listeners.size === 0) {
-    window.addEventListener('keydown', (e) => {
-      lastKey = e.key
-      listeners.forEach((fn) => fn())
-    })
+    window.addEventListener('keydown', handleKeydown)   // first subscriber installs
   }
   listeners.add(notify)
-  return () => listeners.delete(notify)
+  return () => {
+    listeners.delete(notify)
+    if (listeners.size === 0) {
+      window.removeEventListener('keydown', handleKeydown)   // last unsubscriber removes (no leak)
+    }
+  }
 }
 
 export function useLastPressedKey() {
@@ -2878,9 +2890,6 @@ verification:
   status: manual
   notes: "Combobox onChange handler must check composingRef.current or nativeEvent.isComposing before invoking the filter/search. onCompositionStart must set the guard; onCompositionEnd must clear it and fire the deferred filter."
 evidence:
-  - upstream_id: mdn-addeventlistener-passive
-    section: "CompositionEvent — isComposing property"
-    quote: "isComposing"
   - source_type: external
     citation: "MDN Web Docs — CompositionEvent: compositionstart / compositionend lifecycle for CJK input method editors"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"
@@ -2973,11 +2982,11 @@ Reference: [MDN Web Docs — CompositionEvent](https://developer.mozilla.org/en-
 Reference: [W3C UI Events §CompositionEvent](https://www.w3.org/TR/uievents/#events-composition-types)
 
 
-<!-- @source rules/currency-amount-precision-explicit.md -->
+<!-- @source rules/currency-amount-no-raw-jsx-render.md -->
 
 ---
 title: "All monetary amounts in billing UI must be displayed via CurrencyFormatter using integer minor-unit values; raw number display and float arithmetic are prohibited"
-rule_id: currency-amount-precision-explicit
+rule_id: currency-amount-no-raw-jsx-render
 impact: CRITICAL
 impactDescription: "Displaying monetary amounts as raw numbers (e.g., 1000 instead of ₩1,000) or converting minor units to float before display silently misrepresents prices. Users may see ₩100,000 displayed as 100000 or $9.99 displayed as $10.00 due to float rounding."
 tags:
@@ -2991,16 +3000,14 @@ applicable_to:
   - nextjs
 provenance_class: internal_design
 protects_template_id: templates/L1/components/currency-input.tsx
-failing_fixture_path: practices-react/evals/fixtures/currency-amount-precision-explicit/
 spec_ref: "specs/billing-frontend-l0.yaml#BILLING-FE-001"
 verification:
-  type: script
+  type: review
   notes: |
-    ESLint rule (custom): no-raw-billing-amount
-    Detects: numeric billing amount literals rendered directly in JSX without CurrencyFormatter.
-    Detects: amount / 100, amount * 0.01, parseFloat(amount), Number(amount).toFixed(2)
-    in billing component files.
-    Failing fixture: a PricingCard that renders {plan.amount} directly in JSX.
+    Review-tier (no shipped ESLint rule yet — ax/no-raw-billing-amount is NOT in eslint-plugin-ax):
+    reject numeric billing-amount literals rendered directly in JSX without CurrencyFormatter, and
+    reject amount / 100, amount * 0.01, parseFloat(amount), Number(amount).toFixed(2) in billing
+    component files. A reviewer confirms every {plan.amount} is wrapped in formatCurrencyAmount.
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
@@ -3079,7 +3086,7 @@ function PricingCard({ plan }: { plan: Plan }) {
 
 ```tsx
 // ✅ CORRECT: use CurrencyInput for editable amount fields
-import CurrencyInput from '@/templates/L1/components/currency-input'
+import { CurrencyInput } from '@/templates/L1/components/currency-input'
 
 function PlanForm() {
   const [amount, setAmount] = useState<number>(0)  // minor units
@@ -3095,9 +3102,9 @@ function PlanForm() {
 }
 ```
 
-## No-raw-billing-amount ESLint rule (custom)
+## No-raw-billing-amount review checklist
 
-Detects the following patterns in billing component files:
+No ESLint rule ships for this (ax/no-raw-billing-amount is NOT in eslint-plugin-ax). A reviewer flags these patterns in billing component files:
 
 | Pattern | Violation |
 |---|---|
@@ -3110,9 +3117,9 @@ Detects the following patterns in billing component files:
 
 ## Failing fixture
 
-See: `practices-react/evals/fixtures/currency-amount-precision-explicit/fail_raw_amount/PricingCardRawAmount.tsx` — a PricingCard that renders `{plan.amount}` directly.
+Illustrative FAIL shape: a PricingCard that renders `{plan.amount}` directly (no dedicated fixture shipped yet — verified at review).
 
-See: `practices-react/evals/fixtures/currency-amount-precision-explicit/pass_formatted_amount/PricingCardFormatted.tsx` — correct usage via `formatCurrencyAmount`.
+Illustrative PASS shape: correct usage via `formatCurrencyAmount` from `templates/L1/components/currency-input.tsx` (which exists).
 
 
 <!-- @source rules/impersonation-banner-required-when-acting-as-other-user.md -->
@@ -3202,8 +3209,10 @@ router.push('/admin/dashboard')
 ### Correct — any helper name, banner always present
 
 ```typescript
-// ✅ CORRECT — helper name is irrelevant; banner is wired at the layout level
-// Helper (any name):
+// ✅ CORRECT — helper name is irrelevant. The per-file scanner requires <ImpersonationBanner>
+// CO-LOCATED in the file that PERSISTS actingAs. A pure helper that merely computes {actingAs}
+// is fine; the layout below both consumes it and renders the banner in the same file.
+// Helper (any name) — pure computation, persists nothing:
 export function runAsUser(userId: string) {
   return { ...currentSession, actingAs: userId }
 }
@@ -3232,7 +3241,7 @@ export default async function AdminLayout({ children }) {
 // ✅ CORRECT — server component reads session from cookie; banner in layout
 // lib/admin-session.ts:
 export async function getAdminSession(): Promise<AdminSession> {
-  const cookie = cookies().get('admin-session')?.value
+  const cookie = (await cookies()).get('admin-session')?.value
   return cookie ? JSON.parse(decrypt(cookie)) : { actingAs: null }
 }
 
@@ -4682,7 +4691,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-L2-001"
 verification:
   type: review
   status: manual
-  notes: "For each L2 form block, verify: (a) no `import ... from 'app/actions/...'` or `import ... from 'lib/...'` in the block file, (b) the form accepts an `onSubmit` callback prop, (c) the callback prop is typed in the exported interface. See check-imports.sh for the static enforcement in ax-verify-L2."
+  notes: "For each L2 form block, verify: (a) no `import ... from 'app/actions/...'` or `import ... from 'lib/...'` in the block file, (b) the form accepts an `onSubmit` callback prop, (c) the callback prop is typed in the exported interface. check-imports.sh statically enforces the L3/L4 import boundary; the app/actions and lib ban in (a) is review-tier (the script does not inspect those paths)."
 provenance:
   pilot: true
   pipeline_version: "2026-05-18"
@@ -4780,7 +4789,7 @@ During SP7 block implementation, every auth, CRUD, and payment form block was a 
 
 ### Layer enforcement
 
-`bash skills/ax-verify-L2/scripts/check-imports.sh` fails with `ILLEGAL_IMPORT` if any L2 file contains an import referencing `templates/L3/`, `templates/L4/`, or `app/`.
+`bash skills/ax-verify-L2/scripts/check-imports.sh` fails with `ILLEGAL_IMPORT` if any L2 file contains an import referencing `templates/L3/` or `templates/L4/`. (The `app/actions/…` and `lib/…` import ban this rule headlines is review-tier — check-imports.sh does not yet inspect those paths.)
 
 
 <!-- @source rules/next-async-params-parallel.md -->
@@ -5662,11 +5671,11 @@ Sources for this rule:
 - [React 19 — cache() (for isolation context)](https://react.dev/reference/react/cache)
 
 
-<!-- @source rules/no-billing-cross-import-from-payment.md -->
+<!-- @source rules/no-billing-payment-ui-boundary.md -->
 
 ---
-title: "billing UI components must not import from payment UI components and vice versa; the L4/billing ↔ L4/payment boundary is enforced by ESLint"
-rule_id: no-billing-cross-import-from-payment
+title: "billing UI components must not import from payment UI components and vice versa; the L4/billing ↔ L4/payment boundary is enforceable via the project ESLint config (import/no-restricted-paths)"
+rule_id: no-billing-payment-ui-boundary
 impact: HIGH
 impactDescription: "Cross-importing between billing and payment UI components couples two separate checkout flows. A payment UI change (e.g., PaymentMethodSelector) should never force billing UI changes (e.g., PricingTable). Subscription UI (billing) and one-shot checkout UI (payment) are independent user flows."
 tags:
@@ -5680,12 +5689,11 @@ applicable_to:
   - nextjs
 provenance_class: internal_design
 protects_template_id: templates/L4/billing/app/(billing)/subscriptions/page.tsx
-failing_fixture_path: practices-react/evals/fixtures/no-billing-cross-import-from-payment/
 spec_ref: "specs/billing-frontend-l0.yaml#BILLING-FE-004"
 verification:
-  type: script
+  type: review
   notes: |
-    ESLint rule (import/no-restricted-paths or custom):
+    Review-tier / project ESLint config (no shipped ax rule): wire eslint import/no-restricted-paths so
     L4/billing/** must not import from L4/payment/**
     L4/payment/** must not import from L4/billing/**
     L2/billing/** must not import from L2/payment/**
@@ -5842,9 +5850,9 @@ function PlanSelectButton({ planId }: { planId: string }) {
 
 ## Failing fixture
 
-See: `practices-react/evals/fixtures/no-billing-cross-import-from-payment/fail_cross_import/NewSubscriptionPageCrossImport.tsx` — a billing page that imports `PaymentMethodSelector` from the payment domain.
+Illustrative FAIL shape: a billing page importing `PaymentMethodSelector` from the payment domain (no dedicated frontend fixture shipped — the Java boundary fixture lives at practices/evals/fixtures/no-billing-cross-import-from-payment/).
 
-See: `practices-react/evals/fixtures/no-billing-cross-import-from-payment/pass_no_cross_import/NewSubscriptionPageClean.tsx` — correct billing page with no payment imports.
+Illustrative PASS shape: a billing page with no payment-domain imports (verified at review).
 
 
 <!-- @source rules/no-hardcoded-user-facing-string-in-l4.md -->
@@ -6184,11 +6192,11 @@ Reference: [Next.js App Router — route colocation](https://nextjs.org/docs/app
 Reference: [Failing fixture: practices/evals/fixtures/no-l4-cross-import/fail_cross_import/PaymentPage.tsx](practices/evals/fixtures/no-l4-cross-import/fail_cross_import/PaymentPage.tsx)
 
 
-<!-- @source rules/no-rrn-collection-without-legal-basis.md -->
+<!-- @source rules/no-rrn-display-without-legal-basis-gate.md -->
 
 ---
 title: "Frontend components must not collect or display raw RRN (주민등록번호) fields without an explicit legal-basis disclosure gate"
-rule_id: no-rrn-collection-without-legal-basis
+rule_id: no-rrn-display-without-legal-basis-gate
 impact: CRITICAL
 impactDescription: "RRN is Sensitive Personal Information under 개인정보보호법 §24-1; collecting it in a frontend form without explicit statutory authorization and a dedicated consent gate is a compliance violation"
 tags:
@@ -6204,7 +6212,7 @@ applicable_to:
   - nextjs
 provenance_class: locked_constraint
 protects_template_id: templates/L2/blocks/phone-verification-panel.tsx
-failing_fixture_path: practices/evals/fixtures/no-rrn-collection-without-legal-basis/fail_rrn_no_legal_basis/
+failing_fixture_path: practices/evals/fixtures/no-rrn-in-form-fields/fail_rrn_field/
 spec_ref: "specs/identity-verification-l0.yaml#IDV-CALLBACK-003"
 verification:
   type: review
@@ -6291,7 +6299,8 @@ function OnboardingPage() {
 
 ```tsx
 // ✅ CORRECT (statutory exception — very rare) — requires legal-basis disclosure UI
-import { LegalBasisGate } from 'templates/L2/blocks/legal-basis-gate'
+// LegalBasisGate is an ILLUSTRATIVE wrapper you implement (no shipped block) — it gates RRN
+// collection behind a documented legal basis and renders the consent + retention notice.
 
 function FinancialKycForm() {
   return (
@@ -6328,7 +6337,7 @@ These replace the RRN for identity correlation. Use `<PhoneVerificationPanel>` +
 
 ## Failing fixture
 
-See: `practices/evals/fixtures/no-rrn-collection-without-legal-basis/fail_rrn_no_legal_basis/`
+See: `practices/evals/fixtures/no-rrn-in-form-fields/fail_rrn_field/RegistrationForm.tsx`
 — A React form component with `name="rrn"` input. Static analysis grep catches the pattern.
 
 Backend companion rule: `practices/rules/no-rrn-collection-without-legal-basis.md`
@@ -6431,7 +6440,8 @@ Use the dedicated `<KycVerificationModal>` component with mandatory legal-basis 
 
 ```tsx
 // ✅ CORRECT — KYC flow with explicit consent gate
-import { KycVerificationModal } from "templates/L2/blocks/kyc-verification-modal";
+// KycVerificationModal is an ILLUSTRATIVE component you build (no shipped L2 block) — it must
+// display the legal basis + retention notice and write an audit record before any RRN-class field renders.
 
 export default function OnboardingPage() {
   const [kycOpen, setKycOpen] = useState(false);
@@ -6574,11 +6584,11 @@ Pattern: `process.env.NEXT_PUBLIC_FEATURE_*` or `process.env.NEXT_PUBLIC_FF_*` i
 The `_run.sh` fixture script in `practices-react/evals/fixtures/feature_gate/` implements this as a Python regex scan.
 
 
-<!-- @source rules/prefer-recipe-composition-over-l4-cross-import.md -->
+<!-- @source rules/prefer-recipe-over-l4-page-cross-import.md -->
 
 ---
 title: "When a Next.js page implements a multi-L4 composition matching a Business Pattern Recipe, the L4 domain README must declare applied_recipe; ad-hoc cross-L4 hook/store imports without that declaration are prohibited"
-rule_id: prefer-recipe-composition-over-l4-cross-import
+rule_id: prefer-recipe-over-l4-page-cross-import
 impact: HIGH
 impactDescription: "Ad-hoc cross-L4 imports in Next.js pages that duplicate a Recipe composition create undeclared bundle coupling between domain route segments, break tree-shaking, and make the recipe audit trail invisible to recipe_governance_guard.sh"
 tags:
@@ -6684,7 +6694,7 @@ export default function SaasDashboardPage() {
 
 See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/fail_ad_hoc_cross_import/SaasPage.tsx` — three L4 cross-imports without recipe declaration.
 
-See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/pass/SaasPage.tsx` — same imports with companion README declaring `applied_recipe: saas-subscription`.
+See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/pass/SaasOrchestrator.java` — same composition with companion README declaring `applied_recipe: saas-subscription`.
 
 Reference: https://nextjs.org/docs/app/building-your-application/routing/colocation
 
@@ -6919,7 +6929,7 @@ verification:
   type: lint
   rule_id: "ax/no-falsy-numeric-render"
   status: shipped
-  notes: "Custom ESLint rule planned: flag `numeric && <JSX>` patterns; safe `boolean && <JSX>` left alone."
+  notes: "Shipped + enabled: ax/no-falsy-numeric-render flags `numeric && <JSX>` patterns; safe `boolean && <JSX>` left alone; registered in the plugin and enforcing."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -8841,7 +8851,7 @@ verification:
   type: lint
   rule_id: "ax/no-inline-component-definition"
   status: shipped
-  notes: "Custom ESLint rule planned: flag function declarations inside other function components whose return type is JSX, except small inline render helpers explicitly returning array-of-JSX nodes."
+  notes: "Shipped + enabled: ax/no-inline-component-definition flags function declarations inside other function components whose return type is JSX, except small inline render helpers explicitly returning array-of-JSX nodes; registered in the plugin and enforcing."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -9697,7 +9707,7 @@ Contains a component that:
 2. Writes saved views to `localStorage.setItem`
 3. Sets `persistence: 'localStorage'` (not a valid `SavedViewPersistence` type value)
 
-Running the fixture should cause ESLint to flag the localStorage usage.
+Running the fixture should cause `saved_view_url_state_guard.sh` (not ESLint — no ax rule detects localStorage) to flag the localStorage usage.
 
 ### TDD anchor
 
@@ -11119,7 +11129,7 @@ export default function ProductsPage() {
   return (
     <VirtualizedTable
       data={MOCK_PRODUCTS}     // 5000 rows loaded in memory, ~20-30 rendered
-      estimateSize={() => 48}  // estimated row height for virtual scroll math
+      estimatedRowHeight={48}  // estimated row height for virtual scroll math
       columns={PRODUCT_COLUMNS}
       getRowKey={(row) => row.id}
     />

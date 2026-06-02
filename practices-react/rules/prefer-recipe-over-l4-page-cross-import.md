@@ -1,6 +1,6 @@
 ---
 title: "When a Next.js page implements a multi-L4 composition matching a Business Pattern Recipe, the L4 domain README must declare applied_recipe; ad-hoc cross-L4 hook/store imports without that declaration are prohibited"
-rule_id: prefer-recipe-composition-over-l4-cross-import
+rule_id: prefer-recipe-over-l4-page-cross-import
 impact: HIGH
 impactDescription: "Ad-hoc cross-L4 imports in Next.js pages that duplicate a Recipe composition create undeclared bundle coupling between domain route segments, break tree-shaking, and make the recipe audit trail invisible to recipe_governance_guard.sh"
 tags:

@@ -635,7 +635,7 @@ items:
 
   - id: "REACT-PRACTICES-L4-001"
     chapter: "L4 Layer / Recipe Composition"
-    requirement: "When a Next.js page in an L4 domain implements a multi-domain composition pattern covered by a Business Pattern Recipe (saas-subscription, e-commerce, crm), it MUST follow the Recipe's L2 block and domain wiring contract. Directly importing hooks, stores, or components from sibling L4 domains without an applied_recipe: declaration on the L4 domain README is prohibited. Rule body: practices-react/rules/prefer-recipe-composition-over-l4-cross-import.md."
+    requirement: "When a Next.js page in an L4 domain implements a multi-domain composition pattern covered by a Business Pattern Recipe (saas-subscription, e-commerce, crm), it MUST follow the Recipe's L2 block and domain wiring contract. Directly importing hooks, stores, or components from sibling L4 domains without an applied_recipe: declaration on the L4 domain README is prohibited. Rule body: practices-react/rules/prefer-recipe-over-l4-page-cross-import.md."
     test_method: "react_practices_L4_001_recipeCompositionOverAdHocL4CrossImport"
     verification_type: "code_review"
     applicable: true

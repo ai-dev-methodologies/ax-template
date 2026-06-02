@@ -1,6 +1,6 @@
 ---
 title: "billing UI components must not import from payment UI components and vice versa; the L4/billing ↔ L4/payment boundary is enforceable via the project ESLint config (import/no-restricted-paths)"
-rule_id: no-billing-cross-import-from-payment
+rule_id: no-billing-payment-ui-boundary
 impact: HIGH
 impactDescription: "Cross-importing between billing and payment UI components couples two separate checkout flows. A payment UI change (e.g., PaymentMethodSelector) should never force billing UI changes (e.g., PricingTable). Subscription UI (billing) and one-shot checkout UI (payment) are independent user flows."
 tags:

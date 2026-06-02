@@ -1,6 +1,6 @@
 ---
 title: "All monetary amounts in billing UI must be displayed via CurrencyFormatter using integer minor-unit values; raw number display and float arithmetic are prohibited"
-rule_id: currency-amount-precision-explicit
+rule_id: currency-amount-no-raw-jsx-render
 impact: CRITICAL
 impactDescription: "Displaying monetary amounts as raw numbers (e.g., 1000 instead of ₩1,000) or converting minor units to float before display silently misrepresents prices. Users may see ₩100,000 displayed as 100000 or $9.99 displayed as $10.00 due to float rounding."
 tags:

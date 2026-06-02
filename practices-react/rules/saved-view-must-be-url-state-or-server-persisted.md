@@ -158,7 +158,7 @@ Contains a component that:
 2. Writes saved views to `localStorage.setItem`
 3. Sets `persistence: 'localStorage'` (not a valid `SavedViewPersistence` type value)
 
-Running the fixture should cause ESLint to flag the localStorage usage.
+Running the fixture should cause `saved_view_url_state_guard.sh` (not ESLint — no ax rule detects localStorage) to flag the localStorage usage.
 
 ### TDD anchor
 

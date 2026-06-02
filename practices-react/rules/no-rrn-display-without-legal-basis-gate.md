@@ -1,6 +1,6 @@
 ---
 title: "Frontend components must not collect or display raw RRN (주민등록번호) fields without an explicit legal-basis disclosure gate"
-rule_id: no-rrn-collection-without-legal-basis
+rule_id: no-rrn-display-without-legal-basis-gate
 impact: CRITICAL
 impactDescription: "RRN is Sensitive Personal Information under 개인정보보호법 §24-1; collecting it in a frontend form without explicit statutory authorization and a dedicated consent gate is a compliance violation"
 tags:
