@@ -66,7 +66,7 @@ public class Payment {
 
 A grep / ArchUnit rule completes the loop: scan the monetary package and assert `float` and `double` do not appear on any monetary-named field. Pair this rule with `payment-iso-4217-currency.md` (per-currency scale validation) and with a Jackson deserializer that rejects JSON `number` tokens with a decimal point (only integer minor units and explicit decimal strings are accepted on the wire).
 
-Verification: `./gradlew testPayment --tests "*Money*"` exercises the deserializer (float-token rejection), the scale validator (KRW with 2 decimals → 400, BHD with 2 decimals → 400 because BHD scale is 3), and a partial-refund-sum invariant test that subtracts repeated partial refunds from `capturedAmount` and asserts exact zero (no sub-cent drift). Static scan: `grep -rn 'float\|double' backend/src/main/java/.../payment/` returns 0 hits on monetary fields.
+Verification: `./gradlew testPayment --tests "*Money*"` exercises the BigDecimal field-type check, KRW integer-amount acceptance, JSON float-token rejection, KRW fractional-amount rejection, and USD scale-2 acceptance. (BHD scale-3 and a partial-refund-sum drift invariant are NOT yet covered by PaymentMoneyTest — enforce those at review until added.) Static scan: `grep -rn 'float\|double' backend/src/main/java/.../payment/` returns 0 hits on monetary fields.
 
 Reference: [java.math.BigDecimal — Java SE 21 API documentation](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html)
 

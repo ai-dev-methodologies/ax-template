@@ -27,7 +27,7 @@ export default function ProductsPage() {
       <h1>Products ({MOCK_PRODUCTS.length})</h1>
       <VirtualizedTable
         data={MOCK_PRODUCTS}
-        estimateSize={() => 48}
+        estimatedRowHeight={48}
         columns={[
           { key: "id", header: "ID" },
           { key: "name", header: "Name" },

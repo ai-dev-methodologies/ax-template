@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "c68d907f99d012d21054d3a98fd28272e0430f70024bb884b12719cbf1c35cb5"
+  source_concat_sha256: "8ebac93f82b3e3975c4501f9d5e7ab11ddbf9c815cdf7a15c1dc0f36e3ff16c4"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -2202,7 +2202,7 @@ public class BlockingStatusGate {
         this.source = source;
     }
 
-    /** True ONLY when we have affirmatively established the entity is not blocked. */
+    /** True when the entity IS blocked, or cannot be proven unblocked (fail-closed: null/UNKNOWN status, or a lookup failure). */
     public boolean isBlocked(EntityRef ref) {
         try {
             BlockingStatus s = source.currentStatus(ref);   // authoritative re-read
@@ -4911,7 +4911,7 @@ public class Payment {
 
 A grep / ArchUnit rule completes the loop: scan the monetary package and assert `float` and `double` do not appear on any monetary-named field. Pair this rule with `payment-iso-4217-currency.md` (per-currency scale validation) and with a Jackson deserializer that rejects JSON `number` tokens with a decimal point (only integer minor units and explicit decimal strings are accepted on the wire).
 
-Verification: `./gradlew testPayment --tests "*Money*"` exercises the deserializer (float-token rejection), the scale validator (KRW with 2 decimals → 400, BHD with 2 decimals → 400 because BHD scale is 3), and a partial-refund-sum invariant test that subtracts repeated partial refunds from `capturedAmount` and asserts exact zero (no sub-cent drift). Static scan: `grep -rn 'float\|double' backend/src/main/java/.../payment/` returns 0 hits on monetary fields.
+Verification: `./gradlew testPayment --tests "*Money*"` exercises the BigDecimal field-type check, KRW integer-amount acceptance, JSON float-token rejection, KRW fractional-amount rejection, and USD scale-2 acceptance. (BHD scale-3 and a partial-refund-sum drift invariant are NOT yet covered by PaymentMoneyTest — enforce those at review until added.) Static scan: `grep -rn 'float\|double' backend/src/main/java/.../payment/` returns 0 hits on monetary fields.
 
 Reference: [java.math.BigDecimal — Java SE 21 API documentation](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html)
 
@@ -10316,8 +10316,6 @@ spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-PERS-005"
 verification:
   gradle_task: testPractices
   tag: PRACTICES-PERS-005
-failing_fixture_path: "practices/evals/fixtures/soft_delete/fail_boolean_flag"
-passing_fixture_path: "practices/evals/fixtures/soft_delete/pass"
 protects_template_ids:
   - "templates/backend/BaseEntity.java"
   - "templates/backend/notification/Notification.java"

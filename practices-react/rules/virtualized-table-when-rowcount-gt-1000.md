@@ -76,7 +76,7 @@ export default function ProductsPage() {
   return (
     <VirtualizedTable
       data={MOCK_PRODUCTS}     // 5000 rows loaded in memory, ~20-30 rendered
-      estimateSize={() => 48}  // estimated row height for virtual scroll math
+      estimatedRowHeight={48}  // estimated row height for virtual scroll math
       columns={PRODUCT_COLUMNS}
       getRowKey={(row) => row.id}
     />

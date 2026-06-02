@@ -12,8 +12,6 @@ spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-PERS-005"
 verification:
   gradle_task: testPractices
   tag: PRACTICES-PERS-005
-failing_fixture_path: "practices/evals/fixtures/soft_delete/fail_boolean_flag"
-passing_fixture_path: "practices/evals/fixtures/soft_delete/pass"
 protects_template_ids:
   - "templates/backend/BaseEntity.java"
   - "templates/backend/notification/Notification.java"

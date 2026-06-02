@@ -85,7 +85,7 @@ public class BlockingStatusGate {
         this.source = source;
     }
 
-    /** True ONLY when we have affirmatively established the entity is not blocked. */
+    /** True when the entity IS blocked, or cannot be proven unblocked (fail-closed: null/UNKNOWN status, or a lookup failure). */
     public boolean isBlocked(EntityRef ref) {
         try {
             BlockingStatus s = source.currentStatus(ref);   // authoritative re-read
