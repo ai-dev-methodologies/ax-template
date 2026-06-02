@@ -84,8 +84,8 @@ Reference: https://martinfowler.com/eaaCatalog/money.html
 ### Correct — rejecting float inputs at the HTTP boundary
 
 ```java
-// BillingController.java — CreateSubscriptionRequest record
-// amount is declared as long; if client sends 9.99, Jackson throws 400
+// BillingController.java — CreateSubscriptionRequest references a plan by id; the
+// money lives on the Plan (see CreatePlanRequest below, whose long amount rejects float JSON)
 record CreateSubscriptionRequest(
     @NotNull UUID planId,
     @NotBlank String provider

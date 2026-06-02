@@ -72,9 +72,14 @@ public EmailOutbox adminRetry(UUID id) {
 ```java
 static String recipientHash(String email) {
     if (email == null || email.isBlank()) return "(none)";
-    MessageDigest md = MessageDigest.getInstance("SHA-256");
-    byte[] digest = md.digest(email.getBytes(StandardCharsets.UTF_8));
-    return HexFormat.of().formatHex(digest).substring(0, 16);
+    try {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        byte[] digest = md.digest(email.getBytes(StandardCharsets.UTF_8));
+        return HexFormat.of().formatHex(digest).substring(0, 16);
+    } catch (NoSuchAlgorithmException e) {
+        // SHA-256 is mandated by the JLS — unreachable, but the checked exception must be handled.
+        throw new IllegalStateException("SHA-256 unavailable", e);
+    }
 }
 
 AUDIT.info("verb=ADMIN_RETRY id={} recipientHash={}", id, recipientHash(row.getRecipient()));

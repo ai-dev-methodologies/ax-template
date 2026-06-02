@@ -81,7 +81,7 @@ export default function DetailPage() {
 }
 ```
 
-The `data!` non-null assertion at the use-site is safe because the `!data` early return already established `data` is non-null at that point. TypeScript's narrowing tracks that.
+The `summary!` non-null assertion at the use-site is safe because the `!summary` early return already established `summary` is non-null at that point. TypeScript's narrowing tracks that.
 
 **A note on `chainPreview` / `chain` patterns**: when a derived value depends on the not-yet-loaded data, do **not** double-derive (`chainPreview = data ? compute() : null; … chain = chainPreview ?? compute()`) — the second derivation is provably unreachable after the `!data` guard, and the duplication invites drift. Compute once inside a memo whose deps include the data, then assert non-null at the use-site.
 

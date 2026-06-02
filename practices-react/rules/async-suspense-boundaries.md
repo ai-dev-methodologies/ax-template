@@ -163,10 +163,15 @@ function Bad() {
   const data = use(posts)
 }
 
-// GOOD: promise created in Server Component, passed down as a prop.
+// GOOD: promise created ONCE in the Server Component, passed down; the child consumes the
+// PASSED-IN promise with use() instead of recreating its own each render.
+function PostList({ posts }: { posts: Promise<Post[]> }) {
+  const list = use(posts)                 // consumes the prop — not a per-render new promise
+  return <ul>{list.map((p) => <li key={p.id}>{p.title}</li>)}</ul>
+}
 function Page() {
-  const posts = fetchPosts()
-  return <Bad posts={posts} />
+  const posts = fetchPosts()              // promise created once, in the Server Component
+  return <Suspense fallback={<Skeleton />}><PostList posts={posts} /></Suspense>
 }
 ```
 

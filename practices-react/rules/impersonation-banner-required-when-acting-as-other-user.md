@@ -113,7 +113,7 @@ export default async function AdminLayout({ children }) {
 // ✅ CORRECT — server component reads session from cookie; banner in layout
 // lib/admin-session.ts:
 export async function getAdminSession(): Promise<AdminSession> {
-  const cookie = cookies().get('admin-session')?.value
+  const cookie = (await cookies()).get('admin-session')?.value
   return cookie ? JSON.parse(decrypt(cookie)) : { actingAs: null }
 }
 

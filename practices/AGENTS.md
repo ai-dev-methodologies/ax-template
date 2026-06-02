@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "eda9e7f72ea241d87c4ec3ee3ba8f162a9e24d6d1c64d9ec7889294b322337b1"
+  source_concat_sha256: "1309cd83146257adda0e18bde049a1a7dc145334e2fc23838523cbb5a0b7215a"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -822,9 +822,14 @@ public EmailOutbox adminRetry(UUID id) {
 ```java
 static String recipientHash(String email) {
     if (email == null || email.isBlank()) return "(none)";
-    MessageDigest md = MessageDigest.getInstance("SHA-256");
-    byte[] digest = md.digest(email.getBytes(StandardCharsets.UTF_8));
-    return HexFormat.of().formatHex(digest).substring(0, 16);
+    try {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        byte[] digest = md.digest(email.getBytes(StandardCharsets.UTF_8));
+        return HexFormat.of().formatHex(digest).substring(0, 16);
+    } catch (NoSuchAlgorithmException e) {
+        // SHA-256 is mandated by the JLS — unreachable, but the checked exception must be handled.
+        throw new IllegalStateException("SHA-256 unavailable", e);
+    }
 }
 
 AUDIT.info("verb=ADMIN_RETRY id={} recipientHash={}", id, recipientHash(row.getRecipient()));
@@ -2516,8 +2521,8 @@ Reference: https://martinfowler.com/eaaCatalog/money.html
 ### Correct — rejecting float inputs at the HTTP boundary
 
 ```java
-// BillingController.java — CreateSubscriptionRequest record
-// amount is declared as long; if client sends 9.99, Jackson throws 400
+// BillingController.java — CreateSubscriptionRequest references a plan by id; the
+// money lives on the Plan (see CreatePlanRequest below, whose long amount rejects float JSON)
 record CreateSubscriptionRequest(
     @NotNull UUID planId,
     @NotBlank String provider
@@ -3817,7 +3822,7 @@ export default function DetailPage() {
 }
 ```
 
-The `data!` non-null assertion at the use-site is safe because the `!data` early return already established `data` is non-null at that point. TypeScript's narrowing tracks that.
+The `summary!` non-null assertion at the use-site is safe because the `!summary` early return already established `summary` is non-null at that point. TypeScript's narrowing tracks that.
 
 **A note on `chainPreview` / `chain` patterns**: when a derived value depends on the not-yet-loaded data, do **not** double-derive (`chainPreview = data ? compute() : null; … chain = chainPreview ?? compute()`) — the second derivation is provably unreachable after the `!data` guard, and the duplication invites drift. Compute once inside a memo whose deps include the data, then assert non-null at the use-site.
 
@@ -4656,8 +4661,8 @@ This rule sits beside `currency-amount-precision-explicit.md` (which mandates lo
 public long computeVatAmount(long supplyAmount) {
     // VIOLATION (1): double accumulates IEEE 754 noise.
     double rate = 0.10d;
-    double vat = supplyAmount * rate;          // 1005 * 0.10 = 100.50000000000001
-    return Math.round(vat);                    // banker's-rounding NOT HALF_UP — drifts on .5
+    double vat = supplyAmount * rate;          // VIOLATION: double arithmetic — float noise compounds across invoices
+    return Math.round(vat);                    // VIOLATION: long via the double path — precision already lost upstream (use BigDecimal.setScale(0, HALF_UP))
 }
 
 // VIOLATION (2): inline double literal inside BigDecimal materializes float noise.
@@ -8957,7 +8962,7 @@ tags:
 spec_ref: "specs/tag-categorization-l0.yaml#TAG-AUTHZ-001"
 verification:
   type: review
-  source: "templates/L4/tag-categorization/app/use-caller-id.ts"
+  source: "templates/L0/fork-receiver-kit/use-caller-id.ts"
   pattern: "useCallerRole() returns 'user' in dev by default; admin path requires explicit `NEXT_PUBLIC_DEV_AS_ADMIN=1` env opt-in"
 upstream:
   - "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
@@ -9334,24 +9339,33 @@ DROP TABLE tracking_event_2026_02;
 public static final int BATCH_SIZE = 5_000;
 public static final long BATCH_PAUSE_MS = 200L;
 
+// RetentionSweeper — no @Transactional on the loop. The per-batch transaction lives on a
+// SEPARATE bean (BatchDeleter) so Spring's proxy is actually crossed; a self-call to a
+// @Transactional method in THIS bean would bypass the proxy and run in JDBC autocommit,
+// making the "each batch is its own transaction" promise false.
+private final BatchDeleter batchDeleter;
+
 @Scheduled(cron = "0 0 3 * * *")
 public void purgeOldEvents() throws InterruptedException {      // no outer @Transactional
     Instant cutoff = Instant.now().minus(90, ChronoUnit.DAYS);
     int deleted;
     do {
-        deleted = deleteBatch(cutoff);                          // each batch is its own transaction
+        deleted = batchDeleter.deleteBatch(cutoff);             // cross-bean call → real per-batch tx
         if (deleted > 0) Thread.sleep(BATCH_PAUSE_MS);          // let autovacuum / replicas catch up
     } while (deleted == BATCH_SIZE);
 }
 
-@Transactional                                                  // CORRECT: scoped to one bounded batch
-public int deleteBatch(Instant cutoff) {
-    // LIMIT bounds the locked row set per transaction; commit between batches caps lock + bloat
-    return jdbc.update("""
-        DELETE FROM tracking_event
-         WHERE id IN (SELECT id FROM tracking_event
-                       WHERE created_at < ? ORDER BY id LIMIT ?)
-        """, Timestamp.from(cutoff), BATCH_SIZE);
+@Component
+class BatchDeleter {
+    @Transactional                                              // honored — call crosses the proxy boundary
+    public int deleteBatch(Instant cutoff) {
+        // LIMIT bounds the locked row set per transaction; commit between batches caps lock + bloat
+        return jdbc.update("""
+            DELETE FROM tracking_event
+             WHERE id IN (SELECT id FROM tracking_event
+                           WHERE created_at < ? ORDER BY id LIMIT ?)
+            """, Timestamp.from(cutoff), BATCH_SIZE);
+    }
 }
 ```
 
@@ -12951,12 +12965,13 @@ public ResponseEntity<Void> receiveWebhook(@RequestBody String payload) {
 @PostMapping("/api/webhooks/github")
 public ResponseEntity<Void> receiveWebhook(
         @RequestHeader("X-Hub-Signature-256") String signatureHeader,
+        @RequestHeader("X-GitHub-Delivery") String deliveryId,
         @RequestBody byte[] rawBody) {
 
     // Step 1: verify HMAC (throws 401 on failure)
     webhookReceiver.verify(signatureHeader, rawBody);
 
-    // Step 2: idempotency check
+    // Step 2: idempotency check — deliveryId is the provider's unique delivery UUID
     webhookReceiver.markProcessed(deliveryId);
 
     // Step 3: process

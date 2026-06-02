@@ -9,7 +9,7 @@ verification:
   type: lint
   rule_id: "ax/no-inline-component-definition"
   status: shipped
-  notes: "Custom ESLint rule planned: flag function declarations inside other function components whose return type is JSX, except small inline render helpers explicitly returning array-of-JSX nodes."
+  notes: "Shipped + enabled: ax/no-inline-component-definition flags function declarations inside other function components whose return type is JSX, except small inline render helpers explicitly returning array-of-JSX nodes; registered in the plugin and enforcing."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

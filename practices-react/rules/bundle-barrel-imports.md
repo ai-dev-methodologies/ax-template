@@ -20,7 +20,7 @@ verification:
   type: eslint
   rule_id: "ax/no-broad-barrel-imports"
   status: shipped
-  notes: "Custom ESLint rule planned: flag `import { ... } from 'X'` for X in a configurable allowlist of known-expensive packages, with an escape hatch for packages already auto-optimized by the project's bundler. Until shipped: peer-review checkpoint."
+  notes: "Shipped + enabled: ax/no-broad-barrel-imports flags `import { ... } from 'X'` for X in a configurable allowlist of known-expensive packages, with an escape hatch for bundler-auto-optimized packages; registered in the plugin and enforcing."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -213,7 +213,7 @@ per-module imports at build time. Use it when:
 
 ### Verification
 
-- Static check (planned): custom ESLint rule `ax/no-broad-barrel-imports`. Maintains
+- Static check (shipped + enabled): custom ESLint rule `ax/no-broad-barrel-imports`. Maintains
   an allowlist of packages already optimized by the project's bundler (read from
   `eslint.config.js` plugin options). Flags `import { ... } from 'X'` only when X
   is on the project's "known expensive, not auto-optimized" list and the import

@@ -80,24 +80,33 @@ DROP TABLE tracking_event_2026_02;
 public static final int BATCH_SIZE = 5_000;
 public static final long BATCH_PAUSE_MS = 200L;
 
+// RetentionSweeper — no @Transactional on the loop. The per-batch transaction lives on a
+// SEPARATE bean (BatchDeleter) so Spring's proxy is actually crossed; a self-call to a
+// @Transactional method in THIS bean would bypass the proxy and run in JDBC autocommit,
+// making the "each batch is its own transaction" promise false.
+private final BatchDeleter batchDeleter;
+
 @Scheduled(cron = "0 0 3 * * *")
 public void purgeOldEvents() throws InterruptedException {      // no outer @Transactional
     Instant cutoff = Instant.now().minus(90, ChronoUnit.DAYS);
     int deleted;
     do {
-        deleted = deleteBatch(cutoff);                          // each batch is its own transaction
+        deleted = batchDeleter.deleteBatch(cutoff);             // cross-bean call → real per-batch tx
         if (deleted > 0) Thread.sleep(BATCH_PAUSE_MS);          // let autovacuum / replicas catch up
     } while (deleted == BATCH_SIZE);
 }
 
-@Transactional                                                  // CORRECT: scoped to one bounded batch
-public int deleteBatch(Instant cutoff) {
-    // LIMIT bounds the locked row set per transaction; commit between batches caps lock + bloat
-    return jdbc.update("""
-        DELETE FROM tracking_event
-         WHERE id IN (SELECT id FROM tracking_event
-                       WHERE created_at < ? ORDER BY id LIMIT ?)
-        """, Timestamp.from(cutoff), BATCH_SIZE);
+@Component
+class BatchDeleter {
+    @Transactional                                              // honored — call crosses the proxy boundary
+    public int deleteBatch(Instant cutoff) {
+        // LIMIT bounds the locked row set per transaction; commit between batches caps lock + bloat
+        return jdbc.update("""
+            DELETE FROM tracking_event
+             WHERE id IN (SELECT id FROM tracking_event
+                           WHERE created_at < ? ORDER BY id LIMIT ?)
+            """, Timestamp.from(cutoff), BATCH_SIZE);
+    }
 }
 ```
 

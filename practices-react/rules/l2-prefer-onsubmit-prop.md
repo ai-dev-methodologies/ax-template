@@ -14,7 +14,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-L2-001"
 verification:
   type: review
   status: manual
-  notes: "For each L2 form block, verify: (a) no `import ... from 'app/actions/...'` or `import ... from 'lib/...'` in the block file, (b) the form accepts an `onSubmit` callback prop, (c) the callback prop is typed in the exported interface. See check-imports.sh for the static enforcement in ax-verify-L2."
+  notes: "For each L2 form block, verify: (a) no `import ... from 'app/actions/...'` or `import ... from 'lib/...'` in the block file, (b) the form accepts an `onSubmit` callback prop, (c) the callback prop is typed in the exported interface. check-imports.sh statically enforces the L3/L4 import boundary; the app/actions and lib ban in (a) is review-tier (the script does not inspect those paths)."
 provenance:
   pilot: true
   pipeline_version: "2026-05-18"
@@ -112,4 +112,4 @@ During SP7 block implementation, every auth, CRUD, and payment form block was a 
 
 ### Layer enforcement
 
-`bash skills/ax-verify-L2/scripts/check-imports.sh` fails with `ILLEGAL_IMPORT` if any L2 file contains an import referencing `templates/L3/`, `templates/L4/`, or `app/`.
+`bash skills/ax-verify-L2/scripts/check-imports.sh` fails with `ILLEGAL_IMPORT` if any L2 file contains an import referencing `templates/L3/` or `templates/L4/`. (The `app/actions/…` and `lib/…` import ban this rule headlines is review-tier — check-imports.sh does not yet inspect those paths.)

@@ -54,12 +54,13 @@ public ResponseEntity<Void> receiveWebhook(@RequestBody String payload) {
 @PostMapping("/api/webhooks/github")
 public ResponseEntity<Void> receiveWebhook(
         @RequestHeader("X-Hub-Signature-256") String signatureHeader,
+        @RequestHeader("X-GitHub-Delivery") String deliveryId,
         @RequestBody byte[] rawBody) {
 
     // Step 1: verify HMAC (throws 401 on failure)
     webhookReceiver.verify(signatureHeader, rawBody);
 
-    // Step 2: idempotency check
+    // Step 2: idempotency check — deliveryId is the provider's unique delivery UUID
     webhookReceiver.markProcessed(deliveryId);
 
     // Step 3: process

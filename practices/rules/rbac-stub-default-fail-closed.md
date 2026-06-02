@@ -11,7 +11,7 @@ tags:
 spec_ref: "specs/tag-categorization-l0.yaml#TAG-AUTHZ-001"
 verification:
   type: review
-  source: "templates/L4/tag-categorization/app/use-caller-id.ts"
+  source: "templates/L0/fork-receiver-kit/use-caller-id.ts"
   pattern: "useCallerRole() returns 'user' in dev by default; admin path requires explicit `NEXT_PUBLIC_DEV_AS_ADMIN=1` env opt-in"
 upstream:
   - "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"

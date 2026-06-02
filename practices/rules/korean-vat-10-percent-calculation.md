@@ -49,8 +49,8 @@ This rule sits beside `currency-amount-precision-explicit.md` (which mandates lo
 public long computeVatAmount(long supplyAmount) {
     // VIOLATION (1): double accumulates IEEE 754 noise.
     double rate = 0.10d;
-    double vat = supplyAmount * rate;          // 1005 * 0.10 = 100.50000000000001
-    return Math.round(vat);                    // banker's-rounding NOT HALF_UP — drifts on .5
+    double vat = supplyAmount * rate;          // VIOLATION: double arithmetic — float noise compounds across invoices
+    return Math.round(vat);                    // VIOLATION: long via the double path — precision already lost upstream (use BigDecimal.setScale(0, HALF_UP))
 }
 
 // VIOLATION (2): inline double literal inside BigDecimal materializes float noise.
