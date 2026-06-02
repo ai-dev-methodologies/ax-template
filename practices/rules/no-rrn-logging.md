@@ -91,7 +91,7 @@ The safe default is to **never log the RRN**, not to try to redact it downstream
 
 ## Failing fixture
 
-See: `practices/evals/fixtures/no-rrn-logging/fail_rrn_in_log/UserService.java` — `log.info` and `log.debug` statements containing the `rrn` variable. A static analysis guard scanning for `log\.\(info\|debug\|warn\|error\).*rrn` catches both.
+See: `practices/evals/fixtures/no-rrn-logging/fail_rrn_in_log/UserService.java` — `log.info` and `log.debug` statements containing the `rrn` variable. A static analysis guard scanning for `log\.\(info\|debug\|warn\|error\).*\brrn\b` (word-bounded, so the allowed `rrnHash`/`rrnMasked`/`rrnToken` forms are NOT flagged) catches both.
 
 Reference: [개인정보보호법 제24조 — 고유식별정보의 처리 제한 (Korean Personal Information Protection Act §24)](https://www.law.go.kr/법령/개인정보보호법)
 

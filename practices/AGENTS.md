@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "a067f83c253d358eae87994fc5f9b20595f44991401e079a715de40fe80203ea"
+  source_concat_sha256: "55bf87a96a2dd6e1d66830677f106591e2ee52163c04749a33d49aab7c424edb"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -3822,7 +3822,7 @@ export default function DetailPage() {
 }
 ```
 
-The `summary!` non-null assertion at the use-site is safe because the `!summary` early return already established `summary` is non-null at that point. TypeScript's narrowing tracks that.
+The `summary!` assertion is safe by REASONING, not by narrowing: past the `!data` guard `data` is non-null, so the memo took the `buildSummary(data)` branch and `summary` is non-null. TypeScript cannot track that cross-variable inference (it still sees `summary` as `Summary | null`) — which is exactly why the explicit assertion is needed here.
 
 **A note on `chainPreview` / `chain` patterns**: when a derived value depends on the not-yet-loaded data, do **not** double-derive (`chainPreview = data ? compute() : null; … chain = chainPreview ?? compute()`) — the second derivation is provably unreachable after the `!data` guard, and the duplication invites drift. Compute once inside a memo whose deps include the data, then assert non-null at the use-site.
 
@@ -4166,10 +4166,9 @@ public class PaymentController {
 @RequestMapping("/api/payments")
 public class PaymentController {
 
-    private final IdempotencyKeyStore idempotencyKeys;   // shared common/IdempotencyKeyStore
-
     // CORRECT: the Idempotency-Key header is REQUIRED — a null/blank key is rejected with 400,
-    // then the handler dedups on the key via IdempotencyKeyStore (a retry returns the cached result).
+    // then the key is passed to the service, which dedups via the shared IdempotencyKeyStore
+    // (a retry with the same key returns the cached result instead of charging again).
     @PostMapping
     public ResponseEntity<PaymentResponse> createPayment(
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
@@ -6479,7 +6478,7 @@ The safe default is to **never log the RRN**, not to try to redact it downstream
 
 ## Failing fixture
 
-See: `practices/evals/fixtures/no-rrn-logging/fail_rrn_in_log/UserService.java` — `log.info` and `log.debug` statements containing the `rrn` variable. A static analysis guard scanning for `log\.\(info\|debug\|warn\|error\).*rrn` catches both.
+See: `practices/evals/fixtures/no-rrn-logging/fail_rrn_in_log/UserService.java` — `log.info` and `log.debug` statements containing the `rrn` variable. A static analysis guard scanning for `log\.\(info\|debug\|warn\|error\).*\brrn\b` (word-bounded, so the allowed `rrnHash`/`rrnMasked`/`rrnToken` forms are NOT flagged) catches both.
 
 Reference: [개인정보보호법 제24조 — 고유식별정보의 처리 제한 (Korean Personal Information Protection Act §24)](https://www.law.go.kr/법령/개인정보보호법)
 

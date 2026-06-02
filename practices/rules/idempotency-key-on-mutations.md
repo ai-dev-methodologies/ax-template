@@ -70,10 +70,9 @@ public class PaymentController {
 @RequestMapping("/api/payments")
 public class PaymentController {
 
-    private final IdempotencyKeyStore idempotencyKeys;   // shared common/IdempotencyKeyStore
-
     // CORRECT: the Idempotency-Key header is REQUIRED — a null/blank key is rejected with 400,
-    // then the handler dedups on the key via IdempotencyKeyStore (a retry returns the cached result).
+    // then the key is passed to the service, which dedups via the shared IdempotencyKeyStore
+    // (a retry with the same key returns the cached result instead of charging again).
     @PostMapping
     public ResponseEntity<PaymentResponse> createPayment(
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
