@@ -31,7 +31,7 @@ A `RestClient` is not a request — it is an HTTP client *handle* with a configu
 
 ```java
 public Response fetch(String id) {
-    return new RestClient.Builder()           // new client on every call
+    return RestClient.builder()                // new client on every call
             .baseUrl("https://api.example.com")
             .build()
             .get().uri("/items/{id}", id)

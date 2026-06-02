@@ -49,7 +49,7 @@ This rule is a **locked constraint**: it derives from statute and cannot be rela
 // VIOLATION: RRN in DTO without @LegalBasis — 개인정보보호법 §24 violation
 @PostMapping("/api/users/register")
 public ResponseEntity<Void> register(@RequestBody RegistrationRequest request) {
-    userService.register(request.getName(), request.getRrn());
+    userService.register(request.name(), request.rrn());
     return ResponseEntity.ok().build();
 }
 public record RegistrationRequest(String name, String email, String rrn) {}
@@ -76,7 +76,7 @@ Reference: https://www.law.go.kr/법령/개인정보보호법
 @PostMapping("/api/kyc/verify")
 public ResponseEntity<Void> kycVerify(@RequestBody KycRequest request) {
     // CORRECT: @LegalBasis documents the specific statute
-    kycService.verifyWithRrn(request.getRrn());
+    kycService.verifyWithRrn(request.rrn());
     return ResponseEntity.ok().build();
 }
 

@@ -58,22 +58,31 @@ public ImportResult importFile(MultipartFile file) {
 ```java
 public static final int CHUNK_SIZE = 500;
 
+// CsvImportService — no @Transactional. persistChunk lives on a SEPARATE bean so the
+// @Transactional proxy is actually crossed. A self-call (this.persistChunk(...)) to a
+// @Transactional method in the SAME bean bypasses the proxy and silently runs with NO
+// per-chunk transaction — defeating the whole point. Inject the collaborator instead.
+private final ChunkPersister chunkPersister;
+
 public ImportResult importFile(MultipartFile file) {          // no @Transactional here
     List<String[]> chunk = new ArrayList<>(CHUNK_SIZE);
     String[] row;
     while ((row = csvReader.readNext()) != null) {
         chunk.add(row);
         if (chunk.size() >= CHUNK_SIZE) {
-            persistChunk(chunk, ...);    // each chunk is its own transaction
+            chunkPersister.persistChunk(chunk, ...);   // cross-bean call → real per-chunk tx
             chunk.clear();
         }
     }
-    if (!chunk.isEmpty()) persistChunk(chunk, ...);
+    if (!chunk.isEmpty()) chunkPersister.persistChunk(chunk, ...);
 }
 
-@Transactional                            // CORRECT: scoped to chunk only
-public int persistChunk(List<String[]> rows, ...) {
-    // validate + save rows; collect errors without throwing
+@Component
+class ChunkPersister {
+    @Transactional                        // CORRECT: honored — call crosses the proxy boundary
+    public int persistChunk(List<String[]> rows, ...) {
+        // validate + save rows; collect errors without throwing
+    }
 }
 ```
 

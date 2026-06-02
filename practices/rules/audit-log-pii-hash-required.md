@@ -12,7 +12,7 @@ spec_ref: "specs/email-outbox-l0.yaml#EMAIL-ADMIN-001"
 verification:
   type: review
   source: "backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java"
-  pattern: "AUDIT.info(\"verb=ADMIN_RETRY id={} recipientHash={}\", id, EmailPiiHelper.recipientHash(row.getRecipient()))"
+  pattern: "AUDIT.info(\"verb=ADMIN_RETRY id={} recipientHash={}\", id, AuditPiiHelper.piiHash(row.getRecipient()))"
 upstream:
   - "https://owasp.org/www-project-application-security-verification-standard/"
   - "https://www.rfc-editor.org/rfc/rfc6234"
@@ -99,7 +99,7 @@ for each interpolated value in the log statement:
     OK
 ```
 
-The catalog ships `EmailPiiHelper.recipientHash()` in the email-outbox L4
+The catalog ships `AuditPiiHelper.piiHash()` in the email-outbox L4
 as the canonical example. Other L4s that touch PII in their audit lines
 should follow the same pattern; the helper is small (one method, no
 dependencies) so duplicating it per L4 is fine until enough L4s converge

@@ -25,7 +25,7 @@ import com.opencsv.exceptions.CsvValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -39,7 +39,8 @@ import java.util.List;
  * Chunked, transactional CSV import service — implements PRACTICES-INTEG-002.
  *
  * <p>Rows are processed in batches of {@link #CHUNK_SIZE}; each batch runs in its
- * own {@code @Transactional} method to bound heap usage and rollback scope.
+ * own transaction via {@link org.springframework.transaction.support.TransactionTemplate}
+ * (a self-invoked {@code @Transactional} method would bypass the proxy) to bound heap usage and rollback scope.
  * At most {@code CHUNK_SIZE} rows are held in memory at any time.
  */
 @Service
@@ -52,6 +53,19 @@ public class CsvImportService {
 
     /** Maximum accepted file size (10 MB). */
     public static final long MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024L;
+
+    /**
+     * Per-chunk transaction boundary. A programmatic {@link TransactionTemplate} is used
+     * deliberately instead of an {@code @Transactional} method on this same bean: a
+     * self-invoked {@code @Transactional} method bypasses Spring's proxy and runs with NO
+     * transaction at all, silently defeating the per-chunk rollback scope. The template
+     * makes each chunk a real unit — committed on success, rolled back on failure.
+     */
+    private final TransactionTemplate transactionTemplate;
+
+    public CsvImportService(TransactionTemplate transactionTemplate) {
+        this.transactionTemplate = transactionTemplate;
+    }
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -77,13 +91,13 @@ public class CsvImportService {
                 chunk.add(row);
 
                 if (chunk.size() >= CHUNK_SIZE) {
-                    importedCount += persistChunk(chunk, header, rowNumber - chunk.size() + 1, errors);
+                    importedCount += persistChunkInTx(chunk, header, rowNumber - chunk.size() + 1, errors);
                     chunk.clear();
                 }
             }
 
             if (!chunk.isEmpty()) {
-                importedCount += persistChunk(chunk, header, rowNumber - chunk.size() + 1, errors);
+                importedCount += persistChunkInTx(chunk, header, rowNumber - chunk.size() + 1, errors);
             }
 
         } catch (IOException | CsvValidationException ex) {
@@ -97,9 +111,14 @@ public class CsvImportService {
 
     // ── Chunk persistence — each chunk is its own transaction ─────────────────
 
-    @Transactional
-    public int persistChunk(List<String[]> rows, String[] header, int chunkStartRow,
-                            List<ImportError> errors) {
+    /** Wraps a chunk in a real transaction via the template — proxy-self-invocation safe. */
+    private int persistChunkInTx(List<String[]> rows, String[] header, int chunkStartRow,
+                                 List<ImportError> errors) {
+        return transactionTemplate.execute(status -> persistChunk(rows, header, chunkStartRow, errors));
+    }
+
+    int persistChunk(List<String[]> rows, String[] header, int chunkStartRow,
+                     List<ImportError> errors) {
         int saved = 0;
         for (int i = 0; i < rows.size(); i++) {
             int rowNum = chunkStartRow + i;

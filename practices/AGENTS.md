@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "1a67381d2c4d0286022ceaae1583c09a1b0a98d929333544cf4ac741aec9aa8d"
+  source_concat_sha256: "d0ef21651dee068cf63b74781ab7dd8df22bb2f91a0332606993772fadd3668a"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -762,7 +762,7 @@ spec_ref: "specs/email-outbox-l0.yaml#EMAIL-ADMIN-001"
 verification:
   type: review
   source: "backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java"
-  pattern: "AUDIT.info(\"verb=ADMIN_RETRY id={} recipientHash={}\", id, EmailPiiHelper.recipientHash(row.getRecipient()))"
+  pattern: "AUDIT.info(\"verb=ADMIN_RETRY id={} recipientHash={}\", id, AuditPiiHelper.piiHash(row.getRecipient()))"
 upstream:
   - "https://owasp.org/www-project-application-security-verification-standard/"
   - "https://www.rfc-editor.org/rfc/rfc6234"
@@ -849,7 +849,7 @@ for each interpolated value in the log statement:
     OK
 ```
 
-The catalog ships `EmailPiiHelper.recipientHash()` in the email-outbox L4
+The catalog ships `AuditPiiHelper.piiHash()` in the email-outbox L4
 as the canonical example. Other L4s that touch PII in their audit lines
 should follow the same pattern; the helper is small (one method, no
 dependencies) so duplicating it per L4 is fine until enough L4s converge
@@ -1779,22 +1779,31 @@ public ImportResult importFile(MultipartFile file) {
 ```java
 public static final int CHUNK_SIZE = 500;
 
+// CsvImportService — no @Transactional. persistChunk lives on a SEPARATE bean so the
+// @Transactional proxy is actually crossed. A self-call (this.persistChunk(...)) to a
+// @Transactional method in the SAME bean bypasses the proxy and silently runs with NO
+// per-chunk transaction — defeating the whole point. Inject the collaborator instead.
+private final ChunkPersister chunkPersister;
+
 public ImportResult importFile(MultipartFile file) {          // no @Transactional here
     List<String[]> chunk = new ArrayList<>(CHUNK_SIZE);
     String[] row;
     while ((row = csvReader.readNext()) != null) {
         chunk.add(row);
         if (chunk.size() >= CHUNK_SIZE) {
-            persistChunk(chunk, ...);    // each chunk is its own transaction
+            chunkPersister.persistChunk(chunk, ...);   // cross-bean call → real per-chunk tx
             chunk.clear();
         }
     }
-    if (!chunk.isEmpty()) persistChunk(chunk, ...);
+    if (!chunk.isEmpty()) chunkPersister.persistChunk(chunk, ...);
 }
 
-@Transactional                            // CORRECT: scoped to chunk only
-public int persistChunk(List<String[]> rows, ...) {
-    // validate + save rows; collect errors without throwing
+@Component
+class ChunkPersister {
+    @Transactional                        // CORRECT: honored — call crosses the proxy boundary
+    public int persistChunk(List<String[]> rows, ...) {
+        // validate + save rows; collect errors without throwing
+    }
 }
 ```
 
@@ -2542,13 +2551,19 @@ formatCurrencyAmount(999, 'USD', 'en-US') // → "$9.99"
 ## ArchUnit enforcement
 
 ```java
-// CurrencyAmountPrecisionArchTest.java
+// BillingArchitectureTest.java (@Tag BILLING-CUR-001) — matches the live testBilling rule.
+// EXCLUSION form, not haveRawType(long): boxed Long is also integer minor units and MUST stay
+// allowed (request DTOs box to Long for @NotNull). Only the float family + BigDecimal are banned.
 @ArchTest
-static final ArchRule billingAmountFieldsMustBeLong = fields()
+static final ArchRule billingAmountFieldsMustBeIntegerMinorUnits = fields()
     .that().areDeclaredInClassesThat().resideInAPackage("..billing..")
     .and().haveNameMatching(".*[Aa]mount.*|.*[Pp]rice.*|.*[Ff]ee.*|.*[Cc]ost.*")
-    .should().haveRawType(long.class)
-    .because("All monetary amounts in billing domain must be long integer minor units");
+    .should().notHaveRawType(double.class)
+    .andShould().notHaveRawType(Double.class)
+    .andShould().notHaveRawType(float.class)
+    .andShould().notHaveRawType(Float.class)
+    .andShould().notHaveRawType(java.math.BigDecimal.class)
+    .because("monetary amounts in billing must be integer minor units (long/Long), never float/double/BigDecimal");
 ```
 
 ## Failing fixture
@@ -4043,7 +4058,7 @@ A `RestClient` is not a request — it is an HTTP client *handle* with a configu
 
 ```java
 public Response fetch(String id) {
-    return new RestClient.Builder()           // new client on every call
+    return RestClient.builder()                // new client on every call
             .baseUrl("https://api.example.com")
             .build()
             .get().uri("/items/{id}", id)
@@ -5847,7 +5862,7 @@ The JWT custom claim name (wire format) is snake_case `tenant_id`; the Java gett
 
 ### Failing fixture
 
-See `practices/evals/fixtures/multi-tenant-aop-guard-skeleton/` (deferred to next round — mechanical guard scaffold). For now this rule operates in `verification.type: review` mode: human review of fork-receiver multi-tenant adoption against the six-decision checklist.
+The mechanical guard is live: `practices/evals/multi_tenant_aop_guard_skeleton_guard.sh` runs the `passing/` fixture (AuthorizedTenantInterceptor.java present) against the `failing/` fixture (interceptor omitted), so `verification.type: fixture` is enforced — not review-only.
 
 Reference: https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#multitenacy
 
@@ -6288,7 +6303,7 @@ This rule is a **locked constraint**: it derives from statute and cannot be rela
 // VIOLATION: RRN in DTO without @LegalBasis — 개인정보보호법 §24 violation
 @PostMapping("/api/users/register")
 public ResponseEntity<Void> register(@RequestBody RegistrationRequest request) {
-    userService.register(request.getName(), request.getRrn());
+    userService.register(request.name(), request.rrn());
     return ResponseEntity.ok().build();
 }
 public record RegistrationRequest(String name, String email, String rrn) {}
@@ -6315,7 +6330,7 @@ Reference: https://www.law.go.kr/법령/개인정보보호법
 @PostMapping("/api/kyc/verify")
 public ResponseEntity<Void> kycVerify(@RequestBody KycRequest request) {
     // CORRECT: @LegalBasis documents the specific statute
-    kycService.verifyWithRrn(request.getRrn());
+    kycService.verifyWithRrn(request.rrn());
     return ResponseEntity.ok().build();
 }
 
@@ -7045,7 +7060,7 @@ evidence:
 
 **Impact: HIGH — A KRW amount with two decimal places, or a BHD amount with two decimals, silently misrepresents value by orders of magnitude**
 
-ISO 4217 fixes a three-letter alpha-3 code per currency (KRW, USD, JPY, EUR, BHD, ...) and the **minor-unit count** — the number of digits after the decimal separator that the currency uses canonically. KRW and JPY are 0-decimal currencies (한국 원 and 円 do not subdivide); USD, EUR, GBP and most others are 2-decimal; BHD, KWD, OMR are 3-decimal; UYW and CLF are 4-decimal. Treating one as another silently scales the value: `100` interpreted as KRW means 100원, but interpreted as USD-with-implicit-cents means $1.00 — a factor-of-100 discrepancy. The bug is hard to detect from the inside because the integer arithmetic is exact; only a per-currency validator that consults `Currency.getInstance(code).getDefaultFractionDigits()` catches it. Mandating both the code lookup (well-formed alpha-3) **and** the scale check (`BigDecimal.scale() == Currency.getDefaultFractionDigits()`) closes the gap.
+ISO 4217 fixes a three-letter alpha-3 code per currency (KRW, USD, JPY, EUR, BHD, ...) and the **minor-unit count** — the number of digits after the decimal separator that the currency uses canonically. KRW and JPY are 0-decimal currencies (한국 원 and 円 do not subdivide); USD, EUR, GBP and most others are 2-decimal; BHD, KWD, OMR are 3-decimal; UYW and CLF are 4-decimal. Treating one as another silently scales the value: `100` interpreted as KRW means 100원, but interpreted as USD-with-implicit-cents means $1.00 — a factor-of-100 discrepancy. The bug is hard to detect from the inside because the integer arithmetic is exact; only a per-currency validator that consults `Currency.getInstance(code).getDefaultFractionDigits()` catches it. Mandating both the code lookup (well-formed alpha-3) **and** the scale check (`BigDecimal.scale() <= Currency.getDefaultFractionDigits()`) closes the gap.
 
 This rule sits in the `payment-*` namespace because — at the time of writing — Payment is the only multi-currency domain in the catalog. A future Invoice / FX / Billing blueprint with a second multi-currency surface would justify promoting this rule to `validation-currency-code.md` under the generic `validation-*` namespace; the promotion trigger is documented in `practices/DECISIONS.md`.
 
@@ -8437,7 +8452,7 @@ spec_ref: "specs/capability-token-l0.yaml#CAPTOKEN-UNGUESSABLE-001"
 verification:
   type: review
   source: "specs/capability-token-l0.yaml"
-  pattern: "public lookup token is >=128-bit SecureRandom, URL-safe, non-sequential, a SEPARATE column from the PK and never derivable from the internal id; bad/absent/expired token → byte-indistinguishable 404 (no 401/403/410 oracle, constant-time compare); the anonymous projection is a strict subset of the owner projection (dedicated public DTO, no internal id, masked PII)"
+  pattern: "public lookup token is >=128-bit SecureRandom, URL-safe, non-sequential, a SEPARATE column from the PK and never derivable from the internal id; bad/absent/expired token → byte-indistinguishable 404 (no 401/403/410 oracle; timing-safe via the >=128-bit indexed token lookup, or a constant-time compare on a stored hash); the anonymous projection is a strict subset of the owner projection (dedicated public DTO, no internal id, masked PII)"
 upstream:
   - "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
   - "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
@@ -8469,7 +8484,7 @@ The catalog's authorization patterns all assume a logged-in principal. Owner-equ
 Three invariants make the inversion safe, and each is testable:
 
 1. **The token must be unguessable and distinct from the primary key.** It is at least 128 bits of `SecureRandom`, URL-safe-encoded, non-sequential, in a SEPARATE column — never the DB id, never derivable from the id, and the internal id never appears in the URL or response. A v4 UUID is the floor only, and only when it is `SecureRandom`-sourced and treated as opaque, because RFC 4122 itself says UUIDs "should not be used as security capabilities." If the token is sequential or PK-derived, the public endpoint becomes an open `for id in 1..N` enumeration of everyone's data.
-2. **A bad, absent, expired, or revoked token denies as a byte-indistinguishable 404.** Possession of a *valid, unexpired* token is the SOLE authorization decision; its absence is the ONLY denial path, and it always returns the same 404 — same status, same `urn:problem:not-found` body, same shape — whether the token was never issued or was issued-then-expired. Any divergence (401/403/410/422, or a different message for the expired case) is an existence oracle that confirms guesses and harvests live tokens. Compare in constant time (`MessageDigest.isEqual` on the hashed token), so timing does not leak validity. This is REBAC-404-001 existence-hiding achieved with NO caller in the request.
+2. **A bad, absent, expired, or revoked token denies as a byte-indistinguishable 404.** Possession of a *valid, unexpired* token is the SOLE authorization decision; its absence is the ONLY denial path, and it always returns the same 404 — same status, same `urn:problem:not-found` body, same shape — whether the token was never issued or was issued-then-expired. Any divergence (401/403/410/422, or a different message for the expired case) is an existence oracle that confirms guesses and harvests live tokens. The deny path is timing-safe: an indexed lookup of a >=128-bit token (as shown below) cannot be probed by timing because the entropy defeats it; a handler that instead fetches a row and compares the token in-app MUST use a constant-time compare (`MessageDigest.isEqual`), ideally on a stored hash of the token (hashing at rest is the stronger, DB-compromise-resistant variant). This is REBAC-404-001 existence-hiding achieved with NO caller in the request.
 3. **The anonymous projection is a strict subset of the owner projection.** The forwardable, screenshot-able, possibly-indexed link returns a dedicated public DTO that masks/omits PII (name, address, contact, internal ids, pricing internals, other parties) and exposes only what the use-case needs. It must never reach the owner entity, never accept a field-selection parameter that widens it, never leak the internal id.
 
 **Incorrect — PK-derived/sequential token, distinguishable expired-vs-missing error, owner entity serialized to the anonymous bearer:**
@@ -8517,7 +8532,7 @@ public PublicTrackingView track(@PathVariable String token) {
 
 The negative test that proves it: `GET /track/<random-128-bit>` → **404**; `GET /track/<an-issued-but-expired-token>` → a **byte-identical 404** (diff the two responses — they must be equal); `GET /track/<the-live-token>` → **200** carrying only the public view. Assert `PublicTrackingView`'s field set is a strict subset of the owner DTO's and contains no internal id and no unmasked PII. The whole access decision lives in the token's entropy and the indistinguishability of the deny path.
 
-Verification: review-tier. A reviewer confirms (a) the token is `SecureRandom`, >=128-bit, URL-safe, in a column distinct from the PK and not derivable from the internal id, with the internal id absent from the public URL/response; (b) malformed/absent/expired/revoked tokens all return the same 404 with no divergent status or message, and the compare is constant-time; (c) the anonymous response is a dedicated public DTO whose fields are a strict subset of the owner DTO with PII masked. No `@Tag` test is claimed because the public token surface and its 404/200 flip are recipe-instantiated, not present as a generic backend module in this template. This composes UNDER existing recipes as a separate `permitAll()` endpoint and MUST NOT be confused with the authenticated owner path: never accept a capability token on an owner endpoint, and never derive a principal from a capability token.
+Verification: review-tier. A reviewer confirms (a) the token is `SecureRandom`, >=128-bit, URL-safe, in a column distinct from the PK and not derivable from the internal id, with the internal id absent from the public URL/response; (b) malformed/absent/expired/revoked tokens all return the same 404 with no divergent status or message, and the deny path is timing-safe (a >=128-bit indexed token lookup, or a constant-time compare on a stored hash); (c) the anonymous response is a dedicated public DTO whose fields are a strict subset of the owner DTO with PII masked. No `@Tag` test is claimed because the public token surface and its 404/200 flip are recipe-instantiated, not present as a generic backend module in this template. This composes UNDER existing recipes as a separate `permitAll()` endpoint and MUST NOT be confused with the authenticated owner path: never accept a capability token on an owner endpoint, and never derive a principal from a capability token.
 
 Reference: [OWASP IDOR Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html)
 
@@ -10869,11 +10884,11 @@ decided_at: "2026-05-18"
 
 ## Subscription.status must only be mutated through SubscriptionStateMachine
 
-**Impact: CRITICAL — Calling `subscription.applyStatusTransition()` directly from service code bypasses transition validation, skips BillingEvent recording, and leaves the audit trail incomplete. Subscription state becomes inconsistent with billing events.**
+**Impact: CRITICAL — Calling `subscription.setStatus()` directly from service code bypasses transition validation, skips BillingEvent recording, and leaves the audit trail incomplete. Subscription state becomes inconsistent with billing events.**
 
 The `SubscriptionStateMachine` is the sole class responsible for:
 1. Validating whether a transition is allowed (TRIAL→PAST_DUE is invalid; PAST_DUE→ACTIVE is valid).
-2. Calling `Subscription.applyStatusTransition()` (package-private method).
+2. Calling `Subscription.setStatus()` (package-private method).
 3. Recording a `BillingEvent` for the transition (append-only audit trail).
 4. Emitting `billing.subscription.lifecycle_transition` counter.
 
@@ -10882,11 +10897,11 @@ Any code that mutates `Subscription.status` outside this machine will:
 - Leave no BillingEvent audit record (compliance and debugging impact).
 - Cause observability counters to miss transitions.
 
-**Incorrect — direct applyStatusTransition() outside SubscriptionStateMachine:**
+**Incorrect — direct setStatus() outside SubscriptionStateMachine:**
 
 ```java
 // VIOLATION: direct mutation bypasses validation and BillingEvent recording
-subscription.applyStatusTransition(SubscriptionStatus.ACTIVE);
+subscription.setStatus(SubscriptionStatus.ACTIVE);
 subscriptionRepository.save(subscription);
 // No BillingEvent recorded. Transition validation skipped. Counter not incremented.
 ```
@@ -10915,7 +10930,7 @@ Reference: https://martinfowler.com/bliki/DDD_Aggregate.html
 static final ArchRule onlyStateMachineMutatesStatus = noClasses()
     .that().areNotAssignableTo(SubscriptionStateMachine.class)
     .should().callMethodWhere(
-        target().hasName("applyStatusTransition")
+        target().hasName("setStatus")
             .and(owner().isAssignableTo(Subscription.class))
     )
     .because("Subscription status may only be changed via SubscriptionStateMachine");
@@ -10923,7 +10938,7 @@ static final ArchRule onlyStateMachineMutatesStatus = noClasses()
 
 ## Failing fixture
 
-See: `practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/BillingServiceDirectStatus.java` — a service method that calls `subscription.applyStatusTransition()` directly.
+See: `practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/BillingServiceDirectStatus.java` — a service method that calls `subscription.setStatus()` directly.
 
 
 <!-- @source rules/tamper-evident-log-hashchain.md -->

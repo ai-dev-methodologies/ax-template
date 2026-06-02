@@ -39,11 +39,11 @@ decided_at: "2026-05-18"
 
 ## Subscription.status must only be mutated through SubscriptionStateMachine
 
-**Impact: CRITICAL — Calling `subscription.applyStatusTransition()` directly from service code bypasses transition validation, skips BillingEvent recording, and leaves the audit trail incomplete. Subscription state becomes inconsistent with billing events.**
+**Impact: CRITICAL — Calling `subscription.setStatus()` directly from service code bypasses transition validation, skips BillingEvent recording, and leaves the audit trail incomplete. Subscription state becomes inconsistent with billing events.**
 
 The `SubscriptionStateMachine` is the sole class responsible for:
 1. Validating whether a transition is allowed (TRIAL→PAST_DUE is invalid; PAST_DUE→ACTIVE is valid).
-2. Calling `Subscription.applyStatusTransition()` (package-private method).
+2. Calling `Subscription.setStatus()` (package-private method).
 3. Recording a `BillingEvent` for the transition (append-only audit trail).
 4. Emitting `billing.subscription.lifecycle_transition` counter.
 
@@ -52,11 +52,11 @@ Any code that mutates `Subscription.status` outside this machine will:
 - Leave no BillingEvent audit record (compliance and debugging impact).
 - Cause observability counters to miss transitions.
 
-**Incorrect — direct applyStatusTransition() outside SubscriptionStateMachine:**
+**Incorrect — direct setStatus() outside SubscriptionStateMachine:**
 
 ```java
 // VIOLATION: direct mutation bypasses validation and BillingEvent recording
-subscription.applyStatusTransition(SubscriptionStatus.ACTIVE);
+subscription.setStatus(SubscriptionStatus.ACTIVE);
 subscriptionRepository.save(subscription);
 // No BillingEvent recorded. Transition validation skipped. Counter not incremented.
 ```
@@ -85,7 +85,7 @@ Reference: https://martinfowler.com/bliki/DDD_Aggregate.html
 static final ArchRule onlyStateMachineMutatesStatus = noClasses()
     .that().areNotAssignableTo(SubscriptionStateMachine.class)
     .should().callMethodWhere(
-        target().hasName("applyStatusTransition")
+        target().hasName("setStatus")
             .and(owner().isAssignableTo(Subscription.class))
     )
     .because("Subscription status may only be changed via SubscriptionStateMachine");
@@ -93,4 +93,4 @@ static final ArchRule onlyStateMachineMutatesStatus = noClasses()
 
 ## Failing fixture
 
-See: `practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/BillingServiceDirectStatus.java` — a service method that calls `subscription.applyStatusTransition()` directly.
+See: `practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/BillingServiceDirectStatus.java` — a service method that calls `subscription.setStatus()` directly.

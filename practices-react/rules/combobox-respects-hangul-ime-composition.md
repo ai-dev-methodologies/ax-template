@@ -22,9 +22,6 @@ verification:
   status: manual
   notes: "Combobox onChange handler must check composingRef.current or nativeEvent.isComposing before invoking the filter/search. onCompositionStart must set the guard; onCompositionEnd must clear it and fire the deferred filter."
 evidence:
-  - upstream_id: mdn-addeventlistener-passive
-    section: "CompositionEvent — isComposing property"
-    quote: "isComposing"
   - source_type: external
     citation: "MDN Web Docs — CompositionEvent: compositionstart / compositionend lifecycle for CJK input method editors"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"

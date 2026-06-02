@@ -197,6 +197,6 @@ The JWT custom claim name (wire format) is snake_case `tenant_id`; the Java gett
 
 ### Failing fixture
 
-See `practices/evals/fixtures/multi-tenant-aop-guard-skeleton/` (deferred to next round — mechanical guard scaffold). For now this rule operates in `verification.type: review` mode: human review of fork-receiver multi-tenant adoption against the six-decision checklist.
+The mechanical guard is live: `practices/evals/multi_tenant_aop_guard_skeleton_guard.sh` runs the `passing/` fixture (AuthorizedTenantInterceptor.java present) against the `failing/` fixture (interceptor omitted), so `verification.type: fixture` is enforced — not review-only.
 
 Reference: https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#multitenacy

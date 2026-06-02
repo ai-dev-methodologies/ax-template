@@ -119,13 +119,19 @@ formatCurrencyAmount(999, 'USD', 'en-US') // → "$9.99"
 ## ArchUnit enforcement
 
 ```java
-// CurrencyAmountPrecisionArchTest.java
+// BillingArchitectureTest.java (@Tag BILLING-CUR-001) — matches the live testBilling rule.
+// EXCLUSION form, not haveRawType(long): boxed Long is also integer minor units and MUST stay
+// allowed (request DTOs box to Long for @NotNull). Only the float family + BigDecimal are banned.
 @ArchTest
-static final ArchRule billingAmountFieldsMustBeLong = fields()
+static final ArchRule billingAmountFieldsMustBeIntegerMinorUnits = fields()
     .that().areDeclaredInClassesThat().resideInAPackage("..billing..")
     .and().haveNameMatching(".*[Aa]mount.*|.*[Pp]rice.*|.*[Ff]ee.*|.*[Cc]ost.*")
-    .should().haveRawType(long.class)
-    .because("All monetary amounts in billing domain must be long integer minor units");
+    .should().notHaveRawType(double.class)
+    .andShould().notHaveRawType(Double.class)
+    .andShould().notHaveRawType(float.class)
+    .andShould().notHaveRawType(Float.class)
+    .andShould().notHaveRawType(java.math.BigDecimal.class)
+    .because("monetary amounts in billing must be integer minor units (long/Long), never float/double/BigDecimal");
 ```
 
 ## Failing fixture
