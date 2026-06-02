@@ -78,7 +78,7 @@ async function handleRequest(userId: string, skipProcessing: boolean) {
 }
 ```
 
-### Correct — cheapest validation first, then independent work in parallel
+### Correct — cheapest validation first (guard before the dependent work it gates)
 
 ```typescript
 async function updateResource(resourceId: string, userId: string) {
