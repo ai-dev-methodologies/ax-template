@@ -117,15 +117,22 @@ const listeners = new Set<() => void>()
 let lastKey: string | null = null
 
 function getSnapshot() { return lastKey }
+// Named handler → removable (an inline closure could never be removeEventListener'd).
+function handleKeydown(e: KeyboardEvent) {
+  lastKey = e.key
+  listeners.forEach((fn) => fn())
+}
 function subscribe(notify: () => void) {
   if (listeners.size === 0) {
-    window.addEventListener('keydown', (e) => {
-      lastKey = e.key
-      listeners.forEach((fn) => fn())
-    })
+    window.addEventListener('keydown', handleKeydown)   // first subscriber installs
   }
   listeners.add(notify)
-  return () => listeners.delete(notify)
+  return () => {
+    listeners.delete(notify)
+    if (listeners.size === 0) {
+      window.removeEventListener('keydown', handleKeydown)   // last unsubscriber removes (no leak)
+    }
+  }
 }
 
 export function useLastPressedKey() {
