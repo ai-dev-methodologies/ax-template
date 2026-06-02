@@ -70,7 +70,7 @@ public final class PaymentMethodToken {
 }
 ```
 
-Verification: `./gradlew testPractices --tests "*NoPiiInLogs*"` exercises the `PiiRedactor` over emails / phones / SSNs / 16-digit card numbers and asserts the original strings are gone, the redaction markers are present, and clean strings pass through unchanged. PAN coverage is additionally asserted by the Payment blueprint's `PanRedactionTest` (`./gradlew testPayment --tests "*PanRedaction*"`).
+Verification: `./gradlew testPractices --tests "*NoPiiInLogs*"` exercises the `PiiRedactor` over emails / phones / SSNs and asserts the original strings are gone, the redaction markers (`[redacted-email]` / `[redacted-phone]` / `[redacted-ssn]`) are present, and clean strings pass through unchanged. (PAN/card-number redaction is mandated by the prose above via `@JsonIgnore` + `toString()`→`[REDACTED]`, but is not yet covered by a dedicated @Tag test — enforce it at review.)
 
 Reference: [OWASP Logging Cheat Sheet — Data to exclude](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude)
 

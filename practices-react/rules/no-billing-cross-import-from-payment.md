@@ -14,12 +14,11 @@ applicable_to:
   - nextjs
 provenance_class: internal_design
 protects_template_id: templates/L4/billing/app/(billing)/subscriptions/page.tsx
-failing_fixture_path: practices-react/evals/fixtures/no-billing-cross-import-from-payment/
 spec_ref: "specs/billing-frontend-l0.yaml#BILLING-FE-004"
 verification:
-  type: script
+  type: review
   notes: |
-    ESLint rule (import/no-restricted-paths or custom):
+    Review-tier / project ESLint config (no shipped ax rule): wire eslint import/no-restricted-paths so
     L4/billing/** must not import from L4/payment/**
     L4/payment/** must not import from L4/billing/**
     L2/billing/** must not import from L2/payment/**
@@ -176,6 +175,6 @@ function PlanSelectButton({ planId }: { planId: string }) {
 
 ## Failing fixture
 
-See: `practices-react/evals/fixtures/no-billing-cross-import-from-payment/fail_cross_import/NewSubscriptionPageCrossImport.tsx` — a billing page that imports `PaymentMethodSelector` from the payment domain.
+Illustrative FAIL shape: a billing page importing `PaymentMethodSelector` from the payment domain (no dedicated frontend fixture shipped — the Java boundary fixture lives at practices/evals/fixtures/no-billing-cross-import-from-payment/).
 
-See: `practices-react/evals/fixtures/no-billing-cross-import-from-payment/pass_no_cross_import/NewSubscriptionPageClean.tsx` — correct billing page with no payment imports.
+Illustrative PASS shape: a billing page with no payment-domain imports (verified at review).

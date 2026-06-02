@@ -1,5 +1,5 @@
 ---
-title: "Payment, notification, and email-outbox POST mutations must enforce Idempotency-Key via @RequireIdempotencyKey"
+title: "Payment, notification, and email-outbox POST mutations must enforce a required Idempotency-Key request header, deduplicated via IdempotencyKeyStore"
 rule_id: idempotency-key-on-mutations
 impact: CRITICAL
 impactDescription: "A network retry on a POST mutation without idempotency protection creates duplicate charges, duplicate notifications, or duplicate emails"
@@ -15,7 +15,7 @@ failing_fixture_path: practices/evals/fixtures/idempotency-key-on-mutations/fail
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-VAL-001"
 verification:
   type: review
-  notes: "All @PostMapping handlers in payment, notification, and email-outbox controllers must carry @RequireIdempotencyKey. The annotation triggers the IdempotencyFilter which caches responses by key."
+  notes: "All @PostMapping handlers in payment, notification, and email-outbox controllers must declare @RequestHeader(value=\"Idempotency-Key\", required=false), reject a null/blank key with 400, and dedup the key via the shared common/IdempotencyKeyStore — the pattern PaymentController uses (PAYMENT-IDEMP-001)."
 evidence:
   - source_type: external
     citation: "IETF draft-ietf-httpapi-idempotency-key-header — The Idempotency-Key HTTP Header Field (deduplicated retry semantics)"
@@ -28,19 +28,19 @@ evidence:
 decided_at: "2026-05-18"
 ---
 
-## Payment, notification, and email-outbox POST mutations must enforce Idempotency-Key via `@RequireIdempotencyKey`
+## Payment, notification, and email-outbox POST mutations must enforce a required `Idempotency-Key` header, deduplicated via `IdempotencyKeyStore`
 
 **Impact: CRITICAL — Network retries without idempotency guards cause duplicate charges, duplicate SMS/push notifications, and duplicate email sends that are indistinguishable from the first request.**
 
-The `api-idempotency-key-required.md` rule defines the general pattern (Idempotency-Key header + 400 on missing). This rule strengthens the enforcement for the three **high-risk mutation domains** — payment, notification, and email-outbox — by requiring the `@RequireIdempotencyKey` annotation, which wires the handler to the `IdempotencyFilter` cache at the framework level rather than relying on ad-hoc header checks in each handler.
+The `api-idempotency-key-required.md` rule defines the general pattern (Idempotency-Key header + 400 on missing). This rule strengthens the enforcement for the three **high-risk mutation domains** — payment, notification, and email-outbox — by requiring a non-null `Idempotency-Key` header on every such handler (400 if missing) and routing the key through the shared `IdempotencyKeyStore`, so a retried POST returns the first response instead of repeating the side effect.
 
-The annotation semantics:
-1. Filter reads `Idempotency-Key` header from the request.
-2. On first call: processes normally, stores `(key → serialised ResponseEntity)` in the idempotency store (Redis/DB).
-3. On retry with the same key: returns the cached response immediately, skipping handler execution.
-4. Missing key: 400 `application/problem+json` with `type=urn:ax:idempotency:key-missing`.
+The store semantics (IdempotencyKeyStore):
+1. The handler reads the `Idempotency-Key` header from the request.
+2. On first call: processes normally, records `(key → serialised result)` in the store (Redis/DB).
+3. On retry with the same key: returns the recorded response, skipping the side effect.
+4. Missing/blank key: 400 `application/problem+json` with `type=urn:ax:idempotency:key-missing`.
 
-**Incorrect — POST mutation handlers without @RequireIdempotencyKey:**
+**Incorrect — POST mutation handlers with no Idempotency-Key header check:**
 
 ```java
 @RestController
@@ -63,26 +63,24 @@ public class PaymentController {
 }
 ```
 
-**Correct — @RequireIdempotencyKey on all side-effecting POST handlers:**
+**Correct — required `Idempotency-Key` header + `IdempotencyKeyStore` dedup on every side-effecting POST:**
 
 ```java
 @RestController
 @RequestMapping("/api/payments")
 public class PaymentController {
 
-    // CORRECT: IdempotencyFilter intercepts and deduplicates retries
-    @RequireIdempotencyKey
+    private final IdempotencyKeyStore idempotencyKeys;   // shared common/IdempotencyKeyStore
+
+    // CORRECT: the Idempotency-Key header is REQUIRED — a null/blank key is rejected with 400,
+    // then the handler dedups on the key via IdempotencyKeyStore (a retry returns the cached result).
     @PostMapping
     public ResponseEntity<PaymentResponse> createPayment(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody CreatePaymentRequest request) {
-        return ResponseEntity.ok(paymentService.charge(request));
-    }
-
-    @RequireIdempotencyKey
-    @PostMapping("/notify")
-    public ResponseEntity<Void> sendNotification(@RequestBody NotifyRequest req) {
-        notificationService.send(req);
-        return ResponseEntity.accepted().build();
+        if (idempotencyKey == null || idempotencyKey.isBlank())
+            throw new PaymentValidationException("Idempotency-Key header is required");
+        return ResponseEntity.ok(paymentService.charge(idempotencyKey, request));
     }
 }
 ```
@@ -96,11 +94,11 @@ The payment, notification, and email-outbox templates are the three domains wher
 
 Unlike read endpoints or idempotent writes (PUT/PATCH), POST mutations in these domains have no natural key to deduplicate on — the `Idempotency-Key` header is the caller-supplied deduplication token.
 
-The `@RequireIdempotencyKey` annotation is defined in `templates/backend/idempotency/` and is wired to `IdempotencyFilter` via AOP. Its use is checked at code-review time for all three domains.
+The mechanism is the shared `common/IdempotencyKeyStore` (backend/src/main/java/com/ax/template/authblueprint/common/IdempotencyKeyStore.java): each side-effecting POST takes the `Idempotency-Key` header, rejects null/blank with 400, and records/looks up the key in the store so a retry returns the cached result. Enforcement across the three domains is review-tier (there is no `@RequireIdempotencyKey` annotation or `IdempotencyFilter` in this template — use the explicit header + store pattern shown above).
 
 ## Failing fixture
 
-See: `practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/PaymentController.java` — two `@PostMapping` handlers in the payment controller without `@RequireIdempotencyKey`. A network retry creates a second charge and a second notification.
+See: `practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/PaymentController.java` — two `@PostMapping` handlers in the payment controller with no `Idempotency-Key` header check. A network retry creates a second charge and a second notification.
 
 Reference: [IETF draft — The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
 

@@ -103,7 +103,8 @@ function OnboardingPage() {
 
 ```tsx
 // ✅ CORRECT (statutory exception — very rare) — requires legal-basis disclosure UI
-import { LegalBasisGate } from 'templates/L2/blocks/legal-basis-gate'
+// LegalBasisGate is an ILLUSTRATIVE wrapper you implement (no shipped block) — it gates RRN
+// collection behind a documented legal basis and renders the consent + retention notice.
 
 function FinancialKycForm() {
   return (

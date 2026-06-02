@@ -14,16 +14,14 @@ applicable_to:
   - nextjs
 provenance_class: internal_design
 protects_template_id: templates/L1/components/currency-input.tsx
-failing_fixture_path: practices-react/evals/fixtures/currency-amount-precision-explicit/
 spec_ref: "specs/billing-frontend-l0.yaml#BILLING-FE-001"
 verification:
-  type: script
+  type: review
   notes: |
-    ESLint rule (custom): no-raw-billing-amount
-    Detects: numeric billing amount literals rendered directly in JSX without CurrencyFormatter.
-    Detects: amount / 100, amount * 0.01, parseFloat(amount), Number(amount).toFixed(2)
-    in billing component files.
-    Failing fixture: a PricingCard that renders {plan.amount} directly in JSX.
+    Review-tier (no shipped ESLint rule yet — ax/no-raw-billing-amount is NOT in eslint-plugin-ax):
+    reject numeric billing-amount literals rendered directly in JSX without CurrencyFormatter, and
+    reject amount / 100, amount * 0.01, parseFloat(amount), Number(amount).toFixed(2) in billing
+    component files. A reviewer confirms every {plan.amount} is wrapped in formatCurrencyAmount.
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
@@ -133,6 +131,6 @@ Detects the following patterns in billing component files:
 
 ## Failing fixture
 
-See: `practices-react/evals/fixtures/currency-amount-precision-explicit/fail_raw_amount/PricingCardRawAmount.tsx` — a PricingCard that renders `{plan.amount}` directly.
+Illustrative FAIL shape: a PricingCard that renders `{plan.amount}` directly (no dedicated fixture shipped yet — verified at review).
 
-See: `practices-react/evals/fixtures/currency-amount-precision-explicit/pass_formatted_amount/PricingCardFormatted.tsx` — correct usage via `formatCurrencyAmount`.
+Illustrative PASS shape: correct usage via `formatCurrencyAmount` from `templates/L1/components/currency-input.tsx` (which exists).

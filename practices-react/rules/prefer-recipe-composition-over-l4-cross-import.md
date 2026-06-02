@@ -106,6 +106,6 @@ export default function SaasDashboardPage() {
 
 See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/fail_ad_hoc_cross_import/SaasPage.tsx` — three L4 cross-imports without recipe declaration.
 
-See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/pass/SaasPage.tsx` — same imports with companion README declaring `applied_recipe: saas-subscription`.
+See: `practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/pass/SaasOrchestrator.java` — same composition with companion README declaring `applied_recipe: saas-subscription`.
 
 Reference: https://nextjs.org/docs/app/building-your-application/routing/colocation

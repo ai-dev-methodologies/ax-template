@@ -12,7 +12,7 @@ spec_ref: "specs/email-outbox-l0.yaml#EMAIL-SEND-002"
 verification:
   type: review
   source: "backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java"
-  pattern: "row.markFailure(EmailPiiHelper.sanitizeReason(trimmed), now, ...) — sender exception scrubbed BEFORE persist, not only at render"
+  pattern: "row.markFailure(AuditPiiHelper.sanitizeReason(trimmed), now, ...) — sender exception scrubbed BEFORE persist, not only at render"
 upstream:
   - "https://cwe.mitre.org/data/definitions/359.html"
   - "https://cwe.mitre.org/data/definitions/532.html"
@@ -59,7 +59,7 @@ READ path.
 Mechanically: every code path that calls `setLastError(reason)` /
 `markFailure(reason, ...)` / similar MUST first pass `reason` through a
 PII deny-list scrubber identical to the render-layer rule's pattern set.
-The catalog ships `EmailPiiHelper.sanitizeReason()` (JVM) and
+The catalog ships `AuditPiiHelper.sanitizeReason()` (JVM) and
 `templates/L0/fork-receiver-kit/parse-error.ts#sanitizeStoredError`
 (TypeScript) as the canonical pair. Apply both — the render layer keeps
 its scrub as a second line of defense for the unlikely case that a
@@ -86,7 +86,7 @@ catch (EmailSendException ex) {
 catch (EmailSendException ex) {
     String raw = ex.getMessage() == null ? "unknown error" : ex.getMessage();
     String trimmed = raw.length() > 1000 ? raw.substring(0, 1000) : raw;
-    String reason = EmailPiiHelper.sanitizeReason(trimmed);  // ✅ scrub BEFORE persist
+    String reason = AuditPiiHelper.sanitizeReason(trimmed);  // ✅ scrub BEFORE persist
     row.markFailure(reason, now, delay -> now.plusSeconds(delay));
     // → DB column email_outbox.last_error = "SMTP rejected [REDACTED]: 550 ..."
     // → operator SELECT or admin UI both see redacted form
@@ -112,7 +112,7 @@ redacts:
 - IPv4
 - `*.internal`, `*.local` hostnames
 
-The canonical scrubber lives in `EmailPiiHelper.sanitizeReason` (JVM) /
+The canonical scrubber lives in `AuditPiiHelper.sanitizeReason` (JVM) /
 `templates/L0/fork-receiver-kit/parse-error.ts#sanitizeStoredError`
 (TypeScript). Duplicate the deny-list per-language helper until enough
 modules converge to justify a shared library.

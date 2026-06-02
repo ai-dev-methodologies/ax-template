@@ -14,7 +14,7 @@ spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-VAL-001"
 verification:
   type: review
   status: manual
-  notes: "Static analysis: every backend DTO field semantically representing a 사업자등록번호 (commonly named brn, businessRegistrationNumber, businessNumber, 사업자등록번호, businessRegNo) must be wired to a Jakarta `ConstraintValidator` that applies the regex ^[0-9]{3}-[0-9]{2}-[0-9]{5}$ before any service-layer call. Inputs failing the regex must be rejected with HTTP 400 + RFC 7807 problem detail; never persisted in unvalidated form; never logged in raw form. The checksum algorithm (mod-10 weighted-sum) is intentionally OUT-OF-SCOPE for this rule (deferred R13+ as a separate rule contingent on an authoritative source landing) — see practices/DECISIONS.md TD-2026-05-24-030/031 cycle scope."
+  notes: "Static analysis: every backend DTO field semantically representing a 사업자등록번호 (commonly named brn, businessRegistrationNumber, businessNumber, 사업자등록번호, businessRegNo) must be wired to a Jakarta `ConstraintValidator` that applies the regex ^[0-9]{3}-[0-9]{2}-[0-9]{5}$ before any service-layer call. Inputs failing the regex must be rejected with HTTP 400 + RFC 7807 problem detail; never persisted in unvalidated form; never logged in raw form. The checksum algorithm (mod-10 weighted-sum) is intentionally OUT-OF-SCOPE for this rule (deferred R13+ as a separate rule contingent on an authoritative source landing) — see practices/DECISIONS.md TD-034 (korean-brn-checksum) deferral."
 evidence:
   - source_type: external
     citation: "부가가치세법 (대한민국) — 사업자등록의 근거 법령. 사업자등록번호는 이 법에 따라 국세청(NTS)이 부여하는 사업자별 식별자이며, 사업자등록증에 10자리(3-2-5, XXX-XX-XXXXX) 형식으로 표기된다. (mod-10 가중합 체크섬은 본 룰 범위 밖 — korean-brn-checksum 룰로 분리 예정)"
@@ -29,7 +29,7 @@ decided_at: "2026-05-24"
 
 The 사업자등록번호 (Business Registration Number, BRN) is a 10-digit identifier issued by the 국세청 (National Tax Service) to every business entity registered in Korea. Its canonical display form is `NNN-NN-NNNNN` — 3-digit 세무서 code + 2-digit individual/corporate code + 5-digit sequence — and the same 10-digit shape is what `세금계산서 작성요령` requires on every issued tax invoice. The rule constrained here is **format-only**: any backend endpoint accepting a BRN field must run the regex `^[0-9]{3}-[0-9]{2}-[0-9]{5}$` (or the equivalent compact `[0-9]{10}` form normalised before validation) at the DTO layer before the service tier runs.
 
-The **mod-10 weighted-sum checksum** that NTS publishes alongside the format is intentionally **out of scope** for this rule. R12 evidence collection on 2026-05-24 could not surface a verbatim Korean authoritative source for the checksum algorithm (위키백과 사업자등록번호 alt URL is 200 OK but its content does not cover the 10-digit format or the checksum; namu.wiki is bot-blocked; en.wikipedia "Business_registration_number" returns 404; law.go.kr / hometax.go.kr / NTS-7660 host-wide downgraded — see practices/upstream/r12-sp49-evidence-snapshot.md). A separate `korean-brn-checksum` rule is queued in `practices/DECISIONS.md#deferred-rules-r13` and will ship once an authoritative source lands.
+The **mod-10 weighted-sum checksum** that NTS publishes alongside the format is intentionally **out of scope** for this rule. R12 evidence collection on 2026-05-24 could not surface a verbatim Korean authoritative source for the checksum algorithm (위키백과 사업자등록번호 alt URL is 200 OK but its content does not cover the 10-digit format or the checksum; namu.wiki is bot-blocked; en.wikipedia "Business_registration_number" returns 404; law.go.kr / hometax.go.kr / NTS-7660 host-wide downgraded — see practices/upstream/r12-sp49-evidence-snapshot.md). A separate `korean-brn-checksum` rule is queued as `TD-034 korean-brn-checksum` in `practices/DECISIONS.md` and will ship once an authoritative source lands.
 
 **Incorrect — DTO accepts arbitrary string in a BRN slot; service layer assumes well-formed input:**
 
@@ -88,7 +88,7 @@ The matching 400 response is shaped by the project's existing `GlobalExceptionHa
 
 The mod-10 weighted-sum checksum NTS publishes is a stronger check (it rejects typos that pass the format gate), but R12 evidence collection on 2026-05-24 found no Korean authoritative source verbatim-reachable to anchor the algorithm. Shipping a checksum-coupled rule against vendor-blog reconstructions of the algorithm would fail the catalog's `evidence:` discipline (every normative claim must be sourced from a verbatim upstream — see `practices/AGENTS.md` evidence-anchored rule provenance contract).
 
-R12 PRD §4.3 + practices/DECISIONS.md TD-2026-05-24-030/031 cycle explicitly defers `korean-brn-checksum` to a later cycle. The format-only rule still closes the four most common failure modes — truncated input, free-form text, an RRN pasted into a BRN slot, the wrong separator pattern.
+R12 PRD §4.3 + practices/DECISIONS.md TD-034 explicitly defers `korean-brn-checksum` to a later cycle. The format-only rule still closes the four most common failure modes — truncated input, free-form text, an RRN pasted into a BRN slot, the wrong separator pattern.
 
 ### What this rule does NOT do
 

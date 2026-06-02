@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "aaf50ca8745085e9c7bfad836964af50ebf7b12ece0ab1e49561504bbe8377c9"
+  source_concat_sha256: "c68d907f99d012d21054d3a98fd28272e0430f70024bb884b12719cbf1c35cb5"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -561,7 +561,7 @@ public Page<ParentResponse> list(Pageable p) { ... }
 public Page<ParentResponse> list(Pageable p) { ... }
 ```
 
-Verification: `./gradlew testPractices --tests "*VersioningUriPrefix*"` asserts the `/v1/` path returns 200 and the un-versioned path returns 404, then asserts via reflection that the handler's `@GetMapping` value contains `/v1/`.
+Verification: `./gradlew testPractices --tests "*VersioningUriPrefix*"` asserts the `/v1/` path returns 200 and the un-versioned path does NOT return 200 (its exact status — 401/403/404 — varies by SecurityFilterChain), then asserts via reflection that the handler's `@GetMapping` value contains `/v1/`.
 
 Reference: [Google AIP-180 — API Versioning](https://google.aip.dev/180)
 
@@ -4095,7 +4095,7 @@ Reference: [Spring Framework — RestClient](https://docs.spring.io/spring-frame
 <!-- @source rules/idempotency-key-on-mutations.md -->
 
 ---
-title: "Payment, notification, and email-outbox POST mutations must enforce Idempotency-Key via @RequireIdempotencyKey"
+title: "Payment, notification, and email-outbox POST mutations must enforce a required Idempotency-Key request header, deduplicated via IdempotencyKeyStore"
 rule_id: idempotency-key-on-mutations
 impact: CRITICAL
 impactDescription: "A network retry on a POST mutation without idempotency protection creates duplicate charges, duplicate notifications, or duplicate emails"
@@ -4111,7 +4111,7 @@ failing_fixture_path: practices/evals/fixtures/idempotency-key-on-mutations/fail
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-VAL-001"
 verification:
   type: review
-  notes: "All @PostMapping handlers in payment, notification, and email-outbox controllers must carry @RequireIdempotencyKey. The annotation triggers the IdempotencyFilter which caches responses by key."
+  notes: "All @PostMapping handlers in payment, notification, and email-outbox controllers must declare @RequestHeader(value=\"Idempotency-Key\", required=false), reject a null/blank key with 400, and dedup the key via the shared common/IdempotencyKeyStore — the pattern PaymentController uses (PAYMENT-IDEMP-001)."
 evidence:
   - source_type: external
     citation: "IETF draft-ietf-httpapi-idempotency-key-header — The Idempotency-Key HTTP Header Field (deduplicated retry semantics)"
@@ -4124,19 +4124,19 @@ evidence:
 decided_at: "2026-05-18"
 ---
 
-## Payment, notification, and email-outbox POST mutations must enforce Idempotency-Key via `@RequireIdempotencyKey`
+## Payment, notification, and email-outbox POST mutations must enforce a required `Idempotency-Key` header, deduplicated via `IdempotencyKeyStore`
 
 **Impact: CRITICAL — Network retries without idempotency guards cause duplicate charges, duplicate SMS/push notifications, and duplicate email sends that are indistinguishable from the first request.**
 
-The `api-idempotency-key-required.md` rule defines the general pattern (Idempotency-Key header + 400 on missing). This rule strengthens the enforcement for the three **high-risk mutation domains** — payment, notification, and email-outbox — by requiring the `@RequireIdempotencyKey` annotation, which wires the handler to the `IdempotencyFilter` cache at the framework level rather than relying on ad-hoc header checks in each handler.
+The `api-idempotency-key-required.md` rule defines the general pattern (Idempotency-Key header + 400 on missing). This rule strengthens the enforcement for the three **high-risk mutation domains** — payment, notification, and email-outbox — by requiring a non-null `Idempotency-Key` header on every such handler (400 if missing) and routing the key through the shared `IdempotencyKeyStore`, so a retried POST returns the first response instead of repeating the side effect.
 
-The annotation semantics:
-1. Filter reads `Idempotency-Key` header from the request.
-2. On first call: processes normally, stores `(key → serialised ResponseEntity)` in the idempotency store (Redis/DB).
-3. On retry with the same key: returns the cached response immediately, skipping handler execution.
-4. Missing key: 400 `application/problem+json` with `type=urn:ax:idempotency:key-missing`.
+The store semantics (IdempotencyKeyStore):
+1. The handler reads the `Idempotency-Key` header from the request.
+2. On first call: processes normally, records `(key → serialised result)` in the store (Redis/DB).
+3. On retry with the same key: returns the recorded response, skipping the side effect.
+4. Missing/blank key: 400 `application/problem+json` with `type=urn:ax:idempotency:key-missing`.
 
-**Incorrect — POST mutation handlers without @RequireIdempotencyKey:**
+**Incorrect — POST mutation handlers with no Idempotency-Key header check:**
 
 ```java
 @RestController
@@ -4159,26 +4159,24 @@ public class PaymentController {
 }
 ```
 
-**Correct — @RequireIdempotencyKey on all side-effecting POST handlers:**
+**Correct — required `Idempotency-Key` header + `IdempotencyKeyStore` dedup on every side-effecting POST:**
 
 ```java
 @RestController
 @RequestMapping("/api/payments")
 public class PaymentController {
 
-    // CORRECT: IdempotencyFilter intercepts and deduplicates retries
-    @RequireIdempotencyKey
+    private final IdempotencyKeyStore idempotencyKeys;   // shared common/IdempotencyKeyStore
+
+    // CORRECT: the Idempotency-Key header is REQUIRED — a null/blank key is rejected with 400,
+    // then the handler dedups on the key via IdempotencyKeyStore (a retry returns the cached result).
     @PostMapping
     public ResponseEntity<PaymentResponse> createPayment(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody CreatePaymentRequest request) {
-        return ResponseEntity.ok(paymentService.charge(request));
-    }
-
-    @RequireIdempotencyKey
-    @PostMapping("/notify")
-    public ResponseEntity<Void> sendNotification(@RequestBody NotifyRequest req) {
-        notificationService.send(req);
-        return ResponseEntity.accepted().build();
+        if (idempotencyKey == null || idempotencyKey.isBlank())
+            throw new PaymentValidationException("Idempotency-Key header is required");
+        return ResponseEntity.ok(paymentService.charge(idempotencyKey, request));
     }
 }
 ```
@@ -4192,11 +4190,11 @@ The payment, notification, and email-outbox templates are the three domains wher
 
 Unlike read endpoints or idempotent writes (PUT/PATCH), POST mutations in these domains have no natural key to deduplicate on — the `Idempotency-Key` header is the caller-supplied deduplication token.
 
-The `@RequireIdempotencyKey` annotation is defined in `templates/backend/idempotency/` and is wired to `IdempotencyFilter` via AOP. Its use is checked at code-review time for all three domains.
+The mechanism is the shared `common/IdempotencyKeyStore` (backend/src/main/java/com/ax/template/authblueprint/common/IdempotencyKeyStore.java): each side-effecting POST takes the `Idempotency-Key` header, rejects null/blank with 400, and records/looks up the key in the store so a retry returns the cached result. Enforcement across the three domains is review-tier (there is no `@RequireIdempotencyKey` annotation or `IdempotencyFilter` in this template — use the explicit header + store pattern shown above).
 
 ## Failing fixture
 
-See: `practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/PaymentController.java` — two `@PostMapping` handlers in the payment controller without `@RequireIdempotencyKey`. A network retry creates a second charge and a second notification.
+See: `practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/PaymentController.java` — two `@PostMapping` handlers in the payment controller with no `Idempotency-Key` header check. A network retry creates a second charge and a second notification.
 
 Reference: [IETF draft — The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
 
@@ -4522,7 +4520,7 @@ spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-VAL-001"
 verification:
   type: review
   status: manual
-  notes: "Static analysis: every backend DTO field semantically representing a 사업자등록번호 (commonly named brn, businessRegistrationNumber, businessNumber, 사업자등록번호, businessRegNo) must be wired to a Jakarta `ConstraintValidator` that applies the regex ^[0-9]{3}-[0-9]{2}-[0-9]{5}$ before any service-layer call. Inputs failing the regex must be rejected with HTTP 400 + RFC 7807 problem detail; never persisted in unvalidated form; never logged in raw form. The checksum algorithm (mod-10 weighted-sum) is intentionally OUT-OF-SCOPE for this rule (deferred R13+ as a separate rule contingent on an authoritative source landing) — see practices/DECISIONS.md TD-2026-05-24-030/031 cycle scope."
+  notes: "Static analysis: every backend DTO field semantically representing a 사업자등록번호 (commonly named brn, businessRegistrationNumber, businessNumber, 사업자등록번호, businessRegNo) must be wired to a Jakarta `ConstraintValidator` that applies the regex ^[0-9]{3}-[0-9]{2}-[0-9]{5}$ before any service-layer call. Inputs failing the regex must be rejected with HTTP 400 + RFC 7807 problem detail; never persisted in unvalidated form; never logged in raw form. The checksum algorithm (mod-10 weighted-sum) is intentionally OUT-OF-SCOPE for this rule (deferred R13+ as a separate rule contingent on an authoritative source landing) — see practices/DECISIONS.md TD-034 (korean-brn-checksum) deferral."
 evidence:
   - source_type: external
     citation: "부가가치세법 (대한민국) — 사업자등록의 근거 법령. 사업자등록번호는 이 법에 따라 국세청(NTS)이 부여하는 사업자별 식별자이며, 사업자등록증에 10자리(3-2-5, XXX-XX-XXXXX) 형식으로 표기된다. (mod-10 가중합 체크섬은 본 룰 범위 밖 — korean-brn-checksum 룰로 분리 예정)"
@@ -4537,7 +4535,7 @@ decided_at: "2026-05-24"
 
 The 사업자등록번호 (Business Registration Number, BRN) is a 10-digit identifier issued by the 국세청 (National Tax Service) to every business entity registered in Korea. Its canonical display form is `NNN-NN-NNNNN` — 3-digit 세무서 code + 2-digit individual/corporate code + 5-digit sequence — and the same 10-digit shape is what `세금계산서 작성요령` requires on every issued tax invoice. The rule constrained here is **format-only**: any backend endpoint accepting a BRN field must run the regex `^[0-9]{3}-[0-9]{2}-[0-9]{5}$` (or the equivalent compact `[0-9]{10}` form normalised before validation) at the DTO layer before the service tier runs.
 
-The **mod-10 weighted-sum checksum** that NTS publishes alongside the format is intentionally **out of scope** for this rule. R12 evidence collection on 2026-05-24 could not surface a verbatim Korean authoritative source for the checksum algorithm (위키백과 사업자등록번호 alt URL is 200 OK but its content does not cover the 10-digit format or the checksum; namu.wiki is bot-blocked; en.wikipedia "Business_registration_number" returns 404; law.go.kr / hometax.go.kr / NTS-7660 host-wide downgraded — see practices/upstream/r12-sp49-evidence-snapshot.md). A separate `korean-brn-checksum` rule is queued in `practices/DECISIONS.md#deferred-rules-r13` and will ship once an authoritative source lands.
+The **mod-10 weighted-sum checksum** that NTS publishes alongside the format is intentionally **out of scope** for this rule. R12 evidence collection on 2026-05-24 could not surface a verbatim Korean authoritative source for the checksum algorithm (위키백과 사업자등록번호 alt URL is 200 OK but its content does not cover the 10-digit format or the checksum; namu.wiki is bot-blocked; en.wikipedia "Business_registration_number" returns 404; law.go.kr / hometax.go.kr / NTS-7660 host-wide downgraded — see practices/upstream/r12-sp49-evidence-snapshot.md). A separate `korean-brn-checksum` rule is queued as `TD-034 korean-brn-checksum` in `practices/DECISIONS.md` and will ship once an authoritative source lands.
 
 **Incorrect — DTO accepts arbitrary string in a BRN slot; service layer assumes well-formed input:**
 
@@ -4596,7 +4594,7 @@ The matching 400 response is shaped by the project's existing `GlobalExceptionHa
 
 The mod-10 weighted-sum checksum NTS publishes is a stronger check (it rejects typos that pass the format gate), but R12 evidence collection on 2026-05-24 found no Korean authoritative source verbatim-reachable to anchor the algorithm. Shipping a checksum-coupled rule against vendor-blog reconstructions of the algorithm would fail the catalog's `evidence:` discipline (every normative claim must be sourced from a verbatim upstream — see `practices/AGENTS.md` evidence-anchored rule provenance contract).
 
-R12 PRD §4.3 + practices/DECISIONS.md TD-2026-05-24-030/031 cycle explicitly defers `korean-brn-checksum` to a later cycle. The format-only rule still closes the four most common failure modes — truncated input, free-form text, an RRN pasted into a BRN slot, the wrong separator pattern.
+R12 PRD §4.3 + practices/DECISIONS.md TD-034 explicitly defers `korean-brn-checksum` to a later cycle. The format-only rule still closes the four most common failure modes — truncated input, free-form text, an RRN pasted into a BRN slot, the wrong separator pattern.
 
 ### What this rule does NOT do
 
@@ -6619,7 +6617,7 @@ public final class PaymentMethodToken {
 }
 ```
 
-Verification: `./gradlew testPractices --tests "*NoPiiInLogs*"` exercises the `PiiRedactor` over emails / phones / SSNs / 16-digit card numbers and asserts the original strings are gone, the redaction markers are present, and clean strings pass through unchanged. PAN coverage is additionally asserted by the Payment blueprint's `PanRedactionTest` (`./gradlew testPayment --tests "*PanRedaction*"`).
+Verification: `./gradlew testPractices --tests "*NoPiiInLogs*"` exercises the `PiiRedactor` over emails / phones / SSNs and asserts the original strings are gone, the redaction markers (`[redacted-email]` / `[redacted-phone]` / `[redacted-ssn]`) are present, and clean strings pass through unchanged. (PAN/card-number redaction is mandated by the prose above via `@JsonIgnore` + `toString()`→`[REDACTED]`, but is not yet covered by a dedicated @Tag test — enforce it at review.)
 
 Reference: [OWASP Logging Cheat Sheet — Data to exclude](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude)
 
@@ -9982,7 +9980,7 @@ spec_ref: "specs/email-outbox-l0.yaml#EMAIL-SEND-002"
 verification:
   type: review
   source: "backend/src/main/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxService.java"
-  pattern: "row.markFailure(EmailPiiHelper.sanitizeReason(trimmed), now, ...) — sender exception scrubbed BEFORE persist, not only at render"
+  pattern: "row.markFailure(AuditPiiHelper.sanitizeReason(trimmed), now, ...) — sender exception scrubbed BEFORE persist, not only at render"
 upstream:
   - "https://cwe.mitre.org/data/definitions/359.html"
   - "https://cwe.mitre.org/data/definitions/532.html"
@@ -10029,7 +10027,7 @@ READ path.
 Mechanically: every code path that calls `setLastError(reason)` /
 `markFailure(reason, ...)` / similar MUST first pass `reason` through a
 PII deny-list scrubber identical to the render-layer rule's pattern set.
-The catalog ships `EmailPiiHelper.sanitizeReason()` (JVM) and
+The catalog ships `AuditPiiHelper.sanitizeReason()` (JVM) and
 `templates/L0/fork-receiver-kit/parse-error.ts#sanitizeStoredError`
 (TypeScript) as the canonical pair. Apply both — the render layer keeps
 its scrub as a second line of defense for the unlikely case that a
@@ -10056,7 +10054,7 @@ catch (EmailSendException ex) {
 catch (EmailSendException ex) {
     String raw = ex.getMessage() == null ? "unknown error" : ex.getMessage();
     String trimmed = raw.length() > 1000 ? raw.substring(0, 1000) : raw;
-    String reason = EmailPiiHelper.sanitizeReason(trimmed);  // ✅ scrub BEFORE persist
+    String reason = AuditPiiHelper.sanitizeReason(trimmed);  // ✅ scrub BEFORE persist
     row.markFailure(reason, now, delay -> now.plusSeconds(delay));
     // → DB column email_outbox.last_error = "SMTP rejected [REDACTED]: 550 ..."
     // → operator SELECT or admin UI both see redacted form
@@ -10082,7 +10080,7 @@ redacts:
 - IPv4
 - `*.internal`, `*.local` hostnames
 
-The canonical scrubber lives in `EmailPiiHelper.sanitizeReason` (JVM) /
+The canonical scrubber lives in `AuditPiiHelper.sanitizeReason` (JVM) /
 `templates/L0/fork-receiver-kit/parse-error.ts#sanitizeStoredError`
 (TypeScript). Duplicate the deny-list per-language helper until enough
 modules converge to justify a shared library.
@@ -10779,7 +10777,7 @@ tags:
 spec_ref: "specs/webhook-l0.yaml#WEBHOOK-DEAD-LETTER-002"
 verification:
   type: review
-  source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L4/scheduled-task/app/parse-error.ts (sanitizeStoredError helper)"
+  source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx, templates/L0/fork-receiver-kit/parse-error.ts (sanitizeStoredError helper)"
   pattern: "sanitize helper applied to any server-stored error field (lastError on Delivery, errorMessage on JobHistory) before inline render; regex deny-list includes email / Bearer / JWT / IPv4 / .internal/.local / Korean RRN / Korean mobile / PEM headers / GitHub PAT"
 upstream:
   - "https://cwe.mitre.org/data/definitions/209.html"

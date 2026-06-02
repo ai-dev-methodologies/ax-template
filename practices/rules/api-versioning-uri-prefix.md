@@ -40,6 +40,6 @@ public Page<ParentResponse> list(Pageable p) { ... }
 public Page<ParentResponse> list(Pageable p) { ... }
 ```
 
-Verification: `./gradlew testPractices --tests "*VersioningUriPrefix*"` asserts the `/v1/` path returns 200 and the un-versioned path returns 404, then asserts via reflection that the handler's `@GetMapping` value contains `/v1/`.
+Verification: `./gradlew testPractices --tests "*VersioningUriPrefix*"` asserts the `/v1/` path returns 200 and the un-versioned path does NOT return 200 (its exact status — 401/403/404 — varies by SecurityFilterChain), then asserts via reflection that the handler's `@GetMapping` value contains `/v1/`.
 
 Reference: [Google AIP-180 — API Versioning](https://google.aip.dev/180)
