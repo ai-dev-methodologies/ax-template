@@ -116,9 +116,9 @@ function PlanForm() {
 }
 ```
 
-## No-raw-billing-amount ESLint rule (custom)
+## No-raw-billing-amount review checklist
 
-Detects the following patterns in billing component files:
+No ESLint rule ships for this (ax/no-raw-billing-amount is NOT in eslint-plugin-ax). A reviewer flags these patterns in billing component files:
 
 | Pattern | Violation |
 |---|---|

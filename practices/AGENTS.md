@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "8ebac93f82b3e3975c4501f9d5e7ab11ddbf9c815cdf7a15c1dc0f36e3ff16c4"
+  source_concat_sha256: "b3af30c49620188ae43bc548dd0bd33669e9a4780fa1a0ad12cebfbcc621961b"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -452,7 +452,7 @@ public Page<ParentResponse> list(Pageable pageable) {
 }
 ```
 
-Verification: `./gradlew testPractices --tests "*NoEntityLeak*"` asserts the JSON body contains the DTO field (`childCount`) and does NOT contain the entity field (`children`).
+Verification: `./gradlew testPractices --tests "*NoEntityLeak*"` asserts the JSON body does NOT contain the entity field (`children`) and (by reflection) that the controller returns `Page<ParentResponse>`, never `Page<Parent>`.
 
 Reference: [Spring MVC — Controller arguments and returns](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/modelattrib-method-args.html)
 

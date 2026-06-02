@@ -89,7 +89,8 @@ Use the dedicated `<KycVerificationModal>` component with mandatory legal-basis 
 
 ```tsx
 // ✅ CORRECT — KYC flow with explicit consent gate
-import { KycVerificationModal } from "templates/L2/blocks/kyc-verification-modal";
+// KycVerificationModal is an ILLUSTRATIVE component you build (no shipped L2 block) — it must
+// display the legal basis + retention notice and write an audit record before any RRN-class field renders.
 
 export default function OnboardingPage() {
   const [kycOpen, setKycOpen] = useState(false);

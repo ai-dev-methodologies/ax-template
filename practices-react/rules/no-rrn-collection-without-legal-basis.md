@@ -16,7 +16,7 @@ applicable_to:
   - nextjs
 provenance_class: locked_constraint
 protects_template_id: templates/L2/blocks/phone-verification-panel.tsx
-failing_fixture_path: practices/evals/fixtures/no-rrn-collection-without-legal-basis/fail_rrn_no_legal_basis/
+failing_fixture_path: practices/evals/fixtures/no-rrn-in-form-fields/fail_rrn_field/
 spec_ref: "specs/identity-verification-l0.yaml#IDV-CALLBACK-003"
 verification:
   type: review
@@ -141,7 +141,7 @@ These replace the RRN for identity correlation. Use `<PhoneVerificationPanel>` +
 
 ## Failing fixture
 
-See: `practices/evals/fixtures/no-rrn-collection-without-legal-basis/fail_rrn_no_legal_basis/`
+See: `practices/evals/fixtures/no-rrn-in-form-fields/fail_rrn_field/RegistrationForm.tsx`
 — A React form component with `name="rrn"` input. Static analysis grep catches the pattern.
 
 Backend companion rule: `practices/rules/no-rrn-collection-without-legal-basis.md`

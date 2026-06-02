@@ -133,12 +133,15 @@ export function formatCurrencyAmount(
   locale = 'ko-KR',
 ): string {
   const isZeroDecimal = currency === 'KRW' || currency === 'JPY'
+  // `amount` is integer MINOR units (e.g. 999 = $9.99). Convert to major units before
+  // formatting: zero-decimal currencies (KRW/JPY) are already major; others divide by 100.
+  const major = isZeroDecimal ? amount : amount / 100
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
     minimumFractionDigits: isZeroDecimal ? 0 : 2,
     maximumFractionDigits: isZeroDecimal ? 0 : 2,
-  }).format(amount)
+  }).format(major)
 }
 
 function clamp(value: number, min?: number, max?: number): number {
