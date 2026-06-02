@@ -83,8 +83,10 @@ router.push('/admin/dashboard')
 ### Correct — any helper name, banner always present
 
 ```typescript
-// ✅ CORRECT — helper name is irrelevant; banner is wired at the layout level
-// Helper (any name):
+// ✅ CORRECT — helper name is irrelevant. The per-file scanner requires <ImpersonationBanner>
+// CO-LOCATED in the file that PERSISTS actingAs. A pure helper that merely computes {actingAs}
+// is fine; the layout below both consumes it and renders the banner in the same file.
+// Helper (any name) — pure computation, persists nothing:
 export function runAsUser(userId: string) {
   return { ...currentSession, actingAs: userId }
 }
