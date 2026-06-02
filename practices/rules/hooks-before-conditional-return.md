@@ -1,7 +1,7 @@
 ---
 title: React hooks MUST be called before any conditional early return — Rules of Hooks
 impact: HIGH
-impactDescription: "Hooks placed after early returns mount into different slots between renders and crash the component with 'Rendered fewer hooks than during the previous render'"
+impactDescription: "Hooks placed after early returns mount into different slots between renders and crash the component with 'Rendered more hooks than during the previous render'"
 tags:
   - react
   - hooks
@@ -32,7 +32,7 @@ evidence:
 
 **Impact: HIGH — every render must call hooks in the same order**
 
-React tracks hook state by call order. A hook placed after a conditional early return is sometimes called and sometimes not, depending on the early-return condition. On the first render where the early-return fires, the hook is skipped; on the next render where data arrives and execution continues past the early returns, the hook is called for the first time. React's internal slot counter sees a different shape than the prior render and throws `'Rendered fewer hooks than during the previous render'`. In production builds the failure mode is silent state corruption between slots (the "second hook" gets state belonging to the "first hook").
+React tracks hook state by call order. A hook placed after a conditional early return is sometimes called and sometimes not, depending on the early-return condition. On the first render where the early-return fires, the hook is skipped; on the next render where data arrives and execution continues past the early returns, the hook is called for the first time. React's internal slot counter sees a different shape than the prior render and throws `'Rendered more hooks than during the previous render'`. In production builds the failure mode is silent state corruption between slots (the "second hook" gets state belonging to the "first hook").
 
 This is the most common AI-generated React bug. The pattern looks correct — guard against null data, then use it. But the guard must come AFTER all hooks, not before.
 

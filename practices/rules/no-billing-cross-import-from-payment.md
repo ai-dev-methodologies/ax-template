@@ -1,5 +1,5 @@
 ---
-title: "billing and payment packages must not import each other; the boundary defined in §5.2.6 is enforced by ArchUnit and ESLint"
+title: "billing and payment packages must not import each other; the boundary defined in §5.2.6 is enforced by ArchUnit"
 rule_id: no-billing-cross-import-from-payment
 impact: CRITICAL
 impactDescription: "Cross-importing between billing and payment creates a circular bounded-context dependency. Any change to payment internals (e.g., PaymentMethod, PaymentStatus) leaks into billing and forces cascading changes. Subscription lifecycle (billing domain) must never depend on one-shot charge logic (payment domain)."
@@ -157,7 +157,7 @@ public record UserId(UUID value) {}
 ## ArchUnit enforcement
 
 ```java
-// BillingPaymentBoundaryArchTest.java
+// BillingArchitectureTest.java
 @ArchTest
 static final ArchRule billingMustNotImportPayment = noClasses()
     .that().resideInAPackage("..billing..")

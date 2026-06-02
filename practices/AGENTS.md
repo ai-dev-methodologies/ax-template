@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "d0ef21651dee068cf63b74781ab7dd8df22bb2f91a0332606993772fadd3668a"
+  source_concat_sha256: "eda9e7f72ea241d87c4ec3ee3ba8f162a9e24d6d1c64d9ec7889294b322337b1"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -3185,7 +3185,7 @@ public class LegalHoldGate {
         this.registry = registry;
     }
 
-    /** True only when we have AFFIRMATIVELY established no hold covers the target. */
+    /** True when an active hold covers the target, and (fail-closed) when the registry lookup fails. */
     public boolean isHeld(String subjectId, String category) {
         try {
             return registry.activeHold(subjectId, category).isPresent();
@@ -3737,7 +3737,7 @@ Reference: [OWASP ASVS v4.0.3 — V4.1.3 Access Control (least privilege)](https
 ---
 title: React hooks MUST be called before any conditional early return — Rules of Hooks
 impact: HIGH
-impactDescription: "Hooks placed after early returns mount into different slots between renders and crash the component with 'Rendered fewer hooks than during the previous render'"
+impactDescription: "Hooks placed after early returns mount into different slots between renders and crash the component with 'Rendered more hooks than during the previous render'"
 tags:
   - react
   - hooks
@@ -3768,7 +3768,7 @@ evidence:
 
 **Impact: HIGH — every render must call hooks in the same order**
 
-React tracks hook state by call order. A hook placed after a conditional early return is sometimes called and sometimes not, depending on the early-return condition. On the first render where the early-return fires, the hook is skipped; on the next render where data arrives and execution continues past the early returns, the hook is called for the first time. React's internal slot counter sees a different shape than the prior render and throws `'Rendered fewer hooks than during the previous render'`. In production builds the failure mode is silent state corruption between slots (the "second hook" gets state belonging to the "first hook").
+React tracks hook state by call order. A hook placed after a conditional early return is sometimes called and sometimes not, depending on the early-return condition. On the first render where the early-return fires, the hook is skipped; on the next render where data arrives and execution continues past the early returns, the hook is called for the first time. React's internal slot counter sees a different shape than the prior render and throws `'Rendered more hooks than during the previous render'`. In production builds the failure mode is silent state corruption between slots (the "second hook" gets state belonging to the "first hook").
 
 This is the most common AI-generated React bug. The pattern looks correct — guard against null data, then use it. But the guard must come AFTER all hooks, not before.
 
@@ -5304,7 +5304,7 @@ evidence:
 
 **Impact: HIGH — A concrete-typed publisher field couples the domain to one broker SDK — broker swap becomes a refactor**
 
-A service that holds a `KafkaTemplate<String, OrderPlacedEvent>` field has *imported the broker* into the domain layer — the broker's serialization model, retry semantics, and partitioning concept are now domain concepts. Swapping Kafka for RabbitMQ or going broker-less for tests means rewriting every service that publishes. The remedy is the standard hexagonal pattern: the domain owns an abstract `MessagePublisher` interface; concrete impls (`KafkaMessagePublisher`, `RabbitMessagePublisher`, `InMemoryMessagePublisher` for tests) live in an adapter package and are wired via Spring. The current template ships only `InMemoryMessagePublisher` — production-broker impls plug in later behind the same interface.
+A service that holds a `KafkaTemplate<String, OrderPlacedEvent>` field has *imported the broker* into the domain layer — the broker's serialization model, retry semantics, and partitioning concept are now domain concepts. Swapping Kafka for RabbitMQ or going broker-less for tests means rewriting every service that publishes. The remedy is the standard hexagonal pattern: the domain owns an abstract `MessagePublisher` interface; concrete impls (`KafkaMessagePublisher`, `RabbitMessagePublisher`, `InMemoryMessagePublisher` for tests) live in an adapter package and are wired via Spring. The current template ships `SpringEventMessagePublisher` (@Primary, backed by Spring's ApplicationEventPublisher) as the real adapter; `InMemoryMessagePublisher` is test-only (not a @Component). Broker adapters plug in later behind the same interface.
 
 **Incorrect — service couples to the broker SDK:**
 
@@ -5766,6 +5766,8 @@ com/<root>/multitenancy/
 ├── TenantContextAwareTaskDecorator.java        # captures + restores context across @Async
 ├── TenantFilterActivationFilter.java           # enables Hibernate @Filter per request
 ├── AuthorizedTenantInterceptor.java            # service-boundary AOP guard
+├── AuthorizedTenant.java                       # @AuthorizedTenant marker the interceptor matches
+├── TenantId.java                               # @TenantId field annotation (audit rows)
 ├── AuditEvent.java                             # @TenantId-annotated audit row (R4)
 ├── TenantIterationScheduler.java               # per-tenant @Scheduled iteration (R6)
 ├── TenantAwareSseEmitterRegistry.java          # long-lived push connection registry (R7)
@@ -6071,7 +6073,7 @@ Reference: [WCAG 2.2 SC 4.1.3 — Status Messages](https://www.w3.org/WAI/WCAG22
 <!-- @source rules/no-billing-cross-import-from-payment.md -->
 
 ---
-title: "billing and payment packages must not import each other; the boundary defined in §5.2.6 is enforced by ArchUnit and ESLint"
+title: "billing and payment packages must not import each other; the boundary defined in §5.2.6 is enforced by ArchUnit"
 rule_id: no-billing-cross-import-from-payment
 impact: CRITICAL
 impactDescription: "Cross-importing between billing and payment creates a circular bounded-context dependency. Any change to payment internals (e.g., PaymentMethod, PaymentStatus) leaks into billing and forces cascading changes. Subscription lifecycle (billing domain) must never depend on one-shot charge logic (payment domain)."
@@ -6229,7 +6231,7 @@ public record UserId(UUID value) {}
 ## ArchUnit enforcement
 
 ```java
-// BillingPaymentBoundaryArchTest.java
+// BillingArchitectureTest.java
 @ArchTest
 static final ArchRule billingMustNotImportPayment = noClasses()
     .that().resideInAPackage("..billing..")
@@ -6315,7 +6317,7 @@ public record RegistrationRequest(String name, String email, String rrn) {}
 // CORRECT — identity verified via CI/DI; no RRN field in any DTO
 @PostMapping("/api/users/register")
 public ResponseEntity<Void> register(@RequestBody RegistrationRequest request) {
-    userService.registerWithVerifiedIdentity(request.getName(), request.ci());
+    userService.registerWithVerifiedIdentity(request.name(), request.ci());
     return ResponseEntity.ok().build();
 }
 public record RegistrationRequest(String name, String email, String ci) {}
@@ -8072,9 +8074,9 @@ evidence:
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
     quoted_at: "2026-05-18"
   - source_type: external
-    citation: "NIST SP 800-186 §3.1 — HMAC-based URL authentication as integrity and authenticity check for temporary access tokens"
-    url: "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-186.pdf"
-    quoted_at: "2026-05-18"
+    citation: "RFC 2104 — HMAC: Keyed-Hashing for Message Authentication: HMAC verifies both the data integrity and the authenticity of a message; a presigned URL signs its parameters + expiry with a server-held HMAC key so any tampering invalidates the signature"
+    url: "https://www.rfc-editor.org/rfc/rfc2104"
+    quoted_at: "2026-06-02"
 decided_at: "2026-05-18"
 ---
 
@@ -10430,7 +10432,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_not_deleted
 
 See `templates/backend/data/migrations/V202605181200__add_soft_delete_columns.sql` for the full migration covering all 8 entities.
 
-Verification: `./gradlew testPractices --tests "*BaseEntitySoftDelete*"` asserts that every `@Entity` in the base template package that extends `BaseEntity` also carries `@SQLDelete`.
+Verification: `./gradlew testPractices --tests "*BaseEntitySoftDelete*"` (@Tag PRACTICES-PERS-005) enforces three structural checks: every `@SQLDelete` entity also carries `@Where` (else soft-deleted rows leak into queries), the BaseEntity fixture carries its audit annotations, and no entity declares a primitive `boolean deleted` field (timestamp `deleted_at` is required). Note it does NOT by itself assert that a given BaseEntity subclass carries `@SQLDelete` — concrete entities MUST add `@SQLDelete` + `@Where` as shown above.
 
 Reference: [Hibernate ORM 6.4 — @SQLDelete](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#soft-delete) | [Hibernate ORM 6.4 — @Where](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#mapping-where)
 
@@ -11684,7 +11686,7 @@ tags:
   - tracing
   - rfc-7807
 provenance_class: internal_design
-protects_template_id: templates/backend/global-exception-handler/GlobalExceptionHandler.java
+protects_template_id: templates/backend/error/GlobalExceptionHandler.java
 failing_fixture_path: practices/evals/fixtures/traceid-in-error-response/fail_no_traceid/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-ERR-001"
 verification:

@@ -26,7 +26,7 @@ evidence:
 
 **Impact: HIGH — A concrete-typed publisher field couples the domain to one broker SDK — broker swap becomes a refactor**
 
-A service that holds a `KafkaTemplate<String, OrderPlacedEvent>` field has *imported the broker* into the domain layer — the broker's serialization model, retry semantics, and partitioning concept are now domain concepts. Swapping Kafka for RabbitMQ or going broker-less for tests means rewriting every service that publishes. The remedy is the standard hexagonal pattern: the domain owns an abstract `MessagePublisher` interface; concrete impls (`KafkaMessagePublisher`, `RabbitMessagePublisher`, `InMemoryMessagePublisher` for tests) live in an adapter package and are wired via Spring. The current template ships only `InMemoryMessagePublisher` — production-broker impls plug in later behind the same interface.
+A service that holds a `KafkaTemplate<String, OrderPlacedEvent>` field has *imported the broker* into the domain layer — the broker's serialization model, retry semantics, and partitioning concept are now domain concepts. Swapping Kafka for RabbitMQ or going broker-less for tests means rewriting every service that publishes. The remedy is the standard hexagonal pattern: the domain owns an abstract `MessagePublisher` interface; concrete impls (`KafkaMessagePublisher`, `RabbitMessagePublisher`, `InMemoryMessagePublisher` for tests) live in an adapter package and are wired via Spring. The current template ships `SpringEventMessagePublisher` (@Primary, backed by Spring's ApplicationEventPublisher) as the real adapter; `InMemoryMessagePublisher` is test-only (not a @Component). Broker adapters plug in later behind the same interface.
 
 **Incorrect — service couples to the broker SDK:**
 

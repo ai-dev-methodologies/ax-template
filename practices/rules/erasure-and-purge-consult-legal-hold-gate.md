@@ -82,7 +82,7 @@ public class LegalHoldGate {
         this.registry = registry;
     }
 
-    /** True only when we have AFFIRMATIVELY established no hold covers the target. */
+    /** True when an active hold covers the target, and (fail-closed) when the registry lookup fails. */
     public boolean isHeld(String subjectId, String category) {
         try {
             return registry.activeHold(subjectId, category).isPresent();

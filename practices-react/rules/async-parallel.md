@@ -17,7 +17,7 @@ verification:
   type: eslint
   rule_id: "ax/react-async-parallel"
   status: shipped
-  notes: "Custom ESLint rule planned; until shipped, peer-review checkpoint"
+  notes: "Shipped: custom ESLint rule ax/react-async-parallel is registered in the plugin and enabled (error in own-blocks/recommended, warn in frontend)"
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -192,8 +192,8 @@ const notices = settled[2].status === 'fulfilled' ? settled[2].value : []
 
 ### Verification
 
-- Static check (planned): custom ESLint rule `ax/react-async-parallel` flags two
+- Static check (shipped + enabled): custom ESLint rule `ax/react-async-parallel` flags two
   or more consecutive top-level `await` statements that share no `await`-bound
   identifiers, inside the same async function body, where each awaited expression
   is a call (i.e., independent network or DB I/O).
-- Manual: code review checkpoint until the ESLint rule ships.
+- Manual: code review complements the shipped ESLint rule for cases static analysis cannot see.

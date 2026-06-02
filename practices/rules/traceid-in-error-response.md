@@ -9,7 +9,7 @@ tags:
   - tracing
   - rfc-7807
 provenance_class: internal_design
-protects_template_id: templates/backend/global-exception-handler/GlobalExceptionHandler.java
+protects_template_id: templates/backend/error/GlobalExceptionHandler.java
 failing_fixture_path: practices/evals/fixtures/traceid-in-error-response/fail_no_traceid/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-ERR-001"
 verification:

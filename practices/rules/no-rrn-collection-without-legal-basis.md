@@ -61,7 +61,7 @@ public record RegistrationRequest(String name, String email, String rrn) {}
 // CORRECT — identity verified via CI/DI; no RRN field in any DTO
 @PostMapping("/api/users/register")
 public ResponseEntity<Void> register(@RequestBody RegistrationRequest request) {
-    userService.registerWithVerifiedIdentity(request.getName(), request.ci());
+    userService.registerWithVerifiedIdentity(request.name(), request.ci());
     return ResponseEntity.ok().build();
 }
 public record RegistrationRequest(String name, String email, String ci) {}

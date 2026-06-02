@@ -140,6 +140,6 @@ CREATE INDEX IF NOT EXISTS idx_notifications_not_deleted
 
 See `templates/backend/data/migrations/V202605181200__add_soft_delete_columns.sql` for the full migration covering all 8 entities.
 
-Verification: `./gradlew testPractices --tests "*BaseEntitySoftDelete*"` asserts that every `@Entity` in the base template package that extends `BaseEntity` also carries `@SQLDelete`.
+Verification: `./gradlew testPractices --tests "*BaseEntitySoftDelete*"` (@Tag PRACTICES-PERS-005) enforces three structural checks: every `@SQLDelete` entity also carries `@Where` (else soft-deleted rows leak into queries), the BaseEntity fixture carries its audit annotations, and no entity declares a primitive `boolean deleted` field (timestamp `deleted_at` is required). Note it does NOT by itself assert that a given BaseEntity subclass carries `@SQLDelete` — concrete entities MUST add `@SQLDelete` + `@Where` as shown above.
 
 Reference: [Hibernate ORM 6.4 — @SQLDelete](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#soft-delete) | [Hibernate ORM 6.4 — @Where](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#mapping-where)

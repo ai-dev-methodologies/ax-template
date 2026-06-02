@@ -101,6 +101,8 @@ com/<root>/multitenancy/
 ├── TenantContextAwareTaskDecorator.java        # captures + restores context across @Async
 ├── TenantFilterActivationFilter.java           # enables Hibernate @Filter per request
 ├── AuthorizedTenantInterceptor.java            # service-boundary AOP guard
+├── AuthorizedTenant.java                       # @AuthorizedTenant marker the interceptor matches
+├── TenantId.java                               # @TenantId field annotation (audit rows)
 ├── AuditEvent.java                             # @TenantId-annotated audit row (R4)
 ├── TenantIterationScheduler.java               # per-tenant @Scheduled iteration (R6)
 ├── TenantAwareSseEmitterRegistry.java          # long-lived push connection registry (R7)

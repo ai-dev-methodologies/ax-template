@@ -26,9 +26,9 @@ evidence:
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
     quoted_at: "2026-05-18"
   - source_type: external
-    citation: "NIST SP 800-186 §3.1 — HMAC-based URL authentication as integrity and authenticity check for temporary access tokens"
-    url: "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-186.pdf"
-    quoted_at: "2026-05-18"
+    citation: "RFC 2104 — HMAC: Keyed-Hashing for Message Authentication: HMAC verifies both the data integrity and the authenticity of a message; a presigned URL signs its parameters + expiry with a server-held HMAC key so any tampering invalidates the signature"
+    url: "https://www.rfc-editor.org/rfc/rfc2104"
+    quoted_at: "2026-06-02"
 decided_at: "2026-05-18"
 ---
 
