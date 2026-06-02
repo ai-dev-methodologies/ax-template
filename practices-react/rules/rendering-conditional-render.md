@@ -9,7 +9,7 @@ verification:
   type: lint
   rule_id: "ax/no-falsy-numeric-render"
   status: shipped
-  notes: "Custom ESLint rule planned: flag `numeric && <JSX>` patterns; safe `boolean && <JSX>` left alone."
+  notes: "Shipped + enabled: ax/no-falsy-numeric-render flags `numeric && <JSX>` patterns; safe `boolean && <JSX>` left alone; registered in the plugin and enforcing."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"

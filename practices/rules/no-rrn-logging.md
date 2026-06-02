@@ -10,7 +10,7 @@ tags:
   - observability
   - locked_constraint
 provenance_class: locked_constraint
-protects_template_id: templates/backend/global-exception-handler/GlobalExceptionHandler.java
+protects_template_id: templates/backend/error/GlobalExceptionHandler.java
 failing_fixture_path: practices/evals/fixtures/no-rrn-logging/fail_rrn_in_log/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-OBS-003"
 verification:

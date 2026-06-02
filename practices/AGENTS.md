@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "1309cd83146257adda0e18bde049a1a7dc145334e2fc23838523cbb5a0b7215a"
+  source_concat_sha256: "aaf50ca8745085e9c7bfad836964af50ebf7b12ece0ab1e49561504bbe8377c9"
   rule_count: 147
   generated_by: "practices/generate_agents.sh"
 ---
@@ -4106,7 +4106,7 @@ tags:
   - email-outbox
   - retry-safety
 provenance_class: internal_design
-protects_template_id: templates/backend/payment/PaymentController.java
+protects_template_id: backend/src/main/java/com/ax/template/authblueprint/payment/PaymentController.java
 failing_fixture_path: practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-VAL-001"
 verification:
@@ -6400,7 +6400,7 @@ tags:
   - observability
   - locked_constraint
 provenance_class: locked_constraint
-protects_template_id: templates/backend/global-exception-handler/GlobalExceptionHandler.java
+protects_template_id: templates/backend/error/GlobalExceptionHandler.java
 failing_fixture_path: practices/evals/fixtures/no-rrn-logging/fail_rrn_in_log/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-OBS-003"
 verification:
@@ -7828,7 +7828,7 @@ tags:
 spec_ref: "specs/favorites-bookmarks-l0.yaml#FAV-VALID-001"
 verification:
   type: review
-  source: "templates/L4/favorites-bookmarks/app/entity-key.ts"
+  source: "templates/L0/fork-receiver-kit/entity-key.ts"
   pattern: "assertSafeEntityRef(entityType, entityId) rejects values containing '/', '?', '#', '\\0', '\\', or a leading '.' — called by every fetch that emits the pair as a path segment"
 upstream:
   - "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"

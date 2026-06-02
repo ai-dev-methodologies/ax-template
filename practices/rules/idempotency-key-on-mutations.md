@@ -10,7 +10,7 @@ tags:
   - email-outbox
   - retry-safety
 provenance_class: internal_design
-protects_template_id: templates/backend/payment/PaymentController.java
+protects_template_id: backend/src/main/java/com/ax/template/authblueprint/payment/PaymentController.java
 failing_fixture_path: practices/evals/fixtures/idempotency-key-on-mutations/fail_no_annotation/
 spec_ref: "specs/spring-practices-l0.yaml#PRACTICES-VAL-001"
 verification:
