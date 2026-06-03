@@ -15,6 +15,38 @@
 "next/navigation"
 ]
 },
+"reapollo/interfaces-dropdown-menu": {
+"category": [
+"dropdown",
+"menu"
+],
+"lines": 248,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"@carbon/icons-react",
+"@radix-ui/react-dropdown-menu"
+]
+},
+"jatin-yadav05/spotify-card": {
+"category": [
+"card"
+],
+"lines": 602,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 2,
+"has_aria": true,
+"is_client": true,
+"ext_libs": [
+"lucide-react"
+]
+},
 "bucharitesh/split-text-effect": {
 "category": [
 "text"
@@ -238,6 +270,22 @@
 "next/image"
 ]
 },
+"lukacho/image-swiper": {
+"category": [
+"image"
+],
+"lines": 98,
+"has_motion": true,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"framer-motion",
+"lucide-react"
+]
+},
 "designali-in/accordion-02-1": {
 "category": [
 "accordion"
@@ -345,6 +393,22 @@
 "is_client": true,
 "ext_libs": []
 },
+"shugar/tooltip-1": {
+"category": [
+"tooltip"
+],
+"lines": 62,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": [
+"clsx",
+"react-tooltip"
+]
+},
 "designali-in/marquee-card": {
 "category": [
 "card"
@@ -435,6 +499,19 @@
 "lucide-react"
 ]
 },
+"larsen66/calendar-variable-size": {
+"category": [
+"calendar"
+],
+"lines": 18,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": []
+},
 "iamsatish4564/prime-button": {
 "category": [
 "button"
@@ -524,86 +601,6 @@
 "is_client": false,
 "ext_libs": [
 "framer-motion"
-]
-},
-"ruixen.ui/alert-badge": {
-"category": [
-"badge"
-],
-"lines": 84,
-"has_motion": false,
-"icon_lib": "lucide-react",
-"uses_cva": false,
-"hardcoded_hex": 0,
-"has_aria": false,
-"is_client": true,
-"ext_libs": [
-"lucide-react"
-]
-},
-"larsen66/avatar-badge": {
-"category": [
-"avatar",
-"badge"
-],
-"lines": 27,
-"has_motion": false,
-"icon_lib": "lucide-react",
-"uses_cva": false,
-"hardcoded_hex": 0,
-"has_aria": false,
-"is_client": true,
-"ext_libs": [
-"lucide-react"
-]
-},
-"larsen66/calendar-with-localisation": {
-"category": [
-"calendar"
-],
-"lines": 18,
-"has_motion": false,
-"icon_lib": null,
-"uses_cva": false,
-"hardcoded_hex": 0,
-"has_aria": false,
-"is_client": false,
-"ext_libs": []
-},
-"larsen66/flexnative-tabs-more": {
-"category": [
-"card",
-"form",
-"icons",
-"tabs"
-],
-"lines": 180,
-"has_motion": false,
-"icon_lib": null,
-"uses_cva": true,
-"hardcoded_hex": 0,
-"has_aria": true,
-"is_client": true,
-"ext_libs": [
-"class-variance-authority"
-]
-},
-"ruixen.ui/dropdown-range-date-picker": {
-"category": [
-"calendar",
-"date-picker",
-"dropdown"
-],
-"lines": 127,
-"has_motion": false,
-"icon_lib": "lucide-react",
-"uses_cva": false,
-"hardcoded_hex": 0,
-"has_aria": false,
-"is_client": true,
-"ext_libs": [
-"date-fns",
-"lucide-react"
 ]
 }
 }

@@ -27,10 +27,11 @@
       },
       {
        "need": "metric",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9833,
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.67,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
@@ -44,8 +45,7 @@
       }
      ],
      "warnings": [
-      "navigation:promote-header (category 'menu' not slug-proven)",
-      "metric:flexnative-tabs-more (category 'card' not slug-proven)"
+      "navigation:promote-header (category 'menu' not slug-proven)"
      ]
     },
     "conversion": {
@@ -64,10 +64,11 @@
       },
       {
        "need": "metric",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.8966,
+       "component": "jshguo/interfaces-card",
+       "score": 0.6966,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
@@ -91,17 +92,16 @@
       },
       {
        "need": "social-proof",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.8966,
+       "component": "jshguo/interfaces-card",
+       "score": 0.6966,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       }
      ],
      "warnings": [
-      "navigation:promote-header (category 'menu' not slug-proven)",
-      "metric:flexnative-tabs-more (category 'card' not slug-proven)",
-      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+      "navigation:promote-header (category 'menu' not slug-proven)"
      ]
     },
     "premium": {
@@ -120,10 +120,11 @@
       },
       {
        "need": "metric",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.75,
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.6367,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
@@ -146,8 +147,7 @@
       }
      ],
      "warnings": [
-      "navigation:promote-header (category 'menu' not slug-proven)",
-      "metric:flexnative-tabs-more (category 'card' not slug-proven)"
+      "navigation:promote-header (category 'menu' not slug-proven)"
      ]
     }
    },
@@ -168,14 +168,6 @@
        ]
       },
       {
-       "need": "data-entry",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9833,
-       "codify": [
-        "conformant"
-       ]
-      },
-      {
        "need": "primary-cta",
        "component": "nextjsshop/animated-arrow-button",
        "score": 0.7178,
@@ -185,9 +177,7 @@
        ]
       }
      ],
-     "warnings": [
-      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)"
-     ]
+     "warnings": []
     },
     "conversion": {
      "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
@@ -205,14 +195,6 @@
        ]
       },
       {
-       "need": "data-entry",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.8166,
-       "codify": [
-        "conformant"
-       ]
-      },
-      {
        "need": "primary-cta",
        "component": "Shatlyk1011/social-button",
        "score": 0.9011,
@@ -224,17 +206,15 @@
       },
       {
        "need": "social-proof",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.8966,
+       "component": "jshguo/interfaces-card",
+       "score": 0.6966,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       }
      ],
-     "warnings": [
-      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)",
-      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
-     ]
+     "warnings": []
     },
     "premium": {
      "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
@@ -252,14 +232,6 @@
        ]
       },
       {
-       "need": "data-entry",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.75,
-       "codify": [
-        "conformant"
-       ]
-      },
-      {
        "need": "primary-cta",
        "component": "Shatlyk1011/social-button",
        "score": 0.7378,
@@ -270,20 +242,12 @@
        ]
       }
      ],
-     "warnings": [
-      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)"
-     ]
+     "warnings": []
     }
    }
   },
   "pass": true,
-  "over_reuse": {
-   "larsen66/flexnative-tabs-more": [
-    "data-entry",
-    "metric",
-    "social-proof"
-   ]
-  }
+  "over_reuse": {}
  },
  {
   "service_plan": "D2C storefront",
@@ -315,25 +279,24 @@
       },
       {
        "need": "value-props",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9562,
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9192,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
        "need": "social-proof",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9562,
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9192,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       }
      ],
-     "warnings": [
-      "value-props:flexnative-tabs-more (category 'card' not slug-proven)",
-      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
-     ]
+     "warnings": []
     },
     "conversion": {
      "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
@@ -424,8 +387,8 @@
       },
       {
        "need": "media",
-       "component": "ravikatiyar162/ai-image-generator-hero",
-       "score": 0.897,
+       "component": "lukacho/image-swiper",
+       "score": 0.9006,
        "codify": [
         "add role/aria",
         "type variants"
@@ -462,25 +425,24 @@
       },
       {
        "need": "pricing",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9562,
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9192,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
        "need": "social-proof",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9562,
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9192,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       }
      ],
-     "warnings": [
-      "pricing:flexnative-tabs-more (category 'card' not slug-proven)",
-      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
-     ]
+     "warnings": []
     },
     "conversion": {
      "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
@@ -571,8 +533,8 @@
       },
       {
        "need": "media",
-       "component": "ravikatiyar162/ai-image-generator-hero",
-       "score": 0.897,
+       "component": "lukacho/image-swiper",
+       "score": 0.9006,
        "codify": [
         "add role/aria",
         "type variants"
@@ -593,11 +555,6 @@
   },
   "pass": true,
   "over_reuse": {
-   "larsen66/flexnative-tabs-more": [
-    "pricing",
-    "social-proof",
-    "value-props"
-   ],
    "ln-dev7/auto-layout-card": [
     "pricing",
     "social-proof",
@@ -625,19 +582,12 @@
      "failed_checks": [],
      "composition": [
       {
-       "need": "data-entry",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 1.0833,
-       "codify": [
-        "conformant"
-       ]
-      },
-      {
        "need": "metric",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 1.0833,
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.8983,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
@@ -649,10 +599,7 @@
        ]
       }
      ],
-     "warnings": [
-      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)",
-      "metric:flexnative-tabs-more (category 'card' not slug-proven)"
-     ]
+     "warnings": []
     },
     "conversion": {
      "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
@@ -661,19 +608,12 @@
      "failed_checks": [],
      "composition": [
       {
-       "need": "data-entry",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9166,
-       "codify": [
-        "conformant"
-       ]
-      },
-      {
        "need": "metric",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9966,
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.8816,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
@@ -686,18 +626,15 @@
       },
       {
        "need": "social-proof",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9966,
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.8161,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       }
      ],
-     "warnings": [
-      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)",
-      "metric:flexnative-tabs-more (category 'card' not slug-proven)",
-      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
-     ]
+     "warnings": []
     },
     "premium": {
      "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
@@ -705,14 +642,6 @@
      "recommended": true,
      "failed_checks": [],
      "composition": [
-      {
-       "need": "data-entry",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.85,
-       "codify": [
-        "conformant"
-       ]
-      },
       {
        "need": "metric",
        "component": "ahmedmayara/category-bar-chart",
@@ -749,9 +678,7 @@
        ]
       }
      ],
-     "warnings": [
-      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)"
-     ]
+     "warnings": []
     }
    },
    "admin-dashboard": {
@@ -763,18 +690,20 @@
      "composition": [
       {
        "need": "navigation",
-       "component": "ruixen.ui/promote-header",
-       "score": 0.675,
+       "component": "reapollo/interfaces-dropdown-menu",
+       "score": 0.7322,
        "codify": [
+        "add role/aria",
         "type variants"
        ]
       },
       {
        "need": "metric",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 1.0833,
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.8983,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
@@ -787,10 +716,7 @@
        ]
       }
      ],
-     "warnings": [
-      "navigation:promote-header (category 'menu' not slug-proven)",
-      "metric:flexnative-tabs-more (category 'card' not slug-proven)"
-     ]
+     "warnings": []
     },
     "conversion": {
      "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
@@ -800,18 +726,20 @@
      "composition": [
       {
        "need": "navigation",
-       "component": "ruixen.ui/promote-header",
-       "score": 0.6583,
+       "component": "reapollo/interfaces-dropdown-menu",
+       "score": 0.7155,
        "codify": [
+        "add role/aria",
         "type variants"
        ]
       },
       {
        "need": "metric",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9966,
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.8816,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
@@ -833,18 +761,15 @@
       },
       {
        "need": "social-proof",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9966,
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.8161,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       }
      ],
-     "warnings": [
-      "navigation:promote-header (category 'menu' not slug-proven)",
-      "metric:flexnative-tabs-more (category 'card' not slug-proven)",
-      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
-     ]
+     "warnings": []
     },
     "premium": {
      "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
@@ -854,9 +779,10 @@
      "composition": [
       {
        "need": "navigation",
-       "component": "ruixen.ui/promote-header",
-       "score": 0.6417,
+       "component": "reapollo/interfaces-dropdown-menu",
+       "score": 0.6989,
        "codify": [
+        "add role/aria",
         "type variants"
        ]
       },
@@ -897,20 +823,12 @@
        ]
       }
      ],
-     "warnings": [
-      "navigation:promote-header (category 'menu' not slug-proven)"
-     ]
+     "warnings": []
     }
    }
   },
   "pass": true,
-  "over_reuse": {
-   "larsen66/flexnative-tabs-more": [
-    "data-entry",
-    "metric",
-    "social-proof"
-   ]
-  }
+  "over_reuse": {}
  },
  {
   "service_plan": "dev-tool docs portal",
@@ -1047,25 +965,24 @@
       },
       {
        "need": "value-props",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.7167,
+       "component": "jshguo/interfaces-card",
+       "score": 0.6333,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
        "need": "social-proof",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.7167,
+       "component": "jshguo/interfaces-card",
+       "score": 0.6333,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       }
      ],
-     "warnings": [
-      "value-props:flexnative-tabs-more (category 'card' not slug-proven)",
-      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
-     ]
+     "warnings": []
     },
     "conversion": {
      "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
@@ -1184,9 +1101,10 @@
      "composition": [
       {
        "need": "navigation",
-       "component": "ruixen.ui/promote-header",
-       "score": 0.5084,
+       "component": "reapollo/interfaces-dropdown-menu",
+       "score": 0.5656,
        "codify": [
+        "add role/aria",
         "type variants"
        ]
       },
@@ -1202,17 +1120,15 @@
       },
       {
        "need": "media",
-       "component": "ravikatiyar162/ai-image-generator-hero",
-       "score": 0.5961,
+       "component": "lukacho/image-swiper",
+       "score": 0.7244,
        "codify": [
         "add role/aria",
         "type variants"
        ]
       }
      ],
-     "warnings": [
-      "navigation:promote-header (category 'menu' not slug-proven)"
-     ]
+     "warnings": []
     },
     "conversion": {
      "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
@@ -1222,9 +1138,10 @@
      "composition": [
       {
        "need": "navigation",
-       "component": "ruixen.ui/promote-header",
-       "score": 0.4917,
+       "component": "reapollo/interfaces-dropdown-menu",
+       "score": 0.5489,
        "codify": [
+        "add role/aria",
         "type variants"
        ]
       },
@@ -1240,8 +1157,8 @@
       },
       {
        "need": "media",
-       "component": "ravikatiyar162/ai-image-generator-hero",
-       "score": 0.5794,
+       "component": "lukacho/image-swiper",
+       "score": 0.7077,
        "codify": [
         "add role/aria",
         "type variants"
@@ -1265,9 +1182,7 @@
        ]
       }
      ],
-     "warnings": [
-      "navigation:promote-header (category 'menu' not slug-proven)"
-     ]
+     "warnings": []
     },
     "premium": {
      "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
@@ -1277,9 +1192,10 @@
      "composition": [
       {
        "need": "navigation",
-       "component": "ruixen.ui/promote-header",
-       "score": 0.4917,
+       "component": "reapollo/interfaces-dropdown-menu",
+       "score": 0.5489,
        "codify": [
+        "add role/aria",
         "type variants"
        ]
       },
@@ -1295,8 +1211,8 @@
       },
       {
        "need": "media",
-       "component": "ravikatiyar162/ai-image-generator-hero",
-       "score": 0.7294,
+       "component": "lukacho/image-swiper",
+       "score": 0.8577,
        "codify": [
         "add role/aria",
         "type variants"
@@ -1329,9 +1245,7 @@
        ]
       }
      ],
-     "warnings": [
-      "navigation:promote-header (category 'menu' not slug-proven)"
-     ]
+     "warnings": []
     }
    },
    "marketing-landing": {
@@ -1353,25 +1267,24 @@
       },
       {
        "need": "value-props",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9167,
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.8861,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       },
       {
        "need": "social-proof",
-       "component": "larsen66/flexnative-tabs-more",
-       "score": 0.9167,
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.8861,
        "codify": [
-        "conformant"
+        "add role/aria",
+        "type variants"
        ]
       }
      ],
-     "warnings": [
-      "value-props:flexnative-tabs-more (category 'card' not slug-proven)",
-      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
-     ]
+     "warnings": []
     },
     "conversion": {
      "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
@@ -1462,8 +1375,8 @@
       },
       {
        "need": "media",
-       "component": "ravikatiyar162/ai-image-generator-hero",
-       "score": 0.7294,
+       "component": "lukacho/image-swiper",
+       "score": 0.8577,
        "codify": [
         "add role/aria",
         "type variants"
@@ -1514,8 +1427,8 @@
       },
       {
        "need": "media",
-       "component": "ravikatiyar162/ai-image-generator-hero",
-       "score": 0.7803,
+       "component": "lukacho/image-swiper",
+       "score": 0.8839,
        "codify": [
         "add role/aria",
         "type variants"
@@ -1549,8 +1462,8 @@
       },
       {
        "need": "media",
-       "component": "ravikatiyar162/ai-image-generator-hero",
-       "score": 0.7637,
+       "component": "lukacho/image-swiper",
+       "score": 0.9006,
        "codify": [
         "add role/aria",
         "type variants"
@@ -1601,8 +1514,8 @@
       },
       {
        "need": "media",
-       "component": "ravikatiyar162/ai-image-generator-hero",
-       "score": 0.897,
+       "component": "lukacho/image-swiper",
+       "score": 1.0339,
        "codify": [
         "add role/aria",
         "type variants"
@@ -1744,8 +1657,8 @@
       },
       {
        "need": "media",
-       "component": "ravikatiyar162/ai-image-generator-hero",
-       "score": 0.897,
+       "component": "lukacho/image-swiper",
+       "score": 1.0339,
        "codify": [
         "add role/aria",
         "type variants"

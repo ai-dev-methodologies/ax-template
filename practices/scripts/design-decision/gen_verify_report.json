@@ -1,5 +1,5 @@
 {
- "generated": 14,
+ "generated": 15,
  "lint_available": true,
  "rows": [
   {
@@ -87,8 +87,8 @@
    "pass": true
   },
   {
-   "component": "larsen66/flexnative-tabs-more",
-   "block": "flexnative-tabs-more.tsx",
+   "component": "ln-dev7/auto-layout-card",
+   "block": "auto-layout-card.tsx",
    "checks": {
     "T1_nonempty": true,
     "T2_provenance": true,
@@ -99,8 +99,8 @@
    "pass": true
   },
   {
-   "component": "ln-dev7/auto-layout-card",
-   "block": "auto-layout-card.tsx",
+   "component": "lukacho/image-swiper",
+   "block": "image-swiper.tsx",
    "checks": {
     "T1_nonempty": true,
     "T2_provenance": true,
@@ -137,6 +137,18 @@
   {
    "component": "ravikatiyar162/animated-feature-card",
    "block": "animated-feature-card.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "reapollo/interfaces-dropdown-menu",
+   "block": "interfaces-dropdown-menu.tsx",
    "checks": {
     "T1_nonempty": true,
     "T2_provenance": true,
