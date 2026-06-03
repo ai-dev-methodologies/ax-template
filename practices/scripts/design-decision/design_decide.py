@@ -45,12 +45,14 @@ PERSONAS = {
         theme=dict(radius="4px", accent_saturation="low", elevation="flat", mode="dark"),
         typo="mono code surfaces + grotesk prose, 14px", motion_budget="minimal"),
     "fintech-trust": dict(motion=1, density="comfortable", a11y=3,
-        affinity={"stat":3,"chart":3,"table":3,"form":3,"card":2,"button":2,"input":2,"badge":2},
+        affinity={"stat":3,"chart":3,"table":3,"form":3,"card":2,"button":2,"input":2,"badge":2,
+                  "sidebar":2,"menu":2,"command":1},  # a fintech console still needs navigation
         avoid={"shader","confetti","glass"},
         theme=dict(radius="8px", accent_saturation="low", elevation="subtle", tabular_nums=True),
         typo="tabular-figure grotesk, medium scale-contrast, 15px", motion_budget="conservative"),
     "playful-creator": dict(motion=3, density="comfortable", a11y=2,
-        affinity={"card":3,"avatar":3,"feed":2,"badge":2,"button":2,"image":2,"hero":2,"shader":1},
+        affinity={"card":3,"avatar":3,"feed":2,"badge":2,"button":2,"image":2,"hero":2,"shader":1,
+                  "menu":2,"command":1},  # a social/feed app still needs navigation (tab/avatar menu)
         avoid={"table","terminal","code"},
         theme=dict(radius="24px", accent_saturation="high", elevation="layered"),
         typo="chunky rounded display, high scale-contrast, 16px", motion_budget="cinematic / reactions"),

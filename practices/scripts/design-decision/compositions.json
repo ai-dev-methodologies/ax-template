@@ -1,0 +1,1437 @@
+[
+ {
+  "service_plan": "B2B analytics console",
+  "persona": "enterprise-operator",
+  "theme": {
+   "base_spec": "specs/react-practices-l0.yaml#REACT-PRACTICES-UX-001",
+   "radius": "6px",
+   "accent_saturation": "low",
+   "elevation": "flat"
+  },
+  "typography": "geometric sans, low scale-contrast, 14px body",
+  "pages": {
+   "admin-dashboard": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 0,
+     "needs": {
+      "navigation": [
+       {
+        "component": "ruixen.ui/promote-header",
+        "category": "menu",
+        "score": 0.675,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ],
+      "metric": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.9833,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.67,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "chart": [
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.67,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 1,
+     "needs": {
+      "navigation": [
+       {
+        "component": "ruixen.ui/promote-header",
+        "category": "menu",
+        "score": 0.6583,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ],
+      "metric": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.8966,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "jshguo/interfaces-card",
+        "category": "card",
+        "score": 0.6966,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "chart": [
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.6533,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "data-grid": [
+       {
+        "component": "ruixen.ui/reorderable-table",
+        "category": "table",
+        "score": 0.9116,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "Shatlyk1011/social-button",
+        "category": "button",
+        "score": 0.9011,
+        "codify_action": [
+         "tokenize 3 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "nextjsshop/animated-arrow-button",
+        "category": "button",
+        "score": 0.8811,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "social-proof": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.8966,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "jshguo/interfaces-card",
+        "category": "card",
+        "score": 0.6966,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 2,
+     "needs": {
+      "navigation": [
+       {
+        "component": "ruixen.ui/promote-header",
+        "category": "menu",
+        "score": 0.6417,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ],
+      "metric": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.75,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.6367,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "chart": [
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.6367,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "data-grid": [
+       {
+        "component": "ruixen.ui/reorderable-table",
+        "category": "table",
+        "score": 0.895,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ],
+      "headline": [
+       {
+        "component": "bucharitesh/split-text-effect",
+        "category": "text",
+        "score": 0.6506,
+        "codify_action": [
+         "tokenize 1 hex",
+         "type variants"
+        ]
+       },
+       {
+        "component": "kauasodreas/whisper-text",
+        "category": "text",
+        "score": 0.5756,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "auth": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 0,
+     "needs": {
+      "headline": [
+       {
+        "component": "bucharitesh/split-text-effect",
+        "category": "text",
+        "score": 0.4973,
+        "codify_action": [
+         "tokenize 1 hex",
+         "type variants"
+        ]
+       },
+       {
+        "component": "kauasodreas/whisper-text",
+        "category": "text",
+        "score": 0.4889,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "data-entry": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "form",
+        "score": 0.9833,
+        "codify_action": [
+         "conformant"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "nextjsshop/animated-arrow-button",
+        "category": "button",
+        "score": 0.7178,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "Shatlyk1011/social-button",
+        "category": "button",
+        "score": 0.7045,
+        "codify_action": [
+         "tokenize 3 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 1,
+     "needs": {
+      "headline": [
+       {
+        "component": "bucharitesh/split-text-effect",
+        "category": "text",
+        "score": 0.5139,
+        "codify_action": [
+         "tokenize 1 hex",
+         "type variants"
+        ]
+       },
+       {
+        "component": "kauasodreas/whisper-text",
+        "category": "text",
+        "score": 0.4722,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "data-entry": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "form",
+        "score": 0.8166,
+        "codify_action": [
+         "conformant"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "Shatlyk1011/social-button",
+        "category": "button",
+        "score": 0.9011,
+        "codify_action": [
+         "tokenize 3 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "nextjsshop/animated-arrow-button",
+        "category": "button",
+        "score": 0.8811,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "social-proof": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.8966,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "jshguo/interfaces-card",
+        "category": "card",
+        "score": 0.6966,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 2,
+     "needs": {
+      "headline": [
+       {
+        "component": "bucharitesh/split-text-effect",
+        "category": "text",
+        "score": 0.6506,
+        "codify_action": [
+         "tokenize 1 hex",
+         "type variants"
+        ]
+       },
+       {
+        "component": "kauasodreas/whisper-text",
+        "category": "text",
+        "score": 0.5756,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "data-entry": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "form",
+        "score": 0.75,
+        "codify_action": [
+         "conformant"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "Shatlyk1011/social-button",
+        "category": "button",
+        "score": 0.7378,
+        "codify_action": [
+         "tokenize 3 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "iamsatish4564/prime-button",
+        "category": "button",
+        "score": 0.695,
+        "codify_action": [
+         "add role/aria"
+        ]
+       }
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "service_plan": "D2C storefront",
+  "persona": "consumer-delight",
+  "theme": {
+   "base_spec": "specs/react-practices-l0.yaml#REACT-PRACTICES-UX-001",
+   "radius": "20px",
+   "accent_saturation": "high",
+   "elevation": "layered"
+  },
+  "typography": "rounded humanist, high scale-contrast, 16px body",
+  "pages": {
+   "marketing-landing": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 1,
+     "needs": {
+      "headline": [
+       {
+        "component": "uniquesonu/futurastic-hero-section",
+        "category": "hero",
+        "score": 0.8261,
+        "codify_action": [
+         "tokenize 5 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "hero",
+        "score": 0.7803,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "value-props": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.9562,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 0.9192,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "social-proof": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.9562,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 0.9192,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 2,
+     "needs": {
+      "headline": [
+       {
+        "component": "uniquesonu/futurastic-hero-section",
+        "category": "hero",
+        "score": 0.8428,
+        "codify_action": [
+         "tokenize 5 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "hero",
+        "score": 0.7637,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "value-props": [
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 1.0159,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "lavikatiyar/card-3",
+        "category": "card",
+        "score": 0.9919,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "social-proof": [
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 1.0159,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "lavikatiyar/card-3",
+        "category": "card",
+        "score": 0.9919,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "iamsatish4564/prime-button",
+        "category": "button",
+        "score": 1.1397,
+        "codify_action": [
+         "add role/aria"
+        ]
+       },
+       {
+        "component": "Shatlyk1011/social-button",
+        "category": "button",
+        "score": 1.0475,
+        "codify_action": [
+         "tokenize 3 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 3,
+     "needs": {
+      "headline": [
+       {
+        "component": "uniquesonu/futurastic-hero-section",
+        "category": "hero",
+        "score": 1.0061,
+        "codify_action": [
+         "tokenize 5 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "hero",
+        "score": 0.927,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "value-props": [
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 0.9192,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "lavikatiyar/card-3",
+        "category": "card",
+        "score": 0.8952,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "social-proof": [
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 0.9192,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "lavikatiyar/card-3",
+        "category": "card",
+        "score": 0.8952,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "iamsatish4564/prime-button",
+        "category": "button",
+        "score": 0.943,
+        "codify_action": [
+         "add role/aria"
+        ]
+       },
+       {
+        "component": "Shatlyk1011/social-button",
+        "category": "button",
+        "score": 0.8508,
+        "codify_action": [
+         "tokenize 3 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "media": [
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "image",
+        "score": 0.897,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "atmosphere": [
+       {
+        "component": "dhileepkumargm/cybernetic-grid-shader",
+        "category": "shader",
+        "score": 0.5623,
+        "codify_action": [
+         "type variants"
+        ]
+       },
+       {
+        "component": "dhileepkumargm/cosmic-ocean-shader",
+        "category": "shader",
+        "score": 0.5564,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "pricing": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 1,
+     "needs": {
+      "headline": [
+       {
+        "component": "uniquesonu/futurastic-hero-section",
+        "category": "hero",
+        "score": 0.8261,
+        "codify_action": [
+         "tokenize 5 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "hero",
+        "score": 0.7803,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "pricing": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.9562,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 0.9192,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "social-proof": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.9562,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 0.9192,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 2,
+     "needs": {
+      "headline": [
+       {
+        "component": "uniquesonu/futurastic-hero-section",
+        "category": "hero",
+        "score": 0.8428,
+        "codify_action": [
+         "tokenize 5 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "hero",
+        "score": 0.7637,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "pricing": [
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 1.0159,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "lavikatiyar/card-3",
+        "category": "card",
+        "score": 0.9919,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "social-proof": [
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 1.0159,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "lavikatiyar/card-3",
+        "category": "card",
+        "score": 0.9919,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "iamsatish4564/prime-button",
+        "category": "button",
+        "score": 1.1397,
+        "codify_action": [
+         "add role/aria"
+        ]
+       },
+       {
+        "component": "Shatlyk1011/social-button",
+        "category": "button",
+        "score": 1.0475,
+        "codify_action": [
+         "tokenize 3 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 3,
+     "needs": {
+      "headline": [
+       {
+        "component": "uniquesonu/futurastic-hero-section",
+        "category": "hero",
+        "score": 1.0061,
+        "codify_action": [
+         "tokenize 5 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "hero",
+        "score": 0.927,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "pricing": [
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 0.9192,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "lavikatiyar/card-3",
+        "category": "card",
+        "score": 0.8952,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "social-proof": [
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 0.9192,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "lavikatiyar/card-3",
+        "category": "card",
+        "score": 0.8952,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "iamsatish4564/prime-button",
+        "category": "button",
+        "score": 0.943,
+        "codify_action": [
+         "add role/aria"
+        ]
+       },
+       {
+        "component": "Shatlyk1011/social-button",
+        "category": "button",
+        "score": 0.8508,
+        "codify_action": [
+         "tokenize 3 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "media": [
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "image",
+        "score": 0.897,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "atmosphere": [
+       {
+        "component": "dhileepkumargm/cybernetic-grid-shader",
+        "category": "shader",
+        "score": 0.5623,
+        "codify_action": [
+         "type variants"
+        ]
+       },
+       {
+        "component": "dhileepkumargm/cosmic-ocean-shader",
+        "category": "shader",
+        "score": 0.5564,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "service_plan": "fintech remittance",
+  "persona": "fintech-trust",
+  "theme": {
+   "base_spec": "specs/react-practices-l0.yaml#REACT-PRACTICES-UX-001",
+   "radius": "8px",
+   "accent_saturation": "low",
+   "elevation": "subtle",
+   "tabular_nums": true
+  },
+  "typography": "tabular-figure grotesk, medium scale-contrast, 15px",
+  "pages": {
+   "checkout": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 0,
+     "needs": {
+      "data-entry": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "form",
+        "score": 1.0833,
+        "codify_action": [
+         "conformant"
+        ]
+       }
+      ],
+      "metric": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 1.0833,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.8983,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "iamsatish4564/prime-button",
+        "category": "button",
+        "score": 0.7467,
+        "codify_action": [
+         "add role/aria"
+        ]
+       },
+       {
+        "component": "nextjsshop/animated-arrow-button",
+        "category": "button",
+        "score": 0.6939,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 1,
+     "needs": {
+      "data-entry": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "form",
+        "score": 0.9166,
+        "codify_action": [
+         "conformant"
+        ]
+       }
+      ],
+      "metric": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.9966,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.8816,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "iamsatish4564/prime-button",
+        "category": "button",
+        "score": 0.9433,
+        "codify_action": [
+         "add role/aria"
+        ]
+       },
+       {
+        "component": "nextjsshop/animated-arrow-button",
+        "category": "button",
+        "score": 0.8572,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "social-proof": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.9966,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 0.8161,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 2,
+     "needs": {
+      "data-entry": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "form",
+        "score": 0.85,
+        "codify_action": [
+         "conformant"
+        ]
+       }
+      ],
+      "metric": [
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.865,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.85,
+        "codify_action": [
+         "conformant"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "iamsatish4564/prime-button",
+        "category": "button",
+        "score": 0.78,
+        "codify_action": [
+         "add role/aria"
+        ]
+       },
+       {
+        "component": "Shatlyk1011/social-button",
+        "category": "button",
+        "score": 0.6889,
+        "codify_action": [
+         "tokenize 3 hex",
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "headline": [
+       {
+        "component": "bucharitesh/split-text-effect",
+        "category": "text",
+        "score": 0.7322,
+        "codify_action": [
+         "tokenize 1 hex",
+         "type variants"
+        ]
+       },
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "hero",
+        "score": 0.6428,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "media": [
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "image",
+        "score": 0.6128,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "admin-dashboard": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 0,
+     "needs": {
+      "navigation": [
+       {
+        "component": "ruixen.ui/promote-header",
+        "category": "menu",
+        "score": 0.675,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ],
+      "metric": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 1.0833,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.8983,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "chart": [
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.8983,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 1,
+     "needs": {
+      "navigation": [
+       {
+        "component": "ruixen.ui/promote-header",
+        "category": "menu",
+        "score": 0.6583,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ],
+      "metric": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.9966,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.8816,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "chart": [
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.8816,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "data-grid": [
+       {
+        "component": "ruixen.ui/reorderable-table",
+        "category": "table",
+        "score": 0.9389,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ],
+      "primary-cta": [
+       {
+        "component": "iamsatish4564/prime-button",
+        "category": "button",
+        "score": 0.9433,
+        "codify_action": [
+         "add role/aria"
+        ]
+       },
+       {
+        "component": "nextjsshop/animated-arrow-button",
+        "category": "button",
+        "score": 0.8572,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "social-proof": [
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.9966,
+        "codify_action": [
+         "conformant"
+        ]
+       },
+       {
+        "component": "ln-dev7/auto-layout-card",
+        "category": "card",
+        "score": 0.8161,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 2,
+     "needs": {
+      "navigation": [
+       {
+        "component": "ruixen.ui/promote-header",
+        "category": "menu",
+        "score": 0.6417,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ],
+      "metric": [
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.865,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       },
+       {
+        "component": "larsen66/flexnative-tabs-more",
+        "category": "card",
+        "score": 0.85,
+        "codify_action": [
+         "conformant"
+        ]
+       }
+      ],
+      "chart": [
+       {
+        "component": "ahmedmayara/category-bar-chart",
+        "category": "chart",
+        "score": 0.865,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "data-grid": [
+       {
+        "component": "ruixen.ui/reorderable-table",
+        "category": "table",
+        "score": 0.9223,
+        "codify_action": [
+         "type variants"
+        ]
+       }
+      ],
+      "headline": [
+       {
+        "component": "bucharitesh/split-text-effect",
+        "category": "text",
+        "score": 0.7322,
+        "codify_action": [
+         "tokenize 1 hex",
+         "type variants"
+        ]
+       },
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "hero",
+        "score": 0.6428,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ],
+      "media": [
+       {
+        "component": "ravikatiyar162/ai-image-generator-hero",
+        "category": "image",
+        "score": 0.6128,
+        "codify_action": [
+         "add role/aria",
+         "type variants"
+        ]
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+]

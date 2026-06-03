@@ -327,7 +327,7 @@
 "uses_cva": false,
 "hardcoded_hex": 4,
 "has_aria": false,
-"is_client": true,
+"is_client": false,
 "ext_libs": [
 "three"
 ]
@@ -521,7 +521,7 @@
 "uses_cva": false,
 "hardcoded_hex": 0,
 "has_aria": false,
-"is_client": true,
+"is_client": false,
 "ext_libs": [
 "framer-motion"
 ]

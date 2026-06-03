@@ -1,0 +1,306 @@
+[
+ {
+  "service_plan": "B2B analytics console",
+  "persona": "enterprise-operator",
+  "variants": {
+   "admin-dashboard/lean": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "navigation:promote-header (category 'menu' not slug-proven)",
+     "metric:flexnative-tabs-more (category 'card' not slug-proven)"
+    ],
+    "details": []
+   },
+   "admin-dashboard/conversion": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "navigation:promote-header (category 'menu' not slug-proven)",
+     "metric:flexnative-tabs-more (category 'card' not slug-proven)",
+     "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+    ],
+    "details": []
+   },
+   "admin-dashboard/premium": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "navigation:promote-header (category 'menu' not slug-proven)",
+     "metric:flexnative-tabs-more (category 'card' not slug-proven)"
+    ],
+    "details": []
+   },
+   "auth/lean": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "data-entry:flexnative-tabs-more (category 'form' not slug-proven)"
+    ],
+    "details": []
+   },
+   "auth/conversion": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "data-entry:flexnative-tabs-more (category 'form' not slug-proven)",
+     "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+    ],
+    "details": []
+   },
+   "auth/premium": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "data-entry:flexnative-tabs-more (category 'form' not slug-proven)"
+    ],
+    "details": []
+   }
+  },
+  "over_reuse": {
+   "larsen66/flexnative-tabs-more": [
+    "data-entry",
+    "metric",
+    "social-proof"
+   ]
+  },
+  "pass": true
+ },
+ {
+  "service_plan": "D2C storefront",
+  "persona": "consumer-delight",
+  "variants": {
+   "marketing-landing/lean": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "value-props:flexnative-tabs-more (category 'card' not slug-proven)",
+     "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+    ],
+    "details": []
+   },
+   "marketing-landing/conversion": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [],
+    "details": []
+   },
+   "marketing-landing/premium": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [],
+    "details": []
+   },
+   "pricing/lean": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "pricing:flexnative-tabs-more (category 'card' not slug-proven)",
+     "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+    ],
+    "details": []
+   },
+   "pricing/conversion": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [],
+    "details": []
+   },
+   "pricing/premium": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [],
+    "details": []
+   }
+  },
+  "over_reuse": {
+   "larsen66/flexnative-tabs-more": [
+    "pricing",
+    "social-proof",
+    "value-props"
+   ],
+   "ln-dev7/auto-layout-card": [
+    "pricing",
+    "social-proof",
+    "value-props"
+   ]
+  },
+  "pass": true
+ },
+ {
+  "service_plan": "fintech remittance",
+  "persona": "fintech-trust",
+  "variants": {
+   "checkout/lean": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "data-entry:flexnative-tabs-more (category 'form' not slug-proven)",
+     "metric:flexnative-tabs-more (category 'card' not slug-proven)"
+    ],
+    "details": []
+   },
+   "checkout/conversion": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "data-entry:flexnative-tabs-more (category 'form' not slug-proven)",
+     "metric:flexnative-tabs-more (category 'card' not slug-proven)",
+     "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+    ],
+    "details": []
+   },
+   "checkout/premium": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "data-entry:flexnative-tabs-more (category 'form' not slug-proven)"
+    ],
+    "details": []
+   },
+   "admin-dashboard/lean": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "navigation:promote-header (category 'menu' not slug-proven)",
+     "metric:flexnative-tabs-more (category 'card' not slug-proven)"
+    ],
+    "details": []
+   },
+   "admin-dashboard/conversion": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "navigation:promote-header (category 'menu' not slug-proven)",
+     "metric:flexnative-tabs-more (category 'card' not slug-proven)",
+     "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+    ],
+    "details": []
+   },
+   "admin-dashboard/premium": {
+    "pass": true,
+    "checks": {
+     "exist": true,
+     "codify-ready": true,
+     "needs-covered": true,
+     "persona-fit": true,
+     "avoid-respect": true
+    },
+    "warnings": [
+     "navigation:promote-header (category 'menu' not slug-proven)"
+    ],
+    "details": []
+   }
+  },
+  "over_reuse": {
+   "larsen66/flexnative-tabs-more": [
+    "data-entry",
+    "metric",
+    "social-proof"
+   ]
+  },
+  "pass": true
+ }
+]

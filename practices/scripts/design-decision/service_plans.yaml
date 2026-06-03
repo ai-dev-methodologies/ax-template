@@ -1,0 +1,30 @@
+# service_plans.yaml — the 서비스 기획 (service plans) the design-composer agent recommends for.
+# Each plan binds a product to a persona (audience -> design direction) and the pages it needs.
+# recommend.py reads this, composes MULTIPLE variant compositions per page, and validates each.
+# A NL brief from a fork-receiver is classified into one of these shapes by the ax-design-composer skill.
+schema_version: 1
+plans:
+  - name: "B2B analytics console"
+    persona: enterprise-operator
+    pages: [admin-dashboard, auth]
+    notes: "Internal operator console; data-dense, keyboard-first, calm. Function over flourish."
+
+  - name: "D2C storefront"
+    persona: consumer-delight
+    pages: [marketing-landing, pricing]
+    notes: "Consumer conversion site; playful, motion-rich, generous whitespace."
+
+  - name: "fintech remittance"
+    persona: fintech-trust
+    pages: [checkout, admin-dashboard]
+    notes: "Regulated finance; trust, clarity, number-correctness, conservative motion."
+
+  - name: "dev-tool docs portal"
+    persona: developer-tool
+    pages: [docs, marketing-landing]
+    notes: "Developer docs + landing; dark-first, code surfaces, keyboard-first."
+
+  - name: "creator community app"
+    persona: playful-creator
+    pages: [feed, marketing-landing]
+    notes: "Social/creator app; expressive, avatar-rich, reaction-driven, cinematic motion."

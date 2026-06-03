@@ -105,7 +105,7 @@ personas:
     density: comfortable
     a11y_priority: 3             # regulated; AA+ and clear error states mandatory
     category_affinity:
-      stat: 3, chart: 3, table: 3, form: 3, card: 2, button: 2, input: 2, badge: 2
+      stat: 3, chart: 3, table: 3, form: 3, card: 2, button: 2, input: 2, badge: 2, sidebar: 2, menu: 2, command: 1
     avoid: ["confetti", "shader", "playful-wobble", "neon-gradient", "glass-over-data"]
     token_overrides: { surface_elevation: subtle, radius: "8px", accent_saturation: low, tabular_nums: true }
 
@@ -122,7 +122,7 @@ personas:
     density: comfortable
     a11y_priority: 2
     category_affinity:
-      card: 3, avatar: 3, feed: 2, badge: 2, button: 2, image: 2, hero: 2, shader: 1
+      card: 3, avatar: 3, feed: 2, badge: 2, button: 2, image: 2, hero: 2, shader: 1, menu: 2, command: 1
     avoid: ["data-table-walls", "monospace-body", "flat-corporate-gray"]
     token_overrides: { surface_elevation: layered, radius: "24px", accent_saturation: high }
 

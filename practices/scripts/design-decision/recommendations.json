@@ -1,0 +1,1520 @@
+[
+ {
+  "service_plan": "B2B analytics console",
+  "persona": "enterprise-operator",
+  "theme": {
+   "base_spec": "specs/react-practices-l0.yaml#REACT-PRACTICES-UX-001",
+   "radius": "6px",
+   "accent_saturation": "low",
+   "elevation": "flat"
+  },
+  "typography": "geometric sans, low scale-contrast, 14px body",
+  "pages": {
+   "admin-dashboard": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 0,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.675,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "metric",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9833,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "chart",
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.67,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)",
+      "metric:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 1,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.6583,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "metric",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.8966,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "chart",
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.6533,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "data-grid",
+       "component": "ruixen.ui/reorderable-table",
+       "score": 0.9116,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "Shatlyk1011/social-button",
+       "score": 0.9011,
+       "codify": [
+        "tokenize 3 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.8966,
+       "codify": [
+        "conformant"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)",
+      "metric:flexnative-tabs-more (category 'card' not slug-proven)",
+      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.6417,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "metric",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.75,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "chart",
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.6367,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "data-grid",
+       "component": "ruixen.ui/reorderable-table",
+       "score": 0.895,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.6506,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)",
+      "metric:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    }
+   },
+   "auth": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 0,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.4973,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "data-entry",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9833,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "nextjsshop/animated-arrow-button",
+       "score": 0.7178,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)"
+     ]
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 1,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.5139,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "data-entry",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.8166,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "Shatlyk1011/social-button",
+       "score": 0.9011,
+       "codify": [
+        "tokenize 3 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.8966,
+       "codify": [
+        "conformant"
+       ]
+      }
+     ],
+     "warnings": [
+      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)",
+      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.6506,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "data-entry",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.75,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "Shatlyk1011/social-button",
+       "score": 0.7378,
+       "codify": [
+        "tokenize 3 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)"
+     ]
+    }
+   }
+  },
+  "pass": true,
+  "over_reuse": {
+   "larsen66/flexnative-tabs-more": [
+    "data-entry",
+    "metric",
+    "social-proof"
+   ]
+  }
+ },
+ {
+  "service_plan": "D2C storefront",
+  "persona": "consumer-delight",
+  "theme": {
+   "base_spec": "specs/react-practices-l0.yaml#REACT-PRACTICES-UX-001",
+   "radius": "20px",
+   "accent_saturation": "high",
+   "elevation": "layered"
+  },
+  "typography": "rounded humanist, high scale-contrast, 16px body",
+  "pages": {
+   "marketing-landing": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 1,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "uniquesonu/futurastic-hero-section",
+       "score": 0.8261,
+       "codify": [
+        "tokenize 5 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9562,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9562,
+       "codify": [
+        "conformant"
+       ]
+      }
+     ],
+     "warnings": [
+      "value-props:flexnative-tabs-more (category 'card' not slug-proven)",
+      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "uniquesonu/futurastic-hero-section",
+       "score": 0.8428,
+       "codify": [
+        "tokenize 5 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 1.0159,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 1.0159,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 1.1397,
+       "codify": [
+        "add role/aria"
+       ]
+      }
+     ],
+     "warnings": []
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 3,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "uniquesonu/futurastic-hero-section",
+       "score": 1.0061,
+       "codify": [
+        "tokenize 5 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9192,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9192,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.943,
+       "codify": [
+        "add role/aria"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.897,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "atmosphere",
+       "component": "dhileepkumargm/cybernetic-grid-shader",
+       "score": 0.5623,
+       "codify": [
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": []
+    }
+   },
+   "pricing": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 1,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "uniquesonu/futurastic-hero-section",
+       "score": 0.8261,
+       "codify": [
+        "tokenize 5 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "pricing",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9562,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9562,
+       "codify": [
+        "conformant"
+       ]
+      }
+     ],
+     "warnings": [
+      "pricing:flexnative-tabs-more (category 'card' not slug-proven)",
+      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "uniquesonu/futurastic-hero-section",
+       "score": 0.8428,
+       "codify": [
+        "tokenize 5 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "pricing",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 1.0159,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 1.0159,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 1.1397,
+       "codify": [
+        "add role/aria"
+       ]
+      }
+     ],
+     "warnings": []
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 3,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "uniquesonu/futurastic-hero-section",
+       "score": 1.0061,
+       "codify": [
+        "tokenize 5 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "pricing",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9192,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9192,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.943,
+       "codify": [
+        "add role/aria"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.897,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "atmosphere",
+       "component": "dhileepkumargm/cybernetic-grid-shader",
+       "score": 0.5623,
+       "codify": [
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": []
+    }
+   }
+  },
+  "pass": true,
+  "over_reuse": {
+   "larsen66/flexnative-tabs-more": [
+    "pricing",
+    "social-proof",
+    "value-props"
+   ],
+   "ln-dev7/auto-layout-card": [
+    "pricing",
+    "social-proof",
+    "value-props"
+   ]
+  }
+ },
+ {
+  "service_plan": "fintech remittance",
+  "persona": "fintech-trust",
+  "theme": {
+   "base_spec": "specs/react-practices-l0.yaml#REACT-PRACTICES-UX-001",
+   "radius": "8px",
+   "accent_saturation": "low",
+   "elevation": "subtle",
+   "tabular_nums": true
+  },
+  "typography": "tabular-figure grotesk, medium scale-contrast, 15px",
+  "pages": {
+   "checkout": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 0,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "data-entry",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 1.0833,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "metric",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 1.0833,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.7467,
+       "codify": [
+        "add role/aria"
+       ]
+      }
+     ],
+     "warnings": [
+      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)",
+      "metric:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 1,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "data-entry",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9166,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "metric",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9966,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.9433,
+       "codify": [
+        "add role/aria"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9966,
+       "codify": [
+        "conformant"
+       ]
+      }
+     ],
+     "warnings": [
+      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)",
+      "metric:flexnative-tabs-more (category 'card' not slug-proven)",
+      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "data-entry",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.85,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "metric",
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.865,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.78,
+       "codify": [
+        "add role/aria"
+       ]
+      },
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.7322,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.6128,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "data-entry:flexnative-tabs-more (category 'form' not slug-proven)"
+     ]
+    }
+   },
+   "admin-dashboard": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 0,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.675,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "metric",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 1.0833,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "chart",
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.8983,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)",
+      "metric:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 1,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.6583,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "metric",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9966,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "chart",
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.8816,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "data-grid",
+       "component": "ruixen.ui/reorderable-table",
+       "score": 0.9389,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.9433,
+       "codify": [
+        "add role/aria"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9966,
+       "codify": [
+        "conformant"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)",
+      "metric:flexnative-tabs-more (category 'card' not slug-proven)",
+      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.6417,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "metric",
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.865,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "chart",
+       "component": "ahmedmayara/category-bar-chart",
+       "score": 0.865,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "data-grid",
+       "component": "ruixen.ui/reorderable-table",
+       "score": 0.9223,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.7322,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.6128,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)"
+     ]
+    }
+   }
+  },
+  "pass": true,
+  "over_reuse": {
+   "larsen66/flexnative-tabs-more": [
+    "data-entry",
+    "metric",
+    "social-proof"
+   ]
+  }
+ },
+ {
+  "service_plan": "dev-tool docs portal",
+  "persona": "developer-tool",
+  "theme": {
+   "base_spec": "specs/react-practices-l0.yaml#REACT-PRACTICES-UX-001",
+   "radius": "4px",
+   "accent_saturation": "low",
+   "elevation": "flat",
+   "mode": "dark"
+  },
+  "typography": "mono code surfaces + grotesk prose, 14px",
+  "pages": {
+   "docs": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 0,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.675,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.4973,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)"
+     ]
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 1,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.6583,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.5139,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "Shatlyk1011/social-button",
+       "score": 0.9011,
+       "codify": [
+        "tokenize 3 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "jshguo/interfaces-card",
+       "score": 0.6966,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)"
+     ]
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.6417,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.6506,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)"
+     ]
+    }
+   },
+   "marketing-landing": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 0,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.4973,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.7167,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.7167,
+       "codify": [
+        "conformant"
+       ]
+      }
+     ],
+     "warnings": [
+      "value-props:flexnative-tabs-more (category 'card' not slug-proven)",
+      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 1,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.5139,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "jshguo/interfaces-card",
+       "score": 0.6966,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "jshguo/interfaces-card",
+       "score": 0.6966,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "Shatlyk1011/social-button",
+       "score": 0.9011,
+       "codify": [
+        "tokenize 3 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": []
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 0.6506,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "ravikatiyar162/animated-feature-card",
+       "score": 0.6267,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ravikatiyar162/animated-feature-card",
+       "score": 0.6267,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "Shatlyk1011/social-button",
+       "score": 0.7378,
+       "codify": [
+        "tokenize 3 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": []
+    }
+   }
+  },
+  "pass": true,
+  "over_reuse": {}
+ },
+ {
+  "service_plan": "creator community app",
+  "persona": "playful-creator",
+  "theme": {
+   "base_spec": "specs/react-practices-l0.yaml#REACT-PRACTICES-UX-001",
+   "radius": "24px",
+   "accent_saturation": "high",
+   "elevation": "layered"
+  },
+  "typography": "chunky rounded display, high scale-contrast, 16px",
+  "pages": {
+   "feed": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.5084,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "identity",
+       "component": "karthikmudunuri/animated-badge",
+       "score": 0.7339,
+       "codify": [
+        "tokenize 2 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.5961,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)"
+     ]
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 3,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.4917,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "identity",
+       "component": "karthikmudunuri/animated-badge",
+       "score": 0.7172,
+       "codify": [
+        "tokenize 2 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.5794,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.9433,
+       "codify": [
+        "add role/aria"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9494,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)"
+     ]
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 3,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "navigation",
+       "component": "ruixen.ui/promote-header",
+       "score": 0.4917,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "identity",
+       "component": "karthikmudunuri/animated-badge",
+       "score": 0.7172,
+       "codify": [
+        "tokenize 2 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.7294,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.7633,
+       "codify": [
+        "add role/aria"
+       ]
+      },
+      {
+       "need": "headline",
+       "component": "uniquesonu/futurastic-hero-section",
+       "score": 0.8239,
+       "codify": [
+        "tokenize 5 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "atmosphere",
+       "component": "dhileepkumargm/cybernetic-grid-shader",
+       "score": 0.6683,
+       "codify": [
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": [
+      "navigation:promote-header (category 'menu' not slug-proven)"
+     ]
+    }
+   },
+   "marketing-landing": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "uniquesonu/futurastic-hero-section",
+       "score": 0.6606,
+       "codify": [
+        "tokenize 5 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9167,
+       "codify": [
+        "conformant"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "larsen66/flexnative-tabs-more",
+       "score": 0.9167,
+       "codify": [
+        "conformant"
+       ]
+      }
+     ],
+     "warnings": [
+      "value-props:flexnative-tabs-more (category 'card' not slug-proven)",
+      "social-proof:flexnative-tabs-more (category 'card' not slug-proven)"
+     ]
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 3,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "uniquesonu/futurastic-hero-section",
+       "score": 0.6439,
+       "codify": [
+        "tokenize 5 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9494,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.9494,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.9433,
+       "codify": [
+        "add role/aria"
+       ]
+      }
+     ],
+     "warnings": []
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 3,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "uniquesonu/futurastic-hero-section",
+       "score": 0.8239,
+       "codify": [
+        "tokenize 5 hex",
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.8694,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.8694,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.7633,
+       "codify": [
+        "add role/aria"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.7294,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "atmosphere",
+       "component": "dhileepkumargm/cybernetic-grid-shader",
+       "score": 0.6683,
+       "codify": [
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": []
+    }
+   }
+  },
+  "pass": true,
+  "over_reuse": {}
+ }
+]
