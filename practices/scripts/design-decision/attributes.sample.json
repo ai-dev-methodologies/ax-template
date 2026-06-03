@@ -1,0 +1,609 @@
+{
+"ruixen.ui/promote-header": {
+"category": [
+"menu"
+],
+"lines": 523,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": true,
+"is_client": true,
+"ext_libs": [
+"next/link",
+"next/navigation"
+]
+},
+"bucharitesh/split-text-effect": {
+"category": [
+"text"
+],
+"lines": 169,
+"has_motion": true,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 1,
+"has_aria": true,
+"is_client": true,
+"ext_libs": [
+"framer-motion"
+]
+},
+"uilayout.contact/button-2": {
+"category": [
+"button"
+],
+"lines": 58,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 7,
+"has_aria": false,
+"is_client": true,
+"ext_libs": []
+},
+"cnippet.dev/davincho-hero-1": {
+"category": [
+"hero"
+],
+"lines": 18,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": []
+},
+"Shatlyk1011/social-button": {
+"category": [
+"button"
+],
+"lines": 88,
+"has_motion": true,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 3,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"clsx",
+"framer-motion",
+"lucide-react",
+"tailwind-merge"
+]
+},
+"larsen66/calendar-1": {
+"category": [
+"calendar"
+],
+"lines": 21,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": []
+},
+"anubra266/calendar-1": {
+"category": [
+"calendar"
+],
+"lines": 137,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"@ark-ui/react/date-picker",
+"lucide-react"
+]
+},
+"ruixen.ui/capsule-tabs": {
+"category": [
+"tabs"
+],
+"lines": 118,
+"has_motion": true,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"framer-motion",
+"lucide-react"
+]
+},
+"kauasodreas/whisper-text": {
+"category": [
+"text"
+],
+"lines": 77,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": [
+"gsap",
+"gsap/ScrollTrigger"
+]
+},
+"uilayout.contact/testimonial-1": {
+"category": [
+"testimonial"
+],
+"lines": 163,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 2,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"@radix-ui/react-tooltip",
+"lucide-react"
+]
+},
+"ravikatiyar162/ai-image-generator-hero": {
+"category": [
+"hero",
+"image"
+],
+"lines": 193,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"lucide-react",
+"next/image"
+]
+},
+"nextjsshop/animated-arrow-button": {
+"category": [
+"button"
+],
+"lines": 43,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": []
+},
+"jshguo/interfaces-card": {
+"category": [
+"card"
+],
+"lines": 93,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": []
+},
+"ravikatiyar162/download-toast": {
+"category": [
+"toast"
+],
+"lines": 208,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 2,
+"has_aria": true,
+"is_client": false,
+"ext_libs": []
+},
+"ahmedmayara/category-bar-chart": {
+"category": [
+"chart"
+],
+"lines": 189,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": [
+"date-fns"
+]
+},
+"jatin-yadav05/editorial-testimonial": {
+"category": [
+"testimonial"
+],
+"lines": 147,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"lucide-react",
+"next/image"
+]
+},
+"designali-in/accordion-02-1": {
+"category": [
+"accordion"
+],
+"lines": 244,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": [
+"lucide-react"
+]
+},
+"ravikatiyar162/animated-feature-card": {
+"category": [
+"card",
+"features"
+],
+"lines": 81,
+"has_motion": true,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": [
+"framer-motion"
+]
+},
+"Shatlyk1011/shimmer-button": {
+"category": [
+"button"
+],
+"lines": 48,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 4,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"clsx",
+"tailwind-merge"
+]
+},
+"ruixen.ui/timeline-02": {
+"category": [
+"timeline"
+],
+"lines": 81,
+"has_motion": true,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"framer-motion"
+]
+},
+"karthikmudunuri/animated-badge": {
+"category": [
+"badge"
+],
+"lines": 151,
+"has_motion": true,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 2,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"lucide-react",
+"motion/react",
+"next/link"
+]
+},
+"rahil1202/scanner-card-stream": {
+"category": [
+"card"
+],
+"lines": 326,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 4,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"three"
+]
+},
+"beratberkayg/highlight-card": {
+"category": [
+"card"
+],
+"lines": 72,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 2,
+"has_aria": false,
+"is_client": true,
+"ext_libs": []
+},
+"designali-in/marquee-card": {
+"category": [
+"card"
+],
+"lines": 79,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 1,
+"has_aria": false,
+"is_client": false,
+"ext_libs": [
+"lucide-react"
+]
+},
+"larsen66/range-selection-calendar": {
+"category": [
+"calendar"
+],
+"lines": 18,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": []
+},
+"larsen66/glass-blog-card-shadcnui": {
+"category": [
+"card"
+],
+"lines": 124,
+"has_motion": true,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": [
+"framer-motion",
+"lucide-react"
+]
+},
+"uniquesonu/futurastic-hero-section": {
+"category": [
+"hero"
+],
+"lines": 73,
+"has_motion": true,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 5,
+"has_aria": false,
+"is_client": false,
+"ext_libs": [
+"@react-three/drei",
+"@react-three/fiber",
+"framer-motion",
+"react-icons/fi"
+]
+},
+"jatin-yadav05/leather-button": {
+"category": [
+"button"
+],
+"lines": 51,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 5,
+"has_aria": false,
+"is_client": true,
+"ext_libs": []
+},
+"ruixen.ui/reorderable-table": {
+"category": [
+"table"
+],
+"lines": 311,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": true,
+"is_client": true,
+"ext_libs": [
+"lucide-react"
+]
+},
+"iamsatish4564/prime-button": {
+"category": [
+"button"
+],
+"lines": 207,
+"has_motion": true,
+"icon_lib": "lucide-react",
+"uses_cva": true,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"class-variance-authority",
+"lucide-react",
+"motion/react"
+]
+},
+"larsen66/avatar-2": {
+"category": [
+"avatar"
+],
+"lines": 115,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": []
+},
+"dhileepkumargm/cybernetic-grid-shader": {
+"category": [
+"shader"
+],
+"lines": 162,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": true,
+"is_client": false,
+"ext_libs": [
+"three"
+]
+},
+"dhileepkumargm/cosmic-ocean-shader": {
+"category": [
+"shader"
+],
+"lines": 143,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": true,
+"is_client": false,
+"ext_libs": [
+"three"
+]
+},
+"lavikatiyar/card-3": {
+"category": [
+"card"
+],
+"lines": 134,
+"has_motion": true,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": [
+"framer-motion",
+"lucide-react"
+]
+},
+"ln-dev7/auto-layout-card": {
+"category": [
+"card"
+],
+"lines": 211,
+"has_motion": true,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"framer-motion"
+]
+},
+"ruixen.ui/alert-badge": {
+"category": [
+"badge"
+],
+"lines": 84,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"lucide-react"
+]
+},
+"larsen66/avatar-badge": {
+"category": [
+"avatar",
+"badge"
+],
+"lines": 27,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"lucide-react"
+]
+},
+"larsen66/calendar-with-localisation": {
+"category": [
+"calendar"
+],
+"lines": 18,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": false,
+"ext_libs": []
+},
+"larsen66/flexnative-tabs-more": {
+"category": [
+"card",
+"form",
+"icons",
+"tabs"
+],
+"lines": 180,
+"has_motion": false,
+"icon_lib": null,
+"uses_cva": true,
+"hardcoded_hex": 0,
+"has_aria": true,
+"is_client": true,
+"ext_libs": [
+"class-variance-authority"
+]
+},
+"ruixen.ui/dropdown-range-date-picker": {
+"category": [
+"calendar",
+"date-picker",
+"dropdown"
+],
+"lines": 127,
+"has_motion": false,
+"icon_lib": "lucide-react",
+"uses_cva": false,
+"hardcoded_hex": 0,
+"has_aria": false,
+"is_client": true,
+"ext_libs": [
+"date-fns",
+"lucide-react"
+]
+}
+}

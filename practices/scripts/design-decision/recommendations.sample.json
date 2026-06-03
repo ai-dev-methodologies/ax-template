@@ -1,0 +1,134 @@
+[
+ {
+  "target": {
+   "persona": "consumer-delight",
+   "page_type": "marketing-landing"
+  },
+  "persona": "consumer-delight",
+  "theme": {
+   "base_spec": "specs/ux/ux-design-tokens-l0.yaml",
+   "radius": "20px",
+   "accent_saturation": "high",
+   "elevation": "layered"
+  },
+  "typography": "rounded humanist, high scale-contrast, 16px body",
+  "motion_budget": "entrance + hover spring",
+  "needs": {
+   "headline": [
+    {
+     "component": "uniquesonu/futurastic-hero-section",
+     "category": "hero",
+     "score": 0.6728,
+     "codify_action": [
+      "tokenize 5 hex",
+      "add role/aria",
+      "type variants"
+     ]
+    },
+    {
+     "component": "ravikatiyar162/ai-image-generator-hero",
+     "category": "hero",
+     "score": 0.627,
+     "codify_action": [
+      "add role/aria",
+      "type variants"
+     ]
+    },
+    {
+     "component": "cnippet.dev/davincho-hero-1",
+     "category": "hero",
+     "score": 0.5723,
+     "codify_action": [
+      "add role/aria",
+      "type variants"
+     ]
+    }
+   ],
+   "value-props": [
+    {
+     "component": "larsen66/flexnative-tabs-more",
+     "category": "card",
+     "score": 0.7729,
+     "codify_action": [
+      "conformant"
+     ]
+    },
+    {
+     "component": "ln-dev7/auto-layout-card",
+     "category": "card",
+     "score": 0.7659,
+     "codify_action": [
+      "add role/aria",
+      "type variants"
+     ]
+    },
+    {
+     "component": "lavikatiyar/card-3",
+     "category": "card",
+     "score": 0.7419,
+     "codify_action": [
+      "add role/aria",
+      "type variants"
+     ]
+    }
+   ],
+   "social-proof": [
+    {
+     "component": "larsen66/flexnative-tabs-more",
+     "category": "card",
+     "score": 0.7729,
+     "codify_action": [
+      "conformant"
+     ]
+    },
+    {
+     "component": "ln-dev7/auto-layout-card",
+     "category": "card",
+     "score": 0.7659,
+     "codify_action": [
+      "add role/aria",
+      "type variants"
+     ]
+    },
+    {
+     "component": "lavikatiyar/card-3",
+     "category": "card",
+     "score": 0.7419,
+     "codify_action": [
+      "add role/aria",
+      "type variants"
+     ]
+    }
+   ],
+   "primary-cta": [
+    {
+     "component": "iamsatish4564/prime-button",
+     "category": "button",
+     "score": 0.7897,
+     "codify_action": [
+      "add role/aria"
+     ]
+    },
+    {
+     "component": "Shatlyk1011/social-button",
+     "category": "button",
+     "score": 0.6975,
+     "codify_action": [
+      "tokenize 3 hex",
+      "add role/aria",
+      "type variants"
+     ]
+    },
+    {
+     "component": "nextjsshop/animated-arrow-button",
+     "category": "button",
+     "score": 0.5801,
+     "codify_action": [
+      "add role/aria",
+      "type variants"
+     ]
+    }
+   ]
+  }
+ }
+]

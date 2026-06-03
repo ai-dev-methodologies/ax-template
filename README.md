@@ -39,7 +39,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-25 L4 domains + 11 active recipes · 147 Java rules · 86 React rules · 7 ESLint rules · 70 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+25 L4 domains + 11 active recipes · 147 Java rules · 87 React rules · 7 ESLint rules · 70 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓

@@ -641,3 +641,12 @@ items:
     applicable: true
     applicable_to: [nextjs]
     notes: "ESLint no-restricted-imports or import/no-restricted-paths detects cross-L4 domain imports in pages that lack applied_recipe: on their L4 README. Failing fixture: practices/evals/fixtures/prefer-recipe-composition-over-l4-cross-import/fail_ad_hoc_cross_import/SaasPage.tsx."
+
+  - id: "REACT-PRACTICES-UX-001"
+    chapter: "UX / Design tokens"
+    requirement: "A reusable UI block (templates/L2/blocks/*) must express every color through a semantic CSS custom property (for example --ax-status-<intent>-fg/bg or --ax-color-<role>), never a hardcoded hex literal or a Tailwind raw-palette arbitrary value; stateful or announcing UI must carry the correct semantic role and aria (a status pill is role=\"status\" with an aria-label, not an <h1>), conveying state by icon plus text and not by color alone; and variants must be a typed string-literal union surfaced as one parameterized component, not an inline demo. One theme swap then re-skins every block (light/dark/brand), screen-reader semantics stay intact, and the block stays reusable."
+    test_method: "react_practices_UX_001_designTokensSemanticA11yTypedVariants"
+    verification_type: "code_review"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "Review-tier (a planned ax/no-raw-color ESLint rule is the static enforcer). Reviewer confirms (a) zero hex / raw-palette literals — colors only via design tokens, (b) stateful UI uses role + aria (status pill = role=\"status\" + aria-label, decorative icon aria-hidden), (c) variants are a string-literal union (ax forbids enum) on one parameterized component. Rule body and evidence: practices-react/rules/ux-block-uses-design-tokens-and-a11y.md. Protected template: templates/L2/blocks/status-badge.tsx."
