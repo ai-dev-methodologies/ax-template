@@ -1,0 +1,174 @@
+{
+ "generated": 14,
+ "lint_available": true,
+ "rows": [
+  {
+   "component": "Shatlyk1011/social-button",
+   "block": "social-button.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "ahmedmayara/category-bar-chart",
+   "block": "category-bar-chart.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "bucharitesh/split-text-effect",
+   "block": "split-text-effect.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "dhileepkumargm/cybernetic-grid-shader",
+   "block": "cybernetic-grid-shader.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "iamsatish4564/prime-button",
+   "block": "prime-button.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "jshguo/interfaces-card",
+   "block": "interfaces-card.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "karthikmudunuri/animated-badge",
+   "block": "animated-badge.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "larsen66/flexnative-tabs-more",
+   "block": "flexnative-tabs-more.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "ln-dev7/auto-layout-card",
+   "block": "auto-layout-card.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "nextjsshop/animated-arrow-button",
+   "block": "animated-arrow-button.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "ravikatiyar162/ai-image-generator-hero",
+   "block": "ai-image-generator-hero.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "ravikatiyar162/animated-feature-card",
+   "block": "animated-feature-card.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "ruixen.ui/promote-header",
+   "block": "promote-header.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  },
+  {
+   "component": "uniquesonu/futurastic-hero-section",
+   "block": "futurastic-hero-section.tsx",
+   "checks": {
+    "T1_nonempty": true,
+    "T2_provenance": true,
+    "T3_tokenized": true,
+    "T4_block_lint": true
+   },
+   "ax_violations": [],
+   "pass": true
+  }
+ ]
+}

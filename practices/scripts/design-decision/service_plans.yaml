@@ -28,3 +28,8 @@ plans:
     persona: playful-creator
     pages: [feed, marketing-landing]
     notes: "Social/creator app; expressive, avatar-rich, reaction-driven, cinematic motion."
+
+  - name: "editorial brand portfolio"
+    persona: editorial-luxury
+    pages: [portfolio, marketing-landing]
+    notes: "Brand / portfolio / publishing; typographic, image-forward, restrained color, refined motion."

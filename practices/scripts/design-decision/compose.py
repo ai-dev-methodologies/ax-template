@@ -96,6 +96,8 @@ def compose_page(page_type, persona, attrs, variant, top_k=2):
             if cat in avoid:                      # hard avoid: never offer an avoided-category pick
                 continue
             for key, a in attrs.items():
+                if key in dd.BLOCKLIST:                   # codified output fails ax block-lint
+                    continue
                 if set(a.get("category", [])) & avoid:   # the component itself carries an avoided tag
                     continue
                 s = _variant_score(key, a, persona, cat, variant)

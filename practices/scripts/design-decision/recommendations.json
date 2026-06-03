@@ -80,14 +80,6 @@
        ]
       },
       {
-       "need": "data-grid",
-       "component": "ruixen.ui/reorderable-table",
-       "score": 0.9116,
-       "codify": [
-        "type variants"
-       ]
-      },
-      {
        "need": "primary-cta",
        "component": "Shatlyk1011/social-button",
        "score": 0.9011,
@@ -140,14 +132,6 @@
        "score": 0.6367,
        "codify": [
         "add role/aria",
-        "type variants"
-       ]
-      },
-      {
-       "need": "data-grid",
-       "component": "ruixen.ui/reorderable-table",
-       "score": 0.895,
-       "codify": [
         "type variants"
        ]
       },
@@ -840,14 +824,6 @@
        ]
       },
       {
-       "need": "data-grid",
-       "component": "ruixen.ui/reorderable-table",
-       "score": 0.9389,
-       "codify": [
-        "type variants"
-       ]
-      },
-      {
        "need": "primary-cta",
        "component": "iamsatish4564/prime-button",
        "score": 0.9433,
@@ -899,14 +875,6 @@
        "score": 0.865,
        "codify": [
         "add role/aria",
-        "type variants"
-       ]
-      },
-      {
-       "need": "data-grid",
-       "component": "ruixen.ui/reorderable-table",
-       "score": 0.9223,
-       "codify": [
         "type variants"
        ]
       },
@@ -1505,6 +1473,288 @@
        "need": "atmosphere",
        "component": "dhileepkumargm/cybernetic-grid-shader",
        "score": 0.6683,
+       "codify": [
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": []
+    }
+   }
+  },
+  "pass": true,
+  "over_reuse": {}
+ },
+ {
+  "service_plan": "editorial brand portfolio",
+  "persona": "editorial-luxury",
+  "theme": {
+   "base_spec": "specs/react-practices-l0.yaml#REACT-PRACTICES-UX-001",
+   "radius": "0px",
+   "accent_saturation": "low",
+   "elevation": "flat"
+  },
+  "typography": "high-contrast serif display, extreme scale-contrast",
+  "pages": {
+   "portfolio": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 1,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 1.0211,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.7803,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "atmosphere",
+       "component": "dhileepkumargm/cybernetic-grid-shader",
+       "score": 0.7623,
+       "codify": [
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": []
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 1.0378,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.7637,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "atmosphere",
+       "component": "dhileepkumargm/cybernetic-grid-shader",
+       "score": 0.7457,
+       "codify": [
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.7397,
+       "codify": [
+        "add role/aria"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.7493,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": []
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 3,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 1.1411,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.897,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "atmosphere",
+       "component": "dhileepkumargm/cybernetic-grid-shader",
+       "score": 0.829,
+       "codify": [
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": []
+    }
+   },
+   "marketing-landing": {
+    "lean": {
+     "intent": "MVP \u2014 ship the essential surface, cheapest to codify, calm",
+     "motion_budget_level": 1,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 1.0211,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.6526,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.6526,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      }
+     ],
+     "warnings": []
+    },
+    "conversion": {
+     "intent": "Growth \u2014 full funnel, CTA + social proof + pricing emphasized",
+     "motion_budget_level": 2,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 1.0378,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.7493,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.7493,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.7397,
+       "codify": [
+        "add role/aria"
+       ]
+      }
+     ],
+     "warnings": []
+    },
+    "premium": {
+     "intent": "Brand \u2014 hero/media forward, richest visual, highest motion budget",
+     "motion_budget_level": 3,
+     "recommended": true,
+     "failed_checks": [],
+     "composition": [
+      {
+       "need": "headline",
+       "component": "bucharitesh/split-text-effect",
+       "score": 1.1411,
+       "codify": [
+        "tokenize 1 hex",
+        "type variants"
+       ]
+      },
+      {
+       "need": "value-props",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.6526,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "social-proof",
+       "component": "ln-dev7/auto-layout-card",
+       "score": 0.6526,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "primary-cta",
+       "component": "iamsatish4564/prime-button",
+       "score": 0.543,
+       "codify": [
+        "add role/aria"
+       ]
+      },
+      {
+       "need": "media",
+       "component": "ravikatiyar162/ai-image-generator-hero",
+       "score": 0.897,
+       "codify": [
+        "add role/aria",
+        "type variants"
+       ]
+      },
+      {
+       "need": "atmosphere",
+       "component": "dhileepkumargm/cybernetic-grid-shader",
+       "score": 0.829,
        "codify": [
         "type variants"
        ]

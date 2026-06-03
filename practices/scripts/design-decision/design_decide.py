@@ -22,6 +22,11 @@ ATTRS = os.path.join(HERE, "attributes.json")
 if not os.path.exists(ATTRS):
     ATTRS = os.path.join(HERE, "attributes.sample.json")  # shipped 40-component sample (full set: regenerate from the 21st crawl)
 
+# components whose CODIFIED output fails the ax own-blocks lint (fed back by gen_verify.py's
+# verification loop) — never recommend them, so every recommendation generates lint-clean code.
+_BL = os.path.join(HERE, "lint_blocklist.json")
+BLOCKLIST = set(json.load(open(_BL))) if os.path.exists(_BL) else set()
+
 # ── PERSONAS: machine projection of personas.yaml (decision-relevant fields) ──
 PERSONAS = {
     "enterprise-operator": dict(motion=1, density="compact", a11y=3,
@@ -132,6 +137,8 @@ def decide(target, attrs, top_k=3):
         cands = []
         for cat in NEED_CATEGORIES.get(need, []):
             for key, a in attrs.items():
+                if key in BLOCKLIST:                 # codified output fails ax block-lint
+                    continue
                 s = score(a, persona, cat)
                 if s is not None:
                     cands.append((s, key, cat, a))
