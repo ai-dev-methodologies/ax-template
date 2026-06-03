@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Metadata } from 'next';
 import { Providers } from '../components/providers';
+import './globals.css';
 
 export const metadata: Metadata = {
   title: 'ax-template',

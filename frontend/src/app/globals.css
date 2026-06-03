@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+
+    /* ax design tokens — from specs/ux/ux-design-tokens-l0.yaml (REACT-PRACTICES-UX-001).
+       Codified blocks resolve status colors against these, never raw hex. */
+    --ax-status-success-fg: oklch(55% 0.14 150);
+    --ax-status-success-bg: oklch(96% 0.03 150);
+    --ax-status-danger-fg: oklch(57% 0.18 25);
+    --ax-status-danger-bg: oklch(96% 0.03 25);
+    --ax-status-warning-fg: oklch(63% 0.14 70);
+    --ax-status-warning-bg: oklch(96% 0.04 70);
+    --ax-status-info-fg: oklch(58% 0.16 250);
+    --ax-status-info-bg: oklch(96% 0.03 250);
+    --ax-status-attention-fg: oklch(70% 0.15 90);
+    --ax-status-attention-bg: oklch(97% 0.04 90);
+    --ax-status-neutral-fg: oklch(50% 0 0);
+    --ax-status-neutral-bg: oklch(95% 0 0);
+    --ax-status-accent-fg: oklch(53% 0.20 290);
+    --ax-status-accent-bg: oklch(96% 0.04 290);
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    --ax-status-success-fg: oklch(72% 0.15 150);
+    --ax-status-success-bg: oklch(28% 0.05 150);
+    --ax-status-danger-fg: oklch(72% 0.17 25);
+    --ax-status-danger-bg: oklch(28% 0.06 25);
+    --ax-status-warning-fg: oklch(78% 0.14 70);
+    --ax-status-warning-bg: oklch(30% 0.05 70);
+    --ax-status-info-fg: oklch(72% 0.15 250);
+    --ax-status-info-bg: oklch(28% 0.05 250);
+    --ax-status-attention-fg: oklch(80% 0.14 90);
+    --ax-status-attention-bg: oklch(30% 0.05 90);
+    --ax-status-neutral-fg: oklch(75% 0 0);
+    --ax-status-neutral-bg: oklch(28% 0 0);
+    --ax-status-accent-fg: oklch(72% 0.18 290);
+    --ax-status-accent-bg: oklch(30% 0.06 290);
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
