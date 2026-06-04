@@ -83,7 +83,7 @@ export default function SocialButton({ className }: { className?: string }) {
             ) : (
               <motion.div className='flex items-center px-1' exit={{ opacity: 0, scale: 0.9 }} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} key='actions' transition={{ delay: 0.1, duration: 0.2 }}>
                 {shareButtons.map((btn) => (
-                  <button className={cn('flex h-10 w-10 items-center justify-center rounded-full transition-colors', 'text-zinc-600 dark:text-zinc-400', btn.color)} key={btn.label} type='button' title={btn.label}>
+                  <button className={cn('flex h-10 w-10 items-center justify-center rounded-full transition-colors', 'text-zinc-600 dark:text-zinc-400', btn.color)} key={btn.label} type='button' aria-label={btn.label} title={btn.label}>
                     <btn.icon className='h-5 w-5' />
                   </button>
                 ))}

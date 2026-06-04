@@ -149,9 +149,9 @@ export const PrimeButton = React.forwardRef<
       idle: '',
       loading: 'cursor-wait opacity-90',
       success:
-        'bg-emerald-600 text-white hover:bg-emerald-600 border-emerald-600 ring-offset-emerald-600',
+        'bg-[var(--ax-status-success-fg)] text-white hover:bg-[var(--ax-status-success-fg)] border-[var(--ax-status-success-fg)] ring-offset-[var(--ax-status-success-fg)]',
       error:
-        'bg-red-600 text-white hover:bg-red-600 border-red-600 ring-offset-red-600',
+        'bg-[var(--ax-status-danger-fg)] text-white hover:bg-[var(--ax-status-danger-fg)] border-[var(--ax-status-danger-fg)] ring-offset-[var(--ax-status-danger-fg)]',
     };
 
     const isIconOnly = size === 'icon';

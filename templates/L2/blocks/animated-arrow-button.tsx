@@ -25,7 +25,7 @@ export const Button04 = ({ text = "Nothing-Plop" }) => {
   const secondIconDots = [0, 2, 2, 1, 2, 0, 1, 1, 2];
 
   return (
-    <a href="#" className="button04 w-inline-block">
+    <button type="button" className="button04 w-inline-block">
       <span className="button04_bg"></span>
       <span data-text={text} className="button04_inner">
         <span className="button04_text">{text}</span>
@@ -56,6 +56,6 @@ export const Button04 = ({ text = "Nothing-Plop" }) => {
           </span>
         </span>
       </span>
-    </a>
+    </button>
   );
 };

@@ -58,9 +58,10 @@ export function ImageSwiper({ images, className, ...props }: ImageSwiperProps) {
           <div className="absolute left-5 top-1/2 -translate-y-1/2">
             <button
               className="pointer-events-auto h-8 w-8 rounded-full bg-white/80 opacity-0 transition-opacity group-hover:opacity-100"
+              aria-label="Previous image"
               onClick={() => setImgIndex((prev) => prev - 1)}
             >
-              <ChevronLeft className="h-4 w-4 text-neutral-600" />
+              <ChevronLeft aria-hidden className="h-4 w-4 text-neutral-600" />
             </button>
           </div>
         )}
@@ -69,9 +70,10 @@ export function ImageSwiper({ images, className, ...props }: ImageSwiperProps) {
           <div className="absolute right-5 top-1/2 -translate-y-1/2">
             <button
               className="pointer-events-auto h-8 w-8 rounded-full bg-white/80 opacity-0 transition-opacity group-hover:opacity-100"
+              aria-label="Next image"
               onClick={() => setImgIndex((prev) => prev + 1)}
             >
-              <ChevronRight className="h-4 w-4 text-neutral-600" />
+              <ChevronRight aria-hidden className="h-4 w-4 text-neutral-600" />
             </button>
           </div>
         )}
