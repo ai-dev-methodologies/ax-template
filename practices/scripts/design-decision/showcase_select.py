@@ -13,7 +13,7 @@ Fit rule (per block, per persona):
 Universal primitives (badge/status/button/card/text) are usable by any persona; specialized blocks
 (hero/shader/image/chart/gallery) need an affinity match. Blocks are ordered affinity-match-first.
 
-  python3 showcase_select.py   # writes personas_showcase.json (consumed by frontend/src/app/showcase)
+  python3 showcase_select.py   # writes frontend/src/components/showcase/personas-showcase.json (the /showcase routes import it)
 """
 import json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -82,9 +82,15 @@ def main():
             "motion_level": p["motion"],
             "typography": p["typo"],
         }
-    path = os.path.join(HERE, "personas_showcase.json")
-    json.dump(out, open(path, "w"), indent=1)
-    print(f"personas_showcase.json -> {len(out)} personas")
+    # Write DIRECTLY to the file the frontend imports (frontend/src/components/showcase/
+    # personas-showcase.json, hyphen) — not a throwaway copy in this dir — so re-running the
+    # recommender after a BLOCK_MANIFEST/PERSONAS edit actually reskins the live showcase.
+    path = os.path.normpath(
+        os.path.join(HERE, "..", "..", "..", "frontend", "src", "components", "showcase", "personas-showcase.json")
+    )
+    with open(path, "w") as fh:
+        json.dump(out, fh, indent=1)
+    print(f"{os.path.relpath(path)} -> {len(out)} personas")
     for persona, v in out.items():
         avoid = sorted(dd.PERSONAS[persona]["avoid"])
         print(f"  {persona:20s} {len(v['blocks']):2d} blocks  (avoid {avoid})")

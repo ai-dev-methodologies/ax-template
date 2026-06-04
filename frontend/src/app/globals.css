@@ -15,7 +15,7 @@
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
     --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    --muted-foreground: 240 3.8% 43%; /* WCAG 1.4.3: 4.91:1 on --muted (was 46.1% = 4.39:1, fails 12px text) */
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
     --destructive: 0 84.2% 60.2%;
@@ -27,15 +27,17 @@
 
     /* ax design tokens — from specs/ux/ux-design-tokens-l0.yaml (REACT-PRACTICES-UX-001).
        Codified blocks resolve status colors against these, never raw hex. */
-    --ax-status-success-fg: oklch(55% 0.14 150);
+    /* fg lightness tuned so fg-on-bg >= 4.5:1 (WCAG 1.4.3) for 12px pill text — verified via
+       OKLab->linear-sRGB->relative-luminance (frontend/tests/tokens-contrast.vitest.ts locks it). */
+    --ax-status-success-fg: oklch(52% 0.14 150); /* 4.65:1 */
     --ax-status-success-bg: oklch(96% 0.03 150);
-    --ax-status-danger-fg: oklch(57% 0.18 25);
+    --ax-status-danger-fg: oklch(55% 0.18 25); /* 4.62:1 */
     --ax-status-danger-bg: oklch(96% 0.03 25);
-    --ax-status-warning-fg: oklch(63% 0.14 70);
+    --ax-status-warning-fg: oklch(54% 0.14 70); /* 4.56:1 */
     --ax-status-warning-bg: oklch(96% 0.04 70);
-    --ax-status-info-fg: oklch(58% 0.16 250);
+    --ax-status-info-fg: oklch(53% 0.16 250); /* 4.66:1 */
     --ax-status-info-bg: oklch(96% 0.03 250);
-    --ax-status-attention-fg: oklch(70% 0.15 90);
+    --ax-status-attention-fg: oklch(54% 0.15 90); /* 4.63:1 */
     --ax-status-attention-bg: oklch(97% 0.04 90);
     --ax-status-neutral-fg: oklch(50% 0 0);
     --ax-status-neutral-bg: oklch(95% 0 0);
