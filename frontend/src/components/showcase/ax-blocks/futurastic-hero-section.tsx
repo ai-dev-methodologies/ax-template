@@ -91,7 +91,7 @@ export const AuroraHero = () => {
         </motion.button>
       </div>
 
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0 z-0" aria-hidden role="presentation">
         <Canvas>
           <Stars radius={50} count={2500} factor={4} fade speed={2} />
         </Canvas>

@@ -106,7 +106,7 @@ export function ImageSwiper({ images, className, ...props }: ImageSwiperProps) {
             <motion.div
               key={i}
               className="h-full w-full shrink-0 overflow-hidden bg-neutral-800 object-cover first:rounded-l-[inherit] last:rounded-r-[inherit]">
-              <img src={src} className="pointer-events-none h-full w-full object-cover" />
+              <img src={src} alt={`Slide ${i + 1}`} className="pointer-events-none h-full w-full object-cover" />
             </motion.div>
           )
         })}

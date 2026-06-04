@@ -163,6 +163,8 @@ const CyberneticGridShader = () => {
   return (
     <div
       ref={containerRef}
+      aria-hidden
+      role="presentation"
       className="shader-container"
       style={{
         position:      'fixed',
@@ -173,7 +175,6 @@ const CyberneticGridShader = () => {
         zIndex:        -1,
         pointerEvents: 'none'
       }}
-      aria-label="Cybernetic Grid animated background"
     />
   );
 };
