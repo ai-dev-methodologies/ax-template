@@ -20,3 +20,4 @@ dist/
 # (completion_checklist_recency_guard.sh) reads this file from local disk.
 # Anchor to repo root so fixture .ax-verify/ dirs (test data) remain tracked.
 /.ax-verify/
+.crawl-21st/

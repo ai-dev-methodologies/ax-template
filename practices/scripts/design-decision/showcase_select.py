@@ -21,7 +21,7 @@ import design_decide as dd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# the 13/14 shipped codified blocks -> their categories (matches templates/L2/blocks + frontend mirror)
+# the 18 shipped codified blocks -> their categories (matches templates/L2/blocks + frontend mirror)
 BLOCK_MANIFEST = {
     "status-badge":            ["status", "badge"],
     "animated-badge":          ["badge"],
@@ -37,6 +37,11 @@ BLOCK_MANIFEST = {
     "ai-image-generator-hero": ["hero", "image"],
     "cybernetic-grid-shader":  ["shader"],
     "futurastic-hero-section": ["hero", "shader"],
+    # per-persona thinness closure (form/table/avatar/code surfaces the audit found missing)
+    "form-field":              ["form", "input"],
+    "data-grid":               ["table", "stat"],
+    "avatar-group":            ["avatar"],
+    "code-snippet":            ["code", "terminal"],
 }
 UNIVERSAL = {"badge", "status", "button", "card", "text"}
 

@@ -20,6 +20,10 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/showcase/ax-blocks/interfaces-card";
+import TextField from "@/components/showcase/ax-blocks/form-field";
+import DataGrid, { GridStatus } from "@/components/showcase/ax-blocks/data-grid";
+import AvatarGroup from "@/components/showcase/ax-blocks/avatar-group";
+import CodeSnippet from "@/components/showcase/ax-blocks/code-snippet";
 
 const swiperImages = [
   "https://picsum.photos/seed/ax1/640/420",
@@ -130,5 +134,58 @@ export const BLOCKS: Record<string, BlockEntry> = {
   "futurastic-hero-section": {
     label: "Aurora Hero", source: "futurastic-hero-section (@react-three/fiber)", full: true,
     render: () => (<div className="relative h-64 overflow-hidden"><AuroraHero /></div>),
+  },
+  "form-field": {
+    label: "Form Field", source: "form-field",
+    render: () => (
+      <div className="flex flex-col gap-3">
+        <TextField id="ax-email" label="Email" type="email" placeholder="you@example.com" helper="We never share it." required />
+        <TextField id="ax-key" label="API key" defaultValue="bad" error="Key must be 32 characters." />
+      </div>
+    ),
+  },
+  "data-grid": {
+    label: "Data Grid", source: "data-grid",
+    render: () => (
+      <DataGrid
+        caption="Recent transactions"
+        columns={[
+          { key: "id", header: "ID" },
+          { key: "amount", header: "Amount", numeric: true },
+          { key: "status", header: "Status" },
+        ]}
+        rows={[
+          { id: "TX-1041", amount: "₩128,000", status: <GridStatus status="success">Settled</GridStatus> },
+          { id: "TX-1042", amount: "₩64,500", status: <GridStatus status="warning">Pending</GridStatus> },
+          { id: "TX-1043", amount: "₩9,900", status: <GridStatus status="danger">Failed</GridStatus> },
+        ]}
+      />
+    ),
+  },
+  "avatar-group": {
+    label: "Avatar Group", source: "avatar-group",
+    render: () => (
+      <AvatarGroup
+        label="Project members"
+        members={[
+          { name: "Ada Lovelace", src: "https://picsum.photos/seed/axa1/64/64" },
+          { name: "Linus Torvalds" },
+          { name: "Grace Hopper", src: "https://picsum.photos/seed/axa3/64/64" },
+          { name: "Alan Turing" },
+          { name: "Margaret Hamilton" },
+          { name: "Ken Thompson" },
+        ]}
+      />
+    ),
+  },
+  "code-snippet": {
+    label: "Code Snippet", source: "code-snippet",
+    render: () => (
+      <CodeSnippet
+        filename="recommend.ts"
+        language="typescript"
+        code={"const picks = recommend(persona, blocks)\n  .filter((b) => b.fit > 0.6)\n  .slice(0, 3)"}
+      />
+    ),
   },
 };

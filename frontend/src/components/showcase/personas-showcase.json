@@ -2,6 +2,8 @@
  "enterprise-operator": {
   "name": "Enterprise Operator",
   "blocks": [
+   "data-grid",
+   "form-field",
    "animated-arrow-button",
    "category-bar-chart",
    "prime-button",
@@ -76,7 +78,10 @@
  "developer-tool": {
   "name": "Developer Tool",
   "blocks": [
+   "code-snippet",
    "animated-arrow-button",
+   "data-grid",
+   "form-field",
    "prime-button",
    "social-button",
    "animated-feature-card",
@@ -100,6 +105,8 @@
   "name": "Fintech Trust",
   "blocks": [
    "category-bar-chart",
+   "data-grid",
+   "form-field",
    "animated-arrow-button",
    "animated-badge",
    "animated-feature-card",
@@ -125,6 +132,7 @@
   "blocks": [
    "animated-feature-card",
    "auto-layout-card",
+   "avatar-group",
    "interfaces-card",
    "ai-image-generator-hero",
    "animated-arrow-button",
