@@ -51,7 +51,7 @@ export function GridStatus({
   children: ReactNode;
   label?: string;
 }) {
-  const name = label ?? (typeof children === "string" ? children : status);
+  const name = typeof children === "string" ? children : label ?? status;
   return (
     <span
       role="status"

@@ -51,6 +51,15 @@ describe("data-grid GridStatus: status semantics reach assistive tech", () => {
     );
     expect(screen.getByRole("status").getAttribute("aria-label")).toBe("warning");
   });
+
+  it("visible string text wins over an explicit label (WCAG 2.5.3 Label-in-Name)", () => {
+    render(
+      <GridStatus status="success" label="Override">
+        Paid
+      </GridStatus>,
+    );
+    expect(screen.getByRole("status").getAttribute("aria-label")).toBe("Paid");
+  });
 });
 
 describe("avatar-group: the full member name reaches assistive tech in both paths", () => {
