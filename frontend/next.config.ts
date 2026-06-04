@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: false,
   },
+  images: {
+    // The showcase's ai-image-generator-hero uses next/image with demo placeholder hosts.
+    remotePatterns: [{ protocol: 'https', hostname: 'picsum.photos' }],
+  },
   async rewrites() {
     return [
       {

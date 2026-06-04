@@ -97,7 +97,7 @@ export function ImageSwiper({ images, className, ...props }: ImageSwiperProps) {
           translateX: `-${imgIndex * 100}%`
         }}
         onDragEnd={onDragEnd}
-        transition={{ damping: 18, stiffness: 90, type: 'spring', duration: 0.2 }}
+        transition={{ damping: 18, stiffness: 90, type: 'spring' as const, duration: 0.2 }}
         className=" flex h-full cursor-grab items-center rounded-[inherit] active:cursor-grabbing">
         {images.map((src, i) => {
           return (

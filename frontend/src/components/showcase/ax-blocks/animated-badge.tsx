@@ -67,7 +67,7 @@ export const AnimatedBadge = ({
       transition={{
         duration: 0.3,
         delay: 0.1,
-        ease: "easeInOut",
+        ease: "easeInOut" as const,
       }}
       viewport={{ once: true }}
       className="group relative flex max-w-fit items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white px-4 py-1.5 text-neutral-700 transition-colors dark:border-neutral-700/80 dark:bg-black dark:text-zinc-300"

@@ -69,7 +69,7 @@ const textVariants: Variants = {
     opacity: 1,
     filter: 'blur(0px)',
     transition: {
-      type: 'spring',
+      type: 'spring' as const,
       stiffness: 500,
       damping: 25,
       mass: 0.5,
@@ -168,7 +168,7 @@ export const PrimeButton = React.forwardRef<
         )}
         onClick={onClick}
         whileTap={internalState === 'idle' ? { scale: 0.98 } : undefined}
-        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        transition={{ type: 'spring' as const, stiffness: 500, damping: 30 }}
         {...(props as any)} // Cast required to resolve conflict between Motion props and HTMLButton attributes
       >
         <AnimatePresence mode='popLayout' initial={false}>
