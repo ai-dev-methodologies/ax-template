@@ -1,0 +1,149 @@
+{
+ "enterprise-operator": {
+  "name": "Enterprise Operator",
+  "blocks": [
+   "animated-arrow-button",
+   "category-bar-chart",
+   "prime-button",
+   "social-button",
+   "animated-feature-card",
+   "auto-layout-card",
+   "interfaces-card",
+   "animated-badge",
+   "split-text-effect",
+   "status-badge"
+  ],
+  "theme": {
+   "radius": "6px",
+   "accent_saturation": "low",
+   "elevation": "flat"
+  },
+  "motion_budget": "state-feedback only",
+  "motion_level": 1,
+  "typography": "geometric sans, low scale-contrast, 14px body"
+ },
+ "consumer-delight": {
+  "name": "Consumer Delight",
+  "blocks": [
+   "ai-image-generator-hero",
+   "animated-arrow-button",
+   "animated-feature-card",
+   "auto-layout-card",
+   "futurastic-hero-section",
+   "interfaces-card",
+   "prime-button",
+   "social-button",
+   "image-swiper",
+   "animated-badge",
+   "status-badge",
+   "split-text-effect"
+  ],
+  "theme": {
+   "radius": "20px",
+   "accent_saturation": "high",
+   "elevation": "layered"
+  },
+  "motion_budget": "entrance + hover spring",
+  "motion_level": 2,
+  "typography": "rounded humanist, high scale-contrast, 16px body"
+ },
+ "editorial-luxury": {
+  "name": "Editorial / Luxury",
+  "blocks": [
+   "ai-image-generator-hero",
+   "futurastic-hero-section",
+   "image-swiper",
+   "split-text-effect",
+   "cybernetic-grid-shader",
+   "animated-feature-card",
+   "auto-layout-card",
+   "interfaces-card",
+   "animated-arrow-button",
+   "animated-badge",
+   "prime-button",
+   "social-button",
+   "status-badge"
+  ],
+  "theme": {
+   "radius": "0px",
+   "accent_saturation": "low",
+   "elevation": "flat"
+  },
+  "motion_budget": "refined reveal / parallax",
+  "motion_level": 2,
+  "typography": "high-contrast serif display, extreme scale-contrast"
+ },
+ "developer-tool": {
+  "name": "Developer Tool",
+  "blocks": [
+   "animated-arrow-button",
+   "prime-button",
+   "social-button",
+   "animated-feature-card",
+   "auto-layout-card",
+   "interfaces-card",
+   "animated-badge",
+   "split-text-effect",
+   "status-badge"
+  ],
+  "theme": {
+   "radius": "4px",
+   "accent_saturation": "low",
+   "elevation": "flat",
+   "mode": "dark"
+  },
+  "motion_budget": "minimal",
+  "motion_level": 1,
+  "typography": "mono code surfaces + grotesk prose, 14px"
+ },
+ "fintech-trust": {
+  "name": "Fintech Trust",
+  "blocks": [
+   "category-bar-chart",
+   "animated-arrow-button",
+   "animated-badge",
+   "animated-feature-card",
+   "auto-layout-card",
+   "interfaces-card",
+   "prime-button",
+   "social-button",
+   "status-badge",
+   "split-text-effect"
+  ],
+  "theme": {
+   "radius": "8px",
+   "accent_saturation": "low",
+   "elevation": "subtle",
+   "tabular_nums": true
+  },
+  "motion_budget": "conservative",
+  "motion_level": 1,
+  "typography": "tabular-figure grotesk, medium scale-contrast, 15px"
+ },
+ "playful-creator": {
+  "name": "Playful Creator",
+  "blocks": [
+   "animated-feature-card",
+   "auto-layout-card",
+   "interfaces-card",
+   "ai-image-generator-hero",
+   "animated-arrow-button",
+   "animated-badge",
+   "futurastic-hero-section",
+   "image-swiper",
+   "prime-button",
+   "social-button",
+   "status-badge",
+   "cybernetic-grid-shader",
+   "split-text-effect"
+  ],
+  "theme": {
+   "radius": "24px",
+   "accent_saturation": "high",
+   "elevation": "layered"
+  },
+  "motion_budget": "cinematic / reactions",
+  "motion_level": 3,
+  "typography": "chunky rounded display, high scale-contrast, 16px"
+ }
+}
