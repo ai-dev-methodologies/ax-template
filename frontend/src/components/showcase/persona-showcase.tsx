@@ -5,7 +5,13 @@ import { BLOCKS } from "./block-registry";
 export interface PersonaData {
   name: string;
   blocks: string[];
-  theme: { radius?: string; accent_saturation?: string; elevation?: string; mode?: string };
+  theme: {
+    radius?: string;
+    accent_saturation?: string;
+    elevation?: string;
+    mode?: string;
+    tabular_nums?: boolean;
+  };
   motion_budget: string;
   motion_level: number;
   typography: string;
@@ -23,7 +29,12 @@ export function PersonaShowcase({ slug, data }: { slug: string; data: PersonaDat
     <div
       data-persona={slug}
       className={isDark ? "dark bg-background text-foreground" : ""}
-      style={{ "--radius": data.theme.radius } as CSSProperties}
+      style={
+        {
+          "--radius": data.theme.radius,
+          fontVariantNumeric: data.theme.tabular_nums ? "tabular-nums" : undefined,
+        } as CSSProperties
+      }
     >
       <main className="mx-auto max-w-6xl px-6 py-12">
         <a href="/showcase" className="text-sm text-muted-foreground hover:underline">

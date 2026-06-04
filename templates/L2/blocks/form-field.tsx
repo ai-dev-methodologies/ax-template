@@ -5,7 +5,7 @@ layer: L2
 provenance_class: internal_design
 evidence:
   - source_type: internal
-    rationale: "ax-native L2 form field codified to fill the form/input gap the persona/role UI/UX audit found (enterprise/fintech/developer personas were thin on form primitives). Self-contained (no @/ alias), semantic-token color (danger via --ax-status-danger-fg, never raw palette), and WCAG-correct: label associated via htmlFor/id, aria-invalid + aria-describedby on error, role=alert on the error message. Typed props (no enum). Governed by practices-react/rules/ux-block-uses-design-tokens-and-a11y.md."
+    rationale: "ax-native L2 form field codified to fill the form/input gap the persona/role UI/UX audit found (enterprise/fintech/developer personas were thin on form primitives). Self-contained (no @/ alias), semantic-token color (danger via --ax-status-danger-fg, never raw palette), and WCAG-correct: label associated via htmlFor/id, the required asterisk is aria-hidden (the input's required attribute carries the semantics), aria-invalid + aria-describedby on error, role=alert on the error message; helper and error coexist (describedby references both) so instructions survive an error (WCAG 3.3.2). Caller props are spread FIRST so the block's id/required/aria-* and label association always win (a caller-supplied aria-describedby cannot silently detach the error). Typed props (no enum). Governed by practices-react/rules/ux-block-uses-design-tokens-and-a11y.md."
 dependencies: []
 imports_from: []
 imports_forbidden: [L4, app/, lib/]
@@ -22,16 +22,23 @@ export interface TextFieldProps
 }
 
 // A labeled text input with helper/error states. Label is associated via htmlFor/id; on error the
-// input gets aria-invalid + aria-describedby and the message is a role="alert" live region.
+// input gets aria-invalid + aria-describedby and the message is a role="alert" live region. Helper
+// and error can coexist — describedBy references whichever are present so instructions persist.
 export function TextField({ id, label, helper, error, required, className, ...input }: TextFieldProps) {
-  const describedBy = error ? `${id}-error` : helper ? `${id}-helper` : undefined;
+  const describedBy =
+    [helper ? `${id}-helper` : null, error ? `${id}-error` : null].filter(Boolean).join(" ") || undefined;
   return (
     <div className="flex w-full max-w-xs flex-col gap-1.5">
       <label htmlFor={id} className="text-sm font-medium">
         {label}
-        {required ? <span className="text-[var(--ax-status-danger-fg)]"> *</span> : null}
+        {required ? (
+          <span aria-hidden="true" className="text-[var(--ax-status-danger-fg)]">
+            {" *"}
+          </span>
+        ) : null}
       </label>
       <input
+        {...input}
         id={id}
         required={required}
         aria-invalid={error ? true : undefined}
@@ -44,9 +51,8 @@ export function TextField({ id, label, helper, error, required, className, ...in
         ]
           .filter(Boolean)
           .join(" ")}
-        {...input}
       />
-      {helper && !error ? (
+      {helper ? (
         <p id={`${id}-helper`} className="text-xs text-muted-foreground">
           {helper}
         </p>
