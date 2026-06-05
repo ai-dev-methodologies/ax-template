@@ -85,6 +85,12 @@ tasks.register<Test>("testProblemDetails") {
     }
 }
 
+tasks.register<Test>("testRequestValidation") {
+    useJUnitPlatform {
+        includeTags("REQUEST_VALIDATION")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")

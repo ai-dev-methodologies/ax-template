@@ -118,6 +118,10 @@ public class SecurityConfig {
                 // the demo surface deliberately raises 4xx/5xx to verify the RFC 9457
                 // problem+json contract; authenticated so a principal-scoped trace_id exists.
                 .requestMatchers("/api/problem-demo/**").authenticated()
+                // request-validation-l0 reference workload (specs/request-validation-l0.yaml):
+                // declarative boundary validation; authenticated so the demo mirrors a real
+                // command surface.
+                .requestMatchers("/api/request-validation/**").authenticated()
                 // R30 api-key domain (specs/api-key-l0.yaml):
                 // KEY-AUTHZ-001 — management surface is JWT-only (the
                 // ApiKeyAuthenticationFilter explicitly skips these paths
