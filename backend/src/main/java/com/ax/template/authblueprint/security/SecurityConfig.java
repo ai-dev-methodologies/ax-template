@@ -114,6 +114,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/cache/**").authenticated()
                 // pagination-l0 reference workload (specs/pagination-l0.yaml): tenant = principal.
                 .requestMatchers("/api/pagination/**").authenticated()
+                // problem-details-l0 reference workload (specs/problem-details-l0.yaml):
+                // the demo surface deliberately raises 4xx/5xx to verify the RFC 9457
+                // problem+json contract; authenticated so a principal-scoped trace_id exists.
+                .requestMatchers("/api/problem-demo/**").authenticated()
                 // R30 api-key domain (specs/api-key-l0.yaml):
                 // KEY-AUTHZ-001 — management surface is JWT-only (the
                 // ApiKeyAuthenticationFilter explicitly skips these paths
