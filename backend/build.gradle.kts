@@ -91,6 +91,12 @@ tasks.register<Test>("testRequestValidation") {
     }
 }
 
+tasks.register<Test>("testIdempotency") {
+    useJUnitPlatform {
+        includeTags("IDEMPOTENCY")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")
