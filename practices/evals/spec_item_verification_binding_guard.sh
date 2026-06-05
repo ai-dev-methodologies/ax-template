@@ -72,10 +72,30 @@ def items(txt):
         out.append((m.group(2) or m.group(3), m.group(4)))
     return out
 
+def _verification_body(blk):
+    # Linear, indent-bounded extraction of the `verification:` child block.
+    # Replaces a catastrophic-backtracking regex: capture only the lines that
+    # are MORE indented than the `verification:` key, stopping at the first
+    # line whose indent is <= the key's (the next sibling YAML key) or EOF.
+    lines = blk.split('\n')
+    for i, ln in enumerate(lines):
+        m = re.match(r'^(\s*)verification:\s*$', ln)
+        if not m:
+            continue
+        base = len(m.group(1))
+        child = []
+        for nxt in lines[i + 1:]:
+            if nxt.strip() == '':
+                continue
+            if (len(nxt) - len(nxt.lstrip())) <= base:
+                break
+            child.append(nxt)
+        return '\n'.join(child)
+    return None
+
 def resolve(iid, blk):
-    vb = re.search(r'\n\s*verification:\s*\n((?:\s+\S.*\n?)+?)(?=\n\s*\S+:|\Z)', blk)
-    if vb:
-        body = vb.group(1)
+    body = _verification_body(blk)
+    if body is not None:
         mech = (re.search(r'mechanism:\s*"?(\w+)"?', body) or [None, ''])[1]
         ref = (re.search(r'ref:\s*"?([^"\n]+)"?', body) or [None, ''])[1].strip()
         if mech == 'tag':
