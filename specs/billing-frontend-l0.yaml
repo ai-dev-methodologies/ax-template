@@ -26,6 +26,9 @@ items:
 
   - id: "BILLING-FE-003"
     chapter: "A11Y"
+    verification:
+      mechanism: rule
+      ref: billing-frontend-status-color-and-table-a11y
     requirement: "PricingTable and PlanComparison must have accessible table headers (scope='col') and ARIA labels on plan tier CTAs."
     test_method: "Vitest + axe-core"
     verification_type: "both"

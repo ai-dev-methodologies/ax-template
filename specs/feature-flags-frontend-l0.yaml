@@ -25,6 +25,9 @@ items:
     backend_only_marker: false
 
   - id: FF-FE-002
+    verification:
+      mechanism: rule
+      ref: feature-flags-frontend-admin-toggle
     requirement: "FeatureFlagToggle component calls PATCH /api/v1/admin/feature-flags/{name} on toggle interaction; shows optimistic update; rolls back on failure."
     backend_operation_id: updateFeatureFlag
     backend_spec_ref: FF-CRUD-003
@@ -36,6 +39,9 @@ items:
     backend_only_marker: false
 
   - id: FF-FE-003
+    verification:
+      mechanism: rule
+      ref: feature-flags-frontend-admin-toggle
     requirement: "Admin detail page renders FeatureFlagToggle + description editor; Save button calls PATCH; Cancel discards local edits."
     backend_operation_id: updateFeatureFlag
     backend_spec_ref: FF-CRUD-003
@@ -58,6 +64,9 @@ items:
     backend_only_marker: false
 
   - id: FF-FE-005
+    verification:
+      mechanism: rule
+      ref: feature-flags-frontend-admin-toggle
     requirement: "Middleware evaluates feature flags server-side via GET /api/v1/feature-flags/{name}/active; redirects to /not-found when flag is inactive."
     backend_operation_id: isFeatureFlagActive
     backend_spec_ref: FF-EVAL-002

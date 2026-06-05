@@ -26,6 +26,9 @@ items:
     backend_only_marker: false
 
   - id: SEARCH-FE-002
+    verification:
+      mechanism: rule
+      ref: combobox-respects-hangul-ime-composition
     requirement: "TypeaheadSearch component debounces input and suppresses API calls during Korean IME composition (compositionstart → compositionend)"
     backend_operation_id: search
     backend_spec_ref: SEARCH-QUERY-002
@@ -37,6 +40,9 @@ items:
     backend_only_marker: false
 
   - id: SEARCH-FE-003
+    verification:
+      mechanism: rule
+      ref: search-frontend-palette-highlight
     requirement: "Search results page renders ResultHighlighter that wraps matched terms in <mark> tags using ts_headline output from the backend"
     backend_operation_id: search
     backend_spec_ref: SEARCH-QUERY-001
@@ -48,6 +54,9 @@ items:
     backend_only_marker: false
 
   - id: SEARCH-FE-004
+    verification:
+      mechanism: rule
+      ref: client-localstorage-schema
     requirement: "RecentSearches component persists last 10 queries in localStorage; renders them below the search input on focus; clicking a recent query re-triggers search"
     backend_operation_id: search
     backend_spec_ref: SEARCH-QUERY-001
