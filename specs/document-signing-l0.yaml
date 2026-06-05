@@ -75,6 +75,9 @@ items:
   # ── FORMAT family ───────────────────────────────────────────────────────
   - id: "DOC-FORMAT-001"
     chapter: "전자서명 포맷 선언"
+    verification:
+      mechanism: rule
+      ref: document-signing-pki-timestamp-revocation
     requirement: "Recipes producing legally binding electronic documents MUST declare the signature format in RECIPE.md frontmatter: `document_signing_format` ∈ {xmldsig, pades}. XMLDSig (W3C XML Digital Signature 1.1) applies to XML-anchored business documents (전자세금계산서, EDI-XML). PAdES (ETSI EN 319 142-1, PDF Advanced ES) applies to PDF-anchored documents (전자계약서, 의료 동의서, 보험 청약서). Format declaration determines the algorithm suite (RSA-SHA256 / ECDSA-P256 / Ed25519 selection), canonicalization method (XMLDSig: c14n11, PAdES: not applicable), and long-term archival profile (PAdES-B-LTA for 10-year retention). Recipes producing both formats MUST declare a primary + secondary format pair; mixed-format documents MUST NOT inherit ambiguous signature semantics."
     test_method: "doc_FORMAT_001_recipeDeclaresValidFormat"
     verification_type: "review"
@@ -127,6 +130,9 @@ items:
   # ── IDENTITY family ─────────────────────────────────────────────────────
   - id: "DOC-IDENTITY-001"
     chapter: "서명자 신원 (RRN PII)"
+    verification:
+      mechanism: rule
+      ref: document-signing-pki-timestamp-revocation
     requirement: "Document signatures MUST be associated with the signer's identity via the existing identity-verification L4 (R54 VerifiedIdentity precedent). RRN MUST be stored using the R54 ElementCollection separation pattern — raw RRN MUST NOT appear on the primary entity column, MUST NOT appear in DTO/JSON transport, MUST NOT appear in signed artifact metadata, MUST NOT appear in dogfood ledgers, MUST NOT appear in observability metric labels (low-cardinality only), MUST NOT appear in OAuth callback responses, MUST NOT appear in WebSocket frames, MUST NOT appear in log messages. CRL/OCSP lookups MUST be keyed by cert serial number, NOT by RRN. Audit logging follows R67 AuditPiiHelper recipient-hash pattern. Signer identity in DTO/API MUST be masked (prefix-6-mask: YYMMDD-N****** form). Backend-only; this item has no frontend surface."
     test_method: "doc_IDENTITY_001_rrnNotInPrimaryColumnNorTransport"
     verification_type: "negative"
@@ -163,6 +169,9 @@ items:
   # ── TIMESTAMP family ────────────────────────────────────────────────────
   - id: "DOC-TIMESTAMP-001"
     chapter: "시점확인 (Time-Stamp)"
+    verification:
+      mechanism: rule
+      ref: document-signing-pki-timestamp-revocation
     requirement: "Signed documents intended for long-term archival (10-year retention per 공인전자문서법 §31의2) MUST carry an RFC 3161 timestamp from a declared TSA (Time-Stamp Authority). TSA URL MUST be pinned in RECIPE.md (document_signing_tsa_url). XMLDSig signatures attach the timestamp via <xades:SignatureTimeStamp>; PAdES signatures attach via the /DocTimeStamp dictionary (PAdES Baseline B-T profile minimum). Timestamp tokens MUST be verified against the TSA's certificate at signing time and re-verified at retrieval time. Signatures without a timestamp MUST NOT qualify for long-term legal effect (전자서명법 §3 효력 inheritance from timestamp authority recognition)."
     test_method: "doc_TIMESTAMP_001_tsaTokenAttachedAndVerified"
     verification_type: "positive"
@@ -182,6 +191,9 @@ items:
   # ── VERIFY family ───────────────────────────────────────────────────────
   - id: "DOC-VERIFY-001"
     chapter: "검증 (Revocation Check)"
+    verification:
+      mechanism: rule
+      ref: document-signing-pki-timestamp-revocation
     requirement: "Signature verification MUST check the signer certificate's revocation status using BOTH the CRL (RFC 5280 §5) AND OCSP (RFC 6960) paths declared in the certificate's AIA / CRLDistributionPoints extensions. Revocation lookups MUST be keyed by cert serial number, NEVER by RRN or other PII (mirrors DOC-IDENTITY-001 forbidden_sinks). At signing time the certificate MUST NOT be revoked; at verification time signatures created before revocation but verified after MUST be accepted IF a timestamp token (DOC-TIMESTAMP-001) precedes the revocation timestamp. Soft-fail (network unreachable) MUST log a structured warning AND require explicit recipe opt-in (`document_signing_revocation_soft_fail_allowed: true`); fail-closed by default."
     test_method: "doc_VERIFY_001_revokedCertRejectedAfterTimestamp"
     verification_type: "negative"
@@ -199,6 +211,9 @@ items:
   # ── RETENTION family ────────────────────────────────────────────────────
   - id: "DOC-RETENTION-001"
     chapter: "장기보관 (10년 의무)"
+    verification:
+      mechanism: rule
+      ref: document-signing-pki-timestamp-revocation
     requirement: "Signed documents qualifying as 공인전자문서 MUST be retained for 10 years per 공인전자문서법 §31의2. Storage profile MUST use PAdES-B-LTA (Baseline Long-Term with Archive timestamps; PAdES) OR XAdES-A (Archive form; XMLDSig) to preserve verifiability across CA/TSA certificate expiration. Archive timestamps MUST be refreshed before the previous timestamp's CA expires (typically every 5 years). Storage MUST be tamper-evident (append-only object store + write-once retention lock OR cryptographic Merkle log). Deletion MUST require explicit legal-hold release + audit trail."
     test_method: "doc_RETENTION_001_archiveTimestampRefreshedBeforeCaExpiry"
     verification_type: "positive"
