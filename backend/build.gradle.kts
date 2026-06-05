@@ -103,6 +103,12 @@ tasks.register<Test>("testOptimisticLocking") {
     }
 }
 
+tasks.register<Test>("testSoftDelete") {
+    useJUnitPlatform {
+        includeTags("SOFT_DELETE")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")

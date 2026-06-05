@@ -128,6 +128,9 @@ public class SecurityConfig {
                 // optimistic-locking-l0 reference workload (specs/optimistic-locking-l0.yaml):
                 // owner = principal (owner-scoped 404), so mutations require a JWT.
                 .requestMatchers("/api/optlock/**").authenticated()
+                // soft-delete-l0 reference workload (specs/soft-delete-l0.yaml): owner = principal;
+                // the include_deleted opt-in is gated to ROLE_ADMIN inside the controller.
+                .requestMatchers("/api/soft-delete/**").authenticated()
                 // R30 api-key domain (specs/api-key-l0.yaml):
                 // KEY-AUTHZ-001 — management surface is JWT-only (the
                 // ApiKeyAuthenticationFilter explicitly skips these paths
