@@ -103,6 +103,14 @@ expected_head_file = root / ".ax-verify" / "expected_head.txt"
 ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 def emit_fail(code, msg):
+    # ax-ledger: a blocked push (no fresh verify at HEAD) IS a bypass attempt — record it (never fails)
+    try:
+        import subprocess
+        subprocess.run(["bash", str(root / "practices" / "scripts" / "ax-ledger-log.sh"),
+                        "bypass_attempt", "gate=completion_checklist_recency",
+                        f"detail={code}", "severity=block"], capture_output=True, timeout=10)
+    except Exception:
+        pass
     print(f"VIOLATION [completion_checklist_recency]: {code} — {msg}")
     print(f'{{"signal":"completion_checklist.recency_fail","code":"{code}","ts":"{ts}"}}')
     sys.exit(1)

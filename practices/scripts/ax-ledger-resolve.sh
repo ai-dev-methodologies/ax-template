@@ -33,7 +33,7 @@ EVENTS="$LEDGER_DIR/events.jsonl"
 
 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 python3 - "$EVENTS" "$MATCH" "$RESOLUTION" "$CLASSIFICATION" "$DECISION" "$ts" <<'PY'
-import sys, json
+import sys, json, os
 path, match, resolution, classification, decision, ts = sys.argv[1:]
 out, n = [], 0
 with open(path, encoding="utf-8") as f:
@@ -45,8 +45,10 @@ with open(path, encoding="utf-8") as f:
             ev = json.loads(line)
         except json.JSONDecodeError:
             out.append(line); continue
-        key = (ev.get("gate") or "") + "|" + (ev.get("rule") or "")
-        if not ev.get("reviewed") and match in key:
+        if not isinstance(ev, dict):
+            out.append(line); continue
+        # EXACT field match (gate OR rule) — substring containment would resolve unrelated events
+        if not ev.get("reviewed") and match in ((ev.get("gate") or ""), (ev.get("rule") or "")):
             ev["reviewed"] = True
             ev["resolution"] = resolution
             ev["classification"] = classification
@@ -55,7 +57,10 @@ with open(path, encoding="utf-8") as f:
             ev["resolved_at"] = ts
             n += 1
         out.append(json.dumps(ev, ensure_ascii=False))
-with open(path, "w", encoding="utf-8") as f:
+# atomic rewrite: tmp + rename, so a crash/concurrent-append cannot corrupt or truncate the ledger
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as f:
     f.write("\n".join(out) + ("\n" if out else ""))
+os.replace(tmp, path)
 print(f"[ax-ledger] resolved {n} event(s) matching '{match}' → {classification}: {resolution}")
 PY

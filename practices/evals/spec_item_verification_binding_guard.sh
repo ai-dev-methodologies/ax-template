@@ -43,9 +43,10 @@ repo, specs_dir = sys.argv[1], sys.argv[2]
 
 # --- resolvable references ------------------------------------------------------------------
 tags = set()
+TAG_RE = re.compile(r'@(?:[A-Za-z_][\w.]*\.)?Tag\("([^"]+)"\)')  # matches @Tag(..) AND @org.junit.jupiter.api.Tag(..)
 for f in glob.glob(os.path.join(repo, 'backend/src/test/**/*.java'), recursive=True):
     try:
-        tags |= set(re.findall(r'@Tag\("([^"]+)"\)', open(f, encoding='utf-8', errors='ignore').read()))
+        tags |= set(TAG_RE.findall(open(f, encoding='utf-8', errors='ignore').read()))
     except OSError:
         pass
 guards = {os.path.basename(p) for p in glob.glob(os.path.join(repo, 'practices/evals/*.sh'))}
@@ -61,13 +62,14 @@ for d in ('practices/rules', 'practices-react/rules'):
         for anchor in re.findall(r'spec_ref:\s*"?[^"\n#]+#([A-Za-z0-9-]+)"?', body):
             rule_anchors.setdefault(anchor, stem)
 
-ITEM_TAG_RE = re.compile(r'^[A-Z0-9]+-[A-Z0-9]+-[0-9]')   # DOMAIN-FAMILY-NNN style (a planned item id)
+ITEM_TAG_RE = re.compile(r'^[A-Z0-9]+-(?:[A-Z0-9]+-)?[0-9]')   # DOMAIN-FAMILY-NNN or DOMAIN-N (RATELIMIT-1)
 
 def items(txt):
-    # each item is `- id: "X"` and the lines until the next sibling `- id:` at the same indent
+    # each item is `- id: X` (quoted OR unquoted — frontend specs use unquoted IDs) and the lines
+    # until the next sibling `- id:` at the same indent
     out = []
-    for m in re.finditer(r'^(\s*)-\s*id:\s*"([^"]+)"(.*?)(?=^\1-\s*id:|\Z)', txt, re.S | re.M):
-        out.append((m.group(2), m.group(3)))
+    for m in re.finditer(r'^(\s*)-\s*id:\s*(?:"([^"]+)"|([A-Za-z0-9_-]+))(.*?)(?=^\1-\s*id:|\Z)', txt, re.S | re.M):
+        out.append((m.group(2) or m.group(3), m.group(4)))
     return out
 
 def resolve(iid, blk):
@@ -79,7 +81,7 @@ def resolve(iid, blk):
         if mech == 'tag':
             return (ref in tags), f"tag '{ref}' has no @Tag in tests"
         if mech == 'guard':
-            hit = ref in guards or ref in guards_noext or any(ref in g for g in guards)
+            hit = ref in guards or ref in guards_noext  # exact filename match (no substring false-pass)
             return hit, f"guard '{ref}' has no practices/evals match"
         if mech == 'rule':
             return (ref in rules), f"rule '{ref}' has no rules/*.md match"

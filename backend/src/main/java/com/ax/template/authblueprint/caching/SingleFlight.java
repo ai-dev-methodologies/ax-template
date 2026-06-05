@@ -4,12 +4,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
- * CACHE-STAMPEDE-001 — single-flight (thundering-herd prevention).
+ * CACHE-STAMPEDE-001 — per-key single-flight LOCK (thundering-herd prevention).
  *
- * On a cache miss for a hot key, concurrent callers MUST NOT all recompute. The first caller for a
- * key computes; every other caller for the SAME key blocks on the in-flight computation and reuses
- * its result, so an N-parallel-miss burst yields exactly ONE origin recomputation, not N. This is the
- * `lock` strategy from the spec (an in-process equivalent of a Redis SETNX recompute lock).
+ * Concurrent callers for the SAME key serialize on a per-key lock, recomputing one-at-a-time rather
+ * than all at once. IMPORTANT: this is a mutex, NOT a result memoizer — the lock is released once the
+ * loader returns, so a caller arriving afterwards gets a fresh lock. De-duplication therefore REQUIRES
+ * the loader to re-check the cache first and return the winner's stored value instead of recomputing
+ * (see {@code CachedItemService} for the reference caller). Used that way, an N-parallel-miss burst
+ * yields exactly ONE origin recomputation. For standalone de-dup independent of the cache, memoize a
+ * {@code CompletableFuture} per key instead. (A distributed deployment would use a Redis SETNX lock.)
  * Spec: specs/caching-l0.yaml#CACHE-STAMPEDE-001 (RFC 5861 §3 stale-while-revalidate sibling).
  */
 public final class SingleFlight {

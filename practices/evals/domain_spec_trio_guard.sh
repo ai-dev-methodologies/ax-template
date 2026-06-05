@@ -37,7 +37,7 @@ tasknorm = {t.lower() for t in re.findall(r'(?:register|create)\w*\("test([A-Za-
 def has_task(dom):
     return dom.replace('-', '').lower() in tasknorm
 
-domains = sorted(l4 | {d for d in l4} )
+domains = sorted(l4)  # every templates/L4/<domain>/ dir
 # add task-only domains (e.g. report-export, identity-verification) discovered from specs that have a task
 for s in glob.glob(os.path.join(repo, 'specs/*-l0.yaml')):
     base = os.path.basename(s)[:-len('-l0.yaml')]

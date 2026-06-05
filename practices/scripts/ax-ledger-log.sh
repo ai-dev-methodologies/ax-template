@@ -18,6 +18,9 @@
 #     violation        — an enforced rule/guard BLOCKED something (carry gate=, rule=, detail=)
 #     bypass_attempt   — someone tried to skip a gate (--no-verify / --skip / manual override)
 #     request_rejected — a request was refused because it would break an enforced rule/method
+#     dogfood_finding  — a persona/agent dogfood (IDW/FDW) found a real gap/bug (carry area=, severity=)
+#                        — feed every confirmed dogfood finding here so review surfaces it as a
+#                          catalog-improvement signal (closing the dogfood→ledger→improve loop)
 #
 #   common keys: gate, rule, outcome, severity (info|warn|block), detail, actor (user|agent)
 #
@@ -33,8 +36,11 @@ shift 2>/dev/null || true
 
 mkdir -p "$LEDGER_DIR" 2>/dev/null || { echo "[ax-ledger] cannot create $LEDGER_DIR — skipping"; exit 0; }
 
-project="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || basename "$REPO_ROOT")"
-user="$(git -C "$REPO_ROOT" config user.email 2>/dev/null || echo "unknown")"
+# stable per-project id: the git remote, else the repo toplevel basename (never empty / ephemeral)
+project="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null)"
+[ -z "$project" ] && project="$(basename "$(git -C "$REPO_ROOT" rev-parse --show-toplevel 2>/dev/null || echo "$REPO_ROOT")")"
+user="$(git -C "$REPO_ROOT" config user.email 2>/dev/null)"
+[ -z "$user" ] && user="unknown"
 head="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo "none")"
 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -43,10 +49,11 @@ import sys, json, os
 path, ts, project, user, head, kind, *kvs = sys.argv[1:]
 ev = {"ts": ts, "project": project, "user": user, "head_sha": head, "kind": kind,
       "severity": "info", "reviewed": False}
+RESERVED = {"ts", "project", "user", "head_sha", "kind", "reviewed"}  # script-owned, integrity-critical
 for kv in kvs:
     if "=" in kv:
         k, v = kv.split("=", 1)
-        ev[k] = v
+        ev["_" + k if k in RESERVED else k] = v  # a caller cannot clobber a trusted field
 with open(path, "a", encoding="utf-8") as f:
     f.write(json.dumps(ev, ensure_ascii=False) + "\n")
 print(f"[ax-ledger] {kind} recorded ({ev.get('gate', ev.get('rule', '-'))}) → {os.path.relpath(path)}")

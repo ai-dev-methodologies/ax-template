@@ -48,6 +48,14 @@ Events are append-only JSONL at `.ax-ledger/events.jsonl` (gitignored, machine-l
 - `violation` — an enforced rule/guard **blocked** something (`gate=`, `rule=`)
 - `bypass_attempt` — someone tried to skip a gate (the Iron Law forbids this; it is still **logged**)
 - `request_rejected` — a request was refused because it would break an enforced rule/method
+- `dogfood_finding` — a persona/agent dogfood (IDW/FDW) confirmed a real gap/bug (carry `area=`, `severity=`)
+
+**Dogfood integration (the catalog's gap-finder feeds the ledger).** Every persona/agent dogfood run
+MUST log each confirmed finding as a `dogfood_finding` event, and the dogfood protocol MUST end by
+running `ax-ledger-review.sh` to decide what to feed back. A dogfood finding is exactly a catalog gap
+to answer, so `review` counts `dogfood_finding` toward the improvement-direction threshold alongside
+gate violations. This is how the persona/agent dogfood (which finds the gaps) and the ledger (which
+turns them into catalog change) are wired into one loop — they are no longer separate systems.
 
 ## 1. Capture — `ax-ledger-log.sh`
 

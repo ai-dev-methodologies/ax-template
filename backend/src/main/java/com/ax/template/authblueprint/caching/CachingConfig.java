@@ -45,13 +45,13 @@ public class CachingConfig {
                 }
             })
             .removalListener((String key, String value, RemovalCause cause) -> {
-                if (key == null) {
-                    return;
+                if (key == null || cause == RemovalCause.REPLACED) {
+                    return; // REPLACED is a value overwrite, NOT an eviction — keep the {ttl,capacity,manual} contract clean
                 }
                 String reason = switch (cause) {
                     case EXPIRED -> "ttl";
                     case SIZE -> "capacity";
-                    default -> "manual";
+                    default -> "manual"; // EXPLICIT (invalidate) / COLLECTED
                 };
                 metrics.recordEviction(tenantOf(key), CACHE_NAME, reason);
             })

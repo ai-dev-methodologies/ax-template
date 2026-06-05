@@ -56,6 +56,8 @@ with open(path, encoding="utf-8") as f:
             ev = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if not isinstance(ev, dict):   # tolerate a stray non-object line without bricking the pipeline
+            continue
         if since and ev.get("ts", "") < since:
             continue
         if user_filter and ev.get("user") != user_filter:
@@ -79,8 +81,10 @@ print("\n# by kind")
 for k, n in by_kind.most_common():
     print(f"  {k:18s} {n}")
 
-# recurring violations / blocked work by (gate|rule)
-viol = [e for e in rows if e.get("kind") in ("violation", "request_rejected", "bypass_attempt")]
+# recurring friction by (gate|rule) — gate FAILs, refused requests, bypass attempts, AND dogfood
+# findings all feed improvement (a dogfood finding is exactly a catalog gap to answer)
+viol = [e for e in rows if e.get("kind") in
+        ("violation", "request_rejected", "bypass_attempt", "dogfood_finding")]
 hot = Counter((e.get("gate") or e.get("rule") or "?") for e in viol)
 if hot:
     print("\n# recurring rule/gate friction (violation + rejected + bypass)")

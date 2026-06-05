@@ -43,18 +43,25 @@ public class CachedItemService {
             return cached;
         }
 
+        java.util.concurrent.atomic.AtomicBoolean recomputed = new java.util.concurrent.atomic.AtomicBoolean(false);
         String value = singleFlight.call(key, () -> {
             String again = cache.getIfPresent(key);
             if (again != null) {
-                return again;
+                return again; // a stampede FOLLOWER served from the winner's put — this is a HIT, not a miss
             }
+            recomputed.set(true);
             recomputes.computeIfAbsent(logical(tenant, id), k -> new AtomicInteger()).incrementAndGet();
             String v = "item:" + id + "@tenant:" + tenant + "@v" + version; // deterministic, version-reflecting payload
             cache.put(key, v);
             return v;
         });
-        metrics.recordMiss(tenant, CachingConfig.CACHE_NAME);
-        metrics.recordLatency(tenant, CachingConfig.CACHE_NAME, "put", Duration.ofNanos(System.nanoTime() - start));
+        if (recomputed.get()) {
+            metrics.recordMiss(tenant, CachingConfig.CACHE_NAME);
+            metrics.recordLatency(tenant, CachingConfig.CACHE_NAME, "put", Duration.ofNanos(System.nanoTime() - start));
+        } else {
+            metrics.recordHit(tenant, CachingConfig.CACHE_NAME); // follower hit — keeps cache_hit_rate honest under stampede
+            metrics.recordLatency(tenant, CachingConfig.CACHE_NAME, "get", Duration.ofNanos(System.nanoTime() - start));
+        }
         return value;
     }
 
