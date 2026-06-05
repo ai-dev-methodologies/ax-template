@@ -128,6 +128,13 @@ public class SecurityConfig {
                 // optimistic-locking-l0 reference workload (specs/optimistic-locking-l0.yaml):
                 // owner = principal (owner-scoped 404), so mutations require a JWT.
                 .requestMatchers("/api/optlock/**").authenticated()
+                // secrets-management-l0 reference workload (specs/secrets-management-l0.yaml):
+                // SECRET-ACCESS-001 — the caller IS the audited principal whose per-secret grant is
+                // checked, so every endpoint requires a JWT. Least-privilege denial (403) and the
+                // value-free audit trail are enforced inside SecretService against
+                // Authentication.getName(); no principal/secret-id ever travels in a query/body for
+                // authorization. The demo never echoes a secret value (presence/ciphertext/masked only).
+                .requestMatchers("/api/secrets-demo/**").authenticated()
                 // soft-delete-l0 reference workload (specs/soft-delete-l0.yaml): owner = principal;
                 // the include_deleted opt-in is gated to ROLE_ADMIN inside the controller.
                 .requestMatchers("/api/soft-delete/**").authenticated()
