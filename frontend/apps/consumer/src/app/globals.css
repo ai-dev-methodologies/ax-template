@@ -1,0 +1,206 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+ * Shared design tokens.
+ *
+ * Replicated from the repo-root token layer (frontend/src/app/globals.css) so
+ * this per-persona app is self-standing — there is no shared CSS export to
+ * import, so the canonical :root / .dark token block is mirrored verbatim. The
+ * catalog primitives (@ax/ui) and blocks (@ax/blocks) resolve every color +
+ * radius against these variables, so they re-skin from a single source.
+ *
+ * The consumer-delight PERSONA override lives in .ax-consumer below (NOT in
+ * :root) so the persona theme is scoped to the app shell, not baked into the
+ * tokens themselves.
+ * ------------------------------------------------------------------------- */
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 43%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+
+    /* ax status tokens — WCAG-locked fg/bg pairs (>= 4.5:1 for 12px pill text). */
+    --ax-status-success-fg: oklch(52% 0.14 150);
+    --ax-status-success-bg: oklch(96% 0.03 150);
+    --ax-status-danger-fg: oklch(55% 0.18 25);
+    --ax-status-danger-bg: oklch(96% 0.03 25);
+    --ax-status-warning-fg: oklch(54% 0.14 70);
+    --ax-status-warning-bg: oklch(96% 0.04 70);
+    --ax-status-info-fg: oklch(53% 0.16 250);
+    --ax-status-info-bg: oklch(96% 0.03 250);
+    --ax-status-attention-fg: oklch(54% 0.15 90);
+    --ax-status-attention-bg: oklch(97% 0.04 90);
+    --ax-status-neutral-fg: oklch(50% 0 0);
+    --ax-status-neutral-bg: oklch(95% 0 0);
+    --ax-status-accent-fg: oklch(53% 0.20 290);
+    --ax-status-accent-bg: oklch(96% 0.04 290);
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    --ax-status-success-fg: oklch(72% 0.15 150);
+    --ax-status-success-bg: oklch(28% 0.05 150);
+    --ax-status-danger-fg: oklch(72% 0.17 25);
+    --ax-status-danger-bg: oklch(28% 0.06 25);
+    --ax-status-warning-fg: oklch(78% 0.14 70);
+    --ax-status-warning-bg: oklch(30% 0.05 70);
+    --ax-status-info-fg: oklch(72% 0.15 250);
+    --ax-status-info-bg: oklch(28% 0.05 250);
+    --ax-status-attention-fg: oklch(80% 0.14 90);
+    --ax-status-attention-bg: oklch(30% 0.05 90);
+    --ax-status-neutral-fg: oklch(75% 0 0);
+    --ax-status-neutral-bg: oklch(28% 0 0);
+    --ax-status-accent-fg: oklch(72% 0.18 290);
+    --ax-status-accent-bg: oklch(30% 0.06 290);
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+@layer components {
+  /* consumer-delight PERSONA THEME.
+   *
+   * Scoped to the app shell wrapper (the layouts add `.ax-consumer`), never to
+   * :root, so the persona stays contained:
+   *   - radius 20px          -> soft, rounded, friendly corners (flows into every
+   *                             catalog component via --radius)
+   *   - HIGH accent saturation -> a vivid, joyful accent (the default --ax-status-
+   *                             accent-* pushed brighter + more chromatic)
+   *   - LAYERED elevation     -> shadows kept soft + tinted for real depth
+   * Motion budget is "entrance + hover spring" (persona motion_level 2); see the
+   * entrance keyframes + the reduced-motion block. */
+  .ax-consumer {
+    --radius: 20px;
+    /* High-saturation, delightful accent (chroma pushed well above the default). */
+    --ax-status-accent-fg: oklch(56% 0.27 320);
+    --ax-status-accent-bg: oklch(95% 0.07 320);
+    /* A warmer, friendlier ring so focus rings read as on-brand, not stark slate. */
+    --ring: 320 70% 55%;
+  }
+  .dark .ax-consumer,
+  .ax-consumer.dark {
+    --ax-status-accent-fg: oklch(80% 0.20 320);
+    --ax-status-accent-bg: oklch(32% 0.09 320);
+    --ring: 320 60% 65%;
+  }
+
+  /* Layered elevation: keep the catalog's soft drop-shadows but tint them with
+   * a touch of the accent hue so surfaces feel like they float on a warm light.
+   * The opposite of the enterprise persona's flat hairline treatment. */
+  .ax-consumer .shadow-sm {
+    box-shadow: 0 1px 2px oklch(56% 0.27 320 / 0.07), 0 1px 3px oklch(0% 0 0 / 0.05);
+  }
+  .ax-consumer .shadow,
+  .ax-consumer .shadow-md {
+    box-shadow: 0 4px 12px oklch(56% 0.27 320 / 0.1), 0 2px 6px oklch(0% 0 0 / 0.06);
+  }
+  .ax-consumer .shadow-lg,
+  .ax-consumer .shadow-xl {
+    box-shadow: 0 12px 32px oklch(56% 0.27 320 / 0.14), 0 6px 14px oklch(0% 0 0 / 0.08);
+  }
+
+  /* Wordmark chip: the high-saturation accent token as a filled rounded glyph. */
+  .ax-consumer .ax-wordmark-chip {
+    color: var(--ax-status-accent-bg);
+    background: var(--ax-status-accent-fg);
+  }
+
+  /* Soft layout for the catalog StatusBadge pill (the block ships only the
+   * inline fg/bg color; the host theme owns layout). Pill, gap, weight. */
+  .ax-consumer .ax-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 9999px;
+    padding: 0.2rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .ax-consumer .ax-status-badge__icon {
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+
+  /* Persona entrance: a springy settle used once on mount for shell panels and
+   * each feed row (staggered via inline animation-delay on the row). Only
+   * transform + opacity, so it stays on the compositor. */
+  .ax-consumer .ax-fade-up,
+  .ax-consumer .ax-activity-feed__row {
+    animation: ax-spring-up 0.5s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+  }
+}
+
+@keyframes ax-spring-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ax-consumer .ax-fade-up,
+  .ax-consumer .ax-activity-feed__row {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

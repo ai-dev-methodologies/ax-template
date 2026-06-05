@@ -34,3 +34,5 @@ export type {
 } from './data-grid';
 export { default as AvatarGroup } from './avatar-group';
 export { default as CodeSnippet } from './code-snippet';
+export { default as ActivityFeed } from './activity-feed';
+export type { ActivityFeedItem, ActivityFeedProps } from './activity-feed';
