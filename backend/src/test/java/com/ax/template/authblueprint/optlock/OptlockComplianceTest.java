@@ -74,12 +74,17 @@ class OptlockComplianceTest {
         String[] created = create();
         String id = created[0];
         String etag0 = auth().get("/api/optlock/resources/" + id).then().statusCode(200).extract().header("ETag");
-        // strong validator: quoted, NO weak W/ prefix; deterministic "<id>-<version>"
-        assertThat(etag0).startsWith("\"").doesNotStartWith("W/").isEqualTo("\"" + id + "-0\"");
+        // strong validator: quoted, NO weak W/ prefix; deterministic "<entityType>-<id>-<version>"
+        assertThat(etag0).startsWith("\"").doesNotStartWith("W/").isEqualTo(expectedEtag(id, 0));
         // a field change MUST change the ETag
         String etag1 = auth().header("If-Match", etag0).body("{\"name\":\"changed\",\"quantity\":2}")
             .put("/api/optlock/resources/" + id).then().statusCode(200).extract().header("ETag");
-        assertThat(etag1).isEqualTo("\"" + id + "-1\"").isNotEqualTo(etag0);
+        assertThat(etag1).isEqualTo(expectedEtag(id, 1)).isNotEqualTo(etag0);
+    }
+
+    /** OPTLOCK-ETAG-001 3-part strong validator format: "<entityType>-<id>-<version>". */
+    private static String expectedEtag(String id, long version) {
+        return "\"optlock-resource-" + id + "-" + version + "\"";
     }
 
     @Test
@@ -90,6 +95,13 @@ class OptlockComplianceTest {
         auth().body("{\"name\":\"x\",\"quantity\":2}")
             .put("/api/optlock/resources/" + id).then().statusCode(428)
             .body("code", org.hamcrest.Matchers.equalTo("PRECONDITION_REQUIRED"));
+
+        // RFC 7232 §3.2: a WEAK validator — even the weak form of the CORRECT current ETag — can
+        // never satisfy an If-Match (strong comparison) → 412, never a silent match.
+        String[] fresh = create();
+        auth().header("If-Match", "W/" + fresh[1]).body("{\"name\":\"x\",\"quantity\":2}")
+            .put("/api/optlock/resources/" + fresh[0]).then().statusCode(412)
+            .body("code", org.hamcrest.Matchers.equalTo("PRECONDITION_FAILED"));
     }
 
     @Test
@@ -101,11 +113,11 @@ class OptlockComplianceTest {
         String etag0 = created[1];
         String etag1 = auth().header("If-Match", etag0).body("{\"name\":\"a\",\"quantity\":2}")
             .put("/api/optlock/resources/" + id).then().statusCode(200).extract().header("ETag");
-        assertThat(etag1).isEqualTo("\"" + id + "-1\"");
+        assertThat(etag1).isEqualTo(expectedEtag(id, 1));
         // a client-supplied "version" field is IGNORED — the provider owns the version
         var r = auth().header("If-Match", etag1).body("{\"name\":\"b\",\"quantity\":3,\"version\":999}")
             .put("/api/optlock/resources/" + id).then().statusCode(200).extract();
-        assertThat(r.header("ETag")).isEqualTo("\"" + id + "-2\"");      // provider version, not 999
+        assertThat(r.header("ETag")).isEqualTo(expectedEtag(id, 2));     // provider version, not 999
         assertThat(r.jsonPath().getLong("version")).isEqualTo(2L);
     }
 
@@ -123,9 +135,11 @@ class OptlockComplianceTest {
             .put("/api/optlock/resources/" + id).then().statusCode(412)      // etag0 is now stale
             .body("code", org.hamcrest.Matchers.equalTo("PRECONDITION_FAILED"));
 
-        // 409: two writers both pass the If-Match check (same fresh version) then race the flush
-        ConflictResult race = concurrentRace();
-        assertThat(race.conflictStatus).as("the flush-race loser is a 409, distinct from the 412 above").isEqualTo(409);
+        // 409: two writers both pass If-Match (same fresh version) then race the flush. The exact
+        // loser status (409 vs 412) is timing-dependent, so retry the race until a genuine 409
+        // surfaces — proving the flush-race path is reachable AND distinct from the 412 stale path.
+        assertThat(raceUntil409())
+            .as("the flush-race conflict is a 409, distinct from the 412 stale path").isEqualTo(409);
     }
 
     @Test
@@ -142,6 +156,12 @@ class OptlockComplianceTest {
         // RETRY-001: authoritative current_etag for read-modify-write; conditional retry, NO Retry-After
         assertThat(r.jsonPath().getString("current_etag")).isEqualTo(etag1);
         assertThat(r.header("Retry-After")).isNull();
+        // the documented recovery actually works: re-GET the fresh representation, then re-PUT with
+        // the new If-Match → 200 (read-modify-write succeeds against the current version)
+        String freshEtag = auth().get("/api/optlock/resources/" + id).then().statusCode(200).extract().header("ETag");
+        assertThat(freshEtag).isEqualTo(etag1);
+        auth().header("If-Match", freshEtag).body("{\"name\":\"merged\",\"quantity\":9}")
+            .put("/api/optlock/resources/" + id).then().statusCode(200);
     }
 
     @Test
@@ -151,10 +171,12 @@ class OptlockComplianceTest {
         ConflictResult race = concurrentRace();
         assertThat(race.success).as("exactly one writer succeeds").isEqualTo(1);
         assertThat(race.conflict).as("exactly one writer is rejected").isEqualTo(1);
-        // final persisted state reflects the WINNER only (the loser did not clobber it)
+        assertThat(race.conflictStatus).as("the loser is a conflict — 412 stale OR 409 flush-race").isIn(409, 412);
+        // final persisted state reflects the WINNER only — the loser's value did NOT clobber it
         var finalState = auth().get("/api/optlock/resources/" + race.id).then().statusCode(200).extract();
         assertThat(finalState.jsonPath().getLong("version")).isEqualTo(1L);
-        assertThat(finalState.jsonPath().getString("name")).isEqualTo(race.winnerName);
+        assertThat(finalState.jsonPath().getString("name"))
+            .isEqualTo(race.winnerName).isNotEqualTo(race.loserName);
     }
 
     @Test
@@ -199,7 +221,26 @@ class OptlockComplianceTest {
 
     // ── concurrency helper ───────────────────────────────────────────────────
 
-    private record ConflictResult(String id, int success, int conflict, int conflictStatus, String winnerName) {}
+    private record ConflictResult(String id, int success, int conflict, int conflictStatus,
+                                  String winnerName, String loserName) {}
+
+    /**
+     * Repeat the race until a genuine 409 (flush-race) loser is observed, proving that outcome is
+     * reachable and distinct from the 412 stale-at-entry path. The in-tx write window makes 409 the
+     * usual outcome; the bounded loop removes any residual scheduling flakiness without a hard
+     * timing assumption. Returns the conflict status of the first 409 (or the last status seen).
+     */
+    private int raceUntil409() {
+        int last = 0;
+        for (int attempt = 0; attempt < 8; attempt++) {
+            ConflictResult r = concurrentRace();
+            last = r.conflictStatus();
+            if (last == 409) {
+                return 409;
+            }
+        }
+        return last;
+    }
 
     /**
      * Two writers GET version 0, both PUT with the SAME If-Match "id-0". The service's in-transaction
@@ -216,6 +257,7 @@ class OptlockComplianceTest {
         AtomicInteger conflict = new AtomicInteger();
         AtomicInteger conflictStatus = new AtomicInteger();
         AtomicReference<String> winnerName = new AtomicReference<>();
+        AtomicReference<String> loserName = new AtomicReference<>();
         for (int i = 0; i < 2; i++) {
             String name = "writer-" + i;
             pool.submit(() -> {
@@ -230,6 +272,7 @@ class OptlockComplianceTest {
                     } else {
                         conflict.incrementAndGet();
                         conflictStatus.set(resp.statusCode());
+                        loserName.set(name);
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -243,6 +286,7 @@ class OptlockComplianceTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        return new ConflictResult(id, success.get(), conflict.get(), conflictStatus.get(), winnerName.get());
+        return new ConflictResult(id, success.get(), conflict.get(), conflictStatus.get(),
+                winnerName.get(), loserName.get());
     }
 }

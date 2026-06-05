@@ -87,7 +87,9 @@ public class OptlockController {
     }
 
     private static String etag(OptlockResource r) {
-        return OptimisticLockingSupport.etag(r.getId().toString(), r.getVersion());
+        // OPTLOCK-ETAG-001 3-part format "<entityType>-<id>-<version>": the entityType is folded
+        // into the resourceId passed to the support helper (which appends "-<version>").
+        return OptimisticLockingSupport.etag(OptlockService.resourceKey(r.getId()), r.getVersion());
     }
 
     private static Map<String, Object> dto(OptlockResource r) {

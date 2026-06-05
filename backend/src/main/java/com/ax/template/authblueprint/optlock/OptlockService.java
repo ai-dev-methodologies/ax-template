@@ -48,12 +48,22 @@ public class OptlockService {
     public OptlockResource update(UUID id, String owner, String ifMatch, String name, int quantity) {
         OptlockResource current = repository.findByIdAndOwnerId(id, owner)
                 .orElseThrow(() -> new ResourceNotFoundException("optlock resource not found"));
-        // 428 (If-Match absent) / 412 (stale validator) — before any mutation.
-        OptimisticLockingSupport.requireMatch(ifMatch, id.toString(), current.getVersion());
+        // 428 (If-Match absent) / 412 (stale validator) — before any mutation. The resourceKey folds
+        // the entityType in so the comparison ETag matches the controller's 3-part emitted ETag.
+        OptimisticLockingSupport.requireMatch(ifMatch, resourceKey(id), current.getVersion());
         current.setName(name);
         current.setQuantity(quantity);
         widenRaceWindow();
         return repository.saveAndFlush(current); // flush bumps @Version; concurrent stale flush → 409
+    }
+
+    /**
+     * The strong-ETag resourceId for an optlock resource: {@code "<entityType>-<id>"}. The support
+     * helper appends {@code "-<version>"}, yielding the OPTLOCK-ETAG-001 3-part validator
+     * {@code "<entityType>-<id>-<version>"}. Shared by the controller (emit) and this service (compare).
+     */
+    static String resourceKey(UUID id) {
+        return OptlockMetrics.RESOURCE + "-" + id;
     }
 
     private static void widenRaceWindow() {

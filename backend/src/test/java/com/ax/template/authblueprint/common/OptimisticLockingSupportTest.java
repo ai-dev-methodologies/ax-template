@@ -78,9 +78,10 @@ class OptimisticLockingSupportTest {
     }
 
     @Test
-    void parseIfMatch_dropsWeakPrefix() {
-        // A weak validator must not survive parsing into a strong-comparison match.
-        assertThat(OptimisticLockingSupport.parseIfMatch("W/\"42-7\"")).isEqualTo("42-7");
+    void parseIfMatch_weakValidatorIsNull() {
+        // RFC 7232 §3.2: a weak validator can never match an If-Match (strong comparison), so it is
+        // not a usable strong tag — parseIfMatch returns null (decide() then treats it as 412 STALE).
+        assertThat(OptimisticLockingSupport.parseIfMatch("W/\"42-7\"")).isNull();
     }
 
     @Test
@@ -145,10 +146,14 @@ class OptimisticLockingSupportTest {
     }
 
     @Test
-    void requireMatch_matchingWeakValidatorStillProceeds() {
-        // W/-prefixed but otherwise-equal validator is normalised then matched.
-        assertThatCode(() -> OptimisticLockingSupport.requireMatch("W/\"42-7\"", "42", 7))
-            .doesNotThrowAnyException();
+    void requireMatch_weakValidatorIsStale412() {
+        // RFC 7232 §3.2 — a weak validator, even one whose tag equals the current strong ETag, can
+        // NEVER satisfy an If-Match strong comparison: it MUST be rejected as stale (412), carrying
+        // the authoritative current ETag, NOT silently accepted as a match.
+        assertThatThrownBy(() -> OptimisticLockingSupport.requireMatch("W/\"42-7\"", "42", 7))
+            .isInstanceOf(PreconditionFailedException.class)
+            .extracting(ex -> ((PreconditionFailedException) ex).currentEtag())
+            .isEqualTo("\"42-7\"");
     }
 
     // ─── Stable RFC 9457 type URIs (spec-anchored constants) ──────────────

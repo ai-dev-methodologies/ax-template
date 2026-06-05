@@ -127,9 +127,12 @@ public final class OptimisticLockingSupport {
         if (trimmed.equals("*")) {
             return "*";
         }
-        // Discard a weak-validator prefix: "W/\"abc\"" → strong comparison can never match it.
+        // RFC 7232 §3.2: "A weak entity-tag ... cannot match any entity-tag used in an If-Match
+        // header field." If-Match uses the STRONG comparison function, so a weak validator is never
+        // a usable strong tag → return null. decide() treats a present-but-weak validator as STALE
+        // (412), distinct from an absent validator (428) which it detects BEFORE calling here.
         if (trimmed.startsWith("W/")) {
-            trimmed = trimmed.substring(2).trim();
+            return null;
         }
         if (trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
             return trimmed.substring(1, trimmed.length() - 1);
@@ -164,6 +167,12 @@ public final class OptimisticLockingSupport {
      */
     public static PreconditionOutcome decide(String ifMatchHeader, String resourceId, long currentVersion) {
         String currentEtag = etag(resourceId, currentVersion);
+        // RFC 7232 §3.2 — a weak validator can never satisfy an If-Match strong comparison. A
+        // present-but-weak validator is therefore STALE (412), NOT absent (428): detect it before
+        // parseIfMatch (which returns null for weak, indistinguishable from absent otherwise).
+        if (ifMatchHeader != null && ifMatchHeader.trim().startsWith("W/")) {
+            return new PreconditionOutcome(Decision.STALE, currentEtag);
+        }
         String supplied = parseIfMatch(ifMatchHeader);
         if (supplied == null) {
             return new PreconditionOutcome(Decision.MISSING, currentEtag);
