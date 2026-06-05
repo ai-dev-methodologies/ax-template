@@ -389,6 +389,15 @@ tasks.register<Test>("testWebhookSigning") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testApiVersioning") {
+    useJUnitPlatform {
+        includeTags("API_VERSIONING")
+    }
+    description = "Run api-versioning-l0 compliance tests (url-path version negotiation + RFC 8594 Sunset/Deprecation: 7 items / 7 families — NEGOTIATION, DEFAULT, COMPATIBILITY, DEPRECATION, MIGRATION, DISCOVERY, OBSERVABILITY)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

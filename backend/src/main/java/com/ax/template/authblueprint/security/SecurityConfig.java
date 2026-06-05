@@ -222,6 +222,17 @@ public class SecurityConfig {
                 // controller (and the verifier's 400/401/409), not a Spring Security 401 —
                 // same carve-out posture as /api/payments/callback/** and /api/webhooks/billing.
                 .requestMatchers("/api/webhook-signing-demo/**").permitAll()
+                // api-versioning-l0 reference workload (specs/api-versioning-l0.yaml):
+                // VERSION-DISCOVERY-001 mandates an UNAUTHENTICATED, cacheable discovery
+                // endpoint (/api/versions); the demo surface negotiates the served version
+                // by the url-path strategy and carries no user data or authorization
+                // decision (it is API-surface plumbing, distinct from any business L4).
+                // permitAll keeps the compliance test black-box and the wiring additive
+                // (it claims only NEW path prefixes). The carve-outs MUST precede the
+                // catch-all denyAll so the unauthenticated GETs reach the controller (and
+                // the resolver's 400/404/410), not a Spring Security 401.
+                .requestMatchers(HttpMethod.GET, "/api/versions").permitAll()
+                .requestMatchers("/api/api-versioning-demo/**").permitAll()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers
