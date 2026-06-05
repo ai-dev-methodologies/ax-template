@@ -1,6 +1,7 @@
 package com.ax.template.authblueprint.softdelete;
 
 import com.ax.template.authblueprint.common.ResourceNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,11 +54,22 @@ public class SoftDeleteService {
     @Transactional
     public SoftDeleteAccount create(String owner, String email, String name) {
         // SOFTDELETE-UNIQUE-001: collide only with a LIVE row; a tombstoned email is free for reuse.
+        // The exists-check is a fast path; the PARTIAL UNIQUE INDEX is the real race backstop — a
+        // concurrent insert (or restore) that wins between the check and the flush surfaces here as
+        // DataIntegrityViolationException, which we map to the SAME 409 (never a raw 500).
         if (accounts.existsByOwnerIdAndEmailAndDeletedAtIsNull(owner, email)) {
-            throw new SoftDeleteConflictException(SoftDeleteConflictException.UNIQUE_CONFLICT,
-                    "email already in use by a live account");
+            throw uniqueConflict();
         }
-        return accounts.save(new SoftDeleteAccount(UUID.randomUUID(), owner, email, name));
+        try {
+            return accounts.saveAndFlush(new SoftDeleteAccount(UUID.randomUUID(), owner, email, name));
+        } catch (DataIntegrityViolationException raceLostToConcurrentLiveRow) {
+            throw uniqueConflict();
+        }
+    }
+
+    private static SoftDeleteConflictException uniqueConflict() {
+        return new SoftDeleteConflictException(SoftDeleteConflictException.UNIQUE_CONFLICT,
+                "email already in use by a live account");
     }
 
     @Transactional
@@ -79,8 +91,15 @@ public class SoftDeleteService {
                 : accounts.findByOwnerIdAndDeletedAtIsNull(owner);
     }
 
+    /**
+     * Owner-scoped live child notes (IDOR-safe): the account MUST belong to the caller — live OR
+     * tombstoned (so the owner can still observe cascade after a delete) — else 404. A non-owner can
+     * never read another owner's notes by guessing the account id.
+     */
     @Transactional(readOnly = true)
-    public List<SoftDeleteNote> liveNotes(UUID accountId) {
+    public List<SoftDeleteNote> liveNotes(UUID accountId, String owner) {
+        accounts.findByIdAndOwnerId(accountId, owner)
+                .orElseThrow(() -> new ResourceNotFoundException("account not found"));
         return notes.findByAccountIdAndDeletedAtIsNull(accountId);
     }
 

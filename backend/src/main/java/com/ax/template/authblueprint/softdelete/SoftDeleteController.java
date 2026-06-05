@@ -56,10 +56,10 @@ public class SoftDeleteController {
         return ResponseEntity.ok(dto(service.getLive(id, auth.getName())));   // tombstoned → 404
     }
 
-    /** Live (non-tombstoned) child notes — lets a caller observe cascade soft-delete/restore. */
+    /** Live (non-tombstoned) child notes — owner-scoped; lets the owner observe cascade soft-delete/restore. */
     @GetMapping("/{id}/notes")
-    public ResponseEntity<List<Map<String, Object>>> notes(@PathVariable UUID id) {
-        return ResponseEntity.ok(service.liveNotes(id).stream()
+    public ResponseEntity<List<Map<String, Object>>> notes(@PathVariable UUID id, Authentication auth) {
+        return ResponseEntity.ok(service.liveNotes(id, auth.getName()).stream()
                 .map(n -> Map.<String, Object>of("id", n.getId().toString(), "text", n.getText())).toList());
     }
 

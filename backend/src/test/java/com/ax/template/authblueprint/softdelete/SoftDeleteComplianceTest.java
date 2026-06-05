@@ -146,6 +146,9 @@ class SoftDeleteComplianceTest {
         as(token).body("{\"text\":\"a\"}").post("/api/soft-delete/accounts/" + id + "/notes").then().statusCode(201);
         as(token).body("{\"text\":\"b\"}").post("/api/soft-delete/accounts/" + id + "/notes").then().statusCode(201);
         assertThat(liveNoteCount(id)).isEqualTo(2);
+        // IDOR guard (dogfood F): a DIFFERENT owner cannot read this account's notes by id → 404
+        String otherToken = tokenFor("sd-other", "MEMBER");
+        as(otherToken).get("/api/soft-delete/accounts/" + id + "/notes").then().statusCode(404);
 
         // delete parent → children consistently tombstoned (no partial cascade)
         as(token).delete("/api/soft-delete/accounts/" + id).then().statusCode(204);
