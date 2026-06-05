@@ -1,0 +1,248 @@
+package com.ax.template.authblueprint.optlock;
+
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.restassured.RestAssured;
+import io.restassured.response.ExtractableResponse;
+import io.restassured.response.Response;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.annotation.DirtiesContext;
+
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * optimistic-locking-l0 compliance — every item verified against the live reference workload.
+ * Domain @Tag("OPTLOCK") drives ./gradlew testOptimisticLocking; the per-item @Tag binds the spec
+ * item to its test (spec_item_verification_binding guard). Spec: specs/optimistic-locking-l0.yaml.
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+class OptlockComplianceTest {
+
+    @LocalServerPort
+    int port;
+
+    @Autowired
+    MeterRegistry registry;
+
+    String token;
+
+    @BeforeEach
+    void setUp() {
+        RestAssured.port = port;
+        String email = "optlock-" + UUID.randomUUID() + "@example.com";
+        given().header("Content-Type", "application/json")
+            .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\",\"role\":\"MEMBER\"}")
+            .when().post("/api/auth/email/signup");
+        token = given().header("Content-Type", "application/json")
+            .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
+            .when().post("/api/auth/email/login").then().extract().path("accessToken");
+    }
+
+    private io.restassured.specification.RequestSpecification auth() {
+        return given().header("Authorization", "Bearer " + token).header("Content-Type", "application/json");
+    }
+
+    /** Create a resource; returns {id, etag}. */
+    private String[] create() {
+        var r = auth().body("{\"name\":\"init\",\"quantity\":1}")
+            .post("/api/optlock/resources").then().statusCode(201).extract();
+        return new String[]{r.jsonPath().getString("id"), r.header("ETag")};
+    }
+
+    @Test
+    @Tag("OPTLOCK")
+    @Tag("OPTLOCK-ETAG-001")
+    void emitsStrongVersionDerivedEtagThatChangesOnMutation() {
+        String[] created = create();
+        String id = created[0];
+        String etag0 = auth().get("/api/optlock/resources/" + id).then().statusCode(200).extract().header("ETag");
+        // strong validator: quoted, NO weak W/ prefix; deterministic "<id>-<version>"
+        assertThat(etag0).startsWith("\"").doesNotStartWith("W/").isEqualTo("\"" + id + "-0\"");
+        // a field change MUST change the ETag
+        String etag1 = auth().header("If-Match", etag0).body("{\"name\":\"changed\",\"quantity\":2}")
+            .put("/api/optlock/resources/" + id).then().statusCode(200).extract().header("ETag");
+        assertThat(etag1).isEqualTo("\"" + id + "-1\"").isNotEqualTo(etag0);
+    }
+
+    @Test
+    @Tag("OPTLOCK")
+    @Tag("OPTLOCK-IFMATCH-001")
+    void mutationWithoutIfMatchIsRejected428() {
+        String id = create()[0];
+        auth().body("{\"name\":\"x\",\"quantity\":2}")
+            .put("/api/optlock/resources/" + id).then().statusCode(428)
+            .body("code", org.hamcrest.Matchers.equalTo("PRECONDITION_REQUIRED"));
+    }
+
+    @Test
+    @Tag("OPTLOCK")
+    @Tag("OPTLOCK-VERSION-001")
+    void versionIncrementsOnEachWriteAndIsNotClientWritable() {
+        String[] created = create();
+        String id = created[0];
+        String etag0 = created[1];
+        String etag1 = auth().header("If-Match", etag0).body("{\"name\":\"a\",\"quantity\":2}")
+            .put("/api/optlock/resources/" + id).then().statusCode(200).extract().header("ETag");
+        assertThat(etag1).isEqualTo("\"" + id + "-1\"");
+        // a client-supplied "version" field is IGNORED — the provider owns the version
+        var r = auth().header("If-Match", etag1).body("{\"name\":\"b\",\"quantity\":3,\"version\":999}")
+            .put("/api/optlock/resources/" + id).then().statusCode(200).extract();
+        assertThat(r.header("ETag")).isEqualTo("\"" + id + "-2\"");      // provider version, not 999
+        assertThat(r.jsonPath().getLong("version")).isEqualTo(2L);
+    }
+
+    @Test
+    @Tag("OPTLOCK")
+    @Tag("OPTLOCK-CONFLICT-001")
+    void staleValidatorIs412AndConcurrentFlushRaceIs409() {
+        // 412: a validator that was already stale at request entry
+        String[] created = create();
+        String id = created[0];
+        String etag0 = created[1];
+        auth().header("If-Match", etag0).body("{\"name\":\"first\",\"quantity\":2}")
+            .put("/api/optlock/resources/" + id).then().statusCode(200);     // now at version 1
+        auth().header("If-Match", etag0).body("{\"name\":\"stale\",\"quantity\":9}")
+            .put("/api/optlock/resources/" + id).then().statusCode(412)      // etag0 is now stale
+            .body("code", org.hamcrest.Matchers.equalTo("PRECONDITION_FAILED"));
+
+        // 409: two writers both pass the If-Match check (same fresh version) then race the flush
+        ConflictResult race = concurrentRace();
+        assertThat(race.conflictStatus).as("the flush-race loser is a 409, distinct from the 412 above").isEqualTo(409);
+    }
+
+    @Test
+    @Tag("OPTLOCK")
+    @Tag("OPTLOCK-RETRY-001")
+    void conflictBodyCarriesCurrentEtagAndNoRetryAfter() {
+        String[] created = create();
+        String id = created[0];
+        String etag0 = created[1];
+        String etag1 = auth().header("If-Match", etag0).body("{\"name\":\"first\",\"quantity\":2}")
+            .put("/api/optlock/resources/" + id).then().statusCode(200).extract().header("ETag");
+        var r = auth().header("If-Match", etag0).body("{\"name\":\"stale\",\"quantity\":9}")
+            .put("/api/optlock/resources/" + id).then().statusCode(412).extract();
+        // RETRY-001: authoritative current_etag for read-modify-write; conditional retry, NO Retry-After
+        assertThat(r.jsonPath().getString("current_etag")).isEqualTo(etag1);
+        assertThat(r.header("Retry-After")).isNull();
+    }
+
+    @Test
+    @Tag("OPTLOCK")
+    @Tag("OPTLOCK-LOSTUPDATE-001")
+    void concurrentStaleWritesYieldOneWinnerNoLostUpdate() {
+        ConflictResult race = concurrentRace();
+        assertThat(race.success).as("exactly one writer succeeds").isEqualTo(1);
+        assertThat(race.conflict).as("exactly one writer is rejected").isEqualTo(1);
+        // final persisted state reflects the WINNER only (the loser did not clobber it)
+        var finalState = auth().get("/api/optlock/resources/" + race.id).then().statusCode(200).extract();
+        assertThat(finalState.jsonPath().getLong("version")).isEqualTo(1L);
+        assertThat(finalState.jsonPath().getString("name")).isEqualTo(race.winnerName);
+    }
+
+    @Test
+    @Tag("OPTLOCK")
+    @Tag("OPTLOCK-OBSERVABILITY-001")
+    void exposesBoundedLabelMeters() {
+        String[] created = create();
+        String id = created[0];
+        String etag0 = created[1];
+        auth().header("If-Match", etag0).body("{\"name\":\"a\",\"quantity\":2}")
+            .put("/api/optlock/resources/" + id).then().statusCode(200);   // applied
+        auth().body("{\"name\":\"x\",\"quantity\":2}").put("/api/optlock/resources/" + id).then().statusCode(428); // precond_required
+        auth().header("If-Match", etag0).body("{\"name\":\"y\",\"quantity\":2}")
+            .put("/api/optlock/resources/" + id).then().statusCode(412);   // precondition_failed
+        concurrentRace();                                                   // lock_conflict (409)
+
+        assertThat(registry.find(OptlockMetrics.CONFLICTS).counter()).isNotNull();
+        assertThat(registry.find(OptlockMetrics.PRECONDITION_REQUIRED).counter()).isNotNull();
+        assertThat(registry.find(OptlockMetrics.WRITE_TIME).timer()).isNotNull();
+
+        Set<String> outcomes = Set.of("precondition_failed", "lock_conflict");
+        Set<String> results = Set.of("applied", "conflict");
+        for (Meter m : registry.find(OptlockMetrics.CONFLICTS).meters()) {
+            for (io.micrometer.core.instrument.Tag t : m.getId().getTags()) {
+                assertThat(Set.of(OptlockMetrics.TAG_RESOURCE, OptlockMetrics.TAG_OUTCOME)).contains(t.getKey());
+                if (t.getKey().equals(OptlockMetrics.TAG_OUTCOME)) {
+                    assertThat(outcomes).contains(t.getValue());
+                } else {
+                    assertThat(t.getValue()).isEqualTo(OptlockMetrics.RESOURCE);
+                }
+            }
+        }
+        for (Meter m : registry.find(OptlockMetrics.WRITE_TIME).meters()) {
+            for (io.micrometer.core.instrument.Tag t : m.getId().getTags()) {
+                assertThat(Set.of(OptlockMetrics.TAG_RESOURCE, OptlockMetrics.TAG_RESULT)).contains(t.getKey());
+                if (t.getKey().equals(OptlockMetrics.TAG_RESULT)) {
+                    assertThat(results).contains(t.getValue());
+                }
+            }
+        }
+    }
+
+    // ── concurrency helper ───────────────────────────────────────────────────
+
+    private record ConflictResult(String id, int success, int conflict, int conflictStatus, String winnerName) {}
+
+    /**
+     * Two writers GET version 0, both PUT with the SAME If-Match "id-0". The service's in-transaction
+     * write window makes both pass the precondition (both load v0), then the flush race lets exactly
+     * one win (v1) and the other lose with 409 (its stale @Version UPDATE bumps zero rows).
+     */
+    private ConflictResult concurrentRace() {
+        String[] created = create();
+        String id = created[0];
+        String etag0 = created[1];
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch go = new CountDownLatch(1);
+        AtomicInteger success = new AtomicInteger();
+        AtomicInteger conflict = new AtomicInteger();
+        AtomicInteger conflictStatus = new AtomicInteger();
+        AtomicReference<String> winnerName = new AtomicReference<>();
+        for (int i = 0; i < 2; i++) {
+            String name = "writer-" + i;
+            pool.submit(() -> {
+                try {
+                    go.await();
+                    ExtractableResponse<Response> resp = auth().header("If-Match", etag0)
+                        .body("{\"name\":\"" + name + "\",\"quantity\":5}")
+                        .put("/api/optlock/resources/" + id).thenReturn().then().extract();
+                    if (resp.statusCode() == 200) {
+                        success.incrementAndGet();
+                        winnerName.set(name);
+                    } else {
+                        conflict.incrementAndGet();
+                        conflictStatus.set(resp.statusCode());
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+        go.countDown();
+        pool.shutdown();
+        try {
+            assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return new ConflictResult(id, success.get(), conflict.get(), conflictStatus.get(), winnerName.get());
+    }
+}

@@ -97,6 +97,12 @@ tasks.register<Test>("testIdempotency") {
     }
 }
 
+tasks.register<Test>("testOptimisticLocking") {
+    useJUnitPlatform {
+        includeTags("OPTLOCK")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")

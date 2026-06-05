@@ -125,6 +125,9 @@ public class SecurityConfig {
                 // idempotency-l0 reference workload (specs/idempotency-l0.yaml): tenant = principal,
                 // so per-tenant Idempotency-Key isolation requires a JWT.
                 .requestMatchers("/api/idempotency-demo/**").authenticated()
+                // optimistic-locking-l0 reference workload (specs/optimistic-locking-l0.yaml):
+                // owner = principal (owner-scoped 404), so mutations require a JWT.
+                .requestMatchers("/api/optlock/**").authenticated()
                 // R30 api-key domain (specs/api-key-l0.yaml):
                 // KEY-AUTHZ-001 — management surface is JWT-only (the
                 // ApiKeyAuthenticationFilter explicitly skips these paths
