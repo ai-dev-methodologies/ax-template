@@ -84,6 +84,9 @@ items:
       requirement specialized to the charge side effect.
   - id: "INDOUBT-RECONCILE-001"
     chapter: "Reconcile-by-query resolution"
+    verification:
+      mechanism: rule
+      ref: in-doubt-outbound-call-holding-state
     requirement: "A record in the in-doubt holding state MUST be resolved by QUERYING the provider's authoritative status — asynchronous reconciliation — NOT by re-issuing the original side-effecting call. The reconciler MUST be (a) idempotent: querying status has no side effect and re-running it converges to the same resolution; (b) scheduled / polled (e.g. Spring @Scheduled) so resolution does not depend on the original request thread surviving; (c) terminal-mapping: a confirmed-applied status moves the record to SUCCESS, a confirmed-not-applied status moves it to FAILED (now safe to retry as a NEW operation), and an indeterminate status keeps it in-doubt until a bounded age-out window (`in_doubt_reconcile_max_age_hours`, default 24h) elapses, after which it escalates for human / operator review rather than guessing. The query MUST target the same provider resource identity (provider transaction id / idempotency key / booking reference) the original call carried, so the reconciler asks about the exact operation that was in doubt."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -102,6 +105,9 @@ items:
       or aging out" — this item lifts that to the generic contract.
   - id: "INDOUBT-IDEMPOTENT-RETRY-001"
     chapter: "Retry only with a provider idempotency key"
+    verification:
+      mechanism: rule
+      ref: in-doubt-outbound-call-holding-state
     requirement: "An in-doubt outbound call MAY be retried (rather than reconciled-by-query) ONLY when the original call carried a provider-honored idempotency key that makes the retry safe — i.e. the provider guarantees that a retry with the same key performs the side effect AT MOST ONCE and returns the original result. The recipe MUST declare `in_doubt_provider_idempotency_key: true` to enable this path; absent that declaration the system MUST fall back to reconcile-by-query (INDOUBT-RECONCILE-001) and MUST NOT retry. The idempotency key MUST be generated and persisted BEFORE the first outbound attempt (so the retry can present the identical key), and the same key MUST be reused for every retry of that one logical operation — a fresh key on retry creates a second side effect and defeats the contract. This is the IETF Idempotency-Key contract pushed OUTBOUND to the provider."
     test_method: "RestAssured integration test"
     verification_type: "both"
@@ -126,6 +132,9 @@ items:
       Composes idempotency-l0 (same key contract, OUTBOUND direction).
   - id: "INDOUBT-NO-DOUBLE-EFFECT-001"
     chapter: "Reconcile path must not double-apply the side effect"
+    verification:
+      mechanism: rule
+      ref: in-doubt-outbound-call-holding-state
     requirement: "The reconciliation / retry path MUST NOT cause the side effect to be applied a second time. Three obligations: (a) reconcile-by-query (INDOUBT-RECONCILE-001) performs a STATUS QUERY only — it MUST NOT contain any code path that re-issues the original side-effecting call; (b) when the resolution is 'confirmed-applied', the record transitions to SUCCESS WITHOUT performing the side effect again (the local state catches up to reality; it does not re-execute reality); (c) when the resolution is 'confirmed-not-applied' and the recipe retries, the retry MUST reuse the original provider idempotency key (INDOUBT-IDEMPOTENT-RETRY-001) so even a racing provider that DID apply the first attempt collapses the retry to a no-op. Negative test: drive a record into the holding state, run the reconciler twice (or concurrently), and assert the side effect's observable count (rows created, messages emitted, money moved) increments by AT MOST the single original intent — never twice. The invariant: from in-doubt to resolved, the side effect happens exactly the number of times the user intended (one), never more."
     test_method: "RestAssured integration test"
     verification_type: "negative"

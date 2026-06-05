@@ -153,6 +153,9 @@ items:
       weight(A→L) + weight(root→B)·weight(B→L), in exact BigDecimal scale.
   - id: "DAG-OBSERVABILITY-001"
     chapter: "관측 (bounded-cardinality fan-out metric)"
+    verification:
+      mechanism: rule
+      ref: provenance-dag-traversal-is-bounded-and-cycle-safe
     requirement: >
       Provenance traversals and rollups MUST expose bounded-cardinality Micrometer
       metrics so a pathological graph is visible before it degrades a read:

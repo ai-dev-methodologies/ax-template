@@ -69,6 +69,9 @@ items:
       explicit hold/lock; 409 for a generic incompatible-state block).
   - id: "GATE-FAIL-CLOSED-001"
     chapter: "Fail-closed on unknown or unresolvable status"
+    verification:
+      mechanism: rule
+      ref: consume-path-consults-shared-fail-closed-blocking-gate
     requirement: >
       The blocking-status gate MUST default to BLOCKED whenever it cannot
       AFFIRMATIVELY establish that the referenced entity is clear: a lookup
@@ -100,6 +103,9 @@ items:
       rejected (409/423/503-class) and A's consumers unchanged; never 200.
   - id: "GATE-SHARED-001"
     chapter: "One shared gate component, every consume path"
+    verification:
+      mechanism: rule
+      ref: consume-path-consults-shared-fail-closed-blocking-gate
     requirement: >
       The blocking-status check MUST be implemented ONCE as a single shared gate
       component (a BlockingStatusGate-style class with a checkClearToConsume /

@@ -33,6 +33,9 @@ introduced_at: "IDW6 2026-06-01 logistics dogfood"
 items:
   - id: "INGEST-WATERMARK-001"
     chapter: "Monotonic last-applied watermark"
+    verification:
+      mechanism: rule
+      ref: monotonic-ingest-reject-stale-event
     requirement: "The authoritative current-state row that is driven by an inbound external event stream MUST persist a monotonic `last_applied` watermark for that stream — either an event-time `Instant` (the time the event occurred on its producing device / carrier system, NOT the local receive time) or a provider-supplied sequence number — recorded atomically in the same transaction that applies the event. The watermark column MUST be non-null after the first applied event and MUST be sourced from a field the provider stamps at emission, because processing-time (arrival order) is not a reliable proxy for event-time ordering on an at-least-once stream. The invariant: the persisted watermark equals the maximum event-time / sequence the row has ever applied, never the most-recently-received one."
     test_method: "RestAssured integration test (POST two webhook events in reverse event-time order; assert the watermark column holds the LATER event-time, not the last-received one)"
     verification_type: "positive"

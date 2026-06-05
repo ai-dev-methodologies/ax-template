@@ -53,6 +53,9 @@ introduced_at: "IDW8 2026-06-01 HR-payroll dogfood"
 items:
   - id: "TEMPORAL-HALF-OPEN-001"
     chapter: "Validity is a HALF-OPEN [validFrom, validTo) interval"
+    verification:
+      mechanism: rule
+      ref: temporal-validity-record-non-overlap
     requirement: >
       A validity-windowed record MUST model its in-force period as a HALF-OPEN
       interval [validFrom, validTo): the lower bound validFrom is INCLUSIVE

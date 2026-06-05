@@ -56,6 +56,9 @@ introduced_at: "IDW5 2026-06-01 LMS dogfood"
 items:
   - id: "ORDER-POSITION-001"
     chapter: "Explicit persisted position column (not insertion order)"
+    verification:
+      mechanism: rule
+      ref: ordered-siblings-reorder-atomic
     requirement: "Sibling rows under a parent that are user-orderable MUST carry an EXPLICIT position / sort_key column whose value alone determines render order — `ORDER BY position` MUST be the sole sort key. The order MUST NOT be derived from `created_at`, `id`, insertion order, or any incidental field, because those cannot express a deliberate move (dragging item C above item A leaves created_at unchanged). The position MUST be a stored, queryable, non-null column (a dense integer rank `0,1,2,...`, OR a sparse/fractional sort_key string per the positional-gap strategy). A NULL or duplicate-default position is FORBIDDEN — every sibling MUST hold a deterministic position the moment it is inserted. Read endpoints MUST sort by this column server-side; clients MUST NOT re-sort."
     test_method: "RestAssured integration test (insert 3 siblings out of created_at order, reorder, GET list, assert response order == position order, not created_at order)"
     verification_type: "positive"
@@ -104,6 +107,9 @@ items:
       is the honest signal that this window was hit and the write refused.
   - id: "ORDER-SCOPE-001"
     chapter: "Position is unique within (parent, level)"
+    verification:
+      mechanism: rule
+      ref: ordered-siblings-reorder-atomic
     requirement: "The position MUST be UNIQUE within its sibling scope — a database `UNIQUE(parent_id, position)` constraint (extended to `UNIQUE(parent_id, level, position)` when the collection is hierarchical/nested, e.g. modules vs lessons). The DB constraint is the backstop that makes a torn or buggy renumber FAIL LOUDLY (constraint violation → rolled-back transaction → ORDER-CONFLICT-001 / 500) rather than silently persisting two siblings claiming position 3. Application code MUST NOT rely on application-level uniqueness checks alone (they are TOCTOU-racy — CWE-362). When the dense-integer strategy temporarily collides mid-renumber, the renumber MUST run inside the single transaction so the constraint is evaluated only at commit (deferred / single-statement bulk shift), or use a positional-gap strategy where new keys never collide by construction. Position uniqueness MUST be scoped to the parent only — two DIFFERENT parents may each have a sibling at position 0."
     test_method: "Integration test (attempt to persist two siblings of the same parent at the same position → assert DB constraint rejects it; assert two different parents may each hold position 0)"
     verification_type: "review"

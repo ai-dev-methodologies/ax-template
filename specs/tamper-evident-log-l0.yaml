@@ -65,6 +65,9 @@ items:
       hash-chained log; each version a superset of every prior version).
   - id: "TAMPER-VERIFY-001"
     chapter: "Chain verification (break / gap / reorder detection)"
+    verification:
+      mechanism: rule
+      ref: tamper-evident-log-hashchain
     requirement: >
       The implementation MUST expose a verify operation that walks the persisted
       entries in sequence order and recomputes the chain head from genesis,

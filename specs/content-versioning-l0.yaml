@@ -60,6 +60,9 @@ items:
       as a new version.
   - id: "DRAFT-MUTABLE-001"
     chapter: "Working draft is a separate mutable row"
+    verification:
+      mechanism: rule
+      ref: published-edition-immutable-copy-on-write
     requirement: "Authoring edits MUST target a SEPARATE working-draft row (distinct table or a row whose status is DRAFT), never the live published edition. The draft is freely mutable — authors may overwrite its fields any number of times — and editing the draft MUST have zero observable effect on any already-published edition or on any consumer currently served a published edition. There MUST be at most one open draft per logical content item; saving the draft MUST NOT change `version_no` (the draft has no public version until it is published). The invariant: draft mutation and published-edition immutability are physically separated, so an in-progress edit can never leak to live consumers."
     test_method: "RestAssured integration test (mutate the draft repeatedly; GET the live published edition and assert it is unchanged across every draft save)"
     verification_type: "positive"
@@ -77,6 +80,9 @@ items:
       same isolation guarantee, expressed at the edition level.
   - id: "PUBLISH-TRANSITION-001"
     chapter: "Atomic draft->published transition via a sole mutator"
+    verification:
+      mechanism: rule
+      ref: published-edition-immutable-copy-on-write
     requirement: "The draft->published transition MUST be a single atomic operation owned by ONE sole-mutator component (a state machine / service method, `@Transactional`): it freezes the draft content into a new published edition, assigns the next `version_no` (prior_max + 1), and supersedes the prior published edition by marking it superseded (or flipping a single `is_current` pointer) — WITHOUT deleting or rewriting the prior edition's content. Prior editions MUST be retained. No other code path may insert a published edition or change `is_current`. A failed publish MUST roll back atomically, leaving the prior current edition authoritative. The invariant: exactly one current edition at any instant, monotonic version numbers, and every superseded edition preserved."
     test_method: "RestAssured integration test (publish v1, publish v2; assert v2 is current, assert v1 row still exists with original content, assert no second mutator path can write a published row)"
     verification_type: "review"
@@ -91,6 +97,9 @@ items:
       edition history is reconstructable rather than overwritten.
   - id: "CONSUMER-PIN-001"
     chapter: "Consumers are pinned to the edition they joined"
+    verification:
+      mechanism: rule
+      ref: published-edition-immutable-copy-on-write
     requirement: "A consumer that enrolls in / accepts / subscribes to content MUST be pinned to the SPECIFIC published edition current at join time by persisting that edition's identifier (edition FK or `{content_id, version_no}`) on the consumer's record. Serving that consumer MUST resolve content through their pinned edition id, NOT through the latest `is_current` edition. A subsequent publish MUST NOT retroactively rewrite any pinned consumer's view; migrating a consumer to a newer edition MUST be an explicit, audited opt-in (re-acceptance of new terms, re-enrollment, plan change), never an implicit side effect of publishing. The invariant: publishing a new edition is invisible to already-pinned consumers until they explicitly move."
     test_method: "RestAssured integration test (consumer joins at v1; publish v2; GET the consumer's served content and assert it still resolves to v1 until an explicit migrate call)"
     verification_type: "positive"

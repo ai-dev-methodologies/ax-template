@@ -68,6 +68,9 @@ items:
       (https://www.postgresql.org/docs/current/explicit-locking.html)
   - id: "CLAIM-OVERSELL-001"
     chapter: "No-oversell concurrency proof + DB CHECK backstop"
+    verification:
+      mechanism: rule
+      ref: shared-counter-claim-must-be-atomic
     requirement: "The contract MUST be proven by a negative concurrency test, not asserted: fire N+1 (or more) concurrent claims against a resource of capacity N from a thread pool / parallel callers; assert EXACTLY N succeed and the remaining claims are rejected — never N+1 grants. Final persisted `taken` MUST equal N (never exceed capacity). As a defense-in-depth backstop independent of application code, the capacity row MUST carry a database constraint `CHECK (taken <= capacity)` (and `CHECK (taken >= 0)`), so that even a future code path that bypasses the atomic-claim primitive cannot persist an oversell — the INSERT/UPDATE fails at the DB. The race this closes (two claimants both reading `taken < capacity` and both inserting) is CWE-362: a timing window in which a shared resource is modified by a concurrent code sequence."
     test_method: "Concurrent-claim integration test (N+1 racing claims) + DB CHECK assertion"
     verification_type: "positive"

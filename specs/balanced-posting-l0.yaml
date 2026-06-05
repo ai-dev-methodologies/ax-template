@@ -78,6 +78,9 @@ items:
       equals) is mandated because BigDecimal equality is scale-sensitive.
   - id: "CONSERVATION-BACKSTOP-001"
     chapter: "Structural backstop makes an asymmetric / dropped-leg write impossible"
+    verification:
+      mechanism: rule
+      ref: value-transfer-must-be-balanced
     requirement: "The net-zero invariant MUST NOT rest on application code alone: a structural backstop independent of the service path MUST make a non-conserving posting impossible to persist. Exactly two implementations are permitted: (a) a database backstop — a deferred-constraint trigger or a table CHECK that, at COMMIT, asserts the SUM of all leg `signed_amount` rows sharing one `operation_id` equals zero (e.g. a `BEFORE`/constraint trigger raising on `SUM(signed_amount) <> 0 GROUP BY operation_id`, or a CHECK on a per-operation rollup row asserting `net_amount = 0`); or (b) a service-level pre-commit assertion that re-reads the just-written legs for the operation id and re-sums them with `BigDecimal::compareTo`, throwing (and rolling back the whole transaction) before commit if the residual is non-zero. The backstop MUST be defense-in-depth: it MUST catch a non-conserving posting even if a FUTURE code path bypasses the CONSERVATION-LEGS-NET-ZERO-001 service check — the way `CHECK (taken <= capacity)` backstops bounded-capacity-claim. A posting that violates the backstop MUST fail the whole transaction (no partial commit), surfacing as 422 `UNBALANCED_POSTING` (service path) or a constraint-violation translated to 422 (DB path)."
     test_method: "Integration test forcing an asymmetric write + DB constraint / pre-commit assertion"
     verification_type: "positive"
@@ -100,6 +103,9 @@ items:
       the legs pre-commit. Both make the conserved total structural.
   - id: "CONSERVATION-OBSERVABILITY-001"
     chapter: "관측 (bounded-cardinality posting counter)"
+    verification:
+      mechanism: rule
+      ref: value-transfer-must-be-balanced
     requirement: "Balanced-posting implementations SHOULD expose a single canonical Micrometer counter `posting_total{operation_type, outcome}` where `operation_type` is a fixed enum (e.g. `transfer`, `allocation`, `journal`) and `outcome ∈ {balanced, rejected_unbalanced}`. Labels MUST exclude operation_id / account_id / user_id / the residual amount (no PII, no high-cardinality, no unbounded numeric labels). The `rejected_unbalanced` count is the value-leak-pressure signal a fork-receiver alerts on — a non-zero rate means application code is generating asymmetric postings and the backstop is catching them; a sustained non-zero rate is a correctness regression, not normal contention. SLO/alert wiring is a fork-receiver concern. This item is OPTIONAL (SHOULD, not MUST): a fork-receiver MAY adopt only items 1–2."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"
