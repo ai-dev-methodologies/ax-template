@@ -71,6 +71,9 @@ items:
   # ── DECLARATION family ─────────────────────────────────────────────────
   - id: "CUSTOMS-DECLARATION-001"
     chapter: "수출입 신고 (관세청 UNI-PASS)"
+    verification:
+      mechanism: rule
+      ref: customs-e-trade-hs-edi-aeo
     requirement: "수출입 화물 (외환거래 + 물품 + 운송수단) MUST 관세청 UNI-PASS 시스템 통해 전자 신고 — paper 신고는 special cases (시스템 장애 / 보안 비밀 화물)만. 신고서 type enum: {수입_정식 / 수입_간이 / 수출_정식 / 수출_간이 / 통관_보세창고_반입 / 환적_T1 / 환적_T2}. 신고서는 XAdES-B-LTA 서명 (document-signing-l0 R97 reference) + RFC 3161 TSA timestamp + 관세청 발급 식별번호. 신고 처리 결과는 24h SLA (간이) / 72h SLA (정식) — UNI-PASS callback notification으로 수신. 신고 수정 (정정) 시 audit trail 보존 (CUSTOMS-AUDIT-001) + 관세청 사후 검증 권한 (관세법 §38 5년)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -92,6 +95,9 @@ items:
   # ── EDI family ──────────────────────────────────────────────────────────
   - id: "CUSTOMS-EDI-001"
     chapter: "UN/EDIFACT 메시지 (D.16B)"
+    verification:
+      mechanism: rule
+      ref: customs-e-trade-hs-edi-aeo
     requirement: "관세청 UNI-PASS와의 모든 자동 메시지 교환은 UN/EDIFACT D.16B 표준 적용 — 한국 관세청은 CUSDEC (Customs Declaration) + CUSRES (Customs Response) + CUSREP (Customs Conveyance Report) + COREOR (Container Release Order) 4종 메시지 사용. 메시지 envelope MUST 다음 segment 포함: UNB (interchange header — 발신자 EAN/EORI + 수신자 + interchange control reference) + UNH (message header — message reference number + version D.16B + 한국 NAD subset M0 / M1) + UNT (message trailer) + UNZ (interchange trailer). 메시지 ID는 12자리 영숫자 unique per sender per day. 인코딩은 UN/CEFACT BCD-7 (ASCII) — Latin-1 또는 UTF-8 사용 시 별도 syntax identifier 명시 (UNB element 1.1)."
     test_method: "RestAssured + EDI parser integration test"
     verification_type: "negative"
@@ -139,6 +145,9 @@ items:
   # ── CERT family ────────────────────────────────────────────────────────
   - id: "CUSTOMS-CERT-001"
     chapter: "관세청 인증서 + EORI 식별번호"
+    verification:
+      mechanism: rule
+      ref: customs-e-trade-hs-edi-aeo
     requirement: "UNI-PASS 연동 무역업체는 관세청 발급 EORI (Economic Operators Registration and Identification — 한국형 EAN) 식별번호 + 관세청 인증서 (X.509 + GPKI 호환 검토 중 — 현재 별도 채널) 모두 필요. EORI 12자리 영숫자 + checksum. 인증서 경로 검증은 document-signing-l0 (R97) DOC-CERT-001 + RFC 5280 §6 알고리즘 따름. 인증서 발급은 관세청 직접 또는 한국 인증센터 (KICA) 위탁. 인증서 만료 30d 전 자동 alert (CUSTOMS-OBSERVABILITY-001 metric). 무역업체 본인확인은 R54 identity-verification + ElementCollection 분리 저장 (CI/DI 패턴 동일)."
     test_method: "RestAssured + cert path validation test"
     verification_type: "negative"
@@ -157,6 +166,9 @@ items:
   # ── AEO family ────────────────────────────────────────────────────────
   - id: "CUSTOMS-AEO-001"
     chapter: "AEO 공인 경제운영자 (Authorized Economic Operator)"
+    verification:
+      mechanism: rule
+      ref: customs-e-trade-hs-edi-aeo
     requirement: "AEO (Authorized Economic Operator — 관세법 §214) 자격은 무역업체 신뢰성 + 보안 인증 — 4 등급: A (성실신고 — 일반 신고 면제) / AA (성실+보안 — Tier 1 fast-track) / AAA (성실+보안+준법 — Tier 2 최우대 + 사후 audit 면제) / 없음 (default). AEO 자격은 관세청 심사 통과 후 3년 갱신 (관세법 §214 시행규칙). 자격 변동 시 (등급 상승 / 정지 / 만료) UNI-PASS notification + 시스템 routing 자동 변경. AAA 등급은 사후 audit 면제이나 무작위 검증 유지. 자격 부정 사용 시 관세법 §219 (자격 취소 + 가산세). Recipe declares `customs_aeo_status` ∈ {none, A, AA, AAA} + `customs_aeo_expiry_date` (RFC 3339)."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -175,6 +187,9 @@ items:
   # ── AUDIT family ────────────────────────────────────────────────────
   - id: "CUSTOMS-AUDIT-001"
     chapter: "신고 audit + 5년 보관 (관세법 §38)"
+    verification:
+      mechanism: rule
+      ref: customs-e-trade-hs-edi-aeo
     requirement: "모든 수출입 신고 + EDI 메시지 + 처리 결과 audit trail은 관세법 §38③에 따라 보존기간 5년 (영업폐쇄 / 합병 시도 사후도 유지). 보존 형식은 document-signing-l0 (R97) DOC-RETENTION-001 PAdES-B-LTA OR XAdES-A archive timestamp (5년 마다 refresh 의무 — TSA archive token 재발급). 무결성 보장: hash chain (R99 EGA-AUDIT-001 패턴 답습) — Merkle log + 직전 segment hash 포함. 결재 흐름 변경 불가 (append-only) — 정정 신고도 새 이벤트로 추가. PII 처리는 R54/R67 AuditPiiHelper recipient_hash (무역업체 CI/DI 절대 raw 저장 안 함). 관세청 사후 검증 시 audit log 검색 가능 — 신고 ID / 무역업체 ID / 기간 query 지원."
     test_method: "RestAssured + integrity probe test"
     verification_type: "positive"
