@@ -60,6 +60,9 @@ items:
       for that associated kind of content."
   - id: "CONNEG-TYPE-001"
     chapter: "Content-Type validation on request bodies + 415"
+    verification:
+      mechanism: rule
+      ref: http-content-negotiation-rfc9110
     requirement: "For any request carrying a body (POST / PUT / PATCH), the server MUST inspect the `Content-Type` request header and reject with `415 Unsupported Media Type` when the indicated media type is not one the endpoint can consume (no matching HttpMessageConverter / @RequestMapping consumes). A missing `Content-Type` on a body-bearing request MUST be treated as `application/octet-stream` (unprocessable for typed endpoints) → 415, never silently parsed as JSON. The server MUST NOT attempt to sniff or guess the body media type from its contents. A successful consume path MUST match an explicitly declared supported type."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -75,6 +78,9 @@ items:
       method on the target resource."
   - id: "CONNEG-LANGUAGE-001"
     chapter: "Accept-Language + content-language selection (composes i18n-policy-l0)"
+    verification:
+      mechanism: rule
+      ref: http-content-negotiation-rfc9110
     requirement: "When a resource has localizable representations, the server MUST select a language from the request `Accept-Language` header using BCP 47 language-range matching with quality values, and MUST advertise the chosen language in the `Content-Language` response header. The match MUST fall back gracefully (e.g. `ko-KR` requested, `ko` available → serve `ko`) and MUST resolve to a configured default language when no requested range is satisfiable rather than returning 406 for language alone. The selected language MUST NOT alter machine-stable identifiers (problem `type` URIs, enum codes). This item composes i18n-policy-l0 for the underlying MessageSource / locale resolution."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -90,6 +96,9 @@ items:
       that are preferred in the response."
   - id: "CONNEG-ENCODING-001"
     chapter: "Accept-Encoding (gzip / br) + Content-Encoding response"
+    verification:
+      mechanism: rule
+      ref: http-content-negotiation-rfc9110
     requirement: "When the request carries `Accept-Encoding`, the server MAY apply a content coding (e.g. `gzip` or `br`) the client signalled as acceptable, and when it does it MUST set the `Content-Encoding` response header to the applied coding and MUST add `Vary: Accept-Encoding` so caches key correctly. The server MUST NOT apply a coding the client did not list (or listed with `q=0`); a coding listed with `q=0` is forbidden. The `identity` (uncompressed) coding MUST remain available, and the server MUST serve uncompressed when no acceptable coding is offered rather than failing the request. Coding MUST be transparent — the decoded body MUST be byte-identical to the uncompressed representation."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -104,6 +113,9 @@ items:
       codings (Section 8.4.1)."
   - id: "CONNEG-406-001"
     chapter: "406 Not Acceptable when no representation matches Accept"
+    verification:
+      mechanism: rule
+      ref: http-content-negotiation-rfc9110
     requirement: "When the request `Accept` header is present and NONE of the representations the resource can produce is acceptable (every producible type was excluded or assigned `q=0`), the server MUST respond `406 Not Acceptable`. The 406 body SHOULD itself be served in a safe, broadly-acceptable type (the problem-details-l0 `application/problem+json` envelope) and SHOULD enumerate the available media types to aid the client. The server MUST NOT silently downgrade to an unacceptable type and return 200. 406 applies to representation media type/language/encoding mismatch, distinct from 415 (request-body type) — the two MUST NOT be conflated."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -121,6 +133,9 @@ items:
       representation."
   - id: "CONNEG-DEFAULT-001"
     chapter: "Default representation when Accept absent or */*"
+    verification:
+      mechanism: rule
+      ref: http-content-negotiation-rfc9110
     requirement: "When the request omits `Accept` entirely, or sends `Accept: */*` (or an `application/*`-style wildcard satisfied by the default), the server MUST serve a single configured default representation (`conneg_default_media_type`, recommended `application/json`) with a deterministic, stable `Content-Type`. Absence of Accept MUST NOT trigger 406. The default MUST be explicit and documented per resource — it MUST NOT depend on handler-method declaration order or HttpMessageConverter registration order. The same default request MUST always yield the same media type across releases."
     test_method: "RestAssured integration test"
     verification_type: "positive"

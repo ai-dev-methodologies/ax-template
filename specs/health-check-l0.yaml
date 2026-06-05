@@ -54,6 +54,9 @@ items:
 
   - id: "HEALTH-READINESS-001"
     chapter: "Readiness probe (critical dependencies)"
+    verification:
+      mechanism: rule
+      ref: health-probes-liveness-readiness-startup
     requirement: "Service MUST expose a readiness endpoint (default `/actuator/health/readiness`) that returns 200 only when ALL critical dependencies declared in `health_critical_dependencies` are reachable. Any critical dependency DOWN → 503 (orchestrator removes the pod from service endpoints; traffic routes elsewhere). Readiness MUST be cheap and bounded (per-check timeout default 2s); it MUST NOT cascade an arbitrary-depth dependency walk. Recovery → next probe returns 200 with no restart."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -67,6 +70,9 @@ items:
 
   - id: "HEALTH-STARTUP-001"
     chapter: "Startup probe (slow-start grace)"
+    verification:
+      mechanism: rule
+      ref: health-probes-liveness-readiness-startup
     requirement: "Service MAY expose a startup endpoint (default `/actuator/health/readiness` reused, or a dedicated `/actuator/health/startup`) so the orchestrator defers liveness/readiness evaluation until first success. Recipe declares `health_startup_grace_seconds` (default 60, range 10-300) which the deployment maps to `failureThreshold × periodSeconds`. During startup grace, the liveness probe MUST be suppressed so a slow boot (migration replay, cache warm) is NOT killed prematurely. After first startup success the probe MUST disable itself (liveness/readiness resume)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -82,6 +88,9 @@ items:
 
   - id: "HEALTH-DEPENDENCY-001"
     chapter: "Downstream dependency health + degraded status"
+    verification:
+      mechanism: rule
+      ref: health-probes-liveness-readiness-startup
     requirement: "Aggregate health (default `/actuator/health`) MUST report each declared dependency as a named check with status ∈ {pass, warn, fail}. A NON-critical dependency that is degraded → overall `warn` and the endpoint still returns 200 (service stays in rotation). A critical dependency failing → overall `fail` and 503. Recipe declares per-dependency criticality + per-check timeout. Dependency checks MUST be bounded and MUST NOT block on a slow downstream beyond the declared timeout (treat timeout as `fail`)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -94,6 +103,9 @@ items:
 
   - id: "HEALTH-FORMAT-001"
     chapter: "application/health+json response format"
+    verification:
+      mechanism: rule
+      ref: health-probes-liveness-readiness-startup
     requirement: "The aggregate health endpoint MUST emit `Content-Type: application/health+json` with a top-level `status` ∈ {pass, fail, warn} and a `checks` object keyed by `componentName:measurementName`. Each check carries `status` + `time` (RFC 3339) + optional `output`. Response MUST set `Cache-Control: no-store`. The endpoint MUST NOT leak secrets, connection strings, or stack traces in `output` (generic descriptive text only). 200 for pass/warn, 503 for fail."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -108,6 +120,9 @@ items:
 
   - id: "HEALTH-GRACEFUL-001"
     chapter: "Graceful shutdown (readiness fails before drain)"
+    verification:
+      mechanism: rule
+      ref: health-probes-liveness-readiness-startup
     requirement: "On SIGTERM the service MUST first flip readiness to 503 (so the orchestrator stops routing new traffic via endpoint removal), THEN wait `health_predrain_seconds` (default 5, range 0-30) for in-flight propagation, THEN drain in-flight requests within `health_graceful_timeout_seconds` (default 30) before the process exits. Liveness MUST stay 200 during drain so the pod is NOT restart-killed mid-drain. New requests arriving during drain are accepted only if already routed (no hard reject of in-flight work)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
