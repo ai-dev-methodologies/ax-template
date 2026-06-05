@@ -51,6 +51,9 @@ items:
 
   - id: "TRACE-SPAN-001"
     chapter: "Span lifecycle + parent-child + status"
+    verification:
+      mechanism: rule
+      ref: distributed-tracing-w3c-context-propagation
     requirement: "Server-side request handling MUST open exactly one SERVER span per inbound request and close it in a finally-equivalent path (no leaked open spans). Child spans (CLIENT for outbound HTTP, INTERNAL for sub-operations) MUST reference the active span as parent. Span status MUST be set from the canonical set {Unset, Ok, Error}: 2xx/3xx → leave Unset or set Ok per policy, 5xx or thrown exception → Error with exception recorded. Status MUST NOT use any non-canonical value. A span MUST be ended exactly once."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -65,6 +68,9 @@ items:
 
   - id: "TRACE-BAGGAGE-001"
     chapter: "W3C Baggage propagation (tenant / locale)"
+    verification:
+      mechanism: rule
+      ref: distributed-tracing-w3c-context-propagation
     requirement: "Cross-cutting request context (e.g., `tenant.id`, `locale`, `request.origin`) MAY be carried via the W3C `baggage` header as percent-encoded name-value pairs and MUST propagate unchanged across every downstream hop. Baggage keys are recipe-declared via an allowlist (`tracing_baggage_allowed_keys`); unlisted inbound baggage keys MUST be dropped, not forwarded. Baggage MUST NEVER carry secrets, tokens, PII, or unbounded values (per-key value cap 256 bytes, total baggage cap 8192 bytes). Oversized baggage → truncate + increment a drop counter, never 4xx."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -78,6 +84,9 @@ items:
 
   - id: "TRACE-SAMPLING-001"
     chapter: "Sampling strategy (head-based ratio + parent-based)"
+    verification:
+      mechanism: rule
+      ref: distributed-tracing-w3c-context-propagation
     requirement: "Recipe MUST declare a sampling strategy via `tracing_sampler` ∈ {parent_based_ratio, always_on, always_off} (default `parent_based_ratio`) and `tracing_sample_ratio` ∈ [0.0, 1.0] (default 0.1). The default sampler MUST be a ParentBased decorator wrapping a head-based ratio sampler so that a sampled inbound parent forces the child to be sampled (consistent traces across services). The sampling decision MUST be made at span start (head sampling), MUST be deterministic for a given trace-id, and MUST be encoded into the outbound traceparent `sampled` flag. always_on is forbidden in the `prod` profile unless explicitly opted in."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -91,6 +100,9 @@ items:
 
   - id: "TRACE-SEMCONV-001"
     chapter: "OpenTelemetry semantic conventions"
+    verification:
+      mechanism: rule
+      ref: distributed-tracing-w3c-context-propagation
     requirement: "Span names and attribute keys MUST follow OpenTelemetry Semantic Conventions: HTTP server spans named by low-cardinality route template (e.g., `GET /api/orders/{id}`, NEVER the resolved path with the concrete id), attribute keys lowercase + dot-namespaced (`http.request.method`, `http.response.status_code`, `url.path`, `server.address`). Custom attributes MUST be namespaced under a recipe-declared prefix (`tracing_attribute_namespace`, default `app`). Span names and attribute keys MUST NOT embed raw ids, query strings, tokens, or PII (cardinality + leak control). Unknown/legacy attribute keys are tolerated but flagged."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -105,6 +117,9 @@ items:
 
   - id: "TRACE-CORRELATION-001"
     chapter: "trace_id in structured logs (MDC)"
+    verification:
+      mechanism: rule
+      ref: distributed-tracing-w3c-context-propagation
     requirement: "Every log line emitted during a request MUST carry the active `trace_id` and `span_id` in the SLF4J/Logback MDC so logs join traces. The MDC keys MUST be exactly `traceId` and `spanId` (Micrometer Tracing defaults) and MUST be cleared at request completion to prevent thread-pool MDC bleed across requests. Structured (JSON) log layout MUST include these fields as top-level keys. RFC 9457 problem responses MUST surface the same trace via an `instance` or `trace_id` member so a client error can be cross-referenced to server logs. trace_id MUST NEVER be presented as a security identifier."
     test_method: "RestAssured integration test"
     verification_type: "negative"
