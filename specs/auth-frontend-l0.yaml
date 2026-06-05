@@ -26,6 +26,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-002
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Login page renders email and password fields and submits credentials to the backend login endpoint"
     backend_operation_id: emailLogin
     backend_spec_ref: ASVS-V2.2.1
@@ -37,6 +40,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-003
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Email verification page shows token-entry UI and calls the verify-email endpoint on submit"
     backend_operation_id: emailVerify
     backend_spec_ref: ASVS-V2.7.2
@@ -48,6 +54,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-004
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Resend verification page shows a resend-email link and calls the resend-verification endpoint"
     backend_operation_id: emailResendVerification
     backend_spec_ref: ASVS-V2.7.3
@@ -59,6 +68,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-005
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Forgot-password page renders an email field and calls the password-reset-request endpoint on submit"
     backend_operation_id: emailPasswordResetRequest
     backend_spec_ref: ASVS-V2.5.3
@@ -70,6 +82,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-006
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Reset-password page renders new-password and confirm-password fields and calls the password-reset endpoint with the token from query params"
     backend_operation_id: emailPasswordReset
     backend_spec_ref: ASVS-V2.5.3
@@ -81,6 +96,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-007
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Change-password page requires current password and new password inputs and calls the password-change endpoint"
     backend_operation_id: emailPasswordChange
     backend_spec_ref: ASVS-V2.1.6
@@ -92,6 +110,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-008
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "OAuth callback page processes the provider callback and handles both success and error responses from the backend"
     backend_operation_id: oauthCallback
     backend_spec_ref: ASVS-V2.8.1
@@ -103,6 +124,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-009
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Account-settings page shows linked OAuth providers and calls the oauth-link endpoint when user links a new provider"
     backend_operation_id: oauthLink
     backend_spec_ref: ASVS-V2.8.2
@@ -114,6 +138,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-010
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Account-settings page calls the oauth-unlink endpoint when user removes a linked provider and validates the last-auth-method guard"
     backend_operation_id: oauthUnlink
     backend_spec_ref: ASVS-V2.8.3
@@ -125,6 +152,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-011
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Auth-aware layout calls getAuthState on mount and redirects unauthenticated users to the login page"
     backend_operation_id: getAuthState
     backend_spec_ref: ASVS-V3.3.1
@@ -137,6 +167,9 @@ items:
 
   # Non-user-facing operations (omitted from UI coverage per full_trio semantics)
   - id: AUTH-FE-012
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Token refresh is handled transparently by the HTTP client interceptor without a dedicated page"
     backend_operation_id: tokenRefresh
     backend_spec_ref: ASVS-V3.2.1
@@ -148,6 +181,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-013
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Logout action clears local auth state and calls the logout endpoint then redirects to the login page"
     backend_operation_id: logout
     backend_spec_ref: ASVS-V3.3.1
@@ -159,6 +195,9 @@ items:
     backend_only_marker: false
 
   - id: AUTH-FE-014
+    verification:
+      mechanism: rule
+      ref: auth-frontend-pages-bind-auth-contract
     requirement: "Login page renders OAuth provider buttons that redirect to the oauthAuthorize endpoint for each enabled provider"
     backend_operation_id: oauthAuthorize
     backend_spec_ref: ASVS-V2.8.1
