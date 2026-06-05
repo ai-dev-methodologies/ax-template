@@ -74,6 +74,9 @@ items:
 
   - id: "SAGA-COMPENSATE-001"
     chapter: "Reverse-order compensating actions"
+    verification:
+      mechanism: rule
+      ref: saga-compensating-transactions
     requirement: "Every step Ti that can be undone MUST declare a compensating action Ci. When any step Tj fails after T1..T(j-1) have committed, the saga MUST execute compensations C(j-1), C(j-2), ..., C1 in STRICT REVERSE order of completion — never forward, never partial-skip. A compensation MUST semantically undo or counteract its committed step (it cannot rollback the already-committed local tx, it issues a new compensating local tx). Steps with no meaningful inverse (pivot/retriable steps) MUST be declared `compensatable: false` and placed so that no committed compensatable step follows them. On compensation completion the saga terminates in a COMPENSATED terminal state; the status resource returns 200 with `status=COMPENSATED`."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -93,6 +96,9 @@ items:
 
   - id: "SAGA-ORCHESTRATION-001"
     chapter: "Single declared coordination style"
+    verification:
+      mechanism: rule
+      ref: saga-compensating-transactions
     requirement: "A recipe MUST declare exactly one coordination style via `saga_coordination_style` ∈ {orchestration, choreography} and MUST NOT mix them implicitly within one saga definition. ORCHESTRATION: a central coordinator owns the saga state machine and explicitly invokes each step / compensation and decides the next transition. CHOREOGRAPHY: each step service reacts to the prior step's domain event and emits its own; no central coordinator. A request to start a saga whose recipe mixes both styles for the same saga, or omits the declaration, MUST be rejected at startup (fail-fast configuration error) rather than executing in an undefined hybrid mode. The chosen style MUST be discoverable on the saga status resource as a `coordination` field."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -111,6 +117,9 @@ items:
 
   - id: "SAGA-IDEMPOTENT-001"
     chapter: "Idempotent + retry-safe steps (composes idempotency-l0)"
+    verification:
+      mechanism: rule
+      ref: saga-compensating-transactions
     requirement: "Every step Ti AND every compensation Ci MUST be idempotent and retry-safe: re-delivering the same step command or compensation command (at-least-once delivery is assumed) MUST NOT produce a duplicate side effect. Each step/compensation command MUST carry a stable `Idempotency-Key` derived from `(saga_id, step_index, attempt-invariant)` per idempotency-l0, and the handler MUST dedup on it. A retried step that already committed MUST replay its recorded outcome rather than re-execute. Compensations MUST be safe to invoke even if the corresponding step never effectively committed (compensate-of-no-op = no-op, not error). Test: deliver each step command twice → single side effect; deliver a compensation twice → single undo."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -129,6 +138,9 @@ items:
 
   - id: "SAGA-STATE-001"
     chapter: "Recoverable persisted state machine + transactional outbox emission"
+    verification:
+      mechanism: rule
+      ref: saga-compensating-transactions
     requirement: "Saga state MUST be persisted as a durable, recoverable state machine: the current step index, each step's outcome, and the overall saga status ∈ {STARTED, STEP_COMPLETED, COMPENSATING, COMPLETED, COMPENSATED, FAILED} MUST be written transactionally with each step's local transaction. On orchestrator (or coordinator process) crash and restart, the saga MUST RESUME from the persisted cursor — it MUST NOT restart from step 1 nor abandon in-flight sagas. Step commands and domain events MUST be emitted via a transactional outbox (the outbox pattern) in the SAME local transaction that advances the saga state, so a command is never lost on crash and never emitted twice. State transitions MUST go through a single sole-mutator state-machine component (no ad-hoc status writes)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -148,6 +160,9 @@ items:
 
   - id: "SAGA-TIMEOUT-001"
     chapter: "Per-step timeout triggers compensation"
+    verification:
+      mechanism: rule
+      ref: saga-compensating-transactions
     requirement: "Each step MUST have a finite per-step timeout (`saga_step_timeout_ms`, recipe-declared, default 5000) — a saga MUST NOT remain in-flight indefinitely. If a step neither completes nor fails within its timeout, the saga MUST transition to COMPENSATING and run the compensations of all previously-completed steps in reverse order (per SAGA-COMPENSATE-001), exactly as for an explicit step failure. The timed-out step itself MUST be treated as not-completed (its own compensation runs only if the step's local tx is later confirmed to have committed — reconciled via the step's idempotency record). Querying a timed-out saga's status resource MUST return 200 with `status` ∈ {COMPENSATING, COMPENSATED} and a machine-readable `failure_reason=STEP_TIMEOUT`; it MUST NEVER hang."
     test_method: "RestAssured integration test"
     verification_type: "negative"

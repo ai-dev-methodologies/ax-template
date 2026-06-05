@@ -55,6 +55,9 @@ items:
 
   - id: "RESILIENCE-RETRY-001"
     chapter: "재시도 — 지수 백오프 + full jitter"
+    verification:
+      mechanism: rule
+      ref: resilience-circuit-breaker-retry-bulkhead
     requirement: "Retries on transient failures MUST use exponential backoff with full jitter and a hard maximum-attempts cap. Recipe declares `retry_max_attempts` (default 3, ceiling 10 — counting the initial call), `retry_base_delay_ms` (default 200), `retry_max_delay_ms` (default 20000), and `retry_jitter` = full. Computed sleep MUST be `random_between(0, min(max_delay, base * 2^attempt))` — full jitter, never a fixed multiplier. Retries MUST be restricted to idempotent operations or operations carrying an Idempotency-Key; non-idempotent POST without such a key MUST NOT be retried. On exhaustion of attempts the call MUST surface the fallback contract, not loop indefinitely."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -71,6 +74,9 @@ items:
 
   - id: "RESILIENCE-TIMEOUT-001"
     chapter: "외부 호출 타임아웃 (connect + read)"
+    verification:
+      mechanism: rule
+      ref: resilience-circuit-breaker-retry-bulkhead
     requirement: "Every external call MUST set an explicit, finite timeout for BOTH connect and read phases — unbounded waits are forbidden. Recipe declares `timeout_connect_ms` (default 2000) + `timeout_read_ms` (default 5000); a non-blocking/reactive call additionally bounds total duration via `timeout_total_ms`. A call exceeding its timeout MUST be cancelled and converted into a circuit-breaker-counted failure (feeding RESILIENCE-CIRCUITBREAKER-001) and MUST surface 504 GATEWAY_TIMEOUT to the upstream caller — never a hung request or default-infinite client timeout."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -85,6 +91,9 @@ items:
 
   - id: "RESILIENCE-BULKHEAD-001"
     chapter: "Bulkhead 격리 (semaphore/threadpool)"
+    verification:
+      mechanism: rule
+      ref: resilience-circuit-breaker-retry-bulkhead
     requirement: "Concurrent calls to each external dependency MUST be capped by a bulkhead so that saturation of one dependency cannot exhaust the shared thread pool and cascade. Recipe declares `bulkhead_type` ∈ {semaphore, threadpool} + `bulkhead_max_concurrent_calls` (default 25) + `bulkhead_max_wait_duration_ms` (default 0 — fail fast). When the bulkhead is full a new call MUST be rejected immediately with the fallback contract and counted as a bulkhead-rejection (not as a dependency failure for breaker purposes), surfacing 503 SERVICE_UNAVAILABLE with a Retry-After header to the upstream caller."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -99,6 +108,9 @@ items:
 
   - id: "RESILIENCE-FALLBACK-001"
     chapter: "Fallback 계약 (cached/default/degraded)"
+    verification:
+      mechanism: rule
+      ref: resilience-circuit-breaker-retry-bulkhead
     requirement: "Each protected call MUST declare an explicit fallback that executes when the breaker is OPEN, the bulkhead rejects, the timeout fires, or retries are exhausted. Recipe declares `fallback_strategy` ∈ {cached, default, degraded, fail} per call site. `cached` returns the last-known-good value with a `X-Resilience-Fallback: cached` header; `default` returns a documented static stub; `degraded` returns a partial/reduced response with `X-Resilience-Fallback: degraded`; `fail` returns 503 with RFC 9457 Problem Details. Fallbacks MUST NOT silently fabricate authoritative data (e.g., a payment confirmation) — degraded responses MUST be machine-distinguishable from live ones."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -114,6 +126,9 @@ items:
 
   - id: "RESILIENCE-RATELIMITER-001"
     chapter: "Client-side rate limiter (Retry-After / 429 준수)"
+    verification:
+      mechanism: rule
+      ref: resilience-circuit-breaker-retry-bulkhead
     requirement: "Outbound callers MUST throttle themselves with a client-side rate limiter AND honor server backpressure. Recipe declares `ratelimiter_limit_for_period` + `ratelimiter_limit_refresh_period_ms` (default window 1000) + `ratelimiter_timeout_ms` (default 0 — fail fast). When a downstream returns 429 Too Many Requests (RFC 6585 §4), the client MUST parse the `Retry-After` header (RFC 7231 §7.1.3 — delta-seconds OR HTTP-date), suspend further calls to that dependency until the indicated instant, and MUST NOT retry before it. Absence of Retry-After → fall back to the exponential-backoff schedule of RESILIENCE-RETRY-001. Local limiter exhaustion → reject with 429 to the upstream caller carrying a computed Retry-After."
     test_method: "RestAssured integration test"
     verification_type: "negative"
