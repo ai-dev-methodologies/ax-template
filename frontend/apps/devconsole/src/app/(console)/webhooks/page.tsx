@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Trash2, Webhook } from 'lucide-react';
+import { RotateCcw, Trash2, Webhook } from 'lucide-react';
 import {
   Alert,
   Button,
@@ -26,6 +26,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/screen-states
 import {
   useDeleteWebhook,
   useRegisterWebhook,
+  useReplayWebhookDelivery,
   useWebhookDeliveries,
   useWebhookEndpoints,
 } from '@/features/webhooks/hooks';
@@ -37,7 +38,7 @@ import type {
 import type { HttpExchange } from '@/lib/api/rawFetch';
 
 type EndpointColumn = 'url' | 'event' | 'active' | 'created' | 'actions';
-type DeliveryColumn = 'event' | 'status' | 'attempts' | 'code' | 'lastError';
+type DeliveryColumn = 'event' | 'status' | 'attempts' | 'code' | 'lastError' | 'actions';
 
 const ENDPOINT_COLUMNS: ReadonlyArray<DataGridColumn<EndpointColumn>> = [
   { key: 'url', header: 'URL' },
@@ -53,6 +54,7 @@ const DELIVERY_COLUMNS: ReadonlyArray<DataGridColumn<DeliveryColumn>> = [
   { key: 'attempts', header: '시도', numeric: true },
   { key: 'code', header: '응답코드', numeric: true },
   { key: 'lastError', header: '마지막 오류' },
+  { key: 'actions', header: '' },
 ];
 
 const DELIVERY_STATUS_MAP: Record<WebhookDeliveryStatus, DataGridStatus> = {
@@ -85,6 +87,7 @@ export default function WebhooksPage() {
   const deliveries = useWebhookDeliveries('FAILED_PERMANENT');
   const register = useRegisterWebhook();
   const remove = useDeleteWebhook();
+  const replay = useReplayWebhookDelivery();
 
   const [url, setUrl] = useState('');
   const [eventFilter, setEventFilter] = useState('');
@@ -121,6 +124,15 @@ export default function WebhooksPage() {
     }
   };
 
+  const handleReplay = async (id: string): Promise<void> => {
+    try {
+      const result = await replay.mutateAsync(id);
+      setLastExchange(result);
+    } catch (err) {
+      setLastExchange((err as { exchange?: HttpExchange<unknown> }).exchange ?? null);
+    }
+  };
+
   const endpointItems = endpoints.data?.data ?? [];
   const endpointRows = endpointItems.map((ep) => ({
     url: <span className="font-mono text-xs">{ep.url}</span>,
@@ -151,6 +163,19 @@ export default function WebhooksPage() {
     code: d.lastResponseCode ?? '—',
     lastError: (
       <span className="font-mono text-[0.7rem] text-muted-foreground">{d.lastError ?? '—'}</span>
+    ),
+    actions: (
+      <span className="flex justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleReplay(d.id)}
+          loading={replay.isPending}
+        >
+          <RotateCcw aria-hidden />
+          <span className="sr-only sm:not-sr-only">재시도</span>
+        </Button>
+      </span>
     ),
   }));
 

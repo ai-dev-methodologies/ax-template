@@ -51,3 +51,14 @@ export function useDeleteWebhook() {
     },
   });
 }
+
+/** Re-enqueue a failed delivery for another attempt; refreshes every delivery list on success. */
+export function useReplayWebhookDelivery() {
+  const qc = useQueryClient();
+  return useMutation<HttpExchange<WebhookDelivery>, Error, string>({
+    mutationFn: (id) => webhookClient.replay(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...webhookKeys.all, 'deliveries'] });
+    },
+  });
+}

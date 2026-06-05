@@ -70,4 +70,8 @@ export const webhookClient = {
     status: WebhookDeliveryStatus,
   ): Promise<HttpExchange<WebhookDelivery[]>> =>
     rawFetch<WebhookDelivery[]>(`/admin/webhook-deliveries?status=${status}&page=0&size=20`),
+
+  /** Re-enqueue a delivery for another send attempt (POST .../{id}/replay). */
+  replay: (id: string): Promise<HttpExchange<WebhookDelivery>> =>
+    rawFetch<WebhookDelivery>(`/admin/webhook-deliveries/${id}/replay`, { method: 'POST' }),
 };
