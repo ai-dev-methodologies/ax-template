@@ -66,6 +66,9 @@ items:
 
   - id: "OBSCONV-ERROR-BUDGET-001"
     chapter: "Error budget + multi-window multi-burn-rate alerting"
+    verification:
+      mechanism: rule
+      ref: observability-slo-error-budget-convention
     requirement: "The error budget MUST be derived from the declared SLO as (1 − SLO_target) over the configured window (e.g. SLO 99.9% over 30d → 0.1% budget). Alerting on budget consumption MUST use multi-window, multi-burn-rate signals: at least one FAST-burn condition (short window, e.g. 1h, high burn-rate threshold catching budget exhaustion within hours) AND one SLOW-burn condition (long window, e.g. 6h, lower threshold catching gradual erosion), each gated by a matching shorter window to suppress flapping. A single fixed-threshold alert (e.g. \"error rate > 1%\") MUST NOT be used as the sole budget alert. The burn-rate computation MUST consume the same SLI series declared in OBSCONV-SLO-001 (no parallel definition)."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -83,6 +86,9 @@ items:
 
   - id: "OBSCONV-ALERT-ROUTING-001"
     chapter: "Alert severity → routing convention"
+    verification:
+      mechanism: rule
+      ref: observability-slo-error-budget-convention
     requirement: "Every alert rule MUST carry an explicit `severity` label drawn from a fixed enum and MUST route by that severity: PAGE (wake a human) ONLY for fast budget-burning, user-impacting conditions (e.g. fast-burn from OBSCONV-ERROR-BUDGET-001); TICKET (async, next-business-day) for degraded / slow-burn conditions that are not yet user-impacting; LOG (record-only, no notification) for informational signals. An alert that pages MUST be actionable and tied to user-facing symptom or imminent budget exhaustion — cause-based noise (e.g. raw CPU high) MUST NOT page. The routing map (severity → channel) is recipe-declared (`alert_routing_page_channel` etc.) and version-controlled; an alert rule with no severity label MUST fail the convention check."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -117,6 +123,9 @@ items:
 
   - id: "OBSCONV-RED-USE-001"
     chapter: "RED for request services + USE for resources"
+    verification:
+      mechanism: rule
+      ref: observability-slo-error-budget-convention
     requirement: "Request-driven services MUST expose the RED triad — Rate (requests/sec), Errors (failed-request rate or ratio), and Duration (request latency distribution, exposed as a histogram/timer so percentiles are queryable) — keyed by the bounded route-template + status-class labels from OBSCONV-CARDINALITY-001. Resources (thread pools, connection pools, queues, caches) MUST expose the USE triad — Utilization, Saturation, and Errors — for each constrained resource. RED + USE are the MINIMUM instrumentation floor that feeds the OBSCONV-SLO-001 SLIs; a request handler with no Duration timer or a bounded resource with no Saturation gauge MUST fail the convention check. Latency MUST be a distribution, never a precomputed average gauge."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"
@@ -137,6 +146,9 @@ items:
 
   - id: "OBSCONV-TRACE-METRIC-LINK-001"
     chapter: "Metric exemplars link to traces (metric→trace drill-down)"
+    verification:
+      mechanism: rule
+      ref: observability-slo-error-budget-convention
     requirement: "Latency/error metrics SHOULD attach exemplars so an operator can pivot from an anomalous histogram bucket to a concrete representative trace. Each exemplar MUST carry the active `trace_id` (and SHOULD carry `span_id`) sourced from the W3C Trace Context propagated per distributed-tracing-l0 (TRACE-CONTEXT-001) — the SAME trace_id, never a parallel id. Exemplars MUST be emitted only for SAMPLED traces (an unsampled trace_id is not retrievable downstream and MUST be omitted). The exemplar label set MUST remain exempt from the cardinality budget (exemplars are not aggregation dimensions) but MUST still NOT carry PII or secrets — trace_id/span_id only."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"
@@ -154,6 +166,9 @@ items:
 
   - id: "OBSCONV-DASHBOARD-AS-CODE-001"
     chapter: "Dashboards + alert rules version-controlled as code"
+    verification:
+      mechanism: rule
+      ref: observability-slo-error-budget-convention
     requirement: "Dashboards and alert rules MUST be defined as version-controlled artifacts (e.g. Grafana dashboard JSON / provisioning files, Prometheus rule YAML) under a recipe-declared path (`dashboards_as_code_path`, default `ops/dashboards`), NOT created or edited solely through a UI (click-ops). Each dashboard/alert change MUST be reviewable as a diff and reproducible from the repository onto a fresh environment. Alert rules committed as code MUST reference the SLO/error-budget definitions from OBSCONV-SLO-001 / OBSCONV-ERROR-BUDGET-001 so the alerting source of truth is a single declared artifact. An alert or dashboard that exists only in a live instance with no committed source MUST fail the convention check."
     test_method: "RestAssured integration test"
     verification_type: "negative"

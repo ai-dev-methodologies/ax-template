@@ -57,6 +57,9 @@ items:
       consent."
   - id: "CONSENT-WITHDRAW-001"
     chapter: "동의 철회 (withdrawal)"
+    verification:
+      mechanism: rule
+      ref: consent-explicit-optin-withdrawable-recorded
     requirement: "Withdrawal MUST be as easy as granting — DELETE /api/consent/{purpose} (or POST with `granted: false`) MUST require no more steps than the original grant (no confirmation chains, no support ticket). Withdrawal takes effect immediately: subsequent purpose-gated operations (e.g., marketing send) MUST observe the revoked state on the very next request. Server returns 200 with the new consent state; withdrawing an already-absent consent is idempotent (200, no error). Prior processing based on consent before withdrawal remains lawful and is NOT retroactively invalidated."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -71,6 +74,9 @@ items:
       as to give consent."
   - id: "CONSENT-RECORD-001"
     chapter: "동의 기록 증빙 (audit proof)"
+    verification:
+      mechanism: rule
+      ref: consent-explicit-optin-withdrawable-recorded
     requirement: "Every consent state change MUST write an append-only record proving who/what/when/version: `{subject_id, purpose, granted, policy_version, captured_at (UTC), source_ip_masked, user_agent_summary, capture_method}`. Records MUST be immutable (JPA columns `updatable=false`; no public setters; withdrawal appends a new row, never updates). On demonstrate-consent challenge, GET /api/consent/{purpose}/history MUST return the full ordered trail. Absence of a record MUST be treated as no-consent."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -94,6 +100,9 @@ items:
       data."
   - id: "CONSENT-PURPOSE-001"
     chapter: "목적 제한 (purpose limitation)"
+    verification:
+      mechanism: rule
+      ref: consent-explicit-optin-withdrawable-recorded
     requirement: "Consent MUST be granular per declared purpose — recipe declares `consent_purposes` (e.g., {marketing_email, analytics, personalization, third_party_share}). A single bundled `granted: true` covering multiple purposes is REJECTED → 400 CONSENT_PURPOSE_BUNDLED. Each purpose carries its own grant/withdraw lifecycle and its own record. Purpose-gated operations MUST check the specific purpose grant, never a global consent flag. Unknown purpose → 400 CONSENT_PURPOSE_UNKNOWN."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -107,6 +116,9 @@ items:
       should be given for all of them."
   - id: "CONSENT-COOKIE-001"
     chapter: "쿠키 카테고리 (cookie categories)"
+    verification:
+      mechanism: rule
+      ref: consent-explicit-optin-withdrawable-recorded
     requirement: "Cookies MUST be classified into exactly four categories: {necessary, functional, analytics, marketing}. `necessary` cookies are exempt from consent (set unconditionally). `functional` / `analytics` / `marketing` cookies MUST NOT be set until the matching purpose grant exists — server MUST suppress Set-Cookie for non-necessary categories absent a grant. Capturing analytics/marketing consent before any non-necessary cookie is set is mandatory; setting a non-necessary cookie without a prior grant → contract violation (test asserts no Set-Cookie header)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -130,6 +142,9 @@ items:
       requested by the subscriber or user."
   - id: "CONSENT-VERSIONING-001"
     chapter: "정책 버전 변경 재동의 (re-consent)"
+    verification:
+      mechanism: rule
+      ref: consent-explicit-optin-withdrawable-recorded
     requirement: "Each consent record pins the `policy_version` it was granted against. When the active privacy-policy version advances beyond a subject's recorded grant version, that grant MUST be treated as STALE — purpose-gated operations MUST behave as no-consent until re-captured. GET /api/consent/{purpose} on a stale grant returns `{granted: true, stale: true, current_policy_version}` so the client can prompt re-consent. A material policy change MUST NOT silently carry forward an old grant; re-consent is an explicit new affirmative action (reuses CONSENT-CAPTURE-001)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -159,6 +174,9 @@ items:
 
   - id: "CONSENT-CAPACITY-001"
     chapter: "미성년자 동의 능력 — 보호자 대리 동의 (capacity / guardian proxy)"
+    verification:
+      mechanism: rule
+      ref: consent-explicit-optin-withdrawable-recorded
     requirement: "When the consent subject is below a recipe-declared `consent_age_of_digital_consent` (jurisdiction-agnostic integer; default OFF — when unset the rule is inert and adult-only forks see NO behavior change), a SELF-grant for the requested purpose MUST be rejected → 400 CONSENT_SUBJECT_LACKS_CAPACITY, and the grant MUST instead be made by a VERIFIED GUARDIAN PROXY (the holder of parental responsibility) acting on the minor's behalf. A guardian-proxy grant MUST carry `guardian_subject_id` (the verified guardian's identity, distinct from the minor `subject_id`) AND a proxy legal-basis marker (`legal_basis: GUARDIAN_PROXY`) on the consent record; a proxy grant missing either field is REJECTED → 400 CONSENT_PROXY_INCOMPLETE. The guardian's identity MUST be verified (reuse identity-verification-l0 posture or an equivalent recipe-declared verification gate) — an unverified or self-asserted guardian → 400 CONSENT_GUARDIAN_UNVERIFIED. The demonstrate-consent history (GET /api/consent/{purpose}/history, CONSENT-RECORD-001) MUST surface the proxy actor: each proxy row exposes both the minor `subject_id` and the acting `guardian_subject_id` plus the `legal_basis` marker, so the trail proves WHO consented on whose behalf. Withdrawal of a proxy grant follows the same proxy path (guardian acts; CONSENT-WITHDRAW-001 symmetry preserved)."
     test_method: "RestAssured integration test (minor self-grant rejection + guardian-proxy grant record-shape + history proxy-actor surfacing)"
     verification_type: "review"
