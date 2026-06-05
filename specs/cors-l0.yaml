@@ -121,6 +121,9 @@ items:
 
   - id: "CORS-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "CORS handling MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `cors_preflight_total{outcome}` — counter, outcome ∈ {allowed, rejected}; (2) `cors_rejected_origin_total{reason}` — counter, reason ∈ {origin_not_allowed, method_not_allowed, header_not_allowed, credentials_wildcard}; (3) `cors_requests_by_origin_class_total{origin_class}` — counter, origin_class ∈ {same_site, allowlisted, disallowed} (a coarse classification, NOT the raw Origin value). Labels MUST exclude the raw `Origin` string, host, path, tenant_id, and user_id (no high-cardinality or PII). SLO/alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

@@ -188,6 +188,9 @@ items:
       (https://en.wikipedia.org/wiki/Slowly_changing_dimension)
   - id: "TEMPORAL-OBSERVABILITY-001"
     chapter: "관측 (bounded-cardinality temporal-write counter)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: >
       Temporal-validity implementations SHOULD expose a single canonical
       Micrometer counter temporal_write_total{record, outcome} where record is

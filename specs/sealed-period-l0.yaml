@@ -125,6 +125,9 @@ items:
 
   - id: "SEALED-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: >
       Sealed-period implementations MUST expose exactly 3 canonical Micrometer
       metrics with bounded-cardinality labels: (1)

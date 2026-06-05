@@ -100,6 +100,9 @@ items:
       (https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.10)
   - id: "CLAIM-OBSERVABILITY-001"
     chapter: "관측 (bounded-cardinality claim counter)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Capacity-claim implementations MUST expose a single canonical Micrometer counter `claim_total{resource, outcome}` where `resource` is a fixed entity-type enum (e.g. `seat`, `enrollment`, `ticket`) and `outcome ∈ {granted, exhausted}`. Labels MUST exclude resource_id / user_id / capacity-value / remaining-count (no PII, no high-cardinality, no unbounded numeric labels). The `exhausted` count is the oversell-pressure signal a fork-receiver alerts on; the granted:exhausted ratio is the contention indicator. SLO/alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

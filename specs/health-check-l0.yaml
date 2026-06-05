@@ -122,6 +122,9 @@ items:
 
   - id: "HEALTH-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Health-check implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `health_check_total{probe, outcome}` — probe ∈ {liveness, readiness, startup}, outcome ∈ {pass, warn, fail}; (2) `dependency_up{dependency}` gauge — 1=up / 0=down, `dependency` from the recipe-declared fixed dependency set; (3) `health_check_duration_seconds{probe}` (histogram). Labels MUST exclude PII / pod IP / instance host / request id / any high-cardinality value. SLO/alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

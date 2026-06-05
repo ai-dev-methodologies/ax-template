@@ -155,6 +155,9 @@ items:
       item specialized to money movement.
   - id: "INDOUBT-OBSERVABILITY-001"
     chapter: "관측 (in_doubt_total{outcome} metric)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "In-doubt handling MUST expose a canonical Micrometer counter `in_doubt_total{operation, outcome}` where `outcome` ∈ {entered_hold, reconciled_applied, reconciled_not_applied, retried_idempotent, aged_out_escalated} and `operation` is a fixed bounded enum of side-effect kinds (charge / label_purchase / sms_send / booking / job_submit / ...). A companion gauge `in_doubt_open_count{operation}` MUST report the current number of unresolved holding-state records so an operator can alert on a backlog. Labels MUST exclude record id / provider transaction id / idempotency key / user id / amount (no PII, no high cardinality). SLO / alert wiring (e.g. page when in_doubt_open_count stays non-zero past the age-out window) is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

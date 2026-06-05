@@ -143,6 +143,9 @@ items:
 
   - id: "BULK-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Bulk implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `bulk_items_total{endpoint, outcome}` — counter, outcome ∈ {succeeded, failed, skipped}; (2) `bulk_partial_failure_rate{endpoint}` — gauge in [0.0, 1.0] reporting the failed-item fraction of the most recent batches; (3) `bulk_batch_seconds{endpoint, mode}` — timer/histogram, mode ∈ {all_or_nothing, best_effort}. Labels MUST exclude item ids / payload values / tenant_id / user_id / job_id (no high-cardinality or PII); `endpoint` MUST be a low-cardinality route template, never a resolved path. SLO/alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

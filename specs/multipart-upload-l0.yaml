@@ -147,6 +147,9 @@ items:
 
   - id: "UPLOAD-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Resumable-upload implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `uploads_initiated_total{tenant, content_type_group}` — content_type_group is a coarse bucket (video / document / data), NOT the raw MIME string; (2) `upload_bytes_total{tenant}` — counter of durably-appended bytes; (3) `upload_abandoned_total{tenant, reason}` — reason ∈ {expired, checksum_fail, client_aborted}. Labels MUST exclude session_id / filename / user_id / offset. SLO and alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

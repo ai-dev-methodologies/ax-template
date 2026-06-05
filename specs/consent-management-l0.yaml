@@ -143,6 +143,9 @@ items:
       from a public source).
   - id: "CONSENT-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Consent implementations MUST expose exactly 3 canonical Micrometer metrics with bounded labels: (1) `consent_granted_total{purpose}` — counter incremented on each affirmative grant; (2) `consent_withdrawn_total{purpose}` — counter incremented on each withdrawal; (3) `consent_active_ratio{purpose}` (gauge) — active-grant fraction per purpose. The `purpose` label is the only dimension and MUST come from the closed recipe-declared `consent_purposes` set (bounded cardinality). Labels MUST exclude subject_id / source_ip / user_agent / policy_version (PII + high-cardinality). SLO/alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

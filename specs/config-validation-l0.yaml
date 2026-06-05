@@ -134,6 +134,9 @@ items:
 
   - id: "CONFIG-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Config-validation implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `config_validation_failure_total{phase}` — counter, phase ∈ {startup, reload}; (2) `config_missing_required_total{key_class}` — counter, key_class ∈ {secret_ref, url, allowlist, issuer, other} (a bounded classification, NEVER the raw property name); (3) `config_reload_total{outcome}` — counter, outcome ∈ {applied, rejected, noop}. Labels MUST exclude raw property paths, secret values, profile-specific URLs, and any high-cardinality or sensitive token. Alert/SLO wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

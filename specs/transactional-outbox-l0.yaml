@@ -163,6 +163,9 @@ items:
 
   - id: "OUTBOX-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Transactional-outbox implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `outbox_pending_depth{aggregate_type}` — a gauge of currently-unpublished (PENDING) rows, surfacing relay backlog; (2) `outbox_relay_lag_seconds{aggregate_type}` — a gauge/timer of the age of the oldest PENDING row (commit-to-publish lag); (3) `outbox_publish_failure_total{aggregate_type, reason}` — a counter of failed publishes, reason from a small recipe-enumerated set (broker_unavailable, serialization_error, poison). The `aggregate_type` label MUST be a bounded, recipe-enumerated value, NEVER a per-row message_id, aggregate_id, payload field, user_id, tenant_id, or any unbounded/PII value. SLO/alert wiring (e.g., alert on outbox_relay_lag_seconds high or outbox_pending_depth growing) is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

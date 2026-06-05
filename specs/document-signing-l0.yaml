@@ -218,6 +218,9 @@ items:
   # ── OBSERVABILITY family ────────────────────────────────────────────────
   - id: "DOC-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Document-signing implementations MUST expose exactly three canonical Micrometer metrics with bounded cardinality labels: (1) `document_signing_sign_total{format,tenant}` — signatures created (counter); (2) `document_signing_verify_failure_rate{format,reason,tenant}` — verification failures by failure reason (counter; reason ∈ {invalid_signature, untrusted_cert, revoked_cert, expired_cert, missing_timestamp, soft_fail_disallowed}); (3) `document_signing_cert_expiry_warning_days{provider,tenant}` — days until next signer cert expiry (gauge). Labels MUST exclude RRN, signer name, document content, or any high-cardinality / PII value (mirrors DOC-IDENTITY-001 forbidden_sinks). SLO/alert wiring is fork-receiver concern (scope_deferral; matches R93/R94/R95/R96 F6 pattern)."
     test_method: "doc_OBSERVABILITY_001_threeMetricsRegisteredWithBoundedLabels"
     verification_type: "positive"

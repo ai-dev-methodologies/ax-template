@@ -211,6 +211,9 @@ items:
   # ── OBSERVABILITY family ───────────────────────────────────────────────
   - id: "EGA-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "행정업무용 전자결재 구현은 정확히 3개의 canonical Micrometer metric 노출 + bounded cardinality labels: (1) `ega_approvals_submitted_total{tenant, classification}` — 결재 제출 (counter; classification ∈ {general/restricted/secret/top_secret}); (2) `ega_postapproval_invalidation_rate{tenant, reason}` — 사후결재 무효율 (counter; reason ∈ {timeout_24h_exceeded / approval_line_incomplete / authority_revoked}); (3) `ega_archive_timestamp_refresh_warning_days{tenant}` — 다음 archive timestamp 만료까지 (gauge). Labels 제외: requester_user_id / approval_request_id / classification_detail (low-cardinality only). SLO/alert wiring은 fork-receiver concern (scope_deferral; R93/R94/R95/R96/R97/R98 F6 패턴 — 7th-wave consecutive)."
     test_method: "Micrometer registry assertion test"
     verification_type: "positive"

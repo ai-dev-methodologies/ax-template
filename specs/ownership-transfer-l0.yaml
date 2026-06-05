@@ -110,6 +110,9 @@ items:
       with personnel termination and transfer processes."
   - id: "TRANSFER-OBSERVABILITY-001"
     chapter: "관측 (canonical metric)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Ownership-transfer implementations MUST expose the canonical Micrometer counter `ownership_transfer_total{outcome}` with bounded-cardinality labels: outcome ∈ {applied, rejected, conflict} (fixed enum). A complementary `ownership_transfer_rows_total{resource}` MAY count moved rows by fixed resource-type enum. Labels MUST exclude from_owner / to_owner / actor / resource_id / tenant_id-as-free-text or any PII / unbounded value. SLO/alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

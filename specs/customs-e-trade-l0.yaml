@@ -195,6 +195,9 @@ items:
   # ── OBSERVABILITY family ───────────────────────────────────────────
   - id: "CUSTOMS-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Customs e-trade 구현은 정확히 3개의 canonical Micrometer metric 노출 + bounded cardinality labels: (1) `customs_declarations_submitted_total{tenant, declaration_type, aeo_status}` — 신고 제출 (counter; declaration_type 7 enum + aeo_status 4 enum); (2) `customs_uni_pass_failure_rate{tenant, error_code}` — UNI-PASS API 호출 실패 (counter; error_code ∈ {connection_timeout / 422_invalid_format / 401_auth_failed / 500_uni_pass_internal / circuit_breaker_open}); (3) `customs_cert_expiry_warning_days{tenant}` — 관세청 인증서 만료까지 (gauge). Labels 제외: declaration_id / eori_id / hs_code / cargo_value (low-cardinality only). SLO/alert wiring은 fork-receiver concern — **9th wave consecutive F6 패턴** (R93~R101)."
     test_method: "Micrometer registry assertion test"
     verification_type: "positive"

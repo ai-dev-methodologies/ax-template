@@ -211,6 +211,9 @@ items:
   # ── OBSERVABILITY family ──────────────────────────────────────────
   - id: "REFERRAL-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Referral 구현은 정확히 3개의 canonical Micrometer metric 노출 + bounded cardinality labels: (1) `referral_shares_emitted_total{tenant, channel}` — 공유 발생 (counter; channel ∈ {direct_link, kakao, sms, email, twitter, facebook, instagram, other}); (2) `referral_attribution_conversion_rate{tenant, attribution_model}` — 가입 전환율 (counter; attribution_model ∈ {last_touch, first_touch, linear, position_based}); (3) `referral_fraud_hold_rate{tenant, signal}` — 사기 보류율 (counter; signal ∈ {ip_match, device_match, payment_match, phone_match, email_domain_match, velocity_24h, ci_di_match}). Labels 제외: referrer_id / referee_id / referral_code / cookie_id (low-cardinality only). SLO/alert wiring은 fork-receiver concern — **8th wave consecutive F6 패턴** (R93~R100)."
     test_method: "Micrometer registry assertion test"
     verification_type: "positive"

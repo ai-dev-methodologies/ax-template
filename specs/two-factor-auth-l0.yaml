@@ -156,6 +156,9 @@ items:
   # ── OBSERVABILITY family ───────────────────────────────────────────
   - id: "TFA-OBSERVABILITY-001"
     chapter: "Per-tenant 관측성"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "3 canonical metrics per tenant: (a) enrollment_count{tenant=,factor_type=}, (b) verify_failure_rate{tenant=,factor_type=}, (c) lockout_count{tenant=,reason=}. Without these SRE cannot diagnose brute-force attacks, silent factor abandonment, mass SMS-OTP failure (gateway outage). 3-wave 누적 pattern (R93/R94/R95 P8 강하늘 F6) 따라 SLO threshold + alert convention은 별도 OBSERVABILITY-002 항목으로 산출 예상 (iter1 P8 catch 후 closure 또는 deferral)."
     test_method: "tfa_OBSERVABILITY_001_threeCanonicalMetricsEmitted"
     verification_type: "integration_test"

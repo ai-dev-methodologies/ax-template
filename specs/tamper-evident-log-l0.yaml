@@ -131,6 +131,9 @@ items:
       media so it cannot be altered alongside the data).
   - id: "TAMPER-OBSERVABILITY-001"
     chapter: "관측 (bounded-cardinality verification metrics) — OPTIONAL"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: >
       When adopted, tamper-evident-log implementations SHOULD expose
       bounded-cardinality Micrometer metrics for chain health: (1)

@@ -162,6 +162,9 @@ items:
 
   - id: "JOB-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Job-queue implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `jobs_enqueued_total{queue, priority}` — counter of jobs accepted onto a queue, `priority` drawn only from the recipe's enumerated lanes; (2) `job_processing_seconds{queue, outcome}` — a timer/histogram of end-to-end worker processing duration, outcome ∈ {succeeded, failed, dead}; (3) `dlq_depth{queue}` — a gauge of the current dead-letter queue size. The `queue` label MUST be a bounded, recipe-enumerated logical queue name, NEVER a per-job job_id, user_id, tenant_id, payload field, or any unbounded/PII value. SLO/alert wiring (e.g., alert on dlq_depth > 0) is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

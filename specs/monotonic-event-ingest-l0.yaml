@@ -82,6 +82,9 @@ items:
       the database."
   - id: "INGEST-OBSERVABILITY-001"
     chapter: "관측 (dropped-event metric)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Stale / duplicate ingest drops MUST be observable: expose a Micrometer counter `stale_event_dropped_total{stream, reason}` where `reason` is a fixed low-cardinality enum ∈ {behind_watermark, duplicate}. The `stream` label MUST be a fixed stream-name / event-source enum; labels MUST exclude event_id / resource_id / event-time / actor (no high-cardinality, no PII). A non-zero `behind_watermark` rate is the normal-but-watch signal that out-of-order delivery is occurring; a spike is the alert that the provider's ordering or the watermark field changed. SLO / alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion (drop one behind-watermark event + one duplicate; assert stale_event_dropped_total increments by 1 on each respective {reason} series and no unbounded label appears)"
     verification_type: "positive"

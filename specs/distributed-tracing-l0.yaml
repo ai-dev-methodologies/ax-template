@@ -119,6 +119,9 @@ items:
 
   - id: "TRACE-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Tracing implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `tracing_spans_exported_total{service, kind}` — counter, kind ∈ {server, client, internal, producer, consumer}; (2) `tracing_sampling_rate{service}` — gauge reporting the effective head-sampling ratio in [0.0, 1.0]; (3) `tracing_export_failure_total{service, reason}` — counter, reason ∈ {timeout, connection, rejected, serialization}. Labels MUST exclude trace_id / span_id / route / tenant_id / user_id / baggage values (no high-cardinality or PII). SLO/alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

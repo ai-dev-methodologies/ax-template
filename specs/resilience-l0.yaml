@@ -130,6 +130,9 @@ items:
 
   - id: "RESILIENCE-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Resilience implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `resilience_circuit_state{dependency, state}` — a gauge emitting 1 for the currently active state, state ∈ {closed, open, half_open}; (2) `resilience_retry_total{dependency, outcome}` — counter, outcome ∈ {success_with_retry, success_without_retry, error, exhausted}; (3) `resilience_fallback_total{dependency, strategy}` — counter, strategy ∈ {cached, default, degraded, fail}. The `dependency` label MUST be a bounded, recipe-enumerated logical name (e.g., \"payment-gateway\"), NEVER a per-request URL, user_id, tenant_id, or any unbounded/PII value. SLO/alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

@@ -214,6 +214,9 @@ items:
   # ── OBSERVABILITY family ──────────────────────────────────────────────
   - id: "CHAT-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Chat implementations MUST expose exactly three canonical Micrometer metrics with bounded cardinality labels: (1) `chat_messages_sent_total{tenant, room_type}` — messages sent (counter; room_type ∈ {dm, group, broadcast}); (2) `chat_delivery_failure_rate{tenant, reason}` — delivery failures (counter; reason ∈ {timeout, receiver_offline, room_disabled, blocked_by_recipient, broker_unavailable}); (3) `chat_active_room_count{tenant}` — currently-active rooms with at least 1 member online (gauge). Labels MUST exclude user_id, room_id, message_id, content_body, or any high-cardinality / PII value. SLO/alert wiring is fork-receiver concern (scope_deferral; matches R93/R94/R95/R96/R97 F6 pattern — 6th wave consecutive)."
     test_method: "Micrometer registry assertion test"
     verification_type: "positive"

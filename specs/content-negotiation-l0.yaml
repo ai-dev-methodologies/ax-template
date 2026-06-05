@@ -138,6 +138,9 @@ items:
       Acceptable) response."
   - id: "CONNEG-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Content negotiation MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `negotiation_total{media_type}` — counter of successful selections keyed by the selected type drawn ONLY from the closed `conneg_supported_media_types` set plus a fixed `default` bucket (never the raw Accept header, never free text); (2) `unsupported_media_total` — counter of 415 outcomes (request Content-Type not consumable); (3) `not_acceptable_total` — counter of 406 outcomes (no producible representation acceptable). Labels MUST draw only from the closed supported-type set + fixed status buckets; raw Accept / Accept-Language / Accept-Encoding strings, user id, and any PII / high-cardinality value are EXCLUDED. SLO / alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

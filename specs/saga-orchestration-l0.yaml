@@ -165,6 +165,9 @@ items:
 
   - id: "SAGA-OBSERVABILITY-001"
     chapter: "관측 (3 canonical metrics)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Saga implementations MUST expose exactly 3 canonical Micrometer metrics with bounded-cardinality labels: (1) `saga_started_total{saga_type}` — counter incremented once per saga start; (2) `saga_compensated_total{saga_type, failure_reason}` — counter incremented when a saga terminates in COMPENSATED, failure_reason ∈ {step_failure, step_timeout, manual}; (3) `saga_step_duration_seconds{saga_type, step}` — histogram of per-step execution duration. The `saga_type` and `step` labels MUST be bounded, recipe-enumerated logical names — NEVER a per-request saga_id, user_id, tenant_id, payload, or any unbounded/PII value. SLO/alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"

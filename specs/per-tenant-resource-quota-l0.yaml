@@ -97,6 +97,9 @@ items:
       low/high)." A drifted counter is an effectively-mis-set limit.
   - id: "QUOTA-OBSERVABILITY-001"
     chapter: "관측 (bounded-cardinality usage gauge)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Per-tenant quota implementations MUST expose a bounded-cardinality Micrometer gauge `quota_usage{tenant_bucket, resource}` reporting the fraction (or absolute used vs limit) of plan consumed, PLUS a `quota_rejected_total{resource}` counter for refused claims. The `tenant_bucket` label MUST be a coarse bounded enum (e.g. usage band `lt50|50-80|80-100|over` or a hashed shard), NEVER the raw tenant_id — a per-tenant time-series would be unbounded cardinality. The `resource` label MUST be a fixed resource-type enum. Labels MUST exclude tenant_id, user_id, plan_id-as-freeform, or any unbounded key. Alert/SLO wiring (e.g. notify a tenant at 80%) is a fork-receiver concern."
     test_method: "Micrometer registry assertion (gauge + counter present with only the bounded label keys; assert raw tenant_id never appears as a label value)"
     verification_type: "positive"

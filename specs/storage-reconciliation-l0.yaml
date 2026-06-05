@@ -119,6 +119,9 @@ items:
       framing (https://microservices.io/patterns/data/transactional-outbox.html).
   - id: "RECON-OBSERVABILITY-001"
     chapter: "관측 (the orphan/missing/reclaimed metric triple)"
+    verification:
+      mechanism: rule
+      ref: domain-metrics-bounded-cardinality
     requirement: "Reconciliation MUST expose exactly 3 canonical Micrometer counters with bounded-cardinality labels: (1) `storage_recon_orphan_total{domain}` — blobs purged by the reverse sweep (no live referent, past grace); (2) `storage_recon_missing_total{domain}` — rows quarantined by the forward sweep (referenced blob absent); (3) `storage_recon_reclaimed_total{domain}` — reclaim-queue keys whose object-store delete succeeded (including idempotent already-absent successes). The `domain` label MUST be a fixed entity-type enum; labels MUST exclude storage_key / blob_key / row_id / user_id (no PII, no high-cardinality). A persistently nonzero orphan or missing count is the fork-receiver's drift signal; SLO/alert wiring is a fork-receiver concern."
     test_method: "Micrometer registry assertion"
     verification_type: "positive"
