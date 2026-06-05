@@ -47,15 +47,18 @@ public class ProblemMetrics {
     }
 
     /**
-     * Record one emitted problem detail. {@code slug} MUST be a registered type slug; an
-     * unregistered slug is collapsed to {@code "other"} so a programming slip can never
-     * blow up the label space (defense in depth over the registry contract).
+     * Record one emitted problem detail. {@code slug} MUST be a registered type slug — the
+     * spec requires the {@code problem_type} label to draw ONLY from the closed registry, so
+     * an unregistered slug FAILS LOUD here (consistent with {@link ProblemTypeRegistry#uri})
+     * rather than silently widening the label space with a fallback value outside the registry.
      */
     public void record(String slug, int httpStatus, Duration elapsed) {
-        String type = ProblemTypeRegistry.isRegistered(slug) ? slug : "other";
+        if (!ProblemTypeRegistry.isRegistered(slug)) {
+            throw new IllegalArgumentException("unregistered problem type slug for metric label: " + slug);
+        }
         String statusClass = statusClass(httpStatus);
         Counter.builder(RESPONSES)
-                .tag(TAG_PROBLEM_TYPE, type)
+                .tag(TAG_PROBLEM_TYPE, slug)
                 .tag(TAG_STATUS_CLASS, statusClass)
                 .register(registry)
                 .increment();

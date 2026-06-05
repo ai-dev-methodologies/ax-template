@@ -104,15 +104,17 @@ public class ProblemDemoAdvice {
     }
 
     /**
-     * TRACE-001 — a genuine 5xx. The {@code detail} is a fixed neutral message; the
-     * exception's own message (which carries a stack frame + SQLSTATE) is logged
-     * server-side against the same {@code trace_id} but NEVER returned to the client.
+     * TRACE-001 — a genuine 5xx. Maps ONLY the dedicated {@link DemoServerFaultException} (NOT a
+     * broad {@code Exception}) so this HIGHEST_PRECEDENCE package advice never masks the framework
+     * handlers in {@code common.GlobalProblemDetailAdvice}. The {@code detail} is a fixed neutral
+     * message; the exception's own message (a stack frame + SQLSTATE) is logged server-side against
+     * the same {@code trace_id} but NEVER returned to the client.
      */
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ProblemDetail> handleUnexpected(Exception ex, HttpServletRequest request) {
+    @ExceptionHandler(DemoServerFaultException.class)
+    public ResponseEntity<ProblemDetail> handleServerFault(DemoServerFaultException ex, HttpServletRequest request) {
         String traceId = traceId(request);
         // Detailed context goes to the LOG (correlated by trace_id), not the response body.
-        log.error("problem-demo unexpected failure trace_id={}", traceId, ex);
+        log.error("problem-demo server fault trace_id={}", traceId, ex);
         return emit(HttpStatus.INTERNAL_SERVER_ERROR, ProblemTypeRegistry.SERVER_ERROR,
                 "Internal Server Error", "INTERNAL_ERROR",
                 "An unexpected error occurred. Reference the trace id when reporting this.",

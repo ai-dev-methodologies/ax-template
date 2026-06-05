@@ -22,6 +22,9 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Shared cross-cutting RFC 9457 {@code application/problem+json} fallback for the
@@ -280,7 +283,27 @@ public class GlobalProblemDetailAdvice {
         pd.setType(type);
         pd.setTitle(title);
         pd.setProperty("code", code);
+        // problem-details-l0 PROBLEM-FORMAT-001: the fifth RFC 9457 member, identifying THIS
+        // occurrence. Sourced from the current request URI so every framework-exception body
+        // routed through this fallback carries instance (not only the demo reference advice).
+        URI instance = currentRequestInstance();
+        if (instance != null) {
+            pd.setInstance(instance);
+        }
         return pd;
+    }
+
+    /** Current request URI as the problem {@code instance}, or null outside a servlet request. */
+    private static URI currentRequestInstance() {
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (attrs instanceof ServletRequestAttributes sra) {
+            try {
+                return URI.create(sra.getRequest().getRequestURI());
+            } catch (RuntimeException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private static ResponseEntity<ProblemDetail> entity(HttpStatusCode status, ProblemDetail pd) {

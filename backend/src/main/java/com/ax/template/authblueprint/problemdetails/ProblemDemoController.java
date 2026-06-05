@@ -61,7 +61,9 @@ public class ProblemDemoController {
     @PostMapping("/boom")
     public ResponseEntity<Void> boom() {
         // A genuine server fault carrying internals that MUST NOT reach the client detail.
-        throw new IllegalStateException(
+        // A DEDICATED type (not a broad RuntimeException/Exception) so the advice maps only this
+        // and never masks framework handlers (e.g. a malformed body stays a 400).
+        throw new DemoServerFaultException(
                 "ledger row 4471 failed at com.ax.template.ledger.PostingEngine.flush() — SQLSTATE 40001");
     }
 }

@@ -184,27 +184,48 @@ class ProblemDetailsComplianceTest {
             .post("/api/problem-demo/validate").then().statusCode(400);
         auth().post("/api/problem-demo/boom").then().statusCode(500);
 
-        assertThat(registry.find(ProblemMetrics.RESPONSES).counter()).isNotNull();
-        assertThat(registry.find(ProblemMetrics.RESPONSE_TIME).timer()).isNotNull();
+        // (1) + (2): the total counter carries BOTH dimensions TOGETHER and is actually recorded —
+        // a dimension-drop or zero-observation regression must NOT pass here.
+        var fundsCounter = registry.find(ProblemMetrics.RESPONSES)
+            .tag(ProblemMetrics.TAG_PROBLEM_TYPE, ProblemTypeRegistry.INSUFFICIENT_FUNDS)
+            .tag(ProblemMetrics.TAG_STATUS_CLASS, "4xx").counter();
+        assertThat(fundsCounter).as("problem_response_total{problem_type=insufficient-funds,status_class=4xx}").isNotNull();
+        assertThat(fundsCounter.count()).isGreaterThanOrEqualTo(1.0);
+        var serverCounter = registry.find(ProblemMetrics.RESPONSES)
+            .tag(ProblemMetrics.TAG_PROBLEM_TYPE, ProblemTypeRegistry.SERVER_ERROR)
+            .tag(ProblemMetrics.TAG_STATUS_CLASS, "5xx").counter();
+        assertThat(serverCounter).as("problem_response_total{problem_type=server-error,status_class=5xx}").isNotNull();
+        assertThat(serverCounter.count()).isGreaterThanOrEqualTo(1.0);
 
-        Set<String> allowedKeys = Set.of(ProblemMetrics.TAG_PROBLEM_TYPE, ProblemMetrics.TAG_STATUS_CLASS);
+        // (3): the timing histogram carries status_class and is recorded.
+        var timer4xx = registry.find(ProblemMetrics.RESPONSE_TIME).tag(ProblemMetrics.TAG_STATUS_CLASS, "4xx").timer();
+        assertThat(timer4xx).as("problem_response_seconds{status_class=4xx}").isNotNull();
+        assertThat(timer4xx.count()).isGreaterThanOrEqualTo(1L);
+
         Set<String> registeredSlugs = ProblemTypeRegistry.slugs();
         Set<String> statusClasses = Set.of("4xx", "5xx");
 
-        for (String name : List.of(ProblemMetrics.RESPONSES, ProblemMetrics.RESPONSE_TIME)) {
-            for (Meter m : registry.find(name).meters()) {
-                for (io.micrometer.core.instrument.Tag t : m.getId().getTags()) {
-                    // label KEYS are bounded — no trace_id / instance / pointer / user id
-                    assertThat(allowedKeys).as("meter %s tag key %s bounded", name, t.getKey())
-                        .contains(t.getKey());
-                    // label VALUES draw only from the closed type registry + fixed status classes
-                    if (t.getKey().equals(ProblemMetrics.TAG_PROBLEM_TYPE)) {
-                        assertThat(registeredSlugs).contains(t.getValue());
-                    } else {
-                        assertThat(statusClasses).contains(t.getValue());
-                    }
+        // every RESPONSES meter MUST carry EXACTLY {problem_type, status_class} (no dropped dim,
+        // no extra high-cardinality key); values bounded to the closed registry + status classes.
+        for (Meter m : registry.find(ProblemMetrics.RESPONSES).meters()) {
+            Set<String> keys = m.getId().getTags().stream()
+                .map(io.micrometer.core.instrument.Tag::getKey).collect(java.util.stream.Collectors.toSet());
+            assertThat(keys).as("RESPONSES meter tag keys")
+                .containsExactlyInAnyOrder(ProblemMetrics.TAG_PROBLEM_TYPE, ProblemMetrics.TAG_STATUS_CLASS);
+            for (io.micrometer.core.instrument.Tag t : m.getId().getTags()) {
+                if (t.getKey().equals(ProblemMetrics.TAG_PROBLEM_TYPE)) {
+                    assertThat(registeredSlugs).as("problem_type bounded to closed registry").contains(t.getValue());
+                } else {
+                    assertThat(statusClasses).as("status_class bounded").contains(t.getValue());
                 }
             }
+        }
+        // every RESPONSE_TIME meter MUST carry EXACTLY {status_class}.
+        for (Meter m : registry.find(ProblemMetrics.RESPONSE_TIME).meters()) {
+            Set<String> keys = m.getId().getTags().stream()
+                .map(io.micrometer.core.instrument.Tag::getKey).collect(java.util.stream.Collectors.toSet());
+            assertThat(keys).as("RESPONSE_TIME meter tag keys").containsExactly(ProblemMetrics.TAG_STATUS_CLASS);
+            assertThat(statusClasses).contains(m.getId().getTag(ProblemMetrics.TAG_STATUS_CLASS));
         }
     }
 }
