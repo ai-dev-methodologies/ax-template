@@ -18,6 +18,9 @@ frontend_required: true
 
 items:
   - id: DSR-FE-001
+    verification:
+      mechanism: rule
+      ref: dsr-frontend-pages-bind-dsr-contract
     requirement: "Privacy dashboard lists the subject's DSR requests with status + SLA due date by tracking each request via the dsrGetRequest endpoint"
     backend_operation_id: dsrGetRequest
     backend_spec_ref: DSR-SLA-001
@@ -40,6 +43,9 @@ items:
     backend_only_marker: false
 
   - id: DSR-FE-003
+    verification:
+      mechanism: rule
+      ref: dsr-frontend-pages-bind-dsr-contract
     requirement: "Rectify page renders a field-level correction form (field_path / current_value / corrected_value / justification) and calls dsrRectify, surfacing per-field validation errors"
     backend_operation_id: dsrRectify
     backend_spec_ref: DSR-RECTIFY-001
@@ -51,6 +57,9 @@ items:
     backend_only_marker: false
 
   - id: DSR-FE-004
+    verification:
+      mechanism: rule
+      ref: dsr-frontend-pages-bind-dsr-contract
     requirement: "Erasure page guards the destructive request behind a confirm-dialog and calls dsrErasure on confirmation, rendering the resulting (partial or full) erasure manifest"
     backend_operation_id: dsrErasure
     backend_spec_ref: DSR-ERASURE-001
@@ -62,6 +71,9 @@ items:
     backend_only_marker: false
 
   - id: DSR-FE-005
+    verification:
+      mechanism: rule
+      ref: dsr-frontend-pages-bind-dsr-contract
     requirement: "Portability page lets the subject choose json/csv format and calls dsrPortability, exposing the DSR-Schema-Version pinned download"
     backend_operation_id: dsrPortability
     backend_spec_ref: DSR-PORTABILITY-001
@@ -73,6 +85,9 @@ items:
     backend_only_marker: false
 
   - id: DSR-FE-006
+    verification:
+      mechanism: rule
+      ref: dsr-frontend-pages-bind-dsr-contract
     requirement: "Restrict page guards the processing-freeze behind a confirm-dialog and calls dsrRestrict, reflecting the resulting restricted status"
     backend_operation_id: dsrRestrict
     backend_spec_ref: DSR-RESTRICT-001
@@ -84,6 +99,9 @@ items:
     backend_only_marker: false
 
   - id: DSR-FE-007
+    verification:
+      mechanism: rule
+      ref: dsr-frontend-pages-bind-dsr-contract
     requirement: "Restrict page offers a lift-restriction action requiring a justification and calls dsrLiftRestriction"
     backend_operation_id: dsrLiftRestriction
     backend_spec_ref: DSR-RESTRICT-001
@@ -95,6 +113,9 @@ items:
     backend_only_marker: false
 
   - id: DSR-FE-008
+    verification:
+      mechanism: rule
+      ref: dsr-frontend-pages-bind-dsr-contract
     requirement: "Request detail page shows a single request's tracking envelope (status, received_at, due_at, closed_at, SLA breach) via dsrGetRequest"
     backend_operation_id: dsrGetRequest
     backend_spec_ref: DSR-SLA-001
@@ -106,6 +127,9 @@ items:
     backend_only_marker: false
 
   - id: DSR-FE-009
+    verification:
+      mechanism: rule
+      ref: dsr-frontend-pages-bind-dsr-contract
     requirement: "Request detail page offers an extend-window action (extensionDays + extensionReason) and calls dsrExtendRequest, refreshing the tracking envelope"
     backend_operation_id: dsrExtendRequest
     backend_spec_ref: DSR-SLA-001
