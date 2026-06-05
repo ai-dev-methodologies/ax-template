@@ -84,10 +84,15 @@ class IdempotencyComplianceTest {
         String body = "{\"v\":1}";
         String idA = post(token, key, body).post("/api/idempotency-demo/resources")
             .then().statusCode(201).extract().jsonPath().getString("id");
+        // the store DOES replay within a tenant (so the cross-tenant difference below is real
+        // isolation, not merely a store that always creates fresh)
+        String idAReplay = post(token, key, body).post("/api/idempotency-demo/resources")
+            .then().statusCode(201).header("Idempotency-Replayed", "true").extract().jsonPath().getString("id");
+        assertThat(idAReplay).isEqualTo(idA);
         // a DIFFERENT tenant reusing the SAME key gets its OWN fresh resource (no cross-tenant replay)
         String tokenB = freshTenantToken("idem-b");
         String idB = post(tokenB, key, body).post("/api/idempotency-demo/resources")
-            .then().statusCode(201).extract().jsonPath().getString("id");
+            .then().statusCode(201).header("Idempotency-Replayed", "false").extract().jsonPath().getString("id");
         assertThat(idB).isNotEqualTo(idA);
     }
 
@@ -136,18 +141,33 @@ class IdempotencyComplianceTest {
         ExecutorService pool = Executors.newFixedThreadPool(n);
         CountDownLatch ready = new CountDownLatch(n);
         CountDownLatch go = new CountDownLatch(1);
-        AtomicInteger success = new AtomicInteger();
+        // The TIMING-INDEPENDENT write-once invariant: exactly ONE request creates a new resource
+        // (201 + Replayed:false); every other request is EITHER rejected in-flight (409) OR replays
+        // the winner verbatim (201 + Replayed:true) — never a second creation. A hard "conflict==9"
+        // would be coupled to the WORK_LATENCY window; this invariant holds at any timing.
+        AtomicInteger firstSeen = new AtomicInteger();
         AtomicInteger conflict = new AtomicInteger();
+        AtomicInteger replay = new AtomicInteger();
         AtomicInteger other = new AtomicInteger();
+        java.util.Set<String> winnerIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
         for (int i = 0; i < n; i++) {
             pool.submit(() -> {
                 ready.countDown();
                 try {
                     go.await();
-                    int sc = post(token, key, body).post("/api/idempotency-demo/resources").thenReturn().statusCode();
-                    if (sc == 201) success.incrementAndGet();
-                    else if (sc == 409) conflict.incrementAndGet();
-                    else other.incrementAndGet();
+                    var resp = post(token, key, body).post("/api/idempotency-demo/resources").thenReturn();
+                    int sc = resp.statusCode();
+                    if (sc == 201 && "false".equals(resp.header("Idempotency-Replayed"))) {
+                        firstSeen.incrementAndGet();
+                        winnerIds.add(resp.jsonPath().getString("id"));
+                    } else if (sc == 201) {
+                        replay.incrementAndGet();
+                        winnerIds.add(resp.jsonPath().getString("id"));
+                    } else if (sc == 409) {
+                        conflict.incrementAndGet();
+                    } else {
+                        other.incrementAndGet();
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -158,9 +178,11 @@ class IdempotencyComplianceTest {
         pool.shutdown();
         assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
 
-        assertThat(success.get()).as("exactly one winner").isEqualTo(1);
-        assertThat(conflict.get()).as("nine 409 conflicts").isEqualTo(9);
-        assertThat(other.get()).isZero();
+        assertThat(firstSeen.get()).as("exactly one winner created the resource").isEqualTo(1);
+        assertThat(conflict.get() + replay.get()).as("the other nine neither created nor failed unexpectedly").isEqualTo(9);
+        assertThat(conflict.get()).as("at least one concurrent duplicate was rejected in-flight").isGreaterThanOrEqualTo(1);
+        assertThat(other.get()).as("no unexpected status").isZero();
+        assertThat(winnerIds).as("every non-conflict response references the single winning resource").hasSize(1);
 
         // after the winner completes, a subsequent identical request replays the cached response
         post(token, key, body).post("/api/idempotency-demo/resources")
@@ -182,6 +204,16 @@ class IdempotencyComplianceTest {
         // a genuine VALUE change → different fingerprint → 422
         post(token, key, "{\"a\":1,\"b\":3}").post("/api/idempotency-demo/resources")
             .then().statusCode(422);
+
+        // NESTED object key reorder MUST also canonicalize (proves recursive sorting, not just
+        // top-level) — the dogfood flagged this as a potential gap; lock it in empirically.
+        String nestedKey = UUID.randomUUID().toString();
+        String nestedId = post(token, nestedKey, "{\"outer\":{\"a\":1,\"b\":2},\"z\":9}")
+            .post("/api/idempotency-demo/resources").then().statusCode(201).extract().jsonPath().getString("id");
+        post(token, nestedKey, "{\"z\":9,\"outer\":{\"b\":2,\"a\":1}}")
+            .post("/api/idempotency-demo/resources").then().statusCode(201)
+            .header("Idempotency-Replayed", "true")
+            .body("id", org.hamcrest.Matchers.equalTo(nestedId));
     }
 
     @Test
@@ -194,15 +226,22 @@ class IdempotencyComplianceTest {
         post(token, k1, "{\"v\":1}").post("/api/idempotency-demo/resources").then().statusCode(201);
         // fingerprint_mismatch
         post(token, k1, "{\"v\":2}").post("/api/idempotency-demo/resources").then().statusCode(422);
-        // conflict — a 2-parallel burst on a fresh key
+        // conflict — a latch-gated burst on a fresh key. 8 simultaneous requests within the
+        // in-flight window make >=1 in-flight rejection effectively certain (7 losers); we assert
+        // >=1 (not a hard count) so the metric-recording check is not timing-coupled.
         String k2 = UUID.randomUUID().toString();
-        ExecutorService pool = Executors.newFixedThreadPool(2);
+        int burst = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(burst);
         CountDownLatch go = new CountDownLatch(1);
-        for (int i = 0; i < 2; i++) {
+        AtomicInteger burstConflicts = new AtomicInteger();
+        for (int i = 0; i < burst; i++) {
             pool.submit(() -> {
                 try {
                     go.await();
-                    post(token, k2, "{\"v\":1}").post("/api/idempotency-demo/resources");
+                    if (post(token, k2, "{\"v\":1}").post("/api/idempotency-demo/resources")
+                            .thenReturn().statusCode() == 409) {
+                        burstConflicts.incrementAndGet();
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -211,6 +250,7 @@ class IdempotencyComplianceTest {
         go.countDown();
         pool.shutdown();
         assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(burstConflicts.get()).as("the burst produced at least one in-flight conflict").isGreaterThanOrEqualTo(1);
 
         assertThat(registry.find(IdempotencyMetrics.REQUESTS).counter()).isNotNull();
         assertThat(registry.find(IdempotencyMetrics.HIT_RATE).gauge()).isNotNull();
