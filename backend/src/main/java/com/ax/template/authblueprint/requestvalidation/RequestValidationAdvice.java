@@ -122,14 +122,20 @@ public class RequestValidationAdvice {
                 .body(pd);
     }
 
-    /** One shared-shape entry: pointer (RFC 6901) + name + code + detail (+ message alias). */
+    /**
+     * One errors[] entry in the EXACT shape {@code common.GlobalProblemDetailAdvice.errorEntry()}
+     * emits — {@code {field, name, pointer, code, message, detail}} — so the two handlers of the
+     * shared problem+json validation pattern produce the SAME entry structure (VALIDATION-ERROR-001
+     * "reuses the SAME errors extension array"), adding only the {@code code} the spec specializes.
+     */
     private static Map<String, String> entry(String pointer, String code, String message) {
         String p = pointer == null ? "" : pointer;
-        // name = the last segment (form/query parameter style), pointer = full RFC 6901 path
-        String name = p.isEmpty() ? "" : p.substring(p.lastIndexOf('/') + 1);
+        // mirror Global: field == name == the dotted binding path; pointer == the RFC 6901 form
+        String field = p.isEmpty() ? "" : p.substring(1).replace('/', '.');
         return Map.of(
+                "field", field,
+                "name", field,
                 "pointer", p,
-                "name", name,
                 "code", code,
                 "message", message,
                 "detail", message);

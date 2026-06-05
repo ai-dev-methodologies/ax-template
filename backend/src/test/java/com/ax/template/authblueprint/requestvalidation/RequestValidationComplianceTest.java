@@ -88,9 +88,14 @@ class RequestValidationComplianceTest {
         // unlisted enum token rejected
         auth().body(validBody().replace("\"priority\":\"HIGH\"", "\"priority\":\"URGENT\""))
             .post("/api/request-validation/orders").then().statusCode(400);
-        // unknown/typo'd field rejected (reject-unknown), not silently dropped
-        auth().body(validBody().replace("\"customer\":\"Acme\",", "\"customer\":\"Acme\",\"customerr\":\"typo\","))
-            .post("/api/request-validation/orders").then().statusCode(400);
+        // unknown/typo'd field rejected (reject-unknown), not silently dropped — and proven to be
+        // the DECLARATIVE @AssertTrue path (code AssertTrue on the no-unknown-fields check), not a
+        // coincidental 400 from another cause
+        List<String> codes = auth()
+            .body(validBody().replace("\"customer\":\"Acme\",", "\"customer\":\"Acme\",\"customerr\":\"typo\","))
+            .post("/api/request-validation/orders").then().statusCode(400)
+            .extract().jsonPath().getList("errors.code", String.class);
+        assertThat(codes).contains("AssertTrue");
     }
 
     @Test
@@ -137,12 +142,15 @@ class RequestValidationComplianceTest {
         auth().body(validBody().replace("\"postalCode\":\"12345\"", "\"postalCode\":\"12a45\""))
             .post("/api/request-validation/orders").then().statusCode(400);
 
-        // the ONLY transform on accepted input is the explicit allowlist NFC-normalize + trim:
-        // decomposed "Café" with surrounding spaces → composed "Café", trimmed
-        String decomposedCustomer = "  Café  ";
-        String echoed = auth().body(validBody().replace("\"customer\":\"Acme\"", "\"customer\":\"" + decomposedCustomer + "\""))
+        // the ONLY transform on accepted input is the explicit allowlist NFC-normalize + trim.
+        // Input is GENUINELY decomposed (NFD: 'e' + U+0301 combining acute) with surrounding spaces,
+        // so a passing assertion PROVES the bytes were transformed (composed) - not a no-op.
+        String decomposed = "  Cafe\u0301  ";          // NFD: 'e' + combining acute
+        String composed = "Caf\u00e9";                  // NFC: precomposed e-acute
+        assertThat(decomposed.trim()).isNotEqualTo(composed); // guard: the input really is decomposed
+        String echoed = auth().body(validBody().replace("\"customer\":\"Acme\"", "\"customer\":\"" + decomposed + "\""))
             .post("/api/request-validation/orders").then().statusCode(201).extract().jsonPath().getString("customer");
-        assertThat(echoed).isEqualTo("Café");               // NFC composed
+        assertThat(echoed).isEqualTo(composed);             // NFC composed the decomposed input
         assertThat(echoed).doesNotStartWith(" ").doesNotEndWith(" "); // trimmed
     }
 
