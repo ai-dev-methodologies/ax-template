@@ -55,6 +55,9 @@ introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_
 items:
   - id: "BULK-SUBMIT-001"
     chapter: "Batch payload envelope + max-batch-size limit"
+    verification:
+      mechanism: rule
+      ref: bulk-operation-partial-success-207
     requirement: "Bulk endpoints MUST accept a batch envelope carrying a top-level `items` array (or an equivalent declared streaming format) and MUST enforce a recipe-declared `bulk_max_batch_size` (default 1000) on the number of items. A request whose item count exceeds the cap → 413 Content Too Large with a Problem Details body (`type`, `title`, `status`=413, `detail` naming the cap and the received count); the field carrying the limit MUST be `max_batch_size` and the observed value `received_count`. An empty `items` array → 400 with `detail` \"items must not be empty\". The cap MUST be enforced before any item is persisted."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -85,6 +88,9 @@ items:
 
   - id: "BULK-ATOMICITY-001"
     chapter: "Declared atomicity mode (transactional vs best-effort)"
+    verification:
+      mechanism: rule
+      ref: bulk-operation-partial-success-207
     requirement: "Each bulk endpoint MUST declare its atomicity via `bulk_atomicity_mode` ∈ {all_or_nothing, best_effort} (default `best_effort`). In `all_or_nothing` the whole batch runs in a single transaction: the first item that fails validation or persistence MUST roll back every prior item in the batch and return 422 with a Problem Details body whose `detail` names the failing `index` and reason; the `results` array (if returned) MUST show zero committed items. In `best_effort` each item commits or fails independently (per BULK-PARTIAL-001). The mode MUST be discoverable to clients (response header `X-Bulk-Atomicity` or an OpenAPI-documented field); a client MUST NOT have to guess whether a partial commit occurred."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -100,6 +106,9 @@ items:
 
   - id: "BULK-FORMAT-001"
     chapter: "Declared input formats (JSON array / JSONL / CSV RFC 4180)"
+    verification:
+      mechanism: rule
+      ref: bulk-operation-partial-success-207
     requirement: "Each bulk endpoint MUST declare its accepted input formats via `bulk_input_formats` ⊆ {json, jsonl, csv} and select the parser by request `Content-Type`: `application/json` → top-level array, `application/jsonl` (or `application/x-ndjson`) → one JSON object per line, `text/csv` → RFC 4180 records with a header row mapping to item fields. An unsupported Content-Type → 415 Unsupported Media Type. A malformed line / record → that item fails with a per-item 422 (best_effort) or rolls back the batch (all_or_nothing); a parse error MUST report the offending line/record `index`. CSV ingress MUST neutralize formula-injection (cells starting with = + - @ tab CR) before any echo-back, sharing the report-export-l0 guard. JSONL and CSV MUST be parsed streamingly so the size cap (BULK-SUBMIT-001) can be enforced without buffering the whole body."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -113,6 +122,9 @@ items:
 
   - id: "BULK-ASYNC-001"
     chapter: "Large-batch async job hand-off (composes job-queue-l0)"
+    verification:
+      mechanism: rule
+      ref: bulk-operation-partial-success-207
     requirement: "When an accepted batch size reaches the recipe-declared `bulk_async_threshold` (default 500), the endpoint MUST NOT block the request thread to completion. Instead it MUST persist the batch, enqueue a job, and return 202 Accepted with a `Location` header pointing at a job-status resource and a body carrying `job_id` plus initial `status` (e.g. `queued`). The client polls (or is notified) for per-item results, which MUST be retrievable in the same 207-style `results` shape as the sync path (composing pagination-l0 for large result sets). Below the threshold the endpoint MAY answer synchronously with 207. The same Idempotency-Key (idempotency-l0) MUST dedup a re-submitted batch to the existing job rather than creating a second one."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -126,6 +138,9 @@ items:
 
   - id: "BULK-VALIDATION-001"
     chapter: "Pre-validation pass — report all item errors before mutation"
+    verification:
+      mechanism: rule
+      ref: bulk-operation-partial-success-207
     requirement: "When `bulk_prevalidate` is true (default for all_or_nothing endpoints), the server MUST run a full validation pass over every item BEFORE mutating any item. If one or more items are invalid, the server MUST return without persisting anything and answer 422 with a Problem Details body whose `errors` array lists every invalid item by `index` with its `error` object — the client sees the complete error set in one round-trip rather than fixing items one-at-a-time. A dry-run MUST be exposed (request param `validate_only=true` or `X-Bulk-Validate-Only: true`) that runs the same pass and returns the would-be `results` with HTTP 200 and zero mutations. Pre-validation MUST cover the same constraints (schema, uniqueness, authorization) the mutating path enforces, so a passing pre-validation does not later 422 mid-batch for an avoidable reason."
     test_method: "RestAssured integration test"
     verification_type: "negative"

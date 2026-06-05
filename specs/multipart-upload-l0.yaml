@@ -50,6 +50,9 @@ introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_
 items:
   - id: "UPLOAD-INIT-001"
     chapter: "Create upload session + declare total length"
+    verification:
+      mechanism: rule
+      ref: resumable-upload-tus-offset
     requirement: "POST to the create-upload endpoint MUST create a server-side upload resource and return 201 with a `Location` header pointing at the new session URL. Client declares total size via `Upload-Length: <bytes>`. Server compares against the recipe `upload_max_total_bytes` ceiling — over-ceiling → 413 with PROBLEM_UPLOAD_TOO_LARGE. Response MUST echo `Tus-Resumable: 1.0.0`. Initial `Upload-Offset` of the new resource is 0."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -83,6 +86,9 @@ items:
 
   - id: "UPLOAD-RESUME-001"
     chapter: "HEAD returns current offset for resume"
+    verification:
+      mechanism: rule
+      ref: resumable-upload-tus-offset
     requirement: "HEAD on the session URL MUST return 200 with the current `Upload-Offset` header and `Cache-Control: no-store` so an interrupted client learns exactly how many bytes were durably received and resumes by sending only the remainder. If the upload length is known the response MAY also include `Upload-Length`. HEAD on an unknown or expired session → 404. Response MUST echo `Tus-Resumable: 1.0.0`."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -99,6 +105,9 @@ items:
 
   - id: "UPLOAD-CHECKSUM-001"
     chapter: "Per-chunk integrity gate"
+    verification:
+      mechanism: rule
+      ref: resumable-upload-tus-offset
     requirement: "When a PATCH carries `Upload-Checksum: <algorithm> <base64-digest>` (default algorithm `sha256`, recipe-configurable), the server MUST compute the digest of the received chunk bytes and compare. On mismatch the server MUST discard the chunk, leave the offset UNCHANGED, and respond 460 (tus Checksum Mismatch). An unsupported checksum algorithm → 400. A correct checksum proceeds as a normal append (204 + advanced offset)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -114,6 +123,9 @@ items:
 
   - id: "UPLOAD-LIMIT-001"
     chapter: "Server-side size + content-type allowlist"
+    verification:
+      mechanism: rule
+      ref: resumable-upload-tus-offset
     requirement: "Maximum total size (`upload_max_total_bytes`) and the allowed content-type allowlist (`upload_allowed_content_types`) MUST be enforced server-side from the recipe — NEVER derived from a client-supplied value alone. Declared `Upload-Length` over the ceiling → 413. A declared content-type (via tus `Upload-Metadata` filetype OR the create request) outside the allowlist → 415 PROBLEM_UPLOAD_UNSUPPORTED_TYPE. Cumulative appended bytes MUST also be capped so a client cannot exceed the declared length."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -131,6 +143,9 @@ items:
 
   - id: "UPLOAD-EXPIRY-001"
     chapter: "Session TTL + abandoned-partial cleanup"
+    verification:
+      mechanism: rule
+      ref: resumable-upload-tus-offset
     requirement: "Every incomplete upload session MUST carry a TTL (`upload_session_ttl_hours`, default 24h). The server MAY advertise the deadline via the `Upload-Expires` header (HTTP-date). PATCH or HEAD against an expired session → 410 PROBLEM_UPLOAD_EXPIRED. A scheduled reaper MUST purge expired ACTIVE sessions and their staged chunks so abandoned partial uploads do not accumulate storage indefinitely. Completed sessions are exempt (handed off to file-storage-l0)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
