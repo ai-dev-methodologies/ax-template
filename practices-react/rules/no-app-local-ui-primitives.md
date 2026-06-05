@@ -4,7 +4,7 @@ impact: HIGH
 impactDescription: "When each app re-implements its own Button/Input/Card, the design system fragments: tokens drift, a11y fixes land in one copy and not the others, and the monorepo's whole reason for a shared catalog is defeated. Apps must import primitives from @ax/ui and composed blocks from @ax/blocks. A bespoke app-local copy (a components/ui/** module, or a component named like a catalog primitive) is a hard error."
 tags: [monorepo, design-system, components, reuse, consistency]
 applicable_to: [react, nextjs, vite]
-spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-CATALOG-088"
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-COMPOSITION-001"
 verification:
   type: lint
   rule_id: "ax/no-app-local-ui-primitives"

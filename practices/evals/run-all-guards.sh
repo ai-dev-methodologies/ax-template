@@ -1031,6 +1031,16 @@ run_guard "no_rrn_in_log/fixture_fail" 1 \
 run_guard "no_rrn_in_log/fixture_pass" 0 \
     bash "$SCRIPT_DIR/no_rrn_in_log_guard.sh" --root "$SCRIPT_DIR/fixtures/no-rrn-logging/pass"
 
+echo ""
+echo "[68] domain_spec_trio_guard.sh (ax-plan G2/G4 — every L4 domain carries the Spec Trio its domain_mode requires; promoted to BLOCKING at G4 hard-promotion 2026-06-06)"
+run_guard "domain_spec_trio/live" 0 \
+    bash "$SCRIPT_DIR/domain_spec_trio_guard.sh"
+
+echo ""
+echo "[69] spec_item_verification_binding_guard.sh (ax-plan G3/G4 — every applicable spec item resolves a REAL verification binding tag|guard|rule; no fakes, no deferred. Promoted to BLOCKING at G4 hard-promotion 2026-06-06 after full backfill 286->0)"
+run_guard "spec_item_verification_binding/live" 0 \
+    bash "$SCRIPT_DIR/spec_item_verification_binding_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

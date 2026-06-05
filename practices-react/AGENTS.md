@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "6f6ad1271ce8e99727ee97eceaceed0a5908420ec45cfd65473d7bd60755c972"
-  rule_count: 87
+  source_concat_sha256: "6bbea82b7c7e25fbc51bd9c666027b46874741a55c4697fdfad7270fb96fefee"
+  rule_count: 99
   generated_by: "practices-react/generate_agents.sh"
 ---
 
@@ -1232,6 +1232,254 @@ Sources:
 - [Vercel: async-suspense-boundaries](https://github.com/vercel-labs/agent-skills/blob/main/skills/react-best-practices/rules/async-suspense-boundaries.md)
 - [React 19 — use()](https://react.dev/reference/react/use)
 - [Next.js 16 — Fetching Data (Client Component use() pattern)](https://nextjs.org/docs/app/getting-started/fetching-data)
+
+
+<!-- @source rules/audit-log-frontend-viewer-rbac-virtualized.md -->
+
+---
+title: "The audit-log viewer UI must virtualize large lists, filter/paginate, gate export behind RBAC, and degrade with empty/error states"
+rule_id: audit-log-frontend-viewer-rbac-virtualized
+impact: MEDIUM
+impactDescription: "An audit list that renders 10k+ rows into the DOM freezes the tab; an export surface not gated behind ROLE_ADMIN/ROLE_AUDITOR leaks the audit trail to unauthorized users; a list that throws on an API error takes down the whole page instead of offering retry; no EmptyState leaves a blank table that looks broken. The audit viewer handles sensitive, high-volume data — virtualization, RBAC, and graceful degradation are load-bearing."
+tags:
+  - audit-log
+  - frontend
+  - virtualization
+  - rbac
+  - error-boundary
+  - contract-first
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/audit-log-frontend-l0.yaml#AUDIT-FE-001"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the audit viewer against specs/audit-log-frontend-l0.yaml: the list renders a
+    VirtualizedTable handling >10k rows without DOM explosion (only visible rows, @tanstack/react-virtual)
+    (001); a FilterBar filters by actor/resource-type/action/outcome/date-range and updates the query
+    (002); pagination via page+size query params with prev/next links (003). The detail page renders full
+    metadata for an entry by id (004). The export page renders a CSV/JSON format selector + optional
+    filters, calling exportAuditLogs (POST) (005), and shows an access-denied notice (NOT the form) when
+    the user lacks ROLE_ADMIN/ROLE_AUDITOR (006). The list shows an EmptyState when no entries match,
+    prompting to clear filters (007), and an ErrorBoundary with a retry prompt when listAuditLogs fails,
+    without crashing the page (008).
+evidence:
+  - source_type: external
+    citation: "React Docs — Reacting to input with state (declarative UI): the viewer renders loaded/empty/error states declaratively and gates the export form on role (AUDIT-FE-006/007/008)"
+    url: "https://react.dev/learn/reacting-to-input-with-state"
+    quote: "React provides a declarative way to manipulate the UI. Instead of manipulating individual pieces of the UI directly, you describe the different states that your component can be in, and switch between them in response to the user input."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "OWASP ASVS v4.0.3 V4.1.3 — Access Control (least privilege): the export surface is gated to ROLE_ADMIN/ROLE_AUDITOR (AUDIT-FE-006)"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
+    quote: "Verify that the principle of least privilege exists - users should only be able to access functions, data files, URLs, controllers, services, and other resources, for which they possess specific authorization."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## The audit-log viewer UI must virtualize large lists, filter/paginate, gate export behind RBAC, and degrade gracefully
+
+**Impact: MEDIUM — An audit log is high-volume, sensitive data, and its viewer must handle both facts. Volume: rendering 10k+ rows into the DOM freezes the tab, so the list MUST virtualize (render only visible rows). Sensitivity: the export surface dumps the audit trail to a file, so it MUST be gated behind `ROLE_ADMIN`/`ROLE_AUDITOR` — an ungated export is a data leak, and ASVS demands *the principle of least privilege ... users should only be able to access ... resources for which they possess specific authorization*. And because audit data loads over the network, the viewer must degrade gracefully — an EmptyState on no-match, an ErrorBoundary with retry on API failure — not a blank table or a whole-page crash. React renders these states declaratively — *you describe the different states that your component can be in*.**
+
+There are eight load-bearing requirements — the items of `specs/audit-log-frontend-l0.yaml`, all governed by this rule.
+
+**List (AUDIT-FE-001..003, 007, 008).** A VirtualizedTable handling >10k rows without DOM explosion — only visible rows (001); a FilterBar over actor/resource-type/action/outcome/date-range that updates the query (002); pagination via page+size query params with prev/next (003); an EmptyState when nothing matches, prompting to clear filters (007); an ErrorBoundary with a retry prompt when `listAuditLogs` fails, without crashing the page (008).
+
+**Detail (AUDIT-FE-004).** Full metadata for a single entry by id (actor, action, resource, outcome, timestamp, ...).
+
+**Export with RBAC (AUDIT-FE-005..006).** An export page with a CSV/JSON format selector + optional filters calling `exportAuditLogs` (POST) (005); an access-denied notice — NOT the form — when the user lacks `ROLE_ADMIN`/`ROLE_AUDITOR` (006).
+
+**Incorrect — full list in the DOM, ungated export, list crashes on error:**
+
+```tsx
+<table>{allEntries.map(e => <Row key={e.id} entry={e} />)}</table>   {/* VIOLATION: 10k rows in DOM (AUDIT-FE-001) */}
+<ExportForm onSubmit={exportAuditLogs} />                            {/* VIOLATION: no RBAC gate (AUDIT-FE-006) */}
+const data = useQuery(...).data;                                     {/* VIOLATION: no ErrorBoundary; throw crashes page (AUDIT-FE-008) */}
+```
+
+**Correct — virtualized, RBAC-gated export, empty + error-boundary states:**
+
+```tsx
+<VirtualizedTable rows={entries} />                                  // only visible rows (AUDIT-FE-001)
+{entries.length === 0 && <EmptyState onClear={clearFilters} />}      // AUDIT-FE-007
+// export page
+if (!hasRole('ROLE_ADMIN','ROLE_AUDITOR')) return <AccessDenied />;  // AUDIT-FE-006 (least privilege)
+<ExportForm formats={['CSV','JSON']} onSubmit={exportAuditLogs} />   // AUDIT-FE-005
+// list wrapped:
+<ErrorBoundary fallback={<RetryPrompt onRetry={refetch} />}><AuditList /></ErrorBoundary>  // AUDIT-FE-008
+```
+
+Verification: review-tier. Viewer correctness is a performance + access-control + resilience property with no compile signal. Verify by review against `specs/audit-log-frontend-l0.yaml`: the list virtualizes >10k rows; filter + pagination drive the query; the export form is gated to ROLE_ADMIN/ROLE_AUDITOR (access-denied notice otherwise); an EmptyState and an ErrorBoundary-with-retry handle no-match and API failure. When a fork-receiver wires real tests (non-admin sees access-denied; API error shows retry not a crash), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [React — Reacting to input with state](https://react.dev/learn/reacting-to-input-with-state)
+
+Reference: [OWASP ASVS V4 — Access Control](https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md)
+
+
+<!-- @source rules/auth-frontend-pages-bind-auth-contract.md -->
+
+---
+title: "Auth UI pages must realize the auth API contract — each page renders its documented fields as controlled inputs and calls its documented endpoint, with route gating, transparent token refresh, and logout cleanup"
+rule_id: auth-frontend-pages-bind-auth-contract
+impact: HIGH
+impactDescription: "An auth surface where a page renders the wrong fields, calls the wrong endpoint, or skips a step (no email-verification page, no resend, no oauth-unlink last-provider guard) leaves the auth flow incomplete or broken; an auth-aware layout that does not gate unauthenticated users leaks protected pages; token refresh not handled in the HTTP interceptor forces re-login on every expiry; logout that does not clear local state leaves a 'logged-in' UI after sign-out. The auth UI must be a faithful 1:1 realization of the auth API contract."
+tags:
+  - auth
+  - frontend
+  - forms
+  - contract-first
+  - session
+  - oauth
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/auth-frontend-l0.yaml#AUTH-FE-001"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the auth UI against specs/auth-frontend-l0.yaml and contracts/auth-openapi.yaml:
+    each documented page renders its documented fields as CONTROLLED inputs (value + onChange) and calls
+    its documented endpoint — signup, login (incl. OAuth provider buttons → oauthAuthorize),
+    email-verification, resend-verification, forgot-password, reset-password (with token), change-password
+    (current + new), oauth-callback (success AND error), account-settings (linked providers, oauth-link,
+    oauth-unlink with last-provider guard). The auth-aware layout calls getAuthState on mount and
+    redirects unauthenticated users to login (AUTH-FE-011). Token refresh is transparent in the HTTP
+    client interceptor, no dedicated page (AUTH-FE-012). Logout clears local auth state, calls the logout
+    endpoint, then redirects to login (AUTH-FE-013). No page maps to an undocumented endpoint; no
+    documented endpoint lacks a page.
+evidence:
+  - source_type: external
+    citation: "React Docs — <input> (controlled inputs): auth form fields are controlled (value + onChange) so submitted credentials come from component state (AUTH-FE-001..007)"
+    url: "https://react.dev/reference/react-dom/components/input"
+    quote: "To render a controlled input, pass the value prop to it (or checked for checkboxes and radios). React will force the input to always have the value you passed."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "React Docs — Reacting to input with state (declarative UI): auth pages render documented states (idle/submitting/error) declaratively"
+    url: "https://react.dev/learn/reacting-to-input-with-state"
+    quote: "React provides a declarative way to manipulate the UI. Instead of manipulating individual pieces of the UI directly, you describe the different states that your component can be in, and switch between them in response to the user input."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Auth UI pages must realize the auth API contract — documented fields as controlled inputs, documented endpoints, route gating, transparent refresh, logout cleanup
+
+**Impact: HIGH — The auth frontend is a contract-first surface: every page exists to drive one endpoint of `contracts/auth-openapi.yaml`, and the flow only works if the mapping is complete and faithful. A signup page that posts to the wrong endpoint, a missing email-verification or resend page, an oauth-unlink with no last-provider guard, an auth-aware layout that forgets to redirect unauthenticated users (leaking protected pages), token refresh bolted onto a page instead of the HTTP interceptor (re-login on every expiry), or a logout that calls the endpoint but leaves the local auth state set (a 'logged-in' UI after sign-out) — each breaks the auth experience or its security. React gives the building blocks: form fields are controlled inputs — *to render a controlled input, pass the value prop to it ... React will force the input to always have the value you passed* — and pages render their states declaratively — *you describe the different states that your component can be in, and switch between them in response to the user input*.**
+
+There are fourteen load-bearing requirements — the items of `specs/auth-frontend-l0.yaml`, all governed by this rule. Each is "the documented page renders its documented fields (as controlled inputs) and calls its documented endpoint":
+
+- **Credential pages** — signup (AUTH-FE-001), login (AUTH-FE-002): email + password controlled fields → signup/login endpoints.
+- **Verification** — email-verification token entry → verify-email (AUTH-FE-003); resend link → resend-verification (AUTH-FE-004).
+- **Password** — forgot-password email → reset-request (AUTH-FE-005); reset-password new+confirm + token → reset (AUTH-FE-006); change-password current+new → change (AUTH-FE-007).
+- **OAuth** — callback page handles success AND error (AUTH-FE-008); account-settings shows linked providers + oauth-link (AUTH-FE-009); oauth-unlink with a last-provider guard (AUTH-FE-010); login OAuth buttons → oauthAuthorize per enabled provider (AUTH-FE-014).
+- **Session** — auth-aware layout calls getAuthState on mount and redirects unauthenticated users to login (AUTH-FE-011); token refresh is transparent in the HTTP interceptor, no dedicated page (AUTH-FE-012); logout clears local auth state, calls logout, redirects to login (AUTH-FE-013).
+
+**Incorrect — uncontrolled field, wrong endpoint, no route gating, logout leaves state set:**
+
+```tsx
+<input name="email" />                                   {/* VIOLATION: uncontrolled (AUTH-FE-001) */}
+await api.post('/users', creds);                         {/* VIOLATION: not the documented signup endpoint */}
+function Layout({children}) { return <>{children}</>; }  {/* VIOLATION: no getAuthState gate (AUTH-FE-011) */}
+function logout() { api.post('/auth/logout'); }          {/* VIOLATION: local auth state not cleared (AUTH-FE-013) */}
+```
+
+**Correct — controlled fields, documented endpoints, gated layout, transparent refresh, full logout:**
+
+```tsx
+const [email, setEmail] = useState('');                  // controlled (AUTH-FE-001)
+<input value={email} onChange={e => setEmail(e.target.value)} type="email" />
+await authClient.signup({ email, password });            // documented signup endpoint (contracts/auth-openapi.yaml)
+
+function AuthAwareLayout({ children }) {                  // AUTH-FE-011
+  const { authed } = useAuthState();                     // getAuthState on mount
+  if (!authed) return <Navigate to="/login" />;          // gate unauthenticated
+  return children;
+}
+// httpClient interceptor refreshes the token transparently (AUTH-FE-012)
+function logout() { authStore.clear(); authClient.logout(); router.push('/login'); } // AUTH-FE-013
+```
+
+Verification: review-tier. Contract fidelity is a UI-to-API mapping property with no compile signal — a page calling the wrong endpoint or a missing route gate compiles and renders. Verify by review against `specs/auth-frontend-l0.yaml` + `contracts/auth-openapi.yaml`: every documented page renders its documented fields as controlled inputs and calls its documented endpoint; the layout gates unauthenticated users; token refresh is in the interceptor; logout clears state. When a fork-receiver wires real component/e2e tests (each page submits to its endpoint; unauthenticated → redirect; logout clears state), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [React — <input> (controlled inputs)](https://react.dev/reference/react-dom/components/input)
+
+Reference: [React — Reacting to input with state](https://react.dev/learn/reacting-to-input-with-state)
+
+
+<!-- @source rules/billing-frontend-status-color-and-table-a11y.md -->
+
+---
+title: "Billing UI status badges must pair semantic color with a text label, and pricing tables must use accessible headers (scope=col) + ARIA-labeled CTAs"
+rule_id: billing-frontend-status-color-and-table-a11y
+impact: MEDIUM
+impactDescription: "A subscription status conveyed by color alone (green=ACTIVE, yellow=PAST_DUE) is invisible to color-blind and screen-reader users; a pricing table without scope='col' headers or ARIA-labeled tier CTAs is unnavigable by assistive tech — a screen-reader user cannot tell which 'Subscribe' button belongs to which plan. The billing surface drives purchase decisions; its status and comparison UI must be accessible."
+tags:
+  - billing
+  - frontend
+  - accessibility
+  - a11y
+  - status-badge
+  - tables
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/billing-frontend-l0.yaml#BILLING-FE-002"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the billing UI against specs/billing-frontend-l0.yaml: subscription status badges map
+    the correct semantic color (TRIAL→blue, ACTIVE→green, PAST_DUE→yellow, CANCELLED→gray) AND carry a
+    text label — never color alone (BILLING-FE-002, WCAG 1.4.1). PricingTable and PlanComparison use
+    accessible table headers (scope='col') and ARIA labels on plan-tier CTAs so each 'Subscribe' button is
+    associated with its plan (BILLING-FE-003, WCAG 1.3.1). (Currency display is BILLING-FE-001, governed by
+    currency-amount-no-raw-jsx-render; the billing↔payment module boundary is BILLING-FE-004.)
+evidence:
+  - source_type: external
+    citation: "WCAG 2.2 Success Criterion 1.4.1 Use of Color (Level A) — a status badge must not rely on color alone; pair color with a text label (BILLING-FE-002)"
+    url: "https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html"
+    quote: "Color is not used as the only visual means of conveying information, indicating an action, prompting a response, or distinguishing a visual element."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "WCAG 2.2 Success Criterion 1.3.1 Info and Relationships (Level A) — pricing table headers (scope=col) + ARIA-labeled CTAs make structure programmatically determinable (BILLING-FE-003)"
+    url: "https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html"
+    quote: "Information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Billing UI status badges must pair color with a text label, and pricing tables must use accessible headers + ARIA-labeled CTAs
+
+**Impact: MEDIUM — The billing surface drives money decisions, so its accessibility is not optional. A subscription status shown only by color — green for ACTIVE, yellow for PAST_DUE — is invisible to a color-blind user and silent to a screen reader; WCAG 1.4.1 is explicit that *color is not used as the only visual means of conveying information, indicating an action, prompting a response, or distinguishing a visual element*. A pricing comparison table without `scope='col'` headers and ARIA-labeled tier CTAs is unnavigable by assistive technology — WCAG 1.3.1 requires that *information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text*, so a screen-reader user can tell which 'Subscribe' button belongs to which plan and what each cell means.**
+
+There are two load-bearing requirements here (BILLING-FE-001 currency → `currency-amount-no-raw-jsx-render`; BILLING-FE-004 module boundary → its own boundary rule).
+
+**Status badge color + label (BILLING-FE-002).** Subscription status badges map the correct semantic color — TRIAL→blue, ACTIVE→green, PAST_DUE→yellow, CANCELLED→gray — AND carry a text label, so the status is conveyed by more than color alone (WCAG 1.4.1).
+
+**Accessible pricing tables (BILLING-FE-003).** PricingTable and PlanComparison use accessible table headers (`scope='col'`) and ARIA labels on plan-tier CTAs, so the table's structure and each CTA's plan association are programmatically determinable (WCAG 1.3.1).
+
+**Incorrect — color-only status; pricing table with no header scope and an ambiguous CTA:**
+
+```tsx
+<span className={statusColor(status)} />                  {/* VIOLATION: color alone, no label (BILLING-FE-002) */}
+<table><tr><th>Free</th><th>Pro</th></tr>               {/* VIOLATION: no scope='col' (BILLING-FE-003) */}
+  <button>Subscribe</button></table>                     {/* VIOLATION: CTA not associated with a plan (no ARIA label) */}
+```
+
+**Correct — color + text label status; scope=col headers + ARIA-labeled CTAs:**
+
+```tsx
+<StatusBadge color={STATUS_COLOR[status]}>{STATUS_LABEL[status]}</StatusBadge>   {/* color + label (BILLING-FE-002) */}
+<table>
+  <thead><tr><th scope="col">Free</th><th scope="col">Pro</th></tr></thead>      {/* scope=col (BILLING-FE-003) */}
+  <tbody>...<button aria-label="Subscribe to Pro plan">Subscribe</button>...</tbody>
+</table>
+```
+
+Verification: review-tier. Billing a11y is an accessibility property with no compile signal — a color-only badge and an unscoped table render fine and exclude real users. Verify by review against `specs/billing-frontend-l0.yaml`: status badges pair the correct semantic color with a text label; pricing tables use `scope='col'` headers and ARIA-labeled tier CTAs. When a fork-receiver wires an axe/a11y test (status has a non-color label; table headers are scoped; CTAs are labeled), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [WCAG 2.2 — Use of Color (1.4.1)](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html)
+
+Reference: [WCAG 2.2 — Info and Relationships (1.3.1)](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html)
 
 
 <!-- @source rules/bundle-barrel-imports.md -->
@@ -2982,6 +3230,93 @@ Reference: [MDN Web Docs — CompositionEvent](https://developer.mozilla.org/en-
 Reference: [W3C UI Events §CompositionEvent](https://www.w3.org/TR/uievents/#events-composition-types)
 
 
+<!-- @source rules/crud-frontend-pages-bind-crud-contract.md -->
+
+---
+title: "CRUD UI pages must realize the CRUD contract — server-paginated list with filter/empty/bulk states, create→redirect, detail with audit fields, edit pre-populated, delete behind a confirm dialog"
+rule_id: crud-frontend-pages-bind-crud-contract
+impact: MEDIUM
+impactDescription: "A CRUD UI that paginates client-side breaks on large datasets; one with no EmptyState shows a blank table; one whose create page does not redirect to the new item leaves the user lost; an edit form not pre-populated from getItem silently blanks fields the user did not touch; a delete with no confirm dialog destroys data on a misclick. Each is a CRUD-surface defect that the documented component contract prevents."
+tags:
+  - crud
+  - frontend
+  - pagination
+  - forms
+  - contract-first
+  - data-table
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/crud-frontend-l0.yaml#CRUD-FE-001"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the CRUD UI against specs/crud-frontend-l0.yaml: the list page is a DataTable over
+    SERVER-paginated data calling listItems (CRUD-FE-001), with a FilterBar + SearchInput (002),
+    Pagination reflecting pagination.totalPages from the response (003), an EmptyState on zero items (004),
+    and a BulkActionsBar when rows are selected (005). The create page renders CrudCreateForm (title +
+    description controlled fields), calls createItem on submit (006), and redirects to the new item's
+    detail page on success (007). The detail page shows title/description + audit fields (createdAt,
+    createdBy) from getItem (008). The edit page renders CrudEditForm PRE-POPULATED from getItem and calls
+    updateItem (009). The edit danger zone renders a CrudDeleteConfirm dialog that calls deleteItem and
+    redirects to the list (010). No client-side pagination of a server-paginated dataset.
+evidence:
+  - source_type: external
+    citation: "React Docs — <input> (controlled inputs): CRUD create/edit form fields are controlled (value + onChange) (CRUD-FE-006/009)"
+    url: "https://react.dev/reference/react-dom/components/input"
+    quote: "To render a controlled input, pass the value prop to it (or checked for checkboxes and radios). React will force the input to always have the value you passed."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "React Docs — Reacting to input with state (declarative UI): list page renders empty/loaded/selected states declaratively (CRUD-FE-004/005)"
+    url: "https://react.dev/learn/reacting-to-input-with-state"
+    quote: "React provides a declarative way to manipulate the UI. Instead of manipulating individual pieces of the UI directly, you describe the different states that your component can be in, and switch between them in response to the user input."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## CRUD UI pages must realize the CRUD contract — server-paginated list, create→redirect, detail with audit, edit pre-populated, delete confirmed
+
+**Impact: MEDIUM — A CRUD surface is the most-copied UI in any app, and the same defects recur: client-side pagination that loads the whole table and dies on large data; a blank table instead of an EmptyState; a create that succeeds but strands the user on the form instead of the new item; an edit form that mounts empty instead of pre-populated from `getItem`, so saving blanks every field the user did not retype; a delete that fires on a misclick with no confirm. The CRUD-frontend spec pins each surface to its documented component and endpoint. React supplies the primitives — form fields are controlled (*to render a controlled input, pass the value prop ... React will force the input to always have the value you passed*) and pages render their states declaratively (*you describe the different states that your component can be in*).**
+
+There are ten load-bearing requirements — the items of `specs/crud-frontend-l0.yaml`, all governed by this rule.
+
+**List page (CRUD-FE-001..005).** A DataTable over SERVER-paginated data calling `listItems` (001); a FilterBar + SearchInput to filter (002); Pagination controls reflecting `pagination.totalPages` from the response — not a client-side slice (003); an EmptyState when the response has zero items (004); a BulkActionsBar shown when rows are selected (005).
+
+**Create (CRUD-FE-006..007).** A CrudCreateForm with title + description controlled fields calling `createItem` on submit (006), redirecting to the new item's detail page on success (007).
+
+**Detail (CRUD-FE-008).** Shows title, description, and audit fields (`createdAt`, `createdBy`) from `getItem`.
+
+**Edit + delete (CRUD-FE-009..010).** A CrudEditForm PRE-POPULATED with the item's current values from `getItem`, calling `updateItem` (009); a danger zone with a CrudDeleteConfirm dialog that calls `deleteItem` and redirects to the list (010).
+
+**Incorrect — client-paginated, blank on empty, edit form not pre-populated, delete with no confirm:**
+
+```tsx
+const all = await listAllItems(); const page = all.slice(0,20);   {/* VIOLATION: client-side pagination (CRUD-FE-001/003) */}
+return <Table rows={page} />;                                      {/* VIOLATION: no EmptyState on zero (CRUD-FE-004) */}
+<form><input value="" onChange={...} /></form>                    {/* VIOLATION: edit form not pre-populated (CRUD-FE-009) */}
+<button onClick={deleteItem}>Delete</button>                      {/* VIOLATION: no confirm dialog (CRUD-FE-010) */}
+```
+
+**Correct — server pagination, EmptyState, pre-populated edit, confirm-dialog delete with redirect:**
+
+```tsx
+const { data } = useQuery(['items', page], () => listItems({ page }));   // server-paginated (CRUD-FE-001)
+if (data.items.length === 0) return <EmptyState />;                       // CRUD-FE-004
+<Pagination totalPages={data.pagination.totalPages} />                    // from response (CRUD-FE-003)
+// edit: form initialized from getItem
+const item = await getItem(id); <CrudEditForm defaultValues={item} onSubmit={v => updateItem(id, v)} />  // CRUD-FE-009
+// delete: confirm dialog
+<CrudDeleteConfirm onConfirm={async () => { await deleteItem(id); router.push('/items'); }} />            // CRUD-FE-010
+// create success → redirect to detail (CRUD-FE-007)
+```
+
+Verification: review-tier. CRUD-contract fidelity is a UI-to-API mapping property with no compile signal. Verify by review against `specs/crud-frontend-l0.yaml`: the list is server-paginated with filter/empty/bulk states; create redirects to detail; detail shows audit fields; edit is pre-populated; delete is behind a confirm dialog and redirects. When a fork-receiver wires real component tests (empty → EmptyState; edit mounts populated; delete requires confirm), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [React — <input> (controlled inputs)](https://react.dev/reference/react-dom/components/input)
+
+Reference: [React — Reacting to input with state](https://react.dev/learn/reacting-to-input-with-state)
+
+
 <!-- @source rules/currency-amount-no-raw-jsx-render.md -->
 
 ---
@@ -3120,6 +3455,267 @@ No ESLint rule ships for this (ax/no-raw-billing-amount is NOT in eslint-plugin-
 Illustrative FAIL shape: a PricingCard that renders `{plan.amount}` directly (no dedicated fixture shipped yet — verified at review).
 
 Illustrative PASS shape: correct usage via `formatCurrencyAmount` from `templates/L1/components/currency-input.tsx` (which exists).
+
+
+<!-- @source rules/dsr-frontend-pages-bind-dsr-contract.md -->
+
+---
+title: "DSR (data-subject-rights) UI must realize the GDPR rights contract — dashboard with SLA, access/rectify/portability flows, and destructive erasure/restrict behind a confirm dialog"
+rule_id: dsr-frontend-pages-bind-dsr-contract
+impact: HIGH
+impactDescription: "A data-subject-rights UI that fires erasure or processing-restriction without a confirm dialog destroys or freezes data on a misclick; one with no SLA due date on the dashboard hides that a statutory deadline is approaching; a lift-restriction or extend-window with no required justification leaves a privileged change unaccountable. The DSR surface implements legal rights (GDPR Art 15-20) — its destructive actions and deadlines must be handled deliberately."
+tags:
+  - dsr
+  - gdpr
+  - frontend
+  - privacy
+  - confirm-dialog
+  - contract-first
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/data-subject-rights-frontend-l0.yaml#DSR-FE-002"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the DSR UI against specs/data-subject-rights-frontend-l0.yaml: the privacy dashboard
+    lists the subject's DSR requests with status + SLA due date, tracking each (DSR-FE-001). The access
+    page submits via dsrOpenAccess and renders the returned export (002). The rectify page renders a
+    field-level correction form (field_path / current_value / corrected_value) (003). The erasure page
+    guards the destructive request behind a confirm-dialog and calls dsrErasure on confirm (004). The
+    portability page lets the subject choose json/csv and calls dsrPortability, exposing the download
+    (005). The restrict page guards the processing-freeze behind a confirm-dialog and calls dsrRestrict
+    (006), and offers a lift-restriction requiring a justification via dsrLiftRestrict (007). The request
+    detail page shows the tracking envelope (status, received_at, due_at, closed_at) (008) and offers an
+    extend-window action (extensionDays + extensionReason) calling the extend endpoint (009). Every
+    destructive/irreversible action (erasure, restrict) is behind a confirm dialog; lift/extend require a
+    justification.
+evidence:
+  - source_type: external
+    citation: "GDPR Article 15(1) — Right of access: the access page (dsrOpenAccess) realizes the subject's right to obtain confirmation + access to their personal data (DSR-FE-002)"
+    url: "https://gdpr-info.eu/art-15-gdpr/"
+    quote: "The data subject shall have the right to obtain from the controller confirmation as to whether or not personal data concerning him or her are being processed, and, where that is the case, access to the personal data and the following information:"
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "React Docs — Reacting to input with state (declarative UI): DSR pages render request states + guard destructive actions behind a confirm-dialog state (DSR-FE-004/006)"
+    url: "https://react.dev/learn/reacting-to-input-with-state"
+    quote: "React provides a declarative way to manipulate the UI. Instead of manipulating individual pieces of the UI directly, you describe the different states that your component can be in, and switch between them in response to the user input."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## DSR UI must realize the GDPR rights contract — dashboard with SLA, access/rectify/portability flows, destructive erasure/restrict behind a confirm dialog
+
+**Impact: HIGH — The data-subject-rights surface implements legal entitlements under GDPR Articles 15-20 — per Art 15(1), *the data subject shall have the right to obtain from the controller confirmation as to whether or not personal data concerning him or her are being processed, and, where that is the case, access to the personal data*. Two classes of defect are serious here: a destructive action (erasure, processing-restriction) fired without a confirm dialog destroys or freezes a subject's data on a misclick and is irreversible; and a dashboard that hides the SLA due date lets a statutory response deadline pass silently. The DSR-frontend spec binds each right to its page, endpoint, and the guards its severity demands. React renders the request states and the confirm-dialog gate declaratively — *you describe the different states that your component can be in*.**
+
+There are nine load-bearing requirements — the items of `specs/data-subject-rights-frontend-l0.yaml`, all governed by this rule (the DSR backend is `specs/data-subject-rights-l0.yaml`).
+
+**Dashboard + access + rectify (DSR-FE-001..003).** The privacy dashboard lists the subject's DSR requests with status + SLA due date (001). The access page submits via `dsrOpenAccess` and renders the returned export (002). The rectify page renders a field-level correction form — `field_path` / `current_value` / `corrected_value` (003).
+
+**Destructive flows behind confirm (DSR-FE-004, 006, 007).** The erasure page guards the request behind a confirm-dialog and calls `dsrErasure` on confirm (004). The restrict page guards the processing-freeze behind a confirm-dialog and calls `dsrRestrict` (006), and offers a lift-restriction action requiring a justification via `dsrLiftRestrict` (007).
+
+**Portability + detail + extend (DSR-FE-005, 008, 009).** The portability page lets the subject choose json/csv and calls `dsrPortability`, exposing the download (005). The request detail page shows the tracking envelope — status, received_at, due_at, closed_at (008) — and offers an extend-window action (`extensionDays` + `extensionReason`) calling the extend endpoint (009).
+
+**Incorrect — erasure with no confirm; dashboard hides the SLA; lift with no justification:**
+
+```tsx
+<button onClick={() => dsrErasure(id)}>Erase my data</button>   {/* VIOLATION: destructive, no confirm dialog (DSR-FE-004) */}
+<RequestRow status={r.status} />                                {/* VIOLATION: no SLA due date shown (DSR-FE-001) */}
+<button onClick={() => dsrLiftRestrict(id)}>Lift</button>       {/* VIOLATION: no required justification (DSR-FE-007) */}
+```
+
+**Correct — confirm-gated erasure/restrict, SLA on the dashboard, justification required:**
+
+```tsx
+<ConfirmDialog title="Erase all your data?" destructive                       // DSR-FE-004
+  onConfirm={() => dsrErasure(id)}><button>Erase my data</button></ConfirmDialog>
+<RequestRow status={r.status} dueAt={r.due_at} />                              // SLA due date (DSR-FE-001)
+<LiftRestrictionForm onSubmit={({justification}) => dsrLiftRestrict(id, justification)} required />  // DSR-FE-007
+// access page: const export = await dsrOpenAccess(); render export  (DSR-FE-002, GDPR Art 15)
+```
+
+Verification: review-tier. DSR-UI correctness is a legal + safety property with no compile signal — an unconfirmed erasure compiles and destroys data on a misclick. Verify by review against `specs/data-subject-rights-frontend-l0.yaml`: the dashboard shows status + SLA; access/rectify/portability call their endpoints; erasure and restrict are behind confirm dialogs; lift and extend require a justification; the detail page shows the tracking envelope. When a fork-receiver wires real tests (erasure requires confirm; lift requires justification; dashboard shows due_at), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [GDPR Article 15 — Right of access](https://gdpr-info.eu/art-15-gdpr/)
+
+Reference: [React — Reacting to input with state](https://react.dev/learn/reacting-to-input-with-state)
+
+
+<!-- @source rules/feature-flags-frontend-admin-toggle.md -->
+
+---
+title: "Feature-flag admin UI must list flags with a toggle that PATCHes optimistically, an editable detail page, and server-side middleware evaluation"
+rule_id: feature-flags-frontend-admin-toggle
+impact: MEDIUM
+impactDescription: "A flag admin table with no toggle forces a code deploy to flip a flag; a toggle that does not PATCH the server leaves the change local-only; a detail Save that does not PATCH (or a Cancel that does not discard) corrupts the edit flow; middleware that does not evaluate flags server-side lets a disabled feature's route still render. The admin surface is how a flag is operated — its mutations must reach the server."
+tags:
+  - feature-flags
+  - frontend
+  - admin
+  - optimistic-update
+  - middleware
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/feature-flags-frontend-l0.yaml#FF-FE-001"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the feature-flag admin UI against specs/feature-flags-frontend-l0.yaml: the admin
+    page lists all flags in a table with name, enabled status (toggle), description, last-modified, and an
+    empty state (001). The FeatureFlagToggle calls PATCH /api/v1/admin/feature-flags/{name} on interaction
+    with an optimistic update + rollback on failure (002). The admin detail page renders the toggle + a
+    description editor; Save calls PATCH, Cancel discards local edits (003). Middleware evaluates flags
+    server-side via GET /api/v1/feature-flags/{name}/active and redirects to /not-found when disabled
+    (005). (The runtime FeatureGate component is FF-FE-004, governed by prefer-feature-gate-over-env-check.)
+evidence:
+  - source_type: external
+    citation: "React Docs — <input> (controlled inputs): the flag toggle is a controlled checkbox (checked + onChange) (FF-FE-002)"
+    url: "https://react.dev/reference/react-dom/components/input"
+    quote: "To render a controlled input, pass the value prop to it (or checked for checkboxes and radios). React will force the input to always have the value you passed."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "React Docs — Reacting to input with state (declarative UI): the admin table renders list/empty + optimistic/rolled-back states declaratively (FF-FE-001/002)"
+    url: "https://react.dev/learn/reacting-to-input-with-state"
+    quote: "React provides a declarative way to manipulate the UI. Instead of manipulating individual pieces of the UI directly, you describe the different states that your component can be in, and switch between them in response to the user input."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Feature-flag admin UI must list flags with a PATCHing optimistic toggle, an editable detail page, and server-side middleware evaluation
+
+**Impact: MEDIUM — Feature flags exist so a feature can be flipped WITHOUT a deploy; the admin UI is how that flip happens, so its mutations must reach the server. A table with no toggle defeats the purpose; a toggle that flips local state but never PATCHes leaves the server unchanged (the flag reverts on reload); a detail Save that does not PATCH, or a Cancel that does not discard, corrupts the edit flow; and middleware that does not evaluate flags server-side lets a disabled feature's route still render to the user. React supplies the primitives — the toggle is a controlled checkbox (*to render a controlled input, pass the value prop (or checked for checkboxes) ... React will force the input to always have the value you passed*) and the table renders its states (incl. optimistic + rollback) declaratively.**
+
+There are four load-bearing requirements here (FF-FE-004, the runtime gate, is governed by `prefer-feature-gate-over-env-check`).
+
+**Admin list (FF-FE-001).** A table of all flags with name, enabled-status toggle, description, last-modified, and an empty state.
+
+**Toggle PATCH + optimistic (FF-FE-002).** The FeatureFlagToggle calls `PATCH /api/v1/admin/feature-flags/{name}` on interaction, applying an optimistic update and rolling back on failure.
+
+**Detail editor (FF-FE-003).** The admin detail page renders the toggle + a description editor; Save calls PATCH; Cancel discards local edits.
+
+**Server-side middleware (FF-FE-005).** Middleware evaluates flags server-side via `GET /api/v1/feature-flags/{name}/active` and redirects to `/not-found` when disabled — a disabled feature's route does not render.
+
+**Incorrect — local-only toggle; middleware does not gate the route:**
+
+```tsx
+<Toggle checked={flag.enabled} onChange={v => setLocal(v)} />   {/* VIOLATION: no PATCH → server unchanged (FF-FE-002) */}
+export function middleware() { return NextResponse.next(); }    {/* VIOLATION: no server-side flag eval (FF-FE-005) */}
+```
+
+**Correct — PATCHing optimistic toggle; middleware redirects when disabled:**
+
+```tsx
+async function onToggle(name, next) {
+  setOptimistic(name, next);                                    // optimistic (FF-FE-002)
+  try { await api.patch(`/v1/admin/feature-flags/${name}`, { enabled: next }); }
+  catch { rollback(name); }                                     // rollback on failure
+}
+export async function middleware(req) {                         // FF-FE-005
+  const { active } = await fetch(`/v1/feature-flags/${flagFor(req)}/active`).then(r => r.json());
+  return active ? NextResponse.next() : NextResponse.redirect(new URL('/not-found', req.url));
+}
+```
+
+Verification: review-tier. Admin-mutation fidelity is a UI-to-API property with no compile signal. Verify by review against `specs/feature-flags-frontend-l0.yaml`: the admin table lists flags with an empty state; the toggle PATCHes with optimistic+rollback; the detail Save/Cancel behave; middleware evaluates server-side and redirects when disabled. When a fork-receiver wires real tests (toggle PATCHes; disabled route → /not-found), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [React — <input> (controlled inputs)](https://react.dev/reference/react-dom/components/input)
+
+Reference: [React — Reacting to input with state](https://react.dev/learn/reacting-to-input-with-state)
+
+
+<!-- @source rules/file-storage-frontend-render-a11y-error.md -->
+
+---
+title: "File-storage UI must render the documented file surfaces with human-readable sizes, accessible dropzone + status, mapped error messages, and virtualized large lists"
+rule_id: file-storage-frontend-render-a11y-error
+impact: HIGH
+impactDescription: "A file UI that renders raw byte counts is unreadable; a dropzone reachable only by mouse excludes keyboard users; status conveyed by color alone is invisible to color-blind and screen-reader users; an upload error shown as a generic 'failed' gives the user no recovery; an un-virtualized list of thousands of files freezes the tab. Each defect is a usability or accessibility failure of the file surface."
+tags:
+  - file-storage
+  - frontend
+  - accessibility
+  - a11y
+  - error-handling
+  - rendering
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/file-storage-frontend-l0.yaml#FILE-FE-A11Y-002"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the file-storage UI against specs/file-storage-frontend-l0.yaml:
+    RENDER — file list is a DataTable (name/type/size/status/uploaded-date); upload page is a
+    FileDropzone (L1) with accepted MIME + size limit as props and a progress indicator; detail page
+    shows metadata + a Download button; file size is rendered human-readable (formatBytes → '1.5 MB'),
+    never a raw byte count. A11Y — the dropzone is keyboard operable (Tab focus, Space/Enter opens the
+    picker); status badges pair a text label WITH color (never color alone); upload/quota errors are
+    announced via an aria-live region. ERROR — upload failures map backend error types to specific
+    messages (quota-exceeded / unsupported-type / too-large), not a generic 'failed'; a 202 scan-pending
+    download shows a non-blocking message and polls. PERF — the list virtualizes beyond 50 rows
+    (off-screen rows are not in the DOM).
+evidence:
+  - source_type: external
+    citation: "WCAG 2.2 Success Criterion 1.4.1 Use of Color (Level A) — status badge needs a text label, not color alone (FILE-FE-A11Y-002)"
+    url: "https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html"
+    quote: "Color is not used as the only visual means of conveying information, indicating an action, prompting a response, or distinguishing a visual element."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "WCAG 2.2 Success Criterion 4.1.3 Status Messages (Level AA) — upload/quota errors announced via an aria-live region (FILE-FE-A11Y-003)"
+    url: "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
+    quote: "In content implemented using markup languages, status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "RFC 9457 Problem Details — backend error types mapped to specific user-facing upload messages (FILE-FE-ERROR-001)"
+    url: "https://www.rfc-editor.org/rfc/rfc9457"
+    quote: "This document defines a 'problem detail' to carry machine-readable details of errors in HTTP response content to avoid the need to define new error response formats for HTTP APIs."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## File-storage UI must render documented surfaces with human-readable sizes, accessible dropzone + status, mapped errors, and virtualized lists
+
+**Impact: HIGH — The file surface is where accessibility and error-handling defects hit users hardest. A size column showing `1572864` instead of `1.5 MB` is unreadable. A drop zone that only accepts a mouse drag excludes every keyboard and screen-reader user. A status pill that is only colored — green for READY, red for QUARANTINED — is invisible to a color-blind user and silent to a screen reader; WCAG 1.4.1 is explicit that *color is not used as the only visual means of conveying information ... or distinguishing a visual element*. An upload error shown as a generic "failed" tells the user nothing actionable, when the backend already said `quota-exceeded`. And a non-virtualized list of thousands of files locks the tab. This rule binds the file-storage-frontend contract across RENDER, A11Y, ERROR, and PERF.**
+
+There are ten load-bearing requirements — the items of `specs/file-storage-frontend-l0.yaml`, all governed by this rule.
+
+**RENDER.** The file list is a DataTable with the documented columns (name, type, size, status, uploaded date) (FILE-FE-RENDER-001). The upload page renders a FileDropzone (L1) with the accepted MIME types and size limit passed as props plus a progress indicator (FILE-FE-RENDER-002). The detail page renders the file metadata and a Download button (FILE-FE-RENDER-003). File size is rendered human-readable (`formatBytes(n)` → `'1.5 MB'`, `'320 KB'`), never a raw byte count (FILE-FE-RENDER-004).
+
+**A11Y.** The FileDropzone is keyboard operable — Tab focuses it, Space/Enter opens the native file picker (WCAG 2.1.1 Keyboard) (FILE-FE-A11Y-001). Status badges (PENDING/READY/QUARANTINED) pair a text label WITH color — never color alone, per WCAG 1.4.1 (FILE-FE-A11Y-002). Upload and quota-exceeded errors are announced via an `aria-live` region so a screen-reader user is notified without a focus change, per WCAG 4.1.3 (FILE-FE-A11Y-003).
+
+**ERROR.** Upload failures map backend error types to SPECIFIC user-facing messages — `quota-exceeded`, `unsupported-type`, `too-large` — read from the RFC 9457 problem `type`, not a generic "failed" (FILE-FE-ERROR-001). A download that returns `202` (scan pending) shows a non-blocking message and automatically polls until the scan completes (FILE-FE-ERROR-002).
+
+**PERF.** The file list virtualizes beyond 50 rows — off-screen rows are not rendered into the DOM (FILE-FE-PERF-001).
+
+**Incorrect — raw bytes, color-only status, generic error, mouse-only dropzone:**
+
+```tsx
+<td>{file.sizeBytes}</td>                                   {/* VIOLATION: raw bytes (FILE-FE-RENDER-004) */}
+<span className={file.status === 'READY' ? 'text-green' : 'text-red'} />  {/* VIOLATION: color alone (FILE-FE-A11Y-002) */}
+<div onDrop={handleDrop}>Drop files</div>                   {/* VIOLATION: no keyboard/picker (FILE-FE-A11Y-001) */}
+catch (e) { setError('Upload failed'); }                    {/* VIOLATION: generic, unmapped (FILE-FE-ERROR-001) */}
+```
+
+**Correct — human-readable size, label+color status, aria-live errors, keyboard dropzone, mapped messages:**
+
+```tsx
+<td>{formatBytes(file.sizeBytes)}</td>                      {/* '1.5 MB' (FILE-FE-RENDER-004) */}
+<StatusBadge status={file.status} />                        {/* renders icon + TEXT label + color (FILE-FE-A11Y-002) */}
+<FileDropzone accept={ACCEPTED_MIME} maxSize={MAX}          {/* MIME/size as props (FILE-FE-RENDER-002) */}
+  onSelect={upload} />                                      {/* Tab/Space/Enter opens picker (FILE-FE-A11Y-001) */}
+<div role="alert" aria-live="assertive">{errorMessage}</div>{/* announced (FILE-FE-A11Y-003) */}
+catch (e) { setError(messageForProblemType(e));            {/* quota-exceeded / unsupported-type / too-large (FILE-FE-ERROR-001) */}
+}
+// list: <VirtualizedTable rows={files} />  (virtualize > 50, FILE-FE-PERF-001)
+// download 202 → non-blocking notice + poll (FILE-FE-ERROR-002)
+```
+
+Verification: review-tier. These are UI-contract + accessibility properties with no compile signal — a color-only badge and a raw-byte size render fine and fail real users. Verify by review against `specs/file-storage-frontend-l0.yaml`: documented surfaces render; sizes are human-readable; the dropzone is keyboard operable; status pairs label+color; errors announce via aria-live and map backend problem types to specific messages; a 202 download polls; the list virtualizes past 50 rows. When a fork-receiver wires a real component/a11y test (axe on the file list; keyboard-opens-picker; color-blind status has a label), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [WCAG 2.2 — Use of Color (1.4.1)](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html)
+
+Reference: [WCAG 2.2 — Status Messages (4.1.3)](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)
 
 
 <!-- @source rules/impersonation-banner-required-when-acting-as-other-user.md -->
@@ -5671,6 +6267,107 @@ Sources for this rule:
 - [React 19 — cache() (for isolation context)](https://react.dev/reference/react/cache)
 
 
+<!-- @source rules/no-app-local-ui-primitives.md -->
+
+---
+title: Per-persona apps must reuse the shared catalog (@ax/ui / @ax/blocks) — never define app-local UI primitives
+impact: HIGH
+impactDescription: "When each app re-implements its own Button/Input/Card, the design system fragments: tokens drift, a11y fixes land in one copy and not the others, and the monorepo's whole reason for a shared catalog is defeated. Apps must import primitives from @ax/ui and composed blocks from @ax/blocks. A bespoke app-local copy (a components/ui/** module, or a component named like a catalog primitive) is a hard error."
+tags: [monorepo, design-system, components, reuse, consistency]
+applicable_to: [react, nextjs, vite]
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-COMPOSITION-001"
+verification:
+  type: lint
+  rule_id: "ax/no-app-local-ui-primitives"
+  status: shipped
+  notes: "Shipped + enabled: ax/no-app-local-ui-primitives is scoped to files under an apps/ segment. It flags (a) defining/exporting a component named like a catalog primitive (Button/Input/Label/Field/Card+Card*/Alert/Badge/Spinner/Switch) and (b) importing a local components/ui/** module. Re-exporting from @ax/ui or @ax/blocks is allowed. The root web-shell app (not under apps/**) is exempt because it predates the catalog. Registered in the plugin index and wired as error for apps/** in frontend/eslint.config.mjs."
+provenance: { pilot: false, pipeline_version: "2026-06-05", pipeline_steps: [phaseA_monorepo_foundation, phaseB_rule_authoring, phaseC_teeth_proof] }
+audit:
+  accuracy: { status: verified, last_verified: "2026-06-05" }
+  freshness: { status: current, last_verified: "2026-06-05", next_review_by: "2026-09-03" }
+  completeness: { status: complete, amendments: ["Scope to apps/** only; exempt the predating web-shell", "Allow re-exports from the catalog packages"] }
+  gap_check: { status: complete }
+upstream:
+  - id: turborepo-internal-packages
+    title: "Turborepo: Sharing code with internal packages"
+    url: "https://turborepo.com/docs/core-concepts/internal-packages"
+    role: seed
+evidence:
+  - source_type: external
+    citation: "Turborepo Handbook — Internal Packages: sharing UI/code across apps in a monorepo via a single internal package, so consuming apps import from the shared package rather than copying source."
+    url: "https://turborepo.com/docs/core-concepts/internal-packages"
+    quote: "Internal Packages are libraries whose source code lives inside your Workspace. ... You can quickly make Internal Packages to share code within your monorepo and choose to publish them to the npm registry if you need to later."
+sibling_rules: [rerender-no-inline-components]
+---
+
+## Per-persona apps must reuse the shared catalog — never define app-local UI primitives
+
+**Impact: HIGH — This is a design-system integrity rule. The whole point of the `@ax/ui` + `@ax/blocks` catalog is that every per-persona app renders the *same* primitives. An app-local `Button` silently forks the design system.**
+
+This monorepo hosts a shared component catalog:
+
+- `@ax/ui` — design-system primitives (`Button`, `Input`, `Label`, `Field`, `Card` + `Card*` family, `Alert`, `Badge`, `Spinner`, `Switch`, plus `cn`).
+- `@ax/blocks` — composed 21st.dev-style blocks built on `@ax/ui`.
+
+Per-persona apps live under `frontend/apps/**`. They **consume** the catalog; they must not re-implement it.
+
+### Incorrect — an app defines its own primitive (apps/enterprise/src/Button.tsx)
+
+```tsx
+// apps/enterprise/src/Button.tsx
+export function Button({ children }: { children: React.ReactNode }) {
+  return <button className="rounded bg-blue-600 px-3 py-2">{children}</button>
+}
+```
+
+This forks the catalog: token drift, divergent focus/hover/disabled states, and any a11y fix to the real `@ax/ui` Button never reaches this copy.
+
+### Incorrect — an app imports a local components/ui module
+
+```tsx
+// apps/enterprise/src/login.tsx
+import { Button } from './components/ui/button' // ← app-local copy, forbidden
+```
+
+### Correct — import the primitive from the shared catalog
+
+```tsx
+// apps/enterprise/src/login.tsx
+import { Button, Card, CardHeader, CardTitle } from '@ax/ui'
+import { StatusBadge } from '@ax/blocks'
+
+export function Login() {
+  return (
+    <Card>
+      <CardHeader><CardTitle>로그인</CardTitle></CardHeader>
+      <Button>계속</Button>
+    </Card>
+  )
+}
+```
+
+### What the rule flags (only in files under `apps/**`)
+
+1. A **definition** of a component named like a catalog primitive that returns JSX — `function Button() { return <.../> }`, `const Card = () => <.../>`, or a `forwardRef(...)`/`memo(...)` factory assigned to a primitive name.
+2. An **export** that surfaces a catalog-primitive name — `export { Button }`, `export { MyThing as Badge }` — unless it re-exports from `@ax/ui` / `@ax/blocks`.
+3. An **import** from a local `components/ui/**` module (any relative specifier with a `components/ui` segment).
+
+### What it does NOT flag
+
+- Importing primitives from `@ax/ui` / blocks from `@ax/blocks` — that is the required pattern.
+- Re-exporting from the catalog packages (`export { Button } from '@ax/ui'`).
+- An app-local function that happens to be named like a primitive but does not return JSX (a plain helper).
+- Components with non-catalog names (`LoginPanel`, `DashboardHeader`, …) — apps compose freely; only the reserved primitive names are protected.
+- The root web-shell app (everything **not** under `apps/**`) — it predates the catalog and is exempt.
+
+### Why "I just need a small tweak" isn't a reason
+
+If a catalog primitive is missing a variant, add the variant to `@ax/ui` so every app benefits — do not fork it into one app. The shared catalog is the single source of truth; that is exactly what makes six per-persona apps stay consistent.
+
+Sources:
+- [Turborepo: Sharing code with internal packages](https://turborepo.com/docs/core-concepts/internal-packages)
+
+
 <!-- @source rules/no-billing-payment-ui-boundary.md -->
 
 ---
@@ -6474,6 +7171,248 @@ Frontend companion to: `no-rrn-logging.md` in `practices/rules/`.
 Reference: [개인정보보호법 제24조 — 고유식별정보의 처리 제한](https://www.law.go.kr/법령/개인정보보호법)
 
 Reference: [KISA 개인정보보호법 가이드라인 — 주민등록번호 처리](https://www.kisa.or.kr/2060301/form?postSeq=14&lang_type=KO)
+
+
+<!-- @source rules/notification-frontend-inbox-settings-bell.md -->
+
+---
+title: "Notification UI must realize the notification contract — virtualized inbox with status filter, mark-read/dismiss actions, preference toggles (partial update), and an unread-count bell"
+rule_id: notification-frontend-inbox-settings-bell
+impact: MEDIUM
+impactDescription: "A notification inbox that renders every notification into the DOM degrades over time; a mark-read that does not PATCH leaves the unread count permanently wrong; a settings form that PUTs the whole preferences object instead of a partial PATCH clobbers fields the user did not change; a bell with no unread badge hides pending notifications. The notification surface is high-frequency UI where each defect erodes trust in the count."
+tags:
+  - notification
+  - frontend
+  - virtualization
+  - forms
+  - contract-first
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/notification-frontend-l0.yaml#NOTIF-FE-001"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the notification UI against specs/notification-frontend-l0.yaml: the inbox renders
+    the list via VirtualizedTable and supports a status filter (UNREAD/READ/ALL) (001). The detail page
+    loads a single notification and renders a mark-read action calling PATCH /api/notifications/{id} (002).
+    The settings page renders a preference form with inAppEnabled + emailEnabled toggles (controlled)
+    (003) and submits a PARTIAL update via PATCH /api/notifications/preferences — not a full-object PUT
+    (004). The NotificationBell in the app header displays an unread badge count, updated by polling or SSE
+    (005). The dismiss action on the detail page calls DELETE /api/notifications/{id} and navigates away
+    (006).
+evidence:
+  - source_type: external
+    citation: "React Docs — <input> (controlled inputs): notification preference toggles are controlled (value/checked + onChange) (NOTIF-FE-003)"
+    url: "https://react.dev/reference/react-dom/components/input"
+    quote: "To render a controlled input, pass the value prop to it (or checked for checkboxes and radios). React will force the input to always have the value you passed."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "React Docs — Reacting to input with state (declarative UI): inbox renders filtered/unread/read states and the bell badge declaratively (NOTIF-FE-001/005)"
+    url: "https://react.dev/learn/reacting-to-input-with-state"
+    quote: "React provides a declarative way to manipulate the UI. Instead of manipulating individual pieces of the UI directly, you describe the different states that your component can be in, and switch between them in response to the user input."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Notification UI must realize the notification contract — virtualized inbox, mark-read/dismiss, partial-update preferences, unread-count bell
+
+**Impact: MEDIUM — Notifications are high-frequency UI, and the user's trust hinges on the unread count being right. The defects compound: an inbox that renders every notification degrades as they accumulate; a mark-read that updates local state but never PATCHes the server leaves the count wrong on the next load; a settings form that PUTs the entire preferences object instead of a PATCH partial-update clobbers a toggle the user did not touch; a header bell with no badge hides that anything is pending. The notification-frontend spec binds each surface to its endpoint and the right update shape. React supplies the primitives — preference toggles are controlled (*to render a controlled input, pass the value prop ... React will force the input to always have the value you passed*) and the inbox/bell render their states declaratively.**
+
+There are six load-bearing requirements — the items of `specs/notification-frontend-l0.yaml`, all governed by this rule.
+
+**Inbox + detail (NOTIF-FE-001, 002, 006).** The inbox renders the list via VirtualizedTable with a status filter (UNREAD/READ/ALL) (001). The detail page loads a single notification and renders a mark-read action calling `PATCH /api/notifications/{id}` (002). The dismiss action calls `DELETE /api/notifications/{id}` and navigates away (006).
+
+**Settings (NOTIF-FE-003, 004).** A preference form with `inAppEnabled` + `emailEnabled` controlled toggles (003), submitting a PARTIAL update via `PATCH /api/notifications/preferences` — never a full-object PUT that clobbers untouched fields (004).
+
+**Bell (NOTIF-FE-005).** The NotificationBell in the app header displays an unread badge count, updated by polling or SSE.
+
+**Incorrect — full list in DOM, local-only mark-read, full PUT of preferences:**
+
+```tsx
+{notifications.map(n => <Item key={n.id} n={n} />)}              {/* VIOLATION: not virtualized (NOTIF-FE-001) */}
+function markRead(n) { setLocal(n.id); }                         {/* VIOLATION: no PATCH → count wrong on reload (NOTIF-FE-002) */}
+await api.put('/notifications/preferences', allPrefs);           {/* VIOLATION: full PUT clobbers untouched fields (NOTIF-FE-004) */}
+```
+
+**Correct — virtualized inbox, server PATCH mark-read, partial-update preferences, badge bell:**
+
+```tsx
+<VirtualizedTable rows={filtered} />                             // NOTIF-FE-001 (+ status filter)
+async function markRead(id) { await api.patch(`/notifications/${id}`, { read: true }); }  // NOTIF-FE-002
+<Toggle checked={prefs.inAppEnabled} onChange={v =>                                        // controlled (NOTIF-FE-003)
+  api.patch('/notifications/preferences', { inAppEnabled: v })} />                          // PARTIAL patch (NOTIF-FE-004)
+<NotificationBell unread={unreadCount} />                        // badge, polled/SSE (NOTIF-FE-005)
+async function dismiss(id) { await api.delete(`/notifications/${id}`); router.back(); }    // NOTIF-FE-006
+```
+
+Verification: review-tier. Notification-contract fidelity is a UI-to-API + performance property with no compile signal. Verify by review against `specs/notification-frontend-l0.yaml`: the inbox virtualizes with a status filter; mark-read PATCHes and dismiss DELETEs the server; preferences submit a partial PATCH; the bell shows an unread badge. When a fork-receiver wires real tests (mark-read PATCHes; preferences PATCH is partial), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [React — <input> (controlled inputs)](https://react.dev/reference/react-dom/components/input)
+
+Reference: [React — Reacting to input with state](https://react.dev/learn/reacting-to-input-with-state)
+
+
+<!-- @source rules/payment-frontend-checkout-idempotent-states.md -->
+
+---
+title: "Payment UI must realize the payment contract — checkout with method picker + idempotency-key handler + slow-provider warning, idempotent success/failure pages, methods list/detail, refund"
+impact: HIGH
+rule_id: payment-frontend-checkout-idempotent-states
+impactDescription: "A checkout that re-POSTs without a stable idempotency key double-charges on a retry or back-button; one with no slow-provider warning leaves the user staring at a frozen button and re-clicking (more double-charges); a success page that is not idempotent re-runs side effects on refresh; a failure page with no retry strands a recoverable payment. Payment is the surface where a UI bug is a financial bug."
+tags:
+  - payment
+  - frontend
+  - idempotency
+  - checkout
+  - contract-first
+  - financial
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/payment-frontend-l0.yaml#PAYMENT-FE-001"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the payment UI against specs/payment-frontend-l0.yaml: the checkout page renders a
+    PaymentMethodPicker (001) and a PaymentCheckoutForm with amount display + card fields + pay button
+    (002), wrapped by an IdempotencyKeyHandler whose key is sent as the Idempotency-Key header and is
+    STABLE across retries (003); a SlowProviderWarning appears after 3000ms in-flight (004); the
+    'already processed' state is shown when the server returns the idempotent-replay result (011). The
+    success page renders a receipt for a completed payment by orderId and is idempotent on refresh (005);
+    the failure page renders an error state with a retry for a failed payment by orderId (006). The
+    methods list shows payment history with method types (007); methods/new renders the PaymentMethodPicker
+    (008); methods/detail renders a payment detail by id via getPayment (009); the refund page submits a
+    refund for an orderId via refundPayment (010). Idempotency key is generated once and reused on retry,
+    never regenerated per click.
+evidence:
+  - source_type: external
+    citation: "React Docs — Reacting to input with state (declarative UI): checkout renders idle/in-flight/slow/already-processed/success/failure states declaratively (PAYMENT-FE-004/005/006/011)"
+    url: "https://react.dev/learn/reacting-to-input-with-state"
+    quote: "React provides a declarative way to manipulate the UI. Instead of manipulating individual pieces of the UI directly, you describe the different states that your component can be in, and switch between them in response to the user input."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "RFC 9457 Problem Details — the failure page maps the backend payment problem type to a specific error + retry; the 'already processed' replay is recognized from the response (PAYMENT-FE-006/011)"
+    url: "https://www.rfc-editor.org/rfc/rfc9457"
+    quote: "This document defines a 'problem detail' to carry machine-readable details of errors in HTTP response content to avoid the need to define new error response formats for HTTP APIs."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Payment UI must realize the payment contract — idempotent checkout with method picker + slow-provider warning, idempotent success/failure, methods, refund
+
+**Impact: HIGH — On a payment surface a UI bug is a financial bug. The classic double-charge is a frontend failure: the user clicks Pay, the provider is slow, the button looks dead, they click again — and without a STABLE idempotency key the second click is a second charge. The catalog's backend payment idempotency (`PAYMENT-CALLBACK-002`, `idempotency-key-on-mutations`) only protects the user if the UI sends the SAME key on the retry. So the checkout wraps the form in an IdempotencyKeyHandler, shows a SlowProviderWarning after 3s so the user waits instead of re-clicking, and recognizes the 'already processed' replay. React renders these states declaratively — *you describe the different states that your component can be in, and switch between them in response to the user input* — and the failure page maps the backend RFC 9457 problem type to a specific, retryable error.**
+
+There are eleven load-bearing requirements — the items of `specs/payment-frontend-l0.yaml`, all governed by this rule.
+
+**Checkout (PAYMENT-FE-001..004, 011).** A PaymentMethodPicker to choose a method (001); a PaymentCheckoutForm with amount display, card fields, and a pay button (002); wrapped in an IdempotencyKeyHandler whose key is sent as `Idempotency-Key` and is STABLE across retries — generated once, reused, never regenerated per click (003); a SlowProviderWarning shown after 3000ms in-flight (004); an 'already processed' state shown when the server returns the idempotent-replay result (011).
+
+**Result pages (PAYMENT-FE-005..006).** A success page rendering a receipt for a completed payment by `orderId`, idempotent on refresh — a reload re-reads, never re-charges (005); a failure page rendering an error state for a failed payment by `orderId` with a retry action (006).
+
+**Methods + refund (PAYMENT-FE-007..010).** A methods list DataTable showing payment history with method types (007); a methods/new page with the PaymentMethodPicker (008); a methods/detail view by payment id via `getPayment` (009); a refund page submitting a refund for an `orderId` via `refundPayment` (010).
+
+**Incorrect — new idempotency key per click, no slow warning, success page re-charges on refresh:**
+
+```tsx
+async function pay() {
+  await paymentClient.charge({ ...form, idempotencyKey: crypto.randomUUID() });  // VIOLATION: new key per click → double charge (PAYMENT-FE-003)
+}
+<button onClick={pay}>Pay</button>                          {/* VIOLATION: no in-flight/slow state (PAYMENT-FE-004) */}
+useEffect(() => { charge(order); }, []);                    {/* VIOLATION: success page re-charges on refresh (PAYMENT-FE-005) */}
+```
+
+**Correct — stable idempotency key, slow-provider warning, idempotent receipt read:**
+
+```tsx
+const idemKey = useIdempotencyKey(orderId);                 // STABLE across retries (PAYMENT-FE-003)
+async function pay() { await paymentClient.charge({ ...form }, { 'Idempotency-Key': idemKey }); }
+{inFlightMs > 3000 && <SlowProviderWarning />}              // PAYMENT-FE-004
+{result?.alreadyProcessed && <AlreadyProcessed />}          // idempotent replay recognized (PAYMENT-FE-011)
+// success page: READ the receipt by orderId (getPayment), never charge (PAYMENT-FE-005)
+const receipt = await getPaymentByOrder(orderId);
+// failure page: map RFC 9457 problem type → specific error + retry (PAYMENT-FE-006)
+```
+
+Verification: review-tier. Payment-UI correctness is a financial-safety property with no compile signal — a per-click key and a re-charging success page compile and only double-charge under retry/refresh. Verify by review against `specs/payment-frontend-l0.yaml`: the idempotency key is stable across retries; a slow-provider warning appears after 3s; the success page reads (never charges) and is refresh-idempotent; the failure page maps the problem type and offers retry; methods/refund pages call their documented endpoints. When a fork-receiver wires real tests (double-click sends one key; success refresh does not re-charge), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [React — Reacting to input with state](https://react.dev/learn/reacting-to-input-with-state)
+
+Reference: [RFC 9457 — Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)
+
+
+<!-- @source rules/practices-frontend-catalog-browser.md -->
+
+---
+title: "The practices catalog browser UI must list both catalogs with counts, filter by category, render rule detail with metadata, and 404 unknown rules"
+rule_id: practices-frontend-catalog-browser
+impact: LOW
+impactDescription: "A catalog browser that lists only one catalog hides half the rules; one with a stale hardcoded count misleads; a category filter that does not span both Java and React catalogs gives incomplete results; a rule-detail page that does not 404 an unknown id renders a broken/blank page; missing breadcrumbs strand the user. The browser is the human window into the catalog — it must faithfully reflect what is on disk."
+tags:
+  - practices
+  - frontend
+  - catalog
+  - routing
+  - navigation
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/practices-frontend-l0.yaml#PRACTICES-FE-001"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the catalog browser against specs/practices-frontend-l0.yaml: the index lists ALL
+    Java rules from practices/rules/**/*.md (001) AND all React rules from practices-react/rules/**/*.md
+    (002) with title/impact/tags, shows a combined count (003), and groups by catalog with headings (009);
+    the app-shell sidebar links to /practices (010). The category page filters by prefix and spans BOTH
+    catalogs (004, 005), with an EmptyState when no rules match (011). The rule-detail page renders the
+    full markdown body for a rule id (006), shows title/impact/tags/spec_ref metadata (007), returns a
+    404 not-found state for an unknown id (008), and has a breadcrumb back to category + index (012). The
+    counts are derived from the files on disk, not hardcoded.
+evidence:
+  - source_type: external
+    citation: "React Docs — Reacting to input with state (declarative UI): the browser renders list/filtered/empty/not-found states declaratively from the catalog data (PRACTICES-FE-004/008/011)"
+    url: "https://react.dev/learn/reacting-to-input-with-state"
+    quote: "React provides a declarative way to manipulate the UI. Instead of manipulating individual pieces of the UI directly, you describe the different states that your component can be in, and switch between them in response to the user input."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## The practices catalog browser UI must list both catalogs with counts, filter by category, render rule detail, and 404 unknown rules
+
+**Impact: LOW — The practices browser is the human-facing window into the catalog, and its only job is to faithfully reflect what is on disk. The failure modes are quiet: it lists only the Java rules and silently omits the React catalog; it shows a hardcoded count that drifts from reality; a category filter spans one catalog and misses matching rules in the other; a rule-detail page for a mistyped id renders blank instead of a 404; breadcrumbs are missing and the user is stranded three levels deep. None crash — they just misrepresent the catalog. React renders the browser's states declaratively — *you describe the different states that your component can be in, and switch between them in response to the user input*.**
+
+There are twelve load-bearing requirements — the items of `specs/practices-frontend-l0.yaml`, all governed by this rule.
+
+**Index (PRACTICES-FE-001..003, 009, 010).** Lists ALL Java rules from `practices/rules/**/*.md` (001) and all React rules from `practices-react/rules/**/*.md` (002) with title/impact/tags; shows a combined count derived from the files (003); groups by catalog with clear headings (009); the app-shell sidebar links to `/practices` (010).
+
+**Category (PRACTICES-FE-004, 005, 011).** Filters rules by prefix (e.g. `/practices/category/async`) (004), spanning BOTH catalogs (005), with an EmptyState when none match (011).
+
+**Rule detail (PRACTICES-FE-006..008, 012).** Renders the full markdown body for a rule id (006); shows title/impact/tags/spec_ref metadata (007); returns a 404 not-found state for an unknown id (008); has a breadcrumb back to the category and index (012).
+
+**Incorrect — only one catalog, hardcoded count, no 404 on unknown rule:**
+
+```tsx
+const rules = await loadJavaRules();                 // VIOLATION: omits React catalog (PRACTICES-FE-002)
+return <h1>147 rules</h1>;                            // VIOLATION: hardcoded count drifts (PRACTICES-FE-003)
+const rule = rules.find(r => r.id === id);           // VIOLATION: no 404 when undefined (PRACTICES-FE-008)
+return <Markdown>{rule.body}</Markdown>;              // crashes / blank on unknown id
+```
+
+**Correct — both catalogs, on-disk count, 404 + breadcrumb:**
+
+```tsx
+const java = await loadRules('practices/rules');     // PRACTICES-FE-001
+const react = await loadRules('practices-react/rules'); // PRACTICES-FE-002
+<RuleCount total={java.length + react.length} />;    // derived from disk (PRACTICES-FE-003)
+// rule detail
+const rule = allRules.find(r => r.id === id);
+if (!rule) return <NotFound />;                       // 404 state (PRACTICES-FE-008)
+return (<><Breadcrumb /><RuleMeta rule={rule} /><Markdown>{rule.body}</Markdown></>); // 007/012/006
+```
+
+Verification: review-tier. Catalog fidelity is a data-reflection property with no compile signal. Verify by review against `specs/practices-frontend-l0.yaml`: the index lists both catalogs with an on-disk count and headings; category filtering spans both catalogs with an EmptyState; rule detail renders the body + metadata, 404s an unknown id, and has a breadcrumb. When a fork-receiver wires real tests (count equals file count; unknown id → 404), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [React — Reacting to input with state](https://react.dev/learn/reacting-to-input-with-state)
 
 
 <!-- @source rules/prefer-feature-gate-over-env-check.md -->
@@ -9740,6 +10679,80 @@ test("SavedViewItem.persistence is not localStorage", () => {
 Reference: [web.dev — URL as state](https://web.dev/articles/url-state)
 
 Reference: [Next.js — useSearchParams](https://nextjs.org/docs/app/api-reference/functions/use-search-params)
+
+
+<!-- @source rules/search-frontend-palette-highlight.md -->
+
+---
+title: "Search UI must render a Cmd+K SearchPalette posting to the search endpoint and a ResultHighlighter that wraps matches in <mark>"
+rule_id: search-frontend-palette-highlight
+impact: LOW
+impactDescription: "A search surface with no keyboard palette forces mouse-only access; results with no highlighting make the user hunt for why a row matched; highlighting that injects server ts_headline output as raw HTML is an XSS sink. The search UI must be keyboard-reachable and highlight matches safely via the semantic <mark> element, not dangerouslySetInnerHTML."
+tags:
+  - search
+  - frontend
+  - command-palette
+  - highlighting
+  - xss-safety
+applicable_to:
+  - react
+  - nextjs
+spec_ref: "specs/search-frontend-l0.yaml#SEARCH-FE-001"
+verification:
+  type: review
+  notes: |
+    Reviewer confirms the search UI against specs/search-frontend-l0.yaml: the search page renders a
+    SearchPalette opened by Cmd+K that sends POST /api/v1/search and displays results with highlighting
+    (001); the ResultHighlighter wraps matched terms in semantic <mark> tags derived from the backend
+    ts_headline output, WITHOUT injecting raw server HTML (no dangerouslySetInnerHTML of unsanitized
+    markup) (003). (Korean IME suppression is SEARCH-FE-002, governed by
+    combobox-respects-hangul-ime-composition; RecentSearches localStorage is SEARCH-FE-004, governed by
+    client-localstorage-schema.)
+evidence:
+  - source_type: external
+    citation: "React Docs — Reacting to input with state (declarative UI): the palette renders idle/results/empty states declaratively (SEARCH-FE-001)"
+    url: "https://react.dev/learn/reacting-to-input-with-state"
+    quote: "React provides a declarative way to manipulate the UI. Instead of manipulating individual pieces of the UI directly, you describe the different states that your component can be in, and switch between them in response to the user input."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "MDN — <mark>: the HTML Mark Text element represents text marked or highlighted for reference; the ResultHighlighter uses it for matched terms (SEARCH-FE-003)"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/mark"
+    quote: "The <mark> HTML element represents text which is marked or highlighted for reference or notation purposes due to the marked passage's relevance in the enclosing context."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Search UI must render a Cmd+K palette posting to the search endpoint and a ResultHighlighter that wraps matches in <mark>
+
+**Impact: LOW — A good search surface is keyboard-first and shows the user WHY each result matched. A palette opened by Cmd+K (`SearchPalette`) makes search reachable without the mouse and is the expected interaction in a modern app. Match highlighting via the semantic `<mark>` element — *the HTML element ... represents text which is marked or highlighted for reference or notation purposes due to the marked passage's relevance in the enclosing context* — shows the matched terms accessibly. The trap is highlighting by injecting the backend's `ts_headline` output as raw HTML: that is an XSS sink. The ResultHighlighter wraps matches in `<mark>` from the structured headline data, never `dangerouslySetInnerHTML` of unsanitized server markup.**
+
+There are two load-bearing requirements here (SEARCH-FE-002 IME → `combobox-respects-hangul-ime-composition`; SEARCH-FE-004 localStorage → `client-localstorage-schema`).
+
+**SearchPalette (SEARCH-FE-001).** The search page renders a SearchPalette opened by Cmd+K that sends `POST /api/v1/search` and displays results with highlighting (Korean IME-safe input, per SEARCH-FE-002).
+
+**ResultHighlighter (SEARCH-FE-003).** Matched terms are wrapped in semantic `<mark>` tags derived from the backend `ts_headline` output — WITHOUT injecting raw server HTML (no `dangerouslySetInnerHTML` of unsanitized markup).
+
+**Incorrect — no palette; highlight by injecting raw server HTML (XSS):**
+
+```tsx
+<input onChange={e => search(e.target.value)} />            {/* VIOLATION: no Cmd+K palette (SEARCH-FE-001) */}
+<div dangerouslySetInnerHTML={{ __html: result.tsHeadline }} /> {/* VIOLATION: raw server HTML = XSS (SEARCH-FE-003) */}
+```
+
+**Correct — Cmd+K palette; safe <mark> highlighting from structured segments:**
+
+```tsx
+useHotkey('mod+k', () => setPaletteOpen(true));             // SEARCH-FE-001
+const results = await api.post('/v1/search', { q });
+// ResultHighlighter renders structured segments, marking matches with <mark> (no raw HTML)  SEARCH-FE-003
+<>{segments.map(s => s.match ? <mark key={s.i}>{s.text}</mark> : <span key={s.i}>{s.text}</span>)}</>
+```
+
+Verification: review-tier. Search-UI correctness is an interaction + XSS-safety property with no compile signal. Verify by review against `specs/search-frontend-l0.yaml`: a Cmd+K SearchPalette posts to the search endpoint; the ResultHighlighter uses semantic `<mark>` from structured headline data with no raw-HTML injection. When a fork-receiver wires real tests (Cmd+K opens the palette; highlighted HTML is escaped), this rule's verification may be upgraded from review to a test-tag binding.
+
+Reference: [MDN — <mark> element](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/mark)
+
+Reference: [React — Reacting to input with state](https://react.dev/learn/reacting-to-input-with-state)
 
 
 <!-- @source rules/server-after-nonblocking.md -->

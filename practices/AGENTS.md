@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "84b61d0d28b0f6df15d65460eafe64767fe43684f396a490a91fa467bf40f6b0"
-  rule_count: 147
+  source_concat_sha256: "c508ed4f7568c0ff284d58ef15e663dd69feb1d6dd164486e48b3fa9fcd2b81c"
+  rule_count: 178
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -634,6 +634,94 @@ Verification: `./gradlew testPractices --tests "*SpringAsyncReturnsCompletableFu
 Reference: [Spring Framework — @Async](https://docs.spring.io/spring-framework/reference/integration/scheduling.html#scheduling-annotation-support-async)
 
 
+<!-- @source rules/async-job-queue-at-least-once-dlq.md -->
+
+---
+title: An async job queue MUST be at-least-once with explicit ack + visibility timeout, bounded jittered retry, and a dead-letter queue — idempotent enqueue and workers
+impact: HIGH
+impactDescription: "A worker that acks a message before it finishes loses the job on a crash (at-most-once data loss); one with no visibility timeout lets two workers grab the same job; one that retries forever wedges the queue behind a poison message; one with no idempotency key double-charges on the inevitable redelivery. At-least-once delivery only works when ack, visibility timeout, bounded retry, a DLQ, and idempotency are all present."
+tags:
+  - job-queue
+  - at-least-once
+  - dead-letter-queue
+  - visibility-timeout
+  - idempotency
+  - reliability
+spec_ref: "specs/job-queue-l0.yaml#JOB-WORKER-001"
+verification:
+  type: review
+  source: "specs/job-queue-l0.yaml#JOB-WORKER-001"
+  pattern: "An async job queue MUST deliver at-least-once with an explicit ack/nack and a visibility timeout: a received message is invisible to other consumers while in flight and is only removed when the worker acks AFTER successful processing — ack-before-work is forbidden (it loses the job on crash) (JOB-WORKER-001). Enqueue returns a job id and accepts a client idempotency key so a duplicate submit does not create a duplicate job (JOB-ENQUEUE-001). A failed/nacked job is retried with exponential backoff + jitter up to a max-attempts cap — never immediately, never unbounded (JOB-RETRY-001). A job that exhausts retries is routed to a dead-letter queue for inspection/replay, never silently dropped and never left to recirculate forever (JOB-DLQ-001). Priority lanes are served with a fairness guarantee so low-priority jobs cannot starve (JOB-PRIORITY-001). Job status + a result handle are queryable by job id (JOB-STATUS-001). Because delivery is at-least-once, every worker MUST be idempotent on the job id. Reject ack-before-processing, an unbounded retry with no DLQ, and a non-idempotent worker."
+upstream:
+  - "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+  - "https://www.rabbitmq.com/docs/confirms"
+evidence:
+  - source_type: external
+    citation: "Amazon SQS Developer Guide — Visibility timeout (message invisible while in flight)"
+    url: "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+    quote: "When you receive a message from an Amazon SQS queue, it remains in the queue but becomes temporarily invisible to other consumers."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Amazon SQS Developer Guide — Visibility timeout (redelivery on no-delete)"
+    url: "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+    quote: "If you don't delete it before the timeout expires, the message becomes visible again in the queue and can be retrieved by another consumer."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## An async job queue MUST be at-least-once with ack + visibility timeout, bounded jittered retry, and a DLQ
+
+**Impact: HIGH — A durable job queue gives at-least-once delivery, and every one of its safety properties exists to make that workable. Per the SQS model, *when you receive a message from an Amazon SQS queue, it remains in the queue but becomes temporarily invisible to other consumers* — the visibility timeout — and *if you don't delete it before the timeout expires, the message becomes visible again in the queue and can be retrieved by another consumer*. That redelivery-on-failure is exactly what prevents lost jobs, but it means a worker that acks before it finishes loses the job on a crash, two workers can grab the same job without a visibility timeout, a job retried forever wedges the queue, and any non-idempotent worker double-applies on the inevitable redelivery.**
+
+There are six load-bearing requirements — the items of `specs/job-queue-l0.yaml`, all governed by this rule.
+
+**1. At-least-once with ack + visibility timeout (JOB-WORKER-001).** A received message is invisible to other consumers for the visibility timeout. The worker acks (deletes) ONLY after successful processing. Ack-before-work is forbidden — a crash mid-processing would lose the job. A nack (or timeout) returns the message for redelivery.
+
+**2. Idempotent enqueue + job id (JOB-ENQUEUE-001).** Enqueue returns a job id and accepts a client idempotency key, so a retried submit (network blip) does not create a second job. Composes `idempotency-l0`.
+
+**3. Bounded jittered retry (JOB-RETRY-001).** A failed job is retried with exponential backoff + jitter up to a max-attempts cap — never an immediate loop, never unbounded.
+
+**4. Dead-letter queue (JOB-DLQ-001).** A job that exhausts its retries goes to a DLQ for inspection/replay — never silently dropped, never left recirculating in the main queue forever blocking other jobs.
+
+**5. Priority + fairness (JOB-PRIORITY-001).** Priority lanes are served with a fairness guarantee (aging / weighted) so low-priority jobs cannot starve indefinitely behind a flood of high-priority ones.
+
+**6. Status + result handle (JOB-STATUS-001).** Job status (`queued`/`running`/`succeeded`/`failed`/`dead-lettered`) and a result handle are queryable by job id.
+
+**Incorrect — acks before processing and retries forever; a crash loses the job, a poison job wedges the queue:**
+
+```java
+void consume(Message m) {
+    queue.ack(m);                          // VIOLATION: ack BEFORE work → crash below loses the job (JOB-WORKER-001)
+    while (true) {                         // VIOLATION: unbounded retry, no DLQ (JOB-RETRY-001/JOB-DLQ-001)
+        try { process(m); return; }
+        catch (Exception e) { /* retry immediately, forever */ }
+    }
+}
+```
+
+**Correct — ack after success; bounded jittered retry; DLQ on exhaustion; idempotent worker:**
+
+```java
+void consume(Message m) {                  // delivered within its visibility timeout (JOB-WORKER-001)
+    if (processed.contains(m.jobId())) { queue.ack(m); return; } // idempotent on job id
+    try {
+        process(m);                        // do the work first
+        processed.add(m.jobId());
+        queue.ack(m);                      // ack ONLY after success
+    } catch (RetryableException e) {
+        if (m.attempts() >= MAX_ATTEMPTS)  // bounded (JOB-RETRY-001)
+            queue.deadLetter(m);           // → DLQ for inspection/replay (JOB-DLQ-001)
+        else
+            queue.nackWithBackoff(m, expoJitter(m.attempts())); // backoff + jitter
+    }
+}
+```
+
+Verification: review-tier. Delivery semantics are a runtime-failure property with no compile-time signal — an ack-before-work worker processes the happy path fine and only loses jobs on crashes. Verify by review against `specs/job-queue-l0.yaml`: at-least-once with a visibility timeout and ack-after-success; enqueue is idempotent on a client key and returns a job id; retries are bounded with backoff+jitter; exhausted jobs go to a DLQ; priority lanes guarantee fairness; status is queryable; workers are idempotent on the job id. When a fork-receiver wires a real IT (kill a worker mid-job; assert redelivery + single net effect; poison job → DLQ), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [Amazon SQS — Visibility timeout](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)
+
+
 <!-- @source rules/async-scheduled-fixed-delay-vs-fixed-rate.md -->
 
 ---
@@ -1240,6 +1328,93 @@ Verification: `./gradlew testPractices --tests "*SpringBootBom*"` reads `backend
 Reference: [Spring dependency-management Plugin](https://docs.spring.io/dependency-management-plugin/docs/current/reference/html/)
 
 
+<!-- @source rules/bulk-operation-partial-success-207.md -->
+
+---
+title: A bulk endpoint MUST report per-item partial success (207-style), declare its atomicity mode, cap batch size, and pre-validate before mutating
+impact: HIGH
+impactDescription: "A bulk endpoint that returns one 200/500 for the whole batch hides which items succeeded and which failed — the client cannot tell what to retry, and a retry of the whole batch re-applies the items that already succeeded. Returning a per-item status array, declaring whether the batch is all-or-nothing or best-effort, and pre-validating before any mutation makes a partial failure recoverable instead of corrupting."
+tags:
+  - bulk-operation
+  - partial-success
+  - multi-status
+  - rfc-9457
+  - batch
+  - atomicity
+spec_ref: "specs/bulk-operation-l0.yaml#BULK-PARTIAL-001"
+verification:
+  type: review
+  source: "specs/bulk-operation-l0.yaml#BULK-PARTIAL-001"
+  pattern: "A batch endpoint MUST return per-item results — a status array carrying each item's outcome (success/failure + an RFC 9457 problem object per failed item), the 207-Multi-Status posture — never a single batch-wide 200/500 that hides which items failed (BULK-PARTIAL-001). The batch envelope MUST enforce a max-batch-size limit (BULK-SUBMIT-001). The endpoint MUST DECLARE its atomicity mode — transactional (all-or-nothing: any item failure rolls back the whole batch) OR best-effort (each item independent) — and behave accordingly; an undeclared/ambiguous mode is forbidden (BULK-ATOMICITY-001). Accepted input formats are declared (JSON array / JSONL / CSV RFC 4180) (BULK-FORMAT-001). A large batch is handed off to an async job returning a job handle rather than blocking the request (composes job-queue) (BULK-ASYNC-001). A pre-validation pass reports ALL item errors BEFORE any mutation, so a best-effort batch does not partially apply then fail on a malformed later item (BULK-VALIDATION-001). Reject a batch-wide single status that masks per-item outcomes, an unbounded batch size, and a best-effort batch that mutates before validating."
+upstream:
+  - "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/207"
+  - "https://www.rfc-editor.org/rfc/rfc9457"
+evidence:
+  - source_type: external
+    citation: "MDN Web Docs — 207 Multi-Status (mixture of responses)"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/207"
+    quote: "The HTTP 207 Multi-Status successful response status code indicates a mixture of responses."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "MDN Web Docs — 207 Multi-Status (body lists individual response codes)"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/207"
+    quote: "The response body is a `text/xml` or `application/xml` HTTP entity with a `multistatus` root element that lists individual response codes."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A bulk endpoint MUST report per-item partial success, declare atomicity, cap size, and pre-validate
+
+**Impact: HIGH — A bulk endpoint processes N items, and N items can have N different outcomes. The 207 Multi-Status code exists precisely for this — per MDN, *the HTTP 207 Multi-Status successful response status code indicates a mixture of responses*, and the body *lists individual response codes*. An endpoint that instead collapses the batch into one 200 (or one 500) hides which items succeeded: the client cannot tell what to retry, and a blind retry of the whole batch re-applies every item that already succeeded — duplicating exactly the work the partial failure should have let it skip. Per-item results, a declared atomicity mode, a size cap, and pre-validation make bulk operations recoverable.**
+
+There are six load-bearing requirements — the items of `specs/bulk-operation-l0.yaml`, all governed by this rule.
+
+**1. Per-item partial-success array (BULK-PARTIAL-001).** The response carries a per-item status array: each item reports success or failure, and each failure carries an RFC 9457 problem object (type/title/detail) identifying what went wrong for THAT item — the 207 posture. A single batch-wide status is forbidden when items can independently fail.
+
+**2. Envelope + max batch size (BULK-SUBMIT-001).** The request is a declared envelope with a maximum batch size; an over-limit batch is rejected (413/422) rather than accepted and OOM-ing the server.
+
+**3. Declared atomicity mode (BULK-ATOMICITY-001).** The endpoint declares whether it is transactional (all-or-nothing — any failure rolls back the whole batch) or best-effort (each item independent), and behaves exactly so. An ambiguous mode leaves the client unable to reason about the result of a partial failure.
+
+**4. Declared input formats (BULK-FORMAT-001).** Accepted formats are explicit — JSON array, JSONL, or CSV (RFC 4180) — validated on the way in.
+
+**5. Async hand-off for large batches (BULK-ASYNC-001).** A large batch is handed to an async job returning a job handle (status pollable), not processed inline holding the request thread open. Composes `job-queue`.
+
+**6. Pre-validation before mutation (BULK-VALIDATION-001).** A validation pass reports ALL item errors BEFORE any mutation runs. Without it, a best-effort batch can mutate items 1..k, then hit a malformed item k+1, leaving a half-applied batch whose successful mutations were avoidable.
+
+**Incorrect — one batch-wide status; mutates as it goes; a late bad item leaves a half-applied batch:**
+
+```java
+@PostMapping("/users/bulk")
+public ResponseEntity<Void> bulk(@RequestBody List<CreateUser> items) {
+    for (CreateUser u : items) userService.create(u);  // VIOLATION: mutates before validating all (BULK-VALIDATION-001)
+    return ResponseEntity.ok().build();                // VIOLATION: one status hides per-item outcomes (BULK-PARTIAL-001)
+    // a malformed item halfway throws 500 — items before it are already committed, client cannot tell which
+}
+```
+
+**Correct — size-capped envelope, pre-validate all, per-item 207-style result, declared best-effort mode:**
+
+```java
+@PostMapping("/users/bulk")
+public ResponseEntity<BulkResult> bulk(@RequestBody @Valid BulkEnvelope<CreateUser> req) {
+    if (req.items().size() > MAX_BATCH) return ResponseEntity.status(413).build(); // size cap (BULK-SUBMIT-001)
+    List<ItemError> errors = validateAll(req.items());   // pre-validate BEFORE mutating (BULK-VALIDATION-001)
+    List<ItemResult> results = new ArrayList<>();
+    for (int i = 0; i < req.items().size(); i++) {       // best-effort: each item independent (BULK-ATOMICITY-001 declared)
+        try { results.add(ItemResult.ok(i, userService.create(req.items().get(i)))); }
+        catch (DomainException e) { results.add(ItemResult.failed(i, ProblemDetail.from(e))); } // RFC 9457 per item
+    }
+    return ResponseEntity.status(207).body(new BulkResult(results)); // per-item outcomes (BULK-PARTIAL-001)
+}
+```
+
+Verification: review-tier. Partial-success handling is an API-contract property — a batch-wide-status endpoint compiles and works when every item succeeds, hiding the gap only when one fails. Verify by review against `specs/bulk-operation-l0.yaml`: per-item status array with RFC 9457 per failure; max batch size enforced; atomicity mode declared and honored; input formats declared; large batches async with a job handle; all items validated before any mutation. When a fork-receiver wires a real IT (a batch with one bad item → 207 with that item failed and the rest applied, or full rollback in transactional mode), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [MDN — 207 Multi-Status](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/207)
+
+Reference: [RFC 9457 — Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)
+
+
 <!-- @source rules/business-domain-must-declare-applied-recipe.md -->
 
 ---
@@ -1722,6 +1897,94 @@ Reference: [OWASP API Security Top 10 (2023) — API1:2023 BOLA](https://owasp.o
 Reference: [OWASP ASVS V4 — Access Control](https://owasp.org/www-project-application-security-verification-standard/)
 
 
+<!-- @source rules/chat-message-delivery-receipts-presence.md -->
+
+---
+title: A chat system MUST carry a typed message envelope with delivery/read receipts, room lifecycle, presence, paginated offline-catchup history, and moderation
+impact: MEDIUM
+impactDescription: "A chat without delivery/read receipts cannot tell the sender whether a message arrived; without per-room offline catch-up, a user who was offline loses messages or re-reads the whole history; without a typed envelope (id, sender, room, timestamp), dedup and ordering are impossible; without moderation + reporting, abuse has no remedy. Each gap degrades a messaging product from reliable to lossy."
+tags:
+  - chat
+  - messaging
+  - delivery-receipt
+  - presence
+  - moderation
+  - realtime
+spec_ref: "specs/chat-messaging-l0.yaml#CHAT-DELIVERY-001"
+verification:
+  type: review
+  source: "specs/chat-messaging-l0.yaml#CHAT-DELIVERY-001"
+  pattern: "A chat system MUST define a typed message envelope — stable message id, sender, room/conversation id, server timestamp (RFC 3339), body, type — so messages dedup and order deterministically (CHAT-MESSAGE-001). Rooms have an explicit lifecycle and type (1:1 / group / broadcast) with membership controlling visibility (CHAT-ROOM-001). Delivery guarantees are explicit: a sender can request a delivery receipt (message reached a recipient client) and a read receipt, distinct states (sent / delivered / read) (CHAT-DELIVERY-001). Presence + typing indicators communicate whether a participant is active/composing/away (CHAT-PRESENCE-001). Message history is paginated and supports offline catch-up — a reconnecting client fetches exactly the messages it missed via a cursor/since token, never the whole history and never gaps (CHAT-HISTORY-001). Moderation supports reporting, takedown, and youth-protection handling of abusive content (CHAT-MODERATION-001). Reject a chat with no message id (undedupable), a single global stream with no room scoping, fire-and-forget delivery with no receipt, and history with no pagination cursor."
+upstream:
+  - "https://xmpp.org/extensions/xep-0184.html"
+  - "https://xmpp.org/extensions/xep-0085.html"
+evidence:
+  - source_type: external
+    citation: "XMPP XEP-0184: Message Delivery Receipts (Abstract)"
+    url: "https://xmpp.org/extensions/xep-0184.html"
+    quote: "This specification defines an XMPP protocol extension for message delivery receipts, whereby the sender of a message can request notification that the message has been delivered to a client controlled by the intended recipient."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "XMPP XEP-0085: Chat State Notifications (Abstract)"
+    url: "https://xmpp.org/extensions/xep-0085.html"
+    quote: "This document defines an XMPP protocol extension for communicating the status of a user in a chat session, thus indicating whether a chat partner is actively engaged in the chat, composing a message, temporarily paused, inactive, or gone."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A chat system MUST carry a typed envelope with delivery/read receipts, rooms, presence, paginated offline-catchup history, and moderation
+
+**Impact: MEDIUM — A chat product lives or dies on reliability the user can see. Delivery and read receipts are a defined protocol concern — XEP-0184 *defines an XMPP protocol extension for message delivery receipts, whereby the sender of a message can request notification that the message has been delivered to a client controlled by the intended recipient* — and presence/typing likewise — XEP-0085 communicates *whether a chat partner is actively engaged in the chat, composing a message, temporarily paused, inactive, or gone*. Skip the typed envelope and messages cannot be deduped or ordered; skip offline catch-up and a reconnecting user silently loses messages or re-downloads everything; skip receipts and the sender never knows if anything arrived; skip moderation and abuse has no remedy.**
+
+There are six load-bearing requirements — the items of `specs/chat-messaging-l0.yaml`, all governed by this rule.
+
+**1. Typed message envelope (CHAT-MESSAGE-001).** Every message carries a stable id, sender, room/conversation id, a server-assigned RFC 3339 timestamp, body, and type. The id makes redelivery dedupable; the server timestamp makes ordering deterministic (never the client clock).
+
+**2. Room lifecycle (CHAT-ROOM-001).** Conversations are rooms with an explicit type (1:1, group, broadcast) and lifecycle (create/join/leave/close); membership controls who sees the messages — there is no single global stream.
+
+**3. Delivery + read receipts (CHAT-DELIVERY-001).** A message moves through explicit, distinct states — sent → delivered (reached a recipient client) → read — and the sender can request receipts, so "did it arrive?" has an answer instead of fire-and-forget.
+
+**4. Presence + typing (CHAT-PRESENCE-001).** Presence (online/away) and typing indicators (composing/paused) are communicated per the chat-state model, so participants see live engagement.
+
+**5. Paginated history + offline catch-up (CHAT-HISTORY-001).** History is paginated by a cursor/since token; a reconnecting client requests exactly the messages it missed since its last seen id — never the entire history, never with gaps.
+
+**6. Moderation (CHAT-MODERATION-001).** Reporting, takedown of abusive content, and youth-protection (청소년보호) handling are supported, so abuse has an enforced remedy.
+
+**Incorrect — no message id, one global stream, fire-and-forget, full-history fetch on reconnect:**
+
+```java
+// VIOLATION: no id (undedupable), no room (CHAT-MESSAGE/ROOM); broadcast to everyone
+void send(String from, String text) { bus.publishToAll(new Msg(from, text, clientClock.now())); }
+// VIOLATION: reconnect pulls the ENTIRE history, no cursor (CHAT-HISTORY-001); no receipts (CHAT-DELIVERY-001)
+List<Msg> onReconnect(String user) { return store.findAll(); }
+```
+
+**Correct — typed envelope, room-scoped, receipts, cursor-based offline catch-up:**
+
+```java
+record ChatMessage(String id, String roomId, String senderId,   // typed envelope (CHAT-MESSAGE-001)
+                   Instant serverTs, String type, String body) {}
+
+ChatMessage send(String roomId, String senderId, String body) {
+    requireMember(roomId, senderId);                            // room membership (CHAT-ROOM-001)
+    ChatMessage m = new ChatMessage(UUID.randomUUID().toString(), roomId, senderId,
+                                    clock.now(), "text", body); // server timestamp
+    store.append(m);
+    receipts.markSent(m.id());                                  // sent → delivered → read (CHAT-DELIVERY-001)
+    return m;
+}
+Page<ChatMessage> catchUp(String roomId, String sinceMessageId, int limit) { // offline catch-up (CHAT-HISTORY-001)
+    return store.findInRoomAfter(roomId, sinceMessageId, limit);             // cursor, not findAll
+}
+```
+
+Verification: review-tier. Messaging reliability is a protocol property — a fire-and-forget chat works in a demo and loses messages under real reconnects. Verify by review against `specs/chat-messaging-l0.yaml`: a typed envelope with id + server timestamp; room-scoped membership; explicit sent/delivered/read receipts; presence + typing; cursor-paginated offline catch-up; moderation/reporting/youth-protection. When a fork-receiver wires a real IT (offline client reconnects and receives exactly the missed messages; a delivery receipt transitions state), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [XMPP XEP-0184 — Message Delivery Receipts](https://xmpp.org/extensions/xep-0184.html)
+
+Reference: [XMPP XEP-0085 — Chat State Notifications](https://xmpp.org/extensions/xep-0085.html)
+
+
 <!-- @source rules/chunked-import-required-when-rowcount-gt-1000.md -->
 
 ---
@@ -2113,6 +2376,194 @@ Verification: `./gradlew testPractices --tests "*TypedProperties*"` runs an Arch
 Reference: [Spring Boot — Type-safe Configuration Properties](https://docs.spring.io/spring-boot/reference/features/external-config.html#features.external-config.typesafe-configuration-properties)
 
 
+<!-- @source rules/config-validation-fail-fast-typed.md -->
+
+---
+title: Configuration MUST be typed, validated, and fail-fast at startup — separated from code, immutable after boot
+impact: HIGH
+impactDescription: "Config read ad-hoc as untyped strings with silent defaults fails LATE and in production: a missing or malformed value surfaces as a NullPointerException or wrong behavior on the first request that touches it — hours after a clean-looking boot — instead of refusing to start. Typed binding + declarative constraints + fail-fast turns a latent misconfiguration into an immediate, obvious startup failure."
+tags:
+  - configuration
+  - twelve-factor
+  - bean-validation
+  - fail-fast
+  - secrets
+  - startup
+spec_ref: "specs/config-validation-l0.yaml#CONFIG-SCHEMA-001"
+verification:
+  type: review
+  source: "specs/config-validation-l0.yaml#CONFIG-SCHEMA-001"
+  pattern: "Configuration MUST be bound to a typed object with declarative constraints (@ConfigurationProperties + Jakarta Bean Validation @Validated), not read as scattered untyped string lookups (CONFIG-SCHEMA-001). Validation MUST run at application startup and a constraint violation MUST FAIL the boot (fail-fast), never defer the error to first use (CONFIG-FAILFAST-001). Required keys MUST have NO silent default — a missing required value fails startup, it does not fall back to an empty/zero/placeholder (CONFIG-REQUIRED-001). Secret values MUST be separated from ordinary config (env/secret-manager, not committed config files) and never logged (CONFIG-SECRET-SEPARATION-001). Environment differences MUST be expressed through explicit profiles, not code branches on a hostname (CONFIG-PROFILE-001). Config MUST be immutable after startup — bound once, no mutable global setters rewriting it at runtime (CONFIG-IMMUTABLE-001). Reject ad-hoc System.getenv/Environment.getProperty scattered through business code, a required key with a hardcoded fallback, secrets in application.yml, and runtime mutation of bound config."
+upstream:
+  - "https://12factor.net/config"
+  - "https://docs.spring.io/spring-boot/reference/features/external-config.html"
+evidence:
+  - source_type: external
+    citation: "The Twelve-Factor App — III. Config (definition)"
+    url: "https://12factor.net/config"
+    quote: "An app's config is everything that is likely to vary between deploys (staging, production, developer environments, etc)."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "The Twelve-Factor App — III. Config (separation from code)"
+    url: "https://12factor.net/config"
+    quote: "Config varies substantially across deploys, code does not."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "The Twelve-Factor App — III. Config (store in environment)"
+    url: "https://12factor.net/config"
+    quote: "The twelve-factor app stores config in environment variables (often shortened to env vars or env)."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Configuration MUST be typed, validated, and fail-fast at startup
+
+**Impact: HIGH — Configuration is, per the Twelve-Factor App, *everything that is likely to vary between deploys (staging, production, developer environments, etc)* — and *config varies substantially across deploys, code does not*. The failure mode of doing it badly is always the same: a value is read ad-hoc as an untyped string with a silent default, the app boots clean, and then the first request that touches a missing or malformed value blows up with a NullPointerException or — worse — behaves wrongly with a placeholder default. The error surfaces hours after deploy, far from its cause. The fix is to bind config to a typed object, validate it declaratively, and **fail the boot** if it is wrong.**
+
+There are six load-bearing requirements — the items of `specs/config-validation-l0.yaml`, all governed by this rule.
+
+**1. Typed binding + declarative constraints (CONFIG-SCHEMA-001).** Config is bound to a typed `@ConfigurationProperties` record/class carrying Jakarta Bean Validation constraints (`@NotBlank`, `@Min`, `@Positive`, `@Pattern`), enabled with `@Validated` — not read as scattered `getProperty("...")` string lookups whose type and presence are unchecked.
+
+**2. Fail-fast at startup (CONFIG-FAILFAST-001).** Validation runs at boot; a constraint violation aborts startup with a clear message naming the offending key. The application never starts in a misconfigured state and defers the error to first use.
+
+**3. Required keys have no silent default (CONFIG-REQUIRED-001).** A required value has NO fallback — its absence fails startup. Hardcoding an empty string, `0`, or a placeholder for a required key hides the misconfiguration and ships it to production.
+
+**4. Secret separation (CONFIG-SECRET-SEPARATION-001).** Secrets live in the environment or a secret manager, separate from ordinary config — per Twelve-Factor, *the twelve-factor app stores config in environment variables*. Secrets are never committed in `application.yml` and never logged (composes the no-PII/secrets-in-logs discipline).
+
+**5. Explicit profiles (CONFIG-PROFILE-001).** Per-environment differences are expressed through explicit profiles (`spring.profiles.active`), not `if (hostname.contains("prod"))` branches scattered in code.
+
+**6. Immutable after startup (CONFIG-IMMUTABLE-001).** Config is bound once and immutable thereafter — a `record` or final fields, no mutable global setter rewriting it at runtime, so behavior cannot silently change mid-process.
+
+**Incorrect — untyped lookups with silent defaults; a missing required key fails late as an NPE:**
+
+```java
+@Service
+class PaymentClient {
+    String key = System.getenv("PAYMENT_API_KEY");          // VIOLATION: untyped, unchecked
+    int timeout = Integer.parseInt(                          // VIOLATION: NumberFormatException at first use
+        Optional.ofNullable(System.getenv("PAY_TIMEOUT")).orElse("0")); // VIOLATION: silent default 0 for a required key
+    // boots clean; the first charge() NPEs on a null key in production.
+}
+```
+
+**Correct — typed @ConfigurationProperties with constraints; validated at boot; required keys fail fast:**
+
+```java
+@ConfigurationProperties("payment")
+@Validated
+public record PaymentConfig(
+    @NotBlank String apiKey,                 // required, no default → boot fails if absent (CONFIG-REQUIRED-001)
+    @Positive int timeoutSeconds) {}         // typed + constrained (CONFIG-SCHEMA-001)
+// @Validated → a violation aborts startup with the bad key named (CONFIG-FAILFAST-001).
+// apiKey comes from the environment / secret manager, never application.yml (CONFIG-SECRET-SEPARATION-001).
+// The record is immutable after binding (CONFIG-IMMUTABLE-001); environments differ by profile (CONFIG-PROFILE-001).
+```
+
+Verification: review-tier. Config validation is a startup-contract property — untyped ad-hoc reads compile and boot fine, failing only when a specific deploy is misconfigured. Verify by review against `specs/config-validation-l0.yaml`: config is bound to typed `@ConfigurationProperties` with Bean Validation constraints and `@Validated`; a bad value fails the boot; required keys have no fallback; secrets are environment/secret-manager sourced and unlogged; environments differ by profile; bound config is immutable. When a fork-receiver wires a real test (context fails to start when a required key is absent/invalid), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [The Twelve-Factor App — III. Config](https://12factor.net/config)
+
+Reference: [Spring Boot — Externalized Configuration](https://docs.spring.io/spring-boot/reference/features/external-config.html)
+
+
+<!-- @source rules/consent-explicit-optin-withdrawable-recorded.md -->
+
+---
+title: Consent MUST be an explicit affirmative opt-in, withdrawable as easily as given, recorded with proof, and purpose-scoped
+impact: HIGH
+impactDescription: "Consent inferred from a pre-ticked box, silence, or a bundled blanket agreement is not valid consent under GDPR — processing on it is unlawful. Consent with no withdrawal path traps the user; consent with no recorded proof cannot be demonstrated to a regulator (the controller bears the burden); consent reused for a purpose it was not given for is a purpose-limitation breach. Each must be correct or the legal basis collapses."
+tags:
+  - consent
+  - gdpr
+  - privacy
+  - opt-in
+  - purpose-limitation
+  - audit
+spec_ref: "specs/consent-management-l0.yaml#CONSENT-CAPTURE-001"
+verification:
+  type: review
+  source: "specs/consent-management-l0.yaml#CONSENT-CAPTURE-001"
+  pattern: "Consent MUST be captured as an explicit affirmative opt-in — a clear affirmative act (an unchecked box the user ticks, an explicit accept), NEVER a pre-ticked box, silence, inactivity, or consent bundled into a blanket ToS acceptance (CONSENT-CAPTURE-001). The user MUST be able to withdraw consent at any time, and withdrawal MUST be as easy as giving it (CONSENT-WITHDRAW-001). Every grant and withdrawal MUST be recorded with proof — who, what purpose, when, the policy version, and the capture context — so the controller can demonstrate consent (CONSENT-RECORD-001). Consent is scoped to specific declared purposes; data MUST NOT be processed for a purpose the user did not consent to, and multiple purposes require separate consent (CONSENT-PURPOSE-001). Cookies/trackers are grouped into categories the user consents to independently, with non-essential defaulting OFF (CONSENT-COOKIE-001). A material policy/purpose version change requires re-consent; stale consent against an old version does not authorize new processing (CONSENT-VERSIONING-001). A minor below the capacity age requires guardian proxy consent (CONSENT-CAPACITY-001). Reject pre-ticked/implied consent, a withdraw flow harder than the grant flow, processing without a recorded consent row, and reuse of consent across unconsented purposes."
+upstream:
+  - "https://gdpr-info.eu/art-7-gdpr/"
+  - "https://gdpr-info.eu/recitals/no-32/"
+evidence:
+  - source_type: external
+    citation: "GDPR Article 7(1) — Conditions for consent (controller must demonstrate consent)"
+    url: "https://gdpr-info.eu/art-7-gdpr/"
+    quote: "Where processing is based on consent, the controller shall be able to demonstrate that the data subject has consented to processing of his or her personal data."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "GDPR Article 7(3) — Conditions for consent (withdrawal as easy as giving)"
+    url: "https://gdpr-info.eu/art-7-gdpr/"
+    quote: "It shall be as easy to withdraw as to give consent."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "GDPR Recital 32 — Conditions for consent (clear affirmative act; no pre-ticked boxes)"
+    url: "https://gdpr-info.eu/recitals/no-32/"
+    quote: "Silence, pre-ticked boxes or inactivity should not therefore constitute consent."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Consent MUST be an explicit affirmative opt-in, withdrawable as easily as given, recorded with proof, and purpose-scoped
+
+**Impact: HIGH — When processing relies on consent as its legal basis, the consent must be real or the basis is void and the processing unlawful. GDPR Recital 32 is explicit that *silence, pre-ticked boxes or inactivity should not therefore constitute consent* — consent must be *a clear affirmative act*. Article 7 adds that the controller bears the burden of proof — *where processing is based on consent, the controller shall be able to demonstrate that the data subject has consented* — and that *it shall be as easy to withdraw as to give consent*. A consent flow that pre-ticks the box, hides the withdrawal, keeps no record, or reuses a grant for a purpose it was never given for fails one of these and collapses the legal basis.**
+
+There are seven load-bearing requirements — the items of `specs/consent-management-l0.yaml`, all governed by this rule.
+
+**1. Explicit affirmative opt-in (CONSENT-CAPTURE-001).** Consent is captured by a clear affirmative act — an unchecked box the user actively ticks, an explicit "I agree" — never a pre-ticked box, silence, inactivity, or consent buried inside a blanket ToS acceptance.
+
+**2. Easy withdrawal (CONSENT-WITHDRAW-001).** The user can withdraw at any time, and withdrawal is *as easy as* giving — a one-click toggle in settings, not a support-ticket-and-wait. Withdrawal stops the consented processing going forward.
+
+**3. Recorded proof (CONSENT-RECORD-001).** Every grant and withdrawal writes an immutable record — subject, purpose, timestamp, policy version, capture context (UI/IP/locale) — so the controller can *demonstrate* the consent on demand. No consent row ⇒ no demonstrable basis.
+
+**4. Purpose limitation (CONSENT-PURPOSE-001).** Consent is scoped to specific declared purposes; processing for a purpose the user did not consent to is forbidden, and distinct purposes require separate consent (no single checkbox covering analytics + marketing + profiling).
+
+**5. Cookie categories (CONSENT-COOKIE-001).** Cookies/trackers are grouped into categories (essential / functional / analytics / marketing); the user consents to each independently, and non-essential categories default OFF until affirmatively enabled.
+
+**6. Re-consent on version change (CONSENT-VERSIONING-001).** A material change to the policy or purposes requires re-consent; a consent recorded against an old version does not authorize processing introduced by a new version.
+
+**7. Capacity / guardian proxy (CONSENT-CAPACITY-001).** A minor below the applicable capacity age cannot self-consent; guardian (proxy) consent is required and recorded as such.
+
+**Incorrect — pre-ticked, bundled, no record, no separate purposes:**
+
+```html
+<!-- VIOLATION: pre-checked (CONSENT-CAPTURE-001); one box bundling all purposes (CONSENT-PURPOSE-001) -->
+<input type="checkbox" name="consent" checked>
+I agree to the Terms, and to analytics, marketing, and profiling.
+```
+```java
+// VIOLATION: processes on an implied flag, writes no consent record (CONSENT-RECORD-001)
+if (user.tosAccepted) analytics.track(user);
+```
+
+**Correct — affirmative per-purpose opt-in, recorded with version, withdrawable, defaults off:**
+
+```java
+// Each purpose is a distinct, unchecked-by-default opt-in (CONSENT-CAPTURE-001 / CONSENT-PURPOSE-001 / CONSENT-COOKIE-001)
+record ConsentGrant(String userId, Purpose purpose, boolean granted,
+                    String policyVersion, Instant at, String context) {}
+
+void capture(String userId, Map<Purpose,Boolean> choices, String policyVersion, String ctx) {
+    choices.forEach((p, granted) ->
+        consentLog.record(new ConsentGrant(userId, p, granted, policyVersion, clock.now(), ctx))); // proof (CONSENT-RECORD-001)
+}
+boolean mayProcess(String userId, Purpose p) {
+    return consentLog.latest(userId, p)                       // purpose-scoped check (CONSENT-PURPOSE-001)
+        .filter(g -> g.granted() && currentPolicy.equals(g.policyVersion())) // re-consent on version (CONSENT-VERSIONING-001)
+        .isPresent();
+}
+// withdraw(userId, p) records a granted=false row via the SAME one-click surface (CONSENT-WITHDRAW-001).
+```
+
+Verification: review-tier. Consent validity is a legal/contract property with no compile-time signal — a pre-ticked flow compiles and collects "consent" that is legally void. Verify by review against `specs/consent-management-l0.yaml`: opt-in is an affirmative act (no pre-tick/bundling); withdrawal is as easy as the grant; every grant/withdrawal is recorded with purpose+version+timestamp; processing checks purpose-scoped consent; cookie categories default non-essential off; a version change forces re-consent; minors use guardian proxy. When a fork-receiver wires a real IT (process blocked without a consent row; withdrawal flips mayProcess to false), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [GDPR Article 7 — Conditions for consent](https://gdpr-info.eu/art-7-gdpr/)
+
+Reference: [GDPR Recital 32 — Affirmative consent](https://gdpr-info.eu/recitals/no-32/)
+
+
 <!-- @source rules/consume-path-consults-shared-fail-closed-blocking-gate.md -->
 
 ---
@@ -2433,6 +2884,94 @@ Verification: `./gradlew testPractices --tests "*SingletonState*"` runs 32 × 10
 Reference: [Spring Framework — Bean scopes](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html)
 
 
+<!-- @source rules/cors-allowlist-and-preflight.md -->
+
+---
+title: CORS MUST be an explicit origin allowlist with correct preflight + credentials policy — never a reflected-origin wildcard
+impact: HIGH
+impactDescription: "Reflecting the request Origin into Access-Control-Allow-Origin (or using '*') while also allowing credentials defeats the same-origin policy: any malicious site can make authenticated cross-origin requests with the victim's cookies and read the responses. CORS is a deliberate relaxation of SOP and MUST be a closed allowlist with a coherent preflight, methods, headers, and credentials policy."
+tags:
+  - cors
+  - same-origin-policy
+  - preflight
+  - credentials
+  - security
+  - http
+spec_ref: "specs/cors-l0.yaml#CORS-ORIGIN-001"
+verification:
+  type: review
+  source: "specs/cors-l0.yaml#CORS-ORIGIN-001"
+  pattern: "CORS MUST be configured as an explicit closed allowlist of permitted origins (CORS-ORIGIN-001) — never a literal '*' on a credentialed surface, and never naive reflection of the inbound Origin header into Access-Control-Allow-Origin without allowlist membership (reflection = effectively allow-all). Preflight OPTIONS requests MUST be answered with the matching Access-Control-Allow-* headers and MUST NOT execute the side-effecting handler (CORS-PREFLIGHT-001). Access-Control-Allow-Credentials=true MUST be paired with a SPECIFIC origin (never '*'); a credentialed policy with a wildcard origin is forbidden by the protocol and the catalog (CORS-CREDENTIALS-001). Allow-Methods reflects exactly the methods the endpoint supports (CORS-METHODS-001). Allow-Headers lists permitted request headers and Expose-Headers lists response headers readable by JS (CORS-HEADERS-001). Access-Control-Max-Age sets a bounded preflight cache duration (CORS-MAXAGE-001). Reject Allow-Origin:* with credentials, unconditional Origin reflection, and a preflight that mutates state."
+upstream:
+  - "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS"
+  - "https://fetch.spec.whatwg.org/#http-cors-protocol"
+evidence:
+  - source_type: external
+    citation: "MDN Web Docs — Cross-Origin Resource Sharing (CORS) — definition"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS"
+    quote: "Cross-Origin Resource Sharing (CORS) is an HTTP-header based mechanism that allows a server to indicate any origins (domain, scheme, or port) other than its own from which a browser should permit loading resources."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "MDN Web Docs — CORS — preflight request"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS"
+    quote: "Unlike simple requests, for \"preflighted\" requests the browser first sends an HTTP request using the OPTIONS method to the resource on the other origin, in order to determine if the actual request is safe to send."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "MDN Web Docs — CORS — Access-Control-Allow-Credentials"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS"
+    quote: "The Access-Control-Allow-Credentials header indicates whether or not the response to the request can be exposed when the credentials flag is true."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## CORS MUST be an explicit origin allowlist with correct preflight + credentials policy
+
+**Impact: HIGH — CORS is a deliberate, controlled relaxation of the browser's same-origin policy. Per MDN, *Cross-Origin Resource Sharing (CORS) is an HTTP-header based mechanism that allows a server to indicate any origins (domain, scheme, or port) other than its own from which a browser should permit loading resources*. The danger is misconfiguration: a backend that reflects the inbound `Origin` straight back into `Access-Control-Allow-Origin` — or sends `*` — while ALSO sending `Access-Control-Allow-Credentials: true` lets any attacker page issue authenticated cross-origin requests with the victim's cookies and read the responses. That is a full SOP bypass. CORS MUST be a closed allowlist with a coherent preflight, methods, headers, and credentials policy.**
+
+There are six load-bearing requirements — the items of `specs/cors-l0.yaml`, all governed by this rule.
+
+**1. Explicit origin allowlist (CORS-ORIGIN-001).** Permitted origins are a closed, configured set. `Access-Control-Allow-Origin` is set to a member of that set (or omitted), NEVER a literal `*` on a credentialed surface, and NEVER the inbound `Origin` reflected without allowlist membership (reflection is allow-all in disguise). A wildcard-pattern config (e.g. `https://*.example.com`) is still bounded to a controlled suffix, not arbitrary.
+
+**2. Preflight OPTIONS (CORS-PREFLIGHT-001).** Per MDN, *for "preflighted" requests the browser first sends an HTTP request using the OPTIONS method to the resource on the other origin, in order to determine if the actual request is safe to send*. The preflight is answered with the matching `Access-Control-Allow-*` headers and MUST NOT run the side-effecting handler — a preflight is a permission check, not the operation.
+
+**3. Credentials policy (CORS-CREDENTIALS-001).** Per MDN, *the Access-Control-Allow-Credentials header indicates whether or not the response to the request can be exposed when the credentials flag is true*. `Allow-Credentials: true` MUST be paired with a SPECIFIC origin — the protocol forbids combining it with `Allow-Origin: *`, and the catalog forbids it as a CSRF/data-exfil vector.
+
+**4. Allow-Methods (CORS-METHODS-001).** `Access-Control-Allow-Methods` reflects exactly the HTTP methods the endpoint supports — not a blanket list including methods the route does not implement.
+
+**5. Allow-Headers + Expose-Headers (CORS-HEADERS-001).** `Access-Control-Allow-Headers` enumerates the request headers the client may send; `Access-Control-Expose-Headers` enumerates the response headers JavaScript is allowed to read. Both are explicit allowlists.
+
+**6. Preflight cache (CORS-MAXAGE-001).** `Access-Control-Max-Age` sets a bounded duration the browser may cache the preflight result, trading a small staleness window for fewer preflights — bounded, not indefinite.
+
+**Incorrect — reflects the Origin and allows credentials: any site can make authenticated cross-origin reads:**
+
+```java
+res.setHeader("Access-Control-Allow-Origin", req.getHeader("Origin")); // VIOLATION: unconditional reflection = allow-all
+res.setHeader("Access-Control-Allow-Credentials", "true");             // VIOLATION: credentials + reflected origin = SOP bypass
+```
+
+**Correct — closed allowlist; credentials only with a specific allowed origin; preflight handled by the framework:**
+
+```java
+@Bean
+CorsConfigurationSource cors() {
+    CorsConfiguration c = new CorsConfiguration();
+    c.setAllowedOrigins(List.of("https://app.example.com"));     // closed allowlist (CORS-ORIGIN-001)
+    c.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));// exactly supported (CORS-METHODS-001)
+    c.setAllowedHeaders(List.of("Authorization", "Content-Type"));// explicit (CORS-HEADERS-001)
+    c.setExposedHeaders(List.of("X-Request-Id"));
+    c.setAllowCredentials(true);                                 // OK: paired with a specific origin (CORS-CREDENTIALS-001)
+    c.setMaxAge(Duration.ofMinutes(30));                         // bounded preflight cache (CORS-MAXAGE-001)
+    var src = new UrlBasedCorsConfigurationSource();
+    src.registerCorsConfiguration("/**", c);
+    return src;                                                   // Spring answers OPTIONS preflight automatically (CORS-PREFLIGHT-001)
+}
+```
+
+Verification: review-tier. CORS misconfiguration is a security property with no compile-time signal — a reflected-origin policy compiles and "works" for the legit frontend while silently exposing every authenticated endpoint. Verify by review against `specs/cors-l0.yaml`: origins are a closed allowlist (no `*` with credentials, no unconditional reflection); preflight OPTIONS is answered without running the handler; `Allow-Credentials: true` only with a specific origin; methods/headers are explicit allowlists; `Max-Age` is bounded. When a fork-receiver wires a real IT (a disallowed Origin gets no `Allow-Origin`; `*`+credentials is rejected), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [MDN — Cross-Origin Resource Sharing (CORS)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)
+
+
 <!-- @source rules/currency-amount-precision-explicit.md -->
 
 ---
@@ -2576,6 +3115,171 @@ static final ArchRule billingAmountFieldsMustBeIntegerMinorUnits = fields()
 See: `practices/evals/fixtures/currency-amount-precision/fail_float_amount/BillingPlanFloatAmount.java` — a Plan entity with `private double amount`.
 
 See: `practices/evals/fixtures/currency-amount-precision/pass_integer_amount/BillingPlanLongAmount.java` — correct `private long amount`.
+
+
+<!-- @source rules/customs-e-trade-hs-edi-aeo.md -->
+
+---
+title: Customs e-trade MUST classify by WCO HS code, exchange UN/EDIFACT messages over authenticated certs, honor AEO status, and retain declarations for the statutory period
+impact: HIGH
+impactDescription: "A customs declaration with a wrong/ad-hoc commodity code is mis-tariffed and rejected by the customs authority; one not in the agreed EDI message format cannot be transmitted to UNI-PASS at all; one sent without the authenticated customs certificate is unauthenticated; AEO status ignored loses the facilitation the operator is entitled to; declarations not retained for the statutory period (관세법 §38, 5 years) fail an audit. Each gap blocks legitimate trade or breaches customs law."
+tags:
+  - customs
+  - hs-code
+  - edifact
+  - aeo
+  - international-trade
+  - compliance
+spec_ref: "specs/customs-e-trade-l0.yaml#CUSTOMS-CLASSIFICATION-001"
+verification:
+  type: review
+  source: "specs/customs-e-trade-l0.yaml#CUSTOMS-CLASSIFICATION-001"
+  pattern: "Customs e-trade MUST classify every traded item by a valid WCO Harmonized System (HS) code — the international product nomenclature — not an ad-hoc internal category (CUSTOMS-CLASSIFICATION-001). Declarations are submitted to the customs authority (관세청 UNI-PASS) in the required electronic form (CUSTOMS-DECLARATION-001) using the agreed UN/EDIFACT message format/version (D.16B) (CUSTOMS-EDI-001). Messages are authenticated with the customs-authority certificate and the operator's EORI/identification number (CUSTOMS-CERT-001). An operator's AEO (Authorized Economic Operator) status, where held, is honored for the facilitation it grants (CUSTOMS-AEO-001). Declarations and their audit trail are retained for the statutory period — 관세법 §38, five years (CUSTOMS-AUDIT-001). Reject an ad-hoc commodity code, a declaration not in the agreed EDI format, an unauthenticated submission, and a declaration store with no statutory retention."
+upstream:
+  - "https://www.wcoomd.org/en/topics/nomenclature/overview/what-is-the-harmonized-system.aspx"
+  - "https://www.rfc-editor.org/rfc/rfc5280"
+  - "https://unece.org/trade/uncefact/introducing-unedifact"
+evidence:
+  - source_type: external
+    citation: "World Customs Organization — What is the Harmonized System (HS)"
+    url: "https://www.wcoomd.org/en/topics/nomenclature/overview/what-is-the-harmonized-system.aspx"
+    quote: "The Harmonized Commodity Description and Coding System generally referred to as \"Harmonized System\" or simply \"HS\" is a multipurpose international product nomenclature developed by the World Customs Organization (WCO)."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "World Customs Organization — What is the Harmonized System (global adoption)"
+    url: "https://www.wcoomd.org/en/topics/nomenclature/overview/what-is-the-harmonized-system.aspx"
+    quote: "The system is used by more than 200 countries and economies as a basis for their Customs tariffs and for the collection of international trade statistics."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "RFC 5280 — Internet X.509 PKI Certificate and CRL Profile (Abstract)"
+    url: "https://www.rfc-editor.org/rfc/rfc5280"
+    quote: "This memo profiles the X.509 v3 certificate and X.509 v2 certificate revocation list (CRL) for use in the Internet."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Customs e-trade MUST classify by WCO HS code, exchange UN/EDIFACT over authenticated certs, honor AEO, and retain for the statutory period
+
+**Impact: HIGH — Cross-border customs declarations are interoperability- and compliance-critical: they must speak the global language of trade or they are rejected at the border. The commodity code must be a WCO Harmonized System code — per the WCO, *the Harmonized Commodity Description and Coding System ... is a multipurpose international product nomenclature developed by the World Customs Organization (WCO)*, and *the system is used by more than 200 countries and economies as a basis for their Customs tariffs and for the collection of international trade statistics*. The message must be in the agreed UN/EDIFACT format to reach the customs system (관세청 UNI-PASS) at all, authenticated with the customs certificate (an X.509 certificate, the profile RFC 5280 defines), and the declaration retained for the statutory period or an audit fails.**
+
+There are six load-bearing requirements — the items of `specs/customs-e-trade-l0.yaml`, all governed by this rule.
+
+**1. WCO HS classification (CUSTOMS-CLASSIFICATION-001).** Every traded item carries a valid WCO Harmonized System code (the 6-digit international code, extended nationally). An ad-hoc internal category cannot be tariffed and is rejected; the HS code is the basis for the tariff and the trade statistics.
+
+**2. Declaration submission to UNI-PASS (CUSTOMS-DECLARATION-001).** Import/export declarations are submitted electronically to the customs authority (관세청 UNI-PASS) in the required structured form, with the mandatory fields the authority validates.
+
+**3. UN/EDIFACT message format (CUSTOMS-EDI-001).** Messages use the agreed UN/EDIFACT directory/version (D.16B) — the United Nations rules for Electronic Data Interchange for Administration, Commerce and Transport — so the customs system can parse them. A non-conforming message cannot be transmitted.
+
+**4. Authenticated certificate + EORI (CUSTOMS-CERT-001).** Submissions are authenticated with the customs-authority certificate (an X.509 certificate per RFC 5280) and carry the operator's EORI / identification number, so the sender is verified and the submission non-repudiable.
+
+**5. AEO status (CUSTOMS-AEO-001).** Where the operator holds Authorized Economic Operator status (WCO SAFE Framework), the system honors it for the trade-facilitation benefits (expedited processing, reduced inspection) it confers.
+
+**6. Statutory retention + audit (CUSTOMS-AUDIT-001).** Declarations and their audit trail are retained for the statutory period — 관세법 §38, five years — and are tamper-evidently auditable, so a post-clearance audit can reconstruct every declaration.
+
+**Incorrect — ad-hoc internal code, no EDI format, unauthenticated, no retention:**
+
+```java
+void declare(Shipment s) {
+    var decl = new Declaration(s.internalCategory(), s.value());  // VIOLATION: internal category, not an HS code (CLASSIFICATION)
+    http.post(UNIPASS_URL, toJson(decl));                         // VIOLATION: JSON, not UN/EDIFACT D.16B (EDI); unauthenticated (CERT)
+    // VIOLATION: nothing retained for the 5-year statutory period (AUDIT)
+}
+```
+
+**Correct — HS-coded, UN/EDIFACT, certificate-authenticated, AEO-aware, retained 5 years:**
+
+```java
+void declare(Shipment s) {
+    HsCode hs = hsClassifier.classify(s.product());              // valid WCO HS code (CUSTOMS-CLASSIFICATION-001)
+    EdifactMessage msg = edifact.build("CUSDEC", "D.16B", hs, s, operator.eori()); // UN/EDIFACT (CUSTOMS-EDI-001)
+    SignedMessage signed = customsCert.sign(msg);               // X.509 customs cert + EORI (CUSTOMS-CERT-001)
+    UnipassResponse r = unipass.submit(signed, operator.aeoStatus()); // UNI-PASS, AEO-aware (DECLARATION/AEO)
+    declarationStore.retain(signed, r, Period.ofYears(5));      // 관세법 §38 retention (CUSTOMS-AUDIT-001)
+}
+```
+
+Verification: review-tier. Customs conformance is an interoperability + compliance property with no compile-time signal — an internal-category JSON "declaration" compiles and is simply rejected by the authority, or passes an internal demo while being non-compliant. Verify by review against `specs/customs-e-trade-l0.yaml`: items carry valid WCO HS codes; declarations submit to UNI-PASS in UN/EDIFACT D.16B; submissions are authenticated with the customs X.509 certificate + EORI; AEO status is honored; declarations are retained 5 years per 관세법 §38 with an audit trail. When a fork-receiver wires a real test (HS code validated against the WCO table; EDIFACT message schema-validated), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [WCO — What is the Harmonized System](https://www.wcoomd.org/en/topics/nomenclature/overview/what-is-the-harmonized-system.aspx)
+
+Reference: [RFC 5280 — X.509 PKI Certificate and CRL Profile](https://www.rfc-editor.org/rfc/rfc5280)
+
+
+<!-- @source rules/denormalized-counter-reconcilable.md -->
+
+---
+title: A denormalized usage counter MUST be reconcilable against its source rows — recompute, detect drift, repair, and decrement on release
+impact: MEDIUM
+impactDescription: "A denormalized counter (a tenant's seat count, stored-bytes total, jobs-this-period) drifts from the source rows it summarizes: a crash between the row write and the counter increment, a release path that forgot to decrement, a double-count. Drift silently over- or under-charges quota — a tenant blocked below their real usage, or allowed past their paid limit. Without a reconciliation routine that recomputes the truth from the source rows and repairs the counter, the drift is permanent and invisible."
+tags:
+  - reconciliation
+  - denormalization
+  - quota
+  - counter
+  - data-integrity
+spec_ref: "specs/per-tenant-resource-quota-l0.yaml#QUOTA-RECONCILE-001"
+verification:
+  type: review
+  source: "specs/per-tenant-resource-quota-l0.yaml#QUOTA-RECONCILE-001"
+  pattern: "A denormalized accumulated-usage counter MUST be reconcilable against the source-of-truth rows it summarizes (count of active seats / SUM of stored bytes / count of jobs in the period). A reconciliation routine MUST recompute the authoritative total from the source rows (a COUNT/SUM aggregate) and compare it to the stored counter; a non-zero difference is DRIFT and MUST be reported (WARN log / metric) and repaired (the counter reset to the recomputed truth). The counter MUST decrement on the release path — a consume-only counter that never decrements is forbidden (it guarantees monotonic drift upward). Reconciliation MUST be idempotent and run off the hot path (a scheduled sweep). Reject a counter with no reconcile routine, a consume-only counter that never decrements, and a reconcile that silently overwrites without reporting drift."
+upstream:
+  - "https://www.postgresql.org/docs/current/functions-aggregate.html"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL Documentation — Aggregate Functions"
+    url: "https://www.postgresql.org/docs/current/functions-aggregate.html"
+    quote: "Aggregate functions compute a single result from a set of input values."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A denormalized usage counter MUST be reconcilable against its source rows — recompute, detect drift, repair, decrement on release
+
+**Impact: MEDIUM — A quota check reads a denormalized counter (the tenant's current seat count or stored-bytes total) because recomputing it from the source rows on every check is too slow. But a denormalized value drifts from its source: a crash between writing a source row and incrementing the counter, a release path that deleted the row but forgot to decrement, a double-increment under a retry. The drift is silent and one-directional in practice — usually upward — so a tenant gets blocked below the resources they actually hold, or (drifting down) slips past their paid limit. The defense is reconciliation: the source rows are the truth, and an aggregate recomputes it — per PostgreSQL, *aggregate functions compute a single result from a set of input values* (COUNT/SUM over the source rows) — which a routine compares to the stored counter to detect and repair drift.**
+
+There is one load-bearing requirement for `QUOTA-RECONCILE-001` (composing `quota-atomic-tenant-claim`, which keeps the counter atomic in the first place).
+
+**1. Recomputable from source.** The authoritative total is always derivable from the source-of-truth rows via a COUNT/SUM aggregate. The denormalized counter is an optimization, never the truth.
+
+**2. Drift detection.** A reconciliation routine recomputes the aggregate and compares it to the stored counter. A non-zero difference is DRIFT — it is reported (a WARN log / a metric), not silently swallowed, because sustained drift is a code defect (a missing decrement, a double-count), not normal operation.
+
+**3. Repair.** On detected drift the counter is reset to the recomputed truth, so the system self-heals rather than accumulating error.
+
+**4. Decrement on release.** The counter MUST decrement on the release path (seat removed, object deleted, period rolled). A consume-only counter that only ever increments guarantees monotonic upward drift and is forbidden.
+
+**5. Idempotent, off the hot path.** Reconciliation is idempotent (a no-drift run mutates nothing) and runs as a scheduled sweep, never inline on the quota-check request path.
+
+**Incorrect — consume-only counter, never reconciled; release forgets to decrement:**
+
+```java
+void consume(String tenant, long n) { quotaRepo.increment(tenant, n); }     // increments
+void release(String tenant, Seat s) { seatRepo.delete(s); }                  // VIOLATION: counter NOT decremented (drifts up)
+// VIOLATION: no reconcile routine → drift between counter and active-seat rows is permanent (QUOTA-RECONCILE-001)
+```
+
+**Correct — decrement on release; scheduled idempotent reconcile recomputes from source and repairs drift:**
+
+```java
+void release(String tenant, Seat s) {                       // decrement on release (QUOTA-RECONCILE-001)
+    seatRepo.delete(s);
+    quotaRepo.decrement(tenant, 1);
+}
+@Scheduled(fixedDelay = RECONCILE_INTERVAL)
+void reconcile() {                                          // off the hot path, idempotent
+    for (String tenant : tenants.all()) {
+        long truth = seatRepo.countActiveByTenant(tenant);  // COUNT aggregate over source rows = authoritative
+        long stored = quotaRepo.current(tenant);
+        if (truth != stored) {
+            log.warn("quota drift tenant={} stored={} truth={}", tenant, stored, truth); // detect + report
+            quotaRepo.set(tenant, truth);                   // repair to the recomputed truth
+        }
+    }
+}
+```
+
+Verification: review-tier. Counter correctness is a data-integrity property with no compile-time signal — a consume-only counter compiles and works until a release path drifts it. Verify by review against `specs/per-tenant-resource-quota-l0.yaml#QUOTA-RECONCILE-001`: the counter is recomputable from source rows; a reconcile routine detects drift, reports it, and repairs to the recomputed truth; the counter decrements on release; reconciliation is idempotent and off the hot path. When a fork-receiver wires a real IT (induce drift, run reconcile, assert the counter equals the source aggregate), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [PostgreSQL — Aggregate Functions](https://www.postgresql.org/docs/current/functions-aggregate.html)
 
 
 <!-- @source rules/derived-value-pins-its-time-varying-input.md -->
@@ -2850,6 +3554,203 @@ Reference: [PostgreSQL — 5.5.5 Foreign Keys (ON DELETE RESTRICT)](https://www.
 Reference: [Jakarta Persistence 3.1 — §2.10 Entity Relationships](https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1.html)
 
 
+<!-- @source rules/distributed-tracing-w3c-context-propagation.md -->
+
+---
+title: Distributed tracing MUST propagate W3C Trace Context across services — traceparent in, span out, trace_id in logs
+impact: MEDIUM
+impactDescription: "If a service does not read the inbound traceparent and continue the trace, every hop starts a fresh disconnected trace — a cross-service request can no longer be reconstructed end to end, and a production incident that spans three services shows three unrelated traces instead of one. W3C Trace Context is the wire standard that keeps the trace continuous; a span lifecycle, sampling, semantic conventions, and trace_id-in-logs make it usable."
+tags:
+  - observability
+  - distributed-tracing
+  - w3c-trace-context
+  - opentelemetry
+  - propagation
+  - correlation
+spec_ref: "specs/distributed-tracing-l0.yaml#TRACE-CONTEXT-001"
+verification:
+  type: review
+  source: "specs/distributed-tracing-l0.yaml#TRACE-CONTEXT-001"
+  pattern: "A service MUST propagate W3C Trace Context: read the inbound `traceparent` (and `tracestate`) header, continue that trace (not start a fresh root), and inject `traceparent` on every outbound call so the trace stays continuous across hops (TRACE-CONTEXT-001). Each unit of work opens a span with a parent-child link to the inbound context and records a status (ok/error) and is always ended, even on exception (TRACE-SPAN-001). Cross-cutting values that must travel with the trace (tenant, locale) ride W3C `baggage`, never smuggled in app headers (TRACE-BAGGAGE-001). Sampling is a declared head-based ratio that is parent-based — a child respects the parent's sampled decision so a trace is sampled whole or not at all (TRACE-SAMPLING-001). Span and metric attributes follow OpenTelemetry semantic conventions, not ad-hoc names (TRACE-SEMCONV-001). The active `trace_id` is placed in the logging MDC so every structured log line correlates to its trace (TRACE-CORRELATION-001). Reject a service that ignores the inbound traceparent and starts a new root, that drops the header on outbound calls, that leaves spans unended on the error path, or that logs without the trace_id."
+upstream:
+  - "https://www.w3.org/TR/trace-context/"
+  - "https://opentelemetry.io/docs/specs/semconv/"
+evidence:
+  - source_type: external
+    citation: "W3C Trace Context (W3C Recommendation) — Abstract / purpose"
+    url: "https://www.w3.org/TR/trace-context/"
+    quote: "This specification defines standard HTTP headers and a value format to propagate context information that enables distributed tracing scenarios."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "W3C Trace Context (W3C Recommendation) — traceparent header field"
+    url: "https://www.w3.org/TR/trace-context/"
+    quote: "The `traceparent` HTTP header field identifies the incoming request in a tracing system."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "W3C Trace Context (W3C Recommendation) — tracestate header field"
+    url: "https://www.w3.org/TR/trace-context/"
+    quote: "The main purpose of the `tracestate` HTTP header is to provide additional vendor-specific trace identification information across different distributed tracing systems."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Distributed tracing MUST propagate W3C Trace Context across services — traceparent in, span out, trace_id in logs
+
+**Impact: MEDIUM — A request that crosses three services should produce ONE trace with a span per hop, linked parent-to-child. It only does so if every service reads the inbound trace context and continues it. The moment one service ignores the inbound `traceparent` and starts a fresh root span, the trace breaks: the downstream work shows up as an unrelated trace with no link back to the caller, and an on-call engineer debugging a slow or failing cross-service request sees disconnected fragments instead of one timeline. W3C Trace Context is the wire standard that prevents this — per the spec, it *defines standard HTTP headers and a value format to propagate context information that enables distributed tracing scenarios*, and the `traceparent` header *identifies the incoming request in a tracing system*.**
+
+There are six load-bearing requirements — the items of `specs/distributed-tracing-l0.yaml`, all governed by this rule.
+
+**1. W3C Trace Context propagation (TRACE-CONTEXT-001).** On every inbound request the service reads `traceparent` (and `tracestate`) and *continues that trace* — the new span's parent is the inbound span id, not a fresh root. On every outbound call (HTTP client, message publish) it injects the current `traceparent` so the next hop continues the same trace. A missing inbound `traceparent` starts a new root (legitimate entry point); a present one MUST be honored, never discarded.
+
+**2. Span lifecycle + parent-child + status (TRACE-SPAN-001).** Each unit of work opens a span linked to the active context, sets a status (`OK` / `ERROR`, with the error recorded on the exception path), and is ALWAYS ended — in a `finally` / try-with-resources scope, so an exception never leaks an unended span (which would corrupt span timing and parent-child nesting).
+
+**3. W3C Baggage for cross-cutting values (TRACE-BAGGAGE-001).** Values that must travel with the whole trace (tenant id, locale) ride the W3C `baggage` header, propagated alongside `traceparent` — not smuggled in bespoke application headers that downstream tracing is blind to. `tracestate` carries vendor trace identification (*additional vendor-specific trace identification information across different distributed tracing systems*); `baggage` carries application context.
+
+**4. Parent-based, head-based sampling (TRACE-SAMPLING-001).** The sampling decision is a *declared* head-based ratio (e.g. a `TraceIdRatioBased` sampler) wrapped parent-based: a child span respects the parent's sampled flag so a distributed trace is sampled *as a whole* — all spans or none. A per-service independent decision fragments a trace into a mix of sampled and dropped spans that cannot be assembled.
+
+**5. OpenTelemetry semantic conventions (TRACE-SEMCONV-001).** Span and attribute names follow OpenTelemetry semantic conventions (`http.request.method`, `url.path`, `server.address`, …) rather than ad-hoc per-service names, so traces are queryable and comparable across services and backends.
+
+**6. trace_id in structured logs (TRACE-CORRELATION-001).** The active `trace_id` (from the W3C context) is placed in the logging MDC for the duration of the request, so every structured log line carries the trace_id and a log can be pivoted to its trace and back. (Distinct from a locally-minted request id — this is the propagated W3C trace_id, the same value across all hops.)
+
+**Incorrect — ignores the inbound context and starts a new root; the cross-service trace breaks:**
+
+```java
+@GetMapping("/orders/{id}")
+public Order get(@PathVariable String id) {
+    Span span = tracer.spanBuilder("getOrder").startSpan();   // VIOLATION: no parent from inbound traceparent → new root
+    Order o = httpClient.get("/inventory/" + id);              // VIOLATION: traceparent NOT injected → downstream is a 3rd disconnected trace
+    return o;                                                  // VIOLATION: span never ended; error path leaks it
+}
+```
+
+**Correct — continues the inbound trace, injects on outbound, ends the span, trace_id in MDC:**
+
+```java
+@GetMapping("/orders/{id}")
+public Order get(@PathVariable String id) {
+    // Context.extract(inbound traceparent/tracestate) done by the tracing filter;
+    // the span's parent IS the inbound span (TRACE-CONTEXT-001 / TRACE-SPAN-001).
+    Span span = tracer.spanBuilder("getOrder")
+        .setSpanKind(SpanKind.SERVER).startSpan();
+    try (Scope scope = span.makeCurrent()) {
+        MDC.put("trace_id", span.getSpanContext().getTraceId());  // TRACE-CORRELATION-001
+        Order o = httpClient.get("/inventory/" + id);             // traceparent auto-injected (TRACE-CONTEXT-001 outbound)
+        span.setStatus(StatusCode.OK);
+        return o;
+    } catch (RuntimeException e) {
+        span.recordException(e); span.setStatus(StatusCode.ERROR);
+        throw e;
+    } finally {
+        MDC.remove("trace_id");
+        span.end();                                               // always ended (TRACE-SPAN-001)
+    }
+}
+// Sampler: ParentBased(TraceIdRatioBased(ratio)) — parent-based head sampling (TRACE-SAMPLING-001).
+// Attributes follow OTel semantic conventions (TRACE-SEMCONV-001).
+```
+
+Verification: review-tier. Trace continuity is a cross-service property with no compile-time signal — a service that drops the inbound context compiles and serves requests fine; the break only shows when you try to assemble a trace across hops. Verify by review against `specs/distributed-tracing-l0.yaml`: inbound `traceparent` is read and continued (not a fresh root); `traceparent` is injected on every outbound call; spans are always ended with a status; `baggage` carries cross-cutting values; sampling is parent-based head ratio; attributes follow OTel semantic conventions; the propagated `trace_id` is in the MDC for every log line. When a fork-receiver wires a real two-service IT asserting the downstream span's trace_id equals the upstream's, this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [W3C Trace Context (standard headers to propagate distributed tracing context)](https://www.w3.org/TR/trace-context/)
+
+Reference: [OpenTelemetry Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/)
+
+
+<!-- @source rules/document-signing-pki-timestamp-revocation.md -->
+
+---
+title: A signed document MUST use a declared standard signature format over a verified PKI chain, with a trusted timestamp, revocation-checked verification, and long-term retention
+impact: HIGH
+impactDescription: "A signature that is not validated against a trusted certificate chain can be forged by any self-signed key; one with no trusted timestamp cannot prove WHEN it was signed (so a back-dated or post-expiry signature passes); one verified without a revocation check accepts a signature from a stolen/revoked certificate; one not retained for the legal period cannot be re-verified years later when disputed. Each gap voids the legal weight the signature was supposed to carry."
+tags:
+  - digital-signature
+  - pki
+  - x509
+  - timestamp
+  - revocation
+  - non-repudiation
+spec_ref: "specs/document-signing-l0.yaml#DOC-CERT-001"
+verification:
+  type: review
+  source: "specs/document-signing-l0.yaml#DOC-CERT-001"
+  pattern: "A signed document MUST use a DECLARED standard signature format (XMLDSig / PAdES / CAdES per the artifact type), not an ad-hoc scheme (DOC-FORMAT-001). The signing certificate MUST chain to a trusted root and be validated against that PKI trust hierarchy — a self-signed or untrusted-chain certificate is rejected (DOC-CERT-001). The signer identity is bound to the certificate subject; any RRN/national-id is stored separately and never logged (composes no-rrn-logging) (DOC-IDENTITY-001). A trusted RFC 3161 time-stamp token from a TSA proves the signing time, so signing time is not the signer's own clock (DOC-TIMESTAMP-001). Verification MUST include a revocation check (OCSP/CRL) — a signature from a revoked or expired certificate is invalid even if the math checks out (DOC-VERIFY-001). The signed artifact + its validation material (chain, timestamp, revocation evidence) are retained for the legal period (e.g. 10 years) so the signature is re-verifiable long-term (DOC-RETENTION-001). Reject a signature accepted without chain validation, without a trusted timestamp, or without a revocation check."
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc5280"
+  - "https://www.rfc-editor.org/rfc/rfc3161"
+  - "https://www.rfc-editor.org/rfc/rfc6960"
+evidence:
+  - source_type: external
+    citation: "RFC 5280 — Internet X.509 PKI Certificate and CRL Profile (Abstract)"
+    url: "https://www.rfc-editor.org/rfc/rfc5280"
+    quote: "This memo profiles the X.509 v3 certificate and X.509 v2 certificate revocation list (CRL) for use in the Internet."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "RFC 3161 — Time-Stamp Protocol (TSP) (Section 1)"
+    url: "https://www.rfc-editor.org/rfc/rfc3161"
+    quote: "A time-stamping service supports assertions of proof that a datum existed before a particular time."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "RFC 6960 — X.509 Online Certificate Status Protocol (OCSP) (Abstract)"
+    url: "https://www.rfc-editor.org/rfc/rfc6960"
+    quote: "This document specifies a protocol useful in determining the current status of a digital certificate without requiring Certificate Revocation Lists (CRLs)."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A signed document MUST use a declared format over a verified PKI chain, with a trusted timestamp, revocation-checked verification, and long-term retention
+
+**Impact: HIGH — A digital signature only carries legal weight (non-repudiation) if every link of its trust chain holds. The signing certificate must chain to a trusted root — RFC 5280 *profiles the X.509 v3 certificate and X.509 v2 certificate revocation list (CRL) for use in the Internet* — because a signature validated against an untrusted or self-signed certificate can be forged by anyone. The signing time must come from a trusted timestamp, not the signer's clock — per RFC 3161, *a time-stamping service supports assertions of proof that a datum existed before a particular time* — or a back-dated or post-expiry signature passes. And verification must check revocation — per RFC 6960, OCSP is *a protocol useful in determining the current status of a digital certificate without requiring Certificate Revocation Lists (CRLs)* — because a stolen or revoked certificate's signature must be rejected even when the cryptographic math verifies.**
+
+There are six load-bearing requirements — the items of `specs/document-signing-l0.yaml`, all governed by this rule.
+
+**1. Declared signature format (DOC-FORMAT-001).** The signature uses a declared standard format appropriate to the artifact — XMLDSig for XML, PAdES (ISO 32000-2 / ETSI EN 319 142) for PDF, CAdES for binary — not an ad-hoc home-grown scheme that no third party can validate.
+
+**2. PKI trust chain (DOC-CERT-001).** The signing certificate is validated up to a trusted root through the X.509 chain. A self-signed certificate, or one whose chain does not terminate at a trusted anchor, is rejected.
+
+**3. Signer identity, PII-separated (DOC-IDENTITY-001).** The signer is the validated certificate subject. Any national identifier (RRN) tied to the identity is stored separately and never logged — composes the no-RRN-logging discipline.
+
+**4. Trusted timestamp (DOC-TIMESTAMP-001).** An RFC 3161 time-stamp token from a TSA establishes WHEN the document was signed, independent of the signer's own clock — so a signature cannot be back-dated and a post-expiry signature is detectable.
+
+**5. Revocation-checked verification (DOC-VERIFY-001).** Verification includes a revocation check (OCSP or CRL): a signature from a revoked or expired certificate is INVALID even if the signature value verifies against the public key. Math-only verification is insufficient.
+
+**6. Long-term retention (DOC-RETENTION-001).** The signed artifact AND its validation material — the certificate chain, the timestamp token, and the revocation evidence captured at signing time — are retained for the legal period (e.g. 10 years), so the signature remains re-verifiable long after the certificate itself expires.
+
+**Incorrect — verifies the signature math only; no chain validation, no timestamp, no revocation check:**
+
+```java
+boolean verify(byte[] doc, byte[] sig, PublicKey key) {
+    Signature s = Signature.getInstance("SHA256withRSA");
+    s.initVerify(key);                       // VIOLATION: trusts a raw key, no chain to a trusted root (DOC-CERT-001)
+    s.update(doc);
+    return s.verify(sig);                     // VIOLATION: no timestamp (DOC-TIMESTAMP), no revocation check (DOC-VERIFY)
+    // a signature from a self-signed or REVOKED cert passes; signing time is unknowable
+}
+```
+
+**Correct — validate chain to trusted root, require RFC 3161 timestamp, OCSP/CRL revocation check, retain evidence:**
+
+```java
+SignatureValidation verify(SignedDocument d) {
+    CertPath chain = pki.buildAndValidate(d.signerCert(), trustAnchors);   // chain to trusted root (DOC-CERT-001)
+    revocation.check(chain);                                               // OCSP/CRL — reject revoked (DOC-VERIFY-001)
+    Instant signedAt = tsa.verifyTimestampToken(d.timestampToken(), d);    // RFC 3161 trusted time (DOC-TIMESTAMP-001)
+    if (!d.certValidAt(signedAt)) throw new SignatureInvalid("signed outside cert validity");
+    boolean ok = d.format().validate(d);                                   // declared format (DOC-FORMAT-001)
+    archive.retain(d, chain, d.timestampToken(), revocation.evidence(),     // long-term (DOC-RETENTION-001)
+                   Period.ofYears(10));
+    return new SignatureValidation(ok, signedAt, d.signerSubject());        // identity = validated subject (DOC-IDENTITY-001)
+}
+```
+
+Verification: review-tier. Signature validity is a trust-chain property — a math-only verify compiles and accepts legitimate signatures while silently accepting forged/revoked ones. Verify by review against `specs/document-signing-l0.yaml`: a declared standard format; the cert chains to a trusted root; signer identity is the validated subject with RRN stored separately/unlogged; an RFC 3161 timestamp establishes signing time; verification performs an OCSP/CRL revocation check; the artifact + validation material are retained for the legal period. When a fork-receiver wires a real IT (a revoked-cert signature is rejected; a self-signed chain is rejected), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [RFC 5280 — X.509 PKI Certificate and CRL Profile](https://www.rfc-editor.org/rfc/rfc5280)
+
+Reference: [RFC 3161 — Time-Stamp Protocol](https://www.rfc-editor.org/rfc/rfc3161)
+
+Reference: [RFC 6960 — OCSP](https://www.rfc-editor.org/rfc/rfc6960)
+
+
 <!-- @source rules/dogfood-finding-must-have-expiry-trigger.md -->
 
 ---
@@ -3102,6 +4003,346 @@ A pair-with rule: R86 pins WHICH commit landed the fix; R87 pins WHICH test guar
 Reference: [SQLite — How SQLite Is Tested](https://www.sqlite.org/testing.html)
 
 Reference: [Linux Kernel — Kselftest](https://www.kernel.org/doc/html/latest/dev-tools/kselftest.html)
+
+
+<!-- @source rules/domain-metrics-bounded-cardinality.md -->
+
+---
+title: A domain operation's metrics MUST use bounded-cardinality labels — fixed enums only, never ids / PII / unbounded values
+impact: HIGH
+impactDescription: "A Micrometer meter tagged with an entity id, user id, tenant id, raw 404 path, residual amount, or any user-supplied / unbounded value spawns a new time series per distinct value — a cardinality explosion that bloats the TSDB, slows queries, and can take down the monitoring backend; it also leaks PII into metrics. The per-operation observability counter every domain spec asks for is only safe when its labels are a fixed, low-cardinality enum set."
+tags:
+  - observability
+  - metrics
+  - micrometer
+  - cardinality
+  - bounded-labels
+  - no-pii
+spec_ref: "specs/observability-convention-l0.yaml#OBSCONV-CARDINALITY-001"
+verification:
+  type: review
+  source: "specs/observability-convention-l0.yaml#OBSCONV-CARDINALITY-001"
+  pattern: "Every domain-level Micrometer meter a recipe exposes (the canonical per-operation counter / gauge each domain spec's *-OBSERVABILITY item asks for) MUST tag ONLY fixed low-cardinality enum dimensions — typically {operation_type, outcome} where operation_type is a closed enum (transfer/allocation/journal, granted/exhausted, applied/rejected, ...) and outcome is a small closed enum. The label set MUST EXCLUDE entity ids, user ids, tenant ids (use a coarse bucket if a tenant dimension is needed), correlation/operation/request ids, raw error paths or messages, residual / amount / count numeric VALUES used as labels, and any user-supplied string that is not first normalized to a bounded enum. Reject a meter whose tag value comes from a request path, a thrown message, a primary key, or any source that grows without bound. This is the canonical governing rule for every domain spec's `*-OBSERVABILITY-001` per-operation bounded counter."
+upstream:
+  - "https://prometheus.io/docs/practices/naming/"
+  - "https://docs.micrometer.io/micrometer/reference/concepts/naming.html"
+evidence:
+  - source_type: external
+    citation: "Prometheus Documentation — Metric and label naming (label best practices / CAUTION on cardinality)"
+    url: "https://prometheus.io/docs/practices/naming/"
+    quote: "Remember that every unique combination of key-value label pairs represents a new time series, which can dramatically increase the amount of data stored."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Prometheus Documentation — Metric and label naming (high-cardinality caution)"
+    url: "https://prometheus.io/docs/practices/naming/"
+    quote: "Do not use labels to store dimensions with high cardinality (many different label values), such as user IDs, email addresses, or other unbounded sets of values."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Micrometer Documentation — Naming Meters (tag cardinality)"
+    url: "https://docs.micrometer.io/micrometer/reference/concepts/naming.html"
+    quote: "Beware of the potential for tag values coming from user-supplied sources to blow up the cardinality of a metric."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A domain operation's metrics MUST use bounded-cardinality labels — fixed enums only, never ids / PII / unbounded values
+
+**Impact: HIGH — Almost every domain in the catalog asks for one canonical observability meter: `claim_total{resource, outcome}`, `posting_total{operation_type, outcome}`, `quota_rejected_total{resource}`, `stale_event_dropped_total{stream, reason}`, `in_doubt_total{operation, outcome}`, and so on. Each is safe ONLY when its label set is a fixed, low-cardinality enum. The moment a recipe tags one of these with an entity id, a user/tenant id, a correlation id, a raw 404 path, a thrown exception message, or a numeric residual/amount/count VALUE, the meter spawns a brand-new time series for every distinct value. That is a cardinality explosion: it bloats the time-series database, slows every query and alert evaluation, runs up cost, and can topple the monitoring backend — and when the offending dimension is a user id or email it also leaks PII into metrics that are typically retained and broadly readable.**
+
+Prometheus states the mechanism and the prohibition directly — *every unique combination of key-value label pairs represents a new time series, which can dramatically increase the amount of data stored*, and *do not use labels to store dimensions with high cardinality (many different label values), such as user IDs, email addresses, or other unbounded sets of values*. Micrometer gives the same warning for tag values: *beware of the potential for tag values coming from user-supplied sources to blow up the cardinality of a metric* — you must *carefully normalize and add bounds to user-supplied input*.
+
+This is the canonical governing rule for every domain spec's `*-OBSERVABILITY-001` item (the per-operation bounded counter). There are three load-bearing requirements.
+
+**1. Labels are a fixed, closed enum set.** The canonical per-operation meter tags only dimensions whose value space is small and known at compile time — typically `{operation_type, outcome}`. `operation_type` is a closed enum (`transfer` / `allocation` / `journal`; `seat` / `license`; `email` / `sms`). `outcome` is a 2–4 value closed enum (`granted` / `exhausted`; `balanced` / `rejected_unbalanced`; `applied` / `rejected`). The number of distinct label tuples is the product of the enum sizes — a small constant, not a function of traffic or data volume.
+
+**2. Excluded from labels, always.** Entity ids, user ids, email addresses, **tenant ids** (use a coarse bucket enum if a tenant dimension is genuinely needed, never the raw id), correlation / operation / request ids, raw error paths, thrown exception messages, and any **numeric VALUE** (a residual amount, a remaining count, a balance) used as a label. Numbers belong in the metric's *value*, not its *labels*. A request-supplied string MUST be normalized to a bounded enum before it can become a tag — Micrometer's own example: constrain a 404 to `NOT_FOUND` rather than tagging the metric with each missing resource id.
+
+**3. The meter is registered once, canonically.** One named meter per domain operation, registered through a small dedicated metrics component, so the tag schema is defined in exactly one place and cannot drift call-site to call-site.
+
+**Incorrect — labels carry ids and a numeric value; cardinality grows without bound and PII leaks into metrics:**
+
+```java
+// VIOLATION: tenantId + userId are unbounded → one new time series per user;
+// residual is a numeric VALUE used as a label → unbounded; email leaks PII.
+meterRegistry.counter("posting_total",
+    "tenant", tenantId,                 // unbounded id
+    "user", user.email(),               // PII + unbounded
+    "operation", op.id().toString(),    // unique per operation → unbounded
+    "residual", residual.toPlainString()// numeric value as label → unbounded
+).increment();
+```
+
+**Correct — only fixed enums are labels; ids/values are excluded; one canonical meter:**
+
+```java
+// CONSERVATION-OBSERVABILITY-001 / *-OBSERVABILITY-001 shape:
+// operation_type is a closed enum, outcome is a closed enum → bounded.
+@Component
+class PostingMetrics {
+    private final MeterRegistry registry;
+    PostingMetrics(MeterRegistry registry) { this.registry = registry; }
+
+    void balanced(OperationType type) {                 // type is an enum
+        registry.counter("posting_total",
+            "operation_type", type.name(),              // closed enum
+            "outcome", "balanced").increment();         // closed enum
+    }
+    void rejectedUnbalanced(OperationType type) {
+        registry.counter("posting_total",
+            "operation_type", type.name(),
+            "outcome", "rejected_unbalanced").increment();
+    }
+    // the residual amount, operation id, tenant id, user id are NEVER labels —
+    // they are carried by logs/traces/the entity, not by the time series.
+}
+```
+
+**Generic across every domain.** A bounded-capacity claim counts `claim_total{resource, outcome}`; a quota gate counts `quota_rejected_total{resource}` and gauges `quota_usage{tenant_bucket, resource}` (a coarse bucket, never the raw tenant id); a monotonic ingest counts `stale_event_dropped_total{stream, reason}` with `reason ∈ {behind_watermark, duplicate}`; an in-doubt outbound call counts `in_doubt_total{operation, outcome}` and gauges `in_doubt_open_count{operation}`. In every case the discipline is identical: the labels are a closed enum cross-product, ids and PII and raw numbers stay out, and a sustained non-zero `rejected`/`dropped`/`exhausted` rate is the operational signal a fork-receiver alerts on. SLO/alert wiring itself is a fork-receiver concern; the bounded-cardinality label contract is the catalog invariant.
+
+Verification: review-tier. Label cardinality is a property of how a meter is constructed, with no compile-time signal — a meter tagged with an id compiles and runs fine, and only degrades the monitoring backend at scale. Verify by review against `specs/observability-convention-l0.yaml#OBSCONV-CARDINALITY-001`: every domain meter tags only fixed enums; no entity/user/tenant id, correlation id, raw path, exception message, or numeric value appears as a label; user-supplied strings are normalized to a bounded enum before tagging. When a fork-receiver wires a real Micrometer registry assertion that enumerates a meter's tag keys against the allowed enum set, this rule's verification block may be upgraded from review to gradle_task+tag.
+
+Reference: [Prometheus — Metric and label naming (high-cardinality caution)](https://prometheus.io/docs/practices/naming/)
+
+Reference: [Micrometer — Naming Meters (tag cardinality)](https://docs.micrometer.io/micrometer/reference/concepts/naming.html)
+
+
+<!-- @source rules/domain-rejection-uses-rfc9457-problem-detail.md -->
+
+---
+title: A refused domain operation MUST return its declared RFC 9457 problem type with the correct status, no partial side effect, and no misleading Retry-After
+impact: MEDIUM
+impactDescription: "A domain rejection (capacity exhausted, reorder conflict, quota exceeded) returned as a bare 400/500 or an ad-hoc JSON blob gives the client nothing machine-readable to branch on — it cannot distinguish a retryable conflict from a permanent refusal. Worse, a rejection that has already applied a partial side effect leaves the system in a half-mutated state, and a Retry-After on a non-time-resetting refusal tells the client to retry something that will never succeed."
+tags:
+  - error-handling
+  - rfc-9457
+  - problem-details
+  - rejection
+  - http-status
+spec_ref: "specs/bounded-capacity-claim-l0.yaml#CLAIM-REJECT-001"
+verification:
+  type: review
+  source: "specs/bounded-capacity-claim-l0.yaml#CLAIM-REJECT-001"
+  pattern: "When a domain operation is REFUSED by a business rule (capacity exhausted, reorder conflict, quota exceeded, ...), the response MUST be an RFC 9457 problem detail carrying the operation's DECLARED problem `type` (a stable urn), `code`, and the correct HTTP status for the refusal class — 409 Conflict for a contended/conflict refusal (CLAIM-REJECT-001 capacity-exhausted; ORDER-CONFLICT-001 reorder-conflict), 429 for a rate/quota refusal (QUOTA-REJECT-001 quota-exceeded, with the diagnostic members resource/limit/current_usage/requested). The refusal MUST NOT have applied a partial side effect — it is all-or-nothing, no half-mutation, no last-write-wins auto-merge (ORDER-CONFLICT-001), no partial consume (QUOTA-REJECT-001). A `Retry-After` header MUST NOT be sent on a refusal that is not time-resetting (a capacity/conflict refusal that retrying immediately will not clear); it is permitted only for a genuinely period-resetting limit. Where a conflict response must let the client recover, it carries the authoritative current state (e.g. the current ordering/version) and the client retries within a bounded budget. Reject a bare 400/500 for a domain refusal, an ad-hoc non-RFC-9457 error body, a refusal that partially mutated, and a Retry-After on a non-resetting refusal."
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc9457"
+evidence:
+  - source_type: external
+    citation: "RFC 9457 — Problem Details for HTTP APIs (Abstract)"
+    url: "https://www.rfc-editor.org/rfc/rfc9457"
+    quote: "This document defines a 'problem detail' to carry machine-readable details of errors in HTTP response content to avoid the need to define new error response formats for HTTP APIs."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A refused domain operation MUST return its declared RFC 9457 problem type with the correct status, no partial side effect, no misleading Retry-After
+
+**Impact: MEDIUM — Across the catalog, many operations can be REFUSED by a business rule: a bounded-capacity claim when the counter is full, a reorder when a concurrent reorder won the race, a quota claim when the limit is hit. RFC 9457 exists precisely so these refusals are machine-readable — it *defines a 'problem detail' to carry machine-readable details of errors in HTTP response content to avoid the need to define new error response formats for HTTP APIs*. A refusal returned as a bare `400`/`500` or an ad-hoc JSON blob forces the client to string-match prose to decide whether to retry. And two subtler bugs travel with bad refusals: a refusal that already applied a partial side effect (decremented one counter before failing the next) corrupts state, and a `Retry-After` on a refusal that retrying will never clear sends the client into a futile loop.**
+
+This rule governs the rejection-response contract that several spec items share — `CLAIM-REJECT-001` (bounded-capacity-claim), `ORDER-CONFLICT-001` (ordered-collection), `QUOTA-REJECT-001` (per-tenant-resource-quota). Each declares its own `type`/`code`/status; this rule mandates the shared discipline they instantiate.
+
+**1. Declared RFC 9457 problem type + code (the envelope).** The refusal body is an RFC 9457 problem detail with the operation's stable declared `type` urn (`urn:problem:capacity-exhausted`, `urn:problem:reorder-conflict`, `urn:problem:quota-exceeded`) and `code`. The client branches on `type`, never on a prose `detail` string.
+
+**2. Correct status for the refusal class.** A contended/conflict refusal is `409 Conflict` (capacity exhausted, reorder lost the race); a rate/quota refusal is `429 Too Many Requests` (quota exceeded — a `402` opt-in is allowed for a billing-gated quota). The status reflects the *kind* of refusal so generic client middleware reacts correctly.
+
+**3. Diagnostic members.** The problem carries the members that let the client act: a quota refusal includes `resource`, `limit`, `current_usage`, `requested`; a reorder conflict includes the parent id and the authoritative current ordering/version so the client can rebase and retry.
+
+**4. No partial side effect.** A refusal is all-or-nothing — it MUST NOT have committed a partial mutation, applied a last-write-wins auto-merge (reorder), or partially consumed (quota). The operation either fully succeeds or fully refuses with the system unchanged.
+
+**5. No misleading Retry-After.** `Retry-After` is sent ONLY for a genuinely time-resetting limit (a per-window quota that refills). A capacity/conflict refusal — which retrying immediately will not clear — MUST NOT carry `Retry-After`. A conflict instead returns the current state and the client retries within a bounded budget.
+
+**Incorrect — bare 500, partial mutation, misleading Retry-After:**
+
+```java
+public void claim(String resource) {
+    counter.increment(resource);                 // VIOLATION: mutates BEFORE the capacity check (partial side effect)
+    if (counter.get(resource) > capacity)
+        throw new RuntimeException("full");        // VIOLATION: bare 500, not RFC 9457; no type/code (CLAIM-REJECT-001)
+    // a client sees an opaque 500 and a half-applied increment
+}
+```
+
+**Correct — atomic check, RFC 9457 problem with declared type + 409, no Retry-After on a non-resetting refusal:**
+
+```java
+public ClaimResult claim(String resource) {
+    int taken = counter.tryClaim(resource, capacity);   // atomic; no mutation if it would exceed (no partial side effect)
+    if (taken < 0) {
+        throw new CapacityExhaustedException(resource);  // → @ExceptionHandler maps to:
+        //   409 Conflict, ProblemDetail{ type=urn:problem:capacity-exhausted, code=CAPACITY_EXHAUSTED, ... }
+        //   NO Retry-After (retrying now will not free capacity)  (CLAIM-REJECT-001)
+    }
+    return ClaimResult.granted(resource);
+}
+// ORDER-CONFLICT-001 → 409 urn:problem:reorder-conflict + current ordering for rebase; no auto-merge.
+// QUOTA-REJECT-001  → 429 urn:problem:quota-exceeded + {resource,limit,current_usage,requested};
+//                     Retry-After ONLY if the quota window resets.
+```
+
+Verification: review-tier. Refusal-response correctness is an API-contract property with no compile-time signal — a bare-500 refusal compiles and "works" while being unbranchable and sometimes half-applied. Verify by review against the reject items of `bounded-capacity-claim`, `ordered-collection`, and `per-tenant-resource-quota`: refusals return an RFC 9457 problem with the declared type/code; the status matches the refusal class (409 conflict / 429 rate); diagnostic members are present; no partial side effect occurred; Retry-After appears only on a time-resetting limit. When a fork-receiver wires a real IT (claim at capacity → 409 with the type and no row mutated; quota hit → 429 with the members), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [RFC 9457 — Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)
+
+
+<!-- @source rules/e-government-approval-gpki-approval-line.md -->
+
+---
+title: Electronic government approval MUST be GPKI-signed with a sequential approval line, post-approval and security-grade escalation, and long-term tamper-evident retention
+impact: HIGH
+impactDescription: "An e-approval (전자결재) without a GPKI/NPKI signature has no legal effect as an official document; one with no enforced sequential approval line lets a step be skipped or approved out of order; one with no post-approval path stalls urgent actions taken before formal sign-off; one whose security grade does not escalate the approval line under-reviews classified documents; one not retained tamper-evidently for the statutory period (30 years) fails an audit. Each breaks the legal validity or governance of the official record."
+tags:
+  - e-government
+  - approval-workflow
+  - gpki
+  - pki
+  - retention
+  - compliance
+spec_ref: "specs/e-government-approval-l0.yaml#EGA-PKI-001"
+verification:
+  type: review
+  source: "specs/e-government-approval-l0.yaml#EGA-PKI-001"
+  pattern: "Electronic government approval MUST be signed with a trusted government PKI certificate — GPKI/NPKI, an X.509 certificate chain (the profile RFC 5280 defines) validated to the government trust root — giving the approval legal force (EGA-PKI-001). The document acquires legal effect (효력) only when the approval ceremony completes per the governing statute (전자정부법 / 전자문서법) (EGA-FRAMEWORK-001). Approval follows an ordered approval line (결재선) — sequential steps with delegation support, each step approved in order by an authorized approver (EGA-LINE-001, composes approval-workflow). A post-approval (사후결재) path records a formally-ratified action taken before sign-off, never a silent bypass (EGA-POSTAPPROVAL-001). The document's security grade (보안등급) drives the approval line — a higher classification auto-escalates the required approvers (EGA-CLASSIFICATION-001). The approval record + its full flow is retained tamper-evidently for the statutory period — 30 years (EGA-AUDIT-001, composes tamper-evident-log). Reject an unsigned approval, an out-of-order or skipped approval step, a post-approval with no formal ratification record, and a classified document that does not escalate its approval line."
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc5280"
+evidence:
+  - source_type: external
+    citation: "RFC 5280 — Internet X.509 PKI Certificate and CRL Profile (Abstract)"
+    url: "https://www.rfc-editor.org/rfc/rfc5280"
+    quote: "This memo profiles the X.509 v3 certificate and X.509 v2 certificate revocation list (CRL) for use in the Internet."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Electronic government approval MUST be GPKI-signed with a sequential approval line, post-approval and security-grade escalation, and long-term tamper-evident retention
+
+**Impact: HIGH — 전자결재 (electronic government approval) produces official records with legal effect, and that effect rests on a trusted government PKI signature. GPKI/NPKI certificates are X.509 certificates — RFC 5280 *profiles the X.509 v3 certificate and X.509 v2 certificate revocation list (CRL) for use in the Internet*, the chain that must validate to the government trust root for an approval to be valid. Around that signature sit the governance requirements: an approval acquires legal effect (효력) only when the statutory ceremony completes (전자정부법 / 전자문서법); the approval must traverse the ordered approval line (결재선); urgent actions need a formal post-approval (사후결재) path rather than a silent bypass; classified documents must escalate their approval line by security grade; and the record must be retained tamper-evidently for 30 years. A skipped step, an unsigned approval, or a mutable record voids the official document.**
+
+There are six load-bearing requirements — the items of `specs/e-government-approval-l0.yaml`, all governed by this rule.
+
+**1. Legal effect framework (EGA-FRAMEWORK-001).** The document gains legal effect (효력) only when the approval completes per the governing statute (전자정부법 §29-30 / 전자문서법) — the system models that ceremony, not an ad-hoc "approved" boolean.
+
+**2. GPKI/NPKI trust chain (EGA-PKI-001).** Each approval is signed with a government PKI (GPKI/NPKI) X.509 certificate validated to the government trust root (with revocation checking) — an untrusted or self-signed certificate yields no valid approval.
+
+**3. Sequential approval line (EGA-LINE-001).** Approval traverses an ordered 결재선 — sequential steps, each approved in order by an authorized approver, with delegation (전결/대결) support. A step cannot be skipped or approved out of order. Composes the `approval-workflow` domain.
+
+**4. Post-approval (EGA-POSTAPPROVAL-001).** An action taken before formal sign-off (urgency) is captured by a 사후결재 path that records the formal ratification afterward — never a silent bypass that leaves no approval record.
+
+**5. Security-grade escalation (EGA-CLASSIFICATION-001).** The document's 보안등급 (security classification) drives the approval line: a higher grade automatically escalates the required approvers, so classified documents are not under-reviewed.
+
+**6. 30-year tamper-evident retention (EGA-AUDIT-001).** The approval record and its full flow (who approved, when, in what order) are retained tamper-evidently for the statutory 30 years. Composes the `tamper-evident-log` pattern.
+
+**Incorrect — boolean "approved" flag, no signature, no ordered line:**
+
+```java
+void approve(Document d, User approver) {
+    d.setApproved(true);              // VIOLATION: a boolean, no GPKI signature → no legal effect (EGA-PKI/FRAMEWORK)
+    d.setApprover(approver.id());     // VIOLATION: no ordered 결재선, any approver, any order (EGA-LINE-001)
+    docRepo.save(d);                  // VIOLATION: mutable record, no tamper-evident 30-year retention (EGA-AUDIT-001)
+}
+```
+
+**Correct — GPKI-signed step on an ordered line, grade-escalated, tamper-evidently recorded:**
+
+```java
+ApprovalStep approve(ApprovalRequest req, User approver, GpkiCert cert) {
+    ApprovalLine line = req.line();                          // ordered 결재선 (EGA-LINE-001)
+    line.assertNextApprover(approver);                       // sequential, in order, authorized
+    pki.verifyChainToGovRoot(cert);                          // GPKI/NPKI X.509 to trust root (EGA-PKI-001)
+    ApprovalStep step = line.signStep(approver, pki.sign(req, cert)); // signed → contributes to 효력 (EGA-FRAMEWORK-001)
+    tamperLog.append(step);                                  // tamper-evident, 30-yr retention (EGA-AUDIT-001)
+    return step;
+}
+// security grade escalates the line (EGA-CLASSIFICATION-001); 사후결재 records formal ratification (EGA-POSTAPPROVAL-001).
+```
+
+Verification: review-tier. E-approval validity is a legal/governance property with no compile-time signal — an "approved=true" flag compiles and looks done while being legally void and un-auditable. Verify by review against `specs/e-government-approval-l0.yaml`: approvals are GPKI/NPKI X.509-signed and validated to the gov root; legal effect follows the statutory ceremony; the approval line is sequential with delegation and no skipping; post-approval is formally ratified; security grade escalates the line; the record is tamper-evidently retained 30 years. When a fork-receiver wires real ITs (out-of-order approval rejected; unsigned approval rejected), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [RFC 5280 — X.509 PKI Certificate and CRL Profile](https://www.rfc-editor.org/rfc/rfc5280)
+
+
+<!-- @source rules/electronic-tax-invoice-vat-pki-retention.md -->
+
+---
+title: An electronic tax invoice MUST use the standard format, separate identifier PII, balance VAT, transmit to the authority, be PKI-signed and timestamped, and retain for the statutory period
+impact: HIGH
+impactDescription: "A 전자세금계산서 with a wrong VAT computation is a tax misstatement; one not transmitted to the 국세청 within the mandated window is a non-issuance penalty; one not PKI-signed has no legal force as an electronic document; one storing the 사업자등록번호/RRN unseparated leaks identifier PII; one not retained 5 years (국세기본법) fails a tax audit. Each is a statutory breach, not a cosmetic defect."
+tags:
+  - invoicing
+  - e-tax-invoice
+  - vat
+  - pki-signature
+  - retention
+  - compliance
+spec_ref: "specs/invoicing-l0.yaml#INV-SIGN-001"
+verification:
+  type: review
+  source: "specs/invoicing-l0.yaml#INV-SIGN-001"
+  pattern: "An electronic tax invoice MUST be PKI-signed for legal force — an X.509 certificate-based digital signature (the profile RFC 5280 defines) with a trusted timestamp (RFC 3161) so the issuance instant is provable (INV-SIGN-001). It MUST use the standard 전자세금계산서 format/schema (INV-FORMAT-001). Business identifiers (사업자등록번호) and any RRN MUST be stored separated from the document body and never logged (INV-IDENTIFIER-001, composes no-rrn-logging). The VAT computation MUST be internally consistent — supply value + tax == total, with exact decimal arithmetic (INV-AMOUNT-001, composes BigDecimal-for-money). The invoice MUST be transmitted to the tax authority (국세청 NTS) within the statutory window via the NTS API (INV-NTS-001). A correction is issued as a 수정세금계산서 that references the original — never an in-place edit of an issued invoice (INV-CORRECT-001). The invoice is retained for the statutory period — 국세기본법, five years (INV-RETENTION-001). Reject an unsigned/untimestamped invoice, an in-place edit of an issued invoice, a VAT total that does not foot, and identifier PII stored in the clear in the document body."
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc5280"
+  - "https://www.rfc-editor.org/rfc/rfc3161"
+evidence:
+  - source_type: external
+    citation: "RFC 5280 — Internet X.509 PKI Certificate and CRL Profile (Abstract)"
+    url: "https://www.rfc-editor.org/rfc/rfc5280"
+    quote: "This memo profiles the X.509 v3 certificate and X.509 v2 certificate revocation list (CRL) for use in the Internet."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "RFC 3161 — Time-Stamp Protocol (TSP) (Section 1)"
+    url: "https://www.rfc-editor.org/rfc/rfc3161"
+    quote: "A time-stamping service supports assertions of proof that a datum existed before a particular time."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## An electronic tax invoice MUST be standard-format, identifier-PII-separated, VAT-consistent, authority-transmitted, PKI-signed + timestamped, and retained
+
+**Impact: HIGH — A 전자세금계산서 (electronic tax invoice) is a legal financial instrument, and every requirement on it is statutory. Its legal force comes from a PKI signature over an X.509 certificate — the profile RFC 5280 *profiles the X.509 v3 certificate and X.509 v2 certificate revocation list (CRL) for use in the Internet* — plus a trusted timestamp proving the issuance instant — RFC 3161's *time-stamping service supports assertions of proof that a datum existed before a particular time*. Beyond the signature, a wrong VAT total is a tax misstatement, a missed 국세청 transmission window is a penalty, an unseparated 사업자등록번호/RRN is an identifier-PII leak, and a sub-5-year retention fails a tax audit (국세기본법). The PDF/JSON looking right is not enough; each statutory facet must hold.**
+
+There are seven load-bearing requirements — the items of `specs/invoicing-l0.yaml`, all governed by this rule.
+
+**1. Standard format (INV-FORMAT-001).** The invoice uses the standard 전자세금계산서 XML schema/format so the tax authority and counterparties can parse and validate it — not an internal ad-hoc layout.
+
+**2. Identifier PII separation (INV-IDENTIFIER-001).** The 사업자등록번호 and any RRN are stored separated from the document body (a referenced record), never logged — composing the no-RRN-logging discipline.
+
+**3. VAT consistency (INV-AMOUNT-001).** The VAT computation foots: supply value + tax == total, computed with exact decimal arithmetic (composing BigDecimal-for-money). A total that does not balance is a tax misstatement.
+
+**4. NTS transmission (INV-NTS-001).** The invoice is transmitted to the 국세청 (NTS) within the statutory window (e.g. by the day after issuance) via the NTS API — a late or missing transmission is a penalty under 부가가치세법.
+
+**5. PKI signature + timestamp (INV-SIGN-001).** The invoice is signed with an X.509 certificate-based digital signature and carries an RFC 3161 timestamp, giving it legal force and a provable issuance instant.
+
+**6. Correction via 수정세금계산서 (INV-CORRECT-001).** A correction is issued as a NEW 수정세금계산서 that references the original invoice — an issued invoice is immutable and is NEVER edited in place (which would destroy the audit trail and the signature).
+
+**7. Statutory retention (INV-RETENTION-001).** The invoice (and its signature/timestamp material) is retained for the statutory period — 국세기본법, five years — so it remains verifiable in a tax audit.
+
+**Incorrect — edits an issued invoice in place, no signature, VAT not re-derived:**
+
+```java
+void correctInvoice(Invoice inv, BigDecimal newTotal) {
+    inv.setTotal(newTotal);          // VIOLATION: in-place edit of an issued invoice (INV-CORRECT-001)
+    invoiceRepo.save(inv);           // VIOLATION: no 수정세금계산서, no re-signature, audit trail destroyed
+    // VIOLATION: total set directly, VAT not re-derived/validated (INV-AMOUNT-001)
+}
+```
+
+**Correct — immutable original; correction is a new signed/timestamped 수정세금계산서 transmitted to NTS:**
+
+```java
+SusungInvoice correct(Invoice original, InvoiceLines revised) {
+    SusungInvoice s = SusungInvoice.referencing(original);       // new corrective invoice (INV-CORRECT-001)
+    s.setLines(revised);
+    s.setVat(vat.compute(revised));                              // supply + tax == total, BigDecimal (INV-AMOUNT-001)
+    Signed signed = pki.signWithTimestamp(s.toStandardXml());    // X.509 + RFC 3161 (INV-SIGN-001 / INV-FORMAT-001)
+    nts.transmitWithinWindow(signed);                           // 국세청 NTS (INV-NTS-001)
+    archive.retain(signed, Period.ofYears(5));                  // 국세기본법 retention (INV-RETENTION-001)
+    return s;                                                    // original stays immutable
+}
+```
+
+Verification: review-tier. Tax-invoice compliance is a statutory property with no compile-time signal — an unsigned, in-place-edited invoice compiles and renders fine while being legally void and audit-failing. Verify by review against `specs/invoicing-l0.yaml`: standard 전자세금계산서 format; identifier PII separated and unlogged; VAT foots with exact decimals; transmitted to NTS within the window; PKI-signed + RFC 3161 timestamped; corrections issued as a referencing 수정세금계산서 (never in-place); retained 5 years per 국세기본법. When a fork-receiver wires real tests (VAT total invariant; an issued invoice rejects mutation; signature verifies), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [RFC 5280 — X.509 PKI Certificate and CRL Profile](https://www.rfc-editor.org/rfc/rfc5280)
+
+Reference: [RFC 3161 — Time-Stamp Protocol](https://www.rfc-editor.org/rfc/rfc3161)
 
 
 <!-- @source rules/erasure-and-purge-consult-legal-hold-gate.md -->
@@ -3737,6 +4978,97 @@ Reference: [OWASP API Security Top 10 (2019) — API3:2019 Excessive Data Exposu
 Reference: [OWASP ASVS v4.0.3 — V4.1.3 Access Control (least privilege)](https://owasp.org/www-project-application-security-verification-standard/)
 
 
+<!-- @source rules/health-probes-liveness-readiness-startup.md -->
+
+---
+title: A service MUST expose distinct liveness, readiness, and startup health endpoints — and fail readiness before shutdown drain
+impact: HIGH
+impactDescription: "Collapsing liveness and readiness into one endpoint corrupts orchestration: if the single check fails when a downstream dependency is briefly down, the orchestrator RESTARTS a perfectly healthy process (liveness semantics) instead of just removing it from rotation (readiness semantics) — turning a transient dependency blip into a restart storm. And a service that does not fail readiness before it stops draining sheds in-flight requests on every deploy."
+tags:
+  - health-check
+  - liveness
+  - readiness
+  - kubernetes
+  - graceful-shutdown
+  - observability
+spec_ref: "specs/health-check-l0.yaml#HEALTH-LIVENESS-001"
+verification:
+  type: review
+  source: "specs/health-check-l0.yaml#HEALTH-LIVENESS-001"
+  pattern: "A service MUST expose DISTINCT health endpoints with distinct semantics. Liveness reports only whether the process is alive and should be restarted if it is wedged — it MUST NOT check downstream dependencies (a dependency outage must not trigger a restart) (HEALTH-LIVENESS-001). Readiness reports whether the instance can serve traffic right now, checking critical dependencies, so the orchestrator removes a not-ready instance from rotation without restarting it (HEALTH-READINESS-001). A startup probe gives a slow-starting container grace before liveness begins, so a long boot is not mistaken for a hang (HEALTH-STARTUP-001). Downstream dependency health is surfaced with a degraded/down distinction, and a non-critical dependency being down MUST NOT fail liveness (HEALTH-DEPENDENCY-001). The health response SHOULD use the application/health+json media type with a top-level status (HEALTH-FORMAT-001). On shutdown, readiness MUST flip to fail BEFORE the server stops accepting and begins draining, so in-flight requests complete and the orchestrator stops routing new ones first (HEALTH-GRACEFUL-001). Reject a single combined health endpoint used for both liveness and readiness, a liveness check that calls a database/remote dependency, or a shutdown that drains before failing readiness."
+upstream:
+  - "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/"
+  - "https://datatracker.ietf.org/doc/html/draft-inadarei-api-health-check"
+evidence:
+  - source_type: external
+    citation: "Kubernetes Documentation — Liveness, Readiness, and Startup Probes (liveness restart)"
+    url: "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/"
+    quote: "If a container fails its liveness probe more times than the configured tolerance, the kubelet restarts that container."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Kubernetes Documentation — Liveness, Readiness, and Startup Probes (readiness removes from endpoints)"
+    url: "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/"
+    quote: "If the readiness probe returns a failed state, the EndpointSlice controller removes the Pod's IP address from the EndpointSlices of all Services that match the Pod."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Kubernetes Documentation — Liveness, Readiness, and Startup Probes (startup for slow starters)"
+    url: "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/"
+    quote: "Startup probes are useful for Pods that have containers that take a long time to come into service."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A service MUST expose distinct liveness, readiness, and startup health endpoints — and fail readiness before shutdown drain
+
+**Impact: HIGH — Liveness and readiness answer two different questions and drive two different orchestrator actions. Liveness: "is this process wedged — should it be restarted?" Per Kubernetes, *if a container fails its liveness probe more times than the configured tolerance, the kubelet restarts that container*. Readiness: "can this instance serve traffic right now?" — *if the readiness probe returns a failed state, the EndpointSlice controller removes the Pod's IP address from the EndpointSlices of all Services that match the Pod* (removed from rotation, NOT restarted). Collapse them into one endpoint that checks a database, and the moment that database blips the orchestrator restarts every healthy instance — a transient dependency outage becomes a self-inflicted restart storm. The two MUST be distinct.**
+
+There are six load-bearing requirements — the items of `specs/health-check-l0.yaml`, all governed by this rule.
+
+**1. Liveness — process alive only (HEALTH-LIVENESS-001).** The liveness endpoint reports ONLY whether the process is alive and able to make progress (not deadlocked). It MUST NOT call downstream dependencies — a dependency being down is not a reason to restart this process, and doing so causes restart storms.
+
+**2. Readiness — can serve now (HEALTH-READINESS-001).** The readiness endpoint checks the critical dependencies this instance needs to serve a request (DB pool, required downstreams). A failed readiness removes the instance from rotation without a restart, so it recovers when the dependency does.
+
+**3. Startup — slow-boot grace (HEALTH-STARTUP-001).** A startup probe protects a slow-starting container: per k8s, *startup probes are useful for Pods that have containers that take a long time to come into service* — liveness only begins after startup succeeds, so a long boot is never mistaken for a hang and killed mid-start.
+
+**4. Dependency health + degraded status (HEALTH-DEPENDENCY-001).** The health detail distinguishes a hard `down` from a `degraded` (a non-critical dependency unavailable). A non-critical dependency being down feeds `degraded`, never a liveness failure.
+
+**5. health+json format (HEALTH-FORMAT-001).** The health response SHOULD use the `application/health+json` media type with a top-level `status` (`pass`/`warn`/`fail`) and per-check detail, so any monitor parses it uniformly.
+
+**6. Graceful shutdown — readiness fails first (HEALTH-GRACEFUL-001).** On SIGTERM, readiness MUST flip to fail FIRST (so the orchestrator stops routing new requests), THEN the server stops accepting and drains in-flight requests to completion, THEN exits. Draining before failing readiness sheds live requests on every deploy.
+
+**Incorrect — one combined endpoint that checks the database; a DB blip restarts every healthy instance:**
+
+```java
+@GetMapping("/health")                 // VIOLATION: used as BOTH liveness and readiness
+public ResponseEntity<?> health() {
+    jdbc.execute("SELECT 1");          // VIOLATION: liveness now depends on the DB → DB down ⇒ kubelet restarts the process
+    return ResponseEntity.ok("UP");
+}
+```
+
+**Correct — distinct probes; liveness is dependency-free; readiness checks deps; readiness fails before drain:**
+
+```java
+// Spring Boot Actuator: management.endpoint.health.probes.enabled=true exposes
+//   /actuator/health/liveness   — group: livenessState only (NO dependency checks)  (HEALTH-LIVENESS-001)
+//   /actuator/health/readiness  — group: readinessState + db + critical downstreams (HEALTH-READINESS-001)
+// startupProbe points at readiness with a generous failureThreshold (HEALTH-STARTUP-001)
+
+@Component
+class ReadinessShutdownListener {
+    @EventListener
+    void onShutdown(ContextClosedEvent e) {
+        availability.publish(ReadinessState.REFUSING_TRAFFIC); // fail readiness FIRST (HEALTH-GRACEFUL-001)
+        // server.shutdown=graceful then drains in-flight requests before exit
+    }
+}
+```
+
+Verification: review-tier. Probe semantics are an orchestration-contract property with no compile-time signal — a combined endpoint compiles and looks healthy until a dependency blips in production and triggers restarts. Verify by review against `specs/health-check-l0.yaml`: liveness and readiness are distinct endpoints; liveness makes no dependency calls; readiness checks critical dependencies; a startup probe grants slow-boot grace; dependency health distinguishes degraded vs down; the response uses health+json; shutdown fails readiness before draining. When a fork-receiver wires a real IT asserting liveness stays UP while a downstream is forced down (and readiness goes DOWN), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [Kubernetes — Liveness, Readiness and Startup Probes](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/)
+
+
 <!-- @source rules/hooks-before-conditional-return.md -->
 
 ---
@@ -3829,6 +5161,99 @@ The `summary!` assertion is safe by REASONING, not by narrowing: past the `!data
 Reference: [React — Rules of Hooks](https://react.dev/reference/rules/rules-of-hooks)
 
 Reference: [React — State as a Snapshot](https://react.dev/learn/state-as-a-snapshot)
+
+
+<!-- @source rules/http-content-negotiation-rfc9110.md -->
+
+---
+title: An API serving multiple representations MUST do proactive content negotiation — rank Accept, validate Content-Type with 415, answer 406 when nothing matches
+impact: MEDIUM
+impactDescription: "An endpoint that ignores the Accept header and always returns one format breaks clients that asked for another; one that does not validate the request Content-Type silently mis-parses a body sent in an unexpected media type; one that returns 200 with a default format when it cannot satisfy Accept lies to the client instead of returning 406. Correct proactive negotiation per RFC 9110 keeps representation selection predictable and honest."
+tags:
+  - http
+  - content-negotiation
+  - rfc-9110
+  - accept
+  - media-type
+spec_ref: "specs/content-negotiation-l0.yaml#CONNEG-ACCEPT-001"
+verification:
+  type: review
+  source: "specs/content-negotiation-l0.yaml#CONNEG-ACCEPT-001"
+  pattern: "An endpoint that can return more than one representation MUST do proactive (server-driven) content negotiation. It MUST parse the Accept header, honor quality values (q) to rank acceptable media types, and select the highest-ranked representation it can produce (CONNEG-ACCEPT-001). It MUST validate the request body's Content-Type and respond 415 Unsupported Media Type when the body media type is not one it accepts (CONNEG-TYPE-001). Language selection follows Accept-Language with a Content-Language response (composing i18n-policy) (CONNEG-LANGUAGE-001). Accept-Encoding (gzip/br) drives a Content-Encoding response when compression is offered (CONNEG-ENCODING-001). When NO available representation matches the Accept preferences, it MUST respond 406 Not Acceptable — never 200 with an unrequested format (CONNEG-406-001). When Accept is absent or */*, it serves a declared default representation (CONNEG-DEFAULT-001). Reject an endpoint that ignores Accept and hardcodes one format where multiple are contracted, that skips request Content-Type validation, or that returns a default representation with 200 when it cannot satisfy a specific Accept."
+upstream:
+  - "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation"
+  - "https://www.rfc-editor.org/rfc/rfc9110#section-12"
+evidence:
+  - source_type: external
+    citation: "MDN Web Docs — Content negotiation (definition)"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation"
+    quote: "In HTTP, content negotiation is the mechanism that is used for serving different representations of a resource to the same URI to help the user agent specify which representation is best suited for the user (for example, which document language, which image format, or which content encoding)."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "MDN Web Docs — Content negotiation (server-driven / proactive)"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation"
+    quote: "In server-driven content negotiation, or proactive content negotiation, the browser (or any other kind of user agent) sends several HTTP headers along with the URL."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "MDN Web Docs — Content negotiation (406 / 415 when no suitable resource)"
+    url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation"
+    quote: "If it can't provide a suitable resource, it might respond with 406 (Not Acceptable) or 415 (Unsupported Media Type) and set headers for the types of media that it does support (e.g., using the Accept-Post or Accept-Patch for POST and PATCH requests, respectively)."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## An API serving multiple representations MUST do proactive content negotiation
+
+**Impact: MEDIUM — When an endpoint can return more than one representation (JSON or CSV; English or Korean; gzip or identity), the client states its preference in request headers and the server is responsible for honoring it. Per MDN, *content negotiation is the mechanism that is used for serving different representations of a resource to the same URI*, and in *server-driven content negotiation, or proactive content negotiation, the browser ... sends several HTTP headers along with the URL*. An endpoint that ignores `Accept` and always returns one format breaks clients that need another; one that does not validate request `Content-Type` mis-parses unexpected bodies; one that returns `200` with a default it was not asked for instead of `406` lies about what it produced.**
+
+There are six load-bearing requirements — the items of `specs/content-negotiation-l0.yaml`, all governed by this rule.
+
+**1. Accept parsing + quality-value ranking (CONNEG-ACCEPT-001).** Parse `Accept`, honor the `q` quality values to rank the client's acceptable media types, and select the highest-ranked representation the endpoint can actually produce. `Accept: application/json;q=0.9, text/csv;q=1.0` means CSV is preferred.
+
+**2. Request Content-Type validation → 415 (CONNEG-TYPE-001).** Validate the *request body's* `Content-Type`. If the body arrives in a media type the endpoint does not accept, respond `415 Unsupported Media Type` — never attempt to parse it as the expected type. Per MDN, the server *might respond with ... 415 (Unsupported Media Type)* when it cannot handle the representation.
+
+**3. Language selection (CONNEG-LANGUAGE-001).** `Accept-Language` selects the response language; echo the chosen language in `Content-Language`. Composes `i18n-policy-l0`.
+
+**4. Encoding (CONNEG-ENCODING-001).** When compression is offered, `Accept-Encoding` (gzip, br) drives a `Content-Encoding` response header naming the encoding actually applied.
+
+**5. 406 when nothing matches (CONNEG-406-001).** When NO representation the endpoint can produce matches the `Accept` preferences, respond `406 Not Acceptable` — per MDN, *if it can't provide a suitable resource, it might respond with 406 (Not Acceptable)*. It MUST NOT return `200` with a representation the client did not ask for.
+
+**6. Default when Accept absent / \*/\* (CONNEG-DEFAULT-001).** When `Accept` is absent or `*/*`, serve a single *declared* default representation. The default applies only to the unspecified/wildcard case — never as a silent substitute for an unsatisfiable specific `Accept` (that is requirement 5's 406).
+
+**Incorrect — ignores Accept, returns a default with 200 even when it cannot satisfy the request:**
+
+```java
+@GetMapping("/report/{id}")            // contracted to serve JSON AND CSV
+public ResponseEntity<String> report(@PathVariable String id) {
+    // VIOLATION: Accept ignored; always JSON; a client that sent Accept: text/csv
+    // gets 200 + JSON it cannot parse, instead of CSV — or 406 if CSV is impossible.
+    return ResponseEntity.ok(toJson(load(id)));
+}
+```
+
+**Correct — produces per Accept, validates request Content-Type, 406 when unsatisfiable:**
+
+```java
+@GetMapping(value = "/report/{id}",
+            produces = { MediaType.APPLICATION_JSON_VALUE, "text/csv" })  // declared representations
+public ResponseEntity<?> report(@PathVariable String id,
+                                @RequestHeader(value = "Accept", required = false) String accept) {
+    Report r = load(id);
+    MediaType chosen = negotiate(accept, List.of(APPLICATION_JSON, parseMediaType("text/csv")));
+    if (chosen == null) {                                  // nothing the client accepts (CONNEG-406-001)
+        return ResponseEntity.status(NOT_ACCEPTABLE).build();
+    }
+    return ResponseEntity.ok().contentType(chosen)
+        .body(chosen.equals(APPLICATION_JSON) ? toJson(r) : toCsv(r));
+}
+// @PostMapping(consumes = APPLICATION_JSON_VALUE) → Spring returns 415 for a non-JSON body (CONNEG-TYPE-001).
+```
+
+Verification: review-tier. Negotiation correctness is an HTTP-contract property — an Accept-ignoring endpoint compiles and serves its one format fine until a client needs another. Verify by review against `specs/content-negotiation-l0.yaml`: multi-representation endpoints parse Accept and rank by q; request Content-Type is validated with 415; Accept-Language drives Content-Language; Accept-Encoding drives Content-Encoding; an unsatisfiable Accept returns 406 (not a 200 default); absent/`*/*` Accept serves a declared default. When a fork-receiver wires a real IT (`Accept: text/csv` → CSV; an impossible Accept → 406; wrong-type body → 415), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [MDN — Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation)
+
+Reference: [RFC 9110 §12 — Content Negotiation](https://www.rfc-editor.org/rfc/rfc9110#section-12)
 
 
 <!-- @source rules/http-delete-idempotency-rfc9110.md -->
@@ -4090,6 +5515,70 @@ public class ItemService {
 Verification: `./gradlew testPractices --tests "*SharedClientSingleton*"` is a `@SpringBootTest` that injects the bean twice and asserts both references are the *same instance* (assertJ `isSameAs`).
 
 Reference: [Spring Framework — RestClient](https://docs.spring.io/spring-framework/reference/integration/rest-clients.html#rest-restclient)
+
+
+<!-- @source rules/i18n-default-and-supported-locales-declared.md -->
+
+---
+title: A multilingual recipe MUST declare its default and supported locales as BCP 47 tags, with every message bundle covering the supported set
+impact: MEDIUM
+impactDescription: "A multilingual app with no declared default locale falls back unpredictably (the JVM default of whatever server it runs on) when negotiation finds no match; one with no declared supported set ships message bundles that silently miss a locale, so a user in that locale sees raw message keys or English fallbacks. Declaring default_locale + supported_locales as BCP 47 tags makes the fallback deterministic and the bundle-coverage checkable."
+tags:
+  - i18n
+  - localization
+  - bcp-47
+  - locale
+  - configuration
+spec_ref: "specs/i18n-policy-l0.yaml#I18N-DEFAULT-DECL-001"
+verification:
+  type: review
+  source: "specs/i18n-policy-l0.yaml#I18N-DEFAULT-DECL-001"
+  pattern: "Every recipe whose target audience is multilingual MUST declare two RECIPE.md frontmatter fields: `default_locale: <BCP-47-tag>` (the deterministic fallback Locale when content negotiation finds no acceptable match) and `supported_locales: [<tag>, ...]` (the exhaustive set). Every `messages_*.properties` bundle MUST cover the full supported_locales set — a supported locale with a missing bundle is a gap. Locale tags MUST be valid BCP 47 (RFC 5646) language tags. A single-audience recipe MAY omit both (absence ⇒ single default). Reject a multilingual recipe with no declared default_locale (nondeterministic JVM-default fallback), a supported locale with no message bundle, and a non-BCP-47 locale tag."
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc5646"
+evidence:
+  - source_type: external
+    citation: "RFC 5646 — Tags for Identifying Languages (BCP 47) (Abstract)"
+    url: "https://www.rfc-editor.org/rfc/rfc5646"
+    quote: "This document describes the structure, content, construction, and semantics of language tags for use in cases where it is desirable to indicate the language used in an information object."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A multilingual recipe MUST declare its default and supported locales as BCP 47 tags
+
+**Impact: MEDIUM — Internationalization fails quietly at the edges. When content negotiation cannot match the client's `Accept-Language` to anything the app offers, it falls back — and if no default is declared, it falls back to whatever the JVM default Locale happens to be on that server, which is nondeterministic across environments. And if the supported set is not declared, a `messages_ko.properties` can be forgotten and a Korean user silently sees raw keys or English. BCP 47 (RFC 5646) is the standard for the tags themselves — it *describes the structure, content, construction, and semantics of language tags for use in cases where it is desirable to indicate the language used in an information object*. Declaring `default_locale` and `supported_locales` makes the fallback deterministic and bundle coverage mechanically checkable.**
+
+There is one load-bearing requirement for `I18N-DEFAULT-DECL-001`.
+
+**1. Declared default + supported locales (BCP 47).** A multilingual recipe declares in RECIPE.md frontmatter:
+- `default_locale: <BCP-47-tag>` — the single deterministic fallback when negotiation finds no acceptable match (composes the content-negotiation `Accept-Language` selection).
+- `supported_locales: [<tag>, ...]` — the exhaustive set the app serves.
+
+Both values are valid BCP 47 language tags (`ko`, `en-US`, `zh-Hant`). Every `messages_*.properties` bundle covers the full `supported_locales` set — a declared supported locale with no bundle is a coverage gap. A single-audience recipe may omit both; absence is treated as a single default locale.
+
+**Incorrect — no declared default; a supported locale with no bundle:**
+
+```yaml
+# RECIPE.md frontmatter
+recipe: orders
+# VIOLATION: multilingual app, but no default_locale → falls back to the JVM default (nondeterministic) (I18N-DEFAULT-DECL-001)
+# VIOLATION: no supported_locales declared → messages_ko.properties silently missing, Korean users see raw keys
+```
+
+**Correct — explicit default + supported set as BCP 47 tags, bundles cover the set:**
+
+```yaml
+# RECIPE.md frontmatter
+recipe: orders
+default_locale: en-US                    # deterministic fallback (BCP 47)  (I18N-DEFAULT-DECL-001)
+supported_locales: [en-US, ko, ja]       # exhaustive; every tag is valid BCP 47
+# messages_en_US.properties, messages_ko.properties, messages_ja.properties all present (full coverage)
+```
+
+Verification: review-tier. Locale declaration is a configuration-completeness property — a missing default or bundle compiles and runs, surfacing only as a wrong-language fallback for some users in some environments. Verify by review against `specs/i18n-policy-l0.yaml#I18N-DEFAULT-DECL-001`: a multilingual recipe declares `default_locale` and `supported_locales` as valid BCP 47 tags, and every supported locale has a message bundle. When a fork-receiver wires a guard that parses RECIPE.md frontmatter and cross-checks the `messages_*` bundles against `supported_locales`, this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [RFC 5646 — Tags for Identifying Languages (BCP 47)](https://www.rfc-editor.org/rfc/rfc5646)
 
 
 <!-- @source rules/idempotency-key-on-mutations.md -->
@@ -6623,6 +8112,91 @@ Reference: [OWASP Logging Cheat Sheet — Data to exclude](https://cheatsheetser
 Reference: [PCI Security Standards Council — Document Library (PCI-DSS v4.0 Requirement 3.4)](https://www.pcisecuritystandards.org/document_library/)
 
 
+<!-- @source rules/observability-slo-error-budget-convention.md -->
+
+---
+title: Observability MUST be convention-driven — declared SLIs/SLOs, error-budget burn-rate alerting, RED/USE coverage, exemplar metric→trace links, dashboards-as-code
+impact: MEDIUM
+impactDescription: "Alerting on raw cause metrics (CPU high, disk 80%) instead of declared SLOs produces pager noise that does not correlate with user pain, and on-call burns out chasing non-incidents while real symptom regressions slip through. Without a declared SLI/SLO, error budget, and burn-rate alerts, 'is the service healthy?' has no objective answer; without RED/USE coverage and metric→trace exemplars, a regression cannot be drilled from symptom to cause."
+tags:
+  - observability
+  - slo
+  - error-budget
+  - sre
+  - alerting
+  - dashboards-as-code
+spec_ref: "specs/observability-convention-l0.yaml#OBSCONV-SLO-001"
+verification:
+  type: review
+  source: "specs/observability-convention-l0.yaml#OBSCONV-SLO-001"
+  pattern: "Observability MUST follow a declared convention. Each service declares SLIs (quantitative measures of service level) and SLO targets as first-class, version-controlled artifacts — not implicit (OBSCONV-SLO-001). An error budget derived from the SLO drives multi-window multi-burn-rate alerting, so alerts fire on SLO-threatening burn, not on arbitrary cause thresholds (OBSCONV-ERROR-BUDGET-001). Alerts carry a severity that maps to a declared routing convention (page vs ticket vs log) (OBSCONV-ALERT-ROUTING-001). Metric labels obey the bounded-cardinality budget — fixed enums only (OBSCONV-CARDINALITY-001, see domain-metrics-bounded-cardinality). Request services expose RED (Rate/Errors/Duration); resources expose USE (Utilization/Saturation/Errors) (OBSCONV-RED-USE-001). Metrics carry exemplars linking a data point to a trace for metric→trace drill-down (OBSCONV-TRACE-METRIC-LINK-001). Dashboards and alert rules are version-controlled as code, not hand-edited in a UI (OBSCONV-DASHBOARD-AS-CODE-001). Reject cause-based paging with no SLO, an undeclared SLI, alerts with no severity/routing, and dashboards that exist only as un-versioned UI state."
+upstream:
+  - "https://sre.google/sre-book/service-level-objectives/"
+  - "https://sre.google/workbook/alerting-on-slos/"
+evidence:
+  - source_type: external
+    citation: "Google SRE Book — Service Level Objectives (SLO definition)"
+    url: "https://sre.google/sre-book/service-level-objectives/"
+    quote: "An SLO is a service level objective: a target value or range of values for a service level that is measured by an SLI."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Google SRE Book — Service Level Objectives (SLI definition)"
+    url: "https://sre.google/sre-book/service-level-objectives/"
+    quote: "An SLI is a service level indicator—a carefully defined quantitative measure of some aspect of the level of service that is provided."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Observability MUST be convention-driven — SLO/error-budget alerting, RED/USE, exemplars, dashboards-as-code
+
+**Impact: MEDIUM — The difference between observability that helps and observability that burns out on-call is convention. Per the Google SRE Book, *an SLO is a service level objective: a target value or range of values for a service level that is measured by an SLI*, where *an SLI is a service level indicator—a carefully defined quantitative measure of some aspect of the level of service that is provided*. Alerting on raw cause metrics (CPU, memory, disk) instead of on SLO-threatening error-budget burn produces a flood of pages that do not correlate with user pain: on-call chases non-incidents while a real latency regression that IS hurting users slips past because no symptom SLO was watching it. The fix is a declared convention — SLIs/SLOs as artifacts, error-budget burn-rate alerts, RED/USE coverage, metric→trace exemplars, dashboards-as-code.**
+
+There are seven requirements — the items of `specs/observability-convention-l0.yaml`, all governed by this rule (CARDINALITY is additionally governed by `domain-metrics-bounded-cardinality`).
+
+**1. Declared SLIs + SLO targets (OBSCONV-SLO-001).** Each service declares its SLIs and SLO targets as first-class, version-controlled artifacts — "99.9% of requests < 300ms over 28 days" — not an implicit notion in someone's head.
+
+**2. Error budget + multi-window multi-burn-rate alerting (OBSCONV-ERROR-BUDGET-001).** The SLO yields an error budget; alerts fire on burn rate across multiple windows (a fast page for a sharp burn, a slow ticket for a gradual one), so paging tracks SLO threat — not an arbitrary "CPU > 80%".
+
+**3. Severity → routing (OBSCONV-ALERT-ROUTING-001).** Every alert carries a severity that maps to a declared routing convention: page (wake someone), ticket (next business day), or log (record only).
+
+**4. Cardinality budget (OBSCONV-CARDINALITY-001).** Metric labels are bounded fixed enums — governed by `domain-metrics-bounded-cardinality`.
+
+**5. RED + USE coverage (OBSCONV-RED-USE-001).** Request-driven services expose RED — Rate, Errors, Duration; resources (pools, queues, disks) expose USE — Utilization, Saturation, Errors. The two methods together give symptom + cause coverage.
+
+**6. Metric→trace exemplars (OBSCONV-TRACE-METRIC-LINK-001).** Metrics carry exemplars (a sampled trace id attached to a data point), so a spike on a latency histogram drills straight to an example slow trace — symptom to cause in one click.
+
+**7. Dashboards + alerts as code (OBSCONV-DASHBOARD-AS-CODE-001).** Dashboards and alert rules live in version control (Grafana JSON / Terraform / Jsonnet), reviewed and deployed like code — not hand-edited in a UI where changes are unaudited and lost.
+
+**Incorrect — pages on a raw cause metric; no SLO, no severity, dashboard only in the UI:**
+
+```yaml
+# VIOLATION: cause-based paging with no SLO/error-budget link (OBSCONV-SLO/ERROR-BUDGET)
+- alert: HighCPU
+  expr: node_cpu_utilization > 0.8     # not a symptom; not user-facing; pages at 3am for nothing
+  # VIOLATION: no severity/routing (OBSCONV-ALERT-ROUTING); dashboard exists only as hand-edited UI state
+```
+
+**Correct — SLO-derived multi-burn-rate alert with severity; SLI/SLO + dashboard as code:**
+
+```yaml
+# slo.yaml (version-controlled artifact) — OBSCONV-SLO-001
+slo: { service: orders-api, sli: "requests < 300ms / total", target: 0.999, window: 28d }
+---
+# Multi-window multi-burn-rate alert off the error budget — OBSCONV-ERROR-BUDGET-001 / OBSCONV-ALERT-ROUTING-001
+- alert: OrdersApiFastBurn
+  expr: burnrate_1h{service="orders-api"} > 14.4 and burnrate_5m{service="orders-api"} > 14.4
+  labels: { severity: page }          # severity → routing convention
+  annotations: { exemplar: "trace_id link via exemplars (OBSCONV-TRACE-METRIC-LINK-001)" }
+# RED for the API + USE for its pool (OBSCONV-RED-USE-001); this file + the dashboard live in git (OBSCONV-DASHBOARD-AS-CODE-001).
+```
+
+Verification: review-tier. Observability convention is an operational property with no compile-time signal — cause-based alerts run fine and only reveal their cost as pager fatigue and missed symptom regressions. Verify by review against `specs/observability-convention-l0.yaml`: SLIs/SLOs are declared version-controlled artifacts; alerts are error-budget multi-burn-rate, not raw-cause; alerts carry severity→routing; labels are bounded; RED covers request services and USE covers resources; metrics carry trace exemplars; dashboards/alerts are code. When a fork-receiver wires a check that the SLO/alert/dashboard definitions exist in the repo and parse, this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [Google SRE Book — Service Level Objectives](https://sre.google/sre-book/service-level-objectives/)
+
+Reference: [Google SRE Workbook — Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/)
+
+
 <!-- @source rules/observability-structured-logging.md -->
 
 ---
@@ -7028,6 +8602,96 @@ and never left on the inactive principal (`specs/ownership-transfer-l0.yaml#TRAN
 
 Reference: [NIST SP 800-53 Rev.5 — AC-2 Account Management](https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-2/)
 Reference: [OWASP ASVS v4.0.3 — V4.1 Access Control](https://github.com/OWASP/ASVS/blob/v4.0.3/4.0/en/0x12-V4-Access-Control.md)
+
+
+<!-- @source rules/ownership-transfer-authz-audit-atomic.md -->
+
+---
+title: An ownership reassignment MUST be initiator-authorized, written atomically all-or-nothing, and recorded in exactly one audit entry
+impact: HIGH
+impactDescription: "A reassignment any principal can trigger lets an attacker hand themselves another user's records; one that moves some rows then fails leaves a departing principal owning half their records and the successor the other half — a corrupt, half-orphaned state; one with no audit entry leaves a privileged ownership change with no trail. Authorization, atomicity, and audit are each load-bearing for a safe transfer."
+tags:
+  - ownership-transfer
+  - authorization
+  - atomicity
+  - audit
+  - access-control
+spec_ref: "specs/ownership-transfer-l0.yaml#TRANSFER-ATOMIC-001"
+verification:
+  type: review
+  source: "specs/ownership-transfer-l0.yaml#TRANSFER-ATOMIC-001"
+  pattern: "Reassignment of all of a departing principal's rows MUST be ATOMIC — one @Transactional unit where either EVERY targeted row moves to the successor (and the audit entry is written) or, on any failure, NOTHING moves and the original ownership is fully intact; a partial handoff is forbidden and a failure surfaces 409 (TRANSFER-ATOMIC-001). Only an ADMIN or the current owner may initiate the transfer — any other principal gets 403 (least privilege); the named successor MUST be ACTIVE, same-tenant, and not the departing principal (inactive→409; foreign-tenant/not-found→404, IDOR-safe; access controls fail securely) (TRANSFER-AUTHZ-001). Every reassignment writes EXACTLY ONE audit record {from_owner, to_owner, actor=initiator (NOT from_owner), resource_type, count, timestamp} in the SAME transaction, with ids not treated as PII-in-the-clear (TRANSFER-AUDIT-001). Reject a transfer initiable by a non-owner non-admin, a partial/non-transactional reassignment, a successor that is inactive/foreign-tenant/the-leaver, and a reassignment with no (or a wrong-actor) audit record."
+upstream:
+  - "https://www.postgresql.org/docs/current/tutorial-transactions.html"
+  - "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL Documentation — Transactions (all-or-nothing)"
+    url: "https://www.postgresql.org/docs/current/tutorial-transactions.html"
+    quote: "The essential point of a transaction is that it bundles multiple steps into a single, all-or-nothing operation."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "PostgreSQL Documentation — Transactions (no partial effect on failure)"
+    url: "https://www.postgresql.org/docs/current/tutorial-transactions.html"
+    quote: "if some failure occurs that prevents the transaction from completing, then none of the steps affect the database at all."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "OWASP ASVS v4.0.3 V4.1.3 — Access Control (least privilege)"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
+    quote: "Verify that the principle of least privilege exists - users should only be able to access functions, data files, URLs, controllers, services, and other resources, for which they possess specific authorization."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "OWASP ASVS v4.0.3 V4.1.5 — Access Control (fail securely)"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md"
+    quote: "Verify that access controls fail securely including when an exception occurs."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## An ownership reassignment MUST be initiator-authorized, atomic all-or-nothing, and recorded in exactly one audit entry
+
+**Impact: HIGH — When a principal is deprovisioned, their owned rows are reassigned to a successor (the `owner-deprovision-reassigns-not-orphans` rule covers WHERE they go). Three properties make that reassignment safe. Authorization: only an admin or the current owner may trigger it — ASVS demands *the principle of least privilege ... users should only be able to access ... resources for which they possess specific authorization*, and that *access controls fail securely including when an exception occurs*. Atomicity: per PostgreSQL, *the essential point of a transaction is that it bundles multiple steps into a single, all-or-nothing operation*, and *if some failure occurs ... then none of the steps affect the database at all* — so a transfer never half-completes. Audit: a privileged ownership change leaves exactly one trail entry. Miss any one and a transfer becomes a privilege-escalation, a corruption, or an untraceable change.**
+
+There are three load-bearing requirements — the AUTHZ/AUDIT/ATOMIC items of `specs/ownership-transfer-l0.yaml` (composing `TRANSFER-REASSIGN-001`, the existing `owner-deprovision-reassigns-not-orphans` rule).
+
+**1. Atomic, all-or-nothing (TRANSFER-ATOMIC-001).** The reassignment runs in ONE `@Transactional` unit: either every targeted row moves to the successor AND the audit entry is written, or on any failure nothing moves and the original ownership is fully intact. A partial handoff (rows split between leaver and successor) is forbidden; a failure surfaces 409, never a committed half-state.
+
+**2. Initiator authorization + successor eligibility (TRANSFER-AUTHZ-001).** Only an ADMIN or the current owner may initiate — any other principal gets 403 (least privilege). The named successor MUST be ACTIVE, the same tenant, and not the departing principal. Failures fail securely: an inactive successor → 409; a foreign-tenant or non-existent successor → 404 (IDOR-safe — does not leak existence).
+
+**3. Exactly one audit record, correct actor (TRANSFER-AUDIT-001).** The transfer writes EXACTLY ONE audit record `{from_owner, to_owner, actor, resource_type, count, timestamp}` in the SAME transaction. The `actor` is the INITIATOR (the admin/owner who triggered it), NOT `from_owner` — conflating them hides who acted. Identifiers are handled per the audit-PII discipline, not logged in the clear.
+
+**Incorrect — any caller initiates; rows moved row-by-row (non-atomic); no audit:**
+
+```java
+public void transfer(Long fromOwner, Long toOwner) {       // VIOLATION: no initiator authz check (TRANSFER-AUTHZ-001)
+    for (Doc d : docRepo.findByOwner(fromOwner)) {
+        d.setOwner(toOwner);
+        docRepo.save(d);                                    // VIOLATION: per-row commit → a mid-loop failure half-transfers (ATOMIC)
+    }
+    // VIOLATION: no audit record of who reassigned what (TRANSFER-AUDIT-001)
+}
+```
+
+**Correct — admin/owner-gated, successor-validated, one transaction, one audit entry with the initiator as actor:**
+
+```java
+@Transactional
+public TransferResult transfer(Long fromOwner, Long toOwner, Principal initiator) {
+    authz.requireAdminOrOwner(initiator, fromOwner);       // 403 otherwise (TRANSFER-AUTHZ-001, least privilege)
+    User successor = users.findActiveSameTenant(toOwner)   // inactive→409, foreign/absent→404 IDOR-safe (fail securely)
+        .orElseThrow(() -> new SuccessorIneligible(toOwner));
+    int moved = docRepo.reassignAll(fromOwner, toOwner);   // all rows in ONE statement/txn (TRANSFER-ATOMIC-001)
+    auditLog.record(new OwnershipTransfer(fromOwner, toOwner,
+        initiator.id(), "Doc", moved, clock.now()));       // exactly one record, actor=initiator (TRANSFER-AUDIT-001)
+    return new TransferResult(moved);                      // commit together; any failure → nothing moved, 409
+}
+```
+
+Verification: review-tier. Transfer safety is an authz + atomicity + audit property with no compile-time signal — a per-row, unauthorized, unaudited transfer compiles and works on the happy path while being a privilege-escalation and corruption risk. Verify by review against `specs/ownership-transfer-l0.yaml`: only admin/owner initiates (403 else); successor is active/same-tenant/not-leaver with fail-secure status codes; all rows reassign in one transaction (no partial); exactly one audit record with actor=initiator. When a fork-receiver wires real ITs (non-owner transfer → 403; forced mid-transfer failure leaves original ownership intact; one audit row written), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [PostgreSQL — Transactions](https://www.postgresql.org/docs/current/tutorial-transactions.html)
+
+Reference: [OWASP ASVS V4 — Access Control](https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md)
 
 
 <!-- @source rules/payment-iso-4217-currency.md -->
@@ -8313,6 +9977,90 @@ if adopter_count >= 3:
   receive the post-lift state; no semver to honor.
 
 
+<!-- @source rules/provenance-dag-append-only-acyclic-rollup.md -->
+
+---
+title: A provenance DAG MUST store edges append-only and immutable, stay acyclic as a rollup precondition, and roll up by product-down-path summed-across-paths
+impact: HIGH
+impactDescription: "If provenance edges are mutable/deletable, the lineage record can be rewritten and an audit cannot trust it; if the graph is allowed a cycle, a weighted rollup (a BOM cost explosion, a contribution trace) is mathematically undefined and a recursive traversal loops forever; if the rollup sums weights instead of multiplying down each path and summing across paths, the computed quantity is simply wrong. Each defect corrupts the lineage or the number derived from it."
+tags:
+  - provenance
+  - dag
+  - append-only
+  - recursive-cte
+  - rollup
+  - postgresql
+spec_ref: "specs/provenance-dag-l0.yaml#DAG-EDGE-001"
+verification:
+  type: review
+  source: "specs/provenance-dag-l0.yaml#DAG-EDGE-001"
+  pattern: "A provenance graph MUST record lineage as an APPEND-ONLY, immutable many-to-many edge set — edge rows are insert-only with immutable columns (`@Column(updatable=false)`), no edit/delete mutator, never a single nullable FK on the node (DAG-EDGE-001). The graph MUST be acyclic as a precondition for a well-defined rollup: acyclicity is enforced at write time (a reparent/insert that would close a cycle is rejected) OR the rollup defensively re-checks and refuses (422) on a detected cycle (DAG-ACYCLIC-PRECOND-001). A cumulative rollup (BOM explosion, contribution trace) MUST compute the PRODUCT of per-edge weights ALONG each path, then SUM those path-products ACROSS all paths, in scaled BigDecimal — never a flat sum of weights (DAG-ROLLUP-MULTIPLY-001). Traversal is bounded and cycle-safe (DAG-TRAVERSE-BOUNDED-001, the existing traversal rule). Reject a mutable/deletable edge, a graph with no acyclicity guard, and a rollup that sums edge weights instead of product-down-path / sum-across-paths."
+upstream:
+  - "https://www.postgresql.org/docs/current/queries-with.html"
+  - "https://www.postgresql.org/docs/current/ddl-constraints.html"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL Documentation — WITH Queries (Common Table Expressions)"
+    url: "https://www.postgresql.org/docs/current/queries-with.html"
+    quote: "WITH provides a way to write auxiliary statements for use in a larger query. These statements, which are often referred to as Common Table Expressions or CTEs, can be thought of as defining temporary tables that exist just for one query."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "PostgreSQL Documentation — WITH Queries (RECURSIVE for tree/graph traversal)"
+    url: "https://www.postgresql.org/docs/current/queries-with.html"
+    quote: "Recursive queries are typically used to deal with hierarchical or tree-structured data."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A provenance DAG MUST store edges append-only, stay acyclic, and roll up by product-down-path summed-across-paths
+
+**Impact: HIGH — A provenance graph records lineage: which inputs produced which outputs, with what weight (a bill-of-materials explosion, a cost/contribution trace, a data-lineage map). Three properties keep it trustworthy. The edges must be append-only and immutable, or the lineage record can be silently rewritten and no audit can rely on it. The graph must stay acyclic, because a weighted rollup over a cyclic graph is mathematically undefined and a recursive traversal — PostgreSQL's *recursive queries are typically used to deal with hierarchical or tree-structured data*, where *WITH provides a way to write auxiliary statements ... thought of as defining temporary tables that exist just for one query* — loops forever without a cycle guard. And the rollup arithmetic must multiply weights down each path and sum across paths; a flat sum of edge weights yields a wrong number.**
+
+This rule governs the structural items of `specs/provenance-dag-l0.yaml`, composing the bounded cycle-safe traversal (`DAG-TRAVERSE-BOUNDED-001`, the existing `provenance-dag-traversal-is-bounded-and-cycle-safe` rule).
+
+**1. Append-only immutable edge set (DAG-EDGE-001).** Provenance is a many-to-many edge table (`from_node`, `to_node`, `weight`), insert-only, with immutable columns (`@Column(updatable=false)`) and NO edit/delete mutator. A node never carries a single nullable parent FK (which cannot express multiple inputs and is mutable). The lineage is thus a tamper-resistant historical record.
+
+**2. Acyclicity precondition (DAG-ACYCLIC-PRECOND-001).** A weighted rollup is well-defined ONLY over an acyclic graph. Acyclicity is enforced at write time — an edge insert/reparent that would close a cycle is rejected — OR the rollup defensively re-checks (a recursive CTE with a CYCLE clause / visited-set) and refuses with 422 on a detected cycle, rather than looping or returning garbage.
+
+**3. Product-down-path, sum-across-paths rollup (DAG-ROLLUP-MULTIPLY-001).** The cumulative quantity for a node is the PRODUCT of the per-edge weights along each path from the source, then the SUM of those path-products across all distinct paths — scaled `BigDecimal` arithmetic. A BOM where part A needs 2×B and each B needs 3×C means A needs 6×C *per path*, summed over every route C reaches A. A flat `SUM(weight)` is simply the wrong number.
+
+**Incorrect — mutable single-parent FK; recursive walk with no cycle guard; flat sum rollup:**
+
+```java
+class Node { @ManyToOne Node parent; }            // VIOLATION: single mutable FK, not an append-only edge set (DAG-EDGE-001)
+
+BigDecimal rollup(Node n) {                         // VIOLATION: no cycle guard → infinite recursion on a cycle (DAG-ACYCLIC)
+    BigDecimal total = BigDecimal.ZERO;
+    for (Edge e : edges(n)) total = total.add(e.weight());   // VIOLATION: flat SUM, not product-down/sum-across (DAG-ROLLUP)
+    return total;
+}
+```
+
+**Correct — append-only immutable edges; cycle-safe recursive CTE; product-down-path summed-across-paths:**
+
+```java
+@Entity class ProvenanceEdge {                      // append-only many-to-many (DAG-EDGE-001)
+    @Column(updatable=false) Long fromNode;
+    @Column(updatable=false) Long toNode;
+    @Column(updatable=false) BigDecimal weight;     // immutable; no setter, no delete mutator
+}
+```
+```sql
+-- cycle-safe recursive CTE; product down each path, summed across paths (DAG-ACYCLIC / DAG-ROLLUP)
+WITH RECURSIVE paths(node, qty) AS (
+    SELECT :root, 1::numeric
+  UNION ALL
+    SELECT e.to_node, p.qty * e.weight                      -- PRODUCT down the path
+      FROM paths p JOIN provenance_edge e ON e.from_node = p.node
+) CYCLE node SET is_cycle USING path                        -- refuse cycles (DAG-ACYCLIC-PRECOND-001)
+SELECT node, SUM(qty) FROM paths WHERE NOT is_cycle GROUP BY node;  -- SUM across paths
+```
+
+Verification: review-tier. DAG correctness is a data-model + arithmetic property — a mutable-FK / flat-sum implementation compiles and gives plausible numbers on a single-path graph, corrupting only on multi-path or cyclic graphs. Verify by review against `specs/provenance-dag-l0.yaml`: edges are append-only immutable many-to-many (no edit/delete); acyclicity is guarded at write time or re-checked with 422 on the rollup; the rollup multiplies down each path and sums across paths in scaled BigDecimal; traversal is bounded/cycle-safe. When a fork-receiver wires a real test (a cycle is rejected; a diamond BOM rolls up to the product-sum, not the flat sum), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [PostgreSQL — WITH Queries (CTEs / RECURSIVE)](https://www.postgresql.org/docs/current/queries-with.html)
+
+
 <!-- @source rules/provenance-dag-traversal-is-bounded-and-cycle-safe.md -->
 
 ---
@@ -9021,6 +10769,74 @@ Reference: [OWASP API Security Top 10 (2023) — API5:2023 BFLA](https://owasp.o
 Reference: [OWASP ASVS V4 — Access Control Design](https://owasp.org/www-project-application-security-verification-standard/)
 
 
+<!-- @source rules/realtime-single-protocol-declared.md -->
+
+---
+title: A recipe MUST declare a single realtime protocol — SSE OR WebSocket — never both in one recipe
+impact: MEDIUM
+impactDescription: "Mixing SSE and WebSocket in one recipe doubles the realtime surface a fork-receiver must build, secure, scale, and reconnect: two server endpoints, two client SDKs, two auth integrations, two backpressure stories. Declaring exactly one protocol — SSE for server-push-only flows, WebSocket for bidirectional flows — keeps the realtime layer coherent and the fork-receiver's client one code path."
+tags:
+  - realtime
+  - sse
+  - websocket
+  - protocol
+  - configuration
+spec_ref: "specs/realtime-policy-l0.yaml#RT-PROTOCOL-001"
+verification:
+  type: review
+  source: "specs/realtime-policy-l0.yaml#RT-PROTOCOL-001"
+  pattern: "A recipe with a realtime surface MUST declare in RECIPE.md frontmatter which protocol it adopts — `realtime_protocol: sse` OR `realtime_protocol: websocket` — and MUST NOT mix both in the same recipe (a 2x maintenance/SDK surface). SSE (Server-Sent Events) is the choice for server-push-only flows (notification feeds, live status, progress) — it is a one-way server→client connection over plain HTTP. WebSocket is the choice for bidirectional flows (chat, multi-user editing, collaborative cursors). The declared protocol matches the flow's directionality: a server-push-only flow MUST NOT pull in a full WebSocket, and a bidirectional flow MUST NOT be forced onto SSE + a side-channel. Reject a recipe that declares both protocols, and a protocol choice mismatched to the flow's directionality."
+upstream:
+  - "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events"
+  - "https://html.spec.whatwg.org/multipage/server-sent-events.html"
+evidence:
+  - source_type: external
+    citation: "MDN Web Docs — Using server-sent events (one-way connection)"
+    url: "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events"
+    quote: "This is a one-way connection, so you can't send events from a client to a server."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A recipe MUST declare a single realtime protocol — SSE OR WebSocket — never both
+
+**Impact: MEDIUM — A realtime feature needs a transport, and the two mainstream choices solve different shapes. SSE is server-push-only: per MDN, *this is a one-way connection, so you can't send events from a client to a server* — ideal for notification feeds, live status, and progress where the client only consumes. WebSocket is full-duplex — needed for chat, multi-user editing, and collaborative flows where the client also sends. A recipe that ships BOTH doubles everything a fork-receiver must build and operate: two server endpoints, two client SDKs, two auth paths, two reconnect/backpressure strategies. The catalog default (the `realtime-policy` spec) is SSE-first; this rule pins the single-protocol declaration so a recipe's realtime layer stays one coherent code path.**
+
+There is one load-bearing requirement for `RT-PROTOCOL-001`.
+
+**1. Declare exactly one realtime protocol.** A recipe with a realtime surface declares `realtime_protocol: sse` OR `realtime_protocol: websocket` in RECIPE.md frontmatter, and never both. The choice matches the flow's directionality:
+- **SSE** — server-push-only flows (notification feed, live status, job progress). One-way, plain HTTP, auto-reconnect built in.
+- **WebSocket** — bidirectional flows (chat, multi-user editing, presence with client input).
+
+A server-push-only flow must NOT pull in a full WebSocket (unnecessary bidirectional surface); a bidirectional flow must NOT be bolted onto SSE plus a separate POST side-channel (that IS mixing, one direction each).
+
+**Incorrect — declares both; uses a WebSocket for a one-way notification feed:**
+
+```yaml
+# RECIPE.md frontmatter
+recipe: notifications
+realtime_protocol: [sse, websocket]   # VIOLATION: both → 2x surface (RT-PROTOCOL-001)
+# the feed is server-push-only, yet a full WebSocket is stood up — wrong directionality
+```
+
+**Correct — one declared protocol matching the flow's directionality:**
+
+```yaml
+# RECIPE.md frontmatter — a server-push-only notification feed
+recipe: notifications
+realtime_protocol: sse                 # one-way server→client; SSE fits (RT-PROTOCOL-001)
+---
+# a bidirectional chat recipe would instead declare:
+# realtime_protocol: websocket
+```
+
+Verification: review-tier. Protocol coherence is a configuration property — a recipe that mixes transports compiles and runs while doubling the maintenance surface. Verify by review against `specs/realtime-policy-l0.yaml#RT-PROTOCOL-001`: the recipe declares exactly one `realtime_protocol` (sse or websocket), not both, and the choice matches the flow's directionality (SSE for server-push-only, WebSocket for bidirectional). When a fork-receiver wires a guard that parses RECIPE.md frontmatter and rejects a dual/absent `realtime_protocol`, this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [MDN — Using server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)
+
+Reference: [WHATWG HTML — Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+
+
 <!-- @source rules/recipe-invariants-must-resolve.md -->
 
 ---
@@ -9129,6 +10945,87 @@ See: `practices/evals/fixtures/recipe-invariants-must-resolve/fail_unresolvable_
 See: `practices/evals/fixtures/recipe-invariants-must-resolve/pass/recipe.yaml` — all `business_invariants` reference `specs/billing-l0.yaml` which exists.
 
 Reference: https://owasp.org/www-project-application-security-verification-standard/
+
+
+<!-- @source rules/referral-disclosure-and-fraud-controls.md -->
+
+---
+title: A referral program MUST disclose the material connection, attribute trackably, and guard against self-referral / multi-account / refund-reversal fraud
+impact: HIGH
+impactDescription: "A referral reward paid without disclosing the referrer's material connection is a deceptive endorsement (FTC 16 CFR 255.5; 공정거래법 부당고객유인); one with no attribution window double-pays or misattributes; one with no fraud controls is drained by self-referral, multi-account farming, and rewards paid on orders later refunded. Each gap is either a legal-disclosure breach or direct financial loss."
+tags:
+  - referral
+  - endorsement-disclosure
+  - fraud-prevention
+  - attribution
+  - ftc
+  - privacy
+spec_ref: "specs/referral-program-l0.yaml#REFERRAL-DISCLOSURE-001"
+verification:
+  type: review
+  source: "specs/referral-program-l0.yaml#REFERRAL-DISCLOSURE-001"
+  pattern: "A referral program MUST issue trackable referral codes bound to a referrer and traceable to the referred signup/order (REFERRAL-CODE-001). Attribution MUST use a declared window and multi-touch policy (first/last-touch) so a conversion maps to exactly one rewardable referral, no double-credit (REFERRAL-ATTRIBUTION-001). Reward distribution follows a declared policy (who gets what, when it vests) (REFERRAL-REWARD-001). The referral/endorsement relationship MUST be disclosed clearly and conspicuously where it is not reasonably expected by the audience — the FTC material-connection rule (and 공정거래법 부당고객유인 / 표시광고법) (REFERRAL-DISCLOSURE-001). Fraud controls MUST block self-referral, detect multi-account/duplicate-device farming, and REVERSE (claw back) a reward when the qualifying order is later refunded/charged-back (REFERRAL-FRAUD-001). Referral-tracking PII is processed under a lawful basis and minimized (REFERRAL-PRIVACY-001, composes consent/PII handling). Reject a reward paid without disclosure, attribution that can double-credit one conversion, a reward that survives a refund of its qualifying order, and a program that pays self-referrals."
+upstream:
+  - "https://www.law.cornell.edu/cfr/text/16/255.5"
+  - "https://www.law.go.kr/법령/독점규제및공정거래에관한법률"
+evidence:
+  - source_type: external
+    citation: "FTC 16 CFR § 255.5 — Disclosure of material connections"
+    url: "https://www.law.cornell.edu/cfr/text/16/255.5"
+    quote: "When there exists a connection between the endorser and the seller of the advertised product that might materially affect the weight or credibility of the endorsement, and that connection is not reasonably expected by the audience, such connection must be disclosed clearly and conspicuously."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A referral program MUST disclose the material connection, attribute trackably, and guard against fraud
+
+**Impact: HIGH — A referral program sits on two fault lines: legal disclosure and financial fraud. On disclosure, the FTC's material-connection rule is explicit — *when there exists a connection between the endorser and the seller of the advertised product that might materially affect the weight or credibility of the endorsement, and that connection is not reasonably expected by the audience, such connection must be disclosed clearly and conspicuously* (16 CFR § 255.5; the Korean equivalent is 공정거래법 부당고객유인 / 표시·광고법). A reward paid for an undisclosed endorsement is a deceptive practice. On fraud, a program with no anti-abuse controls is a money tap: self-referrals, multi-account farming, and rewards paid on orders that are then refunded drain it directly. Both axes must be handled.**
+
+There are six load-bearing requirements — the items of `specs/referral-program-l0.yaml`, all governed by this rule.
+
+**1. Trackable referral code (REFERRAL-CODE-001).** Each referrer gets a code bound to their identity; a signup/order made through it is traceable back to that referrer for attribution and audit.
+
+**2. Attribution window + multi-touch policy (REFERRAL-ATTRIBUTION-001).** Attribution uses a declared window (e.g. 30 days) and a declared multi-touch rule (first- or last-touch) so a single conversion maps to exactly ONE rewardable referral — never double-credited across two referrers or two touches.
+
+**3. Reward distribution policy (REFERRAL-REWARD-001).** Who receives what (referrer / referee / both), the amount, and when it vests are a declared policy — not ad-hoc per payout.
+
+**4. Material-connection disclosure (REFERRAL-DISCLOSURE-001).** The referral/endorsement relationship is disclosed *clearly and conspicuously* wherever the audience would not reasonably expect it — satisfying FTC § 255.5 and the Korean 부당고객유인 / 표시광고법 disclosure duties.
+
+**5. Fraud controls (REFERRAL-FRAUD-001).** Self-referral is blocked (a user cannot refer themselves); multi-account / duplicate-device farming is detected and rejected; and a reward is REVERSED (clawed back) when its qualifying order is later refunded or charged back — a reward must not outlive the revenue that justified it.
+
+**6. Tracking PII (REFERRAL-PRIVACY-001).** Referral-tracking data (who referred whom, devices, IPs) is processed under a lawful basis, minimized, and retained no longer than needed. Composes the consent / PII-handling discipline.
+
+**Incorrect — pays on signup with no self-referral check, no refund reversal, no disclosure:**
+
+```java
+void onSignup(String refCode, String newUserId) {
+    String referrer = codes.resolve(refCode);
+    rewards.grant(referrer, REWARD);            // VIOLATION: no self-referral guard (referrer could == newUserId)
+    // VIOLATION: granted on signup, never reversed if the qualifying order is refunded (REFERRAL-FRAUD-001)
+    // VIOLATION: no material-connection disclosure recorded/surfaced (REFERRAL-DISCLOSURE-001)
+}
+```
+
+**Correct — self-referral blocked, attribution windowed, reward vests on a non-refunded order, reversible:**
+
+```java
+void onQualifyingOrder(String refCode, String buyerId, Order order) {
+    String referrer = codes.resolve(refCode);
+    if (referrer.equals(buyerId)) return;                       // block self-referral (REFERRAL-FRAUD-001)
+    if (fraud.isMultiAccount(referrer, buyerId, order)) return; // multi-account/device farming
+    Attribution a = attribution.resolveSingle(refCode, buyerId, WINDOW); // one conversion → one referral
+    if (a == null) return;
+    rewards.grantPending(referrer, REWARD, order.id());         // vests only on a non-refunded order (REFERRAL-REWARD-001)
+}
+@EventListener void onRefund(OrderRefunded e) {
+    rewards.reverseForOrder(e.orderId());                       // claw back on refund (REFERRAL-FRAUD-001)
+}
+// disclosure of the referral relationship is surfaced clearly+conspicuously per FTC §255.5 (REFERRAL-DISCLOSURE-001).
+```
+
+Verification: review-tier. Referral integrity is a financial + legal property with no compile-time signal — a naive program pays out and looks fine until it is farmed or audited for disclosure. Verify by review against `specs/referral-program-l0.yaml`: codes are trackable to a referrer; attribution is windowed and single-credit; reward policy is declared; the material connection is disclosed clearly and conspicuously; self-referral is blocked, multi-account detected, and rewards reversed on refund; tracking PII is lawful and minimized. When a fork-receiver wires real ITs (self-referral rejected; reward reversed on refund; double-touch credited once), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [FTC 16 CFR § 255.5 — Disclosure of material connections](https://www.law.cornell.edu/cfr/text/16/255.5)
 
 
 <!-- @source rules/relationship-scoped-authz-via-grant-lookup.md -->
@@ -9250,6 +11147,207 @@ Reference: [OWASP API Security Top 10 (2023) — API1:2023 BOLA](https://owasp.o
 Reference: [OWASP ASVS v4.0.3 — V4 Access Control](https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md)
 
 Reference: [Google Zanzibar — relationship-based access control (ReBAC)](https://en.wikipedia.org/wiki/Google_Zanzibar)
+
+
+<!-- @source rules/resilience-circuit-breaker-retry-bulkhead.md -->
+
+---
+title: Every outbound dependency call MUST be wrapped in resilience controls — timeout, circuit breaker, bounded retry with jittered backoff, bulkhead, fallback
+impact: HIGH
+impactDescription: "An unprotected synchronous call to a remote dependency is a cascading-failure vector: with no timeout it blocks a request thread indefinitely when the dependency hangs; with no circuit breaker it keeps hammering a dead dependency and exhausts the thread pool; with naive immediate retries it amplifies load into a retry storm; with no bulkhead one slow dependency starves threads needed by every other call. The dependency's outage becomes your outage."
+tags:
+  - resilience
+  - circuit-breaker
+  - retry
+  - timeout
+  - bulkhead
+  - fallback
+spec_ref: "specs/resilience-l0.yaml#RESILIENCE-CIRCUITBREAKER-001"
+verification:
+  type: review
+  source: "specs/resilience-l0.yaml#RESILIENCE-CIRCUITBREAKER-001"
+  pattern: "Every synchronous outbound dependency call MUST be wrapped in resilience controls. A circuit breaker trips OPEN after consecutive failures cross a threshold (fail-fast while OPEN), and after a timeout transitions HALF_OPEN to test recovery with limited probes (RESILIENCE-CIRCUITBREAKER-001 — CLOSED/OPEN/HALF_OPEN). Retries are BOUNDED with exponential backoff plus jitter — never immediate, never unbounded — and only on transient/idempotent failures (RESILIENCE-RETRY-001). Every call sets explicit connect AND read timeouts — never the library default which may be infinite (RESILIENCE-TIMEOUT-001). Calls run inside a bulkhead (semaphore or thread-pool isolation) so one saturated dependency cannot exhaust the threads of the others (RESILIENCE-BULKHEAD-001). A breaker-open / timeout / exhausted-retry surfaces a declared fallback — cached, default, or degraded — not an unhandled exception (RESILIENCE-FALLBACK-001). A client-side rate limiter honors the server's 429 / Retry-After back-pressure (RESILIENCE-RATELIMITER-001). Reject an outbound call with no timeout, with unbounded or immediate-loop retries, or with retries layered so the effective attempt count multiplies across nested wrappers."
+upstream:
+  - "https://microservices.io/patterns/reliability/circuit-breaker.html"
+  - "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+  - "https://resilience4j.readme.io/docs/circuitbreaker"
+evidence:
+  - source_type: external
+    citation: "Chris Richardson — Circuit Breaker pattern (microservices.io, trip on threshold)"
+    url: "https://microservices.io/patterns/reliability/circuit-breaker.html"
+    quote: "When the number of consecutive failures crosses a threshold, the circuit breaker trips, and for the duration of a timeout period all attempts to invoke the remote service will fail immediately."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Chris Richardson — Circuit Breaker pattern (microservices.io, recovery probe)"
+    url: "https://microservices.io/patterns/reliability/circuit-breaker.html"
+    quote: "After the timeout expires the circuit breaker allows a limited number of test requests to pass through."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Amazon Builders' Library — Timeouts, retries, and backoff with jitter (exponential backoff)"
+    url: "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    quote: "The most common pattern is an _exponential backoff,_ where the wait time is increased exponentially after every attempt."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Amazon Builders' Library — Timeouts, retries, and backoff with jitter (jitter)"
+    url: "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    quote: "Our solution is jitter. Jitter adds some amount of randomness to the backoff to spread the retries around in time."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Every outbound dependency call MUST be wrapped in resilience controls
+
+**Impact: HIGH — A synchronous call to a remote dependency (an HTTP API, a downstream service) is the single most common cascading-failure vector. With no timeout, a hung dependency holds your request thread forever; enough hung calls and your own service runs out of threads and stops serving everything. With no circuit breaker, you keep dialing a dependency that is already down — burning threads and latency on calls you know will fail. With naive immediate retries, a brief dependency blip turns into a self-inflicted retry storm that keeps it down. With no bulkhead, one slow dependency drains the thread pool that every other dependency also needs. The dependency's outage silently becomes *your* outage.**
+
+There are six load-bearing controls — the items of `specs/resilience-l0.yaml`, all governed by this rule.
+
+**1. Circuit breaker: CLOSED / OPEN / HALF_OPEN (RESILIENCE-CIRCUITBREAKER-001).** Wrap the call in a breaker. Per the pattern: *when the number of consecutive failures crosses a threshold, the circuit breaker trips, and for the duration of a timeout period all attempts to invoke the remote service will fail immediately* — that is the OPEN state, failing fast instead of piling threads onto a dead dependency. Then *after the timeout expires the circuit breaker allows a limited number of test requests to pass through* — the HALF_OPEN probe; success closes it, failure re-opens it.
+
+**2. Bounded retry, exponential backoff + jitter (RESILIENCE-RETRY-001).** Retries are bounded (a small max attempts), applied ONLY to transient failures on idempotent operations, and spaced by *exponential backoff* — per AWS, *the most common pattern is an exponential backoff, where the wait time is increased exponentially after every attempt* — with *jitter*: *jitter adds some amount of randomness to the backoff to spread the retries around in time*, so a fleet of clients does not retry in lockstep. Never an immediate retry loop, never unbounded.
+
+**3. Explicit connect + read timeouts (RESILIENCE-TIMEOUT-001).** Every outbound call sets BOTH a connect timeout and a read timeout explicitly — never the client library default, which on several clients is *infinite*. A call with no read timeout is the no.1 thread-exhaustion cause.
+
+**4. Bulkhead isolation (RESILIENCE-BULKHEAD-001).** Calls to a dependency run inside a bulkhead — a bounded semaphore or a dedicated thread pool — so saturation of one dependency consumes only its own quota and cannot starve the threads other dependencies (and the rest of the app) rely on.
+
+**5. Declared fallback (RESILIENCE-FALLBACK-001).** When the breaker is OPEN, a call times out, or retries are exhausted, the caller returns a *declared* fallback — a cached value, a safe default, or a degraded response — not an unhandled exception bubbling to the user. The fallback is part of the contract, chosen deliberately per call site.
+
+**6. Client-side rate limiter, honor 429 / Retry-After (RESILIENCE-RATELIMITER-001).** The client self-limits its outbound rate and, when the server responds 429, honors `Retry-After` rather than retrying immediately — cooperating with the dependency's back-pressure instead of fighting it.
+
+**Incorrect — no timeout, unbounded immediate retry, no breaker; a dependency blip becomes thread exhaustion + a retry storm:**
+
+```java
+while (true) {                                  // VIOLATION: unbounded retry loop
+    try {
+        return restTemplate.getForObject(url, Quote.class);  // VIOLATION: no connect/read timeout (default may be infinite)
+    } catch (RestClientException e) {
+        // VIOLATION: immediate retry, no backoff/jitter, no circuit breaker, no fallback
+    }
+}
+```
+
+**Correct — timeout + breaker + bounded jittered-backoff retry + bulkhead + fallback:**
+
+```java
+// Resilience4j composition (decorators applied outermost→innermost):
+@CircuitBreaker(name = "quotes", fallbackMethod = "cachedQuote")  // OPEN/HALF_OPEN + fallback (1,5)
+@Bulkhead(name = "quotes")                                        // isolation (4)
+@Retry(name = "quotes")                                           // bounded, expo backoff + jitter (2)
+public Quote getQuote(String sym) {
+    return webClient.get().uri(url, sym)
+        .retrieve().bodyToMono(Quote.class)
+        .timeout(Duration.ofSeconds(2))          // explicit read timeout (3); connect timeout on the client
+        .block();
+}
+Quote cachedQuote(String sym, Throwable t) {     // declared fallback (5)
+    return quoteCache.lastKnown(sym).orElse(Quote.unavailable(sym));
+}
+// resilience4j retry config: maxAttempts=3, intervalFunction=ofExponentialRandomBackoff(...)  (expo + jitter)
+// a 429 from the server is honored via Retry-After, not retried immediately (6).
+```
+
+Verification: review-tier. Resilience is a failure-mode property with no compile-time signal — an unprotected call compiles and works perfectly until the dependency degrades. Verify by review against `specs/resilience-l0.yaml`: every outbound call has explicit connect+read timeouts; a circuit breaker with CLOSED/OPEN/HALF_OPEN; bounded retries with exponential backoff + jitter on transient/idempotent failures only; bulkhead isolation; a declared fallback on open/timeout/exhausted; a client rate limiter honoring 429/Retry-After. Confirm retries are not nested-multiplied across layers. When a fork-receiver wires a real IT (stub a hanging/failing dependency; assert fail-fast + fallback + bounded attempts), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [Chris Richardson — Circuit Breaker pattern (trip on threshold, probe after timeout)](https://microservices.io/patterns/reliability/circuit-breaker.html)
+
+Reference: [Amazon Builders' Library — Timeouts, retries, and backoff with jitter](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/)
+
+
+<!-- @source rules/resumable-upload-tus-offset.md -->
+
+---
+title: Large file uploads MUST be resumable by byte offset (tus-style) with per-chunk integrity, size/type allowlist, and session expiry cleanup
+impact: MEDIUM
+impactDescription: "A non-resumable upload restarts from byte 0 on any network drop — on a flaky mobile connection a large file may never complete. An upload with no offset validation can interleave or gap chunks into a corrupt file; with no checksum a flipped byte is silently persisted; with no size/type allowlist it is an unbounded-write and malware vector; with no session expiry, abandoned partials accumulate forever."
+tags:
+  - upload
+  - resumable
+  - tus
+  - integrity
+  - file-storage
+  - cleanup
+spec_ref: "specs/multipart-upload-l0.yaml#UPLOAD-CHUNK-001"
+verification:
+  type: review
+  source: "specs/multipart-upload-l0.yaml#UPLOAD-CHUNK-001"
+  pattern: "A large/resumable upload MUST append chunks at a server-validated byte offset: each chunk declares its Upload-Offset and the server accepts it only if it equals the current persisted offset — a mismatched offset is rejected (409), never blindly appended (no gaps, no overlap) (UPLOAD-CHUNK-001). An upload session is created up front declaring the total length (UPLOAD-INIT-001). A HEAD request returns the current offset so a client can resume after an interruption (UPLOAD-RESUME-001). Each chunk passes a per-chunk integrity gate (checksum) before it is committed (UPLOAD-CHECKSUM-001). The server enforces a maximum size and a content-type allowlist (UPLOAD-LIMIT-001). Sessions have a TTL and abandoned partials are cleaned up (UPLOAD-EXPIRY-001, composes storage-reconciliation). Reject an upload that restarts from zero on resume, that appends a chunk without offset validation, that skips the checksum, or that has no size/type bound."
+upstream:
+  - "https://tus.io/protocols/resumable-upload"
+  - "https://www.rfc-editor.org/rfc/rfc9110"
+evidence:
+  - source_type: external
+    citation: "tus resumable upload protocol 1.0.0 — mechanism"
+    url: "https://tus.io/protocols/resumable-upload"
+    quote: "The protocol provides a mechanism for resumable file uploads via HTTP (RFC 9110)."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "tus resumable upload protocol 1.0.0 — HEAD returns resume offset"
+    url: "https://tus.io/protocols/resumable-upload"
+    quote: "A `HEAD` request is used to determine the offset at which the upload should be continued."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "tus resumable upload protocol 1.0.0 — Upload-Offset header"
+    url: "https://tus.io/protocols/resumable-upload"
+    quote: "The `Upload-Offset` request and response header indicates a byte offset within a resource. The value MUST be a non-negative integer."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Large file uploads MUST be resumable by byte offset with per-chunk integrity, size/type allowlist, and expiry cleanup
+
+**Impact: MEDIUM — A large upload over a real-world (mobile, lossy) connection will be interrupted, and a non-resumable upload restarts from byte 0 every time — a big file may never finish. The tus protocol solves this: it *provides a mechanism for resumable file uploads via HTTP (RFC 9110)*, where *a HEAD request is used to determine the offset at which the upload should be continued* and *the Upload-Offset ... header indicates a byte offset within a resource*. The byte offset is also what keeps the assembled file correct: validate it and chunks append contiguously; ignore it and chunks gap or overlap into a corrupt file. Add a per-chunk checksum, a size/type allowlist, and session expiry and the upload is both resumable and safe.**
+
+There are six load-bearing requirements — the items of `specs/multipart-upload-l0.yaml`, all governed by this rule.
+
+**1. Offset-validated chunk append (UPLOAD-CHUNK-001).** Each chunk carries its `Upload-Offset`; the server appends it ONLY if that offset equals the current persisted offset, else rejects with 409 Conflict. This guarantees contiguity — no gaps, no overlap — regardless of client retries or reordering.
+
+**2. Session init with total length (UPLOAD-INIT-001).** An upload session is created up front, declaring the total length, returning a session id/URL the client uploads chunks against.
+
+**3. HEAD returns offset for resume (UPLOAD-RESUME-001).** After an interruption, a `HEAD` on the session returns the current `Upload-Offset` so the client resumes from exactly where it stopped — never from zero.
+
+**4. Per-chunk integrity gate (UPLOAD-CHECKSUM-001).** Each chunk is checksummed and verified before commit, so a corrupted chunk is rejected (and re-sent) rather than silently assembled into the file.
+
+**5. Size + content-type allowlist (UPLOAD-LIMIT-001).** The server enforces a maximum total size and a content-type allowlist — an upload is otherwise an unbounded-write DoS and a malware-ingress vector.
+
+**6. Session TTL + cleanup (UPLOAD-EXPIRY-001).** Sessions expire after a TTL and abandoned partial uploads are reclaimed, so incomplete blobs do not accumulate forever. Composes `storage-reconciliation`.
+
+**Incorrect — appends blindly with no offset validation and no resume; a dropped connection corrupts or restarts:**
+
+```java
+@PostMapping("/upload/{id}")
+public void chunk(@PathVariable String id, InputStream chunk) {
+    blob.append(id, chunk.readAllBytes());   // VIOLATION: no Upload-Offset check → retried/reordered chunk gaps or overlaps
+    // VIOLATION: no HEAD-offset resume → client that dropped must restart from 0
+    // VIOLATION: no checksum, no size/type limit
+}
+```
+
+**Correct — offset-validated append, HEAD resume, checksum, size/type limit, TTL cleanup:**
+
+```java
+@PostMapping("/upload/{id}")                  // tus-style PATCH/append
+public ResponseEntity<Void> chunk(@PathVariable String id,
+        @RequestHeader("Upload-Offset") long offset,
+        @RequestHeader("Upload-Checksum") String checksum, byte[] body) {
+    UploadSession s = sessions.get(id);
+    if (offset != s.currentOffset())          // offset must match (UPLOAD-CHUNK-001)
+        return ResponseEntity.status(409).build();
+    if (!integrity.matches(body, checksum))   // per-chunk integrity (UPLOAD-CHECKSUM-001)
+        return ResponseEntity.status(460).build();
+    if (s.currentOffset() + body.length > MAX_SIZE) // size bound (UPLOAD-LIMIT-001)
+        return ResponseEntity.status(413).build();
+    s.append(body);
+    return ResponseEntity.noContent().header("Upload-Offset", String.valueOf(s.currentOffset())).build();
+}
+@RequestMapping(method = HEAD, value = "/upload/{id}")  // resume (UPLOAD-RESUME-001)
+public ResponseEntity<Void> head(@PathVariable String id) {
+    return ResponseEntity.ok().header("Upload-Offset", String.valueOf(sessions.get(id).currentOffset())).build();
+}
+// init declares total length (UPLOAD-INIT-001); a scheduled sweep expires abandoned sessions (UPLOAD-EXPIRY-001).
+```
+
+Verification: review-tier. Resumability and offset-correctness are runtime properties — a blind-append upload works for a single clean connection and corrupts only under retry/reorder/interruption. Verify by review against `specs/multipart-upload-l0.yaml`: chunks append only at a matching validated offset (409 on mismatch); a session declares total length; HEAD returns the resume offset; each chunk is checksum-gated; size and content-type are bounded by an allowlist; sessions expire and partials are cleaned up. When a fork-receiver wires a real IT (interrupt mid-upload, resume via HEAD offset, assert the assembled file matches; a wrong-offset chunk → 409), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [tus — resumable upload protocol](https://tus.io/protocols/resumable-upload)
 
 
 <!-- @source rules/retention-delete-on-high-volume-table-must-be-bounded.md -->
@@ -9596,6 +11694,168 @@ Reference: [Martin Fowler — Money pattern (eaaCatalog)](https://martinfowler.c
 Reference (sibling — single-amount representation, do not conflate): [practices/rules/lang-bigdecimal-for-money.md](lang-bigdecimal-for-money.md)
 
 Reference (sibling — single-aggregate scale/compare, do not conflate): [practices/rules/lang-bigdecimal-for-measured-decimals.md](lang-bigdecimal-for-measured-decimals.md)
+
+
+<!-- @source rules/saga-compensating-transactions.md -->
+
+---
+title: A multi-service business transaction MUST be a saga — ordered local transactions with reverse-order compensation, never a distributed 2PC
+impact: HIGH
+impactDescription: "A business operation that spans services (place order → reserve credit → reserve inventory) cannot use one ACID transaction across databases. Doing the steps with no compensation means a failure at step 3 leaves steps 1–2 committed and inconsistent — credit reserved for an order that has no inventory, with nothing to undo it. The saga makes the sequence recoverable: each step is a local transaction, and a failure triggers compensating transactions that undo the prior steps in reverse order."
+tags:
+  - saga
+  - compensating-transaction
+  - distributed-transaction
+  - orchestration
+  - eventual-consistency
+  - reliability
+spec_ref: "specs/saga-orchestration-l0.yaml#SAGA-STEP-001"
+verification:
+  type: review
+  source: "specs/saga-orchestration-l0.yaml#SAGA-STEP-001"
+  pattern: "A business transaction spanning multiple services/aggregates MUST be modeled as a saga — an ORDERED sequence of local transactions, each committing in its own service (SAGA-STEP-001) — never a 2PC/XA distributed transaction across the services. When a step fails, the saga MUST execute compensating transactions that undo the changes of the PRECEDING steps in REVERSE order (SAGA-COMPENSATE-001). The coordination style MUST be declared and singular — orchestration (a central coordinator) OR choreography (event-driven), not an undocumented mix (SAGA-ORCHESTRATION-001). Every forward step and every compensation MUST be idempotent + retry-safe, keyed so a redelivery is a no-op (SAGA-IDEMPOTENT-001, composes idempotency-l0). Saga progress MUST be a recoverable persisted state machine, and the coordinator's own state change + the command/event it emits MUST be atomic via a transactional outbox (SAGA-STATE-001, composes transactional-outbox). A step that does not complete within a per-step timeout MUST trigger compensation rather than hang the saga forever (SAGA-TIMEOUT-001). Reject a cross-service operation that commits step N without a compensation for steps 1..N-1, that uses XA across services, or that has no persisted recoverable state."
+upstream:
+  - "https://microservices.io/patterns/data/saga.html"
+evidence:
+  - source_type: external
+    citation: "Chris Richardson — Saga pattern (microservices.io, definition)"
+    url: "https://microservices.io/patterns/data/saga.html"
+    quote: "A saga is a sequence of local transactions."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Chris Richardson — Saga pattern (microservices.io, compensation on failure)"
+    url: "https://microservices.io/patterns/data/saga.html"
+    quote: "If a local transaction fails because it violates a business rule then the saga executes a series of compensating transactions that undo the changes that were made by the preceding local transactions."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A multi-service business transaction MUST be a saga — ordered local transactions with reverse-order compensation
+
+**Impact: HIGH — A business operation that touches more than one service or aggregate (place an order, then reserve credit in the billing service, then reserve stock in the inventory service) cannot be wrapped in a single ACID transaction — there is no shared database to roll back. If you simply run the steps and one fails midway, the already-committed steps stay committed: credit is reserved against an order that will never ship, inventory is decremented for a payment that never cleared, and there is no mechanism to walk it back. The corruption is silent and accumulates. The saga is the answer — per Chris Richardson, *a saga is a sequence of local transactions*, and *if a local transaction fails because it violates a business rule then the saga executes a series of compensating transactions that undo the changes that were made by the preceding local transactions.***
+
+There are six load-bearing requirements — the items of `specs/saga-orchestration-l0.yaml`, all governed by this rule.
+
+**1. Ordered local-transaction sequence (SAGA-STEP-001).** The operation is decomposed into discrete steps, each a *local* transaction committing atomically in one service. There is NO distributed transaction (2PC/XA) spanning the services — each step stands alone and is durable on its own commit.
+
+**2. Reverse-order compensation (SAGA-COMPENSATE-001).** Every step that has an externally-visible effect has a *compensating* transaction that semantically undoes it (cancel the credit reservation, release the stock). On a failure at step N, the saga runs the compensations for steps N-1 … 1 in **reverse order** — the inverse of the forward order — so dependencies unwind cleanly. A compensation is a new transaction, not a rollback (the original already committed).
+
+**3. One declared coordination style (SAGA-ORCHESTRATION-001).** The saga is EITHER orchestration (a central coordinator tells each service what to do and reacts to replies) OR choreography (each service emits events others react to) — declared explicitly, used consistently. An undocumented mix makes the control flow impossible to reason about or recover.
+
+**4. Idempotent, retry-safe steps (SAGA-IDEMPOTENT-001).** Because messages are delivered at-least-once and steps are retried, every forward step AND every compensation MUST be idempotent — keyed (on the saga id + step) so a redelivery or retry is a no-op, never a double effect. Composes `idempotency-l0`.
+
+**5. Recoverable persisted state (SAGA-STATE-001).** The saga's progress is a persisted state machine (which steps committed, which compensations ran), so a coordinator crash resumes rather than loses the saga. The coordinator's own state transition and the command/event it emits MUST commit atomically — via a transactional outbox, never a dual write. Composes `transactional-outbox`.
+
+**6. Per-step timeout → compensation (SAGA-TIMEOUT-001).** A step that does not reply within a declared per-step timeout MUST NOT hang the saga indefinitely — the timeout triggers the failure path (compensate the prior steps), so a stuck downstream cannot strand resources reserved by earlier steps forever.
+
+**Incorrect — multi-service operation with no compensation; a late failure leaves committed steps inconsistent:**
+
+```java
+@Transactional                                  // VIOLATION: a local @Transactional cannot span services
+public void placeOrder(PlaceOrder cmd) {
+    orderService.create(cmd);                    // commits in order DB
+    billingService.reserveCredit(cmd.amount());  // commits in billing DB
+    inventoryService.reserve(cmd.items());       // throws → order + credit already committed, nothing undoes them
+}
+```
+
+**Correct — orchestrated saga: each step local, failure compensates in reverse, state persisted via outbox:**
+
+```java
+// Orchestrator drives an ordered sequence; each step is a local txn in its service.
+// On step failure, compensations run in REVERSE order. State is a persisted machine;
+// each transition + emitted command commits atomically via the outbox.
+sagaState = SagaState.start(cmd);                         // persisted (SAGA-STATE-001)
+try {
+    orderId = order.create(cmd, sagaKey);                // step 1 (idempotent on sagaKey)
+    creditId = billing.reserveCredit(cmd, sagaKey);      // step 2
+    inventory.reserve(cmd, sagaKey);                     // step 3 — within per-step timeout (SAGA-TIMEOUT-001)
+    sagaState.markCompleted();
+} catch (StepFailedException | StepTimeoutException e) {
+    billing.releaseCredit(creditId, sagaKey);            // compensate step 2 ...
+    order.cancel(orderId, sagaKey);                      // ... then step 1 (REVERSE order, SAGA-COMPENSATE-001)
+    sagaState.markCompensated();
+}
+```
+
+Verification: review-tier. Saga correctness is a distributed-control-flow property with no compile-time signal — a no-compensation pipeline compiles and works on the happy path, failing only when a mid-sequence step fails in production. Verify by review against `specs/saga-orchestration-l0.yaml`: the operation is an ordered sequence of local transactions (no XA); every effecting step has a compensation and failures run them in reverse; one declared coordination style; steps and compensations are idempotent on the saga key; saga state is persisted and the coordinator emits via a transactional outbox; a per-step timeout drives compensation. When a fork-receiver wires a real IT that fails step N and asserts steps 1..N-1 are compensated, this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [Chris Richardson — Saga pattern (sequence of local transactions with compensating transactions)](https://microservices.io/patterns/data/saga.html)
+
+
+<!-- @source rules/sealed-period-watermark-monotonic-close.md -->
+
+---
+title: A period-seal watermark MUST be one-way monotonic — close only advances it, re-close is idempotent, reopen is privileged and audited
+impact: HIGH
+impactDescription: "If the sealed-through watermark can move backward or a period can be silently re-opened, a closed accounting/reporting period becomes mutable again — late writes slip into a period already reported to a regulator or to finance, and the books no longer foot to the filed numbers. Monotonic-only advance plus an audited reopen is what makes 'closed' actually mean closed."
+tags:
+  - sealed-period
+  - watermark
+  - monotonic
+  - period-close
+  - audit
+spec_ref: "specs/sealed-period-l0.yaml#SEALED-MONOTONIC-001"
+verification:
+  type: review
+  source: "specs/sealed-period-l0.yaml#SEALED-MONOTONIC-001"
+  pattern: "The `sealed_through` watermark MUST be a one-way monotonic gate: a close operation may only ADVANCE it forward (`new_sealed_through > old_sealed_through`); a close that would move it backward or leave it unchanged MUST be rejected (no-op / 409). Re-closing an already-sealed period MUST be idempotent on the watermark value (same result, no double effect). Re-opening a sealed period MUST be a privileged, explicitly-audited action (who, when, justification) — never a silent un-seal. A structural backstop (a CHECK / guarded UPDATE asserting the new value strictly exceeds the old) enforces the monotonicity independent of the service path. Reject a watermark that can regress, a close that is not idempotent, and a reopen with no audited justification."
+upstream:
+  - "https://www.postgresql.org/docs/current/ddl-constraints.html"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL Documentation — Constraints (CHECK enforces a Boolean condition on stored rows)"
+    url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    quote: "A check constraint is the most generic constraint type. It allows you to specify that the value in a certain column must satisfy a Boolean (truth-value) expression."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A period-seal watermark MUST be one-way monotonic — close only advances, re-close idempotent, reopen privileged and audited
+
+**Impact: HIGH — A sealed period (an accounting close, a reporting cutoff) is a promise: nothing in that range changes anymore. The promise rests on a `sealed_through` watermark that may move in only one direction. If a close could move it backward, or a period could be silently re-opened, a window already reported to finance or a regulator becomes writable again — a late posting slips in and the books no longer foot to the filed numbers, discovered months later in an audit. The companion `period-close-reject-late-write` rule rejects writes into a sealed range; THIS rule guarantees the seal itself only ever tightens. PostgreSQL's CHECK constraint — *the most generic constraint type ... specify that the value in a certain column must satisfy a Boolean (truth-value) expression* — is the structural backstop for the monotonic invariant.**
+
+There are three load-bearing requirements for `SEALED-MONOTONIC-001`.
+
+**1. One-way advance.** A close sets `sealed_through` to a value STRICTLY GREATER than the current one. A close whose target is `<= old` is rejected (no-op / 409). The watermark never regresses.
+
+**2. Idempotent re-close.** Re-closing an already-sealed period (same target watermark) is idempotent — it returns the existing sealed state with no second effect, not a duplicate close event or an error.
+
+**3. Privileged, audited reopen.** Re-opening a sealed period is an explicit, privileged action recorded with who/when/justification — there is NO silent path that un-seals. Reopen is the rare, accountable exception, not a routine mutation.
+
+**Incorrect — a plain setter that accepts any value; reopen by nulling the watermark with no audit:**
+
+```java
+public void seal(LocalDate through) {
+    period.setSealedThrough(through);   // VIOLATION: accepts a backward/unchanged value → watermark can regress
+    periodRepo.save(period);            // (SEALED-MONOTONIC-001)
+}
+public void reopen() { period.setSealedThrough(null); }  // VIOLATION: silent un-seal, no privilege check, no audit
+```
+
+**Correct — guarded monotonic advance, idempotent re-close, audited reopen, DB CHECK backstop:**
+
+```java
+@Transactional
+public SealResult seal(LocalDate through) {
+    LocalDate current = period.getSealedThrough();
+    if (current != null && !through.isAfter(current))      // strictly advancing only
+        return SealResult.alreadySealed(current);          // idempotent / 409 on regress (SEALED-MONOTONIC-001)
+    period.advanceSealedThrough(through);                   // sole mutator; DB CHECK (new > old) backstops
+    return SealResult.sealed(through);
+}
+@Transactional
+public void reopen(LocalDate to, Principal actor, String justification) {
+    authz.requirePrivilege(actor, "PERIOD_REOPEN");
+    auditLog.record(new PeriodReopened(period.id(), to, actor.id(), justification, clock.now())); // audited
+    period.reopenTo(to);
+}
+// DB backstop:  ALTER TABLE period ADD CONSTRAINT seal_monotonic CHECK (...) / a guarded UPDATE ... WHERE sealed_through < :through
+```
+
+Verification: review-tier. Monotonicity is a state-invariant property with no compile-time signal — a plain setter compiles and works until a backward close or silent reopen lets a late write into a filed period. Verify by review against `specs/sealed-period-l0.yaml#SEALED-MONOTONIC-001`: the watermark only advances (backward/equal rejected); re-close is idempotent; reopen is privileged and audited; a DB CHECK / guarded UPDATE backstops the monotonicity. When a fork-receiver wires a real IT (a backward close → 409; reopen writes an audit row), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [PostgreSQL — Constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)
 
 
 <!-- @source rules/secret-shown-once-uses-beforeunload-guard.md -->
@@ -10659,6 +12919,96 @@ Reference: [Chris Richardson — Pattern: Transactional outbox (the dual-write p
 Reference: [AWS — Deleting Amazon S3 objects (S3 Lifecycle reclaim + idempotent delete)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeletingObjects.html)
 
 
+<!-- @source rules/storage-reconciliation-sweeps.md -->
+
+---
+title: Object store and DB MUST be reconciled by scheduled idempotent sweeps — reverse-purge orphan blobs, forward-quarantine dangling rows, never a raw NoSuchKey 500
+impact: MEDIUM
+impactDescription: "DB rows and object-store blobs drift apart: a purge that deleted the row but not the blob leaves an orphan blob billing forever; a blob lost/never-written leaves a dangling row whose read path 500s on a raw NoSuchKey. Without scheduled reconciliation sweeps the drift accumulates silently — storage cost climbs and reads fail unpredictably — and without sweep idempotency two nodes double-process or a partial run corrupts."
+tags:
+  - storage
+  - reconciliation
+  - object-store
+  - scheduled-task
+  - idempotency
+  - garbage-collection
+spec_ref: "specs/storage-reconciliation-l0.yaml#RECON-ORPHAN-001"
+verification:
+  type: review
+  source: "specs/storage-reconciliation-l0.yaml#RECON-ORPHAN-001"
+  pattern: "Object-store/DB drift MUST be reconciled by scheduled sweeps composing the reclaim-on-purge rule (RECON-DELETE-001). A REVERSE sweep enumerates object-store keys under the domain prefix and purges any blob with NO live DB referent whose last-modified is older than a bounded grace window — never purging a blob inside the grace window (a just-written blob whose row is mid-commit) (RECON-ORPHAN-001). A FORWARD sweep enumerates live DB rows that own a blob and probes the store; a row whose blob is missing is quarantined and its read path returns a controlled RFC 9457 404/422 — NEVER a raw NoSuchKey 500 (RECON-MISSING-001). Both sweeps MUST be idempotent and concurrency-safe by composing two existing primitives: the scheduled-task distributed lock (one runner) and the soft-delete grace window (no premature purge); a no-drift re-run mutates nothing, and an object-store delete of an already-absent key is treated as success (RECON-IDEMPOTENT-001). Reject a reclaim that depends on the inline blob-delete succeeding, a reverse sweep with no grace window, a read path that surfaces a raw NoSuchKey 500, and a sweep that is not lock-guarded."
+upstream:
+  - "https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html"
+  - "https://microservices.io/patterns/data/transactional-outbox.html"
+evidence:
+  - source_type: external
+    citation: "Amazon S3 API Reference — DeleteObject (removes an object)"
+    url: "https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html"
+    quote: "Removes an object from a bucket."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Amazon S3 API Reference — DeleteObject (success response)"
+    url: "https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html"
+    quote: "If the action is successful, the service sends back an HTTP 204 response."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Object store and DB MUST be reconciled by scheduled idempotent sweeps — reverse-purge orphans, forward-quarantine dangling rows
+
+**Impact: MEDIUM — A DB row and its object-store blob are written and deleted by two systems that cannot share one transaction, so they drift. A hard-delete that removed the row but whose blob delete failed leaves an ORPHAN blob — S3's DeleteObject simply *removes an object from a bucket* and *if the action is successful, the service sends back an HTTP 204 response*, but if that call never lands the blob lingers, billing forever. The mirror drift — a row whose blob was never written or was lost — leaves a DANGLING row whose read path throws a raw `NoSuchKey` 500 at users. Neither self-heals; both need scheduled reconciliation sweeps, and the sweeps must be idempotent or two nodes double-process.**
+
+This rule governs the sweep items of `specs/storage-reconciliation-l0.yaml`, composing the reclaim-on-purge rule (`RECON-DELETE-001`, the existing `storage-reclaim-must-be-reconciled` rule), the scheduled-task distributed lock, and the soft-delete grace window.
+
+**1. Reverse sweep — purge orphan blobs past a grace window (RECON-ORPHAN-001).** A scheduled sweep enumerates object-store keys under the domain prefix and purges any blob that has NO live DB referent AND whose last-modified is older than a bounded grace window. The grace window is essential: a blob written seconds ago whose owning row is mid-commit has no referent *yet* and must NOT be purged — only blobs orphaned beyond the window are reclaimed.
+
+**2. Forward sweep — quarantine dangling rows, controlled error (RECON-MISSING-001).** A scheduled sweep enumerates live DB rows that own a blob and probes the store for each key. A row whose blob is missing is quarantined, and the read path for it returns a controlled RFC 9457 `404`/`422` — NEVER a raw `NoSuchKey` 500 leaking the storage internal to the caller.
+
+**3. Sweep idempotency via lock + grace (RECON-IDEMPOTENT-001).** Both sweeps are idempotent and concurrency-safe by COMPOSING two existing primitives: (1) the scheduled-task distributed lock so only one runner executes at a time across nodes, and (2) the soft-delete grace window so nothing is purged prematurely. A no-drift re-run mutates nothing; a delete of an already-absent key is treated as success (idempotent), not an error.
+
+**Incorrect — relies on the inline blob delete; read path 500s on a missing blob; no sweep:**
+
+```java
+@Transactional
+public void purge(Long id) {
+    Doc d = repo.findById(id).orElseThrow();
+    s3.deleteObject(bucket, d.key());   // VIOLATION: if this throws, the txn rolls back OR the blob orphans (RECON-DELETE/ORPHAN)
+    repo.delete(d);
+}
+public byte[] read(Long id) {
+    return s3.getObject(bucket, repo.findById(id).orElseThrow().key());  // VIOLATION: raw NoSuchKey 500 on a dangling row (RECON-MISSING)
+}
+// no reverse/forward sweep → orphans and dangles accumulate forever
+```
+
+**Correct — reconcile by lock-guarded scheduled sweeps with a grace window; read path returns a controlled 404:**
+
+```java
+@Scheduled(fixedDelay = ONE_HOUR)
+public void reverseSweep() {                                   // RECON-ORPHAN-001
+    schedLock.runExclusively("storage-recon-reverse", () -> {  // distributed lock (RECON-IDEMPOTENT-001)
+        for (String key : store.listUnder(PREFIX)) {
+            if (!repo.existsByKey(key) && store.lastModified(key).isBefore(now().minus(GRACE)))
+                store.deleteIdempotent(key);                   // absent-key delete == success
+        }
+    });
+}
+@Scheduled(fixedDelay = ONE_HOUR)
+public void forwardSweep() {                                   // RECON-MISSING-001
+    schedLock.runExclusively("storage-recon-forward", () ->
+        repo.findAllOwningBlob().forEach(d -> { if (!store.exists(d.key())) repo.quarantine(d); }));
+}
+public byte[] read(Long id) {
+    Doc d = repo.findActiveById(id).orElseThrow(NotFound::new); // quarantined → controlled 404/422, not a raw 500
+    return store.getObject(d.key());
+}
+```
+
+Verification: review-tier. Reconciliation is a drift-repair property with no compile-time signal — an inline-delete + raw-read implementation compiles and works until a blob delete fails or a blob goes missing. Verify by review against `specs/storage-reconciliation-l0.yaml`: a reverse sweep purges no-referent blobs only past a grace window; a forward sweep quarantines dangling rows and the read path returns a controlled 404/422 (never a raw NoSuchKey 500); both sweeps run under the scheduled-task distributed lock with the soft-delete grace window and are re-run-safe. When a fork-receiver wires a real IT (orphan blob reclaimed after grace; missing-blob read → 404 not 500), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [Amazon S3 — DeleteObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html)
+
+
 <!-- @source rules/stored-blob-carries-content-digest-verified-on-read.md -->
 
 ---
@@ -10952,6 +13302,81 @@ static final ArchRule onlyStateMachineMutatesStatus = noClasses()
 See: `practices/evals/fixtures/subscription-state-machine/fail_direct_setstatus/BillingServiceDirectStatus.java` — a service method that calls `subscription.setStatus()` directly.
 
 
+<!-- @source rules/tamper-evident-log-external-anchor.md -->
+
+---
+title: A tamper-evident log MUST anchor its chain head to a sink outside the log owner's unilateral write control
+impact: HIGH
+impactDescription: "A hash-chained log proves no entry was altered WITHOUT detection — but only against an attacker who cannot also rewrite the chain. An owner who controls both the log and its hashes can re-hash the whole chain after editing an entry and the tamper is invisible. Anchoring the chain head to an external sink the owner cannot unilaterally rewrite (a detached signature, a trusted timestamp, an external log) is what makes the log evidence against the owner, not just against an outsider."
+tags:
+  - tamper-evident-log
+  - hash-chain
+  - external-anchor
+  - non-repudiation
+  - integrity
+spec_ref: "specs/tamper-evident-log-l0.yaml#TAMPER-ANCHOR-001"
+verification:
+  type: review
+  source: "specs/tamper-evident-log-l0.yaml#TAMPER-ANCHOR-001"
+  pattern: "The current chain head (the latest entry's chain hash, optionally a signed tree head over the whole log) MUST be periodically committed to a sink OUTSIDE the log owner's unilateral write control, via a pluggable TamperEvidentAnchor SPI. Acceptable anchors: a detached signature produced by a key the log-writing service cannot itself rotate/forge, an RFC 3161 trusted timestamp over the head, an append to an external/third-party log, or publication to a write-once medium. The anchor records the head value + the anchoring time so a later verification can prove the head existed at that time and detect any retroactive rewrite of the chain. Reject a tamper-evident log whose ONLY integrity proof is a chain the log owner can fully recompute (no external anchor), and an anchor key the log service can itself rotate."
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc3161"
+  - "https://www.rfc-editor.org/rfc/rfc6962"
+evidence:
+  - source_type: external
+    citation: "RFC 3161 — Time-Stamp Protocol (TSP) (Section 1)"
+    url: "https://www.rfc-editor.org/rfc/rfc3161"
+    quote: "A time-stamping service supports assertions of proof that a datum existed before a particular time."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A tamper-evident log MUST anchor its chain head to a sink outside the owner's unilateral write control
+
+**Impact: HIGH — A hash-chained log (each entry's hash includes the prior hash) detects any after-the-fact edit, because changing one entry breaks every downstream hash. But the chain only protects against an attacker who CANNOT recompute it. The log's own owner can: edit an entry, re-hash the whole chain, and the tampering is invisible — the log is evidence against outsiders but not against the owner. The fix is to anchor the chain head externally. A trusted timestamp is exactly such an anchor — per RFC 3161, *a time-stamping service supports assertions of proof that a datum existed before a particular time* — so once the head at time T is anchored, the owner cannot retroactively present a different chain for the period before T without contradicting the external anchor. The `tamper-evident-log-hashchain` rule builds the chain; THIS rule makes it trustworthy against the owner.**
+
+There is one load-bearing requirement for `TAMPER-ANCHOR-001`.
+
+**External anchor of the chain head.** The current head (latest chain hash, or a signed tree head over the whole log) is periodically committed to a sink OUTSIDE the log owner's unilateral control, through a pluggable `TamperEvidentAnchor` SPI. Acceptable anchors:
+- a **detached signature** produced by a key the log-writing service cannot itself rotate or forge (e.g. an HSM / external signer);
+- an **RFC 3161 trusted timestamp** over the head value;
+- an **append to an external / third-party log** (a transparency log, RFC 6962-style);
+- **publication to a write-once medium**.
+
+The anchor records `{head_value, anchored_at}`. Verification recomputes the chain and checks the head against the anchored values: a retroactive rewrite changes the head and contradicts the anchor, exposing the tamper.
+
+**Incorrect — chain only; the owner can re-hash after editing and nobody can tell:**
+
+```java
+void append(LogEntry e) {
+    e.setPrevHash(lastHash);
+    e.setHash(sha256(lastHash + e.payload()));   // chain only — owner can recompute the WHOLE chain after an edit
+    logRepo.save(e); lastHash = e.getHash();
+    // VIOLATION: head is never anchored externally → tampering by the owner is undetectable (TAMPER-ANCHOR-001)
+}
+```
+
+**Correct — periodic external anchoring of the head via the SPI:**
+
+```java
+interface TamperEvidentAnchor { AnchorReceipt anchor(byte[] head, Instant at); } // pluggable: TSA / signer / ext log
+
+@Scheduled(fixedDelay = ANCHOR_INTERVAL)
+void anchorHead() {
+    byte[] head = currentChainHead();
+    AnchorReceipt r = anchor.anchor(head, clock.now());  // RFC 3161 timestamp / detached sig / external log
+    anchorReceipts.save(r);                              // {head_value, anchored_at, receipt} (TAMPER-ANCHOR-001)
+}
+// verify(): recompute chain head, assert it matches the anchored receipts → detects any owner rewrite.
+```
+
+Verification: review-tier. Anchoring is an against-the-owner integrity property with no compile-time signal — a chain-only log compiles and detects outsider edits while remaining forgeable by the owner. Verify by review against `specs/tamper-evident-log-l0.yaml#TAMPER-ANCHOR-001`: the head is periodically committed to an external sink via the anchor SPI; the anchor key is outside the log service's rotation control; the anchor records head+time; verification checks the recomputed head against the anchor. When a fork-receiver wires a real IT (anchored head; an edited entry fails verification against the anchor), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [RFC 3161 — Time-Stamp Protocol](https://www.rfc-editor.org/rfc/rfc3161)
+
+Reference: [RFC 6962 — Certificate Transparency (external transparency log)](https://www.rfc-editor.org/rfc/rfc6962)
+
+
 <!-- @source rules/tamper-evident-log-hashchain.md -->
 
 ---
@@ -11040,6 +13465,86 @@ Verification: review the entry mapping and the sole-writer/verify routine — co
 Reference: [RFC 6962 — Certificate Transparency (append-only Merkle/hash-chained log)](https://datatracker.ietf.org/doc/html/rfc6962)
 
 Reference: [NIST SP 800-92 — Guide to Computer Security Log Management §3.2 Storage (message-digest detection of log alteration)](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf)
+
+
+<!-- @source rules/temporal-as-of-point-in-time-query.md -->
+
+---
+title: A temporally-versioned record MUST answer an as-of query with exactly the one row in force at the instant, and hold at most one open-ended current row per scope
+impact: HIGH
+impactDescription: "If an as-of (point-in-time) query returns two rows for one instant, a downstream 'what was the salary on date X' has two conflicting answers and any computation built on it is wrong; if a scope key has two open-ended current rows, 'the current value' is ambiguous and a new write can append a second current period instead of closing the prior one. Both corrupt the temporal record silently — overlaps and double-currents only surface when a historical question is asked."
+tags:
+  - temporal
+  - bitemporal
+  - point-in-time
+  - range-types
+  - postgresql
+  - data-integrity
+spec_ref: "specs/temporal-validity-l0.yaml#TEMPORAL-POINT-IN-TIME-001"
+verification:
+  type: review
+  source: "specs/temporal-validity-l0.yaml#TEMPORAL-POINT-IN-TIME-001"
+  pattern: "An as-of (point-in-time) query for a scope key at instant X MUST return EXACTLY the one row whose half-open validity range contains X — `valid_from <= X AND (valid_to IS NULL OR X < valid_to)` — exploiting strict less-than on the upper bound so adjacent windows never both match; empty before the earliest row (TEMPORAL-POINT-IN-TIME-001). A scope key MUST hold AT MOST ONE open-ended current row (`valid_to IS NULL`); writing a new record MUST close the prior open row (set its valid_to) in the SAME transaction, and a partial unique index `(scope_key) WHERE valid_to IS NULL` is the structural backstop (TEMPORAL-OPEN-CURRENT-001). These compose the non-overlap exclusion constraint (TEMPORAL-NON-OVERLAP-001). Reject an as-of query that can return two rows for one instant (inclusive-both-bounds), a new write that appends a current row without closing the prior one, and a scope with no partial-unique-index backstop on the open row."
+upstream:
+  - "https://www.postgresql.org/docs/current/rangetypes.html"
+  - "https://www.postgresql.org/docs/current/ddl-constraints.html"
+evidence:
+  - source_type: external
+    citation: "PostgreSQL Documentation — Range Types (definition)"
+    url: "https://www.postgresql.org/docs/current/rangetypes.html"
+    quote: "Range types are data types representing a range of values of some element type (called the range's _subtype_)."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "PostgreSQL Documentation — Constraints (CHECK / structural enforcement)"
+    url: "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    quote: "A check constraint is the most generic constraint type. It allows you to specify that the value in a certain column must satisfy a Boolean (truth-value) expression."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A temporally-versioned record MUST answer an as-of query with exactly one in-force row and hold at most one open-ended current row
+
+**Impact: HIGH — A temporal record (a salary history, a price schedule, an effective-dated policy) stores many rows per scope key, each valid over a time window. Two invariants make it trustworthy. First, an as-of query for one instant must return EXACTLY one row — ask "what was the salary in force on 2026-01-14" and get one answer, never two. Second, only one row may be the open-ended *current* one. PostgreSQL gives the tools: range types are *data types representing a range of values of some element type*, and a CHECK/exclusion constraint *allows you to specify that the value in a certain column must satisfy a Boolean (truth-value) expression* — the structural backstop. Get the bounds wrong (inclusive on both ends) and adjacent windows both match an instant; forget to close the prior current row and a scope has two "current" values. Both are silent until a historical question exposes them.**
+
+This rule governs the as-of/current-row items of `specs/temporal-validity-l0.yaml`, composing the non-overlap exclusion constraint (`TEMPORAL-NON-OVERLAP-001`, the existing `temporal-validity-record-non-overlap` rule).
+
+**1. Exactly-one as-of query (TEMPORAL-POINT-IN-TIME-001).** The point-in-time query is `valid_from <= X AND (valid_to IS NULL OR X < valid_to)` — half-open, **strict** less-than on the upper bound. Because windows are half-open `[from, to)`, an instant at a shared boundary belongs to exactly one window. The query returns exactly one row when X is within the record's history, and empty before the earliest `valid_from` — never two rows, never a silently-picked arbitrary one.
+
+**2. At most one open-ended current row (TEMPORAL-OPEN-CURRENT-001).** `valid_to IS NULL` marks the current row; a scope key may have at most one. Writing a new record is a single transaction that CLOSES the prior open row (sets its `valid_to` to the new `valid_from`) and inserts the new open row — never appends a second `NULL` row. A partial unique index `UNIQUE (scope_key) WHERE valid_to IS NULL` is the structural backstop that makes a second current row impossible.
+
+**Incorrect — inclusive-both-bounds as-of (two rows at a boundary); appends a current row without closing the prior:**
+
+```sql
+-- VIOLATION: BETWEEN is inclusive on both ends → an instant on a shared boundary matches TWO rows
+SELECT * FROM salary WHERE emp_id = :id AND :x BETWEEN valid_from AND valid_to;   -- TEMPORAL-POINT-IN-TIME-001
+```
+```java
+// VIOLATION: inserts a new open row without closing the prior open one → two "current" rows
+salaryRepo.save(new Salary(empId, newAmount, asOf, null));   // TEMPORAL-OPEN-CURRENT-001
+```
+
+**Correct — half-open strict-upper as-of; close-then-open in one transaction; partial unique index backstop:**
+
+```sql
+-- exactly one in-force row (half-open, strict upper bound)  TEMPORAL-POINT-IN-TIME-001
+SELECT * FROM salary
+ WHERE emp_id = :id AND valid_from <= :x AND (valid_to IS NULL OR :x < valid_to);
+-- structural backstop: at most one open current row per scope  TEMPORAL-OPEN-CURRENT-001
+CREATE UNIQUE INDEX one_current_salary ON salary (emp_id) WHERE valid_to IS NULL;
+```
+```java
+@Transactional
+public void recordNew(long empId, BigDecimal amount, Instant asOf) {
+    salaryRepo.closeOpenRow(empId, asOf);                 // set prior open row's valid_to = asOf
+    salaryRepo.save(new Salary(empId, amount, asOf, null)); // single new open row — commit together
+}
+```
+
+Verification: review-tier. As-of correctness is a query-semantics property — an inclusive-bounds query and a no-close insert both compile and look right on a single-period record, failing only once two periods exist and a boundary instant or "current" is queried. Verify by review against `specs/temporal-validity-l0.yaml`: the as-of query uses half-open strict-upper bounds and returns exactly one (or zero) rows; a new write closes the prior open row in the same transaction; a partial unique index enforces at most one current row; non-overlap is backed by the exclusion constraint. When a fork-receiver wires a real IT (boundary-instant as-of returns one row; two open rows rejected by the index), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [PostgreSQL — Range Types](https://www.postgresql.org/docs/current/rangetypes.html)
+
+Reference: [PostgreSQL — Constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)
 
 
 <!-- @source rules/temporal-validity-record-non-overlap.md -->
@@ -12034,6 +14539,209 @@ public void persistReport(Report r) throws IOException {
 Verification: `./gradlew testPractices --tests "*RollbackForChecked*"` asserts via reflection that the correct fixture declares `rollbackFor = Exception.class` and the anti-pattern fixture leaves it empty.
 
 Reference: [Spring Framework — Rolling back declarative transactions](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html)
+
+
+<!-- @source rules/transactional-outbox-no-dual-write.md -->
+
+---
+title: A producer that mutates state AND emits a message MUST use a transactional outbox — never a dual write
+impact: HIGH
+impactDescription: "Writing the domain row and publishing to the broker as two separate operations (a dual write) is not atomic: a crash between them either commits the state change with no message published (a lost event — downstream never learns) or publishes a message for a transaction that rolled back (a phantom event). The transactional outbox closes the gap: the message is inserted into an outbox table inside the SAME local transaction as the state change, and a separate relay publishes it at-least-once."
+tags:
+  - messaging
+  - transactional-outbox
+  - dual-write
+  - at-least-once
+  - reliability
+  - eventual-consistency
+spec_ref: "specs/transactional-outbox-l0.yaml#OUTBOX-WRITE-001"
+verification:
+  type: review
+  source: "specs/transactional-outbox-l0.yaml#OUTBOX-WRITE-001"
+  pattern: "A command that mutates domain state AND must emit a message MUST insert the message into an outbox table in the SAME local @Transactional unit as the entity write (OUTBOX-WRITE-001 — never a broker publish call inside or after the transaction, which is a dual write). A separate relay publishes PENDING rows to the broker and marks them SENT, delivering at-least-once (OUTBOX-RELAY-001). Every outbox row carries a stable immutable message_id assigned at write time so a duplicate delivery is detectable and the consumer can dedup (OUTBOX-IDEMPOTENT-001). Rows for the same aggregate_id are published in committed order (OUTBOX-ORDERING-001). SENT rows are purged/archived past a retention window so the table does not grow unbounded (OUTBOX-CLEANUP-001). A failed publish leaves the row PENDING for retry with exponential backoff + jitter, and a poison row that exhausts retries is routed to a DLQ rather than blocking the relay (OUTBOX-FAILURE-001). Reject any producer that calls the broker directly alongside the DB write, that publishes from inside the transaction, or that regenerates the message_id on relay."
+upstream:
+  - "https://microservices.io/patterns/data/transactional-outbox.html"
+  - "https://microservices.io/patterns/data/polling-publisher.html"
+evidence:
+  - source_type: external
+    citation: "Chris Richardson — Transactional outbox pattern (microservices.io, Solution)"
+    url: "https://microservices.io/patterns/data/transactional-outbox.html"
+    quote: "The solution is for the service that sends the message to first store the message in the database as part of the transaction that updates the business entities. A separate process then sends the messages to the message broker."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Chris Richardson — Transactional outbox pattern (microservices.io, message outbox)"
+    url: "https://microservices.io/patterns/data/transactional-outbox.html"
+    quote: "Message outbox - if it's a relational database, this is a table that stores the messages to be sent."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "Chris Richardson — Polling publisher pattern (microservices.io, Solution)"
+    url: "https://microservices.io/patterns/data/polling-publisher.html"
+    quote: "Publish messages by polling the database's outbox table."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## A producer that mutates state AND emits a message MUST use a transactional outbox — never a dual write
+
+**Impact: HIGH — A producer command often does two things: it mutates domain state (save the order) and it emits a message (publish `OrderPlaced`). Doing those as two independent operations — write the row, then call the broker — is a *dual write*, and it is not atomic. If the process crashes (or the broker is briefly unreachable) between the two, you get one of two silent corruptions: the state change commits but no message is published (a *lost event* — every downstream consumer stays permanently out of sync), or the message is published for a transaction that then rolls back (a *phantom event* — consumers act on something that never happened). Neither is caught by retries, idempotency keys, or optimistic locking, because the two stores were never coordinated. Chris Richardson's transactional outbox states the fix directly — *first store the message in the database as part of the transaction that updates the business entities. A separate process then sends the messages to the message broker.***
+
+The outbox makes the message *part of the same local transaction* as the state change, so they commit or roll back together; a relay then moves committed messages to the broker. There are six load-bearing requirements — they are the items of `specs/transactional-outbox-l0.yaml`, and this rule governs all six.
+
+**1. Atomic write, no dual write (OUTBOX-WRITE-001).** The entity write and the outbox-row insert happen in ONE `@Transactional` unit. The broker is NOT called inside the transaction (its side effect cannot be rolled back) and NOT called right after (the crash gap reappears). The only durable artifact of the command is rows in the database — the domain row and its outbox row, committed atomically. The outbox is, per microservices.io, *a table that stores the messages to be sent*.
+
+**2. A separate relay publishes at-least-once (OUTBOX-RELAY-001).** A distinct relay — a polling publisher that periodically reads `status=PENDING` rows in committed order and publishes them, or a transaction-log tailer — moves messages to the broker and marks each `SENT`. Per the polling-publisher pattern: *publish messages by polling the database's outbox table.* Because the relay can crash after publishing but before marking the row `SENT`, delivery is **at-least-once**: a message may be published more than once, and that is acceptable *only because* requirement 3 makes duplicates detectable.
+
+**3. Stable message id → consumer dedup (OUTBOX-IDEMPOTENT-001).** Every outbox row carries a stable, immutable `message_id` (an RFC 4122 UUID) assigned at WRITE time and **never regenerated** on relay or retry. The same logical message thus carries the same id across every redelivery, so a consumer can dedup on it (composing `idempotency-l0`). Regenerating the id on relay defeats at-least-once safety — each duplicate would look like a new message.
+
+**4. Per-aggregate ordering (OUTBOX-ORDERING-001).** Messages for the same `aggregate_id` MUST be published in the order they were committed — the relay dispatches them ordered by a monotonic per-row sequence (the outbox PK / a sequence column). Global total order is not required; *per-aggregate* order is, or a consumer sees `Updated` before `Created`.
+
+**5. Bounded retention (OUTBOX-CLEANUP-001).** `SENT` rows MUST NOT accumulate forever — they are purged or archived once confirmed published and older than a retention window. An unbounded outbox table eventually starves the relay's `PENDING` scan and the database. Cleanup runs off the hot path (a scheduled sweep), never inline with publishing.
+
+**6. Retry, backoff, poison handling (OUTBOX-FAILURE-001).** When a broker publish fails, the row STAYS `PENDING` (never dropped) and is retried by the next relay pass with exponential backoff plus jitter. A poison row that exhausts its retry budget is routed to a DLQ (composing the job-queue DLQ pattern) so one undeliverable message does not wedge the relay behind it.
+
+**Incorrect — dual write: the broker call and the DB write are not atomic; a crash between them loses or phantoms the event:**
+
+```java
+@Transactional
+public Order place(PlaceOrder cmd) {
+    Order order = orderRepository.save(Order.from(cmd));   // (1) DB write
+    broker.publish("orders", new OrderPlaced(order.id())); // (2) VIOLATION: broker call
+    // If (2) is inside the txn and the txn later rolls back → phantom event.
+    // If (2) is moved after the txn and the process crashes first → lost event.
+    return order;
+}
+```
+
+**Correct — outbox row written in the same transaction; a separate relay publishes at-least-once with a stable id:**
+
+```java
+@Transactional
+public Order place(PlaceOrder cmd) {
+    Order order = orderRepository.save(Order.from(cmd));
+    outbox.save(OutboxRow.pending(
+        UUID.randomUUID(),            // stable message_id, assigned ONCE at write (OUTBOX-IDEMPOTENT-001)
+        order.id(),                   // aggregate_id for per-aggregate ordering (OUTBOX-ORDERING-001)
+        "orders", new OrderPlaced(order.id())));
+    return order;                     // entity + outbox row commit atomically (OUTBOX-WRITE-001)
+}
+
+// Separate relay (OUTBOX-RELAY-001) — polling publisher:
+@Scheduled(fixedDelay = 1000)
+@Transactional
+public void relay() {
+    for (OutboxRow row : outbox.findPendingOrderedByAggregateThenSeq(BATCH)) {
+        try {
+            broker.publish(row.topic(), row.payload());   // at-least-once
+            row.markSent();                               // crash before this → republished (dedup on message_id)
+        } catch (BrokerException e) {
+            row.scheduleRetryWithBackoffJitter();         // stays PENDING (OUTBOX-FAILURE-001)
+            if (row.retriesExhausted()) row.routeToDlq(); // poison → DLQ
+        }
+    }
+}
+// Retention sweep (OUTBOX-CLEANUP-001) purges SENT rows past the window, off the hot path.
+```
+
+Verification: review-tier. Atomicity-of-two-stores is a structural property with no compile-time signal — a dual write compiles and usually works, failing only on the crash/outage window. Verify by review against `specs/transactional-outbox-l0.yaml`: the message insert shares the entity's `@Transactional` unit; no broker call sits inside or immediately after that transaction; a separate relay publishes `PENDING`→`SENT` at-least-once; `message_id` is assigned once at write and reused on every retry; same-`aggregate_id` rows publish in committed order; `SENT` rows are purged on a retention window; failed publishes stay `PENDING` with backoff+jitter and poison rows go to a DLQ. When a fork-receiver wires a real `@Tag("OUTBOX-WRITE-001")` IT (kill the broker; assert the row is still in the outbox and republished on recovery), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [Chris Richardson — Transactional outbox pattern (store the message in the same transaction)](https://microservices.io/patterns/data/transactional-outbox.html)
+
+Reference: [Chris Richardson — Polling publisher pattern (publish by polling the outbox table)](https://microservices.io/patterns/data/polling-publisher.html)
+
+
+<!-- @source rules/two-factor-auth-totp-webauthn.md -->
+
+---
+title: Second-factor auth MUST use a real distinct factor (TOTP/WebAuthn) with secure enrollment, per-session verification, recovery codes, attempt limits, and session binding
+impact: HIGH
+impactDescription: "A 2FA implementation that does not bind the verified factor to the session lets an attacker who passed step one skip step two; one with no attempt limit lets a 6-digit TOTP be brute-forced; one with no recovery codes locks users out permanently when they lose the device; one that re-uses a single OTP is replayable. MFA only raises assurance when each piece is correct."
+tags:
+  - authentication
+  - mfa
+  - 2fa
+  - totp
+  - webauthn
+  - security
+spec_ref: "specs/two-factor-auth-l0.yaml#TFA-FACTOR-001"
+verification:
+  type: review
+  source: "specs/two-factor-auth-l0.yaml#TFA-FACTOR-001"
+  pattern: "Second-factor authentication MUST use a genuinely DISTINCT factor category — a TOTP authenticator (RFC 6238) or a WebAuthn/FIDO2 credential — not a second password or a knowledge question (TFA-FACTOR-001). Enrollment is a deliberate ceremony that provisions and confirms the factor (TOTP secret shown once + a confirming code; WebAuthn registration ceremony) before it is active (TFA-ENROLL-001). Verification is per-session: the factor is checked at login (or step-up) and a TOTP code is single-use within its time step — never replayable (TFA-VERIFY-001). The user is issued single-use recovery codes at setup for device loss (TFA-RECOVERY-001). Verification attempts are rate-limited / strictly attempt-limited so a 6-digit code cannot be brute-forced (TFA-RATE-LIMIT-001, composes ratelimit). The verified factor MUST be bound to the authenticated session so a caller who passed factor one cannot reach protected resources without factor two (TFA-SESSION-BIND-001). Reject a 'second password' as a factor, an unbounded verification attempt count, a reusable OTP, and a session marked authenticated before the second factor is verified."
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc6238"
+  - "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html"
+evidence:
+  - source_type: external
+    citation: "OWASP Multifactor Authentication Cheat Sheet — MFA definition"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html"
+    quote: "Multifactor Authentication (MFA) or Two-Factor Authentication (2FA) is when a user is required to present more than one type of evidence in order to authenticate on a system."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "OWASP Multifactor Authentication Cheat Sheet — recovery codes"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html"
+    quote: "Providing the user with a number of single-use recovery codes when they first setup MFA."
+    quoted_at: "2026-06-06"
+  - source_type: external
+    citation: "RFC 6238 — TOTP: Time-Based One-Time Password Algorithm (Abstract)"
+    url: "https://www.rfc-editor.org/rfc/rfc6238"
+    quote: "This document describes an extension of the One-Time Password (OTP) algorithm, namely the HMAC-based One-Time Password (HOTP) algorithm, as defined in [RFC 4226], to support the time-based moving factor."
+    quoted_at: "2026-06-06"
+decided_at: "2026-06-06"
+---
+
+## Second-factor auth MUST use a real distinct factor with secure enrollment, per-session verification, recovery, attempt limits, and session binding
+
+**Impact: HIGH — Per OWASP, *Multifactor Authentication (MFA) or Two-Factor Authentication (2FA) is when a user is required to present more than one type of evidence in order to authenticate on a system* — the key word is *type*: a second password is not a second factor. The assurance MFA adds evaporates if any piece is wrong: if the verified factor is not bound to the session, an attacker who phished the password skips factor two; if verification has no attempt limit, a 6-digit TOTP is brute-forced in minutes; if there are no recovery codes, a lost phone is a permanent lockout; if an OTP is accepted twice, it is replayable. This rule governs the whole ceremony.**
+
+There are six load-bearing requirements — the items of `specs/two-factor-auth-l0.yaml`, all governed by this rule.
+
+**1. A real distinct factor (TFA-FACTOR-001).** The second factor is a genuinely different category — a TOTP authenticator app (RFC 6238: *an extension of the ... HMAC-based One-Time Password (HOTP) algorithm ... to support the time-based moving factor*) or a WebAuthn/FIDO2 credential (a possession/biometric factor). A second password or a knowledge-based question is NOT a second factor.
+
+**2. Enrollment ceremony (TFA-ENROLL-001).** Activating a factor is a deliberate ceremony: for TOTP, the secret is shown once (QR/secret) and the user confirms with a generated code before it goes live; for WebAuthn, the registration ceremony binds a credential to the account. A factor is not active until enrollment is confirmed.
+
+**3. Per-session verification, single-use code (TFA-VERIFY-001).** The factor is verified at login (and on step-up for sensitive actions). A TOTP code is valid only within its time step and is single-use — once accepted (or its step elapses) it cannot be replayed.
+
+**4. Recovery codes (TFA-RECOVERY-001).** Per OWASP, *providing the user with a number of single-use recovery codes when they first setup MFA* — issued at enrollment, each usable once, for device-loss recovery, stored hashed like passwords.
+
+**5. Attempt limits / rate limit (TFA-RATE-LIMIT-001).** Verification is strictly attempt-limited and rate-limited so a 6-digit code's 10^6 space cannot be brute-forced; repeated failures lock or throttle. Composes the ratelimit catalog.
+
+**6. Session ↔ factor binding (TFA-SESSION-BIND-001).** The session is NOT marked fully authenticated until the second factor is verified; the verified factor is bound to that session. A caller who passed only factor one cannot reach factor-two-protected resources — the authorization check distinguishes "password-authenticated" from "MFA-authenticated".
+
+**Incorrect — a "second password" as the factor; session authenticated before factor two; unbounded attempts:**
+
+```java
+public Session login(String user, String pw, String secondPw) {
+    if (!passwords.verify(user, pw)) throw new AuthException();
+    Session s = sessions.create(user);          // VIOLATION: session authenticated BEFORE second factor (TFA-SESSION-BIND-001)
+    if (!passwords.verify(user + ":2", secondPw)) // VIOLATION: a second password is not a distinct factor (TFA-FACTOR-001)
+        throw new AuthException();               // VIOLATION: no attempt limit → brute-forceable (TFA-RATE-LIMIT-001)
+    return s;
+}
+```
+
+**Correct — TOTP factor; session pending until verified + single-use code + attempt limit + bound:**
+
+```java
+public LoginResult login(String user, String pw) {
+    if (!passwords.verify(user, pw)) throw new AuthException();
+    return LoginResult.mfaRequired(mfaChallenge.start(user)); // session NOT yet authenticated (TFA-SESSION-BIND-001)
+}
+public Session verifyTotp(String challengeId, String code) {
+    rateLimiter.check(challengeId);                           // strict attempt limit (TFA-RATE-LIMIT-001)
+    Challenge c = mfaChallenge.load(challengeId);
+    if (!totp.verifySingleUse(c.userSecret(), code))          // RFC 6238, single-use within time step (TFA-VERIFY-001)
+        throw new AuthException();
+    return sessions.createMfaAuthenticated(c.user());         // factor bound to session (TFA-SESSION-BIND-001)
+}
+// Enrollment shows the secret once + confirming code (TFA-ENROLL-001);
+// setup issues hashed single-use recovery codes (TFA-RECOVERY-001).
+```
+
+Verification: review-tier. MFA correctness is a security property with no compile-time signal — a weak 2FA flow compiles and lets legitimate users in while leaving the bypass open. Verify by review against `specs/two-factor-auth-l0.yaml`: the second factor is TOTP/WebAuthn (not a password/question); enrollment confirms before activation; codes are single-use and verified per session; recovery codes are issued and single-use; verification is attempt-limited; the session is not authenticated until the factor is verified and the factor is bound to it. When a fork-receiver wires real ITs (replayed TOTP rejected; N+1 attempts locked; pre-MFA session denied protected resources), this rule's verification may be upgraded from review to gradle_task+tag.
+
+Reference: [RFC 6238 — TOTP: Time-Based One-Time Password Algorithm](https://www.rfc-editor.org/rfc/rfc6238)
+
+Reference: [OWASP — Multifactor Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html)
 
 
 <!-- @source rules/unit-of-measure-conversion-is-exact-and-pinned.md -->

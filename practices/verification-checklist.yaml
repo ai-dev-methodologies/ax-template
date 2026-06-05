@@ -152,6 +152,36 @@ checklist:
       - command: "./gradlew testRealtime"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testApiVersioning"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testCaching"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testIdempotency"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testOptimisticLocking"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testPagination"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testProblemDetails"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testRequestValidation"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testSecrets"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testSoftDelete"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testWebhookSigning"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testIntegration"
         working_directory: "backend"
         expected_exit: 0

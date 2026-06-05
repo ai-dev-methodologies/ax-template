@@ -650,3 +650,12 @@ items:
     applicable: true
     applicable_to: [react, nextjs, vite]
     notes: "Review-tier (a planned ax/no-raw-color ESLint rule is the static enforcer). Reviewer confirms (a) zero hex / raw-palette literals — colors only via design tokens, (b) stateful UI uses role + aria (status pill = role=\"status\" + aria-label, decorative icon aria-hidden), (c) variants are a string-literal union (ax forbids enum) on one parameterized component. Rule body and evidence: practices-react/rules/ux-block-uses-design-tokens-and-a11y.md. Protected template: templates/L2/blocks/status-badge.tsx."
+
+  - id: "REACT-PRACTICES-COMPOSITION-001"
+    chapter: "App-layer reuse of the shared component catalog"
+    requirement: "A per-persona / per-product app (apps/**, L4 pages) MUST reuse the shared component catalog (@ax/ui primitives + @ax/blocks composites) for UI primitives — buttons, inputs, dialogs, cards, badges, etc. It MUST NOT define app-local re-implementations of catalog primitives (a bespoke <Button>, <Dialog>, status badge, etc. inside apps/**). The shared catalog is the single source of UI truth so theming, a11y, and design-token discipline (REACT-PRACTICES-UX-001) apply once and propagate to every app; an app-local primitive forks that discipline and drifts. Enforced statically by the ax/no-app-local-ui-primitives ESLint rule, which errors on a primitive component defined under apps/**."
+    test_method: "react_practices_COMPOSITION_001_appsReuseSharedCatalogNoLocalPrimitives"
+    verification_type: "static_analysis"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "ESLint-enforced (ax/no-app-local-ui-primitives in @ax/eslint-plugin-ax). Rule body + evidence: practices-react/rules/no-app-local-ui-primitives.md. Surfaced during the per-persona apps pivot — dogfood found apps defining bespoke components instead of importing @ax/ui."

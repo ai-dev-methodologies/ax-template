@@ -63,7 +63,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 147 Java rules + 87 React rules + 7 ESLint rules + 70 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 178 Java rules + 99 React rules + 8 ESLint rules + 72 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -108,7 +108,7 @@ catalog 시스템.**
 ### 이 skill이 제공하는 것
 
 1. **Spec Trio** — `specs/` + `contracts/` + `blueprints/`. AI가 코드보다 spec을 먼저 읽도록 강제하는 contract-first 구조. AI 환각 차단의 1차 방어선.
-2. **practices/ catalog** — Java/Spring best-practices 147룰 + practices-react 86룰 + ESLint 7룰. evidence-anchored (외부 URL/quote 필수)라 AI가 임의로 룰을 발명하지 못함.
+2. **practices/ catalog** — Java/Spring best-practices 178룰 + practices-react 86룰 + ESLint 7룰. evidence-anchored (외부 URL/quote 필수)라 AI가 임의로 룰을 발명하지 못함.
 3. **Verification feedback loop** — `./gradlew test{Domain}` 단일 명령으로 binary pass/fail. AI가 자기 결과를 self-verify 가능.
 4. **AGENTS.md sentinel** — AI agent가 진입 시 즉시 컨텍스트 받음. sha256 anchoring으로 catalog와 동기화 보장.
 5. **4 hard gates** — spec_ref / substance / time_decay / evidence. AI 결과물이 외부 사실에 anchor 안 되면 통과 불가.
@@ -119,7 +119,7 @@ catalog 시스템.**
 - **Deployment / release** — 어떻게 배포하든 catalog 품질과 무관
 - **Code review** — 1인 maintainer, 팀 review, AI review 어떤 방식이든 OK
 - **CI 정책** — sentinel CI는 catalog quality probe로만 제공. merge gate 여부는 fork받는 팀이 결정
-- **언어/프레임워크 확장** — Java/Spring 카탈로그(147 rules) + React/Next.js 카탈로그(86 rules + 7 ESLint rules) 둘 다 active. 다른 stack(Kotlin/Go/Python 등) 추가는 동일 패턴 (spec → rule → evidence → test) 따라 확장.
+- **언어/프레임워크 확장** — Java/Spring 카탈로그(178 rules) + React/Next.js 카탈로그(99 rules + 8 ESLint rules) 둘 다 active. 다른 stack(Kotlin/Go/Python 등) 추가는 동일 패턴 (spec → rule → evidence → test) 따라 확장.
 
 → 한 줄: **catalog 품질**은 skill이 보장, **인간 협업 정책**은 fork받은 팀 자율.
 
@@ -143,7 +143,7 @@ AI agent (Claude Code 등)가 코드를 작성할 때 가장 큰 risk:
 
 - `./gradlew testAsvs` — auth 도메인 (26 ASVS items)
 - `./gradlew testCrud` — CRUD 도메인 (Spec Trio 시연)
-- `./gradlew testPractices` — 147 practices rules
+- `./gradlew testPractices` — 178 practices rules
 - `./gradlew testPortability` — advisory; 외부 fixture에 룰 적용
 
 ### 외부 참조 정규화
@@ -204,7 +204,7 @@ task 전 GREEN + aggregate `./gradlew test` 는 advisory PortabilityCyclic
 |--------------------------------|----------|---|
 | `./gradlew testCrud`           | GREEN    | 7/7 PASS |
 | `./gradlew testAsvs`           | GREEN    | 26 ASVS items PASS |
-| `./gradlew testPractices`      | GREEN    | 147 rules PASS |
+| `./gradlew testPractices`      | GREEN    | 178 rules PASS |
 | `./gradlew testRateLimit`      | GREEN    | RATELIMIT 전 PASS |
 | `./gradlew testNotification`   | GREEN    | NOTIFICATION 전 PASS |
 | `./gradlew testPayment`        | GREEN    | PAYMENT 29 items PASS |
@@ -251,7 +251,7 @@ cd backend && ./gradlew build         # 빌드
 cd backend && ./gradlew test          # 전체 — 위 매트릭스의 aggregate
 cd backend && ./gradlew testAsvs      # auth ASVS 검증 (GREEN)
 cd backend && ./gradlew testCrud      # CRUD spec 검증 (GREEN)
-cd backend && ./gradlew testPractices # practices/ 147룰 검증 (GREEN)
+cd backend && ./gradlew testPractices # practices/ 178룰 검증 (GREEN)
 cd backend && ./gradlew testPortability  # advisory: 외부 fixture에 룰 적용
 
 # Frontend
@@ -280,9 +280,9 @@ ax-template/
 ├── blueprints/                # 정책 매니페스트 (핵심)
 │   └── auth-manifest.yaml
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
-│   ├── rules/                 # 147룰, 22+ categories (R50/R58/R61 추가분 포함)
+│   ├── rules/                 # 178룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 70 hard guards
+│   ├── evals/                 # 4 hard gates + 72 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
@@ -311,7 +311,7 @@ ax-template/
 |---|---|---|---|
 | Auth | `specs/auth-asvs-l1.yaml` | 14 (signup, login, OAuth Google/Naver/Kakao 등) | 26 ASVS items |
 | CRUD | `specs/crud-l0.yaml` | 5 (CRUD-001~005) | 7 security tests |
-| Practices | `specs/spring-practices-l0.yaml` | — | 147 rules / 22 categories |
+| Practices | `specs/spring-practices-l0.yaml` | — | 178 rules / 22 categories |
 
 각 도메인은 동일한 패턴: spec YAML → `@Tag` test → `./gradlew test{Domain}` binary verification.
 

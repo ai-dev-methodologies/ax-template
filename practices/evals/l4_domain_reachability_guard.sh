@@ -96,8 +96,17 @@ for dpath in "$BACKEND_DOMAINS_DIR"/*/; do
     # same category as observability/security/common; `realtime` is the
     # cross-cutting SSE channel-policy package — in-memory SseEmitter registry +
     # metrics, no entity → ViolationProofTest is not applicable).
+    # G4 (2026-06-06): the cross-cutting, ENTITY-LESS reference workloads built to
+    # supply @Tag verification for their L0 specs carry no JPA @Entity, so a
+    # ViolationProofTest (which asserts entity invariants — immutable columns,
+    # no-public-setter) is not applicable — exactly the observability/common/i18n/
+    # realtime category. apiversioning (URL/header policy), caching (cache probe),
+    # idempotency (in-memory key store), pagination (page probe), problemdetails
+    # (RFC 9457 advice), requestvalidation (bean-validation probe), secretsmanagement
+    # (config), webhooksigning (HMAC verify) — all @Entity=0, verified at G4.
     case "$dname_camel" in
         importer|integration|observability|security|user|common|i18n|realtime) continue ;;
+        apiversioning|caching|idempotency|pagination|problemdetails|requestvalidation|secretsmanagement|webhooksigning) continue ;;
     esac
 
     # Derive kebab-case domain name candidates for ledger lookup.
