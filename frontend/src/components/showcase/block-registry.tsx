@@ -1,29 +1,29 @@
 "use client";
 import type { ReactNode } from "react";
-import StatusBadge from "@/components/showcase/ax-blocks/status-badge";
-import { Button04 } from "@/components/showcase/ax-blocks/animated-arrow-button";
-import { Component as CategoryBarChart } from "@/components/showcase/ax-blocks/category-bar-chart";
-import { PrimeButton } from "@/components/showcase/ax-blocks/prime-button";
-import { AnimatedBadge } from "@/components/showcase/ax-blocks/animated-badge";
-import { ImageSwiper } from "@/components/showcase/ax-blocks/image-swiper";
-import { AnimatedFeatureCard } from "@/components/showcase/ax-blocks/animated-feature-card";
-import SocialButton from "@/components/showcase/ax-blocks/social-button";
-import AutoLayoutCard from "@/components/showcase/ax-blocks/auto-layout-card";
-import { Component as SplitText } from "@/components/showcase/ax-blocks/split-text-effect";
-import { ImageCarouselHero } from "@/components/showcase/ax-blocks/ai-image-generator-hero";
-import CyberneticGridShader from "@/components/showcase/ax-blocks/cybernetic-grid-shader";
-import { AuroraHero } from "@/components/showcase/ax-blocks/futurastic-hero-section";
+import StatusBadge from "@ax/blocks/status-badge";
+import { Button04 } from "@ax/blocks/animated-arrow-button";
+import { Component as CategoryBarChart } from "@ax/blocks/category-bar-chart";
+import { PrimeButton } from "@ax/blocks/prime-button";
+import { AnimatedBadge } from "@ax/blocks/animated-badge";
+import { ImageSwiper } from "@ax/blocks/image-swiper";
+import { AnimatedFeatureCard } from "@ax/blocks/animated-feature-card";
+import SocialButton from "@ax/blocks/social-button";
+import AutoLayoutCard from "@ax/blocks/auto-layout-card";
+import { Component as SplitText } from "@ax/blocks/split-text-effect";
+import { ImageCarouselHero } from "@ax/blocks/ai-image-generator-hero";
+import CyberneticGridShader from "@ax/blocks/cybernetic-grid-shader";
+import { AuroraHero } from "@ax/blocks/futurastic-hero-section";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
   CardContent,
-} from "@/components/showcase/ax-blocks/interfaces-card";
-import TextField from "@/components/showcase/ax-blocks/form-field";
-import DataGrid, { GridStatus } from "@/components/showcase/ax-blocks/data-grid";
-import AvatarGroup from "@/components/showcase/ax-blocks/avatar-group";
-import CodeSnippet from "@/components/showcase/ax-blocks/code-snippet";
+} from "@ax/blocks/interfaces-card";
+import TextField from "@ax/blocks/form-field";
+import DataGrid, { GridStatus } from "@ax/blocks/data-grid";
+import AvatarGroup from "@ax/blocks/avatar-group";
+import CodeSnippet from "@ax/blocks/code-snippet";
 
 const swiperImages = [
   "https://picsum.photos/seed/ax1/640/420",

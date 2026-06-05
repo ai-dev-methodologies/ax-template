@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, within, act, fireEvent } from "@testing-library/react";
-import TextField from "@/components/showcase/ax-blocks/form-field";
-import { GridStatus } from "@/components/showcase/ax-blocks/data-grid";
-import AvatarGroup from "@/components/showcase/ax-blocks/avatar-group";
-import CodeSnippet from "@/components/showcase/ax-blocks/code-snippet";
+import TextField from "@ax/blocks/form-field";
+import { GridStatus } from "@ax/blocks/data-grid";
+import AvatarGroup from "@ax/blocks/avatar-group";
+import CodeSnippet from "@ax/blocks/code-snippet";
 
 // Behavioral contracts the adversarial audit found and the passing gates (axe/eslint/tsc/build) miss.
 // Each test locks one confirmed fix so it cannot silently regress.

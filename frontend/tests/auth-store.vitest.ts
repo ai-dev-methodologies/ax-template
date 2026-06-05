@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { setupServer } from 'msw/node';
 import { handlers } from '../src/mocks/handlers';
-import { useAuthStore } from '../src/lib/auth/authStore';
+import { useAuthStore } from '@ax/core';
 
 const server = setupServer(...handlers);
 

@@ -16,9 +16,9 @@ beforeAll(() => {
 });
 
 // The codified 21st.dev blocks, mirrored into the UI/UX layer, must render in a real React tree.
-import StatusBadge from "@/components/showcase/ax-blocks/status-badge";
-import { Button04 } from "@/components/showcase/ax-blocks/animated-arrow-button";
-import { AnimatedBadge } from "@/components/showcase/ax-blocks/animated-badge";
+import StatusBadge from "@ax/blocks/status-badge";
+import { Button04 } from "@ax/blocks/animated-arrow-button";
+import { AnimatedBadge } from "@ax/blocks/animated-badge";
 
 describe("codified ax UI blocks render in a real React tree", () => {
   it("StatusBadge exposes an accessible status with its label", () => {

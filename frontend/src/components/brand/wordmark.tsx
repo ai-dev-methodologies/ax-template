@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn } from '@ax/ui';
 
 interface WordmarkProps {
   /** Visual size of the lockup. */

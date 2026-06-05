@@ -27,6 +27,18 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@ax/ui": [
+        "./packages/ui/src/index.ts"
+      ],
+      "@ax/core": [
+        "./packages/core/src/index.ts"
+      ],
+      "@ax/blocks": [
+        "./packages/blocks/src/index.ts"
+      ],
+      "@ax/blocks/*": [
+        "./packages/blocks/src/*"
       ]
     },
     "allowJs": true,
@@ -36,6 +48,7 @@
   "include": [
     "next.config.ts",
     "src",
+    "packages",
     ".next/types/**/*.ts"
   ],
   "exclude": [

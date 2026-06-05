@@ -4,18 +4,17 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';
-import { useAuthStore } from '../../../../lib/auth/authStore';
-import { setAccessTokenCookie } from '../../../../lib/auth/token-cookie';
+import { useAuthStore, setAccessTokenCookie } from '@ax/core';
 import { Wordmark } from '@/components/brand/wordmark';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
 import {
+  Button,
+  Spinner,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
+} from '@ax/ui';
 
 type Status = 'processing' | 'success' | 'error';
 

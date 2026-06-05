@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { VerifyPageClient } from './VerifyPageClient';
-import { Spinner } from '@/components/ui/spinner';
+import { Spinner } from '@ax/ui';
 
 function VerifyFallback() {
   return (

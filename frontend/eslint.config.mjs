@@ -1,8 +1,15 @@
 // frontend/eslint.config.mjs — ESLint v9 flat config.
 //
 // Wires @ax/eslint-plugin-ax (the practices-react/eslint-plugin-ax local plugin)
-// into the frontend. The plugin's 7 rules pair 1:1 with practices-react/rules/
+// into the frontend. The plugin's rules pair 1:1 with practices-react/rules/
 // entries whose `verification.rule_id` points here.
+//
+// Surfaces linted:
+//   - src/**, tests/**       — the root web-shell app (predates the catalog).
+//   - packages/**            — the shared catalog (@ax/ui / @ax/blocks / @ax/core).
+//   - apps/**                — per-persona apps. These additionally get
+//                              ax/no-app-local-ui-primitives at ERROR: they MUST
+//                              reuse the shared catalog, never fork primitives.
 
 import globals from 'globals'
 import tsParser from '@typescript-eslint/parser'
@@ -18,6 +25,13 @@ const sharedRules = {
   'ax/no-inline-component-definition': 'error',
 }
 
+// Per-persona apps must reuse the shared catalog — enforced only under apps/**.
+// (The rule is also internally scoped to apps/ paths, so this is belt-and-braces.)
+const appRules = {
+  ...sharedRules,
+  'ax/no-app-local-ui-primitives': 'error',
+}
+
 export default [
   {
     ignores: [
@@ -30,7 +44,11 @@ export default [
     ],
   },
   {
-    files: ['src/**/*.{js,jsx}', 'tests/**/*.{js,jsx}'],
+    files: [
+      'src/**/*.{js,jsx}',
+      'tests/**/*.{js,jsx}',
+      'packages/**/*.{js,jsx}',
+    ],
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: 'module',
@@ -41,7 +59,12 @@ export default [
     rules: sharedRules,
   },
   {
-    files: ['src/**/*.{ts,tsx}', 'middleware.ts', 'tests/**/*.{ts,tsx}'],
+    files: [
+      'src/**/*.{ts,tsx}',
+      'middleware.ts',
+      'tests/**/*.{ts,tsx}',
+      'packages/**/*.{ts,tsx}',
+    ],
     languageOptions: {
       parser: tsParser,
       ecmaVersion: 2024,
@@ -51,5 +74,29 @@ export default [
     },
     plugins: { ax: axPlugin },
     rules: sharedRules,
+  },
+  // Per-persona apps — shared rules PLUS the enforced-reuse rule at error.
+  {
+    files: ['apps/**/*.{js,jsx}'],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: 'module',
+      globals: { ...globals.browser, ...globals.es2022, ...globals.node },
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    plugins: { ax: axPlugin },
+    rules: appRules,
+  },
+  {
+    files: ['apps/**/*.{ts,tsx}'],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 2024,
+      sourceType: 'module',
+      globals: { ...globals.browser, ...globals.es2022, ...globals.node },
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    plugins: { ax: axPlugin },
+    rules: appRules,
   },
 ]

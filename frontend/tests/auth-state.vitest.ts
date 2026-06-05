@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { AuthState } from '../src/lib/auth/store';
-import { refreshMutex } from '../src/lib/auth/refresh-mutex';
+import type { AuthState } from '@ax/core';
+import { refreshMutex } from '@ax/core';
 
 describe('Auth State Scenarios', () => {
   it('auth-state/login-success-state: maintains state shape', () => {

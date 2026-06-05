@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { OAuthCallbackClient } from './OAuthCallbackClient';
-import { Spinner } from '@/components/ui/spinner';
+import { Spinner } from '@ax/ui';
 
 function OAuthCallbackFallback() {
   return (

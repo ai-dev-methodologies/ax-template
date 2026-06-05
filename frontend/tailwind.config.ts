@@ -1,11 +1,17 @@
 import type { Config } from "tailwindcss";
 
 // Tailwind + shadcn theme for the UI/UX layer. The codified 21st.dev blocks
-// (templates/L2/blocks/*, mirrored into src/components/showcase/ax-blocks/) are
-// shadcn-class-based, so the showcase needs this theme to render styled.
+// (templates/L2/blocks/*, now the @ax/blocks package) are shadcn-class-based, so
+// the showcase needs this theme to render styled. The `content` globs include
+// packages/** and apps/** so the shared-catalog component classes (and future
+// per-persona app classes) are never purged.
 const config: Config = {
   darkMode: ["class"],
-  content: ["./src/**/*.{ts,tsx}"],
+  content: [
+    "./src/**/*.{ts,tsx}",
+    "./packages/**/*.{ts,tsx}",
+    "./apps/**/*.{ts,tsx}",
+  ],
   theme: {
     container: { center: true, padding: "2rem", screens: { "2xl": "1400px" } },
     extend: {

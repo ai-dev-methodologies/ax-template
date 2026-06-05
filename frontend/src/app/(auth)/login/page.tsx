@@ -4,19 +4,19 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
-import { useAuthStore } from '../../../lib/auth/authStore';
+import { useAuthStore } from '@ax/core';
 import { Wordmark } from '@/components/brand/wordmark';
 import { OAuthButtons } from '@/components/auth/oauth-buttons';
-import { Button } from '@/components/ui/button';
-import { Field } from '@/components/ui/field';
-import { Alert } from '@/components/ui/alert';
 import {
+  Button,
+  Field,
+  Alert,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
+} from '@ax/ui';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');

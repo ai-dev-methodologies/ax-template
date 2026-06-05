@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   // Cross-origin dev access (Next 15): allow the home-mac Tailscale IP so carray-mac can load the
   // dev server + HMR/static chunks over the tailnet (http://100.112.5.105:3000).
   allowedDevOrigins: ['100.112.5.105'],
+  // The shared catalog packages (@ax/ui, @ax/blocks, @ax/core) ship raw TS source
+  // (package.json "exports" point at .ts), so Next must transpile them.
+  transpilePackages: ['@ax/ui', '@ax/blocks', '@ax/core'],
   typescript: {
     ignoreBuildErrors: false,
   },

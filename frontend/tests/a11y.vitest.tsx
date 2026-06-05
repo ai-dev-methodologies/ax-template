@@ -54,7 +54,7 @@ describe("decorative WebGL blocks hide their canvas from assistive tech", () => 
       const fs = await import("fs");
       const path = await import("path");
       const src = fs.readFileSync(
-        path.join(process.cwd(), "src/components/showcase/ax-blocks", `${slug}.tsx`),
+        path.join(process.cwd(), "packages/blocks/src", `${slug}.tsx`),
         "utf8",
       );
       expect(src).toMatch(/aria-hidden/);

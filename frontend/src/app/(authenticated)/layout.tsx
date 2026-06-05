@@ -4,10 +4,9 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
-import { useAuthStore } from '../../lib/auth/authStore';
+import { useAuthStore } from '@ax/core';
 import { Wordmark } from '@/components/brand/wordmark';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
+import { Button, Spinner } from '@ax/ui';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 interface AuthenticatedLayoutProps {

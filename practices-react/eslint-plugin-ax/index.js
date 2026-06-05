@@ -13,6 +13,7 @@ import noArrayIncludesInLoop from './rules/no-array-includes-in-loop.js'
 import noArrayMutateOnState from './rules/no-array-mutate-on-state.js'
 import preferFunctionalSetState from './rules/prefer-functional-setstate.js'
 import noInlineComponentDefinition from './rules/no-inline-component-definition.js'
+import noAppLocalUiPrimitives from './rules/no-app-local-ui-primitives.js'
 
 const plugin = {
   meta: {
@@ -27,6 +28,7 @@ const plugin = {
     'no-array-mutate-on-state': noArrayMutateOnState,
     'prefer-functional-setstate': preferFunctionalSetState,
     'no-inline-component-definition': noInlineComponentDefinition,
+    'no-app-local-ui-primitives': noAppLocalUiPrimitives,
   },
   configs: {},
 }
@@ -42,6 +44,7 @@ plugin.configs.recommended = {
     'ax/no-array-mutate-on-state': 'error',
     'ax/prefer-functional-setstate': 'error',
     'ax/no-inline-component-definition': 'error',
+    'ax/no-app-local-ui-primitives': 'error',
   },
 }
 

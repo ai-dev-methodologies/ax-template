@@ -4,7 +4,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import { handlers } from '../src/mocks/handlers';
-import { useAuthStore } from '../src/lib/auth/authStore';
+import { useAuthStore } from '@ax/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock next/navigation for Vitest (not available in jsdom)

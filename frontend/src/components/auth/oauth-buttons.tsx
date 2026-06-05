@@ -1,6 +1,6 @@
 'use client';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@ax/ui';
 
 const API_BASE = '/api';
 
