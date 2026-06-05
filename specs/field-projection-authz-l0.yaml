@@ -89,6 +89,9 @@ items:
     test_method: "RestAssured integration test"
     verification_type: "review"
     applicable: true
+    verification:
+      mechanism: rule
+      ref: field-level-projection-authz-omits-not-nulls
     notes: >
       Omission-by-construction beats redaction-by-assignment: a null is still a
       property the serializer/logger can observe; an absent member cannot leak.

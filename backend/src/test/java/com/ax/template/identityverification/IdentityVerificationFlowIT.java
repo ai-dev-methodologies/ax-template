@@ -120,6 +120,7 @@ class IdentityVerificationFlowIT {
     // ─── IDV-CALLBACK-001: Invalid HMAC → 401 ──────────────────────────────
 
     @Test
+    @Tag("IDV-CALLBACK-001")
     @DisplayName("IDV-CALLBACK-001: PASS callback without X-Identity-Signature returns 401")
     void passCallback_missingSignature_returns401() {
         given()
@@ -132,6 +133,7 @@ class IdentityVerificationFlowIT {
     }
 
     @Test
+    @Tag("IDV-CALLBACK-001")
     @DisplayName("IDV-CALLBACK-001: PASS callback with invalid HMAC returns 401")
     void passCallback_invalidHmac_returns401() {
         given()
@@ -145,6 +147,7 @@ class IdentityVerificationFlowIT {
     }
 
     @Test
+    @Tag("IDV-CALLBACK-001")
     @DisplayName("IDV-CALLBACK-001: KCB callback with invalid HMAC returns 401")
     void kcbCallback_invalidHmac_returns401() {
         given()
@@ -160,6 +163,7 @@ class IdentityVerificationFlowIT {
     // ─── IDV-CALLBACK-002: Valid callback → 200, persisted ─────────────────
 
     @Test
+    @Tag("IDV-CALLBACK-002")
     @DisplayName("IDV-CALLBACK-002: valid PASS callback with correct HMAC returns 200")
     void passCallback_validHmac_returns200() throws Exception {
         String body = buildPassPayload();
@@ -178,6 +182,7 @@ class IdentityVerificationFlowIT {
     }
 
     @Test
+    @Tag("IDV-CALLBACK-002")
     @DisplayName("IDV-CALLBACK-002: valid KCB callback with correct HMAC returns 200")
     void kcbCallback_validHmac_returns200() throws Exception {
         String body = buildKcbPayload();
@@ -240,6 +245,7 @@ class IdentityVerificationFlowIT {
     // ─── IDV-PROVIDER-001: PASS and KCB produce identical shape ────────────
 
     @Test
+    @Tag("IDV-PROVIDER-001")
     @DisplayName("IDV-PROVIDER-001: PASS and KCB callbacks return same response shape {status, provider}")
     void bothProviders_returnIdenticalShape() throws Exception {
         String passBody = buildPassPayload();
@@ -282,6 +288,7 @@ class IdentityVerificationFlowIT {
     // ─── R54 residual closure — persistence, audit, admin, unknown-provider ───
 
     @Test
+    @Tag("IDV-CALLBACK-002")
     @DisplayName("IDV-CALLBACK-002: valid PASS callback persists exactly one VerifiedIdentity row")
     void passCallback_validHmac_persistsVerifiedIdentity() throws Exception {
         String body = buildPassPayload();
@@ -308,6 +315,7 @@ class IdentityVerificationFlowIT {
     }
 
     @Test
+    @Tag("IDV-PROVIDER-002")
     @DisplayName("IDV-PROVIDER-002: unknown provider returns 400 with RFC 7807 ProblemDetail")
     void unknownProvider_returns400() {
         given()
@@ -321,6 +329,7 @@ class IdentityVerificationFlowIT {
     }
 
     @Test
+    @Tag("IDV-AUDIT-001")
     @DisplayName("IDV-AUDIT-001: successful callback publishes audit with SUCCESS outcome")
     void successfulCallback_publishesAudit() throws Exception {
         String body = buildPassPayload();
@@ -346,6 +355,7 @@ class IdentityVerificationFlowIT {
     }
 
     @Test
+    @Tag("IDV-AUDIT-001")
     @DisplayName("IDV-AUDIT-001: HMAC failure publishes audit with FAILURE outcome")
     void hmacFailure_publishesAudit() {
         given()
@@ -367,6 +377,7 @@ class IdentityVerificationFlowIT {
     }
 
     @Test
+    @Tag("IDV-ADMIN-001")
     @DisplayName("IDV-ADMIN-001: GET /api/admin/identity-verification without JWT returns 401")
     void adminList_unauthenticated_returns401() {
         given()
@@ -377,6 +388,7 @@ class IdentityVerificationFlowIT {
     }
 
     @Test
+    @Tag("IDV-ADMIN-001")
     @DisplayName("IDV-ADMIN-001: GET /api/admin/identity-verification with non-admin JWT returns 403")
     void adminList_nonAdmin_returns403() {
         String memberToken = obtainToken("idv-member@r54.test", "MEMBER");
@@ -389,6 +401,7 @@ class IdentityVerificationFlowIT {
     }
 
     @Test
+    @Tag("IDV-ADMIN-001")
     @DisplayName("IDV-ADMIN-001: GET /api/admin/identity-verification with ADMIN JWT returns 200 paginated list")
     void adminList_admin_returns200() throws Exception {
         // Seed a row so the list has content.

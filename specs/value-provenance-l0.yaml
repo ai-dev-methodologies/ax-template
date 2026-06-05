@@ -27,6 +27,9 @@ items:
     test_method: "RestAssured integration test + JPA structural assertion"
     verification_type: "review"
     applicable: true
+    verification:
+      mechanism: rule
+      ref: machine-computed-value-tracks-override-provenance
     notes: >
       Provenance is what makes a human correction defensible and
       auditable. Anchored to OWASP ASVS V7 (security-relevant event

@@ -473,6 +473,9 @@ items:
     test_method: "Static analysis"
     verification_type: "negative"
     applicable: true
+    verification:
+      mechanism: guard
+      ref: payment_provider_type_enum_guard.sh
     notes: >
       Test: practices/evals/payment_provider_type_enum_guard.sh parses
       blueprints/payment-manifest.yaml, reads the scalar at provider.type and

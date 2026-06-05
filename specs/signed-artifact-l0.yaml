@@ -52,6 +52,9 @@ items:
     test_method: "RestAssured integration test (negative) — forge alg:none and alg-confusion (HS256-over-public-key) variants, assert both rejected with a verification failure, never accepted as valid"
     verification_type: "negative"
     applicable: true
+    verification:
+      mechanism: rule
+      ref: externally-verifiable-artifact-uses-asymmetric-signature
     notes: >
       The token's own alg header is attacker-controlled; trusting it is the
       root of both the alg:none bypass and the RS/ES→HS confusion forgery.
