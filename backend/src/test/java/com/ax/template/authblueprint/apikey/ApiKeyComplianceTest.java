@@ -228,7 +228,45 @@ class ApiKeyComplianceTest {
         .then().statusCode(200);
     }
 
-    // KEY-LIFECYCLE-003 covered by authn_003's expired branch above.
+    @Test
+    @Tag("KEY-LIFECYCLE-003")
+    void lifecycle_003_expiredKeyStillActiveInDb_rejectedAtAuthWith401() {
+        // Seed a key whose DB status STAYS ACTIVE but whose expiresAt is in the
+        // past. This proves the clock-based expiration is checked at every
+        // authentication (ApiKeyService.resolvePlaintext -> ApiKey.isActive(now)),
+        // NOT inferred from a status sweep job.
+        String token = ApiKeyTestSupport.obtainToken(ApiKeyTestSupport.freshEmail("life3"), "MEMBER");
+        String userId = given()
+            .header("Authorization", "Bearer " + token)
+        .when().get("/api/api-keys/scope-probe/whoami")
+        .then().statusCode(200)
+            .extract().path("userId");
+
+        String plaintext = ApiKeyHasher.newPlaintext();
+        ApiKey expired = ApiKey.builder()
+            .ownerUserId(userId)
+            .name("expired-but-active")
+            .hashPrefix(ApiKeyHasher.prefixOf(plaintext))
+            .hashedValue(ApiKeyHasher.hash(plaintext))
+            .scopes(java.util.EnumSet.of(ApiKeyScope.READ))
+            .status(ApiKeyStatus.ACTIVE)
+            .createdAt(Instant.now(clock).minus(Duration.ofDays(2)))
+            .expiresAt(Instant.now(clock).minus(Duration.ofMinutes(1)))
+            .build();
+        UUID savedId = repository.save(expired).getId();
+
+        // The DB row is genuinely ACTIVE — so a 401 below can only come from the
+        // clock check, never from a status check.
+        org.assertj.core.api.Assertions.assertThat(
+                repository.findById(savedId).orElseThrow().getStatus())
+            .isEqualTo(ApiKeyStatus.ACTIVE);
+
+        // Authentication MUST reject the expired-but-ACTIVE key with 401.
+        given()
+            .header(ApiKeyAuthenticationFilter.HEADER, plaintext)
+        .when().get("/api/api-keys/scope-probe/whoami")
+        .then().statusCode(401);
+    }
 
     // ─── AUTHZ family ────────────────────────────────────────────────────────
 

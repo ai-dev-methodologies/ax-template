@@ -204,6 +204,31 @@ class BillingFlowIT {
             .then().statusCode(200); // must NOT return 500 on duplicate-key
     }
 
+    // ─── BILLING-IDEMP-002 (webhook replay outside 300s tolerance rejected) ──
+
+    /**
+     * BILLING-IDEMP-002: A webhook whose Stripe-Signature timestamp is older than
+     * 300s is rejected with HTTP 400. The signature value is the well-known valid
+     * reference token (so signature verification PASSES) and the timestamp is a
+     * non-reference value 600s in the past — so the 400 can ONLY come from the
+     * age (replay) check, not from a signature mismatch (which would be 401).
+     */
+    @Test
+    @Tag("BILLING")
+    @Tag("BILLING-IDEMP-002")
+    void webhook_timestampOlderThan300s_returns400() {
+        long staleTimestamp = (System.currentTimeMillis() / 1000L) - 600L; // 10 min in the past
+
+        given()
+            .header("Stripe-Signature", "t=" + staleTimestamp + ",v1=test_signature_skip_validation")
+            .contentType(ContentType.JSON)
+            .body("""
+                {"id":"evt_test_replay","type":"invoice.payment_succeeded","data":{"object":{"subscription":"sub_test_replay"}}}
+                """)
+            .when().post("/api/webhooks/billing")
+            .then().statusCode(400);
+    }
+
     // ─── BILLING-CUR-001 (float amounts rejected) ────────────────────────────
 
     /**
