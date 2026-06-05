@@ -79,6 +79,9 @@ items:
   # ── MESSAGE family ─────────────────────────────────────────────────────
   - id: "CHAT-MESSAGE-001"
     chapter: "메시지 envelope schema"
+    verification:
+      mechanism: rule
+      ref: chat-message-delivery-receipts-presence
     requirement: "All chat messages MUST carry a canonical envelope with the following required fields: `id` (UUID v4, server-assigned at persistence), `room_id` (UUID referencing CHAT-ROOM-001), `sender_id` (user id), `timestamp` (RFC 3339 UTC with `Z` suffix), `content_type` (enum: text/plain, text/markdown, application/json, image/*, file/*), `body` (string OR base64-encoded binary OR JSON object). Optional: `reply_to_id` (UUID referencing parent message for threading), `mentions[]` (list of user ids referenced via @-notation), `client_msg_id` (client-generated UUID for idempotency — server dedups on (sender_id, client_msg_id) tuple for 24h window). Envelope MUST be JSON (RFC 8259) — binary content_type values encode body as base64 string. Server MUST reject envelopes lacking any required field with HTTP 400."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -113,6 +116,9 @@ items:
   # ── ROOM family ─────────────────────────────────────────────────────────
   - id: "CHAT-ROOM-001"
     chapter: "Room lifecycle (1:1 / group / broadcast)"
+    verification:
+      mechanism: rule
+      ref: chat-message-delivery-receipts-presence
     requirement: "Rooms MUST declare a `room_type` enum: {dm, group, broadcast}. DM rooms are idempotent on (member_a_id, member_b_id) — POST /api/chat/rooms with same member pair returns the existing room (200) NOT a new room (201). Group rooms support multi-member with at least one ADMIN role (creator becomes ADMIN by default); ADMIN can invite/kick/ban members + assign other ADMINs. Broadcast rooms are write-only: only the room owner (declared at creation) can post; all other members are read-only subscribers (channel pattern). Membership transitions (join / leave / kick / ban) MUST emit CHAT-MESSAGE-001 envelopes with content_type=application/json and structured body (`{type: 'membership', action, actor_id, target_id}`) — clients render these as system events."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -152,6 +158,9 @@ items:
   # ── PRESENCE family ────────────────────────────────────────────────────
   - id: "CHAT-PRESENCE-001"
     chapter: "Presence + typing indicators"
+    verification:
+      mechanism: rule
+      ref: chat-message-delivery-receipts-presence
     requirement: "Presence states: enum {online, away, busy, offline, invisible}. `online` set on WebSocket connect; `offline` set on disconnect with 30s grace period (handles brief reconnects). `away` = client-declared (5min+ idle); `busy` = client-declared (do-not-disturb); `invisible` = appears offline to others but receives messages normally. Typing indicators MUST be ephemeral (no persistence) — emit `typing` event on first keystroke + `stopped` event after 5s of inactivity OR on send. Typing scoped to room (other room members see indicator). Last-seen-at timestamp MUST be room-scoped (privacy: A and B share last-seen only if they share a room); never globally exposed. `invisible` presence MUST be sticky — server respects user's setting across reconnects."
     test_method: "RestAssured + WebSocket integration test"
     verification_type: "positive"
@@ -171,6 +180,9 @@ items:
   # ── HISTORY family ────────────────────────────────────────────────────
   - id: "CHAT-HISTORY-001"
     chapter: "Message history + pagination + offline catchup"
+    verification:
+      mechanism: rule
+      ref: chat-message-delivery-receipts-presence
     requirement: "GET /api/chat/rooms/{room_id}/messages MUST support cursor-based pagination via `before` (message_id, older direction) and `after` (message_id, newer direction) parameters. Cursor MUST NOT be offset-based (avoids drift on concurrent insertions). Default page size 50 messages; max 500. Response carries `Link` header (RFC 5988) with `prev` and `next` rel values. Offline catchup: client sends `last_seen_msg_id` query parameter; server returns ALL messages with id > last_seen_msg_id, ordered ascending (oldest first for sequential replay). Per-room retention policy MUST be declared (default 90 days; archive policy fork-receiver concern). Deleted messages (CHAT-MODERATION-001) MUST appear in history with body=null and `deleted_at` populated (tombstone — preserves message id continuity for read markers)."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -189,6 +201,9 @@ items:
   # ── MODERATION family ─────────────────────────────────────────────────
   - id: "CHAT-MODERATION-001"
     chapter: "Moderation + 청소년보호 + 신고 처리"
+    verification:
+      mechanism: rule
+      ref: chat-message-delivery-receipts-presence
     requirement: "User-level moderation: `block` (mute incoming from blocked user — blocked user can still see un-blocked room participants), `report` (escalate to admin with reason category + free-text). Room-level moderation: `kick` (remove member; can rejoin), `ban` (remove + prevent rejoin), `mute_room` (member can read but not write for N minutes). Content-level moderation: ADMIN can soft-delete a message (tombstone per CHAT-HISTORY-001) — body=null, deleted_at populated. Moderation events MUST emit audit log entries (R67 AuditPiiHelper recipient_hash pattern; never raw user ids in logs). 정보통신망법 §44의2 (정보통신서비스 제공자 이용자 보호의무): report 접수 24h 내 1차 처리 + 7d 내 최종 통보 SLA enforced via outbox + scheduled task. 청소년보호법 §16의2 + 정보통신망법 §44의7 (불법정보 유통 금지): 청소년 유해정보 자동 필터링 시 (text classifier hook 위치 표시 only — implementation fork-receiver concern)."
     test_method: "RestAssured integration test"
     verification_type: "positive"
