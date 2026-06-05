@@ -245,12 +245,13 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:3000", "http://localhost:5173",
-                // Tailscale tailnet access (carray-mac -> home-mac). Frontend /api calls are normally
-                // same-origin (proxied via next.config.ts), so this matters only for any direct
-                // browser->backend call over the tailnet.
-                "http://100.112.5.105:3000", "http://100.112.5.105:8080"));
+        // Port-wildcard PATTERNS so each per-persona app (own dev port: 3000, 3001, 3002, ...) is
+        // allowed without a backend restart per port. Covers localhost + the Tailscale tailnet
+        // (carray-mac -> home-mac) on ANY port. allowedOriginPatterns (not allowedOrigins) is
+        // required because allowCredentials=true forbids a bare "*" — patterns are the supported
+        // credential-safe wildcard form (Spring CorsConfiguration).
+        configuration.setAllowedOriginPatterns(List.of(
+                "http://localhost:[*]", "http://127.0.0.1:[*]", "http://100.112.5.105:[*]"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-CSRF-TOKEN"));
         configuration.setAllowCredentials(true);
