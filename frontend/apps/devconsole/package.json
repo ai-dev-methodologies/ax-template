@@ -1,0 +1,29 @@
+{
+  "name": "@ax/app-devconsole",
+  "version": "0.1.0",
+  "private": true,
+  "description": "developer-tool per-persona app — a developer console / API platform composed entirely from the shared @ax catalog. Dark, dense, IDE-like; signature surface is the @ax/blocks CodeSnippet showing the live HTTP request + response for every interaction.",
+  "scripts": {
+    "dev": "next dev -p 3004",
+    "build": "next build",
+    "start": "next start -p 3004",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ax/blocks": "*",
+    "@ax/core": "*",
+    "@ax/ui": "*",
+    "@tanstack/react-query": "^5.0.0",
+    "lucide-react": "^1.17.0",
+    "next": "^15.3.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^6.0.2"
+  }
+}
