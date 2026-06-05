@@ -38,10 +38,10 @@ function verbText(event: ActivityEvent): string {
   }
 }
 
-function toFeedItem(event: ActivityEvent): ActivityFeedItem {
+function toFeedItem(event: ActivityEvent, selfId?: string | null): ActivityFeedItem {
   return {
     id: event.id,
-    actorName: displayName(event.actorUserId),
+    actorName: displayName(event.actorUserId, selfId),
     verbText: verbText(event),
     preview: previewOf(event),
     timeText: formatRelative(event.createdAt),
@@ -62,10 +62,10 @@ export default function FeedPage() {
 
   const [draft, setDraft] = useState('');
 
-  const events = feed.data?.items ?? [];
-  const items = events.map(toFeedItem);
-  const unreadCount = events.filter((e) => e.readAt === null).length;
   const myId = profile.data?.userId;
+  const events = feed.data?.items ?? [];
+  const items = events.map((e) => toFeedItem(e, myId));
+  const unreadCount = events.filter((e) => e.readAt === null).length;
 
   const handlePost = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();

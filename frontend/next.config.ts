@@ -2,6 +2,9 @@ import path from 'path';
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Hide the Next.js dev-mode build indicator (bottom-left badge) — a dev-only
+  // artifact, never present in production; removing the visual noise.
+  devIndicators: false,
   // Cross-origin dev access (Next 15): allow the home-mac Tailscale IP so carray-mac can load the
   // dev server + HMR/static chunks over the tailnet (http://100.112.5.105:3000).
   allowedDevOrigins: ['100.112.5.105'],

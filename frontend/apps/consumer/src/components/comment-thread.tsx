@@ -90,11 +90,11 @@ export function CommentThread({ entityType, entityId, currentUserId, enabled }: 
     return (
       <div className={isReply ? 'ml-8 border-l border-border pl-4' : ''}>
         <div className="flex items-start gap-3">
-          <AvatarGroup members={[{ name: displayName(comment.authorUserId) }]} label="작성자" />
+          <AvatarGroup members={[{ name: displayName(comment.authorUserId, currentUserId) }]} label="작성자" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="text-sm font-semibold text-foreground">
-                {displayName(comment.authorUserId)}
+                {displayName(comment.authorUserId, currentUserId)}
               </span>
               <span className="text-xs text-muted-foreground">{formatRelative(comment.createdAt)}</span>
               {comment.status === 'EDITED' ? (

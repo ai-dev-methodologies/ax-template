@@ -22,6 +22,9 @@ import type { Article } from '@/lib/api/articleClient';
 function ArticleCard({ article }: { article: Article }) {
   const cover = extractCover(article.description);
   const summary = excerpt(article.description, 120);
+  // A cover may reference a since-purged /api/files id (404/401). Fall back to the
+  // placeholder on load error instead of leaving a broken-image box.
+  const [coverOk, setCoverOk] = useState(true);
   return (
     <li>
       <Link
@@ -29,12 +32,13 @@ function ArticleCard({ article }: { article: Article }) {
         className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <InterfacesCard className="h-full overflow-hidden transition-colors duration-200 group-hover:border-foreground">
-          {cover ? (
+          {cover && coverOk ? (
             // Cover is a relative /api/files URL via the proxy; native <img> is
             // intentional (no Next Image optimizer in this app).
             <img
               src={cover}
               alt=""
+              onError={() => setCoverOk(false)}
               className="aspect-[3/2] w-full border-b border-border object-cover"
             />
           ) : (
@@ -83,7 +87,17 @@ export default function LibraryPage() {
     );
   }, [items, activeTag]);
 
-  const tagItems = tags.data?.items ?? [];
+  // Tag names are not unique at the DB level (only slug is — non-ASCII names get a
+  // tag-<uuid> slug fallback), so the same display name can recur. Dedupe by name
+  // for the filter chips (the tags-management screen still shows every row).
+  const tagItems = useMemo(() => {
+    const seen = new Set<string>();
+    return (tags.data?.items ?? []).filter((t) => {
+      if (seen.has(t.name)) return false;
+      seen.add(t.name);
+      return true;
+    });
+  }, [tags.data]);
 
   return (
     <div className="space-y-8">

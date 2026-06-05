@@ -1,6 +1,6 @@
 'use client';
 
-import React, { use } from 'react';
+import React, { use, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Pencil, Tag as TagIcon } from 'lucide-react';
 import { Button } from '@ax/ui';
@@ -15,6 +15,24 @@ import { errorMessage } from '@/lib/errors';
 // Use the dramatic SplitText hero only for short titles; long headlines render
 // as a plain serif masthead so the line-reveal effect stays legible.
 const SPLIT_TITLE_MAX = 24;
+
+/** Cover image that removes itself if the referenced /api/files id is gone (404/401). */
+function CoverFigure({ src }: { src: string }) {
+  const [ok, setOk] = useState(true);
+  if (!ok) return null;
+  return (
+    <figure className="w-full">
+      {/* Cover is a relative /api/files URL served through the proxy; the
+          native <img> is intentional (no Next Image optimizer in this app). */}
+      <img
+        src={src}
+        alt=""
+        onError={() => setOk(false)}
+        className="w-full border border-border object-cover"
+      />
+    </figure>
+  );
+}
 
 export default function ArticleReadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -82,13 +100,7 @@ export default function ArticleReadPage({ params }: { params: Promise<{ id: stri
         ) : null}
       </header>
 
-      {cover ? (
-        <figure className="w-full">
-          {/* Cover is a relative /api/files URL served through the proxy; the
-              native <img> is intentional (no Next Image optimizer in this app). */}
-          <img src={cover} alt="" className="w-full border border-border object-cover" />
-        </figure>
-      ) : null}
+      {cover ? <CoverFigure src={cover} /> : null}
 
       {bodyHtml.trim() ? (
         // The body HTML is authored by the studio's own RichTextEditor (Tiptap
