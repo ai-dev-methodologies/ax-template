@@ -15,7 +15,8 @@ export interface OperatorIdentity {
   email: string;
   role: string;
   emailVerified: boolean;
-  linkedProviders: { provider: string; connectedAt: string }[];
+  // Backend UserProfileResponse returns List<String> (e.g. ["GOOGLE","NAVER"]), not objects.
+  linkedProviders: string[];
 }
 
 export const operatorClient = {

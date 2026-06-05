@@ -68,7 +68,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed z-50 border-border bg-card text-card-foreground shadow-lg focus:outline-none',
+        'fixed z-50 border-border bg-card text-card-foreground shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'data-[state=open]:animate-in data-[state=closed]:animate-out motion-reduce:animate-none',
         SIDE_CLASS[side],
         className,
