@@ -380,6 +380,15 @@ tasks.register<Test>("testRealtime") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testWebhookSigning") {
+    useJUnitPlatform {
+        includeTags("WEBHOOK_SIGNING")
+    }
+    description = "Run webhook-signing-l0 compliance tests (INBOUND HMAC-SHA256 signature verification: 7 items / 7 families — HMAC, TIMESTAMP, REPLAY, SECRET, HEADER, VERIFY, OBSERVABILITY)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

@@ -214,6 +214,14 @@ public class SecurityConfig {
                 // signatures — they do not carry Bearer tokens. The WebhookReceiver.verify()
                 // call inside the handler is the security gate.
                 .requestMatchers("/api/test/webhooks").permitAll()
+                // webhook-signing-l0 reference workload (specs/webhook-signing-l0.yaml):
+                // WHSIGN-VERIFY-001 — an INBOUND signed webhook is unauthenticated-but-
+                // signature-verified: the HMAC-SHA256 signature in the Webhook-Signature
+                // header IS the authentication (no Bearer token), verified inside
+                // InboundSignatureVerifier. permitAll so the signed POST reaches the
+                // controller (and the verifier's 400/401/409), not a Spring Security 401 —
+                // same carve-out posture as /api/payments/callback/** and /api/webhooks/billing.
+                .requestMatchers("/api/webhook-signing-demo/**").permitAll()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers
