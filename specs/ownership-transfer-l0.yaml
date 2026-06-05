@@ -65,6 +65,9 @@ items:
       with personnel termination and transfer processes."
   - id: "TRANSFER-AUTHZ-001"
     chapter: "권한 (Who may initiate + successor eligibility)"
+    verification:
+      mechanism: rule
+      ref: ownership-transfer-authz-audit-atomic
     requirement: "Only an ADMIN (ROLE_ADMIN) OR the current owner of the records may initiate a transfer of those records. Any other principal → 403. The named successor MUST be an ACTIVE principal in the SAME tenant as the records (cross-tenant handoff is forbidden) and MUST NOT be the departing principal themselves (a transfer to the leaver is a no-op masquerading as a handoff). Successor that is inactive / suspended → 409 TRANSFER_SUCCESSOR_INACTIVE; successor in a different tenant or not found → 404 (IDOR-safe, never confirm a foreign-tenant principal's existence)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -82,6 +85,9 @@ items:
       which they possess specific authorization."
   - id: "TRANSFER-AUDIT-001"
     chapter: "감사 (Audit every reassignment)"
+    verification:
+      mechanism: rule
+      ref: ownership-transfer-authz-audit-atomic
     requirement: "Every reassignment MUST write exactly one audit record capturing {from_owner, to_owner, actor (initiator), resource_type, count (rows moved), timestamp}. The actor MUST be the authenticated initiator, never the from_owner by default (an admin-driven offboarding is initiated by the admin, not the leaver). The audit record MUST be written inside the SAME transaction as the reassignment so a committed transfer always has a matching audit entry and a rolled-back transfer leaves none. Audit fields MUST carry principal identifiers (ids), not PII (no raw email / name) — reuse the audit PII helper."
     test_method: "RestAssured integration test"
     verification_type: "positive"
