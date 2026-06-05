@@ -1,0 +1,356 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+ * Shared design tokens.
+ *
+ * Replicated from the repo-root token layer (frontend/src/app/globals.css) so
+ * this per-persona app is self-standing — there is no shared CSS export to
+ * import, so the canonical :root / .dark token block is mirrored verbatim. The
+ * catalog primitives (@ax/ui) and blocks (@ax/blocks) resolve every color +
+ * radius against these variables, so they re-skin from a single source.
+ *
+ * The playful-creator PERSONA override lives in .ax-studio below (NOT in :root)
+ * so the persona theme is scoped to the app shell, not baked into the tokens.
+ * The shell is a FORCED vibrant light surface: a joyful "creative studio" canvas
+ * regardless of <html> class — distinct from the dense enterprise grid, the
+ * playful-light consumer feed, the editorial serif publish app, the dark
+ * developer console, and the tabular fintech ledger.
+ * ------------------------------------------------------------------------- */
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 43%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+
+    /* ax status tokens — WCAG-locked fg/bg pairs (>= 4.5:1 for 12px pill text). */
+    --ax-status-success-fg: oklch(52% 0.14 150);
+    --ax-status-success-bg: oklch(96% 0.03 150);
+    --ax-status-danger-fg: oklch(55% 0.18 25);
+    --ax-status-danger-bg: oklch(96% 0.03 25);
+    --ax-status-warning-fg: oklch(54% 0.14 70);
+    --ax-status-warning-bg: oklch(96% 0.04 70);
+    --ax-status-info-fg: oklch(53% 0.16 250);
+    --ax-status-info-bg: oklch(96% 0.03 250);
+    --ax-status-attention-fg: oklch(54% 0.15 90);
+    --ax-status-attention-bg: oklch(97% 0.04 90);
+    --ax-status-neutral-fg: oklch(50% 0 0);
+    --ax-status-neutral-bg: oklch(95% 0 0);
+    --ax-status-accent-fg: oklch(53% 0.20 290);
+    --ax-status-accent-bg: oklch(96% 0.04 290);
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    --ax-status-success-fg: oklch(72% 0.15 150);
+    --ax-status-success-bg: oklch(28% 0.05 150);
+    --ax-status-danger-fg: oklch(72% 0.17 25);
+    --ax-status-danger-bg: oklch(28% 0.06 25);
+    --ax-status-warning-fg: oklch(78% 0.14 70);
+    --ax-status-warning-bg: oklch(30% 0.05 70);
+    --ax-status-info-fg: oklch(72% 0.15 250);
+    --ax-status-info-bg: oklch(28% 0.05 250);
+    --ax-status-attention-fg: oklch(80% 0.14 90);
+    --ax-status-attention-bg: oklch(30% 0.05 90);
+    --ax-status-neutral-fg: oklch(75% 0 0);
+    --ax-status-neutral-bg: oklch(28% 0 0);
+    --ax-status-accent-fg: oklch(72% 0.18 290);
+    --ax-status-accent-bg: oklch(30% 0.06 290);
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+@layer components {
+  /* playful-creator PERSONA THEME.
+   *
+   * Scoped to the app shell wrapper (the layouts add `.ax-studio`), never to
+   * :root, so the persona stays contained. This persona is VIBRANT LIGHT: a
+   * joyful creative-studio canvas with a warm paper tint, a high-saturation
+   * accent, and LAYERED colorful elevation. Every catalog component renders
+   * against it through the tokens.
+   *
+   *   - radius 24px           -> the persona spec; very rounded, soft, friendly
+   *                              corners that read as a playful creative toy
+   *   - HIGH accent saturation-> a vivid magenta/violet accent (chroma pushed
+   *                              well ABOVE the default); a second warm accent is
+   *                              exposed as --ax-accent-2 for two-tone moments
+   *   - LAYERED elevation      -> stacked, accent-tinted, colorful shadows so
+   *                              cards float with depth + a hint of glow (the
+   *                              opposite of the fintech "subtle paper" shadow)
+   *   - chunky rounded display -> the persona typography (var(--font-display),
+   *                              high scale-contrast, 16px base body)
+   * Motion budget is "cinematic / reactions" (motion_level 3): the richest of
+   * the six personas — staggered entrance reveals, a hover float, and a "pop"
+   * reaction keyframe. ALL of it is compositor-friendly (transform/opacity only)
+   * and FULLY disabled under prefers-reduced-motion (see the reduce block). */
+  .ax-studio {
+    /* A warm, faintly tinted "studio canvas" — bright but not stark white. */
+    --background: 30 50% 98.5%;
+    --foreground: 280 25% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 280 25% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 280 25% 12%;
+    /* Primary = the vivid creator magenta; the loud brand color the persona wants. */
+    --primary: 322 78% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 300 35% 96%;
+    --secondary-foreground: 300 30% 22%;
+    --muted: 300 25% 96%;
+    --muted-foreground: 280 12% 42%;
+    --accent: 270 60% 96%;
+    --accent-foreground: 280 40% 24%;
+    --destructive: 0 78% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 300 25% 90%;
+    --input: 300 22% 88%;
+
+    /* The persona radius. Flows into every catalog component via --radius. */
+    --radius: 24px;
+
+    /* HIGH-saturation vivid accent — a punchy violet/magenta that reads as a
+     * joyful creative product. A second warm accent (--ax-accent-2, a tangerine)
+     * powers two-tone gradients in the shell. The focus ring uses the vivid hue. */
+    --ax-status-accent-fg: oklch(58% 0.26 330);
+    --ax-status-accent-bg: oklch(95% 0.06 330);
+    --ax-accent-2: oklch(72% 0.20 45);
+    --ring: 322 78% 52%;
+
+    /* Re-tint the status tokens HIGHER-chroma to match the saturated palette
+     * (still WCAG-locked pairs). These carry the media semantics: success =
+     * READY, warning = PENDING scan, danger = QUARANTINED. */
+    --ax-status-success-fg: oklch(54% 0.18 150);
+    --ax-status-success-bg: oklch(95% 0.07 150);
+    --ax-status-danger-fg: oklch(56% 0.21 25);
+    --ax-status-danger-bg: oklch(95% 0.07 25);
+    --ax-status-warning-fg: oklch(58% 0.16 70);
+    --ax-status-warning-bg: oklch(96% 0.09 75);
+    --ax-status-info-fg: oklch(55% 0.19 255);
+    --ax-status-info-bg: oklch(95% 0.06 255);
+    --ax-status-attention-fg: oklch(56% 0.18 95);
+    --ax-status-attention-bg: oklch(96% 0.09 95);
+    --ax-status-neutral-fg: oklch(48% 0.02 300);
+    --ax-status-neutral-bg: oklch(95% 0.02 300);
+
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    /* The persona typography: 16px chunky rounded body, high scale-contrast. */
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  /* A studio-canvas atmosphere: two soft accent blooms behind the shell so the
+   * vibrant surface has depth, not flatness. Decorative + pointer-transparent;
+   * fixed so it stays put while content scrolls. */
+  .ax-studio::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(60% 50% at 12% 0%, hsl(322 80% 60% / 0.10), transparent 70%),
+      radial-gradient(55% 45% at 100% 8%, oklch(72% 0.20 45 / 0.10), transparent 70%);
+  }
+  .ax-studio > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* CHUNKY ROUNDED DISPLAY type. The persona's defining typographic trait — a
+   * high-contrast display face for headings + hero, set via the next/font var. */
+  .ax-studio .ax-display {
+    font-family: var(--font-display), var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  /* LAYERED colorful elevation. The catalog ships shadow-sm/md/lg utilities;
+   * under the studio shell we replace them with STACKED, accent-tinted shadows
+   * so cards float with depth + a hint of joyful glow (the opposite of the
+   * fintech subtle-paper shadow). Layered = multiple offset/blur tiers. */
+  .ax-studio .shadow-sm {
+    box-shadow:
+      0 1px 2px hsl(322 40% 30% / 0.06),
+      0 4px 10px hsl(322 50% 45% / 0.06);
+  }
+  .ax-studio .shadow,
+  .ax-studio .shadow-md {
+    box-shadow:
+      0 2px 4px hsl(322 40% 30% / 0.07),
+      0 8px 20px hsl(322 50% 45% / 0.10),
+      0 16px 40px oklch(72% 0.20 45 / 0.06);
+  }
+  .ax-studio .shadow-lg,
+  .ax-studio .shadow-xl,
+  .ax-studio .shadow-2xl {
+    box-shadow:
+      0 4px 8px hsl(322 40% 30% / 0.08),
+      0 14px 34px hsl(322 60% 50% / 0.14),
+      0 28px 70px oklch(72% 0.20 45 / 0.10);
+  }
+
+  /* The masthead wordmark mark: a vivid magenta→tangerine gradient chip. */
+  .ax-studio .ax-wordmark-chip {
+    color: #fff;
+    background-image: linear-gradient(
+      120deg,
+      hsl(322 78% 52%),
+      oklch(72% 0.20 45)
+    );
+  }
+
+  /* Settled layout for the catalog StatusBadge pill (the block ships only the
+   * inline fg/bg color via tokens; the host theme owns layout). A rounded, lively
+   * chip that fits the playful surface. */
+  .ax-studio .ax-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.005em;
+    line-height: 1.3;
+  }
+  .ax-studio .ax-status-badge__icon {
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+
+  /* ── Cinematic motion (motion_level 3) ─────────────────────────────────────
+   * The richest persona motion of the six. Each is transform/opacity only
+   * (compositor-friendly) and is fully neutralized by the reduce block below. */
+
+  /* Hero / page entrance: a soft rise + scale settle. */
+  .ax-studio .ax-rise {
+    animation: ax-studio-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Staggered grid reveal — the consuming screen sets --ax-i per item for the
+   * cascade; the delay is capped so a large grid never stalls visibly. */
+  .ax-studio .ax-stagger {
+    animation: ax-studio-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(min(var(--ax-i, 0), 12) * 55ms);
+  }
+
+  /* Hover float for interactive media cards — a lift + subtle scale that reads
+   * as "this is alive". Pointer hover only. */
+  .ax-studio .ax-float {
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.32s ease;
+    will-change: transform;
+  }
+  @media (hover: hover) {
+    .ax-studio .ax-float:hover {
+      transform: translateY(-6px) scale(1.012);
+    }
+  }
+
+  /* Reaction "pop" — the delightful burst when a like/favorite fires. The
+   * consuming component toggles .ax-pop-on to replay it. */
+  .ax-studio .ax-pop-on {
+    animation: ax-studio-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+}
+
+@keyframes ax-studio-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ax-studio-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35) rotate(-8deg);
+  }
+  70% {
+    transform: scale(0.92) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* prefers-reduced-motion: this is the MOST motion-heavy persona, so the calm
+ * here must be genuine. Every persona animation collapses to a no-op (no rise,
+ * no stagger, no float lift, no reaction pop) and any catalog block transition
+ * is reduced to an imperceptible duration. The decorative blooms remain (they
+ * are static gradients, not motion). */
+@media (prefers-reduced-motion: reduce) {
+  .ax-studio .ax-rise,
+  .ax-studio .ax-stagger,
+  .ax-studio .ax-pop-on {
+    animation: none !important;
+  }
+  .ax-studio .ax-float {
+    transition: none !important;
+  }
+  .ax-studio .ax-float:hover {
+    transform: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

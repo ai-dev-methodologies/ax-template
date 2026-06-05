@@ -1,0 +1,29 @@
+{
+  "name": "@ax/app-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "playful-creator per-persona app — a creative studio / media gallery composed entirely from the shared @ax catalog. Joyful, vibrant, cinematic tone; the signature surface is rich visual blocks (a hero, an image swiper, layered media cards, reaction toggles) wired to the live file-storage + tag + favorites + activity-feed backend domains (24px radius, high-saturation accent, layered colorful elevation, cinematic/reactions motion that fully honors prefers-reduced-motion).",
+  "scripts": {
+    "dev": "next dev -p 3006",
+    "build": "next build",
+    "start": "next start -p 3006",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ax/blocks": "*",
+    "@ax/core": "*",
+    "@ax/ui": "*",
+    "@tanstack/react-query": "^5.0.0",
+    "lucide-react": "^1.17.0",
+    "next": "^15.3.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^6.0.2"
+  }
+}

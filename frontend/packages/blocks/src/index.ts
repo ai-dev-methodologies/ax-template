@@ -6,6 +6,7 @@
 // do not collide with the @ax/ui Card family.
 
 export { default as StatusBadge } from './status-badge';
+export type { StatusKind, StatusBadgeProps } from './status-badge';
 export { Button04 } from './animated-arrow-button';
 export { Component as CategoryBarChart } from './category-bar-chart';
 export { PrimeButton } from './prime-button';
