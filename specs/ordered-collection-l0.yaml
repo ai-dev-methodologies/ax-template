@@ -90,6 +90,9 @@ items:
       parent-version path anchored to Jakarta Persistence 3.1 §3.4.2.
   - id: "ORDER-CONFLICT-001"
     chapter: "Deterministic 409 on concurrent-reorder conflict + retry"
+    verification:
+      mechanism: rule
+      ref: domain-rejection-uses-rfc9457-problem-detail
     requirement: "When a reorder loses the concurrency race — the parent @Version was bumped by a committed concurrent reorder, or the FOR UPDATE / conditional renumber observes the collection changed under it — the server MUST respond 409 Conflict + an RFC 9457 Problem Details body of `type=urn:problem:reorder-conflict`, `title=\"Collection was reordered concurrently\"`, carrying the machine-readable facts needed for a safe retry: the parent id and the authoritative current ordering (or its version/etag) so the client can re-GET the fresh order, re-apply its intended move onto it, and re-submit. The server MUST NOT auto-merge, MUST NOT last-write-wins, and MUST NOT partially apply the losing reorder. The response MUST be free of `Retry-After` (recovery is conditional re-GET-then-retry, not time-based); the recipe documents a bounded client retry budget (default `order_reorder_retry_max=3`)."
     test_method: "RestAssured integration test (force a concurrent commit between the loser's read and write; assert 409 + type=urn:problem:reorder-conflict + current-ordering/version member present + losing reorder NOT applied)"
     verification_type: "negative"

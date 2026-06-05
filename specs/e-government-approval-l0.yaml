@@ -80,6 +80,9 @@ items:
   # ── FRAMEWORK family ────────────────────────────────────────────────────
   - id: "EGA-FRAMEWORK-001"
     chapter: "전자결재 효력 부여"
+    verification:
+      mechanism: rule
+      ref: e-government-approval-gpki-approval-line
     requirement: "행정업무용 전자결재 시스템은 행정업무의 운영 및 혁신에 관한 규정 §10 + 행정업무용 전자문서법 §5 의 효력 부여 조건을 충족해야 한다: (1) 결재권자 본인확인 (GPKI/NPKI 전자서명 — EGA-PKI-001) (2) 결재 시점 timestamp (RFC 3161 TSA + document-signing-l0 R97 DOC-TIMESTAMP-001) (3) 결재 내용 무결성 (XAdES-A 또는 PAdES-B-LTA — R97 DOC-RETENTION-001) (4) 결재선 추적 (EGA-LINE-001) (5) 보존 (EGA-AUDIT-001). 위 5조건 중 하나라도 미충족 시 행정업무용 전자결재로서 법적 효력 없음 (전자정부법 §30 안전성 요건 위반). 일반 ITIL 결재 (approval-workflow-l0 R31)는 본 조건 미충족 — recipes는 vertical 따라 명시적 분기 필요."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -118,6 +121,9 @@ items:
   # ── LINE family ─────────────────────────────────────────────────────────
   - id: "EGA-LINE-001"
     chapter: "결재선 (sequential + delegation)"
+    verification:
+      mechanism: rule
+      ref: e-government-approval-gpki-approval-line
     requirement: "결재선은 sequential ordered (순차 결재 — R31 ApprovalRequest 패턴) 또는 parallel ordered (병결 — 동급 결재권자 다수 동시 검토) 또는 두 유형 mixed 허용. 위임 처리 2종: (1) 사전 위임 — 결재권자가 부재 시 위임받을 자 사전 지정 (위임 기간 + 위임 사유 보존); (2) 자동 위임 — 결재 도착 후 72h 미처리 시 차상위 결재권자에게 자동 escalation (운영 규정 §12 시행세칙). 위임 처리도 전체 audit trail (EGA-AUDIT-001) 기록. 결재선 변경 (위임 발동 / 결재선 추가 / 결재선 삭제)은 보안등급 (EGA-CLASSIFICATION-001) 변동 시 자동 재구성."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -137,6 +143,9 @@ items:
   # ── POSTAPPROVAL family ────────────────────────────────────────────────
   - id: "EGA-POSTAPPROVAL-001"
     chapter: "사후결재 (post-facto approval)"
+    verification:
+      mechanism: rule
+      ref: e-government-approval-gpki-approval-line
     requirement: "긴급한 사유 (재해 / 보안 사고 / 긴급 예산 집행 등) 발생 시 결재 완료 전 의사결정 실행 후 24h 이내 사후결재 수행 가능. 사후결재 요건: (1) 긴급 사유 기록 (자유 텍스트 + 사전 정의된 enum 코드 — DISASTER / SECURITY_INCIDENT / EMERGENCY_BUDGET / OTHER); (2) 24h timer (실행 시점부터 — 시스템이 자동 측정); (3) 결재선 사후 보강 (정상 결재선 절차 진행 — 단계 생략 불가); (4) 24h 경과 시 사후결재 무효 (행정업무용 전자문서법 §16②에 따라 사후결재 시한 강행규정). 사후결재 빈도 높은 결재권자는 audit log 검토 대상 (EGA-AUDIT-001)."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -157,6 +166,9 @@ items:
   # ── CLASSIFICATION family ──────────────────────────────────────────────
   - id: "EGA-CLASSIFICATION-001"
     chapter: "보안등급 + 결재선 자동 escalation"
+    verification:
+      mechanism: rule
+      ref: e-government-approval-gpki-approval-line
     requirement: "결재 요청은 보안등급 enum 필수: {일반(general), 대외비(restricted), 비밀(secret), 극비(top_secret)}. 보안등급별 결재선 자동 escalation: 일반은 부서장 레벨, 대외비는 본부장+1 추가, 비밀은 차관급+1 추가, 극비는 장관급+1 추가 (운영 규정 §14 시행세칙 ratification). 보안등급 변경 시 (예: 일반 → 대외비 elevate) 결재선 자동 재구성 + 기존 결재 단계 무효 + 재시작. 보안등급 처리 권한은 결재권자의 GPKI 인증서 OID extension (EGA-PKI-001)에서 추출. 권한 없는 결재권자 routing 시도 시 → 결재선에서 제거 + audit log emit."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -176,6 +188,9 @@ items:
   # ── AUDIT family ────────────────────────────────────────────────────────
   - id: "EGA-AUDIT-001"
     chapter: "30년 보존 + 무결성 + 결재 흐름"
+    verification:
+      mechanism: rule
+      ref: e-government-approval-gpki-approval-line
     requirement: "행정업무용 전자결재 audit trail은 공공기록물 관리에 관한 법률 §27 에 따라 보존기간 차등: 일반 결재 5년, 중요 결재 30년 (보안업무 규정 적용 결재), 영구 보존 결재 (대통령 보고 / 입법 / 행정조치 결과). 보존 형식은 document-signing-l0 (R97) DOC-RETENTION-001 PAdES-B-LTA 또는 XAdES-A로 archive timestamp 갱신 의무 (5년마다 TSA archive token 재발급). 무결성 보장: hash chain (Merkle log) — 매 결재 단계가 직전 단계 hash 포함. 결재 흐름은 변경 불가 (append-only) — 위임 발동 + 결재선 변경도 새 이벤트로 추가 (이전 이벤트 수정 금지). PII 처리는 R54/R67 AuditPiiHelper recipient_hash 패턴 적용 (RRN raw 절대 미저장)."
     test_method: "RestAssured + integrity probe test"
     verification_type: "positive"

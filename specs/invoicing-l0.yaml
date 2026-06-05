@@ -52,6 +52,9 @@ items:
   # ── FORMAT family ──────────────────────────────────────────────────────
   - id: "INV-FORMAT-001"
     chapter: "전자세금계산서 표준 형식"
+    verification:
+      mechanism: rule
+      ref: electronic-tax-invoice-vat-pki-retention
     requirement: "전자세금계산서는 국세청 NTS가 정의한 XML schema (KS X ISO/IEC 19792 기반)를 따라야 한다. 임의 JSON / 사내 포맷 / PDF만으로의 발행은 법적 효력이 없으며 부가가치세법 §32 위반이다. 발행 시점에 XML schema validation을 통과해야 NTS API 전송 자격이 부여된다."
     test_method: "inv_FORMAT_001_xmlValidatesAgainstNtsSchema"
     verification_type: "integration_test"
@@ -75,6 +78,9 @@ items:
   # ── IDENTIFIER family ─────────────────────────────────────────────────
   - id: "INV-IDENTIFIER-001"
     chapter: "사업자 식별 + PII 분리 저장"
+    verification:
+      mechanism: rule
+      ref: electronic-tax-invoice-vat-pki-retention
     requirement: "발행자 + 공급받는자의 사업자등록번호 + (개인사업자 경우) 주민등록번호 + 종사업장 일련번호는 분리 저장 + 별도 권한 컬럼으로 보호한다. 일반 발행/조회 surface는 마스킹된 ID만 (e.g. 123-45-***** / RRN 마지막 7자리 *)를 반환; 정확한 ID는 회계감사 / 국세청 audit 용도 전용 endpoint에서 권한자(역할: TAX_AUDITOR)만 접근. 개인정보보호법 §23 + §24의2 (고유식별정보 처리 제한) 정합."
     test_method: "inv_IDENTIFIER_001_rrnMaskedInDefaultResponse"
     verification_type: "integration_test"
@@ -89,6 +95,9 @@ items:
   # ── AMOUNT family ────────────────────────────────────────────────────
   - id: "INV-AMOUNT-001"
     chapter: "VAT 정합성"
+    verification:
+      mechanism: rule
+      ref: electronic-tax-invoice-vat-pki-retention
     requirement: "공급가액 + 세액 (10% VAT for 일반 / 0% for 영세율 / 세액=null for 면세) + 합계금액이 산술 정합. 부가가치세법 시행령 §62 (반올림 규칙: 1원 단위로 반올림)을 따른다. 금액 컬럼은 BigDecimal (precision=15, scale=0)로 저장하여 double 부동소수점 오차를 차단; 표시 시점에만 천 단위 콤마 적용."
     test_method: "inv_AMOUNT_001_vatRoundingMatchesEnforcementDecree"
     verification_type: "integration_test"
@@ -102,6 +111,9 @@ items:
   # ── NTS family ───────────────────────────────────────────────────────
   - id: "INV-NTS-001"
     chapter: "국세청 NTS 전송 의무"
+    verification:
+      mechanism: rule
+      ref: electronic-tax-invoice-vat-pki-retention
     requirement: "전자세금계산서는 발급일자 기준 24시간 내 국세청 NTS API로 전송 + 접수증 (승인번호 24자리) 보관 의무. 전송 실패 시 지수 재시도 (e.g. 1m / 5m / 30m / 6h / 24h backoff) + DLQ + audit alert. 24시간 초과 미전송은 가산세 부과 대상 (공급가액의 0.5%)이므로 catalog는 'fire-and-forget' 전송을 거부하고 R51 email-outbox 동일 패턴 (idempotent retry + DLQ + lastFailureAt) 채택."
     test_method: "inv_NTS_001_submitWithin24HoursElseDlq"
     verification_type: "integration_test"
@@ -130,6 +142,9 @@ items:
   # ── CORRECT family ──────────────────────────────────────────────────
   - id: "INV-CORRECT-001"
     chapter: "수정세금계산서"
+    verification:
+      mechanism: rule
+      ref: electronic-tax-invoice-vat-pki-retention
     requirement: "수정세금계산서 (감액 / 추가 / 취소 / 환입 / 계약해제 / 내국신용장 사후개설 등 6개 사유코드)는 원본 invoice ID를 통한 chain 추적이 가능해야 한다. 수정 횟수에 제한은 없으나 매 수정 발행마다 사유코드 + 변경내역 + 발행자 확인이 immutable history 행으로 기록된다 (R31 approval-workflow audit pattern + R51 email-outbox EmailTemplateHistory pattern 합성)."
     test_method: "inv_CORRECT_001_modificationChainTrackedImmutable"
     verification_type: "integration_test"
@@ -144,6 +159,9 @@ items:
   # ── RETENTION family ────────────────────────────────────────────────
   - id: "INV-RETENTION-001"
     chapter: "5년 보관 의무"
+    verification:
+      mechanism: rule
+      ref: electronic-tax-invoice-vat-pki-retention
     requirement: "전자세금계산서는 발행일자 기준 5년간 보관 의무 (국세기본법 §85의3). immutable storage (append-only, no UPDATE/DELETE) + 매년 백업 + 보관기간 만료 자동 삭제 (5년 + 1일) 정책. Soft-delete 금지 — 법령 의무 vs PIPA 개인정보 최소수집 사이 균형에서 세법이 우선; 5년 경과 후 hard-delete + audit log entry 남김."
     test_method: "inv_RETENTION_001_immutableStorageEnforcedByJpaAndDb"
     verification_type: "integration_test"

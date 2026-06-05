@@ -66,6 +66,9 @@ items:
       per tenant.
   - id: "QUOTA-REJECT-001"
     chapter: "Deterministic over-limit response"
+    verification:
+      mechanism: rule
+      ref: domain-rejection-uses-rfc9457-problem-detail
     requirement: "When a claim is refused because `used + delta > limit`, the server MUST respond deterministically with an RFC 9457 Problem Details body of `type=urn:problem:quota-exceeded`, `title=\"Quota exceeded\"`, and members carrying the machine-readable facts: `resource`, `limit`, `current_usage`, and `requested` (delta). The status code MUST be 429 Too Many Requests by default (RFC 6585) — the canonical 'you have consumed your allowance' signal — UNLESS the recipe explicitly models the cap as a billing paywall, in which case 402 Payment Required MAY be used. Because 402 is reserved/non-standard (RFC 9110 / MDN), a recipe choosing 402 MUST document it in DECISIONS.md and MUST still carry the same `urn:problem:quota-exceeded` body so clients branch on `type`, not status. The response MUST NOT silently truncate the consume to the remaining headroom or apply last-write-wins; refusal is total. A `Retry-After` header MUST NOT be sent (recovery is upgrade-or-release, not time-based) unless the resource is a billing-period-resetting count and the reset instant is known."
     test_method: "RestAssured integration test (consume that exceeds limit → assert chosen status + RFC 9457 type=urn:problem:quota-exceeded + limit/current_usage/requested members present + no partial consume)"
     verification_type: "negative"
