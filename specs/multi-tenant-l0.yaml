@@ -46,6 +46,9 @@ items:
 
   - id: "MULTI-TENANT-ISOLATION-002"
     chapter: "ISOLATION"
+    verification:
+      mechanism: guard
+      ref: recipe_tenant_model_declaration_guard.sh
     requirement: "Schema-per-tenant isolation via Hibernate `MultiTenantConnectionProvider` + `CurrentTenantIdentifierResolver`. Each tenant resolved to its own schema before connection acquisition. PUBLIC schema reserved for tenant catalog + shared reference data only."
     test_method: "integration test against PostgreSQL with 2+ tenant schemas"
     verification_type: "positive + negative"
