@@ -27,5 +27,10 @@ export {
 } from './interfaces-card';
 export { default as TextField } from './form-field';
 export { default as DataGrid, GridStatus } from './data-grid';
+export type {
+  DataGridColumn,
+  DataGridProps,
+  DataGridStatus,
+} from './data-grid';
 export { default as AvatarGroup } from './avatar-group';
 export { default as CodeSnippet } from './code-snippet';

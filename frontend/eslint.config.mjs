@@ -41,6 +41,9 @@ export default [
       'test-results',
       'coverage',
       '.next',
+      // Per-persona app build artifacts (apps/*/.next) are generated output, not
+      // source — never lint them. Bare '.next' only matches the repo-root dir.
+      '**/.next/**',
     ],
   },
   {

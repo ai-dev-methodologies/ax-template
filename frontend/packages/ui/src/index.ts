@@ -13,6 +13,21 @@ export { Badge, badgeVariants } from './badge';
 export { Button, buttonVariants } from './button';
 export type { ButtonProps } from './button';
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './card';
+export {
+  Dialog,
+  DialogTrigger,
+  DialogClose,
+  DialogPortal,
+  DialogOverlay,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from './dialog';
+export type { DialogContentProps } from './dialog';
+export { ConfirmDialog } from './confirm-dialog';
+export type { ConfirmDialogProps } from './confirm-dialog';
 export { Field } from './field';
 export { Input } from './input';
 export { Label } from './label';
