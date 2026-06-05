@@ -9,6 +9,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.annotation.DirtiesContext;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -120,5 +123,55 @@ class SearchQueryTest {
         .when().post("/api/v1/search")
         .then().statusCode(400)
             .body("type", containsString("validation-error"));
+    }
+
+    /**
+     * SEARCH-RANK-001 — deterministic, page-stable ordering: relevance DESC with id as the
+     * MANDATORY tiebreaker. Indexing 5 documents with IDENTICAL content gives every hit the
+     * same ts_rank for query "hello", so ONLY the id tiebreaker establishes a total order. The
+     * union of hits across page boundaries must contain every matching id exactly once (no
+     * duplicate, no gap), and an identical repeated request must return a byte-identical order.
+     * This is the search-domain realization of pagination-l0 PAGE-STABLE-SORT-001.
+     */
+    @Test
+    @Tag("SEARCH")
+    @Tag("SEARCH-RANK-001")
+    void rank_001_tiedRelevanceIsPageStableViaIdTiebreaker() {
+        String token = SearchTestSupport.obtainToken(
+            SearchTestSupport.freshEmail("search-rank-001"), "MEMBER");
+
+        // 5 documents, identical content → identical relevance score for query "hello"
+        List<String> indexed = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            indexed.add(given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body("{\"content\":\"hello hello hello\"}")
+            .when().post("/api/v1/search/index")
+            .then().statusCode(201).extract().path("id"));
+        }
+
+        List<String> firstPass = pageThrough(token);
+        // no duplicate id, no missing id across page boundaries
+        assertThat(firstPass).doesNotHaveDuplicates();
+        assertThat(firstPass).containsExactlyInAnyOrderElementsOf(indexed);
+
+        // identical repeated request → byte-identical hit ordering (page-stable via id tiebreaker)
+        List<String> secondPass = pageThrough(token);
+        assertThat(secondPass).containsExactlyElementsOf(firstPass);
+    }
+
+    /** Collect hit ids across size-2 pages 0..2 (5 tied hits → 2 + 2 + 1). */
+    private List<String> pageThrough(String token) {
+        List<String> ids = new ArrayList<>();
+        for (int page = 0; page < 3; page++) {
+            ids.addAll(given()
+                .header("Authorization", "Bearer " + token)
+                .contentType(ContentType.JSON)
+                .body("{\"query\":\"hello\",\"page\":" + page + ",\"size\":2}")
+            .when().post("/api/v1/search")
+            .then().statusCode(200).extract().jsonPath().getList("hits.id", String.class));
+        }
+        return ids;
     }
 }
