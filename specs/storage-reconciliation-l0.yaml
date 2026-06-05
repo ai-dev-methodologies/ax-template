@@ -87,6 +87,9 @@ items:
       specs/scheduled-task-l0.yaml SCHED-LOCK-001.
   - id: "RECON-MISSING-001"
     chapter: "Forward sweep — quarantine dangling rows (never 500)"
+    verification:
+      mechanism: rule
+      ref: storage-reconciliation-sweeps
     requirement: "A scheduled forward sweep MUST enumerate live DB rows that own a blob and, for each, probe the object store for the referenced key. A row whose blob is MISSING MUST be transitioned to a terminal QUARANTINED / DEGRADED status (a state-machine transition, recorded), NOT deleted and NOT left to fail at read time. Any read-path request for a row whose blob is missing MUST return a controlled RFC 9457 response (404 / 422 with `type=urn:problem:blob-missing`) — it MUST NEVER surface the raw object-store NoSuchKey as an unhandled 500. The forward sweep MUST be read-only against the object store (a HEAD/exists probe), never a destructive operation."
     test_method: "RestAssured integration test + seeded missing-blob fixture"
     verification_type: "positive"
@@ -101,6 +104,9 @@ items:
       and RFC 9457 Problem Details for the controlled read-path error.
   - id: "RECON-IDEMPOTENT-001"
     chapter: "Sweep idempotency (lock + grace composition)"
+    verification:
+      mechanism: rule
+      ref: storage-reconciliation-sweeps
     requirement: "Both sweeps MUST be idempotent and safe to run concurrently across nodes by COMPOSING two existing catalog primitives: (1) the scheduled-task distributed lock (SCHED-LOCK-001 — DB-row lock with TTL, SELECT ... FOR UPDATE SKIP LOCKED) so only one node sweeps per cycle and a crashed holder's stale lock is re-acquirable after the TTL; and (2) the soft-delete grace window so a re-run within the grace period reaches the IDENTICAL purge/quarantine decision (no double-purge, no flapping a row in and out of QUARANTINED). Re-running either sweep with no new drift MUST be a no-op that mutates nothing and emits zero purge/quarantine counts. The sweep MUST NOT invent its own lock — it reuses the scheduled-task LockingPolicy."
     test_method: "JUnit 5 unit test with Mockito + scheduled-task LockingPolicy"
     verification_type: "review"

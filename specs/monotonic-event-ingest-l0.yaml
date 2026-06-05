@@ -68,6 +68,9 @@ items:
       practices/rules/monotonic-ingest-reject-stale-event.md).
   - id: "INGEST-IDEMPOTENT-APPLY-001"
     chapter: "Idempotent apply (exact-duplicate dedup)"
+    verification:
+      mechanism: rule
+      ref: per-subject-marker-entity-idempotent
     requirement: "Applying the SAME event twice MUST be a no-op. At-least-once transports (webhooks with retry, queue redelivery, Kafka without exactly-once) WILL redeliver an already-applied event, so the consumer MUST dedup on the natural key `(stream, event_id)` — recording each processed event id in a dedup ledger (a `processed_event` table or a unique constraint on the watermark row) within the apply transaction. A redelivered event whose `(stream, event_id)` is already recorded MUST be discarded without re-running side effects (no second state mutation, no second downstream emission) and MUST be ack'd. Dedup is distinct from the watermark check: an exact replay of the CURRENT watermark event (event-time == watermark) is caught by dedup; an older distinct event is caught by INGEST-REJECT-STALE-001. Both paths converge on: the row reflects each distinct event's effect exactly once."
     test_method: "RestAssured integration test (POST the identical event body twice; assert the second POST mutates nothing, emits no second downstream effect, and is ack'd; assert exactly one dedup-ledger row for that (stream, event_id))"
     verification_type: "positive"
