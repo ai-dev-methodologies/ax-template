@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Download, FileSpreadsheet, ScrollText } from 'lucide-react';
-import { Alert, Button } from '@ax/ui';
+import { Alert, Button, Input } from '@ax/ui';
 import { DataGrid, type DataGridColumn } from '@ax/blocks';
 import { PageHeader } from '@/components/page-header';
 import { ExportStatus } from '@/components/status';
@@ -53,11 +53,10 @@ export default function StatementsPage() {
           <label htmlFor="export-name" className="text-sm font-medium text-foreground">
             명세서 이름
           </label>
-          <input
+          <Input
             id="export-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="h-10 w-full rounded-[var(--radius)] border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
         <Button onClick={() => handleCreate('csv')} loading={createExport.isPending}>

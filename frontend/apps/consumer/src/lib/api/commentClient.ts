@@ -14,7 +14,9 @@
  */
 import { apiFetch } from '@ax/core';
 
-export type CommentStatus = 'ACTIVE' | 'EDITED' | 'DELETED';
+// Mirrors the backend CommentStatus enum exactly: ACTIVE | DELETED. Edits are NOT a status —
+// the backend keeps status=ACTIVE and only moves updatedAt, so there is no 'EDITED' value.
+export type CommentStatus = 'ACTIVE' | 'DELETED';
 
 export const DELETED_BODY_MASK = '[deleted]';
 

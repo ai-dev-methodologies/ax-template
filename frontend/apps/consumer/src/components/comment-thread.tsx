@@ -97,7 +97,9 @@ export function CommentThread({ entityType, entityId, currentUserId, enabled }: 
                 {displayName(comment.authorUserId, currentUserId)}
               </span>
               <span className="text-xs text-muted-foreground">{formatRelative(comment.createdAt)}</span>
-              {comment.status === 'EDITED' ? (
+              {comment.updatedAt && comment.updatedAt !== comment.createdAt ? (
+                // The backend tracks edits via updatedAt (status stays ACTIVE), not a separate
+                // 'EDITED' status — so an edited comment is detected by a moved timestamp.
                 <span className="text-xs text-muted-foreground">(수정됨)</span>
               ) : null}
             </div>

@@ -61,8 +61,11 @@ export interface CreatePlanInput {
 
 export const billingClient = {
   // ── plans (admin) ────────────────────────────────────────────────────────
-  listPlans: (page = 0, size = 50): Promise<Plan[]> =>
-    apiFetch<Plan[]>('/admin/billing/plans', { query: { page, size } }),
+  // The backend returns the page CONTENT as a flat array (not a Page wrapper). A plan
+  // catalogue is a small bounded set with no pagination UI, so one generous page covers
+  // it — size is large enough that the list is never silently truncated.
+  listPlans: (size = 200): Promise<Plan[]> =>
+    apiFetch<Plan[]>('/admin/billing/plans', { query: { page: 0, size } }),
 
   createPlan: (input: CreatePlanInput): Promise<Plan> =>
     apiFetch<Plan>('/admin/billing/plans', { method: 'POST', body: input }),

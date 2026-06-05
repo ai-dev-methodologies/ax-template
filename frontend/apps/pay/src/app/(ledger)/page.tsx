@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { ArrowRight, BadgeDollarSign, ReceiptText, RotateCcw, Wallet } from 'lucide-react';
-import { Button } from '@ax/ui';
+import { Button, Card } from '@ax/ui';
 import { CategoryBarChart } from '@ax/blocks';
 import { PageHeader } from '@/components/page-header';
 import { MetricTile } from '@/components/metric-tile';
@@ -111,7 +111,7 @@ function RecentLedger({
   rows: { id: string; label: string; value: string; state: string }[];
 }) {
   return (
-    <div className="flex flex-col rounded-[var(--radius)] border border-border bg-card shadow-sm">
+    <Card className="flex flex-col">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-medium text-muted-foreground">최근 거래</h2>
         <Link
@@ -135,6 +135,6 @@ function RecentLedger({
           ))
         )}
       </ul>
-    </div>
+    </Card>
   );
 }
