@@ -245,7 +245,12 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:3000", "http://localhost:5173",
+                // Tailscale tailnet access (carray-mac -> home-mac). Frontend /api calls are normally
+                // same-origin (proxied via next.config.ts), so this matters only for any direct
+                // browser->backend call over the tailnet.
+                "http://100.112.5.105:3000", "http://100.112.5.105:8080"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-CSRF-TOKEN"));
         configuration.setAllowCredentials(true);
