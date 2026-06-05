@@ -1,0 +1,29 @@
+{
+  "name": "@ax/app-pay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "fintech-trust per-persona app — a payments / billing console composed entirely from the shared @ax catalog. Trustworthy, precise, money-handling tone; the signature surface is tabular-figure money everywhere (8px radius, low-saturation accent, subtle elevation, conservative motion), wired to the live payment + billing + report-export backend domains.",
+  "scripts": {
+    "dev": "next dev -p 3005",
+    "build": "next build",
+    "start": "next start -p 3005",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ax/blocks": "*",
+    "@ax/core": "*",
+    "@ax/ui": "*",
+    "@tanstack/react-query": "^5.0.0",
+    "lucide-react": "^1.17.0",
+    "next": "^15.3.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^6.0.2"
+  }
+}
