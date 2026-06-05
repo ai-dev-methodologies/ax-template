@@ -73,6 +73,12 @@ tasks.register<Test>("testCaching") {
     }
 }
 
+tasks.register<Test>("testPagination") {
+    useJUnitPlatform {
+        includeTags("PAGINATION")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")

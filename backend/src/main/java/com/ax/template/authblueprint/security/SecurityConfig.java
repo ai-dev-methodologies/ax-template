@@ -112,6 +112,8 @@ public class SecurityConfig {
                 // CACHE-KEY-001 — the authenticated principal IS the cache tenant, so a
                 // JWT is required (an anonymous caller has no tenant to isolate keys by).
                 .requestMatchers("/api/cache/**").authenticated()
+                // pagination-l0 reference workload (specs/pagination-l0.yaml): tenant = principal.
+                .requestMatchers("/api/pagination/**").authenticated()
                 // R30 api-key domain (specs/api-key-l0.yaml):
                 // KEY-AUTHZ-001 — management surface is JWT-only (the
                 // ApiKeyAuthenticationFilter explicitly skips these paths
