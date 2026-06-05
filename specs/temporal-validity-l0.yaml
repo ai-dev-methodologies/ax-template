@@ -159,6 +159,9 @@ items:
       version numbers." (https://en.wikipedia.org/wiki/Slowly_changing_dimension)
   - id: "TEMPORAL-OPEN-CURRENT-001"
     chapter: "At most ONE open-ended current row per scope key"
+    verification:
+      mechanism: rule
+      ref: temporal-as-of-point-in-time-query
     requirement: >
       For each scope key there MUST be at most ONE open-ended current row — a
       record whose valid_to IS NULL, meaning 'in force from valid_from with no

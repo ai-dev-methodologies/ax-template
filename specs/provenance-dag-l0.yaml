@@ -97,6 +97,9 @@ items:
       truncated=true rather than an unbounded payload.
   - id: "DAG-ACYCLIC-PRECOND-001"
     chapter: "Acyclicity precondition for a well-defined rollup"
+    verification:
+      mechanism: rule
+      ref: provenance-dag-append-only-acyclic-rollup
     requirement: >
       A weighted rollup (DAG-ROLLUP-MULTIPLY-001) is mathematically well-defined
       ONLY over an acyclic graph: a cycle in the input→output edges means a node
@@ -125,6 +128,9 @@ items:
       topological ordering — the ordering a finite rollup accumulation relies on).
   - id: "DAG-ROLLUP-MULTIPLY-001"
     chapter: "Weighted product-down-path / sum-across-paths rollup (BOM explosion)"
+    verification:
+      mechanism: rule
+      ref: provenance-dag-append-only-acyclic-rollup
     requirement: >
       A cumulative quantity rolled up through the provenance DAG MUST be computed as
       the PRODUCT of the per-edge weights along each distinct path from the root to

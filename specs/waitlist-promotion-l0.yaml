@@ -54,6 +54,9 @@ introduced_at: "IDW5 2026-06-01 LMS dogfood"
 items:
   - id: "WAITLIST-FSM-001"
     chapter: "waiting → enrolled → dropped state machine (sole mutator)"
+    verification:
+      mechanism: rule
+      ref: persistence-state-machine-atomic
     requirement: "A waitlist entry MUST move only through the closed state machine waiting → enrolled → dropped (a waiting entry MAY also go waiting → dropped on cancel/expiry). State transitions MUST flow through a SINGLE sole-mutator service method (a WaitlistStateMachine) — no controller, repository caller, scheduler, or test may write the status column directly. Each entry MUST carry a JPA @Version column so a concurrent transition loses the optimistic race (composes specs/optimistic-locking-l0.yaml#OPTLOCK-VERSION-001): two transactions both attempting waiting → enrolled on the same entry MUST resolve to exactly ONE success and one OptimisticLockException-derived 409. Illegal transitions (enrolled → waiting, dropped → enrolled, dropped → dropped) MUST be rejected with an invalid-transition error, never silently no-op'd."
     test_method: "RestAssured integration test + sole-mutator structural assertion"
     verification_type: "positive"
@@ -70,6 +73,9 @@ items:
       (https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1#a2059)
   - id: "WAITLIST-CLAIM-001"
     chapter: "Atomic seat claim before enqueue (composes bounded-capacity-claim)"
+    verification:
+      mechanism: rule
+      ref: shared-counter-claim-must-be-atomic
     requirement: "Before an entry is enqueued as waiting, the request MUST first attempt an atomic seat claim against the bounded capacity row using the primitive contracted in specs/bounded-capacity-claim-l0.yaml#CLAIM-ATOMIC-001 — a single conditional UPDATE (`UPDATE capacity SET taken = taken + 1 WHERE resource_id = ? AND taken < capacity`, affected-rows checked) OR a pessimistic SELECT ... FOR UPDATE + bounded UPDATE in the same transaction. If the claim is granted (affected-rows == 1), the entry is created directly as enrolled and NOT enqueued. Only when the claim is rejected (affected-rows == 0 — no room) MUST the entry be created as waiting and appended to the queue. The waitlist MUST NOT derive 'is there room' by a separate COUNT(*) read-then-decide — that re-opens the CWE-362 read-then-insert race the composed primitive exists to close. The capacity counter MUST live on ONE aggregate row backstopped by a DB `CHECK (taken <= capacity)`."
     test_method: "RestAssured integration test + concurrent-claim harness (N+1 racing claims on capacity N)"
     verification_type: "positive"
@@ -106,6 +112,9 @@ items:
       (https://www.postgresql.org/docs/current/explicit-locking.html)
   - id: "WAITLIST-NOTIFY-001"
     chapter: "Promotion emits via transactional-outbox (no lost notification)"
+    verification:
+      mechanism: rule
+      ref: transactional-outbox-no-dual-write
     requirement: "A successful promotion (WAITLIST-PROMOTE-001) MUST emit a `waitlist.promoted` event so the promoted user is told a seat is now held for them — and that emission MUST go through the transactional outbox contracted in specs/transactional-outbox-l0.yaml#OUTBOX-WRITE-001: the outbox row insert MUST occur in the SAME local transaction as the promote (the waiting → enrolled flip), so a crash between the DB commit and the broker publish cannot lose the notification (the dual-write problem). Direct broker publish from the promote request/transaction path is FORBIDDEN. The outbox row MUST carry a stable immutable `message_id` (specs/transactional-outbox-l0.yaml#OUTBOX-IDEMPOTENT-001) so an at-least-once redelivery is deduped by the consumer — a promoted user MUST NOT be notified twice for one promotion even though the relay is at-least-once. A promotion that commits MUST always have its outbox row committed with it; a promotion that rolls back MUST leave no outbox row."
     test_method: "RestAssured integration test (assert outbox row committed in the promote transaction; no direct publish)"
     verification_type: "negative"
@@ -123,6 +132,9 @@ items:
       (https://microservices.io/patterns/data/transactional-outbox.html)
   - id: "WAITLIST-POSITION-001"
     chapter: "Position query is owner-or-admin (IDOR-safe)"
+    verification:
+      mechanism: rule
+      ref: caller-authentication-only-no-userid-param
     requirement: "A waitlist entry's position query (GET /api/waitlist/{resourceId}/position or equivalent — 'you are number K in line') MUST be authorized owner-or-admin: the authenticated caller MUST be either the user who owns the entry OR hold ROLE_ADMIN. A caller requesting another user's position MUST receive 404 Not Found (IDOR-safe — never 403, which would confirm the entry exists), so position numbers are not enumerable by non-owners. Position MUST be computed from the same monotonic enqueue ordinal used by WAITLIST-PROMOTE-001 (count of waiting entries with a strictly smaller ordinal, +1), so the number a user sees matches the order they will actually be promoted in. A dropped or already-enrolled entry's position query MUST return a terminal state, not a stale queue number."
     test_method: "RestAssured integration test (non-owner → 404; owner/admin → position; ordinal-consistent)"
     verification_type: "negative"
