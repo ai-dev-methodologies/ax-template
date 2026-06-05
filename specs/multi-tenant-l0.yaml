@@ -23,6 +23,9 @@ items:
       single-tenant reference workload. b2b-admin recipe enabling multi-tenant
       semantics MUST adopt ISOLATION-001/002/003 + PROPAGATION-001. Without
       declaration, downstream fork-receivers risk cross-tenant leakage.
+    verification:
+      mechanism: guard
+      ref: recipe_tenant_model_declaration_guard.sh
     policy_ref: "blueprints/multi-tenant-manifest.yaml#tenant-model-declaration"
 
   - id: "MULTI-TENANT-ISOLATION-001"
@@ -36,6 +39,9 @@ items:
       resource URL → assert 404 (not 403, not 200). Static analysis: every
       @Entity with tenant-scoped semantics has @FilterDef + @Filter applied;
       every Repository method runs under tenant context.
+    verification:
+      mechanism: guard
+      ref: recipe_tenant_model_declaration_guard.sh
     policy_ref: "blueprints/multi-tenant-manifest.yaml#row-level-strategy"
 
   - id: "MULTI-TENANT-ISOLATION-002"
@@ -77,6 +83,9 @@ items:
       empty context, not leftover). Negative test: malicious request with
       `?tenant_id=victim` query param → assert ignored; tenant resolved from
       principal only.
+    verification:
+      mechanism: guard
+      ref: recipe_tenant_model_declaration_guard.sh
     policy_ref: "blueprints/multi-tenant-manifest.yaml#context-resolution"
 
   - id: "MULTI-TENANT-PROPAGATION-002"
@@ -90,6 +99,9 @@ items:
       assert TenantContextMissing. Add TaskDecorator → assert context
       propagated to async thread. Closes the common async leak vector
       (TenantContext is request-scoped; @Async runs on a different thread).
+    verification:
+      mechanism: guard
+      ref: webclient_async_tenant_scope_guard.sh
     policy_ref: "blueprints/multi-tenant-manifest.yaml#async-propagation"
 
 evidence:
