@@ -88,5 +88,92 @@
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+    font-family:
+      var(--font-sans),
+      ui-sans-serif,
+      system-ui,
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+@layer components {
+  /* Atmospheric backdrop for the unauthenticated auth screens: a layered
+     radial gradient mesh tinted by the accent token + a fine grain overlay,
+     giving depth without raw hex. Motion is opt-in and reduced-motion aware. */
+  .ax-auth-backdrop {
+    position: relative;
+    isolation: isolate;
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(
+        42rem 42rem at 12% -8%,
+        oklch(from hsl(var(--accent)) l c h / 0.5),
+        transparent 60%
+      ),
+      radial-gradient(
+        38rem 38rem at 108% 12%,
+        var(--ax-status-info-bg),
+        transparent 55%
+      ),
+      radial-gradient(
+        30rem 30rem at 88% 112%,
+        var(--ax-status-accent-bg),
+        transparent 60%
+      );
+  }
+  .ax-auth-backdrop::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.5;
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.5) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.5) 1px, transparent 1px);
+    background-size: 3.5rem 3.5rem;
+    -webkit-mask-image: radial-gradient(60% 55% at 50% 40%, black, transparent 100%);
+    mask-image: radial-gradient(60% 55% at 50% 40%, black, transparent 100%);
+  }
+  /* Subtle SVG grain — adds tactile texture over flat surfaces. */
+  .ax-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .ax-fade-up {
+    animation: ax-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@keyframes ax-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ax-fade-up {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -25,7 +25,7 @@ imports_forbidden: [L4, app/, lib/]
  *   --ax-c-3: #0a66c2;
  */
 
-import { useState, FC, ReactNode, useRef, useEffect, type RefObject } from 'react'
+import { useState, ReactNode, useRef, useEffect, type RefObject } from 'react'
 import { Check, Copy, Camera, AtSign, Share2, Send } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { clsx } from 'clsx'
@@ -44,9 +44,9 @@ function useClickOutside(ref: RefObject<HTMLElement | null>, handler: () => void
 }
 
 const shareButtons = [
-  { icon: Send, label: 'Twitter', color: 'hover:text-[var(--ax-c-1)] hover:bg-[var(--ax-c-1)]/10' },
-  { icon: Camera, label: 'Instagram', color: 'hover:text-[var(--ax-c-2)] hover:bg-[var(--ax-c-2)]/10' },
-  { icon: AtSign, label: 'LinkedIn', color: 'hover:text-[var(--ax-c-3)] hover:bg-[var(--ax-c-3)]/10' },
+  { icon: Send, label: 'Twitter', color: 'hover:text-[var(--ax-c-1)] hover:bg-[color-mix(in_oklab,var(--ax-c-1)_10%,transparent)]' },
+  { icon: Camera, label: 'Instagram', color: 'hover:text-[var(--ax-c-2)] hover:bg-[color-mix(in_oklab,var(--ax-c-2)_10%,transparent)]' },
+  { icon: AtSign, label: 'LinkedIn', color: 'hover:text-[var(--ax-c-3)] hover:bg-[color-mix(in_oklab,var(--ax-c-3)_10%,transparent)]' },
 ]
 
 export default function SocialButton({ className }: { className?: string }) {
@@ -105,7 +105,7 @@ export default function SocialButton({ className }: { className?: string }) {
 }
 
 interface OnClickOutsideProps { children: ReactNode; onClickOutside: () => void; classes?: string }
-const OnClickOutside: FC<OnClickOutsideProps> = ({ children, onClickOutside, classes }) => {
+function OnClickOutside({ children, onClickOutside, classes }: OnClickOutsideProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   useClickOutside(wrapperRef, onClickOutside)
   return <div ref={wrapperRef} className={cn(classes)}>{children}</div>
