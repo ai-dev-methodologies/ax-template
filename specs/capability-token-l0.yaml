@@ -52,6 +52,9 @@ items:
       floor and the opaque-treatment requirement even when a UUID shape is used.
   - id: "CAPTOKEN-ENUM-404-001"
     chapter: "Existence-hiding 404 on bad / absent / expired token (no caller)"
+    verification:
+      mechanism: rule
+      ref: public-lookup-token-is-unguessable-and-enumeration-resistant
     requirement: "A request bearing a token that is malformed, absent, unknown, revoked, or expired MUST resolve to a 404 Not Found that is BYTE-INDISTINGUISHABLE from the 404 for a well-formed-but-never-issued token — same status, same RFC 9457 body type=urn:problem:not-found, same shape, no field that distinguishes 'token never existed' from 'token existed but is expired/revoked'. The lookup MUST NOT emit a different status (401/403/410/422) or a different message for the expired/revoked case, because any such difference is an existence oracle that lets an attacker confirm guesses and harvest live tokens. Token comparison SHOULD be constant-time (MessageDigest.isEqual on the hashed token, not String.equals on the raw value) so timing does not leak validity. Possession of a VALID, unexpired token is the SOLE authorization decision — there is NO authenticated principal, NO role check, and NO ownership check; the absence of a valid token is the ONLY denial path, and it always denies as an indistinguishable 404. This mirrors relationship-authz-l0 REBAC-404-001 existence-hiding, but with NO caller in the request at all."
     test_method: "RestAssured integration test"
     verification_type: "review"
@@ -71,6 +74,9 @@ items:
       token → 200. The expired and never-issued 404s MUST be diff-equal.
   - id: "CAPTOKEN-PROJECTION-001"
     chapter: "PII-minimized anonymous projection"
+    verification:
+      mechanism: rule
+      ref: public-lookup-token-is-unguessable-and-enumeration-resistant
     requirement: "The representation returned to an anonymous token holder MUST be a strictly NARROWER, PII-minimized projection than the authenticated-owner representation of the same resource — a dedicated public DTO, never the owner entity serialized directly. Because the bearer is unauthenticated and the link may be forwarded, screenshotted, indexed, or sit in an e-mail an attacker reads, the public projection MUST exclude full PII (full name truncated/masked, full address reduced to city/region, e-mail/phone masked or omitted, internal ids / audit fields / pricing internals / other recipients removed) and MUST expose only the fields the use-case requires (e.g. shipment status + ETA + masked destination for a tracking lookup; order state + masked line summary for guest order-status). The owner/authenticated endpoint keeps the fuller view; the capability endpoint MUST NOT reach the owner DTO, MUST NOT accept a field-selection parameter that widens it, and MUST NOT leak the internal id used in CAPTOKEN-UNGUESSABLE-001. The invariant: anonymous-projection ⊊ owner-projection (a strict subset), enforced by a distinct serialization path, not by conditional field-stripping on the owner object."
     test_method: "RestAssured integration test + DTO field review"
     verification_type: "review"
