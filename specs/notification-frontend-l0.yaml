@@ -26,6 +26,9 @@ items:
     backend_only_marker: false
 
   - id: NOTIF-FE-002
+    verification:
+      mechanism: rule
+      ref: notification-frontend-inbox-settings-bell
     requirement: "Notification detail page loads a single notification and renders mark-read action; PATCH /api/notifications/{id}/read is called when the user reads the notification"
     backend_operation_id: markNotificationRead
     backend_spec_ref: NOTIF-READ-001
@@ -37,6 +40,9 @@ items:
     backend_only_marker: false
 
   - id: NOTIF-FE-003
+    verification:
+      mechanism: rule
+      ref: notification-frontend-inbox-settings-bell
     requirement: "Settings page renders notification preference form with inAppEnabled and emailEnabled toggles; PATCH /api/notifications/preferences is called on submit"
     backend_operation_id: getNotificationPreferences
     backend_spec_ref: NOTIF-PREF-001
@@ -48,6 +54,9 @@ items:
     backend_only_marker: false
 
   - id: NOTIF-FE-004
+    verification:
+      mechanism: rule
+      ref: notification-frontend-inbox-settings-bell
     requirement: "Settings page preference form submits PATCH /api/notifications/preferences with partial update; response updates the form state"
     backend_operation_id: updateNotificationPreferences
     backend_spec_ref: NOTIF-PREF-002
@@ -59,6 +68,9 @@ items:
     backend_only_marker: false
 
   - id: NOTIF-FE-005
+    verification:
+      mechanism: rule
+      ref: notification-frontend-inbox-settings-bell
     requirement: "NotificationBell component in the app header displays unread badge count; polling or SSE updates the count without full page reload"
     backend_operation_id: listNotifications
     backend_spec_ref: NOTIF-LIST-002
@@ -70,6 +82,9 @@ items:
     backend_only_marker: false
 
   - id: NOTIF-FE-006
+    verification:
+      mechanism: rule
+      ref: notification-frontend-inbox-settings-bell
     requirement: "Dismiss action on notification detail page calls DELETE /api/notifications/{id} and navigates back to inbox"
     backend_operation_id: dismissNotification
     backend_spec_ref: NOTIF-DISMISS-001

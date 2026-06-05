@@ -25,6 +25,9 @@ items:
     backend_only_marker: false
 
   - id: AUDIT-FE-002
+    verification:
+      mechanism: rule
+      ref: audit-log-frontend-viewer-rbac-virtualized
     requirement: >
       List page renders FilterBar with filter inputs for actor, resource type,
       action, outcome, and date range (from/to). Submitting the filter updates
@@ -39,6 +42,9 @@ items:
     backend_only_marker: false
 
   - id: AUDIT-FE-003
+    verification:
+      mechanism: rule
+      ref: audit-log-frontend-viewer-rbac-virtualized
     requirement: >
       List page supports pagination via page + size query params; Pagination
       component renders and links to prev/next pages.
@@ -52,6 +58,9 @@ items:
     backend_only_marker: false
 
   - id: AUDIT-FE-004
+    verification:
+      mechanism: rule
+      ref: audit-log-frontend-viewer-rbac-virtualized
     requirement: >
       Detail page renders full metadata for a single audit log entry identified
       by id from path params; displays actor, action, resource, outcome, timestamp,
@@ -66,6 +75,9 @@ items:
     backend_only_marker: false
 
   - id: AUDIT-FE-005
+    verification:
+      mechanism: rule
+      ref: audit-log-frontend-viewer-rbac-virtualized
     requirement: >
       Export page renders a form with format selector (CSV/JSON) and optional
       filter fields; onSubmit calls exportAuditLogs endpoint (POST) and shows
@@ -80,6 +92,9 @@ items:
     backend_only_marker: false
 
   - id: AUDIT-FE-006
+    verification:
+      mechanism: rule
+      ref: audit-log-frontend-viewer-rbac-virtualized
     requirement: >
       Export page shows an access-denied notice when the current user lacks
       ROLE_ADMIN or ROLE_AUDITOR; the export form is not rendered in that case.
@@ -93,6 +108,9 @@ items:
     backend_only_marker: false
 
   - id: AUDIT-FE-007
+    verification:
+      mechanism: rule
+      ref: audit-log-frontend-viewer-rbac-virtualized
     requirement: >
       List page shows EmptyState component when no audit log entries match the
       current filter, with a prompt to clear filters.
@@ -106,6 +124,9 @@ items:
     backend_only_marker: false
 
   - id: AUDIT-FE-008
+    verification:
+      mechanism: rule
+      ref: audit-log-frontend-viewer-rbac-virtualized
     requirement: >
       List page shows ErrorBoundary when the listAuditLogs API call fails; the
       error boundary renders a retry prompt without crashing the entire page.

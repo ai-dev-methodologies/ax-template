@@ -29,6 +29,9 @@ items:
       - practices/rules/async-virtual-thread-executor.md
 
   - id: PRACTICES-FE-002
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Index page lists all React rules from practices-react/rules/**/*.md with title, impact, and tags"
     test_method: practices_index_renders_react_rules
     backend_operation_id: null
@@ -37,6 +40,9 @@ items:
       - practices-react/rules/async-parallel.md
 
   - id: PRACTICES-FE-003
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Index page shows combined rule count (≥64 Java rules + ≥70 React rules)"
     test_method: practices_index_shows_rule_counts
     backend_operation_id: null
@@ -45,6 +51,9 @@ items:
       - practices-react/rules/async-parallel.md
 
   - id: PRACTICES-FE-004
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Category page filters rules by prefix (e.g. /practices/category/async shows only async-* rules)"
     test_method: practices_category_page_filters_by_prefix
     backend_operation_id: null
@@ -53,6 +62,9 @@ items:
       - practices-react/rules/async-parallel.md
 
   - id: PRACTICES-FE-005
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Category page shows rules from both Java and React catalogs that match the prefix"
     test_method: practices_category_page_shows_both_catalogs
     backend_operation_id: null
@@ -61,6 +73,9 @@ items:
       - practices-react/rules/async-defer-await.md
 
   - id: PRACTICES-FE-006
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Rule detail page renders the full markdown body for a specific rule ID"
     test_method: practices_rule_detail_renders_markdown
     backend_operation_id: null
@@ -69,6 +84,9 @@ items:
       - practices-react/rules/async-parallel.md
 
   - id: PRACTICES-FE-007
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Rule detail page shows rule metadata: title, impact, tags, and spec_ref"
     test_method: practices_rule_detail_shows_metadata
     backend_operation_id: null
@@ -77,6 +95,9 @@ items:
       - practices-react/rules/async-parallel.md
 
   - id: PRACTICES-FE-008
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Rule detail page for a non-existent rule ID returns a 404 not-found state"
     test_method: practices_rule_detail_404_for_unknown_id
     backend_operation_id: null
@@ -84,6 +105,9 @@ items:
       - practices/rules/async-virtual-thread-executor.md
 
   - id: PRACTICES-FE-009
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Index page groups rules by catalog (Java / React) with clear headings"
     test_method: practices_index_groups_by_catalog
     backend_operation_id: null
@@ -92,6 +116,9 @@ items:
       - practices-react/AGENTS.md
 
   - id: PRACTICES-FE-010
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Index page navigation link leads to /practices from the app shell sidebar"
     test_method: practices_index_nav_link
     backend_operation_id: null
@@ -100,6 +127,9 @@ items:
       - practices-react/AGENTS.md
 
   - id: PRACTICES-FE-011
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Category page shows an empty state when no rules match the given prefix"
     test_method: practices_category_page_empty_state
     backend_operation_id: null
@@ -108,6 +138,9 @@ items:
       - practices-react/rules/async-parallel.md
 
   - id: PRACTICES-FE-012
+    verification:
+      mechanism: rule
+      ref: practices-frontend-catalog-browser
     requirement: "Rule detail page breadcrumb links back to the category and index pages"
     test_method: practices_rule_detail_breadcrumb
     backend_operation_id: null
