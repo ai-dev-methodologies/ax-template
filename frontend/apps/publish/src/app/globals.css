@@ -1,0 +1,284 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+ * Shared design tokens.
+ *
+ * Replicated from the repo-root token layer (frontend/src/app/globals.css) so
+ * this per-persona app is self-standing — there is no shared CSS export to
+ * import, so the canonical :root / .dark token block is mirrored verbatim. The
+ * catalog primitives (@ax/ui) and blocks (@ax/blocks) resolve every color +
+ * radius against these variables, so they re-skin from a single source.
+ *
+ * The editorial-luxury PERSONA override lives in .ax-editorial below (NOT in
+ * :root) so the persona theme is scoped to the app shell, not baked into the
+ * tokens themselves.
+ * ------------------------------------------------------------------------- */
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 43%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+
+    /* ax status tokens — WCAG-locked fg/bg pairs (>= 4.5:1 for 12px pill text). */
+    --ax-status-success-fg: oklch(52% 0.14 150);
+    --ax-status-success-bg: oklch(96% 0.03 150);
+    --ax-status-danger-fg: oklch(55% 0.18 25);
+    --ax-status-danger-bg: oklch(96% 0.03 25);
+    --ax-status-warning-fg: oklch(54% 0.14 70);
+    --ax-status-warning-bg: oklch(96% 0.04 70);
+    --ax-status-info-fg: oklch(53% 0.16 250);
+    --ax-status-info-bg: oklch(96% 0.03 250);
+    --ax-status-attention-fg: oklch(54% 0.15 90);
+    --ax-status-attention-bg: oklch(97% 0.04 90);
+    --ax-status-neutral-fg: oklch(50% 0 0);
+    --ax-status-neutral-bg: oklch(95% 0 0);
+    --ax-status-accent-fg: oklch(53% 0.20 290);
+    --ax-status-accent-bg: oklch(96% 0.04 290);
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    --ax-status-success-fg: oklch(72% 0.15 150);
+    --ax-status-success-bg: oklch(28% 0.05 150);
+    --ax-status-danger-fg: oklch(72% 0.17 25);
+    --ax-status-danger-bg: oklch(28% 0.06 25);
+    --ax-status-warning-fg: oklch(78% 0.14 70);
+    --ax-status-warning-bg: oklch(30% 0.05 70);
+    --ax-status-info-fg: oklch(72% 0.15 250);
+    --ax-status-info-bg: oklch(28% 0.05 250);
+    --ax-status-attention-fg: oklch(80% 0.14 90);
+    --ax-status-attention-bg: oklch(30% 0.05 90);
+    --ax-status-neutral-fg: oklch(75% 0 0);
+    --ax-status-neutral-bg: oklch(28% 0 0);
+    --ax-status-accent-fg: oklch(72% 0.18 290);
+    --ax-status-accent-bg: oklch(30% 0.06 290);
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans), ui-serif, Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+@layer components {
+  /* editorial-luxury PERSONA THEME.
+   *
+   * Scoped to the app shell wrapper (the layouts add `.ax-editorial`), never to
+   * :root, so the persona stays contained:
+   *   - radius 0px            -> sharp, magazine-grid corners (flows into every
+   *                              catalog component via --radius)
+   *   - LOW accent saturation -> a near-monochrome ink accent (chroma pulled far
+   *                              below the default; refined, not decorative)
+   *   - FLAT elevation        -> shadows are neutralized to hairline rules; depth
+   *                              comes from typographic scale + rules, not glow
+   * Motion budget is "refined reveal + subtle parallax" (persona motion_level 2);
+   * see the reveal keyframes + the reduced-motion block. */
+  .ax-editorial {
+    --radius: 0px;
+    /* Low-saturation ink accent — a deep desaturated indigo-graphite that reads
+     * as "editorial accent" rather than a vivid brand color. */
+    --ax-status-accent-fg: oklch(38% 0.04 270);
+    --ax-status-accent-bg: oklch(95% 0.01 270);
+    /* A precise ink ring so focus rings read as a thin editorial rule. */
+    --ring: 240 6% 12%;
+  }
+  .dark .ax-editorial,
+  .ax-editorial.dark {
+    --ax-status-accent-fg: oklch(82% 0.03 270);
+    --ax-status-accent-bg: oklch(26% 0.02 270);
+    --ring: 0 0% 92%;
+  }
+
+  /* FLAT elevation: the editorial persona is the opposite of the consumer's
+   * tinted float — every catalog drop-shadow collapses to a crisp hairline rule
+   * so surfaces are defined by edges, not glow. */
+  .ax-editorial .shadow-sm,
+  .ax-editorial .shadow,
+  .ax-editorial .shadow-md,
+  .ax-editorial .shadow-lg,
+  .ax-editorial .shadow-xl {
+    box-shadow: none;
+  }
+
+  /* Masthead wordmark: the ink accent token as a sharp filled glyph. */
+  .ax-editorial .ax-wordmark-chip {
+    color: var(--ax-status-accent-bg);
+    background: var(--ax-status-accent-fg);
+  }
+
+  /* Square layout for the catalog StatusBadge pill (the block ships only the
+   * inline fg/bg color; the host theme owns layout). Sharp corners, uppercase
+   * micro-label — an editorial caption, not a rounded pill. */
+  .ax-editorial .ax-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 0;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.2;
+  }
+  .ax-editorial .ax-status-badge__icon {
+    width: 0.8rem;
+    height: 0.8rem;
+  }
+
+  /* Editorial reveal: a slow, refined upward settle used once on mount for shell
+   * panels and each library row (staggered via inline animation-delay). Only
+   * transform + opacity, so it stays on the compositor. */
+  .ax-editorial .ax-reveal {
+    animation: ax-editorial-reveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* The Tiptap editable surface inherits the body serif + token spacing and
+   * gives block elements editorial rhythm. Scoped under .ax-editorial so it
+   * never leaks past the studio shell. */
+  .ax-editorial .ax-rte-content h2 {
+    font-family: var(--font-display), ui-serif, Georgia, serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 1.2rem 0 0.5rem;
+  }
+  .ax-editorial .ax-rte-content h3 {
+    font-family: var(--font-display), ui-serif, Georgia, serif;
+    font-size: 1.3rem;
+    font-weight: 600;
+    line-height: 1.25;
+    margin: 1rem 0 0.4rem;
+  }
+  .ax-editorial .ax-rte-content p {
+    margin: 0 0 0.85rem;
+  }
+  .ax-editorial .ax-rte-content ul,
+  .ax-editorial .ax-rte-content ol {
+    margin: 0 0 0.85rem 1.4rem;
+  }
+  .ax-editorial .ax-rte-content ul {
+    list-style: disc;
+  }
+  .ax-editorial .ax-rte-content ol {
+    list-style: decimal;
+  }
+  .ax-editorial .ax-rte-content blockquote {
+    border-left: 2px solid hsl(var(--foreground));
+    padding-left: 1rem;
+    margin: 0 0 0.85rem;
+    font-style: italic;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Shared rendered-article prose (read view) — same editorial rhythm as the
+   * editor surface so what you write is what you read. */
+  .ax-editorial .ax-prose {
+    font-size: 1.125rem;
+    line-height: 1.75;
+  }
+  .ax-editorial .ax-prose h2 {
+    font-family: var(--font-display), ui-serif, Georgia, serif;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 2rem 0 0.75rem;
+  }
+  .ax-editorial .ax-prose h3 {
+    font-family: var(--font-display), ui-serif, Georgia, serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.5rem;
+  }
+  .ax-editorial .ax-prose p {
+    margin: 0 0 1.15rem;
+  }
+  .ax-editorial .ax-prose ul,
+  .ax-editorial .ax-prose ol {
+    margin: 0 0 1.15rem 1.6rem;
+  }
+  .ax-editorial .ax-prose ul {
+    list-style: disc;
+  }
+  .ax-editorial .ax-prose ol {
+    list-style: decimal;
+  }
+  .ax-editorial .ax-prose blockquote {
+    border-left: 3px solid hsl(var(--foreground));
+    padding-left: 1.25rem;
+    margin: 1.5rem 0;
+    font-style: italic;
+    font-size: 1.25rem;
+    color: hsl(var(--muted-foreground));
+  }
+}
+
+@keyframes ax-editorial-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ax-editorial .ax-reveal {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

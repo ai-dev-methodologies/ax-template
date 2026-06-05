@@ -36,3 +36,5 @@ export { default as AvatarGroup } from './avatar-group';
 export { default as CodeSnippet } from './code-snippet';
 export { default as ActivityFeed } from './activity-feed';
 export type { ActivityFeedItem, ActivityFeedProps } from './activity-feed';
+export { default as RichTextEditor } from './rich-text-editor';
+export type { RichTextEditorProps } from './rich-text-editor';
