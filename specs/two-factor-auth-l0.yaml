@@ -87,6 +87,9 @@ items:
   # ── ENROLL family ─────────────────────────────────────────────────────
   - id: "TFA-ENROLL-001"
     chapter: "Factor 등록 ceremony"
+    verification:
+      mechanism: rule
+      ref: two-factor-auth-totp-webauthn
     requirement: "TOTP / WebAuthn 등록은 반드시 first OTP / WebAuthn attestation 검증 후 binding이 완료된다. QR / challenge 표시만으로 enrolled 상태가 되지 않으며 (caller가 QR을 스캔만 하고 OTP 입력 실패 시 unenrolled rollback). 등록 ceremony는 idempotent — 동일 user의 재-등록은 기존 factor 폐기 + 신규 등록 + audit log emit. Recovery-code 발급은 enrollment의 일부로 동시 생성 (10 codes)."
     test_method: "tfa_ENROLL_001_qrAloneIsNotEnrolled"
     verification_type: "integration_test"
@@ -101,6 +104,9 @@ items:
   # ── VERIFY family ─────────────────────────────────────────────────────
   - id: "TFA-VERIFY-001"
     chapter: "Per-session verification"
+    verification:
+      mechanism: rule
+      ref: two-factor-auth-totp-webauthn
     requirement: "MFA-enrolled user의 모든 fresh session은 bearer token 외 추가로 factor verification을 요구한다. bearer token 단독으로는 session 시작 불가 — mfa_verified_at이 session record에 null이면 모든 protected endpoint가 403 MFA_REQUIRED. mfa_verified_at은 factor 검증 성공 시점 timestamp; session TTL (recipe 결정) 경과 시 재검증 필요."
     test_method: "tfa_VERIFY_001_bearerWithoutMfaReturns403"
     verification_type: "integration_test"
@@ -115,6 +121,9 @@ items:
   # ── RECOVERY family ──────────────────────────────────────────────────
   - id: "TFA-RECOVERY-001"
     chapter: "Recovery codes"
+    verification:
+      mechanism: rule
+      ref: two-factor-auth-totp-webauthn
     requirement: "Recovery code는 enrollment 시 10 codes 발급 + one-time use 강제 (사용 즉시 폐기). 저장은 plaintext 금지 — bcrypt OR scrypt hash (cost factor >= 12) + immutable history table (사용 record audit trail). 재발급은 기존 codes 전체 폐기 후 신규 10 codes 발급 + audit log. Recovery code 사용은 TOTP/WebAuthn factor가 분실/도난 시점에만 허용되며 사용 후 새 factor 재등록 강제."
     test_method: "tfa_RECOVERY_001_codeUsedOnceThenInvalid"
     verification_type: "integration_test"
@@ -128,6 +137,9 @@ items:
   # ── RATE-LIMIT family ───────────────────────────────────────────────
   - id: "TFA-RATE-LIMIT-001"
     chapter: "Brute-force 방지 rate limit"
+    verification:
+      mechanism: rule
+      ref: two-factor-auth-totp-webauthn
     requirement: "Factor verification 실패는 identifier (userId + factor_type) 별 sliding window rate limit — 15분 내 5회 실패 시 lockout 30분 + 비동기 audit alert (P0 이벤트). Lockout 중에는 valid factor도 거부 (lockout TTL 만료 후 재시도). SMS-OTP는 추가로 IP+phone 조합 1시간 내 3회 시도 cap (SMS 비용 polynomial 방어)."
     test_method: "tfa_RATE_LIMIT_001_5failuresIn15minLockout30min"
     verification_type: "integration_test"
@@ -142,6 +154,9 @@ items:
   # ── SESSION-BIND family ─────────────────────────────────────────────
   - id: "TFA-SESSION-BIND-001"
     chapter: "Session ↔ Factor 결속"
+    verification:
+      mechanism: rule
+      ref: two-factor-auth-totp-webauthn
     requirement: "Session record (기존 session-management L4의 SessionRecord 확장)는 mfa_verified_at + factor_type_used 컬럼 보유 + 결속. 등록된 factor가 변경 (재등록 / 폐기)되면 영향 받는 모든 active session이 자동 revoke + 재인증 요구. Cross-device factor change (휴대전화 새로 등록)는 모든 기기 session revoke (admin 본인 device 제외)."
     test_method: "tfa_SESSION_BIND_001_factorChangeRevokesAllSessions"
     verification_type: "integration_test"

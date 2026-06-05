@@ -54,6 +54,9 @@ items:
 
   - id: "CORS-PREFLIGHT-001"
     chapter: "OPTIONS preflight handling"
+    verification:
+      mechanism: rule
+      ref: cors-allowlist-and-preflight
     requirement: "For a CORS preflight (an `OPTIONS` request carrying both `Origin` and `Access-Control-Request-Method`, optionally `Access-Control-Request-Headers`) the server MUST respond 204 (or 200) WITHOUT executing business logic and WITHOUT requiring authentication, returning `Access-Control-Allow-Origin`, `Access-Control-Allow-Methods`, and (when requested) `Access-Control-Allow-Headers`. The preflight MUST be answered before any authn/authz filter runs so that a protected endpoint is still reachable by a legitimate cross-origin client. A non-preflight `OPTIONS` (no `Access-Control-Request-Method`) is a normal request and MUST NOT be treated as preflight."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -68,6 +71,9 @@ items:
 
   - id: "CORS-CREDENTIALS-001"
     chapter: "Allow-Credentials policy"
+    verification:
+      mechanism: rule
+      ref: cors-allowlist-and-preflight
     requirement: "`Access-Control-Allow-Credentials: true` MUST be sent ONLY when the recipe sets `cors_allow_credentials: true` AND a specific origin is echoed in `Access-Control-Allow-Origin`. The combination of `Access-Control-Allow-Origin: *` with `Access-Control-Allow-Credentials: true` is forbidden — the credentialed mode disallows the wildcard for origin, methods, and headers, so each MUST be an explicit value. When credentials are allowed the response MUST include `Vary: Origin`. Default `cors_allow_credentials` MUST be `false`; cookie/Authorization-bearing cross-origin reads require an explicit opt-in."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -81,6 +87,9 @@ items:
 
   - id: "CORS-METHODS-001"
     chapter: "Allow-Methods per endpoint"
+    verification:
+      mechanism: rule
+      ref: cors-allowlist-and-preflight
     requirement: "`Access-Control-Allow-Methods` MUST enumerate the exact HTTP methods the endpoint group supports (e.g., `GET, POST, PUT, DELETE`) drawn from a recipe-declared `cors_allowed_methods` list. `*` is permitted ONLY in non-credentialed mode and MUST NOT be used when `cors_allow_credentials` is true. The preflight MUST reflect the support set such that the value in `Access-Control-Request-Method` is included; a method not in the allowlist MUST cause the server to omit it from `Access-Control-Allow-Methods` (browser blocks), NOT to 405 the preflight. CORS-simple methods (GET/HEAD/POST) are still subject to the declared allowlist for the response advertisement."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -95,6 +104,9 @@ items:
 
   - id: "CORS-HEADERS-001"
     chapter: "Allow-Headers + Expose-Headers"
+    verification:
+      mechanism: rule
+      ref: cors-allowlist-and-preflight
     requirement: "`Access-Control-Allow-Headers` MUST enumerate the request headers the client may send (covering every value listed in `Access-Control-Request-Headers`), drawn from a recipe-declared `cors_allowed_headers` list; CORS-safelisted request headers need not be listed but a custom header such as `Authorization`, `X-Idempotency-Key`, or `X-Tenant-Id` MUST be. `Access-Control-Expose-Headers` MUST enumerate any non-safelisted RESPONSE headers (e.g., `X-Total-Count`, `Location`, `ETag`) the browser is allowed to read; without it those headers are hidden from script. `*` for either header is permitted ONLY in non-credentialed mode. A requested header absent from the allowlist MUST cause omission (browser blocks), NOT a 4xx."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -108,6 +120,9 @@ items:
 
   - id: "CORS-MAXAGE-001"
     chapter: "Preflight cache duration"
+    verification:
+      mechanism: rule
+      ref: cors-allowlist-and-preflight
     requirement: "Preflight responses MUST set `Access-Control-Max-Age` to a recipe-declared `cors_max_age_seconds` (default 600) bounding how long the browser caches the preflight result, reducing repeat OPTIONS round-trips. The value MUST be a non-negative integer of seconds; the server MUST treat it as advisory because the user agent enforces its own upper cap and MAY ignore larger values. A value of `0` (or omission) means re-preflight every request and is acceptable for rarely-called or rapidly-changing surfaces. The configured value MUST be a bounded constant, never derived from request input."
     test_method: "RestAssured integration test"
     verification_type: "positive"

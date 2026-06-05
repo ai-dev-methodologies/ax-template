@@ -58,6 +58,9 @@ items:
 
   - id: "CONFIG-FAILFAST-001"
     chapter: "Fail-fast at application startup"
+    verification:
+      mechanism: rule
+      ref: config-validation-fail-fast-typed
     requirement: "Invalid or unbindable configuration MUST cause the application context to FAIL TO START (non-zero exit, no listening port), never to start in a degraded state that throws lazily on first use. Validation MUST execute during context refresh / bean binding, before the embedded server accepts traffic. The startup failure MUST emit a structured log entry naming every offending property path and the violated constraint. A health/readiness probe MUST NOT report ready if any validated config bean failed to bind."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -73,6 +76,9 @@ items:
 
   - id: "CONFIG-REQUIRED-001"
     chapter: "Required keys have no silent default"
+    verification:
+      mechanism: rule
+      ref: config-validation-fail-fast-typed
     requirement: "Security-relevant configuration keys (secret-store references, downstream service URLs, CORS / trust allowlists, signing-key identifiers, token issuer/audience) MUST be declared required (`@NotNull` / `@NotBlank`) with NO in-code fallback default. Absence of such a key MUST be a startup error (per CONFIG-FAILFAST-001), never a substitution with an insecure built-in placeholder (no `http://localhost`, `changeme`, empty-allowlist-as-allow-all). Non-security operational tunables (timeouts, page sizes) MAY carry documented defaults."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -88,6 +94,9 @@ items:
 
   - id: "CONFIG-SECRET-SEPARATION-001"
     chapter: "Secret values separated from config"
+    verification:
+      mechanism: rule
+      ref: config-validation-fail-fast-typed
     requirement: "Secret VALUES (passwords, private keys, API tokens, DB credentials) MUST NOT appear in plain-text config files, committed property files, or container images. Configuration MUST hold only a REFERENCE (e.g., a secret-store path / key alias / env-var name) that is resolved at runtime from a secret store (composes secrets-management-l0). Bound `@ConfigurationProperties` fields carrying secrets MUST be excluded from any config-dump / actuator `/configprops` / log output (masked). A literal high-entropy secret detected in a property source SHOULD fail a startup guard or CI scan."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -103,6 +112,9 @@ items:
 
   - id: "CONFIG-PROFILE-001"
     chapter: "Explicit environment profiles"
+    verification:
+      mechanism: rule
+      ref: config-validation-fail-fast-typed
     requirement: "The active environment profile MUST be set explicitly (e.g., `spring.profiles.active`) and a `prod` deployment MUST NOT silently fall back to development defaults when no profile is supplied. If no profile is active, the application MUST refuse to start in a production-intended packaging OR MUST start under an explicitly safe default that disables dev-only conveniences (no in-memory DB, no permit-all security, no verbose stack traces). Profile-specific property files MUST NOT leak dev secrets into the prod profile."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -119,6 +131,9 @@ items:
 
   - id: "CONFIG-IMMUTABLE-001"
     chapter: "Config immutable after startup"
+    verification:
+      mechanism: rule
+      ref: config-validation-fail-fast-typed
     requirement: "Bound configuration MUST be effectively immutable after context startup: `@ConfigurationProperties` objects SHOULD be constructor-bound records / final fields exposing no public setters, and no code path may mutate a shared config bean at request time (no hidden mutable global state). If runtime reconfiguration is genuinely required, it MUST be an EXPLICITLY declared reload contract (e.g., Spring Cloud `@RefreshScope` or a documented reload endpoint) that re-runs the same validation; an undeclared mutable config field is forbidden. Reload MUST re-validate and reject an invalid new value without corrupting the prior good state."
     test_method: "RestAssured integration test"
     verification_type: "negative"
