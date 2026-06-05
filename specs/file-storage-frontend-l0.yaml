@@ -8,6 +8,9 @@ items:
   # ─── RENDER family (4 items) ──────────────────────────────────────────────
   - id: "FILE-FE-RENDER-001"
     chapter: "RENDER"
+    verification:
+      mechanism: rule
+      ref: file-storage-frontend-render-a11y-error
     requirement: "The file list page renders a DataTable of the user's files with columns: name, type, size, status, uploaded date, and actions (download, delete)."
     test_method: "composition.spec.ts static analysis"
     verification_type: "positive"
@@ -21,6 +24,9 @@ items:
 
   - id: "FILE-FE-RENDER-002"
     chapter: "RENDER"
+    verification:
+      mechanism: rule
+      ref: file-storage-frontend-render-a11y-error
     requirement: "The upload page renders a FileDropzone (L1) with accepted MIME types and size limit passed as props; a progress indicator is shown during upload."
     test_method: "composition.spec.ts static analysis"
     verification_type: "positive"
@@ -35,6 +41,9 @@ items:
 
   - id: "FILE-FE-RENDER-003"
     chapter: "RENDER"
+    verification:
+      mechanism: rule
+      ref: file-storage-frontend-render-a11y-error
     requirement: "The file detail page renders file metadata (name, type, size, status, timestamps) and a Download button; for PENDING files the button shows a 'Scan in progress' state."
     test_method: "composition.spec.ts static analysis"
     verification_type: "positive"
@@ -48,6 +57,9 @@ items:
 
   - id: "FILE-FE-RENDER-004"
     chapter: "RENDER"
+    verification:
+      mechanism: rule
+      ref: file-storage-frontend-render-a11y-error
     requirement: "File size is rendered as a human-readable string (e.g., '1.5 MB', '320 KB'); raw byte counts are never displayed to the user."
     test_method: "composition.spec.ts static analysis"
     verification_type: "positive"
@@ -61,6 +73,9 @@ items:
   # ─── A11Y family (3 items) ────────────────────────────────────────────────
   - id: "FILE-FE-A11Y-001"
     chapter: "A11Y"
+    verification:
+      mechanism: rule
+      ref: file-storage-frontend-render-a11y-error
     requirement: "The FileDropzone (L1) is keyboard accessible: Tab focuses the drop zone, Space/Enter opens the file picker, and the accepted files list supports keyboard removal."
     test_method: "composition.spec.ts static analysis + WCAG 2.2 audit"
     verification_type: "positive"
@@ -89,6 +104,9 @@ items:
 
   - id: "FILE-FE-A11Y-003"
     chapter: "A11Y"
+    verification:
+      mechanism: rule
+      ref: file-storage-frontend-render-a11y-error
     requirement: "Upload errors and quota exceeded messages are announced via an ARIA live region so screen reader users are notified without a page reload."
     test_method: "composition.spec.ts static analysis"
     verification_type: "positive"
@@ -103,6 +121,9 @@ items:
   # ─── ERROR family (2 items) ───────────────────────────────────────────────
   - id: "FILE-FE-ERROR-001"
     chapter: "ERROR"
+    verification:
+      mechanism: rule
+      ref: file-storage-frontend-render-a11y-error
     requirement: "Upload failures show specific user-facing messages mapped from backend error types: quota-exceeded, unsupported-type, file-too-large, and network-error."
     test_method: "composition.spec.ts static analysis"
     verification_type: "positive"
@@ -119,6 +140,9 @@ items:
 
   - id: "FILE-FE-ERROR-002"
     chapter: "ERROR"
+    verification:
+      mechanism: rule
+      ref: file-storage-frontend-render-a11y-error
     requirement: "If a download attempt returns 202 (scan pending), the UI shows a non-blocking message and automatically polls getFile every 3 seconds until the file becomes READY or QUARANTINED."
     test_method: "composition.spec.ts static analysis"
     verification_type: "positive"
@@ -134,6 +158,9 @@ items:
   # ─── PERF family (1 item) ─────────────────────────────────────────────────
   - id: "FILE-FE-PERF-001"
     chapter: "PERF"
+    verification:
+      mechanism: rule
+      ref: file-storage-frontend-render-a11y-error
     requirement: "The file list page uses virtualized rendering for lists exceeding 50 items; DOM nodes for off-screen rows are not rendered."
     test_method: "composition.spec.ts static analysis"
     verification_type: "positive"
