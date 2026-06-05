@@ -108,6 +108,10 @@ public class SecurityConfig {
                 // (EXPORT-AUTHZ-001). Owner-only access is then enforced inside
                 // ReportExportService.
                 .requestMatchers("/api/exports/**").authenticated()
+                // caching-l0 reference workload (specs/caching-l0.yaml):
+                // CACHE-KEY-001 — the authenticated principal IS the cache tenant, so a
+                // JWT is required (an anonymous caller has no tenant to isolate keys by).
+                .requestMatchers("/api/cache/**").authenticated()
                 // R30 api-key domain (specs/api-key-l0.yaml):
                 // KEY-AUTHZ-001 — management surface is JWT-only (the
                 // ApiKeyAuthenticationFilter explicitly skips these paths

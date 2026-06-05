@@ -67,6 +67,12 @@ tasks.register<Test>("testCrud") {
     }
 }
 
+tasks.register<Test>("testCaching") {
+    useJUnitPlatform {
+        includeTags("CACHING")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")
