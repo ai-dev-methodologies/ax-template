@@ -75,6 +75,9 @@ items:
 
   - id: "REBAC-CAPABILITY-XREF-001"
     chapter: "Inversion boundary vs capability-token (no-caller surfaces)"
+    verification:
+      mechanism: rule
+      ref: relationship-scoped-authz-via-grant-lookup
     requirement: "Relationship-scoped authorization (REBAC-LOOKUP-001 / REBAC-404-001 / REBAC-LIST-PREFILTER-001) applies ONLY to an AUTHENTICATED caller whose identity is derived from Authentication.getName(). A surface that has NO authenticated principal and is authorized SOLELY by possession of an unguessable token in the request (parcel tracking-number lookup, guest order-status, share-by-link, e-receipt, unsubscribe) MUST NOT be modeled as ReBAC: there is no caller to key a grant lookup on. Such surfaces MUST instead adopt capability-token-l0 (CAPTOKEN-UNGUESSABLE-001 / CAPTOKEN-ENUM-404-001 / CAPTOKEN-PROJECTION-001). The boundary is strict and bidirectional: a ReBAC/owner endpoint MUST NOT accept a capability token in lieu of Authentication, and a capability-token endpoint MUST NOT derive an authenticated principal (owner/role/grant) from the token — the token authorizes the READ, it does not impersonate a caller. The two specs share the existence-hiding 404 posture (REBAC-404-001 ≈ CAPTOKEN-ENUM-404-001) but differ on whether a principal exists at all."
     test_method: "review"
     verification_type: "review"
