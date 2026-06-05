@@ -1,13 +1,16 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
+  ArrowRight,
   CheckCircle2,
   Clock,
   Link2,
   Mail,
   RefreshCw,
   ShieldCheck,
+  SlidersHorizontal,
   UserRound,
 } from 'lucide-react';
 import { useAuthStore } from '../../../lib/auth/authStore';
@@ -207,6 +210,33 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Service launcher — enterprise operations console (ADMIN) */}
+          <Link
+            href="/enterprise"
+            className="group md:col-span-3 rounded-[calc(var(--radius)+0.35rem)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <Card className="transition-colors duration-150 group-hover:border-foreground/20 motion-reduce:transition-none">
+              <CardHeader className="flex-row items-center gap-4 space-y-0">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius)] bg-secondary text-secondary-foreground">
+                  <SlidersHorizontal aria-hidden="true" className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    운영 콘솔
+                    <Badge tone="info">ADMIN</Badge>
+                  </CardTitle>
+                  <CardDescription>
+                    감사 로그 · 결재함 · 기능 플래그 · 세션 · 리포트 추출을 한 곳에서 운영합니다.
+                  </CardDescription>
+                </div>
+                <ArrowRight
+                  aria-hidden="true"
+                  className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transform-none"
+                />
+              </CardHeader>
+            </Card>
+          </Link>
         </div>
       )}
     </div>
