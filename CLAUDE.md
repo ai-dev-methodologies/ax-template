@@ -31,6 +31,28 @@ bash practices/scripts/verify-and-fix-loop.sh --non-interactive   # CI/headless
 
 ---
 
+## 📒 ALWAYS LOG to the ax-ledger (capture → 복기 → improve → feedback)
+
+ax-template's enforcement must be **observable and self-improving**. Every interaction with the gates
+is captured to a per-project, per-user trace (`.ax-ledger/`, gitignored) so it can be reviewed and fed
+back into the catalog. This is a STANDING directive for any AI agent / persona working in a fork:
+
+- **Gate runs auto-log** — `verify-completion.sh` records `gate_run`/`violation` itself. Nothing to do.
+- **You MUST log, the moment it happens:**
+  - a request you refuse because it would break an enforced rule/method →
+    `bash practices/scripts/ax-ledger-log.sh request_rejected rule=<R##|rule-id> detail="…" severity=block actor=user`
+  - any attempt to skip a gate (no-verify / skip flags / manual override) →
+    `bash practices/scripts/ax-ledger-log.sh bypass_attempt detail="…" severity=block`
+  - a meaningful milestone → `bash practices/scripts/ax-ledger-log.sh progress gate=<task> outcome=pass detail="…"`
+- **Review (복기) on request / at session end:** `bash practices/scripts/ax-ledger-review.sh [--since <today>]`
+  surfaces recurring friction + the improvement direction. Recurring friction is a catalog signal —
+  classify it and feed it back via `ax-ledger-resolve.sh` + `practices/DECISIONS.md`.
+
+The ledger is never a merge gate (judgment, not binary) — but **capture is always-on; nothing is lost.**
+Full process: `skills/ax-ledger/SKILL.md`.
+
+---
+
 ## ⭐ Project Vision (READ FIRST — 절대 잊지 말 것)
 
 **ax-template은 React (front) + Spring Boot (backend) full-stack 개발의

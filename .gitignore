@@ -27,3 +27,7 @@ dist/
 .playwright-mcp/
 /persona-*.jpeg
 /showcase-hub.png
+
+# ax-ledger — per-project usage/violation trace (machine-local, per fork-receiver). Reviewable via
+# practices/scripts/ax-ledger-review.sh; never committed (it is the local project's own history).
+.ax-ledger/

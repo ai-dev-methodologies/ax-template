@@ -499,6 +499,19 @@ printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_
     "$TS" "$CURRENT_HEAD" "$EXIT_CODE" "$PASS_COUNT" "$ADVISORY_FAIL" "$HARD_FAIL" "$SKIP_COUNT" \
     >> "$AUDIT_LOG"
 
+# ── ax-ledger capture — every verify run leaves a per-project usage trace (progress / violation),
+# so a fork-receiver's gate history is reviewable (복기) and improvable. Never fails the gate. ──
+_AX_LEDGER="$(dirname "${BASH_SOURCE[0]:-$0}")/ax-ledger-log.sh"
+if [ -f "$_AX_LEDGER" ]; then
+    if [ "$HARD_FAIL" -gt 0 ]; then
+        bash "$_AX_LEDGER" violation gate=verify-completion outcome=fail "pass=$PASS_COUNT" "fail=$HARD_FAIL" \
+            severity=block detail="R25 gate FAILED at HEAD" >/dev/null 2>&1 || true
+    else
+        bash "$_AX_LEDGER" gate_run gate=verify-completion outcome=pass "pass=$PASS_COUNT" "fail=0" \
+            severity=info detail="R25 gate PASSED" >/dev/null 2>&1 || true
+    fi
+fi
+
 # Finalize resume log atomically.
 mv -f "$RESUME_NEW" "$RESUME_LOG"
 
