@@ -72,6 +72,9 @@ items:
 
   - id: "OUTBOX-RELAY-001"
     chapter: "Relay publishes unsent rows + marks sent (at-least-once)"
+    verification:
+      mechanism: rule
+      ref: transactional-outbox-no-dual-write
     requirement: "A separate message relay MUST move PENDING outbox rows to the broker: either a polling publisher that periodically reads unsent rows (status=PENDING, ordered, batch size `outbox_relay_batch_size`) and publishes them, OR a CDC relay (Debezium Outbox Event Router) tailing the outbox table's transaction log. After a successful broker publish the relay MUST mark the row SENT (or delete it) so it is not republished. Delivery is at-least-once: if the relay crashes after publishing but before marking SENT, the row WILL be republished on the next pass — duplicates are expected and handled downstream by OUTBOX-IDEMPOTENT-001. The relay MUST NOT mark a row SENT before the broker acknowledges the publish."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -92,6 +95,9 @@ items:
 
   - id: "OUTBOX-IDEMPOTENT-001"
     chapter: "Stable message id → consumer dedup (composes idempotency-l0)"
+    verification:
+      mechanism: rule
+      ref: transactional-outbox-no-dual-write
     requirement: "Every outbox row MUST carry a stable, immutable `message_id` (RFC 4122 UUID, `outbox_message_id_format`) assigned at WRITE time and never regenerated on relay/redelivery, so a consumer that has already processed that `message_id` can dedup a redelivered copy (composes idempotency-l0: the message_id is the consumer-side idempotency key). Because OUTBOX-RELAY-001 is at-least-once, the publish path MUST NOT assume exactly-once and consumers MUST be idempotent — a consumer re-receiving a known `message_id` MUST treat it as a no-op (same observable effect as a single delivery). The `message_id` MUST also be carried as a message header/property so the consumer can dedup without parsing the payload."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -108,6 +114,9 @@ items:
 
   - id: "OUTBOX-ORDERING-001"
     chapter: "Per-aggregate ordering preserved"
+    verification:
+      mechanism: rule
+      ref: transactional-outbox-no-dual-write
     requirement: "Messages for the same aggregate (same `aggregate_id`) MUST be published in the order they were committed — relay dispatch within an aggregate is ordered by the monotonic outbox sequence (auto-increment id) or `created_at` so an earlier state change is never published after a later one for that aggregate. Recipe declares `outbox_per_aggregate_ordering` (default true). Global cross-aggregate ordering is NOT promised (different aggregates MAY interleave); the contract is per-aggregate FIFO only. A polling relay MUST therefore order its scan by (aggregate_id, sequence) and MUST NOT parallelize publishes for the same aggregate_id; a CDC relay inherits log order and MUST partition the broker by a key derived from aggregate_id so a single aggregate's events land on one ordered partition."
     test_method: "RestAssured integration test"
     verification_type: "positive"
@@ -123,6 +132,9 @@ items:
 
   - id: "OUTBOX-CLEANUP-001"
     chapter: "Sent rows purged/archived on a retention window"
+    verification:
+      mechanism: rule
+      ref: transactional-outbox-no-dual-write
     requirement: "SENT outbox rows MUST NOT accumulate unbounded — they MUST be purged or archived once they are confirmed published and older than `outbox_retention_window_hours` (default 168h / 7d), so the hot outbox table stays small and relay scans stay fast. A retention sweeper (scheduled) MUST only remove rows in status=SENT (never PENDING / never a row that has not been confirmed published), and MAY copy them to an archive table before delete when audit retention is required. PENDING rows MUST NEVER be purged by the cleanup path (that would silently drop an unpublished message). The cleanup window is recipe-configurable and the trade-off (shorter = leaner table, longer = more replay/audit runway) is documented in RECIPE.md."
     test_method: "RestAssured integration test"
     verification_type: "negative"
@@ -141,6 +153,9 @@ items:
 
   - id: "OUTBOX-FAILURE-001"
     chapter: "Relay retry + backoff + poison-message handling (composes job-queue DLQ)"
+    verification:
+      mechanism: rule
+      ref: transactional-outbox-no-dual-write
     requirement: "When the relay's broker publish fails, the row MUST stay PENDING (not lost) and be retried by the next relay pass with exponential backoff plus jitter — the per-attempt delay MUST be `random_between(0, min(max_delay, base * 2^N))` (full jitter, never a fixed multiplier) tracked via an `attempt` count on the row, with `outbox_relay_max_attempts` (default 5) and `outbox_relay_base_delay_ms` (default 1000). On exhausting max attempts the row MUST be routed to a dead-letter / poison state (status=DEAD) rather than blocking the relay head-of-line or being silently dropped — an admin-only endpoint (GET /api/admin/outbox/dead-letter, @PreAuthorize ROLE_ADMIN, 403 for non-admin) lists poison rows and a replay endpoint (POST /api/admin/outbox/dead-letter/{message_id}/replay) resets it to PENDING returning 202 ACCEPTED; replaying a `message_id` not in DEAD state → 404 OUTBOX_NOT_IN_DEAD_LETTER. A single poison row MUST NOT stall delivery of healthy rows."
     test_method: "RestAssured integration test"
     verification_type: "negative"
