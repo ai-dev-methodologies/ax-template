@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "crud-resource-management"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + React"
 standard: "OWASP Top 10 + Internal CRUD Security Rules"
 items:

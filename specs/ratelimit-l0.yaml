@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "api-rate-limiting"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + Caffeine cache"
 standard: "RFC 6585 §4 (HTTP 429) + IETF draft-ietf-httpapi-ratelimit-headers"
 items:

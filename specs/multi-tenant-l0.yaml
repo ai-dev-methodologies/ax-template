@@ -1,5 +1,6 @@
 version: "1.0.0"
 scope: "multi-tenant isolation"
+domain_mode: backend_only
 stack: "Spring Boot 3.2.x + JPA (Hibernate filter / RLS / schema-per-tenant) + AOP guard + TenantContext propagation"
 standard: "OWASP ASVS V4.x (Access Control) + RFC 7235 + ad-hoc multi-tenancy patterns (Spring Modulith / Hibernate Filter)"
 introduced_at: "R16 — closes P2 critique that b2b-admin INV-003 cited ASVS-V4.2.1 (IDOR) + V4.2.2 (CSRF) as multi-tenant boundary anchors. Neither ASVS item defines tenant isolation; both address per-user resource access. This spec provides the missing direct anchor."

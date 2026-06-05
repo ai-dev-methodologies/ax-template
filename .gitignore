@@ -21,3 +21,9 @@ dist/
 # Anchor to repo root so fixture .ax-verify/ dirs (test data) remain tracked.
 /.ax-verify/
 .crawl-21st/
+
+# Playwright MCP browser-verification artifacts — screenshots + a11y/page snapshots from
+# manual /showcase render checks. Kept locally for review, never committed (binary test output).
+.playwright-mcp/
+/persona-*.jpeg
+/showcase-hub.png

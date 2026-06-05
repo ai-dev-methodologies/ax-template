@@ -1,5 +1,6 @@
 version: "4.0.3"
 scope: "email-auth-vertical-slice"
+domain_mode: full_trio
 stack: "Spring Boot 3.2.x + React"
 items:
   - id: "ASVS-V2.1.1"
