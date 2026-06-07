@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
@@ -109,6 +110,8 @@ public class GlobalProblemDetailAdvice {
             URI.create(OptimisticLockingSupport.TYPE_PRECONDITION_FAILED);
     private static final URI OPTIMISTIC_LOCK_CONFLICT_TYPE =
             URI.create("urn:problem:optimistic-lock-conflict");
+    private static final URI LOCK_CONFLICT_TYPE =
+            URI.create("urn:problem:lock-conflict");
     private static final URI CONSENT_REQUIRED_TYPE =
             URI.create("https://errors.example.com/consent-required");
 
@@ -246,6 +249,21 @@ public class GlobalProblemDetailAdvice {
         ProblemDetail pd = problem(HttpStatus.CONFLICT, OPTIMISTIC_LOCK_CONFLICT_TYPE,
                 "Conflict", "OPTIMISTIC_LOCK_CONFLICT",
                 "The resource was modified concurrently; re-read and retry.");
+        return entity(HttpStatus.CONFLICT, pd);
+    }
+
+    /**
+     * A PESSIMISTIC_WRITE (SELECT ... FOR UPDATE) waiter that could not acquire the row lock within the
+     * configured timeout raises {@link PessimisticLockingFailureException} (e.g. CannotAcquireLockException).
+     * Map it to a deterministic, retryable 409 — every {@code @Lock(PESSIMISTIC_WRITE)} adopter (dispatch,
+     * costshare, reservation, register, netting, governedrecord) gets a clean conflict instead of a raw 500.
+     */
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handlePessimisticLockConflict(
+            PessimisticLockingFailureException ex) {
+        ProblemDetail pd = problem(HttpStatus.CONFLICT, LOCK_CONFLICT_TYPE,
+                "Conflict", "LOCK_CONFLICT",
+                "Could not acquire the row lock under contention; retry the request.");
         return entity(HttpStatus.CONFLICT, pd);
     }
 

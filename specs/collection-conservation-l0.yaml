@@ -1,0 +1,80 @@
+version: "0.1.0"
+scope: "collection-conservation-l0 — set-wide / population-level conservation. The generalized contract for collapsing an N×N set of directed gross obligations into ONE signed net per member (multilateral netting) such that BOTH a per-node identity (net_member == Σ owed-to-member − Σ owed-by-member, within one currency) AND a set-wide closure (Σ of all members' nets == EXACTLY 0 per currency) hold, computed by a sole-mutator single transaction with a DB-backstopped rollup. Cross-cutting, framework-agnostic. The IDW15 capital-markets dogfood proved the catalog's ENTIRE conservation vocabulary operates on ONE operation or ONE scalar (balanced-posting: legs of one operation net to zero AND a non-zero per-member net is REJECTED; transformation-conservation: one input → output + classified residual; ordered-waterfall: partition ONE amount; rounded-split: split ONE known total; reserve-settle: two-phase hold on ONE pool) and structurally lacks a primitive that conserves across a SET of independently-derived signed aggregates — where the per-member net is the deliberate OUTPUT and only the SET sums to zero. Realized by the netting reference workload (com.ax.template.authblueprint.netting). Recurs in: CCP/clearing, interbank & ACH multilateral settlement netting, FX CLS net settlement, energy/power-pool imbalance netting, carbon/REC registry netting, intercompany ERP treasury netting, reinsurance bordereau netting, card-scheme interchange settlement — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only gross obligations + computed net positions + @Version optimistic + PESSIMISTIC_WRITE run lock + @Check live set-wide-zero backstop) + exact BigDecimal (NUMERIC(19,4)) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "BIS CPMI Glossary — 'multilateral netting' (the offsetting of obligations among multiple participants to a single net position per participant) + 'net credit (or debit) position' (Σ received − Σ sent) + double-entry conservation (every obligation is owed BY one node TO another, so Σ signed nets == 0) + CWE-362 (concurrent reduction race) + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW15 2026-06-08 capital-markets post-trade dogfood"
+
+# OPT-IN collection-conservation catalog. The IDW15 capmarkets dogfood's flagship
+# signature ("SET-WIDE / population-level conservation"): the catalog conserves ONE
+# operation or ONE scalar, never a derived signed-aggregate across a COLLECTION.
+# Multilateral netting is the canonical instance; novation (incremental dual),
+# DvP, and corporate-action fan-out are sibling backlog. Generic; the clearing
+# framing is the anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. NET-SETWIDE-ZERO-001 (the keystone — Σ all member nets == 0 per currency, DB-backstopped)
+#   2. NET-PER-NODE-001     (each net == Σ received − Σ sent, within one currency)
+#   3. NET-PARTITION-001    (summation only within one currency; heterogeneous units never co-net)
+#   4. NET-INPUTS-IMMUTABLE-001 (gross obligations append-only; a NETTED run is immutable; correct = new run)
+#   5. NET-ONCE-001         (concurrent reductions serialize; a run is netted at most once)
+
+# ── Composition note ──
+# DISTINCT from balanced-posting (conserves ONE operation to zero and REJECTS a
+# non-zero per-member net — here the per-member net is the OUTPUT, only the SET is
+# zero). The set-wide Σ==0 follows from double-entry (every gross obligation is one
+# node's payable and another's receivable). The run lock + sole-mutator single tx
+# make the reduction atomic (no obligation dropped or double-counted — CWE-362).
+
+items:
+  - id: "NET-SETWIDE-ZERO-001"
+    chapter: "The N×N reduction conserves set-wide: Σ of all members' nets == 0 per currency"
+    verification:
+      mechanism: rule
+      ref: multilateral-netting-conserves-per-node-and-set-wide
+    requirement: "Reducing a set of directed gross obligations to net positions MUST, in ONE transaction under the netting run's row lock (the sole mutator), produce one signed net per (member, currency) and guarantee the SET-WIDE closure: the sum of ALL members' net amounts within a currency partition is EXACTLY 0 (no obligation dropped, double-counted, or cross-currency-summed). NOTE the set-wide Σ==0 is a STRUCTURAL IDENTITY of a two-legged reduction (every obligation contributes +amount and −amount), so a `net_total` rollup with a DB `@Check (net_total = 0)` catches only a one-sided/asymmetric emit — it CANNOT by itself detect a creditor/debtor swap, a sign error, or a whole-row drop (all of which keep Σ==0). Per-node correctness MUST therefore be verified INDEPENDENTLY: each persisted net is cross-checked against a separate derivation (e.g. repository SUM queries `Σ owed-to-member − Σ owed-by-member`, a different code path than the in-memory reduction); a mismatch — or member nets not summing to zero — MUST be rejected with a deterministic 422 (`type=urn:problem:netting-not-conserved`, `code=NETTING_NOT_CONSERVED`) before persist. DISTINCT from balanced-posting: there the per-member net must be zero; here the per-member net is the deliberate output and only the SET sums to zero."
+    test_method: "RestAssured (build an N×N gross obligation set, net it → each member net = Σreceived−Σsent AND Σ all nets == 0; the rollup net_total == 0)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Set-wide conservation — the population closure the catalog lacked.
+      Quote anchor (BIS CPMI Glossary, 'multilateral netting'): "The offsetting
+      of obligations between or among multiple participants to result in a single
+      net position per participant." (https://www.bis.org/cpmi/glossary.pdf)
+  - id: "NET-PER-NODE-001"
+    chapter: "Each member's net == Σ owed-to-member − Σ owed-by-member (one currency)"
+    requirement: "Each member's net position MUST equal the sum of the gross amounts owed TO it minus the sum of the gross amounts owed BY it, within one currency partition (a net credit position if positive, a net debit position if negative), computed exactly in BigDecimal. The reduction reads every gross obligation of the run exactly once; no obligation is omitted or counted twice."
+    test_method: "RestAssured (a member that is owed 100 and owes 30 has net +70; a member that owes 100 and is owed 0 has net −100)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Per-node net = received − sent.
+      Quote anchor (BIS CPMI Glossary, 'net credit (or debit) position'): "A
+      participant's net credit or net debit position in a netting system is the
+      sum of the value of all the transfers it has received up to a particular
+      point in time less the value of all transfers it has sent."
+      (https://www.bis.org/cpmi/glossary.pdf)
+  - id: "NET-PARTITION-001"
+    chapter: "Summation only within one currency; heterogeneous units never co-net"
+    requirement: "Gross obligations are netted ONLY within a single currency/instrument partition. Obligations denominated in different currencies MUST NOT be summed into one net (that would conserve nothing — a USD payable cannot offset a EUR receivable). A run is bound to one currency; an obligation of a different currency is rejected (422). The set-wide-zero closure holds PER partition key."
+    test_method: "RestAssured (a run is single-currency; an obligation with a mismatched currency → 422)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Heterogeneous-unit discipline (mirrors the one-scale rule of balanced-posting), per currency.
+  - id: "NET-INPUTS-IMMUTABLE-001"
+    chapter: "Gross obligations are append-only; a NETTED run is immutable (correction = new run)"
+    requirement: "Gross obligations are append-only inputs: every column is `@Column(updatable=false)`, captured while the run is OPEN; once the run is NETTED, no obligation may be added or edited and the computed net positions are immutable. A correction is a NEW netting run over the corrected obligation set, never an in-place edit of a settled reduction (so the audit trail of what netted to what is preserved)."
+    test_method: "RestAssured + ViolationProofTest (adding an obligation to a NETTED run → 409; net positions immutable; obligations updatable=false)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Append-only inputs; immutable settled reduction; correct-by-new-run.
+  - id: "NET-ONCE-001"
+    chapter: "Concurrent reductions serialize; a run is netted at most once"
+    requirement: "Concurrent net() calls on the SAME run MUST serialize under the run's row lock so the reduction runs EXACTLY ONCE — never zero, never twice (which would double-persist net positions). A second reduction of an already-NETTED run is rejected with a deterministic 409 (`code=NETTING_ALREADY_NETTED`). The set-wide-zero and per-node invariants hold for the single committed reduction regardless of interleaving."
+    test_method: "RestAssured concurrency proof (two simultaneous net() on one run → exactly one NETTED, one 409; positions computed once; Σ nets == 0)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Net-once under concurrency (row lock); the reduction is a one-shot terminal transition.

@@ -78,6 +78,9 @@ public class SecurityConfig {
                 // REGISTER (monotone-register-l0): any authenticated user creates a cumulative register
                 // and appends monotone reads (meter/odometer); decrease only via governed rollover/exchange.
                 .requestMatchers("/api/registers/**").authenticated()
+                // NETTING (collection-conservation-l0): any authenticated user opens a netting run, adds
+                // gross obligations, and triggers the conserving multilateral reduction (Σ member nets == 0).
+                .requestMatchers("/api/netting/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The
