@@ -1,0 +1,84 @@
+version: "0.1.0"
+scope: "transformation-conservation-l0 — the conserve-with-CLASSIFIED-LOSS dual of balanced-posting-l0. For any recipe whose business invariant is that an operation CONSUMES input of one material and EMITS a different output, where the total is conserved but the residual is DELIBERATELY non-zero and must be fully accounted: a manufacturing transformation (raw material -> good output + scrap + rework + yield-loss + WIP-remainder), food/chem/pharma batch yield, recycling material-recovery, even a data pipeline (ingested == loaded + rejected + filtered). Cross-cutting, framework-agnostic. Realized by the transformation reference workload (com.ax.template.authblueprint.transformation). DISTINCT from balanced-posting-l0: that contract asserts the signed legs of one operation net to EXACTLY ZERO and REJECTS any non-zero residual (422 UNBALANCED_POSTING); THIS contract asserts Σ(input) == Σ(good output) + Σ(residual) where the residual is NON-zero and EVERY residual unit is tagged with a disposition reason-code from a governed enum — conserve-to-accounted-residual, not conserve-to-zero. DISTINCT from accumulator-consume (single-bucket draw) and rounded-split (simultaneous proration)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (immutable append-only legs) + BigDecimal exact-decimal + RFC 9457 Problem Details + Micrometer"
+standard: "Conservation of mass / mass balance (input = output + accumulation; reactive: input + generation = output + accumulation + consumption) + Double-entry conservation (Martin Fowler — Accounting Patterns, 'all entries must sum to zero', here generalized to sum-to-accounted-residual) + Martin Fowler — Money pattern (exact-decimal / penny conservation) + IEEE 754 / BigDecimal + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW11 2026-06-07 manufacturing/MES dogfood"
+
+# OPT-IN transformation-conservation catalog. The IDW11 manufacturing dogfood
+# proved the catalog owns every NEIGHBOUR of this invariant (net-zero transfer =
+# balanced-posting, single-bucket draw = accumulator-consume, weighted rollup =
+# provenance-dag, conserving split = rounded-split, exact same-dim conversion =
+# unit-of-measure-conversion) yet its strongest conservation rule ACTIVELY
+# FORBIDS the manufacturing shape: balanced-posting CONSERVATION-LEGS-NET-ZERO-001
+# rejects any non-zero residual with 422 UNBALANCED. A backflush / yield posting
+# is conserve-WITH-classified-loss: input is consumed, good output + scrap +
+# rework + yield-loss + WIP-remainder emitted, the residual is real and must be
+# decomposed into named disposition categories (no unexplained shrinkage). This
+# spec supplies the missing dual. Generic; zero Korean law cite.
+
+# ── Priority order for fork-receivers ──
+#   1. XFORM-ACCOUNTED-LOSS-001   (the primitive — Σinput == Σgood + Σresidual, exact)
+#   2. XFORM-RESIDUAL-CLASSIFIED-001 (every residual unit carries a governed disposition code)
+#   3. XFORM-DIMENSION-001        (legs share one base unit / pinned conversion — no naive cross-dim sum)
+#   4. XFORM-ATOMIC-001           (consume + produce + record-residual in ONE transaction; legs immutable)
+
+# ── Composition note ──
+# balanced-posting (net-ZERO, same-unit transfer) and transformation-conservation
+# (net-to-ACCOUNTED-RESIDUAL, one base unit, classified loss) are duals, not
+# substitutes. Use balanced-posting when the operation must mint/destroy nothing
+# (a transfer); use transformation-conservation when the operation legitimately
+# yields a non-zero, fully-classified residual (a transformation). A correction to
+# a recorded transformation is a reversal (immutable-record-corrected-by-reversal),
+# never an in-place edit of the legs.
+
+items:
+  - id: "XFORM-ACCOUNTED-LOSS-001"
+    chapter: "Input conserves to good output plus accounted residual (exact)"
+    verification:
+      mechanism: rule
+      ref: transformation-conserves-with-classified-residual
+    requirement: "For ONE transformation operation, the quantities MUST satisfy `Σ(input legs) == Σ(good-output legs) + Σ(residual legs)` as an EXACT decimal equality (`BigDecimal.compareTo == 0`, never `double`, never independently-rounded sides), evaluated per base unit (XFORM-DIMENSION-001). This is the mass-balance law applied to a stored operation: the input that enters is exactly the good output that leaves plus the residual that is accounted. An imbalance MUST be rejected with a deterministic 422 (`type=urn:problem:transformation-not-conserved`, `code=XFORM_NOT_CONSERVED`) carrying the computed input/output/residual totals and the shortfall — never silently persisted (silent shrinkage is the canonical inventory-leak). Unlike balanced-posting the residual is NON-zero and expected; unlike a one-axis cap it is a multi-leg conservation across input and output materials."
+    test_method: "RestAssured integration test (conserving record -> 201; imbalance -> 422)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Mass-balance / conservation-of-mass generalized to an accounted residual.
+      Anchored to the mass-balance law + Money exact-decimal.
+      Quote anchor (Wikipedia — Mass balance): "The mass that enters a system
+      must, by conservation of mass, either leave the system or accumulate
+      within the system." and the balance form "Input = Output + Accumulation".
+      (https://en.wikipedia.org/wiki/Mass_balance)
+      Quote anchor (Martin Fowler — Money pattern): "The more subtle problem
+      is with rounding. Monetary calculations are often rounded to the
+      smallest currency unit. When you do this it's easy to lose pennies (or
+      your local equivalent) because of rounding errors."
+      (https://martinfowler.com/eaaCatalog/money.html)
+  - id: "XFORM-RESIDUAL-CLASSIFIED-001"
+    chapter: "Every residual unit carries a governed disposition reason-code"
+    requirement: "The non-zero residual MUST be fully decomposed into named, mutually-exclusive disposition categories drawn from a governed (closed) enum — e.g. {SCRAP, REWORK, YIELD_LOSS, WIP_REMAINDER}. A residual leg with no disposition, or a disposition outside the governed set, MUST be rejected (400 on an unknown enum value at the validation boundary; 422 `code=XFORM_UNCLASSIFIED_RESIDUAL` if a residual quantity is present with no category). There is NO 'miscellaneous / unexplained' bucket: the sum of the classified residual categories MUST equal the total residual, so every lost unit is attributable. This is what distinguishes accounted loss from silent shrinkage."
+    test_method: "RestAssured (unclassified/unknown-disposition residual rejected; classified residual accepted)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      A closed disposition vocabulary with no miscellaneous bucket — every
+      residual unit is attributable. Governed-enum discipline; the sum of
+      categories equals the residual total.
+  - id: "XFORM-DIMENSION-001"
+    chapter: "Legs share one base unit (no naive cross-dimension sum)"
+    requirement: "The conservation sum MUST be dimension-aware: quantities in different physical units (eaches vs kg vs litres) MUST NOT be naively summed. The reference contract requires all legs of one transformation to share ONE base unit (or carry an explicitly pinned conversion to a base unit, per unit-of-measure-conversion-is-exact-and-pinned); a transformation mixing units with no pinned conversion MUST be rejected (422 `code=XFORM_MIXED_UNIT`). A unit-CHANGING transformation (e.g. kg input -> eaches output via a yield factor) is governed by the yield gross-up extension (a separate rule), not by naive addition."
+    test_method: "RestAssured (mixed-unit legs without conversion -> 422)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Conservation is per-dimension; eaches and kg are never summed. Composes
+      unit-of-measure-conversion-is-exact-and-pinned for any cross-unit case.
+  - id: "XFORM-ATOMIC-001"
+    chapter: "Consume + produce + record-residual in ONE transaction; legs immutable"
+    requirement: "Recording a transformation — consuming the input legs, producing the good-output legs, and recording the classified residual legs — MUST happen in a SINGLE transaction: either the whole conserving operation is persisted, or (on a conservation failure or any error) NOTHING is persisted. A half-recorded transformation (inputs consumed but output not produced) is forbidden — it manufactures or destroys quantity. The persisted legs MUST be immutable (`@Column(updatable=false)`, no public setter); a correction is a compensating reversal transformation, never an in-place edit."
+    test_method: "RestAssured (a rejected transformation persists nothing) + ViolationProofTest (legs immutable)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      All-or-nothing; immutable legs. A correction is a reversal
+      (immutable-record-corrected-by-reversal-not-edit), never an edit.

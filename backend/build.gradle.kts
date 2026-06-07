@@ -133,6 +133,12 @@ tasks.register<Test>("testCostShare") {
     }
 }
 
+tasks.register<Test>("testTransformation") {
+    useJUnitPlatform {
+        includeTags("TRANSFORMATION")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")
