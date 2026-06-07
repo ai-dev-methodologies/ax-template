@@ -61,6 +61,10 @@ public class SecurityConfig {
                 // the dispatcher write paths (/api/admin/dispatch/**: register provider, offer)
                 // are gated by the /api/admin/** ROLE_ADMIN rule above.
                 .requestMatchers("/api/dispatch/**").authenticated()
+                // COST-SHARE (accumulator-consume-l0 + ordered-waterfall-l0): consume/release/reset/
+                // allocate are any authenticated user; accumulator provisioning
+                // (/api/admin/cost-share/**) is gated by the /api/admin/** ROLE_ADMIN rule above.
+                .requestMatchers("/api/cost-share/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

@@ -1,0 +1,115 @@
+version: "0.1.0"
+scope: "accumulator-consume-l0 — the NON-REJECTING dual of bounded-capacity-claim-l0. For any recipe whose business invariant is a monotone running total drawn down toward a threshold that MUST NOT reject a valid draw but instead absorb as much as fits and return the unabsorbed remainder: an insurance deductible / copay / out-of-pocket-max accumulator, a metered-overage / data-cap consume, a cloud-budget burndown, a loyalty-tier progress meter. Cross-cutting, jurisdiction-agnostic + framework-agnostic. Realized by the costshare reference workload (com.ax.template.authblueprint.costshare). DISTINCT from bounded-capacity-claim-l0: that contract REJECTS the loser (affected-rows==0 → 409, 'refusal is total'); THIS contract NEVER rejects a valid scope — it draws applied=min(delta, limit-used), advances used by exactly applied, and returns residual=delta-applied for the caller to carry forward. DISTINCT from balanced-posting-l0 (net-zero multi-leg transfer) and rounded-split (simultaneous proration): this is a single-bucket partial-fill against a moving watermark."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (@Version + PESSIMISTIC_WRITE) + PostgreSQL (conditional UPDATE with LEAST / SELECT FOR UPDATE) + BigDecimal exact-decimal + RFC 9457 Problem Details + Micrometer"
+standard: "PostgreSQL 'Transaction Isolation' (Read Committed WHERE re-evaluation) + PostgreSQL 'Explicit Locking' (FOR UPDATE) + CWE-362 (Concurrent Execution using Shared Resource with Improper Synchronization) + IEEE 754 / BigDecimal exact-decimal arithmetic + Martin Fowler — Money pattern (rounding/penny conservation) + RFC 9457 (Problem Details)"
+domain_mode: backend_only
+introduced_at: "IDW10 2026-06-07 insurance/claims dogfood"
+
+# OPT-IN accumulator-consume catalog. The IDW10 insurance dogfood proved the
+# catalog's ENTIRE money-accumulation vocabulary is CAP-AND-REJECT — bounded-
+# capacity-claim yields grant|reject, per-tenant-resource-quota says verbatim
+# "MUST NOT silently truncate the consume to the remaining headroom; refusal is
+# total." Claims adjudication needs the EXACT inverse: a deductible/copay/OOP
+# accumulator NEVER rejects a covered claim — it absorbs min(delta, headroom),
+# advances by exactly that, and hands back the residual to flow to the next
+# tier (see ordered-waterfall-l0). This spec supplies the missing primitive.
+# Generic; zero Korean law cite (R102+ generic catalog principle).
+
+# ── Priority order for fork-receivers ──
+#   1. ACC-ATOMIC-001    (the primitive — one atomic non-rejecting partial consume)
+#   2. ACC-CONSERVE-001  (applied + residual == delta, exact BigDecimal)
+#   3. ACC-RACE-001      (concurrency proof — partial sums, never oversell, never reject)
+#   4. ACC-FLIP-001      (a straddling consume splits at the watermark, conserving)
+#   5. ACC-CLAWBACK-001  (reversal decrements used; non-monotone; CHECK used>=0)
+#   6. ACC-RESET-001     (server-clock-gated period-boundary reset)
+
+# ── Composition note ──
+# accumulator-consume (non-rejecting partial draw) and bounded-capacity-claim
+# (rejecting all-or-nothing claim) are duals, not substitutes. Use bounded-
+# capacity-claim when over-allocation MUST be refused (seat/inventory/quota);
+# use accumulator-consume when a valid draw must always be absorbed up to the
+# limit with a residual returned (deductible/copay/budget burndown). Compose N
+# accumulator-consume buckets in order via ordered-waterfall-l0.
+
+items:
+  - id: "ACC-ATOMIC-001"
+    chapter: "Consume is one atomic, non-rejecting partial draw"
+    verification:
+      mechanism: rule
+      ref: accumulator-consume-is-atomic-non-rejecting
+    requirement: "A consume of `delta` against an accumulator with `(used, limit)` MUST compute `applied = min(delta, limit - used)`, advance `used` by EXACTLY `applied`, and return `residual = delta - applied`, in ONE atomic step — never a read-the-used-then-write sequence across two statements (CWE-362). Exactly two implementations are permitted: (a) a single conditional UPDATE `UPDATE acc SET used = used + LEAST(:delta, limit - used) WHERE id = :k` whose applied is recovered via RETURNING (used - prior); or (b) a pessimistic `SELECT ... FOR UPDATE` on the accumulator row inside the SAME transaction that then performs the bounded UPDATE, so the row lock serializes concurrent consumers. Unlike bounded-capacity-claim, a consume against a VALID scope NEVER rejects: when `delta > limit - used` the consume still succeeds with `applied = limit - used` (the headroom) and `residual > 0`. The accumulator counter MUST live on ONE row, never derived by COUNT/SUM of child rows read in a separate statement."
+    test_method: "RestAssured integration test + concurrent-consume harness (partial fill)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Non-rejecting single-statement (or FOR UPDATE) partial draw — the dual of
+      the atomic claim. Anchored to PostgreSQL Transaction Isolation (Read
+      Committed WHERE re-evaluation) + Explicit Locking (FOR UPDATE) + CWE-362.
+      Quote anchor (PostgreSQL 'Transaction Isolation' — Read Committed):
+      "The search condition of the command (the WHERE clause) is
+      re-evaluated to see if the updated version of the row still matches
+      the search condition. If so, the second updater proceeds with its
+      operation using the updated version of the row."
+      (https://www.postgresql.org/docs/current/transaction-iso.html)
+      Quote anchor (PostgreSQL 'Explicit Locking' — FOR UPDATE):
+      "FOR UPDATE causes the rows retrieved by the SELECT statement to be
+      locked as though for update. This prevents them from being locked,
+      modified or deleted by other transactions until the current
+      transaction ends."
+      (https://www.postgresql.org/docs/current/explicit-locking.html)
+  - id: "ACC-CONSERVE-001"
+    chapter: "applied + residual == delta exactly (no lost minor unit)"
+    requirement: "Every consume MUST satisfy `applied + residual == delta` as an EXACT decimal equality (`BigDecimal.compareTo == 0`, never `double`, never an independently-rounded pair). The residual is what the caller carries to the next tier; if it does not conserve, value is silently created or destroyed on every claim. `applied` MUST be in `[0, min(delta, limit-used)]` and `used` after the consume MUST never exceed `limit`. Money values use `BigDecimal` (or committed minor-units), never floating point — losing a 'penny' here drifts the books exactly as the Money pattern warns."
+    test_method: "RestAssured + BigDecimal compareTo assertion (applied+residual==delta; used<=limit)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Conservation across the draw is exact-decimal. Anchored to the Money
+      pattern's penny-conservation hazard.
+      Quote anchor (Martin Fowler — Money pattern): "The more subtle problem
+      is with rounding. Monetary calculations are often rounded to the
+      smallest currency unit. When you do this it's easy to lose pennies (or
+      your local equivalent) because of rounding errors."
+      (https://martinfowler.com/eaaCatalog/money.html)
+  - id: "ACC-RACE-001"
+    chapter: "Concurrency proof — partial sums, never oversell, never reject"
+    requirement: "The contract MUST be proven by a negative concurrency test, not asserted: fire N concurrent consumes (e.g. several family-member claims) racing the LAST `H` units of headroom on one accumulator from a thread pool; assert that EVERY consume succeeds (none is rejected — the non-rejecting posture), that the sum of all `applied` values equals EXACTLY `H` (never more — no oversell past the limit), and that the final persisted `used` equals `limit` exactly. This is the partial-fill analogue of bounded-capacity-claim's no-oversell proof: there the assertion is exactly-N-grants; here it is Σapplied == H with every caller served a deterministic partial share. As a defense-in-depth backstop the row MUST carry `CHECK (used <= limit)` and `CHECK (used >= 0)`."
+    test_method: "Concurrent-consume integration test (N racing the last H headroom) + DB CHECK"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The keystone — a single-threaded test passes on a broken read-then-write;
+      only true concurrency surfaces the over-draw. Anchored to CWE-362.
+      Quote anchor (CWE-362): "The product contains a concurrent code
+      sequence that requires temporary, exclusive access to a shared
+      resource, but a timing window exists in which the shared resource
+      can be modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)
+  - id: "ACC-FLIP-001"
+    chapter: "A straddling consume splits at the watermark, conserving"
+    requirement: "When a single consume straddles the limit watermark (part fits under the limit, part spills over), the split into `applied` (under-limit) and `residual` (over-limit) MUST conserve the total exactly. When the residual is itself fanned across multiple downstream parts (e.g. proportional cost-share), the fan-out MUST use a conserving allocation (largest-remainder / Money.allocate), never independently-rounded shares — so the parts sum back to the residual exactly. The boundary is half-open and deterministic: the same straddling input always splits the same way."
+    test_method: "Unit/logic test — straddling split conserves; largest-remainder fan-out sums to residual"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Composes rounded-split-conserves-total-largest-remainder for any
+      multi-part fan-out of the residual. Design invariant; conservation is the
+      load-bearing property.
+  - id: "ACC-CLAWBACK-001"
+    chapter: "Reversal decrements used (non-monotone), floored at zero"
+    requirement: "A reversal/clawback (claim voided, payment recovered, correction) MUST DECREMENT `used` by the reversed amount under the SAME atomic form as a consume — the accumulator is NOT a monotone counter, it moves both ways. A reversal that would drive `used < 0` MUST be rejected with a deterministic 422 (the canonical solvency hole: refunding more than was ever accumulated), backstopped by `CHECK (used >= 0)`. The reversal MUST be expressed as a signed adjustment, never an in-place rewrite that loses the audit of what moved."
+    test_method: "RestAssured (release decrements used; over-release → 422)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Distinguishes an accumulator (bidirectional balance) from a monotone
+      claim counter. CHECK(used>=0) is the defense-in-depth backstop.
+  - id: "ACC-RESET-001"
+    chapter: "Server-clock-gated period-boundary reset"
+    requirement: "An accumulator that resets at a period boundary (plan year, billing cycle, calendar reset) MUST reset `used` to zero ONLY on a server-clock-gated boundary read from an injected `Clock` — never from a client-supplied date and never as an untestable inline `Instant.now()`. The reset MUST be idempotent (re-running it within the same period is a no-op) and auditable (when and by what boundary it reset)."
+    test_method: "RestAssured (reset zeroes used) + injected-clock boundary"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Composes time-gated-decisions-read-injected-clock. The reset is the only
+      non-consume mutation besides clawback. Design invariant.

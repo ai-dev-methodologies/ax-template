@@ -1,0 +1,75 @@
+version: "0.1.0"
+scope: "ordered-waterfall-l0 — sequential ordered-bucket allocation of ONE inbound amount across priority-ordered, individually-capped, gating buckets with residual carry-forward, a cross-tier retroactive clamp, and an exact conservation post-condition. For any recipe that splits one amount across ordered capped tiers in a FIXED order: an insurance member-liability cascade (deductible → coinsurance → out-of-pocket-max), a tax-bracket marginal calculation, payment-application order (fees → interest → principal), a debt-payoff avalanche, a fund-accounting distribution waterfall, invoice-to-multiple-charges allocation. Cross-cutting, framework-agnostic. Realized by the costshare reference workload. Composes N accumulator-consume-l0 buckets. DISTINCT from balanced-posting-l0 (net-zero multi-leg transfer — does not split one amount across ordered caps), rounded-split (SIMULTANEOUS proration — not ordered sequential cascade with per-tier gating), and ordered-collection (row ORDER, not value allocation)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (one @Transactional spanning N accumulator consumes) + BigDecimal exact-decimal + RFC 9457 Problem Details + Micrometer"
+standard: "CWE-362 (Concurrent Execution using Shared Resource) + PostgreSQL 'Explicit Locking' (Deadlocks — consistent lock-acquisition order) + IEEE 754 / BigDecimal exact-decimal arithmetic + Martin Fowler — Money pattern (penny conservation) + PostgreSQL 'Data Definition — Constraints' (CHECK)"
+domain_mode: backend_only
+introduced_at: "IDW10 2026-06-07 insurance/claims dogfood"
+
+# OPT-IN ordered-waterfall catalog. The IDW10 insurance dogfood found the
+# catalog had no binding for "partition one amount across ordered capped buckets
+# with conservation": balanced-posting is net-zero transfer, rounded-split is
+# simultaneous proration, ordered-collection is row order. The member-liability
+# cascade is the canonical case — eligible amount E flows deductible → coinsurance
+# → OOP-max, where OOP-max can RETROACTIVELY clamp a coinsurance charge computed
+# one tier earlier, and Σ(absorbed) + memberOutOfPocket MUST equal E exactly.
+# Generic; zero Korean law cite.
+
+# ── Priority order for fork-receivers ──
+#   1. WF-CONSERVE-001 (Σ absorbed + memberOutOfPocket == eligible, exact)
+#   2. WF-ATOMIC-001   (the whole multi-accumulator advance is ONE transaction)
+#   3. WF-CLAMP-001    (a cross-cutting clamp tier retroactively bounds a prior tier)
+#   4. WF-LOCK-001     (deterministic lock order across shared accumulator rows)
+
+items:
+  - id: "WF-CONSERVE-001"
+    chapter: "Conservation across the cascade (Σ absorbed + member == eligible)"
+    requirement: "An eligible amount `E` partitioned across the ordered tiers MUST conserve exactly: `Σ(amount absorbed by each tier) + memberOutOfPocket == E` as a `BigDecimal.compareTo == 0` equality. Each tier consumes up to its own cap (via accumulator-consume-l0) and spills its residual to the next tier; the final tier's residual is the member/insurer split. The post-condition MUST be asserted in code AND backstopped defense-in-depth by a DB `CHECK` on the persisted decision row (the parts recorded sum to the eligible). The insurer side MUST be computed as the RESIDUAL (`E - memberPaid`), never independently rounded — independent rounding of both sides loses or conjures a minor unit."
+    test_method: "RestAssured (allocate E → assert memberPaid + insurerPaid == E exactly)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Conservation is the load-bearing invariant. Anchored to the Money
+      pattern's penny hazard; insurer side is the residual, not a second round.
+      Quote anchor (Martin Fowler — Money pattern): "The more subtle problem
+      is with rounding. Monetary calculations are often rounded to the
+      smallest currency unit. When you do this it's easy to lose pennies (or
+      your local equivalent) because of rounding errors."
+      (https://martinfowler.com/eaaCatalog/money.html)
+  - id: "WF-ATOMIC-001"
+    chapter: "The whole multi-accumulator advance is ONE transaction"
+    requirement: "Advancing every tier's accumulator for one allocation MUST happen in a SINGLE transaction: either ALL tier accumulators advance and the decision row is written, OR (on any failure mid-cascade) NOTHING advances. A crash that left the deductible advanced but the OOP-max not advanced is forbidden — it would double-charge the member on the retry. Proven by a mid-waterfall failure-injection test asserting all-or-nothing (no accumulator moved on a failed allocation)."
+    test_method: "Failure-injection integration test (mid-cascade throw → zero accumulators advanced)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      All-or-nothing across N accumulators. Anchored to CWE-362 (a partially
+      advanced cascade is a concurrent-modification corruption window).
+      Quote anchor (CWE-362): "The product contains a concurrent code
+      sequence that requires temporary, exclusive access to a shared
+      resource, but a timing window exists in which the shared resource
+      can be modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)
+  - id: "WF-CLAMP-001"
+    chapter: "A cross-cutting clamp tier retroactively bounds a prior tier"
+    requirement: "A clamp tier (e.g. out-of-pocket maximum) MUST be able to RETROACTIVELY reduce a charge a prior tier produced in the same pass: if the member's running out-of-pocket total would exceed the clamp's headroom, the excess MUST be moved from the member to the insurer (reducing the earlier coinsurance charge), and the member's total capped at the clamp headroom — while conservation (WF-CONSERVE-001) still holds exactly. The clamp MUST be evaluated as a final non-local pass over the accumulated member total, not inline within one tier, because it depends on the SUM of prior tiers."
+    test_method: "RestAssured (a claim whose member share would exceed OOP headroom → coinsurance clamped, member capped, Σ conserved)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The retroactive clamp is what makes the cascade non-local — a later tier
+      revises an earlier tier's output. Conservation must survive the clamp.
+      Design invariant.
+  - id: "WF-LOCK-001"
+    chapter: "Deterministic lock order across shared accumulator rows"
+    requirement: "When two allocations co-mutate the SAME accumulator rows (e.g. two claims for the same member touching the shared deductible + OOP accumulators), the tier accumulators MUST be locked in a single deterministic order (e.g. by accumulator id / scope-key ascending) so two interleaved allocations cannot each hold one accumulator and wait on the other — the classic lock-order deadlock. A waterfall MUST declare its tier order as an immutable ordered structure (a List, never a HashSet / unordered iteration); iterating tiers in non-deterministic order is forbidden."
+    test_method: "Concurrent two-allocation integration test (same member) — deadlock-free; + ordered-structure assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Consistent lock order is the standard deadlock defense (same posture as
+      exclusive-assignment-l0 EXCL-PAIR-002). Anchored to PostgreSQL 'Deadlocks'.
+      Quote anchor (PostgreSQL 'Explicit Locking' — Deadlocks):
+      "The best defense against deadlocks is generally to avoid them by
+      being certain that all applications using a database acquire locks
+      on multiple objects in a consistent order."
+      (https://www.postgresql.org/docs/current/explicit-locking.html)

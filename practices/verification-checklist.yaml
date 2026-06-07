@@ -191,6 +191,9 @@ checklist:
       - command: "./gradlew testDispatch"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testCostShare"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testIntegration"
         working_directory: "backend"
         expected_exit: 0
