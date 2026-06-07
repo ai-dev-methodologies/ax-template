@@ -212,6 +212,9 @@ checklist:
       - command: "./gradlew testCopresence"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testBandedPricing"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testIntegration"
         working_directory: "backend"
         expected_exit: 0

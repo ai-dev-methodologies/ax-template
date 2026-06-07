@@ -169,6 +169,12 @@ tasks.register<Test>("testCopresence") {
     }
 }
 
+tasks.register<Test>("testBandedPricing") {
+    useJUnitPlatform {
+        includeTags("BANDEDPRICE")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")

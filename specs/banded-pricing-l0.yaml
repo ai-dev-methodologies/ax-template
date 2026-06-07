@@ -1,0 +1,57 @@
+version: "0.1.0"
+scope: "banded-pricing-l0 — marginal / tiered / time-of-use pricing: ONE quantity is segmented across an ordered set of half-open bands, each charged at its OWN rate, and the per-band charges sum to the total (charge = Σ over bands of qty-in-band × band-rate). The bands TILE the axis [0, ∞) with no gap and no overlap (each band is a half-open interval [lo, hi); adjacent bands abut — the upper bound of one is the lower bound of the next), so every unit of the quantity is charged exactly once at exactly its band's rate (Σ qty-in-band == quantity). The total is rounded ONCE at the end (not a sum of independently-rounded per-band charges), conserving money. Pure, cross-cutting, framework-agnostic. The IDW13 telecom dogfood proved the catalog has no banding primitive: ordered-waterfall partitions ONE amount across capped tiers but is amount-only (no per-band unit-rate / quantity × rate), and rounded-split splits a KNOWN total (the inverse direction). Realized by the BandedPricer common primitive (com.ax.template.authblueprint.common.BandedPricer). Recurs in: telecom usage rating, utility tiered + time-of-use tariffs, cloud tiered pricing, progressive tax brackets, shipping weight/zone bands — 5+ industries."
+stack: "Java 21 pure function (no Spring) + exact BigDecimal (NUMERIC money discipline, round-once) — a stateless allocator like common/WaterfallAllocator"
+standard: "E. W. Dijkstra EWD831 'Why numbering should start at zero' (half-open intervals: the upper bound of one subsequence equals the lower bound of the next, so adjacent ranges tile without gap or overlap) + Martin Fowler, Patterns of Enterprise Application Architecture, Money pattern (round once; independently-rounded parts lose pennies)"
+domain_mode: backend_only
+
+# OPT-IN banded-pricing catalog. The IDW13 telecom dogfood's rating-cluster gap:
+# segment ONE quantity across tier/TOU bands each at a different unit rate and sum.
+# A pure primitive (no persistence) — the conserving, half-open-tiling counterpart
+# to ordered-waterfall (amount-only) and rounded-split (splits a known total).
+
+# ── Priority order for fork-receivers ──
+#   1. BAND-SEGMENT-001  (the primitive — charge = Σ qty-in-band × band-rate)
+#   2. BAND-TILING-001   (bands tile [0,∞) half-open; strictly increasing thresholds; last band unbounded)
+#   3. BAND-CONSERVE-001 (Σ qty-in-band == quantity; total rounded ONCE, never sum-of-rounded)
+
+# ── Composition note ──
+# DISTINCT from ordered-waterfall (partitions one AMOUNT across capped tiers, no
+# per-unit rate) and rounded-split (splits a KNOWN total so Σparts==total by
+# construction). Half-open band edges follow Dijkstra EWD831; round-once follows the
+# Money pattern. Composes with rounded-split only when the banded total is then split.
+
+items:
+  - id: "BAND-SEGMENT-001"
+    chapter: "A quantity is segmented across half-open bands, each charged at its own rate; charge = Σ qty-in-band × rate"
+    verification:
+      mechanism: rule
+      ref: banded-pricing-segments-qty-per-band-and-conserves
+    requirement: "Pricing a quantity Q against an ordered band set MUST charge each portion of Q at the rate of the band it falls in: for band i covering the half-open interval [lo_i, hi_i), the quantity-in-band is `clamp(Q, lo_i, hi_i) − lo_i` (never negative) and its charge is `qtyInBand_i × rate_i`; the total is the sum over all bands. Each unit of Q is charged at EXACTLY one band's rate (the band whose half-open interval contains it). Arithmetic is exact BigDecimal — never floating point. This is marginal/tiered pricing (the first 10 units at rate A, the next 10 at rate B, …), NOT a single rate on the whole quantity."
+    test_method: "JUnit (Q=25 over [0,10)@1,[10,20)@0.5,[20,∞)@0.1 → 10×1 + 10×0.5 + 5×0.1 = 15.5; per-band breakdown matches)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Marginal/tiered banding — qty-in-band × rate, summed.
+      Quote anchor (Fowler, Money pattern): "The more subtle problem is with
+      rounding. Monetary calculations are often rounded to the smallest currency
+      unit. When you do this it's easy to lose pennies (or your local equivalent)
+      because of rounding errors." (https://martinfowler.com/eaaCatalog/money.html)
+  - id: "BAND-TILING-001"
+    chapter: "Bands tile [0,∞) half-open: strictly increasing thresholds, adjacent bands abut, last band unbounded"
+    requirement: "The band set MUST tile the quantity axis [0, ∞) with NO gap and NO overlap: each band is the half-open interval [previous-threshold, this-threshold), the thresholds are STRICTLY INCREASING and positive, adjacent bands abut (the upper bound of one equals the lower bound of the next — Dijkstra EWD831), and EXACTLY the last band is unbounded (its upper bound is +∞) so the whole axis is covered. A band set with a non-increasing threshold, a negative threshold/rate, an empty set, or a bounded last band MUST be rejected (a quantity beyond the last bounded band would be un-priced — a silent revenue/charge hole)."
+    test_method: "JUnit (non-increasing thresholds → reject; bounded last band → reject; negative rate → reject; adjacent bands abut with no gap/overlap)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Half-open tiling; the axis is fully covered.
+      Quote anchor (Dijkstra EWD831): "two subsequences are adjacent means that
+      the upper bound of the one equals the lower bound of the other."
+      (https://www.cs.utexas.edu/~EWD/transcriptions/EWD08xx/EWD831.html)
+  - id: "BAND-CONSERVE-001"
+    chapter: "Σ qty-in-band == quantity; the total is rounded ONCE (never a sum of independently-rounded parts)"
+    requirement: "Every unit of Q is charged exactly once: the sum of qty-in-band over all bands MUST equal Q exactly (conservation of quantity). The monetary total MUST be rounded ONCE at the end (round the exact Σ of `qtyInBand × rate`), NOT computed as a sum of independently-rounded per-band charges (which loses pennies — the Money-pattern hazard). The per-band breakdown is reported at full precision (or its own rounding is explicitly the caller's, composing rounded-split); the authoritative total is the single round-once value."
+    test_method: "JUnit (Σ qtyInBand == Q for fractional Q; total == round-once(Σ exact), distinct from sum-of-rounded on a fixture that would lose a penny)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quantity conservation + round-once money discipline.
