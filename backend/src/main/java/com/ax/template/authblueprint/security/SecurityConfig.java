@@ -68,6 +68,9 @@ public class SecurityConfig {
                 // TRANSFORMATION (transformation-conservation-l0): recording a conserving material
                 // transformation is any authenticated user (a shop-floor operation).
                 .requestMatchers("/api/transformations/**").authenticated()
+                // GOVERNED-DATA (attested-change-record-l0): any authenticated user may create/edit a
+                // governed datum; an edit MUST carry a reason (enforced by the service, 422 if blank).
+                .requestMatchers("/api/governed-data/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

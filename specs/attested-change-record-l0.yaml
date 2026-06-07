@@ -1,0 +1,76 @@
+version: "0.1.0"
+scope: "attested-change-record-l0 — the generalized contract for an ORDINARY governed-data edit: any change to a governed datapoint MUST atomically carry a structured provenance envelope {actor, occurredAt, entityRef, fieldName, oldValue, newValue, reason}, be rejected at the sole-mutator boundary when the envelope is incomplete (no blank reason), and be preserved as an append-only per-field history that never obscures a prior value. Cross-cutting, framework-agnostic. The IDW12 clinical dogfood proved the catalog has the PARTS only on privileged escape-hatch paths (reason on break-glass / dsr-rectify / sealed-reopen, old/new on fraud-override, prior-value on value-provenance, text pre-image on comment-edit) but generalized NONE — there is no default attested-edit contract for routine governed data. Realized by the governedrecord reference workload (com.ax.template.authblueprint.governedrecord). DISTINCT from soft-delete-audit-trail (delete-only), value-provenance (re-derivable derived value, single prior input, no edit history), immutable-record-corrected-by-reversal (whole-record reversal, not a per-field old→new envelope), comment-edit (free-text pre-image only). Recurs in: clinical eCRF (ALCOA / 21 CFR 11), fintech ledger corrections, HR/payroll retro-edits, EMR amendments, regulated-manufacturing batch records, any SOX/GxP audited system."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only immutable change rows) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "FDA 21 CFR Part 11 §11.10(e) (secure, computer-generated, time-stamped audit trails of operator entries/actions that create, modify, or delete electronic records; record changes shall not obscure previously recorded information) + ALCOA+ data-integrity principles (Attributable, Legible, Contemporaneous, Original, Accurate) + java.time.Clock (server-owned timestamp) + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW12 2026-06-07 clinical-trials/pharma dogfood"
+
+# OPT-IN attested-change-record catalog. The single most cross-industry gap the
+# dogfood loop surfaced: a routine governed edit must record WHO/WHEN/OLD/NEW/
+# REASON atomically and never obscure the prior value (21 CFR 11.10(e)). The
+# catalog reasons about provenance ONLY on escape-hatch paths; this spec makes
+# attested mutation the DEFAULT contract for governed data. Generic; the clinical
+# 21 CFR 11 framing is the anchor, not a Korea-legal cite (R102+ principle).
+
+# ── Priority order for fork-receivers ──
+#   1. ACR-ENVELOPE-001    (the primitive — atomic who/when/old/new/reason at the sole mutator)
+#   2. ACR-PREIMAGE-001    (oldValue == the value immediately before the edit; no gap)
+#   3. ACR-APPEND-ONLY-001 (per-(entity,field) append-only history; never obscure a prior value)
+#   4. ACR-VOCAB-001       (optional: reason validated against a versioned controlled vocabulary)
+
+# ── Composition note ──
+# attested-change-record (the default for an ordinary governed edit) composes with
+# the escape-hatch paths it generalizes: break-glass and DSR-rectify are reason-
+# gated SPECIAL accesses; this is the reason-gated NORMAL edit. occurredAt is read
+# from an injected Clock (time-gated-decisions-read-injected-clock), never a client
+# timestamp. A whole-record reversal (immutable-record-corrected-by-reversal) and a
+# per-field attested edit are complementary, not substitutes.
+
+items:
+  - id: "ACR-ENVELOPE-001"
+    chapter: "A governed edit atomically carries who/when/old/new/reason; blank reason rejected"
+    verification:
+      mechanism: rule
+      ref: attested-governed-edit-carries-reason-and-preimage
+    requirement: "A change to a governed datapoint MUST, in ONE transaction at the SOLE mutator, persist a change record carrying {actor (the authenticated principal, never a client-supplied id), occurredAt (read from an injected Clock, never a client timestamp), entityRef, fieldName, oldValue, newValue, reason}. The `reason` is mandatory and non-blank; a missing or blank reason MUST be rejected with a deterministic 422 (`type=urn:problem:attested-reason-required`, `code=ATTESTED_REASON_REQUIRED`) BEFORE the field value changes (no half-applied edit). The governed field MUST NOT be mutable through any path that bypasses this record (no public setter reachable from a controller); the change record and the field update commit together or not at all (21 CFR 11.10(e) attributable, time-stamped audit of every modify)."
+    test_method: "RestAssured (edit with reason -> 200 + change row matching old/new/reason; blank reason -> 422 + value unchanged)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Attributable + contemporaneous + reasoned, atomic at the sole mutator.
+      Anchored to 21 CFR 11.10(e) + injected Clock.
+      Quote anchor (21 CFR 11.10(e)): "Use of secure, computer-generated,
+      time-stamped audit trails to independently record the date and time of
+      operator entries and actions that create, modify, or delete electronic
+      records."
+      (https://www.law.cornell.edu/cfr/text/21/11.10)
+  - id: "ACR-PREIMAGE-001"
+    chapter: "Recorded oldValue equals the value immediately before the edit (no gap)"
+    requirement: "The `oldValue` written into the change record MUST be exactly the field's persisted value immediately before this edit (read under the same lock/transaction as the write), so the chain of change records perfectly reconstructs the field's value at any past point. There MUST be no window in which the field is updated without a matching change record, nor a change record whose oldValue disagrees with the prior record's newValue. N successive edits to one field produce N change records whose (oldValue -> newValue) links form an unbroken chain from the original value to the current value."
+    test_method: "RestAssured (N successive edits -> N records; record[k].oldValue == record[k-1].newValue; record[0].oldValue == original)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The pre-image is the true prior value, read under the mutator's lock —
+      the audit chain is gap-free and self-consistent.
+  - id: "ACR-APPEND-ONLY-001"
+    chapter: "Per-(entity,field) append-only history never obscures a prior value"
+    requirement: "Change records are APPEND-ONLY: every value/metadata column is `@Column(updatable=false)`, there is no setter, and a record is never UPDATEd or deleted — a correction is a NEW appended record, never an edit of an existing one (21 CFR 11.10(e): record changes shall not obscure previously recorded information). Records carry a strictly monotonic per-(entityRef, fieldName) sequence so their causal order is unambiguous even under concurrent edits (the sequence is allocated under the field's row lock). A persisted change record MUST be immutable for at least as long as the governed record it describes."
+    test_method: "RestAssured + ViolationProofTest (records immutable; monotonic per-field sequence; concurrent edits never collide on a sequence)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Append-only, monotonic sequence, never obscure prior info.
+      Quote anchor (21 CFR 11.10(e)): "Record changes shall not obscure
+      previously recorded information."
+      (https://www.law.cornell.edu/cfr/text/21/11.10)
+  - id: "ACR-VOCAB-001"
+    chapter: "Reason may be validated against a versioned controlled vocabulary"
+    requirement: "When a fork-receiver configures a controlled reason vocabulary (e.g. {transcription-error, source-correction, query-resolution, unit-conversion}), the `reason` MUST be validated against the ALLOWED set and the active vocabulary VERSION pinned on the change record, so a reason code's meaning is reproducible even after the vocabulary evolves. A reason outside the active allowlist MUST be rejected (400/422). When no vocabulary is configured, a non-blank free-text reason is accepted (ACR-ENVELOPE-001 still applies). The vocabulary, when present, is governed (closed) — there is no 'other/miscellaneous' escape unless it is itself an explicit allowed code."
+    test_method: "RestAssured (configured allowlist: unknown code rejected, known code accepted with pinned version; unconfigured: free-text accepted)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Optional governed reason vocabulary with version-pinning — reproducible
+      reason semantics. Composes the governed-vocabulary discipline; advisory
+      when unconfigured.
