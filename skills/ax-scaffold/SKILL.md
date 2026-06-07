@@ -86,14 +86,20 @@ Exit semantics: 0 = files written (or plan printed); non-zero = validation error
 
 Generated file tree (for `full_trio`):
 ```
-specs/<domain>-frontend-l0.yaml
-specs/<domain>-asvs-l0.yaml          (backend, if full_trio)
-contracts/<domain>-openapi.yaml       (backend)
-contracts/<domain>-ui.yaml            (frontend)
-blueprints/<domain>-manifest.yaml     (backend)
-blueprints/<domain>-ui-manifest.yaml  (frontend)
-templates/L4/<domain>/                (frontend workload stubs)
+specs/<domain>-l0.yaml                 (backend compliance — canonical name)
+specs/<domain>-frontend-l0.yaml        (frontend page-compliance)
+contracts/<domain>-openapi.yaml        (backend)
+contracts/<domain>-ui.yaml             (frontend)
+blueprints/<domain>-manifest.yaml      (backend)
+blueprints/<domain>-ui-manifest.yaml   (frontend)
+templates/L4/<domain>/                 (frontend workload stubs)
 ```
+
+Every generated spec is an **UNFILLED skeleton** carrying a `# TODO: Add` marker.
+`spec_scaffold_unfilled_guard.sh` (hard gate [70]) BLOCKS the build until it is filled,
+so the **required next step is `/ax-plan <domain>`** (the G6 forcing wire): /ax-plan
+runs the interview, fills the Spec Trio with real items, and emits 1:1 RED `@Tag` stubs.
+Do not hand-write items or implementation before running /ax-plan.
 
 ### Step 4: Allowlist registration
 After scaffold, manually add the domain to

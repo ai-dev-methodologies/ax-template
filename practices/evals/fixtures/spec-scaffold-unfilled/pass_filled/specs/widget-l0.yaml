@@ -1,0 +1,14 @@
+version: "0.1.0"
+scope: "widget — bounded gadget allocation"
+domain_mode: full_trio
+stack: "Spring Boot 3.2.x"
+standard: "OWASP ASVS V4"
+items:
+  - id: "WIDGET-AUTHZ-001"
+    chapter: "authz"
+    requirement: "Only the owner may read."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: "GET by non-owner -> 404"
+    policy_ref: "blueprints/widget-manifest.yaml#authz"

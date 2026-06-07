@@ -1041,6 +1041,15 @@ echo "[69] spec_item_verification_binding_guard.sh (ax-plan G3/G4 — every appl
 run_guard "spec_item_verification_binding/live" 0 \
     bash "$SCRIPT_DIR/spec_item_verification_binding_guard.sh"
 
+echo ""
+echo "[70] spec_scaffold_unfilled_guard.sh (ax-plan G6 forcing wire — a scaffolded-but-unplanned spec (still carrying the '# TODO: Add' marker) keeps the catalog RED until /ax-plan fills it; this is what makes an empty skeleton FAIL, since the trio + binding guards pass an empty skeleton vacuously)"
+run_guard "spec_scaffold_unfilled/live" 0 \
+    bash "$SCRIPT_DIR/spec_scaffold_unfilled_guard.sh"
+run_guard "spec_scaffold_unfilled/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/spec_scaffold_unfilled_guard.sh" --root "$SCRIPT_DIR/fixtures/spec-scaffold-unfilled/fail_unplanned"
+run_guard "spec_scaffold_unfilled/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/spec_scaffold_unfilled_guard.sh" --root "$SCRIPT_DIR/fixtures/spec-scaffold-unfilled/pass_filled"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

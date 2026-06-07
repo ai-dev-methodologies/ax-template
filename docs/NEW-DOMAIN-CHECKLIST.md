@@ -7,6 +7,25 @@
 > `com.ax.template.authblueprint.<domain>`. The mechanical guards listed in [§Enforcement]
 > will FAIL your build if you skip a step — that is intentional (zero-tolerance).
 
+## ▶ STEP 0 — Plan first: `/ax-scaffold` → `/ax-plan` → implement (the G6 forcing wire)
+
+You do **not** start a domain by writing code. The chain is mechanically forced:
+
+1. `bash skills/ax-scaffold/scripts/new-domain.sh <domain>` — emits the empty Spec Trio
+   skeleton (`specs/<domain>-l0.yaml` + frontend spec + contracts + manifests), each
+   carrying a `# TODO: Add` marker.
+2. **`/ax-plan <domain>`** — interview (domain_mode / standards / complexity) → fill the
+   Spec Trio with real items → emit **1:1 RED `@Tag` stubs** (`emit-red-stubs.sh`) →
+   register `domain_mode` in `trio_integrity_allowlist.yaml` + the `test<Domain>` Gradle
+   task → `docs/blueprints/<domain>/{plan.md,progress.md}`. This is the **fill+map** stage.
+3. Only now implement (RED → GREEN), top-to-bottom through this checklist.
+
+**Why you cannot skip `/ax-plan`:** `spec_scaffold_unfilled_guard.sh` (hard gate [70])
+BLOCKS the build while any spec still carries the `# TODO: Add` scaffold marker. The
+trio + binding guards pass an *empty* skeleton vacuously; this guard is what makes the
+unplanned skeleton fail. `bash skills/ax-plan/scripts/check-plan-complete.sh <domain>`
+must exit 0 (PLAN_COMPLETE, all items RED-bound) before implementation is meaningful.
+
 ## 0. Reuse before you build (the catalog already ships this code)
 Do **NOT** hand-roll these — import the real implementations from `common/`:
 

@@ -15,6 +15,17 @@
 
 구현 코드는 이 Spec Trio의 **참조 구현**이다. 코드가 아니라 spec이 진실.
 
+### 새 도메인은 plan-first (G6 forcing wire)
+
+새 도메인은 코드부터 쓰지 않는다. 체인은 기계적으로 강제된다:
+`/ax-scaffold <domain>` (빈 Spec Trio 스켈레톤, 각 spec에 `# TODO: Add` 마커) →
+**`/ax-plan <domain>`** (interview → Spec Trio 채우기 → 1:1 RED `@Tag` 스텁) → 구현(RED→GREEN).
+`spec_scaffold_unfilled_guard.sh` (hard gate [70]) 가 `# TODO: Add` 마커가 남은 spec이 하나라도
+있으면 빌드를 BLOCK 한다 — domain_spec_trio / spec_item_verification_binding 두 게이트는 빈
+스켈레톤을 vacuously 통과시키므로, 이 게이트가 "계획 없이 스캐폴드만 한" 도메인을 막는다.
+아래 5-step (Step 1~5) 은 `/ax-plan` 이 채우는 산출물의 스키마다. 상세 산출물 목록은
+`docs/NEW-DOMAIN-CHECKLIST.md` STEP 0 참조.
+
 ---
 
 ## Step 1: Define Compliance Spec

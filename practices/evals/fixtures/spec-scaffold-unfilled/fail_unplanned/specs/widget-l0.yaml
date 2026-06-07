@@ -1,0 +1,7 @@
+version: "0.1.0"
+scope: "widget — TODO(/ax-plan): one-line scope"
+domain_mode: full_trio
+stack: "Spring Boot 3.2.x"
+standard: "TODO(/ax-plan)"
+items: []
+# TODO: Add items — run /ax-plan widget
