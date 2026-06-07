@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.announcement;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,7 +82,7 @@ public class AnnouncementService {
     /** ANN-LIST-001 — admin: all announcements regardless of state/window. */
     @Transactional(readOnly = true)
     public List<Announcement> listAll() {
-        return repo.findAllByOrderByStartsAtDesc();
+        return repo.findAllByOrderByStartsAtDesc(PageRequest.of(0, 1000));  // bounded read (ArchitectureUnboundedRepositoryList)
     }
 
     @Transactional(readOnly = true)
