@@ -58,12 +58,15 @@ checklist:
   - id: per-domain-tests
     title: "Per-domain ./gradlew test{Domain} suite (30 tasks)"
     parallel: false  # gradle daemon serializes anyway; keep stderr deterministic
-    # The 25-domain matrix + the R22 BEFORE_CLASS DirtiesContext on hot
+    # The growing domain matrix + the R22 BEFORE_CLASS DirtiesContext on hot
     # @SpringBootTest classes pushes cumulative wall-clock past the global
-    # 900s default — observed 15-16 min runs on a warm daemon. Bumping to
-    # 1800s (30 min) gives stable headroom. The matrix only grows; this
-    # is a catalog-mechanics adjustment, not a per-domain regression.
-    timeout_seconds: 1800
+    # 900s default — observed 15-16 min runs on a warm daemon at ~30 domains.
+    # IDW9 grew the matrix to 41 testX tasks (dispatch adds two fresh
+    # @SpringBootTest contexts); the collapsed run hit the 1800s cap under a
+    # busy machine (exit 143 / SIGTERM, not a test regression). Bumping to
+    # 2700s (45 min) restores headroom. The matrix only grows; this is a
+    # catalog-mechanics adjustment, not a per-domain regression.
+    timeout_seconds: 2700
     commands:
       - command: "./gradlew testAsvs"
         working_directory: "backend"
@@ -183,6 +186,9 @@ checklist:
         working_directory: "backend"
         expected_exit: 0
       - command: "./gradlew testAnnouncement"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testDispatch"
         working_directory: "backend"
         expected_exit: 0
       - command: "./gradlew testIntegration"

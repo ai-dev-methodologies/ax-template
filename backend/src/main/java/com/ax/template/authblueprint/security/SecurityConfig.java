@@ -56,6 +56,11 @@ public class SecurityConfig {
                 // ANN-AUTHZ-001 — active-list read is any authenticated user; the admin write
                 // paths (/api/admin/announcements/**) are gated by the /api/admin/** rule above.
                 .requestMatchers("/api/announcements/**").authenticated()
+                // DISPATCH (exclusive-assignment-l0 + timed-offer-l0): actor surface
+                // (create request / accept / decline / heartbeat) is any authenticated user;
+                // the dispatcher write paths (/api/admin/dispatch/**: register provider, offer)
+                // are gated by the /api/admin/** ROLE_ADMIN rule above.
+                .requestMatchers("/api/dispatch/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

@@ -1,0 +1,107 @@
+version: "0.1.0"
+scope: "exclusive-assignment-l0 — cardinality-1 mutual-exclusion claim contract for any recipe whose business invariant pairs a NAMED demand unit to a NAMED supply unit such that each holds AT-MOST-ONE active assignment (a request resolves to ≤1 provider AND a provider holds ≤1 active job). Cross-cutting, jurisdiction-agnostic + framework-agnostic. DISTINCT from bounded-capacity-claim-l0: that contract serializes N claimants against ONE shared fungible counter ('taken < capacity'); THIS contract is two-sided exclusive ownership of a singleton named resource ('this provider, by this request, exactly once'). Realized by the dispatch reference workload (com.ax.template.authblueprint.dispatch). Recurs in: logistics load-to-truck, healthcare bed/OR-room/clinician-slot, staffing shift-to-worker, telco number/SIM provisioning, ticketing seat-hold-to-one-buyer — any two-sided marketplace pairing a named supply unit to a named demand unit."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA) + PostgreSQL (status-guarded conditional UPDATE + partial unique index) + RFC 9457 Problem Details + Micrometer metrics"
+standard: "PostgreSQL 'Transaction Isolation' (Read Committed WHERE re-evaluation) + PostgreSQL 'Explicit Locking' (Deadlocks — consistent lock-acquisition order) + PostgreSQL 'Partial Indexes' (unique among rows satisfying the predicate) + CWE-362 (Concurrent Execution using Shared Resource with Improper Synchronization) + RFC 9110 §15.5.10 (409 Conflict) + RFC 9457 (Problem Details for HTTP APIs)"
+domain_mode: backend_only
+introduced_at: "IDW9 2026-06-07 on-demand dispatch dogfood"
+
+# OPT-IN exclusive-assignment catalog. The IDW9 dispatch dogfood proved the
+# catalog could express a SHARED-COUNTER claim (bounded-capacity-claim-l0) but
+# had NO way to express cardinality-1 mutual exclusion of a NAMED two-sided
+# resource. A driver/worker/bed is not a fungible counter slot: claiming it is
+# "set THIS one row to ASSIGNED iff it is still AVAILABLE", and the SAME winner
+# must not be simultaneously awarded a different request. This spec supplies the
+# missing primitive: a status-guarded conditional UPDATE (affected-rows==1
+# wins), a deterministic lock-acquisition order to kill the two-sided deadlock,
+# a partial-unique-index backstop, and distinct 409 codes. Generic; zero Korean
+# law cite (R102+ generic catalog principle).
+
+# ── Priority order for fork-receivers ──
+#   1. EXCL-CLAIM-001  (the primitive — status-guarded conditional UPDATE)
+#   2. EXCL-PAIR-002   (two-sided atomicity — deterministic lock order)
+#   3. EXCL-INDEX-003  (partial-unique-index backstop)
+#   4. EXCL-409-004    (distinct 409 JOB_ALREADY_TAKEN vs DRIVER_ALREADY_BUSY)
+
+# ── Composition note ──
+# bounded-capacity-claim (shared counter) and exclusive-assignment (named pair)
+# are siblings, not substitutes. Use bounded-capacity-claim when the resource is
+# a fungible count (seats remaining); use exclusive-assignment when BOTH sides
+# are named singletons that must each be claimed at most once. A two-sided
+# marketplace assignment is the latter; an enrollment cap is the former.
+
+items:
+  - id: "EXCL-CLAIM-001"
+    chapter: "Claim is a status-guarded conditional UPDATE on the named resource row"
+    requirement: "Claiming a singleton named resource (e.g. a provider) for a named demand unit (e.g. a request) MUST be expressed as ONE atomic, status-guarded conditional UPDATE on the resource row — `UPDATE provider SET status='ASSIGNED' WHERE id=:providerId AND status='AVAILABLE'` — whose affected-row count is checked: affected-rows == 1 ⇒ claim granted, affected-rows == 0 ⇒ the resource was no longer AVAILABLE (lost the race). It MUST NOT be a read-the-status-then-write-if-available sequence in application code: under Read Committed a concurrent committed claim is invisible to the first claimant's earlier SELECT, so two requests both read AVAILABLE and both proceed, double-dispatching one provider. The conditional UPDATE is race-safe precisely because Read Committed re-evaluates the WHERE clause against the freshly-committed row: the loser's `status='AVAILABLE'` predicate is re-checked against the now-ASSIGNED row and matches zero rows."
+    test_method: "RestAssured integration test + concurrent-accept harness (M requests race one provider)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Single-statement status-guarded UPDATE — never application-side
+      check-then-act. Anchored to PostgreSQL Transaction Isolation
+      (Read Committed WHERE re-evaluation) + CWE-362.
+      Quote anchor (PostgreSQL 'Transaction Isolation' — Read Committed):
+      "The search condition of the command (the WHERE clause) is
+      re-evaluated to see if the updated version of the row still matches
+      the search condition. If so, the second updater proceeds with its
+      operation using the updated version of the row."
+      (https://www.postgresql.org/docs/current/transaction-iso.html)
+      Quote anchor (CWE-362): "The product contains a concurrent code
+      sequence that requires temporary, exclusive access to a shared
+      resource, but a timing window exists in which the shared resource
+      can be modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)
+  - id: "EXCL-PAIR-002"
+    chapter: "Two-sided atomicity via a deterministic lock-acquisition order"
+    requirement: "When a claim must mutate BOTH sides of the pair in one transaction (mark the provider ASSIGNED AND mark the request ASSIGNED-to-this-provider), the winning provider MUST NOT be simultaneously awarded a DIFFERENT request, and the winning request MUST NOT simultaneously hold a different provider. When two transactions each need locks on a (request, provider) pair, they MUST acquire those locks in a single deterministic order (e.g. by ascending primary-key / UUID) so that two interleaved claims cannot each hold one half and wait on the other — the classic A-waits-driver / B-waits-job deadlock. A claim that cannot acquire its pair atomically MUST fail cleanly (no partial assignment: never a provider ASSIGNED with no owning request, nor a request ASSIGNED with a still-AVAILABLE provider)."
+    test_method: "Concurrent two-sided claim integration test (interleaved pair claims) — no deadlock, no partial assignment"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Consistent lock order is the standard deadlock defense. Anchored to
+      PostgreSQL 'Explicit Locking' (Deadlocks).
+      Quote anchor (PostgreSQL 'Explicit Locking' — Deadlocks):
+      "The use of explicit locking can increase the likelihood of
+      deadlocks, wherein two (or more) transactions each hold locks that
+      the other wants."
+      Quote anchor (consistent order):
+      "The best defense against deadlocks is generally to avoid them by
+      being certain that all applications using a database acquire locks
+      on multiple objects in a consistent order."
+      (https://www.postgresql.org/docs/current/explicit-locking.html)
+  - id: "EXCL-INDEX-003"
+    chapter: "Partial-unique-index backstop (DB enforces ≤1 active per side)"
+    requirement: "Independent of application code, the schema MUST carry partial unique indexes that make a double assignment unrepresentable at the database: a unique index on the provider key WHERE the assignment is active, and a unique index on the request key WHERE the assignment is active. This is the defense-in-depth backstop (mirrors bounded-capacity-claim's `CHECK (taken<=capacity)`): even a future code path that bypasses the conditional-UPDATE primitive cannot persist a provider holding two active jobs or a request holding two active providers — the second INSERT/UPDATE fails at the DB."
+    test_method: "Migration structural assertion (partial unique indexes present) + duplicate-active INSERT rejected"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Partial unique index enforces uniqueness only over the active subset.
+      The reference workload runs on ddl-auto=create-drop, so V034's partial
+      indexes are applied only by Flyway fork-receivers (defense-in-depth);
+      the runtime exclusion in the reference is held by the status-guarded
+      conditional-UPDATE claim (EXCL-CLAIM-001) + the per-request offer lock,
+      and the ViolationProofTest asserts the migration DECLARES the indexes.
+      Anchored to PostgreSQL 'Partial Indexes'.
+      Quote anchor (PostgreSQL 'Partial Indexes'):
+      "A partial index is an index built over a subset of a table; the
+      subset is defined by a conditional expression (called the predicate
+      of the partial index)."
+      Quote anchor (uniqueness over the subset):
+      "This enforces uniqueness among the rows that satisfy the index
+      predicate, without constraining those that do not."
+      (https://www.postgresql.org/docs/current/indexes-partial.html)
+  - id: "EXCL-409-004"
+    chapter: "Distinct 409 codes for each side losing the race"
+    requirement: "A claim that loses the race MUST return a deterministic 409 Conflict with an RFC 9457 problem body whose machine-readable `code` distinguishes WHICH side was already taken: `JOB_ALREADY_TAKEN` (the request was already assigned to another provider) vs `DRIVER_ALREADY_BUSY` (the provider was already assigned to another request). These MUST be distinct from each other and from bounded-capacity-claim's `CAPACITY_EXHAUSTED` (a fungible-counter exhaustion) and from optimistic-locking's 412 (a stale caller-supplied validator) — a client branches differently on each. The loser's response MUST carry no partial side effect."
+    test_method: "RestAssured integration test (each loser asserts 409 + the correct distinct code)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      409 (state conflict) with a side-specific code, distinct from 412
+      (stale validator) and CAPACITY_EXHAUSTED (counter). Anchored to
+      RFC 9110 §15.5.10 (409 Conflict) + RFC 9457.
+      Quote anchor (RFC 9110 §15.5.10): "The 409 (Conflict) status code
+      indicates that the request could not be completed due to a conflict
+      with the current state of the target resource."
+      (https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.10)

@@ -1,0 +1,122 @@
+version: "0.1.0"
+scope: "timed-offer-l0 — the exclusive push-offer-with-TTL dispatch lifecycle for any recipe that PUSHES a scarce assignment to ranked candidates with an acceptance deadline (rather than letting candidates PULL from a shared queue — that is job-queue-l0). An Offer is pushed to ONE ranked candidate; on ACCEPT within the TTL it commits the exclusive claim (exclusive-assignment-l0); on DECLINE or TTL-EXPIRY it atomically revokes-and-re-offers to the next candidate, releasing the provisional hold in the same transaction. Includes the supply-side availability gate (a candidate is offerable only while AVAILABLE and heartbeat-fresh) and the expiry sweep that MUST lose the race against a live accept. Cross-cutting, framework-agnostic. Realized by the dispatch reference workload (com.ax.template.authblueprint.dispatch). Recurs in: logistics load-offer-to-carrier, healthcare on-call escalation (page next clinician on no-ack), staffing shift-offer cascades, sales lead round-robin with claim-TTL, incident on-call escalation."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (@Version optimistic locking) + Spring @Scheduled sweep + PostgreSQL partial unique index + injected java.time.Clock + RFC 9457 Problem Details + Micrometer metrics"
+standard: "CWE-367 (Time-of-check Time-of-use Race Condition) + CWE-362 (Concurrent Execution using Shared Resource) + PostgreSQL 'Partial Indexes' + Jakarta Persistence @Version (optimistic lock value) + Spring Framework Task Scheduling (@Scheduled) + RFC 9457 (Problem Details)"
+domain_mode: backend_only
+introduced_at: "IDW9 2026-06-07 on-demand dispatch dogfood"
+
+# OPT-IN timed-offer catalog. The IDW9 dispatch dogfood proved the catalog had
+# job-queue-l0 (candidates PULL an anonymous job) and waitlist-promotion-l0
+# (FIFO seat promotion) but NO push-offer lifecycle: a scarce assignment OFFERED
+# to one named ranked candidate with an acceptance deadline that, on decline or
+# timeout, cascades to the next candidate. The hard part is the TOCTOU between a
+# background expiry sweep and a live accept arriving at the deadline boundary —
+# the sweep MUST lose that race. This spec composes exclusive-assignment-l0 (the
+# claim on accept), an injected-clock deadline (time-gated-decisions-read-
+# injected-clock), and the sweep-as-concurrent-mutator rule
+# (timeout-sweep-is-a-concurrent-mutator). Generic; zero Korean law cite.
+
+# ── Priority order for fork-receivers ──
+#   1. OFFER-FSM-001    (Offer FSM + at-most-one PENDING per request)
+#   2. OFFER-ATOMIC-002 (re-offer expires current + releases hold in ONE tx)
+#   3. OFFER-TOCTOU-003 (accept re-checks deadline INSIDE its own tx, injected clock)
+#   4. OFFER-CASCADE-004(bounded cascade depth + monotonic offer ordinal)
+#   5. AVAIL-FSM-001    (supply availability FSM: AVAILABLE XOR ASSIGNED)
+#   6. AVAIL-FRESH-002  (eligibility AND-s a heartbeat-freshness predicate)
+#   7. AVAIL-SWEEP-001  (scheduled sweep — the concurrent-mutator contract)
+
+items:
+  - id: "OFFER-FSM-001"
+    chapter: "Offer is a sub-entity FSM with at-most-one PENDING per request"
+    requirement: "An Offer is a first-class sub-entity layered on the request, with a lifecycle PENDING → ACCEPTED | DECLINED | EXPIRED (the three terminal outcomes) and an `offer_expires_at` deadline. At most ONE outstanding PENDING offer may exist per request at any instant — enforced structurally by a partial unique index on the request key WHERE status='PENDING', not merely by application logic. The offer's status is advanced only by a sole-mutator state machine; an illegal edge (e.g. ACCEPT an already-EXPIRED offer) throws a domain exception → 409/410."
+    test_method: "RestAssured integration test (offer lifecycle) + migration partial-unique-index assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      At-most-one PENDING per request is enforced two ways: a partial unique
+      index (the DB backstop a Flyway fork-receiver applies) AND, in the
+      reference workload (ddl-auto=create-drop, no Flyway), a per-request
+      PESSIMISTIC_WRITE lock that serializes offer creation so the
+      check-then-insert cannot race. Anchored to PostgreSQL 'Partial Indexes'.
+      Quote anchor (PostgreSQL 'Partial Indexes'):
+      "A partial index is an index built over a subset of a table; the
+      subset is defined by a conditional expression (called the predicate
+      of the partial index)."
+      Quote anchor (uniqueness over the subset):
+      "This enforces uniqueness among the rows that satisfy the index
+      predicate, without constraining those that do not."
+      (https://www.postgresql.org/docs/current/indexes-partial.html)
+  - id: "OFFER-ATOMIC-002"
+    chapter: "Re-offer expires-current + releases-hold in ONE transaction"
+    requirement: "Advancing to the next candidate (on DECLINE or sweep EXPIRY) MUST, in a SINGLE transaction: (a) move the current offer to its terminal state (DECLINED/EXPIRED), (b) release the provisional hold on the declined/expired provider so it returns to AVAILABLE, and (c) create the next PENDING offer to the next ranked candidate. There MUST be no window in which the previous offer is terminal but the hold is still held, nor one in which two PENDING offers coexist for the request. A failure at any step rolls back all three (no orphaned hold, no lost request)."
+    test_method: "RestAssured integration test (decline → next candidate offered, prior provider AVAILABLE again, single PENDING)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      One transaction or none — a partially-advanced offer strands a hold.
+      Anchored to CWE-362 (the concurrent re-offer/accept window).
+      Quote anchor (CWE-362): "The product contains a concurrent code
+      sequence that requires temporary, exclusive access to a shared
+      resource, but a timing window exists in which the shared resource
+      can be modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)
+  - id: "OFFER-TOCTOU-003"
+    chapter: "Accept re-checks the deadline INSIDE its own transaction (injected clock)"
+    requirement: "Accepting an offer MUST re-check, inside the accept transaction, that the offer is STILL PENDING and that `now < offer_expires_at`, reading `now` from an injected `java.time.Clock` (never `Instant.now()` inline — that is untestable and bypasses the deterministic time seam). An accept that arrives after the deadline — even by microseconds, even if the row is still nominally PENDING because the sweep has not yet run — MUST be rejected deterministically (409/410), never granted. This closes the time-of-check/time-of-use window between an earlier eligibility read and the committing write."
+    test_method: "RestAssured integration test (accept-after-expiry → 409/410) with clock-advanced fixture"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The deadline is re-evaluated at use, not at check, via an injected
+      Clock. Anchored to CWE-367 (TOCTOU) + the catalog rule
+      time-gated-decisions-read-injected-clock.
+      Quote anchor (CWE-367): "The product checks the state of a resource
+      before using that resource, but the resource's state can change
+      between the check and the use in a way that invalidates the results
+      of the check."
+      (https://cwe.mitre.org/data/definitions/367.html)
+  - id: "OFFER-CASCADE-004"
+    chapter: "Bounded cascade depth + monotonic offer ordinal"
+    requirement: "The re-offer cascade MUST be bounded: each offer for a request carries a strictly monotonic ordinal (1, 2, 3, …), and once the ordinal reaches a configured max-cascade-depth with no acceptance the request moves to a terminal UNFULFILLED state (not an infinite re-offer loop, not a silent drop). The ordinal makes the cascade auditable (which candidates were tried, in order) and the terminal state makes exhaustion observable."
+    test_method: "RestAssured integration test (decline through max depth → request UNFULFILLED; ordinal strictly increasing)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Bounded cascade with an auditable ordinal — exhaustion is an explicit
+      terminal state, never an infinite loop or a silent drop. Design
+      invariant (mirrors provenance-dag-l0's bounded-traversal posture);
+      no external quote required.
+  - id: "AVAIL-FSM-001"
+    chapter: "Supply availability FSM: AVAILABLE XOR ASSIGNED"
+    requirement: "A provider's duty state is an explicit FSM (OFFLINE → AVAILABLE → ASSIGNED → AVAILABLE | OFFLINE …) with the hard invariant that a provider is never simultaneously offerable and assigned: AVAILABLE and ASSIGNED are mutually exclusive. This mutual exclusion is the supply-side root of double-dispatch and composes with exclusive-assignment-l0 EXCL-INDEX-003 (the partial unique index on provider WHERE active). State is advanced only by a sole-mutator state machine."
+    test_method: "RestAssured integration test (duty transitions) + ViolationProofTest (no AVAILABLE+ASSIGNED)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      AVAILABLE XOR ASSIGNED is the supply-side double-dispatch root.
+      Composes with exclusive-assignment-l0#EXCL-INDEX-003 (partial unique
+      index). Design invariant; DB-backstopped per that sibling item.
+  - id: "AVAIL-FRESH-002"
+    chapter: "Eligibility AND-s a heartbeat-freshness predicate"
+    requirement: "An offer-eligibility query MUST AND a freshness predicate: a provider is offerable only if AVAILABLE AND `last_heartbeat_at > now - staleness_window`, where `now` is read from the injected Clock and `staleness_window` is a config-validated value (not a magic literal). A provider that has gone silent (crashed app, lost connectivity) MUST be excluded from matching even though its stored status is still AVAILABLE — a stale AVAILABLE is not offerable. This prevents offering work to a provider that cannot accept it (the offer would always TTL-expire and waste a cascade step)."
+    test_method: "RestAssured integration test (stale-heartbeat provider excluded from eligibility)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Freshness is part of eligibility, evaluated against the injected
+      Clock. staleness_window is config-validated (config-validation-l0
+      posture), never a magic literal. Design invariant; no external quote.
+  - id: "AVAIL-SWEEP-001"
+    chapter: "Scheduled sweep is a concurrent mutator that loses the race"
+    verification:
+      mechanism: rule
+      ref: timeout-sweep-is-a-concurrent-mutator
+    requirement: "A scheduled sweep MUST drive the timeout transitions (PENDING offers past their deadline → EXPIRED + re-offer; stale-AVAILABLE providers → OFFLINE). Because a live accept can transition the SAME offer row concurrently, the sweep MUST obey the concurrent-mutator contract: re-check the trigger condition (still PENDING AND still past deadline) inside its own transaction, carry @Version so a committed live accept makes the sweep's optimistic update LOSE the race and SKIP the row (never force-EXPIRE an offer a user just accepted), process each swept row in its OWN transaction (REQUIRES_NEW per item, not one batch tx), be idempotent across re-runs, and release any provisional hold atomically with the re-offer."
+    test_method: "Concurrent accept-vs-sweep integration test (exactly one wins; an accepted offer is never force-expired) + the bound rule"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The keystone race: a background sweep and a live accept both target
+      one offer at the deadline boundary; the sweep must lose. Bound to the
+      catalog rule timeout-sweep-is-a-concurrent-mutator (Spring @Scheduled +
+      Jakarta @Version optimistic-lock evidence carried by the rule).
