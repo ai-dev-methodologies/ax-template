@@ -7,7 +7,10 @@ spring:
     # PostgreSQL-flavored JSON operators (payload->>'amount') against the H2 test DB.
     # Production deployments use Postgres directly; this template DB compatibility flag
     # is a portability convenience for the reference workload.
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;NON_KEYWORDS=USER
+    # LOCK_TIMEOUT=10000 — concurrency proofs serialize many PESSIMISTIC_WRITE (FOR UPDATE) waiters on one
+    # row; H2's default 1000ms can spuriously time out a deep queue on a loaded box (Postgres blocks rather
+    # than times out at 1s). Hardens reserve-settle / cost-share / dispatch race tests; only more tolerant.
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;NON_KEYWORDS=USER;LOCK_TIMEOUT=10000
     driver-class-name: org.h2.Driver
     username: sa
     password:

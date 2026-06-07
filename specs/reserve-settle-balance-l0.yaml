@@ -1,0 +1,87 @@
+version: "0.1.0"
+scope: "reserve-settle-balance-l0 — the generalized two-phase RESERVE→SETTLE lifecycle for a pooled balance. A claim against a fungible balance happens in TWO phases: first an over-reserve-safe RESERVE places a reversible HOLD (a third balance term distinct from committed and available: available = funded − committed − reserved); later a SETTLE commits the ACTUAL consumed amount (which MUST be ≤ the reserved hold — the load-bearing overspend guard) AND atomically returns the unused remainder to available in ONE transaction; an un-settled hold is RELEASED (returns the whole hold) explicitly or auto-EXPIRED by a timeout sweep. Value is conserved across the whole lifecycle (funded == committed + reserved + available; reserved == Σ outstanding holds). Cross-cutting, framework-agnostic. The IDW13 telecom dogfood proved the catalog's entire money/quota vocabulary is SINGLE-PHASE (accumulator-consume commits immediately; bounded-capacity-claim / per-tenant-resource-quota are all-or-nothing scalar counters; payment-l0 AUTHORIZED→CAPTURED is a per-ROW FSM with no shared pool and no release-of-uncommitted-remainder) and generalized NONE of the two-phase hold→settle→release-remainder lifecycle. accumulator clawback REVERSES already-committed value; a release returns an UNCOMMITTED hold — a different ledger movement. Realized by the reservation reference workload (com.ax.template.authblueprint.reservation). Recurs in: prepaid telecom online charging (3GPP Ro / RFC 4006 Credit-Control), payment authorize-then-capture, ride-hail / EV-charging / cloud reserved-credit pre-auth, hotel/car deposit holds, wallet/gift-card holds, inventory soft-reservation, ad-budget pacing — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (@Version optimistic + PESSIMISTIC_WRITE row lock + @Check live solvency backstop) + exact BigDecimal (NUMERIC(19,4)) + injected java.time.Clock (hold expiry) + @Scheduled REQUIRES_NEW timeout sweep + RFC 9457 Problem Details + Micrometer"
+standard: "IETF RFC 4006 (Diameter Credit-Control Application) §4 + §5.4 (reserve a suitable amount; at final interrogation refund the reserved credit amount not used and deduct the used amount) + java.time.Clock (server-owned hold expiry) + RFC 9457 + RFC 9110 §15.5.10 (409 Conflict)"
+domain_mode: backend_only
+introduced_at: "IDW13 2026-06-08 telecom CSP BSS/OSS dogfood"
+
+# OPT-IN reserve-settle-balance catalog. The single most load-bearing correctness
+# primitive the telecom dogfood surfaced: a two-phase reserve→settle pooled balance
+# (6 prepaid-charging personas independently reinvented it). The catalog money/quota
+# vocabulary is entirely single-phase; this spec makes the hold→settle→release-remainder
+# lifecycle a first-class, conserving, concurrency-safe contract. Generic; the prepaid
+# online-charging (RFC 4006) framing is the anchor, not a vertical lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. RSV-RESERVE-001  (the primitive — over-reserve-safe atomic hold under a row lock)
+#   2. RSV-SETTLE-001   (settle commits actual ≤ reserved AND returns the remainder, in one tx)
+#   3. RSV-RELEASE-001  (release returns the whole hold; one terminal transition; idempotent)
+#   4. RSV-SWEEP-001    (timeout sweep reclaims a stranded hold; loses the race to a live settle)
+#   5. RSV-CONSERVE-001 (keystone — value conserved across any interleaving; reserved == Σ open holds)
+
+# ── Composition note ──
+# RESERVE is the REJECTING dual of accumulator-consume (which is non-rejecting and single-phase):
+# a reserve that would push committed+reserved past funded is REJECTED (409), where consume clamps.
+# The sweep composes timeout-sweep-is-a-concurrent-mutator (a @Scheduled poller is just another
+# concurrent writer that must LOSE the race to a live settle, re-checking under @Version). Hold
+# expiry is read from an injected Clock (time-gated-decisions-read-injected-clock), never a client
+# timestamp. DISTINCT from accumulator-clawback (reverses committed value) and payment auth→capture
+# (per-row FSM, no shared pool, no release-of-remainder).
+
+items:
+  - id: "RSV-RESERVE-001"
+    chapter: "An over-reserve-safe atomic reserve places a reversible hold ≤ available"
+    verification:
+      mechanism: rule
+      ref: balance-reservation-is-two-phase-and-conserving
+    requirement: "A RESERVE against a pooled balance MUST, under the balance's row lock (PESSIMISTIC_WRITE), place a reversible HOLD only if the requested amount is ≤ available, where available = funded − committed − reserved. The hold increases the `reserved` term (never `committed`). N concurrent reserves against the SAME balance MUST serialize so they cannot COLLECTIVELY over-reserve past available — the sum of granted holds never exceeds the balance (a solvency invariant committed + reserved ≤ funded, DB-backstopped via @Check so it holds even under ddl-auto). A reserve that would exceed available MUST be REJECTED with a deterministic 409 (`type=urn:problem:reservation-insufficient-funds`, `code=RESERVATION_INSUFFICIENT_FUNDS`) — reserve is the REJECTING dual of the non-rejecting accumulator-consume. The hold is created OUTSTANDING with a server-computed expiry read from an injected Clock."
+    test_method: "RestAssured (reserve ≤ available → 201 hold, reserved rises; reserve > available → 409; N concurrent reserves → Σ granted ≤ funded, never over-reserved)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Over-reserve-safe atomic hold under a row lock; the rejecting dual of
+      accumulator-consume. Anchored to RFC 4006 §4 (reserve a suitable amount).
+      Quote anchor (RFC 4006 §4): "the credit-control server rates the request,
+      reserves a suitable amount of money from the user's account, and returns
+      the corresponding amount of credit resources."
+      (https://www.rfc-editor.org/rfc/rfc4006.txt)
+  - id: "RSV-SETTLE-001"
+    chapter: "Settle commits actual ≤ reserved AND returns the unused remainder, in one transaction"
+    requirement: "A SETTLE against an OUTSTANDING hold MUST, in ONE transaction under the balance's row lock, commit the ACTUAL consumed amount and return the unused remainder to available. The actual MUST be ≤ the held amount — this is the load-bearing overspend guard (a settle with actual > hold is REJECTED 422 `code=RESERVATION_OVER_SETTLE`, DB-backstopped via @Check settled_amount ≤ amount). On settle: `committed += actual`, `reserved -= holdAmount` (the FULL hold leaves the reserved term), so `available` rises by exactly `holdAmount − actual` (the refunded remainder) — nothing is created or destroyed. The hold becomes SETTLED and records the settled amount; settling an already-terminal hold is idempotent or a deterministic 409, never a double-commit."
+    test_method: "RestAssured (reserve 100 then settle 60 → committed += 60, available += 40 remainder; settle 120 against a 100 hold → 422; double-settle → idempotent/409, no double-commit)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Two-phase commit-actual-and-refund-remainder, conserving, atomic.
+      Quote anchor (RFC 4006 §5.4): "After final interrogation, the
+      credit-control server MUST refund the reserved credit amount not used to
+      the end user's account and deduct the used monetary amount from the end
+      user's account." (https://www.rfc-editor.org/rfc/rfc4006.txt)
+  - id: "RSV-RELEASE-001"
+    chapter: "Release returns the whole hold; one terminal transition; idempotent"
+    requirement: "A RELEASE cancels an OUTSTANDING hold and returns the WHOLE held amount to available (`reserved -= holdAmount`, `committed` unchanged), under the balance's row lock. A hold has exactly ONE terminal transition: OUTSTANDING → (SETTLED | RELEASED | EXPIRED). A SETTLED hold MUST NOT be releasable and a RELEASED/EXPIRED hold MUST NOT be settleable — a second terminal attempt is idempotent (returns the existing terminal state) or a deterministic 409, never a second balance movement (no double-return)."
+    test_method: "RestAssured + ViolationProofTest (release returns full hold; settle-then-release → 409/idempotent no double-return; one terminal transition enforced)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Whole-hold return; single terminal transition; no double-return on a
+      repeated terminal call.
+  - id: "RSV-SWEEP-001"
+    chapter: "A timeout sweep reclaims a stranded hold and loses the race to a live settle"
+    requirement: "An OUTSTANDING hold whose expiry (injected Clock) has passed MUST be reclaimable by a @Scheduled timeout sweep that, in a per-row REQUIRES_NEW transaction, returns the EXACT still-held amount to available and marks the hold EXPIRED — never more than was held (conservation). The sweep is just another concurrent writer: it MUST LOSE the race to a live settle/release that committed in the gap (re-read the hold under the balance lock; if it is no longer OUTSTANDING, skip it) so a swept-then-settled hold never double-returns value and a settle after a sweep gets a deterministic terminal-state response and does NOT re-move the balance. The authoritative reconciliation truth is `reserved == Σ(amount of OUTSTANDING holds)` with NO external system of record to query (composes timeout-sweep-is-a-concurrent-mutator)."
+    test_method: "RestAssured (expired hold swept → reserved returns to available, hold EXPIRED; reserve→settle then sweep → sweep skips, no double-return; reserved == Σ open holds after sweep)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Stranded-hold reclaim; sweep-loses-to-live-settle; local timeout-driven
+      (no external SoR). Composes timeout-sweep-is-a-concurrent-mutator.
+  - id: "RSV-CONSERVE-001"
+    chapter: "Keystone — value is conserved across any interleaving of reserve/settle/release/sweep"
+    requirement: "Across ANY interleaving of reserve, settle, release, and timeout-sweep against a balance, the conservation identity MUST hold: funded == committed + reserved + available, AND reserved == Σ(held amount of OUTSTANDING holds), with exact decimal arithmetic (NUMERIC(19,4), never floating point). The balance is never over-spent (committed + reserved ≤ funded) and a hold's value is never stranded (an abandoned hold is reclaimed) nor double-counted (a hold contributes to reserved exactly until its single terminal transition). This is the load-bearing correctness property the whole lifecycle exists to guarantee."
+    test_method: "RestAssured concurrency proof (N concurrent reservers + settlers on one balance via ExecutorService → Σ committed == Σ settled-actual, reserved == Σ open holds, funded == committed + reserved + available, never over-spent)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The conservation keystone — exact-decimal, concurrency-proven. Reserve is
+      the rejecting dual of accumulator-consume; settle conserves like
+      balanced-posting but across a two-phase hold lifecycle.

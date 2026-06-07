@@ -200,6 +200,9 @@ checklist:
       - command: "./gradlew testGovernedRecord"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testReservation"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testIntegration"
         working_directory: "backend"
         expected_exit: 0

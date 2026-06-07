@@ -71,6 +71,10 @@ public class SecurityConfig {
                 // GOVERNED-DATA (attested-change-record-l0): any authenticated user may create/edit a
                 // governed datum; an edit MUST carry a reason (enforced by the service, 422 if blank).
                 .requestMatchers("/api/governed-data/**").authenticated()
+                // RESERVATION (reserve-settle-balance-l0): any authenticated user funds a pooled balance
+                // and reserves/settles/releases against it (two-phase prepaid charging).
+                .requestMatchers("/api/balances/**").authenticated()
+                .requestMatchers("/api/reservations/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

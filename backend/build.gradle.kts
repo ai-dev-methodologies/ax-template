@@ -145,6 +145,12 @@ tasks.register<Test>("testTransformation") {
     }
 }
 
+tasks.register<Test>("testReservation") {
+    useJUnitPlatform {
+        includeTags("RESERVATION")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")
