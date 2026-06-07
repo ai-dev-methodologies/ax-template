@@ -1,0 +1,75 @@
+version: "0.1.0"
+scope: "monotone-register-l0 — the generalized VALUE-monotone cumulative register (odometer). A per-key register holds a cumulative reading that only ever INCREASES; billable/observed consumption between two reads is the DELTA = curr − prior, computed under the register's row lock; a read below the current anchor is REJECTED unless it is a governed exception (ROLLOVER — the register wrapped past its modulus, so delta = (modulus − prior) + curr; or EXCHANGE — the physical device was swapped, resetting the baseline). Reads are append-only and immutable; Σ deltas == final − initial. Cross-cutting, framework-agnostic. The IDW14 energy dogfood proved the catalog has NO value-monotone register: monotonic-event-ingest guards event-TIME against a watermark and folds to ONE row (dedup), accumulator-consume FLOORS at zero and is bidirectional, and shared-counter-claim refuses past a cap — none encodes a value-monotone odometer with wrapped-delta math and governed reset. Realized by the register reference workload (com.ax.template.authblueprint.register). Recurs in: utility meters (electricity/gas/water), vehicle odometers, cumulative byte/request/page-view counters, SNMP-style counters, blockchain nonces, any monotone cumulative sensor — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only immutable reads + @Version optimistic + PESSIMISTIC_WRITE row lock + @Check live monotone/non-negative-delta backstop) + exact BigDecimal (NUMERIC(19,4)) + injected java.time.Clock (recorded-at) + RFC 9457 Problem Details + Micrometer"
+standard: "IETF RFC 2578 (SMIv2) §7.1.6 Counter32 / §7.1.10 Counter64 (a non-negative integer that monotonically increases until a maximum, then wraps to zero — the canonical monotone-counter-with-wrap formalization) + CWE-362 (concurrent register update race) + java.time.Clock + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW14 2026-06-08 energy/utilities dogfood"
+
+# OPT-IN monotone-register catalog. The IDW14 energy dogfood's flagship signature
+# (\"measured-quantity integrity over a fixed grid\"): the catalog reasons about
+# TIME-monotonicity (event watermark) and bidirectional accumulators, but never a
+# VALUE-monotone cumulative register with delta = curr − prior and governed
+# rollover/exchange. Generic; the utility-meter framing is the anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. REG-MONOTONE-001 (the primitive — an appended read is ≥ the anchor, under the row lock)
+#   2. REG-DELTA-001    (consumption = curr − prior; append-only; Σ deltas == final − initial)
+#   3. REG-ROLLOVER-001 (a wrap past the modulus is a governed read: delta = (modulus − prior) + curr)
+#   4. REG-EXCHANGE-001 (a device swap is a governed baseline reset; the seam never fabricates consumption)
+#   5. REG-CONCURRENT-001 (keystone — concurrent appends serialize; every delta is vs the true prior anchor)
+
+# ── Composition note ──
+# DISTINCT from monotonic-event-ingest (TIME watermark + dedup to one row),
+# accumulator-consume (floors at zero, bidirectional draw), and shared-counter-claim
+# (refuse past a cap). The wrapped-delta on ROLLOVER mirrors RFC 2578 Counter
+# semantics. recordedAt is read from an injected Clock; the row lock serializes
+# concurrent reads so a delta is never computed against a stale anchor (CWE-362).
+
+items:
+  - id: "REG-MONOTONE-001"
+    chapter: "An appended read is ≥ the register anchor; a decrease is rejected unless governed"
+    verification:
+      mechanism: rule
+      ref: cumulative-register-is-value-monotone-with-governed-reset
+    requirement: "A NORMAL read appended to a cumulative register MUST be ≥ the register's current anchor (the latest reading), under the register's row lock (PESSIMISTIC_WRITE). The consumption is delta = read − anchor. A read BELOW the anchor MUST be REJECTED with a deterministic 422 (`type=urn:problem:register-not-monotone`, `code=REGISTER_NOT_MONOTONE`) — NOT silently accepted (which would post a negative delta and destroy billed consumption) — UNLESS it is a governed exception (ROLLOVER or EXCHANGE, below). A read at or above the register's modulus is invalid (422). The monotone invariant (anchor never decreases on a NORMAL read; delta ≥ 0) MUST be DB-backstopped via @Check so it holds even under ddl-auto."
+    test_method: "RestAssured (read ≥ anchor → 200 + delta = read − anchor, anchor advances; read < anchor → 422 REGISTER_NOT_MONOTONE, anchor unchanged)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Value-monotone odometer; a decrease is a 422, never a negative delta.
+      Quote anchor (RFC 2578 §7.1.6 Counter32): "The Counter32 type represents a
+      non-negative integer which monotonically increases until it reaches a
+      maximum value of 2^32-1 (4294967295 decimal), when it wraps around and
+      starts increasing again from zero." (https://www.rfc-editor.org/rfc/rfc2578.txt)
+  - id: "REG-DELTA-001"
+    chapter: "Consumption is delta = curr − prior; reads are append-only; Σ deltas == final − initial"
+    requirement: "Each appended read records the consumption delta = (this read) − (the prior anchor), computed under the SAME lock/transaction as the anchor advance, so the read chain perfectly reconstructs both the cumulative total and the per-interval consumption. Reads are APPEND-ONLY: every column is `@Column(updatable=false)`, there is no setter, and a read is never UPDATEd or deleted — a correction is a new appended read. Σ deltas (the total of every read's delta — exposed as totalConsumption) is the SOLE correct cumulative-consumption quantity and is robust across rollover and exchange. The identity `Σ deltas == (final anchor − initial anchor)` holds ONLY across an unbroken run of NORMAL reads; each governed reset (ROLLOVER wraps the anchor, EXCHANGE resets it DOWN to a new device's opening read) deliberately breaks the final−initial relation. A fork-receiver MUST reconcile and bill on Σ deltas, NEVER on (final − initial) — a final−initial recon mis-bills every wrapped meter and every device swap."
+    test_method: "RestAssured (N successive reads → N immutable rows; Σ delta == final anchor − initial anchor; reads append-only)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Delta is the true increment under the lock; the audit chain conserves.
+  - id: "REG-ROLLOVER-001"
+    chapter: "A wrap past the modulus is a governed read with wrapped-delta, never a negative"
+    requirement: "When a register wraps past its modulus (an odometer turning over: the new read is below the anchor because the physical register reset to zero), the consumption MUST be recorded via a GOVERNED ROLLOVER read whose delta = (modulus − anchor) + read (the consumption from the anchor up to the modulus, then from zero up to the new read), carrying a mandatory non-blank reason. A ROLLOVER read sets the anchor to the new read. A silent negative delta MUST NEVER be produced. This mirrors RFC 2578 Counter wrap semantics."
+    test_method: "RestAssured (anchor near modulus, ROLLOVER read below anchor → delta = (modulus − anchor) + read, anchor = read; ROLLOVER without reason → 422)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Wrapped-delta on rollover (RFC 2578 Counter); reason-gated governed exception.
+  - id: "REG-EXCHANGE-001"
+    chapter: "A device exchange is a governed baseline reset; the seam fabricates no consumption"
+    requirement: "When the physical device is swapped (meter exchange), the register's baseline is reset to the new device's opening read via a GOVERNED EXCHANGE read carrying a mandatory non-blank reason. The EXCHANGE read attributes ZERO consumption to the swap itself (consumption up to the swap is captured by the prior NORMAL read on the old device) and sets the anchor to the new opening read. The opening read MUST be BELOW the current anchor (a baseline reset is downward — a new device starts lower than the old device's accumulated reading); an EXCHANGE whose read is ≥ the anchor MUST be rejected (422), because an upward EXCHANGE with delta 0 would silently erase the real consumption between the old anchor and the new read (an authenticated caller could otherwise advance the anchor for free). To bill a genuine increase, use a NORMAL read. No spurious positive or negative delta is fabricated at the seam."
+    test_method: "RestAssured (EXCHANGE read below anchor with reason → delta 0, anchor reset; EXCHANGE read ≥ anchor → 422; EXCHANGE without reason → 422)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Governed baseline reset; zero seam consumption; reason-gated.
+  - id: "REG-CONCURRENT-001"
+    chapter: "Keystone — concurrent appends serialize; every delta is vs the true prior anchor"
+    requirement: "Across ANY interleaving of concurrent appends to ONE register, each read's delta MUST be computed against the TRUE prior anchor (the value left by the previously-committed read), never a stale anchor (which would double-count or lose consumption — CWE-362). The register row lock serializes concurrent appenders. Under concurrency, for a NORMAL-only run, Σ(deltas of committed reads) == final anchor − initial anchor, with exact decimal arithmetic (NUMERIC(19,4)), and the committed reads are strictly monotone in sequence order. (Across governed resets the final−initial relation no longer holds — Σ deltas remains the billing quantity per REG-DELTA-001.)"
+    test_method: "RestAssured concurrency proof (N concurrent appends of distinct increasing values via ExecutorService → Σ committed deltas == final anchor − initial; reads monotone by sequence; no delta vs a stale anchor)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The conservation-under-concurrency keystone — row-lock serialization, exact delta.

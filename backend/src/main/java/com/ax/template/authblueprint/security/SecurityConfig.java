@@ -75,6 +75,9 @@ public class SecurityConfig {
                 // and reserves/settles/releases against it (two-phase prepaid charging).
                 .requestMatchers("/api/balances/**").authenticated()
                 .requestMatchers("/api/reservations/**").authenticated()
+                // REGISTER (monotone-register-l0): any authenticated user creates a cumulative register
+                // and appends monotone reads (meter/odometer); decrease only via governed rollover/exchange.
+                .requestMatchers("/api/registers/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The
