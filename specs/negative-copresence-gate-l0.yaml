@@ -1,0 +1,84 @@
+version: "0.1.0"
+scope: "negative-copresence-gate-l0 — a candidate write that INTRODUCES a member into a subject's set MUST be evaluated, before it commits, against the SET of the subject's OTHER currently-active members via set-intersection on a NORMALIZED concept key (a drug class, an allergen class, a conflicting role, an incompatible feature — NOT a literal name), producing a per-finding GRADED verdict (ABSOLUTE hard-stop vs RELATIVE overridable) that lives on NONE of the matched rows; the gate FAILS CLOSED when the knowledge source cannot assess the candidate (an unmapped/unknown concept BLOCKS, never silently allows); and the set is re-read in the SAME transaction so a member added concurrently between evaluation and commit is still caught. Cross-cutting, framework-agnostic. The IDW16 EMR dogfood proved the catalog's entire gate vocabulary is SINGLE-SUBJECT and negative-on-presence-of-one-flag: blocking-status-gate-l0 re-reads ONE referenced entity's OWN blocking flag (binary), bounded-capacity/quota is a scalar counter, exclusive-assignment is cardinality-1 named-pair exclusion, consent/legal-hold/DSR-restriction forbid on ONE present fact. NONE evaluate set-intersection on a normalized concept against an N-row sibling set, grade severity, or fail-closed on an unassessable candidate. Realized by the copresence reference workload (com.ax.template.authblueprint.copresence). Recurs in: medication safety (drug-drug, drug-allergy, duplicate-therapy), separation-of-duties conflict-set (granting a role to an actor already holding a conflicting role), conflicting-reservation / double-booking, incompatible-configuration / feature-conflict detection, incompatible-materials co-storage — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (@Version optimistic + PESSIMISTIC_WRITE subject lock for the in-transaction set re-read) + RFC 9457 Problem Details + injected java.time.Clock + Micrometer"
+standard: "Saltzer & Schroeder (1975) 'The Protection of Information in Computer Systems' — Fail-safe defaults (base access decisions on permission rather than exclusion; the default situation is lack of access) + CWE-362 (a member added between evaluation and commit) + PostgreSQL row-level FOR UPDATE + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW16 2026-06-08 healthcare/EMR dogfood"
+
+# OPT-IN negative-copresence-gate catalog. The IDW16 EMR dogfood's flagship signature:
+# the catalog's gates are all single-subject / one-flag; this is a SET-evaluated,
+# graded, fail-closed contraindication gate. Generic; the medication-safety framing
+# (drug-drug / drug-allergy) is the anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. GATE-SET-EVAL-001   (the primitive — evaluate the candidate vs the subject's active set, in-tx)
+#   2. GATE-GRADED-001     (per-finding ABSOLUTE hard-stop vs RELATIVE overridable; verdict on no row)
+#   3. GATE-FAILCLOSED-001 (an unassessable/unmapped candidate BLOCKS — Saltzer fail-safe defaults)
+#   4. GATE-OVERRIDE-001   (a RELATIVE finding may be overridden ONLY with an atomic mandatory reason,
+#                           the overridden findings recorded by reference; ABSOLUTE has no override path)
+#   5. GATE-CONCURRENT-001 (the set is re-read under the subject lock so a concurrent add is still caught)
+
+# ── Composition note ──
+# DISTINCT from blocking-status-gate (one entity's own flag), bounded-capacity (a
+# scalar counter), and exclusive-assignment (cardinality-1 pair). The fail-closed
+# default is Saltzer & Schroeder fail-safe defaults; the in-tx re-read under the
+# subject row lock is the same concurrency discipline as the consume-path gate.
+# GATE-OVERRIDE is reason-to-ACT-past-a-fired-recommendation (distinct from
+# break-glass = authz bypass, and attested-change = reason for a value EDIT).
+#
+# KB integrity (load-bearing for the gate to mean anything):
+#   - a conflict rule MUST reference REGISTERED concepts (referential integrity) — a rule on a
+#     typo'd/unregistered concept silently never fires, disabling a real contraindication (fail-OPEN).
+#   - conflicting concept PAIRS are UNORDERED: store them canonically (lo,hi) so {A,B} and {B,A} are the
+#     same pair (the lookup can never resolve two contradictory directional rows).
+#   - a same-concept re-add (DUPLICATE THERAPY) is itself a finding (RELATIVE by default — a deliberate
+#     re-introduction is overridable), so drug-drug, drug-allergy, AND duplicate-therapy all route the gate.
+
+items:
+  - id: "GATE-SET-EVAL-001"
+    chapter: "A candidate write is evaluated against the subject's active member SET (set-intersection on a normalized concept), in-transaction"
+    verification:
+      mechanism: rule
+      ref: negative-copresence-gate-is-set-evaluated-graded-failclosed
+    requirement: "Before a write that INTRODUCES/ACTIVATES a member into a subject's set commits, the system MUST, under the subject's row lock (PESSIMISTIC_WRITE), evaluate the candidate against the SET of the subject's OTHER currently-active members by set-intersection on a NORMALIZED concept key (the concept, e.g. a drug/allergen/role class — not the literal display name) against a knowledge base of conflicting concept pairs. The evaluation reads the active set in the SAME transaction as the write (so a member added concurrently is included). The gate is the SOLE path that activates a member (no public setter / no bypass write). A finding is the intersection of the candidate's concept with an existing member's concept that the knowledge base marks as conflicting."
+    test_method: "RestAssured (adding a member that conflicts with an existing active member is gated; adding a non-conflicting member succeeds; the concept key is normalized, not the literal label)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Set-evaluated contraindication gate — the multi-row sibling check the catalog lacked.
+  - id: "GATE-GRADED-001"
+    chapter: "Each finding is graded ABSOLUTE (hard-stop) vs RELATIVE (overridable); the verdict lives on no row"
+    requirement: "Each finding carries a graded severity: ABSOLUTE (a hard-stop the candidate write MUST NOT commit under any reason) or RELATIVE (a soft-stop that blocks by default but may be overridden, GATE-OVERRIDE-001). The graded verdict is DERIVED from the candidate × existing-set × knowledge-base intersection and is carried on NONE of the individual member rows (it is a property of the combination, computed at write time). An ABSOLUTE finding MUST reject with a deterministic 422 (`code=COPRESENCE_ABSOLUTE`); a RELATIVE finding with no override MUST reject 422 (`code=COPRESENCE_RELATIVE`)."
+    test_method: "RestAssured (an ABSOLUTE conflict → 422 COPRESENCE_ABSOLUTE; a RELATIVE conflict with no override → 422 COPRESENCE_RELATIVE)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Graded severity; verdict is a property of the combination, not of a single row.
+  - id: "GATE-FAILCLOSED-001"
+    chapter: "An unassessable (unmapped/unknown) candidate concept BLOCKS — fail-safe defaults"
+    requirement: "When the knowledge source cannot assess the candidate — the candidate's concept is unknown to the knowledge base (unmapped), or the knowledge source is unreachable — the gate MUST resolve to BLOCK (422 `code=COPRESENCE_UNASSESSABLE`), NEVER silently allow. This is Saltzer & Schroeder fail-safe defaults: the default is lack of access; the gate identifies the conditions under which the write is permitted, not the conditions under which it is denied. A silent allow on an unknown concept is the load-bearing failure this gate exists to prevent (an unrecognized drug must not bypass interaction checking)."
+    test_method: "RestAssured (a candidate whose concept is not in the knowledge base → 422 COPRESENCE_UNASSESSABLE, member NOT added)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Fail-closed on an unassessable candidate.
+      Quote anchor (Saltzer & Schroeder, Fail-safe defaults): "Base access
+      decisions on permission rather than exclusion. ... the default situation is
+      lack of access, and the protection scheme identifies conditions under which
+      access is permitted." (https://web.mit.edu/Saltzer/www/publications/protection/Basic.html)
+  - id: "GATE-OVERRIDE-001"
+    chapter: "A RELATIVE finding may be overridden only with an atomic mandatory reason; ABSOLUTE has no override path"
+    requirement: "A RELATIVE finding MAY be overridden so the write proceeds, but ONLY if a non-blank justification is captured ATOMICALLY with the write (a blank/missing reason MUST reject 422); the specific finding(s) overridden are recorded BY REFERENCE on the resulting record (which conflicting concept, what severity at the time), bound to it, and the override is a first-class audited event. An ABSOLUTE finding has structurally NO override path — no reason, of any form, lets an ABSOLUTE-contraindicated write commit. This is reason-to-ACT-past-a-fired-recommendation, distinct from break-glass (an authorization bypass) and attested-change (a reason for a value edit)."
+    test_method: "RestAssured (RELATIVE + non-blank override → committed with the overridden findings recorded; RELATIVE + blank override → 422; ABSOLUTE + any override → still 422)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Soft override-with-justification (recorded by reference); hard stop has no override.
+  - id: "GATE-CONCURRENT-001"
+    chapter: "Keystone — the set is re-read under the subject lock; a concurrent add is still caught"
+    requirement: "Two concurrent introducing writes to the SAME subject MUST serialize under the subject's row lock, so the second's set-evaluation observes the first's just-committed member (no compose-then-commit race in which two mutually-conflicting members are both admitted because each evaluated the pre-other set). The gate evaluates the active set inside the locked transaction, never against a stale pre-read snapshot (CWE-362)."
+    test_method: "RestAssured concurrency proof (two simultaneous adds of mutually-ABSOLUTE-conflicting members to one subject → at most one is admitted, never both)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      In-transaction set re-read under the subject lock — no compose-then-commit race.

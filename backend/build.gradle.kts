@@ -163,6 +163,12 @@ tasks.register<Test>("testNetting") {
     }
 }
 
+tasks.register<Test>("testCopresence") {
+    useJUnitPlatform {
+        includeTags("COPRESENCE")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")

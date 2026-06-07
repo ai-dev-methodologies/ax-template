@@ -81,6 +81,9 @@ public class SecurityConfig {
                 // NETTING (collection-conservation-l0): any authenticated user opens a netting run, adds
                 // gross obligations, and triggers the conserving multilateral reduction (Σ member nets == 0).
                 .requestMatchers("/api/netting/**").authenticated()
+                // COPRESENCE (negative-copresence-gate-l0): authenticated users run the contraindication
+                // gate; the safety knowledge base (/kb/**) is ADMIN-only via @PreAuthorize on the methods.
+                .requestMatchers("/api/copresence/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

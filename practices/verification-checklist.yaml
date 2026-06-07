@@ -209,6 +209,9 @@ checklist:
       - command: "./gradlew testNetting"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testCopresence"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testIntegration"
         working_directory: "backend"
         expected_exit: 0
