@@ -53,6 +53,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/v1/feature-flags/*/active").permitAll()
                 .requestMatchers("/api/v1/admin/feature-flags/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/api/items/**").authenticated()
+                // ANN-AUTHZ-001 — active-list read is any authenticated user; the admin write
+                // paths (/api/admin/announcements/**) are gated by the /api/admin/** rule above.
+                .requestMatchers("/api/announcements/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

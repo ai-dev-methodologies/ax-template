@@ -115,6 +115,12 @@ tasks.register<Test>("testSoftDelete") {
     }
 }
 
+tasks.register<Test>("testAnnouncement") {
+    useJUnitPlatform {
+        includeTags("ANNOUNCEMENT")
+    }
+}
+
 tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")

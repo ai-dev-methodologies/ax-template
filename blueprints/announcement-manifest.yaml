@@ -1,0 +1,96 @@
+template_id: "announcement-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "A system/admin notice that must be visible only during a time window (maintenance banner, feature announcement, policy-change notice)"
+  - "Content authored through a reviewed lifecycle (draft, then publish, then archive) rather than written live"
+  - "Visibility that must be deterministically testable — derived from an injected clock, not a stored flag"
+
+not_for:
+  - "Per-user notifications / inbox — use the notification domain (those are addressed + read-tracked per recipient)"
+  - "Immutable audit/event records — announcements are mutable in DRAFT and have a lifecycle"
+  - "Always-on static content — if there is no time window or lifecycle, a plain CMS page is simpler"
+
+must_not:
+  - "Store an is_active / is_visible boolean — visibility is DERIVED (state==PUBLISHED AND now in [startsAt,endsAt))"
+  - "Call Instant.now()/new Date() in the active-window check — inject java.time.Clock so the window is testable"
+  - "Mutate the state column outside the sole-mutator transition method"
+  - "Accept the author from a client field — derive it from Authentication.getName()"
+
+reject_if:
+  - "endsAt <= startsAt (non-positive window) -> 400 announcement-invalid-window"
+  - "an illegal lifecycle transition (archive a DRAFT, re-publish, publish an ARCHIVED) -> 409 announcement-invalid-transition"
+  - "create/publish/archive by a non-ROLE_ADMIN principal -> 403"
+
+source_precedence:
+  - "OWASP ASVS v4.0.3 V4.1 (access control) — authoritative for admin-write/authed-read + fail-secure"
+  - "RFC 9457 — problem+json error shape for 400/404/409"
+  - "ax-template catalog primitives — persistence-state-machine-atomic, time-gated-decisions-read-injected-clock, caller-authentication, domain-metrics-bounded-cardinality"
+
+official_doc_refs:
+  - "https://owasp.org/www-project-application-security-verification-standard/"
+  - "https://www.rfc-editor.org/rfc/rfc9457"
+
+# ─── lifecycle ───────────────────────────────────────────────────────────────
+lifecycle:
+  states: [DRAFT, PUBLISHED, ARCHIVED]
+  transitions:
+    - from: DRAFT
+      to: [PUBLISHED]
+    - from: PUBLISHED
+      to: [ARCHIVED]
+    - from: ARCHIVED
+      to: []
+  sole_mutator: true                 # ANN-LIFECYCLE-001 — one @Transactional transition method, @Version guarded
+  illegal_transition_status: 409     # type=urn:problem:announcement-invalid-transition
+
+# ─── window ──────────────────────────────────────────────────────────────────
+window:
+  bounds: "half-open [startsAt, endsAt)"   # ANN-WINDOW-001 — inclusive lower, exclusive upper
+  active_definition: "state == PUBLISHED AND startsAt <= now AND now < endsAt"
+  clock_source: "injected java.time.Clock"  # never Instant.now()/new Date()
+  stored_visibility_flag: forbidden
+
+# ─── authz ───────────────────────────────────────────────────────────────────
+authz:
+  write_roles: [ROLE_ADMIN]          # ANN-AUTHZ-001 — create/publish/archive/admin-list
+  read_active_roles: authenticated   # any logged-in user may read the active list
+  author_source: "Authentication.getName()"  # never a client-supplied field
+  not_found_status: 404              # IDOR-safe; never 403-leak existence
+
+# ─── list ────────────────────────────────────────────────────────────────────
+list:
+  active_endpoint: "GET /api/announcements/active"   # ANN-LIST-001 — only currently-active, server-filtered
+  admin_endpoint: "GET /api/admin/announcements"     # all, regardless of state/window
+  active_order: "startsAt desc"
+  filter_location: "query/service (never client-side over a full fetch)"
+
+# ─── validation ──────────────────────────────────────────────────────────────
+validation:
+  required_fields: [title, body, startsAt, endsAt]   # ANN-VALIDATION-001
+  title_max: 200
+  body_max: 5000
+  window_rule: "startsAt < endsAt"
+  blank_or_missing_status: 400       # bean-validation via common/GlobalProblemDetailAdvice
+  invalid_window_status: 400         # type=urn:problem:announcement-invalid-window
+
+# ─── observability ───────────────────────────────────────────────────────────
+observability:
+  counter: "announcement_total"      # ANN-OBSERVABILITY-001
+  labels: [transition, outcome]      # transition in {created,published,archived}; outcome in {ok,rejected}
+  excluded_labels: [id, author, title]  # no PII, no unbounded cardinality
+
+testing_baseline:
+  task: "./gradlew testAnnouncement"
+  tag: "ANNOUNCEMENT"
+  style: "RestAssured black-box integration (RANDOM_PORT) + Micrometer registry assertion"
+
+verification_checkpoints:
+  - "ANN-LIFECYCLE-001: illegal transition -> 409 announcement-invalid-transition"
+  - "ANN-WINDOW-001: pinned-clock boundary (future/active/expired) controls active membership"
+  - "ANN-AUTHZ-001: non-admin write -> 403; unknown id -> 404"
+  - "ANN-LIST-001: active list = currently-active only; admin list = all"
+  - "ANN-VALIDATION-001: blank field -> 400; endsAt<=startsAt -> 400 announcement-invalid-window"
+  - "ANN-OBSERVABILITY-001: announcement_total{transition,outcome} bounded; no id/author label"
+
+last_reviewed_at: "2026-06-07"

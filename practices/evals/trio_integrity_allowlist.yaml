@@ -17,6 +17,7 @@ domains:
   payment: full_trio
   practices: frontend_only      # static viewer reading practices/AGENTS.md + rules/
   ratelimit: backend_only
+  announcement: backend_only  # G007 ax-plan dogfood: time-boxed admin notices, lifecycle FSM + injected-clock window; no UI in scope
   audit-log: full_trio      # SP17: append-only log entries, async export, VirtualizedTable for >10k rows
   notification: full_trio    # SP16: inbox/settings/detail vertical + bell + list + item L2 blocks
   file-storage: full_trio    # SP18: upload/list/download/delete + presigned URL + L4 vertical

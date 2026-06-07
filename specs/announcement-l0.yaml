@@ -1,0 +1,65 @@
+version: "0.1.0"
+scope: "announcement-l0 — time-boxed system announcements (admin-authored notices shown to users during an active window). Backend-only reference workload added end-to-end via /ax-plan (ultragoal G007 dogfood). Generic cross-cutting pattern: a DRAFT→PUBLISHED→ARCHIVED lifecycle whose 'is this visible now?' answer is computed from an injected clock against a [startsAt, endsAt) half-open window, admin-write / authenticated-read. Composes persistence-state-machine-atomic (sole-mutator lifecycle), time-gated-decisions-read-injected-clock (testable window), caller-authentication (no client-supplied author), problem-details (RFC 9457), and domain-metrics-bounded-cardinality (bounded counter)."
+domain_mode: backend_only
+stack: "Spring Boot 3.2.x + Spring Security (Authentication.getName()) + Spring Data JPA + Flyway + java.time.Clock (injected) + Micrometer + RFC 9457 Problem Details"
+standard: "OWASP ASVS v4.0.3 V4.1 Access Control (V4.1.3 least privilege / V4.1.5 fail securely) + RFC 9457 (Problem Details for HTTP APIs) + RFC 9110 §15.5.1 (400 Bad Request) + finite-state-machine discipline (a closed transition graph; illegal transition rejected)"
+introduced_at: "G007 2026-06-07 — ax-plan dogfood (scaffold -> /ax-plan -> impl -> green)"
+
+# OPT-IN time-boxed announcement catalog. Adopted by any recipe that shows users a
+# notice that is only visible during a window and is authored through a reviewed
+# lifecycle (system banner, maintenance notice, feature announcement, policy update).
+# The signature correctness property: visibility is NOT a stored boolean a writer
+# flips - it is DERIVED at read time from (state == PUBLISHED) AND (now within the
+# half-open [startsAt, endsAt) window), where `now` comes from an injected Clock so
+# the window is deterministically testable. A stored is_visible flag drifts; a derived
+# one cannot.
+
+items:
+  - id: "ANN-LIFECYCLE-001"
+    chapter: "Lifecycle state machine (DRAFT -> PUBLISHED -> ARCHIVED, sole mutator)"
+    requirement: "An announcement MUST move only through the closed state machine DRAFT -> PUBLISHED -> ARCHIVED, applied through a single sole-mutator transition method inside one @Transactional unit with an @Version optimistic-lock column. A DRAFT may be PUBLISHED; a PUBLISHED may be ARCHIVED; any other transition (publish an ARCHIVED, archive a DRAFT, re-publish) MUST be rejected with 409 Conflict + an RFC 9457 body type=urn:problem:announcement-invalid-transition. The state column MUST NOT be mutated anywhere outside the transition method. Composes persistence-state-machine-atomic."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: "POST /api/admin/announcements -> 201 state=DRAFT; POST .../{id}/publish -> 200 state=PUBLISHED; POST .../{id}/archive on a DRAFT -> 409 announcement-invalid-transition; re-publish a PUBLISHED -> 409."
+    policy_ref: "blueprints/announcement-manifest.yaml#lifecycle"
+  - id: "ANN-WINDOW-001"
+    chapter: "Active window derived from an injected clock (half-open [startsAt, endsAt))"
+    requirement: "Whether an announcement is ACTIVE MUST be DERIVED, never stored: active iff state == PUBLISHED AND startsAt <= now AND now < endsAt (half-open). `now` MUST be obtained from an injected java.time.Clock (not Instant.now() / new Date()), so a test can pin time and assert the boundary deterministically. There is NO is_active / is_visible column. An announcement whose window has not started or has ended is NOT active even while PUBLISHED. Composes time-gated-decisions-read-injected-clock."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: "With clock pinned: a PUBLISHED announcement with startsAt in the future is absent from /api/announcements/active; once now >= startsAt and now < endsAt it appears; at now == endsAt it disappears (exclusive upper bound)."
+    policy_ref: "blueprints/announcement-manifest.yaml#window"
+  - id: "ANN-AUTHZ-001"
+    chapter: "Admin-write / authenticated-read (least privilege, fail securely)"
+    requirement: "Create / publish / archive / admin-list MUST require ROLE_ADMIN (any other principal -> 403). The active-list read MUST be available to any authenticated user. The author identity MUST be derived server-side from Authentication.getName() - never accepted from a client-supplied field. A non-existent announcement id on any authed path MUST return 404 (RFC 9457 not-found), never leak existence. Composes caller-authentication-only-no-userid-param + ASVS V4.1.3/V4.1.5."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: "POST /api/admin/announcements as ROLE_MEMBER -> 403; GET /api/announcements/active as any authenticated user -> 200; GET /api/admin/announcements/{unknown} -> 404."
+    policy_ref: "blueprints/announcement-manifest.yaml#authz"
+  - id: "ANN-LIST-001"
+    chapter: "Active-list returns only currently-active; admin-list returns all"
+    requirement: "GET /api/announcements/active MUST return ONLY announcements that are active per ANN-WINDOW-001 (PUBLISHED + within window) at the injected-clock now, ordered deterministically (startsAt desc). GET /api/admin/announcements (ROLE_ADMIN) MUST return ALL announcements regardless of state/window, for management. Filtering for the active list MUST happen in the query/service, not by returning all and letting the client filter."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: "Given 1 DRAFT, 1 PUBLISHED-active, 1 PUBLISHED-expired: GET active -> exactly the 1 active; GET admin list -> all 3."
+    policy_ref: "blueprints/announcement-manifest.yaml#list"
+  - id: "ANN-VALIDATION-001"
+    chapter: "Input validation - required fields + ordered window -> 400"
+    requirement: "Create MUST validate: title and body are non-blank; startsAt and endsAt are present; and startsAt < endsAt (a non-positive window is rejected). A violation MUST return 400 Bad Request as an RFC 9457 problem+json (via common/GlobalProblemDetailAdvice for bean-validation; a domain check for startsAt<endsAt returns type=urn:problem:announcement-invalid-window). No partially-created row may persist on a rejected request."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: "POST with blank title -> 400; POST with endsAt <= startsAt -> 400 announcement-invalid-window; no row persisted."
+    policy_ref: "blueprints/announcement-manifest.yaml#validation"
+  - id: "ANN-OBSERVABILITY-001"
+    chapter: "관측 (bounded-cardinality lifecycle counter)"
+    requirement: "Announcement lifecycle transitions SHOULD increment a single canonical Micrometer counter announcement_total{transition, outcome} where transition is a closed enum {created, published, archived} and outcome is a closed enum {ok, rejected}. Labels MUST exclude announcement id / author / title (no PII, no unbounded cardinality). Composes domain-metrics-bounded-cardinality."
+    test_method: "Micrometer registry assertion"
+    verification_type: "positive"
+    applicable: true
+    notes: "After a create + publish + a rejected archive: announcement_total{transition=created,outcome=ok}=1, {published,ok}=1, {archived,rejected}=1; no id/author appears as a label."
+    policy_ref: "blueprints/announcement-manifest.yaml#observability"

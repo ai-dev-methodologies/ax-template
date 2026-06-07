@@ -1,0 +1,83 @@
+openapi: "3.0.3"
+info:
+  title: "announcement API"
+  version: "0.1.0"
+  description: >
+    Time-boxed system announcements (announcement-l0). Admin-write / authenticated-read.
+    Visibility is derived (state==PUBLISHED AND now in [startsAt,endsAt)), never stored.
+    Errors are RFC 9457 application/problem+json.
+servers:
+  - url: "/"
+paths:
+  /api/admin/announcements:
+    post:
+      operationId: createAnnouncement
+      summary: "Create a DRAFT announcement (ROLE_ADMIN). ANN-LIFECYCLE-001 / ANN-VALIDATION-001."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAnnouncementRequest" }
+      responses:
+        "201": { description: "Created (state=DRAFT)", content: { application/json: { schema: { $ref: "#/components/schemas/Announcement" } } } }
+        "400": { description: "Validation error / invalid window", content: { application/problem+json: { schema: { $ref: "#/components/schemas/ProblemDetail" } } } }
+        "403": { description: "Not ROLE_ADMIN" }
+    get:
+      operationId: listAllAnnouncements
+      summary: "List ALL announcements regardless of state/window (ROLE_ADMIN). ANN-LIST-001."
+      responses:
+        "200": { description: "OK", content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Announcement" } } } } }
+        "403": { description: "Not ROLE_ADMIN" }
+  /api/admin/announcements/{id}/publish:
+    post:
+      operationId: publishAnnouncement
+      summary: "DRAFT -> PUBLISHED (ROLE_ADMIN). ANN-LIFECYCLE-001."
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        "200": { description: "Published", content: { application/json: { schema: { $ref: "#/components/schemas/Announcement" } } } }
+        "404": { description: "Unknown id", content: { application/problem+json: { schema: { $ref: "#/components/schemas/ProblemDetail" } } } }
+        "409": { description: "Invalid transition", content: { application/problem+json: { schema: { $ref: "#/components/schemas/ProblemDetail" } } } }
+  /api/admin/announcements/{id}/archive:
+    post:
+      operationId: archiveAnnouncement
+      summary: "PUBLISHED -> ARCHIVED (ROLE_ADMIN). ANN-LIFECYCLE-001."
+      parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        "200": { description: "Archived", content: { application/json: { schema: { $ref: "#/components/schemas/Announcement" } } } }
+        "404": { description: "Unknown id", content: { application/problem+json: { schema: { $ref: "#/components/schemas/ProblemDetail" } } } }
+        "409": { description: "Invalid transition", content: { application/problem+json: { schema: { $ref: "#/components/schemas/ProblemDetail" } } } }
+  /api/announcements/active:
+    get:
+      operationId: listActiveAnnouncements
+      summary: "List currently-active announcements (any authenticated user). ANN-WINDOW-001 / ANN-LIST-001."
+      responses:
+        "200": { description: "OK", content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Announcement" } } } } }
+components:
+  schemas:
+    CreateAnnouncementRequest:
+      type: object
+      required: [title, body, startsAt, endsAt]
+      properties:
+        title: { type: string, maxLength: 200 }
+        body: { type: string, maxLength: 5000 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+    Announcement:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        body: { type: string }
+        state: { type: string, enum: [DRAFT, PUBLISHED, ARCHIVED] }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+    ProblemDetail:
+      type: object
+      description: "RFC 9457 problem+json"
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
