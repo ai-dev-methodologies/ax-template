@@ -13,7 +13,7 @@
  * Backend analog: @PublishedApi default-deny / published-API-only access.
  */
 
-import { toSrcRelative, resolveImport, classifySrcPath } from '../lib/feature-layout.js'
+import { toSrcRelative, resolveImport, classifySrcPath, importVisitors } from '../lib/feature-layout.js'
 
 /** @type {import("eslint").Rule.RuleModule} */
 const rule = {
@@ -42,19 +42,16 @@ const rule = {
     // Files outside the src tree entirely are not governed.
     if (!importer.layer) return {}
 
-    return {
-      ImportDeclaration(node) {
-        const source = node.source && node.source.value
-        const target = classifySrcPath(resolveImport(source, importerSrcRel))
-        if (target.layer !== 'features' || !target.feature) return
-        if (target.isBarrel) return // barrel import is the correct public access
-        context.report({
-          node,
-          messageId: 'featureInternal',
-          data: { importerLayer: importer.layer, to: target.feature, source },
-        })
-      },
-    }
+    return importVisitors((source, node) => {
+      const target = classifySrcPath(resolveImport(source, importerSrcRel))
+      if (target.layer !== 'features' || !target.feature) return
+      if (target.isBarrel) return // barrel import is the correct public access
+      context.report({
+        node,
+        messageId: 'featureInternal',
+        data: { importerLayer: importer.layer, to: target.feature, source },
+      })
+    })
   },
 }
 

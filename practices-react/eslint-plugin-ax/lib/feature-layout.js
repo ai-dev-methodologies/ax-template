@@ -74,7 +74,8 @@ export function classifySrcPath(srcRel) {
     const feature = parts[2] || null;
     const after = parts.slice(3); // segments after `src/features/<feature>`
     const last = after.length ? after[after.length - 1] : '';
-    const isIndex = /^index(\.(t|j)sx?)?$/.test(last);
+    // index barrel: index(.ts|tsx|js|jsx|mjs|cjs|mts|cts) — all module extensions.
+    const isIndex = /^index(\.[mc]?[tj]sx?)?$/.test(last);
     // barrel: feature root, a single slice dir, or any explicit index file.
     const isBarrel = after.length <= 1 || isIndex;
     return { layer: 'features', feature, segsAfterFeature: after.length, isBarrel };
@@ -85,6 +86,32 @@ export function classifySrcPath(srcRel) {
 /** layer rank, or 0 for unknown/out-of-tree. */
 export function rankOf(layer) {
   return LAYER_RANK[layer] || 0;
+}
+
+/**
+ * Build an ESLint visitor that fires `check(sourceValue, reportNode)` for EVERY import
+ * form — static `import ... from 'x'`, dynamic `import('x')`, and `require('x')` — so a
+ * rule cannot be bypassed by switching import syntax (audit 2026-06-08 HIGH finding).
+ */
+export function importVisitors(check) {
+  function fromLiteral(arg) {
+    return arg && arg.type === 'Literal' && typeof arg.value === 'string' ? arg.value : null;
+  }
+  return {
+    ImportDeclaration(node) {
+      check(node.source && node.source.value, node);
+    },
+    // dynamic import('x')
+    ImportExpression(node) {
+      const v = fromLiteral(node.source);
+      if (v != null) check(v, node);
+    },
+    // require('x')
+    'CallExpression[callee.name="require"]'(node) {
+      const v = fromLiteral(node.arguments && node.arguments[0]);
+      if (v != null) check(v, node);
+    },
+  };
 }
 
 /** Is this a Next.js App Router route file (app/**\/page|layout)? */

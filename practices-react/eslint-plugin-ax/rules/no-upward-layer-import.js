@@ -12,7 +12,7 @@
  * Backend analog: layering (controller->service->repository direction).
  */
 
-import { toSrcRelative, resolveImport, classifySrcPath, rankOf } from '../lib/feature-layout.js'
+import { toSrcRelative, resolveImport, classifySrcPath, rankOf, importVisitors } from '../lib/feature-layout.js'
 
 /** @type {import("eslint").Rule.RuleModule} */
 const rule = {
@@ -38,22 +38,19 @@ const rule = {
     const importer = classifySrcPath(importerSrcRel)
     if (!importer.layer || rankOf(importer.layer) === 0) return {} // outside the layered tree
 
-    return {
-      ImportDeclaration(node) {
-        const source = node.source && node.source.value
-        const target = classifySrcPath(resolveImport(source, importerSrcRel))
-        if (rankOf(target.layer) === 0) return // bare/out-of-tree import — not our concern
-        // same-layer feature<->feature is handled by no-cross-feature-deep-import
-        if (target.layer === 'features' && importer.layer === 'features') return
-        if (rankOf(target.layer) > rankOf(importer.layer)) {
-          context.report({
-            node,
-            messageId: 'upwardImport',
-            data: { importerLayer: importer.layer, targetLayer: target.layer, source },
-          })
-        }
-      },
-    }
+    return importVisitors((source, node) => {
+      const target = classifySrcPath(resolveImport(source, importerSrcRel))
+      if (rankOf(target.layer) === 0) return // bare/out-of-tree import — not our concern
+      // same-layer feature<->feature is handled by no-cross-feature-deep-import
+      if (target.layer === 'features' && importer.layer === 'features') return
+      if (rankOf(target.layer) > rankOf(importer.layer)) {
+        context.report({
+          node,
+          messageId: 'upwardImport',
+          data: { importerLayer: importer.layer, targetLayer: target.layer, source },
+        })
+      }
+    })
   },
 }
 

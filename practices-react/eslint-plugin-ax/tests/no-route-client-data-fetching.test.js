@@ -43,6 +43,18 @@ test('ax/no-route-client-data-fetching — RuleTester suite', () => {
         filename: ROUTE,
         errors: [{ messageId: 'clientDataInRoute' }],
       },
+      // audit HIGH: RENAMED hook import must NOT bypass — `useSWR as useFetch`
+      {
+        code: `'use client'\nimport { useSWR as useFetch } from 'swr'\nexport default function Page(){ const { data } = useFetch('/api/me'); return data }`,
+        filename: ROUTE,
+        errors: [{ messageId: 'clientDataInRoute' }],
+      },
+      // audit HIGH: aliased axios (import axios as http) — member call still caught
+      {
+        code: `'use client'\nimport http from 'axios'\nexport default function Page(){ http.get('/api/x'); return null }`,
+        filename: ROUTE,
+        errors: [{ messageId: 'clientDataInRoute' }],
+      },
     ],
   })
 })

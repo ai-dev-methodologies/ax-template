@@ -35,6 +35,18 @@ test('ax/no-cross-feature-deep-import — RuleTester suite', () => {
         filename: BILLING,
         errors: [{ messageId: 'crossFeatureDeep' }],
       },
+      // audit HIGH: dynamic import() must NOT bypass the rule
+      {
+        code: `const m = await import('@/features/payment/panel/capture')`,
+        filename: BILLING,
+        errors: [{ messageId: 'crossFeatureDeep' }],
+      },
+      // audit HIGH: require() must NOT bypass the rule
+      {
+        code: `const m = require('@/features/payment/panel/capture')`,
+        filename: BILLING,
+        errors: [{ messageId: 'crossFeatureDeep' }],
+      },
     ],
   })
 })

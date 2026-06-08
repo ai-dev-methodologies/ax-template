@@ -85,3 +85,34 @@ gameable proxy; error+allowlist contradicts Principle 3 + adds governance overhe
 - Why: honors GREEN-on-existing + Next.js App Router idioms + heuristic-honesty; lands real TIER-1 enforcement without breaking the reference app.
 - Consequences: god-route size enforcement remains human-review (TIER-2); 2 ESLint rules added (1 error, 1 advisory).
 - Follow-ups: extract the 3 fat client routes into features/auth/* containers (separate refactor); promote state-boundary to error once a clean signal + GREEN is established.
+
+---
+
+## Post-audit hardening (2026-06-08 — 59-agent adversarial audit, 24 confirmed findings)
+A full-system adversarial audit (6 dimensions, refute-by-default verify) ran over the
+backend+frontend decomposition enforcement. Triage + response:
+
+**FIXED (real frontend rule bypasses — HIGH):**
+- Dynamic `import('@/features/B/internal')` and `require(...)` bypassed the `ImportDeclaration`-only
+  checks → added `importVisitors()` (handles static + dynamic + require) to no-cross-feature-deep-import,
+  no-upward-layer-import, no-feature-internal-import. Regression fixtures added.
+- Renamed/aliased data-lib import (`import { useSWR as useFetch } from 'swr'`, `import http from 'axios'`)
+  bypassed no-route-client-data-fetching → now tracks imported bindings name-agnostically. Fixtures added.
+- `index.mjs`/`.cjs` barrel misclassified → index regex widened to `/^index(\.[mc]?[tj]sx?)?$/`.
+
+**DOCUMENTED honest limit:** a route calling a LOCAL wrapper hook that internally uses useSWR is not
+caught (needs data-flow analysis) — that wrapper IS the intended feature hook, so acceptable.
+
+**REJECTED (audit over-reach):** "Favorite → @AggregateMember of User" is the god-aggregate fallacy —
+being queried by `userId` no more makes Favorite a member of User than Order (queried by customerId) is
+a member of Customer. Favorite has an independent lifecycle and is NOT in User's transactional
+consistency boundary → stays @AggregateRoot. (The 4 real re-verification reclassifications were genuine
+composition children inside a parent's transaction; Favorite is not.)
+
+**TIER-2 (borderline, deferred):** "ActivityRead → member of ActivityEvent" — ActivityRead is a 2-FK
+(event,user) read-receipt/read-model, not a single-parent composition child; kept @AggregateRoot pending
+human review (recorded as a TIER-2 boundary-adequacy item, consistent with spec §7).
+
+**ACCEPTED policy (MEDIUM):** uniform 2026-12-31 expiry + the shared AX-DDD-AUDITLOG-ENTITY ticket are a
+single coordinated remediation window/campaign — acceptable; complexity-differentiated expiries are a
+nice-to-have, not a defect.
