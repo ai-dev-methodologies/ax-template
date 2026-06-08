@@ -2,6 +2,7 @@
 
 - Date: 2026-06-08
 - Status: DRAFT (ralplan consensus: Planner → Architect → Critic[codex])
+- Count note (point-in-time): "headline 75 guards / 81/81 / doc_headline_count_guard → 75" below are the BACKEND-era snapshot. Frontend Phase 0 added `feature_boundary_allowlist_guard.sh` → current authoritative headline is **76 guards** (82/82 run-all-guards). This planning doc is not guard-scanned; the enforced catalog is consistent at 76. (dogfood ddd-decomposition-iter1 P12.)
 - Trigger: re-verify the just-implemented DDD decomposition enforcement (impl method + rule/guard code + verification approach) end-to-end, starting the moment R25 (`verify-completion.sh`) finishes.
 - Subject under test (SUT) — what was built this session:
   - 3 markers: `common/AggregateRoot`, `AggregateMember(root)`, `PublishedApi` (RUNTIME).

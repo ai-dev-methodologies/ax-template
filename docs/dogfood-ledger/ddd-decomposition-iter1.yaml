@@ -1,0 +1,35 @@
+# ddd-decomposition — iter1 (12-persona dogfood of the backend+frontend DDD decomposition enforcement)
+#
+# Wave: the DDD decomposition enforcement (backend ArchUnit guards + markers + allowlist;
+# frontend eslint-plugin-ax decomposition rules + allowlist), shipped ace1136 / 310fade /
+# bc196a0, and already hardened by a 59-agent adversarial audit (4 frontend bypasses fixed).
+# The full P1..P12 panel re-reviewed from each lens.
+#
+# Outcome: 11 of 12 personas surfaced no residual. P12 (meta-governance) raised one real
+# signal from two angles — a stale guard count in the (non-guard-scanned) re-verification
+# planning docs. The personas' "blocking / cannot deploy / catalog contains contradictions"
+# framing was OVER-STATED (the ENFORCED catalog — CLAUDE.md, README, doc_headline_count_guard —
+# is internally consistent at 76 and that guard PASSES against disk). Narrowed to the genuine
+# defect (stale point-in-time count in advisory docs) and closed.
+
+iteration: 1
+termination_status: TRUE_0_REAL_BUG
+real_bug_count: 0
+scope_deferral_count: 0
+methodology_gap_count: 1
+no_new_artifacts_mid_stream: true
+panel: [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12]
+clean_personas: [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11]
+note: >
+  The dogfood verified that the decomposition enforcement is sound from 12 lenses
+  (operational visibility, PII/authz, SDK consumer, onboarding, sequential playbook,
+  Korean regulatory, typed contract, observability, migration, backcompat, standards
+  symmetry, meta-governance). ZERO real enforcement defects (TRUE-0 real_bug). The single
+  methodology_gap is a doc-truth slip in non-guarded planning artifacts, now corrected.
+
+findings:
+  - persona: P12
+    finding: "F1 (MEDIUM, real_bug): the DDD re-verification planning docs assert 'headline 75 guards' and 'doc_headline_count_guard → 75', which became factually wrong after the frontend Phase 0 added feature_boundary_allowlist_guard.sh (count is now 76; run-all-guards 82/82). P12 raised this from two angles (spec-vs-CLAUDE count mismatch + report 81/81-vs-75 ambiguity); both are the same stale point-in-time count. CRITICAL: the personas' 'blocking / catalog contradiction' framing is over-stated — the ENFORCED surface (CLAUDE.md, README, doc_headline_count_guard) is internally consistent at 76 and the guard PASSES; only the non-guard-scanned re-verification {plan,report}.md carry the stale 75. Closure: added an explicit point-in-time count note to both re-verification docs (75 = backend-era snapshot; 76 = current authoritative headline after frontend Phase 0)."
+    classification: methodology_gap
+    closure_note: "point-in-time count note added to 2026-06-08-ddd-reverification-{report,plan}.md clarifying 75 (backend-era snapshot) vs 76 (current authoritative headline after frontend Phase 0 feature_boundary_allowlist_guard). Classified methodology_gap (not real_bug): the ENFORCED catalog (CLAUDE.md/README/doc_headline_count_guard) is consistent at 76 and PASSES against disk — this is doc-process drift in a non-guard-scanned planning artifact, not a blocking enforcement defect. The personas' 'blocking' framing was over-stated (synthesis-confirmed)."
+    references_artifact_path: docs/superpowers/specs/2026-06-08-ddd-reverification-report.md

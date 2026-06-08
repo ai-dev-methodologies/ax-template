@@ -3,6 +3,12 @@
 - Date: 2026-06-08
 - Plan: /tmp/ddd-reverify-plan.md (Planner → Architect[AM1-4] → Critic codex[CM1-3, verdict ITERATE→addressed])
 - Trigger: re-verify the DDD enforcement (impl method + guard code + verification approach) after R25 PASS.
+- **Count note (point-in-time):** the "75 guards / run-all-guards 81/81" figures below are the
+  BACKEND re-verification snapshot (2026-06-08, before the frontend decomposition work). The
+  frontend Phase 0 later added `feature_boundary_allowlist_guard.sh`, so the CURRENT authoritative
+  headline (enforced by `doc_headline_count_guard` against disk) is **76 guards** (README/CLAUDE),
+  and `run-all-guards.sh` now reports **82/82**. These planning/report docs are NOT scanned by any
+  guard; the enforced catalog is internally consistent at 76. (dogfood ddd-decomposition-iter1 P12.)
 
 ## Phases executed
 - **F0 (CM2)** — extracted all guard predicates into shared `DddRules` (test scope), parameterized by (JavaClasses, srcRoot, allowlistPath). The production tests AND the non-vacuity fixture now call the SAME code → the proof exercises real predicates, not a copy. testPractices behavior preserved.
