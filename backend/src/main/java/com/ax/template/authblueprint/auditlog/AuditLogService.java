@@ -56,6 +56,42 @@ public class AuditLogService {
         return repository.save(entry);
     }
 
+    /**
+     * Record an audit entry from the published {@link AuditLogDto} port — the cross-feature
+     * write surface (other features build a DTO instead of constructing the {@link AuditLog}
+     * aggregate root directly; see DDD decomposition spec §6 / {@code HG-FEAT-ISOLATION}).
+     * <p>
+     * Runs in its own {@code REQUIRES_NEW} transaction and calls {@code repository.save}
+     * directly — it must NOT delegate to {@link #record(AuditLog)}, because a self-invocation
+     * bypasses the Spring proxy and would lose the isolated-transaction semantics.
+     * <p>
+     * Trace: AUDIT-RECORD-001 / AUDIT-RECORD-003.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public AuditLog record(AuditLogDto dto) {
+        AuditLog.Builder b = AuditLog.builder()
+            .actorUserId(dto.actorUserId())
+            .actorIp(dto.actorIp())
+            .action(dto.action())
+            .resourceType(dto.resourceType())
+            .resourceId(dto.resourceId())
+            .correlationId(dto.correlationId())
+            .userAgent(dto.userAgent())
+            .metadataJson(dto.metadataJson());
+        // Unset id/outcome/timestamp fall through to the entity builder's defaults
+        // (random id / SUCCESS / now), preserving the prior caller behaviour exactly.
+        if (dto.id() != null) {
+            b.id(dto.id());
+        }
+        if (dto.outcome() != null) {
+            b.outcome(dto.outcome());
+        }
+        if (dto.timestamp() != null) {
+            b.timestamp(dto.timestamp());
+        }
+        return repository.save(b.build());
+    }
+
     @Transactional(readOnly = true)
     public Optional<AuditLog> findById(UUID id) {
         return repository.findById(id);

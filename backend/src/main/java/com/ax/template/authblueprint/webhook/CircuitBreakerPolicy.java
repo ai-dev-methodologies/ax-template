@@ -1,6 +1,6 @@
 package com.ax.template.authblueprint.webhook;
 
-import com.ax.template.authblueprint.auditlog.AuditLog;
+import com.ax.template.authblueprint.auditlog.AuditLogDto;
 import com.ax.template.authblueprint.auditlog.AuditLogService;
 import com.ax.template.authblueprint.auditlog.AuditOutcome;
 
@@ -89,7 +89,7 @@ public class CircuitBreakerPolicy {
             endpointRepository.save(endpoint);
             log.error("webhook: circuit opened endpointId={} failureRate={} windowSize={}",
                 endpointId, rate, totalTerminal);
-            auditLogService.record(AuditLog.builder()
+            auditLogService.record(AuditLogDto.builder()
                 .action(AUDIT_ACTION_CIRCUIT_OPENED)
                 .resourceType("webhook_endpoint")
                 .resourceId(endpointId.toString())

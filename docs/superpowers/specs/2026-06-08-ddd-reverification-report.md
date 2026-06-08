@@ -54,7 +54,9 @@
 - **Test fork heap pinned (OOM fix).** The combined footprint of the PRACTICES suite (many @SpringBootTest/@DataJpaTest contexts + several whole-tree ArchUnit imports) OOMed the default test fork non-deterministically ("Java heap space" on favoriteRepository / Persistence*). Added `tasks.withType<Test> { maxHeapSize = "2g" }` to backend/build.gradle.kts (the project had NO explicit test heap). testPractices now deterministically GREEN (118 tests, incl. 14 DDD).
 
 ## Net allowlist state after re-verification
-- exceptions: 25 (15 cross-feature/FEAT-ISOLATION + 1 ProviderLink AGG-REF + 9 member-repo)
+- exceptions: 21 (11 cross-feature/FEAT-ISOLATION + 1 ProviderLink AGG-REF + 9 member-repo)
+  - was 25; AX-DDD-AUDITLOG-ENTITY closed 2026-06-08 (−4 cross-feature-entity exceptions) — the
+    4 callers now use the published `AuditLogDto` port; see practices/DECISIONS.md.
 - governed_god_service: 4 (was 6; -2 from reclassification)
 - governed_state_mutators: 2
 - All bijection-proven load-bearing.

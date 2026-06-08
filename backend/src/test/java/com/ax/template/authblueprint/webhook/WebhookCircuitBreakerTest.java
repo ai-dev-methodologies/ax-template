@@ -1,6 +1,6 @@
 package com.ax.template.authblueprint.webhook;
 
-import com.ax.template.authblueprint.auditlog.AuditLog;
+import com.ax.template.authblueprint.auditlog.AuditLogDto;
 import com.ax.template.authblueprint.auditlog.AuditLogService;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -68,12 +68,12 @@ class WebhookCircuitBreakerTest {
         verify(endpointRepository).save(endpoint);
 
         // Audit-log row emitted with action=webhook.endpoint.circuit_opened
-        ArgumentCaptor<AuditLog> auditCaptor = ArgumentCaptor.forClass(AuditLog.class);
+        ArgumentCaptor<AuditLogDto> auditCaptor = ArgumentCaptor.forClass(AuditLogDto.class);
         verify(auditLogService).record(auditCaptor.capture());
-        AuditLog audited = auditCaptor.getValue();
-        assertThat(audited.getAction()).isEqualTo(CircuitBreakerPolicy.AUDIT_ACTION_CIRCUIT_OPENED);
-        assertThat(audited.getResourceType()).isEqualTo("webhook_endpoint");
-        assertThat(audited.getResourceId()).isEqualTo(endpointId.toString());
+        AuditLogDto audited = auditCaptor.getValue();
+        assertThat(audited.action()).isEqualTo(CircuitBreakerPolicy.AUDIT_ACTION_CIRCUIT_OPENED);
+        assertThat(audited.resourceType()).isEqualTo("webhook_endpoint");
+        assertThat(audited.resourceId()).isEqualTo(endpointId.toString());
     }
 
     @Test
@@ -96,7 +96,7 @@ class WebhookCircuitBreakerTest {
             .as("WEBHOOK-CIRCUIT-001 — 88% failure rate must NOT open the circuit")
             .isTrue();
         verify(endpointRepository, never()).save(any(WebhookEndpoint.class));
-        verify(auditLogService, never()).record(any());
+        verify(auditLogService, never()).record(any(AuditLogDto.class));
     }
 
     private List<WebhookDelivery> synthesizeTerminalWindow(UUID endpointId, int failed, int succeeded) {

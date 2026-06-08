@@ -1,6 +1,6 @@
 package com.ax.template.authblueprint.identityverification;
 
-import com.ax.template.authblueprint.auditlog.AuditLog;
+import com.ax.template.authblueprint.auditlog.AuditLogDto;
 import com.ax.template.authblueprint.auditlog.AuditLogService;
 import com.ax.template.authblueprint.auditlog.AuditOutcome;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -29,7 +29,7 @@ import java.util.UUID;
  *   <li>IDV-PROVIDER-002 — resolve adapter by provider name; unknown → throw.</li>
  *   <li>IDV-CALLBACK-002 — extract via adapter, persist {@link VerifiedIdentity}.</li>
  *   <li>IDV-AUDIT-001 — every callback attempt (SUCCESS / HMAC_FAIL /
- *       EXTRACTION_FAIL / UNKNOWN_PROVIDER) publishes an {@link AuditLog} entry
+ *       EXTRACTION_FAIL / UNKNOWN_PROVIDER) publishes an {@link AuditLogDto} entry
  *       via {@link AuditLogService}; CI is recorded, RRN never is.</li>
  * </ul>
  *
@@ -171,7 +171,7 @@ public class IdentityVerificationService {
         String resourceId = (ci != null && !ci.isBlank()) ? ci : "(no-ci)";
 
         try {
-            auditLogService.record(AuditLog.builder()
+            auditLogService.record(AuditLogDto.builder()
                 .action(AUDIT_ACTION)
                 .resourceType(RESOURCE_TYPE)
                 .resourceId(resourceId)

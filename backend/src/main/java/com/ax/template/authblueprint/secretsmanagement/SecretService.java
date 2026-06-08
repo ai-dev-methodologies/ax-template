@@ -1,6 +1,6 @@
 package com.ax.template.authblueprint.secretsmanagement;
 
-import com.ax.template.authblueprint.auditlog.AuditLog;
+import com.ax.template.authblueprint.auditlog.AuditLogDto;
 import com.ax.template.authblueprint.auditlog.AuditLogService;
 import com.ax.template.authblueprint.auditlog.AuditOutcome;
 import org.springframework.stereotype.Service;
@@ -179,7 +179,7 @@ public class SecretService {
      * {@link AuditLogService#record}.
      */
     private void audit(String action, String secretId, String principal, AuditOutcome outcome) {
-        auditLog.record(AuditLog.builder()
+        auditLog.record(AuditLogDto.builder()
                 .actorUserId(principal)
                 .action(action)
                 .resourceType(RESOURCE_TYPE)

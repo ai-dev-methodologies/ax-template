@@ -1,6 +1,6 @@
 package com.ax.template.authblueprint.dsr;
 
-import com.ax.template.authblueprint.auditlog.AuditLog;
+import com.ax.template.authblueprint.auditlog.AuditLogDto;
 import com.ax.template.authblueprint.auditlog.AuditLogService;
 import com.ax.template.authblueprint.auditlog.AuditOutcome;
 import com.ax.template.authblueprint.common.AuditPiiHelper;
@@ -365,7 +365,7 @@ public class DsrService {
     private void auditWithMetadata(String subject, String action, UUID requestId,
                                    AuditOutcome outcome, String metadataJson) {
         try {
-            auditLogService.record(AuditLog.builder()
+            auditLogService.record(AuditLogDto.builder()
                 .actorUserId(AuditPiiHelper.piiHash(subject))
                 .action(action)
                 .resourceType(AUDIT_RESOURCE_TYPE)

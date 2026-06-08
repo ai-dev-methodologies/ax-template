@@ -110,36 +110,11 @@ exceptions:
     rationale: "auth↔user deep grandfather (spec §8: ProviderLinkRepository) — OAuthService uses ProviderLinkRepository directly"
     expiry: 2026-12-31
     remediation_ticket: AX-DDD-AUTH-USER
-  # *→auditlog.AuditLog — cross-feature audit-entity coupling. Remediate by
-  # depending on the published AuditLogService (DTO return) instead of the entity.
-  - from: com.ax.template.authblueprint.dsr.DsrService
-    to:   com.ax.template.authblueprint.auditlog.AuditLog
-    kind: cross-feature-entity
-    owner: ax-template
-    rationale: "DsrService reads AuditLog entity for the data-subject access manifest; should use a published audit query port"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUDITLOG-ENTITY
-  - from: com.ax.template.authblueprint.identityverification.IdentityVerificationService
-    to:   com.ax.template.authblueprint.auditlog.AuditLog
-    kind: cross-feature-entity
-    owner: ax-template
-    rationale: "IdentityVerificationService references AuditLog entity; should use a published audit query port"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUDITLOG-ENTITY
-  - from: com.ax.template.authblueprint.secretsmanagement.SecretService
-    to:   com.ax.template.authblueprint.auditlog.AuditLog
-    kind: cross-feature-entity
-    owner: ax-template
-    rationale: "SecretService references AuditLog entity; should use a published audit query port"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUDITLOG-ENTITY
-  - from: com.ax.template.authblueprint.webhook.CircuitBreakerPolicy
-    to:   com.ax.template.authblueprint.auditlog.AuditLog
-    kind: cross-feature-entity
-    owner: ax-template
-    rationale: "CircuitBreakerPolicy references AuditLog entity; should use a published audit query port"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUDITLOG-ENTITY
+  # *→auditlog.AuditLog exceptions RETIRED 2026-06-08 (AX-DDD-AUDITLOG-ENTITY closed):
+  # the 4 cross-feature callers (DsrService / IdentityVerificationService / SecretService /
+  # CircuitBreakerPolicy) now build the published AuditLogDto port and hand it to
+  # AuditLogService.record(AuditLogDto) — they no longer import the AuditLog entity, so
+  # HG-FEAT-ISOLATION passes with no exception. See practices/DECISIONS.md.
   # ecommerce → payment — capstone composition domain (spec §8: real composition
   # = ecommerce). OrderService orchestrates the Payment aggregate during checkout.
   - from: com.ax.template.authblueprint.ecommerce.OrderService
