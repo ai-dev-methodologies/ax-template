@@ -37,6 +37,9 @@ export default [
       'ax/no-array-mutate-on-state': 'error',
       'ax/prefer-functional-setstate': 'error',
       'ax/no-inline-component-definition': 'error',
+      'ax/no-cross-feature-deep-import': 'error',
+      'ax/no-upward-layer-import': 'error',
+      'ax/no-feature-internal-import': 'error',
     },
   },
 ]

@@ -1060,6 +1060,11 @@ echo "[72] aggregate_tagging_completeness_guard.sh (DDD decomposition spec 2026-
 run_guard "aggregate_tagging_completeness/live" 0 \
     bash "$SCRIPT_DIR/aggregate_tagging_completeness_guard.sh"
 
+echo ""
+echo "[73] feature_boundary_allowlist_guard.sh (frontend decomposition spec 2026-06-08 §5 — practices-react/feature_boundary_allowlist.yaml is schema-valid: every exception from/to + published_api barrel resolves under frontend/src, no wildcards outside shared_layers, and no exception is past its expiry. The frontend analog of aggregate_boundary_allowlist_guard.)"
+run_guard "feature_boundary_allowlist/live" 0 \
+    bash "$SCRIPT_DIR/../../practices-react/evals/feature_boundary_allowlist_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

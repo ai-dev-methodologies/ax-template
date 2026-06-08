@@ -1,0 +1,38 @@
+# feature_boundary_allowlist.yaml
+# Frontend decomposition / package-structure enforcement allowlist.
+# Spec: docs/superpowers/specs/2026-06-08-frontend-decomposition-rules-design.md §5.
+# Backend analog: practices/evals/aggregate_boundary_allowlist.yaml.
+#
+# The schema-checked escape-hatch surface for the frontend decomposition ESLint
+# rules (ax/no-cross-feature-deep-import, ax/no-upward-layer-import,
+# ax/no-feature-internal-import). Validated by
+# practices-react/evals/feature_boundary_allowlist_guard.sh:
+#   (1) every exception from/to resolves to a real path under frontend/src,
+#   (2) every exception carries owner + rationale + expiry + remediation_ticket,
+#   (3) an exception whose expiry has passed FAILs (no permanent escape hatch).
+#
+# Wildcards are allowed ONLY in shared_layers (the stable kernel). published_api
+# lists exact slice barrels; exceptions list exact paths (no wildcards).
+
+# ── stable shared layers (wildcards allowed) ───────────────────────────────────
+# The kernel every feature/app may import. A reference whose target resolves here
+# is always legal (downward, by layer rule).
+shared_layers:
+  - "@/components/**"
+  - "@/lib/**"
+
+# ── per-feature published surface (the barrels other code may import) ───────────
+# Each feature's public entry points. Outside code imports only these (or a slice
+# barrel under them), never a slice's internals.
+published_api:
+  auth:
+    - "@/features/auth/login"
+    - "@/features/auth/signup"
+    - "@/features/auth/verify-email-result"
+    - "@/features/auth/protected-route-guard"
+
+# ── exact-path exceptions (no wildcards) ───────────────────────────────────────
+# grandfather / composition deep-imports accepted as explicit debt with expiry +
+# remediation ticket. Empty in Phase 0 — the current tree (features/auth, slice
+# barrels only) has zero cross-feature / upward / deep-internal imports.
+exceptions: []

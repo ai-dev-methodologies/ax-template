@@ -23,6 +23,11 @@ const sharedRules = {
   'ax/no-array-mutate-on-state': 'error',
   'ax/prefer-functional-setstate': 'warn',
   'ax/no-inline-component-definition': 'error',
+  // Frontend decomposition (TIER-0, spec 2026-06-08-frontend-decomposition): feature-slice
+  // isolation + single-direction layer imports + published-API-via-barrel.
+  'ax/no-cross-feature-deep-import': 'error',
+  'ax/no-upward-layer-import': 'error',
+  'ax/no-feature-internal-import': 'error',
 }
 
 // Per-persona apps must reuse the shared catalog — enforced only under apps/**.

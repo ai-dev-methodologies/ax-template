@@ -14,6 +14,9 @@ import noArrayMutateOnState from './rules/no-array-mutate-on-state.js'
 import preferFunctionalSetState from './rules/prefer-functional-setstate.js'
 import noInlineComponentDefinition from './rules/no-inline-component-definition.js'
 import noAppLocalUiPrimitives from './rules/no-app-local-ui-primitives.js'
+import noCrossFeatureDeepImport from './rules/no-cross-feature-deep-import.js'
+import noUpwardLayerImport from './rules/no-upward-layer-import.js'
+import noFeatureInternalImport from './rules/no-feature-internal-import.js'
 
 const plugin = {
   meta: {
@@ -29,6 +32,9 @@ const plugin = {
     'prefer-functional-setstate': preferFunctionalSetState,
     'no-inline-component-definition': noInlineComponentDefinition,
     'no-app-local-ui-primitives': noAppLocalUiPrimitives,
+    'no-cross-feature-deep-import': noCrossFeatureDeepImport,
+    'no-upward-layer-import': noUpwardLayerImport,
+    'no-feature-internal-import': noFeatureInternalImport,
   },
   configs: {},
 }
@@ -45,6 +51,9 @@ plugin.configs.recommended = {
     'ax/prefer-functional-setstate': 'error',
     'ax/no-inline-component-definition': 'error',
     'ax/no-app-local-ui-primitives': 'error',
+    'ax/no-cross-feature-deep-import': 'error',
+    'ax/no-upward-layer-import': 'error',
+    'ax/no-feature-internal-import': 'error',
   },
 }
 
