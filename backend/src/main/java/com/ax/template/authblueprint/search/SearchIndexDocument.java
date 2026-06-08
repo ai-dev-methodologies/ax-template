@@ -8,6 +8,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Search index document — keyed by ({@code id}, {@code tenantId}).
@@ -21,6 +22,7 @@ import java.util.UUID;
  * </ul>
  * Manifest: {@code blueprints/search-manifest.yaml}.
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "search_index_documents",

@@ -10,6 +10,7 @@ import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * announcement-l0 entity — a time-boxed system notice. State moves only through
@@ -18,6 +19,7 @@ import java.util.UUID;
  * time from state==PUBLISHED AND now in [startsAt, endsAt)). id/createdBy/createdAt are
  * immutable (@Column updatable=false). Spec: specs/announcement-l0.yaml.
  */
+@AggregateRoot
 @Entity
 @Table(name = "announcements")
 public class Announcement {

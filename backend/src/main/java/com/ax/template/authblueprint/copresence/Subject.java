@@ -8,6 +8,7 @@ import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * negative-copresence-gate-l0 subject — the entity whose member SET the gate evaluates against (e.g. a
@@ -16,6 +17,7 @@ import java.util.UUID;
  * and concurrent adds serialize (GATE-CONCURRENT-001). {@code subjectKey}/{@code createdAt} immutable;
  * no public setter. {@code @Version} backstops.
  */
+@AggregateRoot
 @Entity
 @Table(name = "copresence_subjects")
 public class Subject {

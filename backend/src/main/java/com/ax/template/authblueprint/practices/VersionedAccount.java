@@ -5,6 +5,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Version;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Fixture for PRACTICES-PERS-004: optimistic locking via JPA @Version.
@@ -12,6 +13,7 @@ import jakarta.persistence.Version;
  * from the same row read but reach commit with stale versions throw OptimisticLockException
  * (or its JPA equivalent) instead of silently losing one update.
  */
+@AggregateRoot
 @Entity
 public class VersionedAccount {
 

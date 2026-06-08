@@ -7,6 +7,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.Objects;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Runtime feature toggle.
@@ -19,6 +20,7 @@ import java.util.Objects;
  *       (name PK, enabled boolean, description varchar, createdAt, updatedAt).</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(name = "feature_flags")
 public class FeatureFlag {

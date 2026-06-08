@@ -11,6 +11,7 @@ import org.hibernate.annotations.Check;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * transformation-conservation-l0 header — an IMMUTABLE record of one conserving transformation
@@ -19,6 +20,7 @@ import java.util.UUID;
  * transformation, never an in-place edit (immutable-record-corrected-by-reversal-not-edit).
  * {@code @Version} is present for optimistic-lock discipline though the row is never updated.
  */
+@AggregateRoot
 @Entity
 @Table(name = "transformation_runs")
 // XFORM-ACCOUNTED-LOSS-001 — DB backstop applied by ddl-auto (LIVE in tests, also declared in V036

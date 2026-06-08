@@ -8,6 +8,7 @@ import jakarta.persistence.UniqueConstraint;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
 /**
  * collection-conservation-l0 computed net position: one signed net per member of a netting run
@@ -16,6 +17,7 @@ import java.util.UUID;
  * (run_id, member_id) constraint makes a double-persist (a concurrent re-net) unrepresentable — the
  * structural backstop for NET-ONCE-001. The set of a run's positions sums to exactly 0.
  */
+@AggregateMember(root = NettingRun.class)
 @Entity
 @Table(name = "netting_net_positions",
     uniqueConstraints = @UniqueConstraint(name = "uq_net_position_run_member",

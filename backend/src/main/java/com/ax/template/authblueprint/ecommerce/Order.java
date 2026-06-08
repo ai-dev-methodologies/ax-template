@@ -16,11 +16,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Order entity — snapshot of items at purchase time (ECOM-INV-001).
  * Lifecycle mutated only via {@link OrderStateMachine}.
  */
+@AggregateRoot
 @Entity
 @Table(name = "orders")
 public class Order {

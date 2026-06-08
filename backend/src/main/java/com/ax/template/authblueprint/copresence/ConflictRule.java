@@ -11,12 +11,14 @@ import jakarta.persistence.UniqueConstraint;
 import org.hibernate.annotations.Check;
 
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * negative-copresence-gate-l0 knowledge-base entry — an UNORDERED conflicting concept pair with a
  * graded severity (the pair {A,B} conflicts whether the candidate is A-with-B-present or vice versa).
  * The gate looks up (candidate.concept, existing.concept) in either order. Immutable KB row.
  */
+@AggregateRoot
 @Entity
 @Table(name = "copresence_conflict_rules",
     uniqueConstraints = @UniqueConstraint(name = "uq_copresence_conflict_pair",

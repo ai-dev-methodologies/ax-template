@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * R54 — IDV-CALLBACK-002 / IDV-CALLBACK-003 persistence entity.
@@ -42,6 +43,7 @@ import java.util.UUID;
  * their native keys; the catalog promises no schema on these keys — fork-
  * receivers index/query them as they like.
  */
+@AggregateRoot
 @Entity
 @Table(name = "verified_identity")
 public class VerifiedIdentity {

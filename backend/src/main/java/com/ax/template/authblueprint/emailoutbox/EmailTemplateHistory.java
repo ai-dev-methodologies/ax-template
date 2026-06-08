@@ -9,6 +9,7 @@ import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
 /**
  * Immutable snapshot of an {@link EmailTemplate} at a specific version.
@@ -24,6 +25,7 @@ import java.util.UUID;
  * <p>Every column carries {@code updatable = false} so the JPA layer
  * cannot rewrite a snapshot — once a history row exists, it is frozen.
  */
+@AggregateMember(root = EmailTemplate.class)
 @Entity
 @Table(
     name = "email_template_history",

@@ -10,6 +10,7 @@ import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Timed push-offer (timed-offer-l0 OFFER-FSM-001). At most one PENDING offer per request
@@ -18,6 +19,7 @@ import java.util.UUID;
  * {@code expiresAt}/{@code ordinal}/{@code createdAt} immutable. {@code @Version} makes the
  * sweep LOSE the race against a live accept (timeout-sweep-is-a-concurrent-mutator).
  */
+@AggregateRoot
 @Entity
 @Table(name = "dispatch_offers")
 public class Offer {

@@ -5,7 +5,9 @@ import jakarta.persistence.*;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
+@AggregateRoot
 @Entity
 @Table(name = "verification_tokens")
 public class VerificationToken {

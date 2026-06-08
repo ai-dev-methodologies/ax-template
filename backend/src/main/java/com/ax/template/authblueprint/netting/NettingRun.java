@@ -13,6 +13,7 @@ import org.hibernate.annotations.Check;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * collection-conservation-l0 netting run — one multilateral netting over a single-currency set of
@@ -22,6 +23,7 @@ import java.util.UUID;
  * ONLY via the package-private {@link #markNetted} (no public setter — {@link NettingService} is the
  * sole mutator, under a PESSIMISTIC_WRITE row lock). {@code @Version} backstops.
  */
+@AggregateRoot
 @Entity
 @Table(name = "netting_runs")
 // NET-SETWIDE-ZERO-001 — the rollup of all member nets is ALWAYS exactly zero (LIVE under ddl-auto).

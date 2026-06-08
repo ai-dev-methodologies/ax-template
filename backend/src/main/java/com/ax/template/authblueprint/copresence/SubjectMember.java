@@ -10,6 +10,7 @@ import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
 /**
  * negative-copresence-gate-l0 member of a subject's set. {@code concept} is the NORMALIZED concept key
@@ -18,6 +19,7 @@ import java.util.UUID;
  * write cannot bypass the contraindication check. {@code overrideReason}/{@code overriddenFindings}
  * record a GATE-OVERRIDE-001 proceed-past-a-RELATIVE-finding, by reference, bound to this row.
  */
+@AggregateMember(root = Subject.class)
 @Entity
 @Table(name = "copresence_members")
 public class SubjectMember {

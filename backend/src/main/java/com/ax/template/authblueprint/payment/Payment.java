@@ -15,6 +15,7 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Payment domain entity. State machine root.
@@ -30,6 +31,7 @@ import java.util.UUID;
  * <p>PAYMENT-STATE-002: {@link #version} backs JPA optimistic locking; concurrent transitions
  * surface as {@link org.springframework.orm.ObjectOptimisticLockingFailureException} → 409.
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "payments",

@@ -10,6 +10,7 @@ import org.hibernate.annotations.Check;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
 /**
  * attested-change-record-l0 append-only change record (ACR-APPEND-ONLY-001 / 21 CFR 11.10(e):
@@ -18,6 +19,7 @@ import java.util.UUID;
  * correction is a NEW appended record. {@code sequence} is strictly monotonic per (datumId, fieldName),
  * allocated under the datum's row lock so causal order is unambiguous under concurrent edits.
  */
+@AggregateMember(root = GovernedDatum.class)
 @Entity
 @Table(name = "governed_change_records",
     uniqueConstraints = @UniqueConstraint(name = "uq_governed_change_seq",

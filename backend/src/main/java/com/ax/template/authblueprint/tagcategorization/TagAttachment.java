@@ -9,6 +9,7 @@ import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * TagAttachment — a polymorphic edge between a {@link Tag} and any
@@ -23,6 +24,7 @@ import java.util.UUID;
  *   <li>TAG-ATTACH-003 — repository finder joins on Tag + filters on the pair</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "tag_attachments",

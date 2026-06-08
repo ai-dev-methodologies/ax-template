@@ -9,11 +9,13 @@ import jakarta.persistence.Table;
 
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
 /**
  * Order line item — snapshot of product name + unit_price at purchase time
  * so subsequent product mutations don't rewrite history (ECOM-INV-001 anchor).
  */
+@AggregateMember(root = Order.class)
 @Entity
 @Table(name = "order_items")
 public class OrderItem {

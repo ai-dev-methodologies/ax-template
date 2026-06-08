@@ -10,6 +10,7 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Registered outbound webhook endpoint.
@@ -23,6 +24,7 @@ import java.util.UUID;
  *       rolling failure-rate threshold is crossed.</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "webhook_endpoints",

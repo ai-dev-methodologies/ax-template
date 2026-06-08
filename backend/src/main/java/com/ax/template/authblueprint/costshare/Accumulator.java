@@ -11,6 +11,7 @@ import org.hibernate.annotations.Check;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * accumulator-consume-l0 entity — a monotone-drawable running total against a limit, per scope
@@ -20,6 +21,7 @@ import java.util.UUID;
  * {@code createdAt} immutable; mutators are package-private (no public setter — the service in this
  * package is the sole mutator, always under a PESSIMISTIC_WRITE row lock). {@code @Version} backstops.
  */
+@AggregateRoot
 @Entity
 @Table(name = "cost_share_accumulators")
 // ACC-RACE-001 / ACC-CLAWBACK-001 — the solvency backstops applied by ddl-auto (so they are LIVE in

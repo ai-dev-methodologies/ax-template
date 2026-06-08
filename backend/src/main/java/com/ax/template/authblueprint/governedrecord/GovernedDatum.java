@@ -8,6 +8,7 @@ import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * attested-change-record-l0 governed datapoint. {@code value} is mutated ONLY via the package-private
@@ -15,6 +16,7 @@ import java.util.UUID;
  * mutator and every change flows through an appended {@link ChangeRecord} (ACR-ENVELOPE-001).
  * {@code name}/{@code createdBy}/{@code createdAt} immutable; {@code @Version} for atomic edits.
  */
+@AggregateRoot
 @Entity
 @Table(name = "governed_data")
 public class GovernedDatum {

@@ -13,6 +13,7 @@ import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * SessionRecord — explicit per-login record bound to a JWT jti claim.
@@ -26,6 +27,7 @@ import java.util.UUID;
  *   <li>SESS-AUTHZ-002 — every lookup uses (id, userId) filter</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "session_records",

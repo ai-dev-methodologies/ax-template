@@ -8,6 +8,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * optimistic-locking-l0 reference entity — a mutable, owner-scoped resource carrying a JPA
@@ -16,6 +17,7 @@ import java.util.UUID;
  * field. The strong ETag (OPTLOCK-ETAG-001) is derived from {@code (id, version)} via
  * {@code common.OptimisticLockingSupport.etag}. Spec: specs/optimistic-locking-l0.yaml.
  */
+@AggregateRoot
 @Entity
 @Table(name = "optlock_resources",
         indexes = @Index(name = "ix_optlock_owner", columnList = "owner_id"))

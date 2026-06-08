@@ -63,6 +63,7 @@ import java.util.Objects;
  * ships only the minimal append-only ledger spine the rule-of-three proved every
  * persona re-derives identically.
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "consent_records",

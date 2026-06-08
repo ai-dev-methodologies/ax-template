@@ -13,6 +13,7 @@ import org.hibernate.annotations.Check;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * reserve-settle-balance-l0 hold against a {@link ReservableBalance}. {@code amount} (the held value),
@@ -21,6 +22,7 @@ import java.util.UUID;
  * {@link ReservationService} is the sole mutator). A hold has exactly ONE terminal transition. The
  * {@code @Check settled_amount ≤ amount} is the load-bearing overspend backstop, LIVE under ddl-auto.
  */
+@AggregateRoot
 @Entity
 @Table(name = "reservations")
 // RSV-SETTLE-001 — the settled actual can never exceed the held amount; amount is always positive.

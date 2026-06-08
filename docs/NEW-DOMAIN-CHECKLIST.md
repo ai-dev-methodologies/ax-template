@@ -73,6 +73,39 @@ Create these under `backend/src/main/java/com/ax/template/authblueprint/<domain>
    run on `ddl-auto=create-drop` so the migration is not auto-exercised — write it carefully.
 8. **SecurityConfig** — add the domain's request-matcher (authenticated / permitAll / role).
 
+## 1b. Aggregate decomposition (DDD — MANDATORY for every `@Entity`)
+> Spec: `docs/superpowers/specs/2026-06-08-ddd-decomposition-rules-design.md`. An aggregate
+> is a transactional consistency boundary (Vernon). A feature package = bounded context and
+> MAY hold several aggregate roots (e.g. dispatch = Provider / Offer / ServiceRequest).
+
+- [ ] **Tag the ROOT entity `@AggregateRoot`** (`common/AggregateRoot`) — the entry point for
+      all mutation, the only entity with global (repository) access.
+- [ ] **Tag every MEMBER entity `@AggregateMember(root = <Root>.class)`** (`common/AggregateMember`)
+      — a composition part loaded/saved through its root (e.g. `OrderItem` → `Order`). The
+      `root` attribute is mandatory. *Every `@Entity` must carry exactly one of these two*
+      (`aggregate_tagging_completeness_guard` fails the build otherwise).
+- [ ] **Repository only on roots** — a `@AggregateMember` must NOT have its own `*Repository`;
+      mutate/load it through its root (`HG-AGG-REPO`). A genuine exception goes in
+      `practices/evals/aggregate_boundary_allowlist.yaml` (`kind: member-repo`, with expiry).
+- [ ] **Reference other aggregates by identity, not object pointer** — no entity field may be
+      typed as a *different* aggregate's `@AggregateRoot` (`HG-AGG-REF`). Child→own-root
+      back-references are fine; store a `Long <other>Id` for cross-aggregate links.
+- [ ] **Mutate ONE aggregate per `@Transactional` method** — coordinate the rest via a published
+      service / domain event, not a second `repo.save(...)` in the same method body
+      (`HG-ANTI-GODSERVICE-TX`; governed exceptions in `governed_god_service`).
+- [ ] **Keep members encapsulated** — never reference another feature's `@AggregateMember` from
+      outside its package; expose the root (`HG-AGG-MEMBER-ENCAP`).
+- [ ] **Cross-feature access = published API only** — to call another feature, depend on a
+      `@PublishedApi` type (or a `shared_kernel` package), never its `@Entity`/`*Repository`
+      (`HG-FEAT-ISOLATION`, default-deny). Composition/grandfather edges go in the allowlist.
+- [ ] **Controller is resource-oriented** — one thin `/api/<resource>` controller per root, never
+      verb-per-endpoint (`Create*Controller`/`List*Controller`/`Get*Controller`) and never a
+      top-level `controllers/`/`services/`/`repositories/` package (`HG-ANTI-SPLIT-ENDPOINT`,
+      `HG-FEAT-TOPLEVEL-TECH`).
+- [ ] **State machine is the sole state mutator** — if root `X` has an `XStateMachine`, only it
+      may call `X.setStatus/setState` (`HG-STATE-SOLE-MUTATOR`; governed callers in
+      `governed_state_mutators`).
+
 ## 2. Required tests
 Under `backend/src/test/java/com/ax/template/authblueprint/<domain>/`:
 
@@ -104,6 +137,11 @@ Under `backend/src/test/java/com/ax/template/authblueprint/<domain>/`:
 | `spec_ref_code_guard` | a `specs/*.yaml` path mentioned in code that does not resolve |
 | `test_tag_naming_convention_guard` | a non-UPPERCASE `@Tag` |
 | `l4_domain_reachability_guard` | a domain shipped without a `ViolationProofTest` |
+| `aggregate_tagging_completeness_guard` | an `@Entity` not tagged `@AggregateRoot`/`@AggregateMember` |
+| `aggregate_boundary_allowlist_guard` | an unresolved / expired DDD allowlist exception |
+| `DddDecompositionTierZeroTest` | by-layer package, verb controller, kernel→feature dep, cross-feature `@Entity`/`*Repository` |
+| `DddDecompositionTierOneTest` | member-repo, cross-aggregate object pointer, leaked member |
+| `DddDecompositionHeuristicsTest` | god-service `@Transactional`, state setter bypassing the state machine |
 
 ## 5. Verify (binary pass/fail)
 ```bash

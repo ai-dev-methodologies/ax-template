@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Immutable audit log entry.
@@ -23,6 +24,7 @@ import java.util.UUID;
  * </ul>
  * Manifest: {@code blueprints/audit-log-manifest.yaml#audit_policy}.
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "audit_logs",

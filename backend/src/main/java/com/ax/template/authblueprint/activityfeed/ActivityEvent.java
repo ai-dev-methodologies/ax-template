@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * ActivityEvent — a single (actor, verb, object) record visible to a polymorphic audience.
@@ -27,6 +28,7 @@ import java.util.UUID;
  *   <li>ACT-READ-001 / ACT-AUTHZ-002/003 — visibility = (actor OR audience contains caller)</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "activity_events",

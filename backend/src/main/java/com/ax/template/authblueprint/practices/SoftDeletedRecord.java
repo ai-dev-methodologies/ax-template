@@ -17,6 +17,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Fixture entity for PRACTICES-PERS-005: soft-delete via @SQLDelete + @Where.
@@ -32,6 +33,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * It replicates the BaseEntity fields inline to keep the fixture self-contained in the
  * backend test application.
  */
+@AggregateRoot
 @Entity
 @Table(name = "soft_deleted_records")
 @SQLDelete(sql = "UPDATE soft_deleted_records SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND version = ?")

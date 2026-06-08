@@ -11,6 +11,7 @@ import jakarta.persistence.Version;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * dispatch supply unit (timed-offer-l0 AVAIL-FSM-001 / AVAIL-FRESH-002). Non-contended status
@@ -18,6 +19,7 @@ import java.util.UUID;
  * AVAILABLE→ASSIGNED claim is the atomic conditional UPDATE in {@link ProviderRepository#claim}
  * (exclusive-assignment-l0 EXCL-CLAIM-001). {@code id}/{@code handle}/{@code createdAt} immutable.
  */
+@AggregateRoot
 @Entity
 @Table(name = "dispatch_providers")
 public class Provider {

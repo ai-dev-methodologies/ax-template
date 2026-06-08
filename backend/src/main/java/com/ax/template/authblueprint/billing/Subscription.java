@@ -10,6 +10,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Customer's subscription instance.
@@ -22,6 +23,7 @@ import java.util.UUID;
  *   <li>BILLING-CUR-001 — {@code amount} is integer minor units.</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(name = "subscriptions")
 public class Subscription {

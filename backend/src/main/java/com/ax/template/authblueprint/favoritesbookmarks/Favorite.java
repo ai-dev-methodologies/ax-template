@@ -9,6 +9,7 @@ import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Favorite — per-user single-state marker on a polymorphic entity reference.
@@ -19,6 +20,7 @@ import java.util.UUID;
  *   <li>FAV-AUTHZ-002 / 003 — user_id is the only scoping key</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "favorites",

@@ -8,6 +8,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
 /**
  * CommentEdit — immutable edit-history row. Captured BEFORE each PUT mutates the
@@ -15,6 +16,7 @@ import java.util.UUID;
  *
  * <p>Trace: COMMENT-HISTORY-001 — every field is @Column(updatable=false).
  */
+@AggregateMember(root = Comment.class)
 @Entity
 @Table(
     name = "comment_edits",

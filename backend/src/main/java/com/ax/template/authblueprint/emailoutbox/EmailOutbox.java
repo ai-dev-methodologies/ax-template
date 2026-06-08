@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Outbox row persisting one queued email send attempt-chain.
@@ -26,6 +27,7 @@ import java.util.UUID;
  *       {@link EmailOutboxStatus#DLQ}.</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "email_outbox",

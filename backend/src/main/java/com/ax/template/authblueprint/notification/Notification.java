@@ -10,6 +10,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Notification entity — keyed by recipient user.
@@ -24,6 +25,7 @@ import java.util.UUID;
  * </ul>
  * Manifest: {@code blueprints/notification-manifest.yaml}.
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "notifications",

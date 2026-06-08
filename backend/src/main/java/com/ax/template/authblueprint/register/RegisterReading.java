@@ -13,6 +13,7 @@ import org.hibernate.annotations.Check;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
 /**
  * monotone-register-l0 append-only read. EVERY column is {@code @Column(updatable=false)}, there is no
@@ -21,6 +22,7 @@ import java.util.UUID;
  * {@code priorAnchor} is the anchor immediately before this read; {@code sequenceNo} is strictly
  * monotonic per register. {@code @Check delta >= 0} is the load-bearing no-negative-consumption backstop.
  */
+@AggregateMember(root = Register.class)
 @Entity
 @Table(name = "register_readings",
     uniqueConstraints = @UniqueConstraint(name = "uq_register_reading_seq",

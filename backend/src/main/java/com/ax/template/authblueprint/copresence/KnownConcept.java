@@ -6,12 +6,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * negative-copresence-gate-l0 knowledge-base vocabulary — the set of concepts the KB can ASSESS. A
  * candidate whose concept is absent here is UNASSESSABLE and the gate fails closed (GATE-FAILCLOSED-001,
  * Saltzer fail-safe defaults), rather than silently allowing an unrecognized concept past the check.
  */
+@AggregateRoot
 @Entity
 @Table(name = "copresence_known_concepts")
 public class KnownConcept {

@@ -11,6 +11,7 @@ import org.hibernate.annotations.Check;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * monotone-register-l0 cumulative register (meter / odometer / counter). {@code anchor} is the latest
@@ -21,6 +22,7 @@ import java.util.UUID;
  * always under a PESSIMISTIC_WRITE row lock). Column is {@code anchor_value} ("anchor" risks reserved-word
  * DDL). {@code @Version} backstops.
  */
+@AggregateRoot
 @Entity
 @Table(name = "registers")
 // REG-MONOTONE-001 — anchor stays within [0, modulus); modulus positive. LIVE under ddl-auto.

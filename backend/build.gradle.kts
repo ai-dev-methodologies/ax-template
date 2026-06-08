@@ -59,6 +59,12 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // The PRACTICES suite runs many @SpringBootTest/@DataJpaTest contexts alongside several
+    // whole-tree ArchUnit imports (layering, no-cycle, DDD decomposition). The default test
+    // fork heap is too small for that combined footprint under machine load and OOMs
+    // non-deterministically (favoriteRepository/Persistence* "Java heap space"). Pin a 2g fork
+    // heap so the suite is deterministic.
+    maxHeapSize = "2g"
 }
 
 tasks.register<Test>("testCrud") {

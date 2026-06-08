@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Email template (subject + body) keyed by templateCode.
@@ -19,6 +20,7 @@ import jakarta.persistence.Table;
  * joining {@code email_outbox.created_at} against the history table's
  * {@code captured_at}.
  */
+@AggregateRoot
 @Entity
 @Table(name = "email_templates")
 public class EmailTemplate {

@@ -3,7 +3,9 @@ package com.ax.template.authblueprint.crud;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
+@AggregateRoot
 @Entity
 @Table(name = "items")
 public class ItemEntity {

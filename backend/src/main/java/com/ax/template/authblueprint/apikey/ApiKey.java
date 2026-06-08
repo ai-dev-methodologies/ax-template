@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * ApiKey — persistence record. Stores the SHA-256 hex digest of the plaintext;
@@ -31,6 +32,7 @@ import java.util.UUID;
  *   <li>KEY-AUTHZ-002  — every lookup filters on {@code (id, ownerUserId)}</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "api_keys",

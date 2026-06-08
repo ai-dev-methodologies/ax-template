@@ -15,6 +15,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
 /**
  * ApprovalStep — one rung of an {@link ApprovalRequest}'s approval ladder.
@@ -27,6 +28,7 @@ import java.util.UUID;
  *       {@code comment} captured atomically with {@code status} by the state machine</li>
  * </ul>
  */
+@AggregateMember(root = ApprovalRequest.class)
 @Entity
 @Table(
     name = "approval_steps",

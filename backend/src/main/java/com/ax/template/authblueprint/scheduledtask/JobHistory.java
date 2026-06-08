@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Immutable execution audit row — one per task run.
@@ -22,6 +23,7 @@ import java.util.UUID;
  *   <li>blueprints/scheduled-task-manifest.yaml#execute</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "job_history",

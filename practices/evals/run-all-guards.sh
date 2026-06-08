@@ -1050,6 +1050,16 @@ run_guard "spec_scaffold_unfilled/fixture_fail" 1 \
 run_guard "spec_scaffold_unfilled/fixture_pass" 0 \
     bash "$SCRIPT_DIR/spec_scaffold_unfilled_guard.sh" --root "$SCRIPT_DIR/fixtures/spec-scaffold-unfilled/pass_filled"
 
+echo ""
+echo "[71] aggregate_boundary_allowlist_guard.sh (DDD decomposition spec 2026-06-08 §5 — the aggregate_boundary_allowlist.yaml escape-hatch surface is schema-valid: every exception from/to resolves to a real class, every published_api class resolves in its feature, no wildcards outside shared_kernel, and no exception is past its expiry. Stops a grandfather edge from becoming a permanent escape hatch.)"
+run_guard "aggregate_boundary_allowlist/live" 0 \
+    bash "$SCRIPT_DIR/aggregate_boundary_allowlist_guard.sh"
+
+echo ""
+echo "[72] aggregate_tagging_completeness_guard.sh (DDD decomposition spec 2026-06-08 §4 back-tag wave forcing function — every JPA @Entity in backend main sources MUST carry exactly one of @AggregateRoot / @AggregateMember(root=...). Tagging cannot regress and a new untagged @Entity fails the build, which is the prerequisite that lets the marker-dependent TIER-1 guards be sound.)"
+run_guard "aggregate_tagging_completeness/live" 0 \
+    bash "$SCRIPT_DIR/aggregate_tagging_completeness_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

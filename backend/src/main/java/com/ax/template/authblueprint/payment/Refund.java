@@ -14,6 +14,7 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Refund row. Each refund references a {@link Payment} via {@link #paymentId}.
@@ -22,6 +23,7 @@ import java.util.UUID;
  *
  * <p>PAYMENT-MONEY-001: amount is {@link BigDecimal}; no float/double fields.
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "refunds",

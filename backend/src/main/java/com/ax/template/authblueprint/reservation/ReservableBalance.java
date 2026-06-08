@@ -11,6 +11,7 @@ import org.hibernate.annotations.Check;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * reserve-settle-balance-l0 pooled balance with a THIRD term. A claim happens in two phases, so the
@@ -21,6 +22,7 @@ import java.util.UUID;
  * PESSIMISTIC_WRITE row lock). {@code @Version} backstops; columns use {@code _amount} suffixes because
  * {@code committed}/{@code reserved} risk SQL reserved-word DDL collisions.
  */
+@AggregateRoot
 @Entity
 @Table(name = "reservable_balances")
 // RSV-RESERVE-001 / RSV-CONSERVE-001 — solvency backstops applied by ddl-auto (LIVE in tests, not only

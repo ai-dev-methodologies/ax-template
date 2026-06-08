@@ -9,7 +9,9 @@ import jakarta.persistence.Table;
 
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
+@AggregateMember(root = Cart.class)
 @Entity
 @Table(name = "cart_items")
 public class CartItem {

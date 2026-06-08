@@ -10,6 +10,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Comment — entity-agnostic threaded comment with soft-delete.
@@ -22,6 +23,7 @@ import java.util.UUID;
  *   <li>COMMENT-AUTHZ-002/003 — author + admin scoping</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "comments",

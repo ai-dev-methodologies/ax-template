@@ -7,7 +7,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import com.ax.template.authblueprint.common.AggregateMember;
 
+@AggregateMember(root = Parent.class)
 @Entity
 public class Child {
 

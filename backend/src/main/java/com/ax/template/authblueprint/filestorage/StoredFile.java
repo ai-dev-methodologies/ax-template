@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * StoredFile entity — keyed by owner.
@@ -26,6 +27,7 @@ import java.util.UUID;
  * </ul>
  * Manifest: {@code blueprints/file-storage-manifest.yaml}.
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "stored_files",

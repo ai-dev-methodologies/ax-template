@@ -8,6 +8,7 @@ import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.Objects;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Row representing one distributed lock.
@@ -17,6 +18,7 @@ import java.util.Objects;
  * <p>
  * Trace: blueprints/scheduled-task-manifest.yaml#lock (strategy=db-row-lock)
  */
+@AggregateRoot
 @Entity
 @Table(name = "task_locks")
 public class TaskLock {

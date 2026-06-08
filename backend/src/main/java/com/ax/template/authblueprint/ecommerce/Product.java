@@ -10,12 +10,14 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Product entity — recipes/e-commerce/RECIPE.md (crud L4).
  * <p>
  * Price is stored as integer minor units (BILLING-CUR-001 convention reused).
  */
+@AggregateRoot
 @Entity
 @Table(name = "products")
 public class Product {

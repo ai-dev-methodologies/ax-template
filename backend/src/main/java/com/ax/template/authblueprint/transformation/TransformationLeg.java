@@ -11,6 +11,7 @@ import org.hibernate.annotations.Check;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
 /**
  * One leg of a transformation (input consumed, good output produced, or classified residual).
@@ -18,6 +19,7 @@ import java.util.UUID;
  * row is never updated (a correction is a reversal transformation). {@code disposition} is non-null
  * only for a RESIDUAL leg (XFORM-RESIDUAL-CLASSIFIED-001).
  */
+@AggregateMember(root = TransformationRun.class)
 @Entity
 @Table(name = "transformation_legs")
 // XFORM-RESIDUAL-CLASSIFIED-001 — DB backstop (LIVE under ddl-auto): a RESIDUAL leg MUST carry a

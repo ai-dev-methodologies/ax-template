@@ -10,6 +10,7 @@ import org.hibernate.annotations.Check;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateMember;
 
 /**
  * collection-conservation-l0 directed gross obligation: {@code fromMember} owes {@code toMember}
@@ -17,6 +18,7 @@ import java.util.UUID;
  * no setter) captured while the run is OPEN; once the run is NETTED no obligation may be added or edited
  * (NET-INPUTS-IMMUTABLE-001). {@code @Check} keeps amount positive and forbids a self-obligation.
  */
+@AggregateMember(root = NettingRun.class)
 @Entity
 @Table(name = "netting_gross_obligations")
 @Check(constraints = "amount > 0 AND from_member <> to_member")

@@ -1,0 +1,259 @@
+# aggregate_boundary_allowlist.yaml
+# DDD decomposition / package-structure enforcement allowlist.
+# Spec: docs/superpowers/specs/2026-06-08-ddd-decomposition-rules-design.md §5.
+#
+# This artifact is the single, schema-validated escape-hatch surface for the
+# DDD hard guards (HG-FEAT-ISOLATION + the marker-dependent TIER-1 guards).
+# It is validated by practices/evals/aggregate_boundary_allowlist_guard.sh:
+#   (1) every exception from/to MUST resolve to a real class in the tree,
+#   (2) every exception MUST carry owner + rationale + expiry + remediation_ticket,
+#   (3) an exception whose `expiry` has passed FAILs the build (no permanent escape).
+#
+# Loophole prevention (spec §5): `shared_kernel` is the ONLY place wildcards are
+# allowed (stable kernel packages everything may depend on). `published_api` lists
+# the exact published surface per feature. `exceptions` lists exact classes only —
+# never wildcards — so a grandfather edge cannot silently widen.
+
+# ── stable kernel (wildcards allowed) ──────────────────────────────────────────
+# Cross-cutting infrastructure every feature may depend on. HG-FEAT-ISOLATION
+# treats a reference whose target resides here as always-legal (target (ii)).
+shared_kernel:
+  - com.ax.template.authblueprint.common
+  - com.ax.template.authblueprint.observability
+
+# ── per-feature published surface (default-deny everywhere else) ────────────────
+# The exact types each feature exposes to OTHER features. A cross-feature
+# reference is legal only if the target is listed here (or is @PublishedApi in
+# source, or shared_kernel). Simple class names, resolved within the feature's
+# package. Populated incrementally by the back-tag wave (spec §4).
+published_api: {}
+
+# ── exact-class exceptions (no wildcards) ──────────────────────────────────────
+# grandfather / composition couplings that violate HG-FEAT-ISOLATION (a feature
+# referencing another feature's @Entity / *Repository) but are accepted as
+# explicit debt with an expiry + remediation ticket. Each entry MUST have all
+# keys. The 11 entries below are the COMPLETE set of pre-existing cross-feature
+# @Entity/*Repository references on the 52-package tree (authoritative scan
+# 2026-06-08); recording them is what lets HG-FEAT-ISOLATION run in block mode
+# while keeping the existing tree GREEN (spec §2 grandfather, §8).
+exceptions:
+  # auth ↔ user — deep grandfather coupling (spec §8: UserEntity / UserRepository
+  # / @ManyToOne FK from RefreshToken & VerificationToken). Remediate via a
+  # published user lookup port + reference-by-id (follow-up IMW).
+  - from: com.ax.template.authblueprint.auth.AuthServiceImpl
+    to:   com.ax.template.authblueprint.user.UserEntity
+    kind: cross-aggregate-ref
+    owner: ax-template
+    rationale: "auth↔user deep grandfather (spec §8) — AuthServiceImpl reads the User aggregate root directly"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  - from: com.ax.template.authblueprint.auth.AuthServiceImpl
+    to:   com.ax.template.authblueprint.user.UserRepository
+    kind: cross-aggregate-repo
+    owner: ax-template
+    rationale: "auth↔user deep grandfather (spec §8) — AuthServiceImpl uses UserRepository directly"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  - from: com.ax.template.authblueprint.auth.RefreshToken
+    to:   com.ax.template.authblueprint.user.UserEntity
+    kind: cross-aggregate-fk
+    owner: ax-template
+    rationale: "auth↔user deep grandfather (spec §8) — RefreshToken @ManyToOne UserEntity FK"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  - from: com.ax.template.authblueprint.auth.RefreshTokenRepository
+    to:   com.ax.template.authblueprint.user.UserEntity
+    kind: cross-aggregate-ref
+    owner: ax-template
+    rationale: "auth↔user deep grandfather (spec §8) — RefreshTokenRepository query parameter type"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  - from: com.ax.template.authblueprint.auth.VerificationToken
+    to:   com.ax.template.authblueprint.user.UserEntity
+    kind: cross-aggregate-fk
+    owner: ax-template
+    rationale: "auth↔user deep grandfather (spec §8) — VerificationToken @ManyToOne UserEntity FK"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  - from: com.ax.template.authblueprint.auth.VerificationTokenRepository
+    to:   com.ax.template.authblueprint.user.UserEntity
+    kind: cross-aggregate-ref
+    owner: ax-template
+    rationale: "auth↔user deep grandfather (spec §8) — VerificationTokenRepository query parameter type"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  - from: com.ax.template.authblueprint.auth.OAuthService
+    to:   com.ax.template.authblueprint.user.UserEntity
+    kind: cross-aggregate-ref
+    owner: ax-template
+    rationale: "auth↔user deep grandfather (spec §8) — OAuthService reads the User aggregate root"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  - from: com.ax.template.authblueprint.auth.OAuthService
+    to:   com.ax.template.authblueprint.user.UserRepository
+    kind: cross-aggregate-repo
+    owner: ax-template
+    rationale: "auth↔user deep grandfather (spec §8) — OAuthService uses UserRepository directly"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  - from: com.ax.template.authblueprint.auth.OAuthService
+    to:   com.ax.template.authblueprint.user.ProviderLink
+    kind: cross-aggregate-ref
+    owner: ax-template
+    rationale: "auth↔user deep grandfather (spec §8: ProviderLink) — OAuthService manages OAuth provider links on the User aggregate"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  - from: com.ax.template.authblueprint.auth.OAuthService
+    to:   com.ax.template.authblueprint.user.ProviderLinkRepository
+    kind: cross-aggregate-repo
+    owner: ax-template
+    rationale: "auth↔user deep grandfather (spec §8: ProviderLinkRepository) — OAuthService uses ProviderLinkRepository directly"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  # *→auditlog.AuditLog — cross-feature audit-entity coupling. Remediate by
+  # depending on the published AuditLogService (DTO return) instead of the entity.
+  - from: com.ax.template.authblueprint.dsr.DsrService
+    to:   com.ax.template.authblueprint.auditlog.AuditLog
+    kind: cross-feature-entity
+    owner: ax-template
+    rationale: "DsrService reads AuditLog entity for the data-subject access manifest; should use a published audit query port"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUDITLOG-ENTITY
+  - from: com.ax.template.authblueprint.identityverification.IdentityVerificationService
+    to:   com.ax.template.authblueprint.auditlog.AuditLog
+    kind: cross-feature-entity
+    owner: ax-template
+    rationale: "IdentityVerificationService references AuditLog entity; should use a published audit query port"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUDITLOG-ENTITY
+  - from: com.ax.template.authblueprint.secretsmanagement.SecretService
+    to:   com.ax.template.authblueprint.auditlog.AuditLog
+    kind: cross-feature-entity
+    owner: ax-template
+    rationale: "SecretService references AuditLog entity; should use a published audit query port"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUDITLOG-ENTITY
+  - from: com.ax.template.authblueprint.webhook.CircuitBreakerPolicy
+    to:   com.ax.template.authblueprint.auditlog.AuditLog
+    kind: cross-feature-entity
+    owner: ax-template
+    rationale: "CircuitBreakerPolicy references AuditLog entity; should use a published audit query port"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUDITLOG-ENTITY
+  # ecommerce → payment — capstone composition domain (spec §8: real composition
+  # = ecommerce). OrderService orchestrates the Payment aggregate during checkout.
+  - from: com.ax.template.authblueprint.ecommerce.OrderService
+    to:   com.ax.template.authblueprint.payment.Payment
+    kind: composition
+    owner: ax-template
+    rationale: "ecommerce is the composition capstone (spec §8); OrderService composes the payment aggregate at checkout"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-ECOM-COMPOSITION
+  # HG-AGG-REF (TIER-1): cross-aggregate object pointer within the user feature.
+  # ProviderLink (root) holds a @ManyToOne to the UserEntity root; reference-by-id
+  # is the target end-state (part of the auth↔user remediation IMW).
+  - from: com.ax.template.authblueprint.user.ProviderLink
+    to:   com.ax.template.authblueprint.user.UserEntity
+    kind: cross-aggregate-fk
+    owner: ax-template
+    rationale: "ProviderLink @ManyToOne UserEntity — cross-aggregate object pointer inside the user context; remediate to reference-by-id"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-AUTH-USER
+  # HG-AGG-REPO (TIER-1): the 5 pre-existing member entities that carry their own
+  # *Repository (spec §6). End-state is root-promotion OR mutate-through-root; kept as
+  # explicit debt because each is queried append-only / by composite key today.
+  - from: com.ax.template.authblueprint.approvalworkflow.ApprovalStepRepository
+    to:   com.ax.template.authblueprint.approvalworkflow.ApprovalStep
+    kind: member-repo
+    owner: ax-template
+    rationale: "ApprovalStep is an ApprovalRequest member but has a repository for ordered step queries; mutate-through-root is the end-state"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-MEMBER-REPO
+  - from: com.ax.template.authblueprint.commentthread.CommentEditRepository
+    to:   com.ax.template.authblueprint.commentthread.CommentEdit
+    kind: member-repo
+    owner: ax-template
+    rationale: "CommentEdit is a Comment member (immutable edit history) but has a repository for history listing; load-through-root is the end-state"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-MEMBER-REPO
+  - from: com.ax.template.authblueprint.copresence.SubjectMemberRepository
+    to:   com.ax.template.authblueprint.copresence.SubjectMember
+    kind: member-repo
+    owner: ax-template
+    rationale: "SubjectMember is a Subject member but has a repository for set-intersection queries; mutate-through-root is the end-state"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-MEMBER-REPO
+  - from: com.ax.template.authblueprint.netting.GrossObligationRepository
+    to:   com.ax.template.authblueprint.netting.GrossObligation
+    kind: member-repo
+    owner: ax-template
+    rationale: "GrossObligation is a NettingRun member (append-only) but has a repository for the independent cross-check sum; load-through-root is the end-state"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-MEMBER-REPO
+  - from: com.ax.template.authblueprint.netting.NetPositionRepository
+    to:   com.ax.template.authblueprint.netting.NetPosition
+    kind: member-repo
+    owner: ax-template
+    rationale: "NetPosition is a NettingRun member (computed per run+member) but has a repository for position lookup; load-through-root is the end-state"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-MEMBER-REPO
+  # Reclassified ROOT->MEMBER by the 2026-06-08 ralplan re-verification (adversarial refuter,
+  # HIGH finding): these 4 are append-only composition children with a parent-id-scoped
+  # repository, written only through the parent's service, never referenced by their own id —
+  # the exact profile of the 5 above. Each keeps its repository for parent-scoped/version
+  # queries (member-repo), so the load-through-root end-state is the remediation.
+  - from: com.ax.template.authblueprint.transformation.TransformationLegRepository
+    to:   com.ax.template.authblueprint.transformation.TransformationLeg
+    kind: member-repo
+    owner: ax-template
+    rationale: "TransformationLeg is a TransformationRun member (conservation legs); repo is run-id-scoped (findByRunId); load-through-root is the end-state"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-MEMBER-REPO
+  - from: com.ax.template.authblueprint.register.RegisterReadingRepository
+    to:   com.ax.template.authblueprint.register.RegisterReading
+    kind: member-repo
+    owner: ax-template
+    rationale: "RegisterReading is a Register member (append-only readings); repo is register-id-scoped, written under the parent's row lock; load-through-root is the end-state"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-MEMBER-REPO
+  - from: com.ax.template.authblueprint.governedrecord.ChangeRecordRepository
+    to:   com.ax.template.authblueprint.governedrecord.ChangeRecord
+    kind: member-repo
+    owner: ax-template
+    rationale: "ChangeRecord is a GovernedDatum member (attested-change history); repo is datum-id-scoped, written under the datum row lock; load-through-root is the end-state"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-MEMBER-REPO
+  - from: com.ax.template.authblueprint.emailoutbox.EmailTemplateHistoryRepository
+    to:   com.ax.template.authblueprint.emailoutbox.EmailTemplateHistory
+    kind: member-repo
+    owner: ax-template
+    rationale: "EmailTemplateHistory is an EmailTemplate member (immutable version history, like CommentEdit); repo serves history/version lookup; load-through-root is the end-state"
+    expiry: 2026-12-31
+    remediation_ticket: AX-DDD-MEMBER-REPO
+
+# ── governed god-service methods (HG-ANTI-GODSERVICE-TX, spec §6/§8) ────────────
+# @Transactional methods that directly mutate >=2 distinct @AggregateRoot entities.
+# Governed = accepted (event/history-write alongside the aggregate update, or the
+# auth↔user grandfather). The shallow heuristic only catches DIRECT save/delete in
+# the method body — delegation through helpers is a documented limitation (spec §6).
+governed_god_service:
+  - com.ax.template.authblueprint.auth.AuthServiceImpl#resetPassword       # UserEntity + VerificationToken (auth↔user grandfather)
+  - com.ax.template.authblueprint.auth.AuthServiceImpl#verifyEmail         # UserEntity + VerificationToken (auth↔user grandfather)
+  - com.ax.template.authblueprint.billing.BillingService#applyTransition   # Subscription + BillingEvent (BillingEvent is a genuine root: written by providerEventId with no Subscription loaded)
+  - com.ax.template.authblueprint.payment.RefundService#refund             # Payment + Refund (refund mutates payment + creates refund)
+  # NOTE (2026-06-08 ralplan re-verification): TransformationService#record and
+  # EmailTemplateService#upsertTemplate were REMOVED here — reclassifying TransformationLeg /
+  # EmailTemplateHistory as @AggregateMember means those methods now mutate ONE root + its
+  # member (one aggregate), so they are no longer god-services. The fix made the grandfather
+  # unnecessary rather than parking the smell.
+
+# ── governed direct state mutators (HG-STATE-SOLE-MUTATOR, spec §6) ─────────────
+# Non-StateMachine callers of a state-machine-governed entity's setStatus/setState.
+# Payment exposes a PUBLIC setState today (spec §6 notes "Payment는 state"); routing
+# all mutation through PaymentStateMachine is the end-state. Product.setStatus is NOT
+# listed because Product has no ProductStateMachine — the heuristic only checks an
+# entity X when an XStateMachine exists, which avoids the public-setter overblock the
+# spec warns about.
+governed_state_mutators:
+  - com.ax.template.authblueprint.payment.PaymentService -> com.ax.template.authblueprint.payment.Payment#setState
+  - com.ax.template.authblueprint.payment.RefundService -> com.ax.template.authblueprint.payment.Payment#setState

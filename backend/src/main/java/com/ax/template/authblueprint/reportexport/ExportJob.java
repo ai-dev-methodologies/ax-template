@@ -15,6 +15,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * ExportJob — the persistence record for an asynchronous report-export request.
@@ -31,6 +32,7 @@ import java.util.UUID;
  * simplicity. A fork-receiver scaling beyond the 100k row advisory limit should
  * delegate persistence to the file-storage domain instead.
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "export_jobs",

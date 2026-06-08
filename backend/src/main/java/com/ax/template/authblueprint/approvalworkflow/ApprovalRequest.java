@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * ApprovalRequest — the top-level workflow record.
@@ -29,6 +30,7 @@ import java.util.UUID;
  *       {@link ApprovalRequestStateMachine}</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "approval_requests",

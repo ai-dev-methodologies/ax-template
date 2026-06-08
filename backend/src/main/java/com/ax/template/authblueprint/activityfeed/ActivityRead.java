@@ -9,11 +9,13 @@ import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Per-(event, user) read state. Idempotent — UNIQUE(event_id, user_id) backs
  * ACT-MARK-001 'second mark preserves the original timestamp'.
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "activity_reads",

@@ -16,11 +16,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Cart entity — one per user (uk_carts_user). Total is derived from items
  * and recalculated on each mutation (immutable-by-recompute pattern).
  */
+@AggregateRoot
 @Entity
 @Table(name = "carts")
 public class Cart {

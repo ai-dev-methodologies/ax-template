@@ -8,6 +8,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * soft-delete-l0 reference parent entity — a tombstoned, owner-scoped aggregate root with a
@@ -19,6 +20,7 @@ import java.util.UUID;
  * finders rather than {@code @SQLRestriction} — restore / admin / purge MUST read tombstoned rows,
  * which an entity-wide SQL restriction would hide. Spec: specs/soft-delete-l0.yaml.
  */
+@AggregateRoot
 @Entity
 @Table(name = "soft_delete_accounts",
         indexes = @Index(name = "ix_sda_owner", columnList = "owner_id"))

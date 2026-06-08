@@ -8,6 +8,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * soft-delete-l0 reference CHILD entity — a dependent of {@link SoftDeleteAccount}. Cascade
@@ -17,6 +18,7 @@ import java.util.UUID;
  *
  * <p>Spec: specs/soft-delete-l0.yaml#SOFTDELETE-CASCADE-001.
  */
+@AggregateRoot
 @Entity
 @Table(name = "soft_delete_notes",
         indexes = @Index(name = "ix_sdn_account", columnList = "account_id"))

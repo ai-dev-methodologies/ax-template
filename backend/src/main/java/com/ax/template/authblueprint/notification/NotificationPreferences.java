@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Per-user notification channel preferences.
@@ -11,6 +12,7 @@ import jakarta.persistence.Table;
  * Trace: NOTIF-PREF-001 (defaults), NOTIF-PREF-002 (partial update).
  * Keyed by userId (no surrogate key) — one row per user max.
  */
+@AggregateRoot
 @Entity
 @Table(name = "notification_preferences")
 public class NotificationPreferences {

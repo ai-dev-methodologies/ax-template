@@ -10,6 +10,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Append-only ledger row for every webhook + state-machine transition.
@@ -19,6 +20,7 @@ import java.util.UUID;
  *   <li>BILLING-STATE-002 — every TRIAL→ACTIVE writes TRIAL_END; ACTIVE→PAST_DUE writes PAYMENT_FAILED.</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(name = "billing_events")
 public class BillingEvent {

@@ -8,7 +8,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import java.util.ArrayList;
 import java.util.List;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
+@AggregateRoot
 @Entity
 public class Parent {
 

@@ -10,12 +10,14 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Subscription plan template (e.g., "Basic 9900 KRW/MONTH").
  * <p>Trace: BILLING-AUTHZ-003 — admin-managed; BILLING-CUR-001 — amount in
  * integer minor units (won for KRW, cents for USD).
  */
+@AggregateRoot
 @Entity
 @Table(name = "plans")
 public class Plan {

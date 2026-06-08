@@ -11,6 +11,7 @@ import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * DsrRequest — the tracking record for a single data-subject-rights request
@@ -35,6 +36,7 @@ import java.util.UUID;
  * the personal data itself lives in the owning modules and is reached through the
  * {@link PersonalDataProvider} SPI, never copied onto this row.
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "dsr_requests",

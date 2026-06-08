@@ -12,6 +12,7 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Registered scheduled task definition.
@@ -26,6 +27,7 @@ import java.util.UUID;
  * (SCHED-EXECUTE-001 contract: {@code ScheduledTask.lastRun} is touched after
  * a successful run, while {@link JobHistory} records every cycle).
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "scheduled_tasks",

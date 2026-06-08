@@ -10,6 +10,7 @@ import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * dispatch demand unit. Non-contended edges move only through {@link ServiceRequestStateMachine}
@@ -17,6 +18,7 @@ import java.util.UUID;
  * {@link ServiceRequestRepository#claim} (exclusive-assignment-l0 EXCL-CLAIM-001 / EXCL-409-004).
  * {@code id}/{@code description}/{@code createdBy}/{@code createdAt} immutable.
  */
+@AggregateRoot
 @Entity
 @Table(name = "dispatch_requests")
 public class ServiceRequest {

@@ -13,6 +13,7 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * One row per (endpoint, event) delivery. Retries reuse the same row so that
@@ -28,6 +29,7 @@ import java.util.UUID;
  *   <li>WEBHOOK-DEAD-LETTER-002 — admin replay creates a NEW row with a fresh id, leaving this one intact.</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "webhook_deliveries",

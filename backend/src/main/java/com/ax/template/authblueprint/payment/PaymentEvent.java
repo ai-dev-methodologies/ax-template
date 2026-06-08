@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Append-only ledger row. PAYMENT-RECON-001: each event records a sha256
@@ -24,6 +25,7 @@ import java.util.UUID;
  *   <li>A DB-level trigger (V003 migration) raises an exception on UPDATE/DELETE.</li>
  * </ol>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "payment_events",

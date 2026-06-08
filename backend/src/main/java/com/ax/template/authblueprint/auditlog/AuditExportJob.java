@@ -10,6 +10,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Tracks asynchronous export jobs.
@@ -20,6 +21,7 @@ import java.util.UUID;
  * PENDING → PROCESSING → COMPLETED/FAILED), but only the export worker writes
  * to it; never through user-facing controllers.
  */
+@AggregateRoot
 @Entity
 @Table(name = "audit_export_jobs")
 public class AuditExportJob {

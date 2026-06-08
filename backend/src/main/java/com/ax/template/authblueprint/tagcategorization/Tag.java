@@ -9,6 +9,7 @@ import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * Tag — an admin-curated taxonomy entry. {@code slug} is the stable URL-safe identifier
@@ -21,6 +22,7 @@ import java.util.UUID;
  *   <li>TAG-HIER-001 — parentTagId immutable closes the cycle-introduction window</li>
  * </ul>
  */
+@AggregateRoot
 @Entity
 @Table(
     name = "tags",
