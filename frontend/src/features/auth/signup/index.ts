@@ -1,1 +1,2 @@
-// Signup feature placeholder
+// Signup feature — public surface (barrel).
+export { SignupPage } from './SignupPage';

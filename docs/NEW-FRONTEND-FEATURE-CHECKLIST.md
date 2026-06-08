@@ -47,14 +47,18 @@ bash practices-react/evals/lint_own_blocks_guard.sh # catalog blocks satisfy ax/
 bash practices/evals/run-all-guards.sh              # incl. feature_boundary_allowlist
 ```
 
-## 6. Known TIER-2 debt (human-review remediation, not a flipped-rule block)
-The reference frontend ships 3 fat client routes that `ax/no-god-route` surfaces as
-**warnings** (advisory). They are documented debt — remediate by extracting their
-form/business logic + inline UI into `features/auth/*` containers, leaving a thin route:
-- `app/(authenticated)/dashboard/page.tsx` (239 lines)
-- `app/(auth)/signup/page.tsx` (144 lines)
-- `app/(auth)/login/page.tsx` (105 lines)
+## 6. Fat-route TIER-2 debt — REMEDIATED (2026-06-08)
+The 3 fat client routes that `ax/no-god-route` surfaced as advisory warnings have been
+extracted into feature-slice containers, leaving each route a thin 2-line barrel re-export:
+- `app/(authenticated)/dashboard/page.tsx` (239 → 2) → `features/auth/dashboard/DashboardPage.tsx`
+- `app/(auth)/signup/page.tsx` (144 → 2) → `features/auth/signup/SignupPage.tsx`
+- `app/(auth)/login/page.tsx` (105 → 2) → `features/auth/login/LoginPage.tsx`
 
-> These are NOT allowlist grandfather entries (they violate no `error` rule); the size
-> signal is an advisory heuristic (line-count is a gameable proxy — ralplan codex critic),
-> so the route-thin adequacy decision stays human-judgment (TIER-2).
+Each route now `export { XPage as default } from '@/features/auth/<slice>'` — `ax/no-god-route`
+warnings are 0, and the routes obey `no-feature-internal-import` (barrel-only). This is the
+intended end-state: the route is the routing seam; the feature container owns the UI/logic.
+Verified: tsc clean, 24 vitest tests pass, frontend 0 ax errors.
+
+> The pattern: a route delegates to a feature container via its published barrel; the
+> container (in `features/<f>/<slice>/`) is not a route file, so the size heuristic does not
+> apply to it. New features should start in this shape (don't grow a fat route in the first place).

@@ -31,6 +31,7 @@ published_api:
     - "@/features/auth/signup"
     - "@/features/auth/verify-email-result"
     - "@/features/auth/protected-route-guard"
+    - "@/features/auth/dashboard"
 
 # ── exact-path exceptions (no wildcards) ───────────────────────────────────────
 # grandfather / composition deep-imports accepted as explicit debt with expiry +
