@@ -6,7 +6,7 @@ ax = **AI transformation**. This repo is the source of the Claude Code skill
 **`/ax-transform`** and a composition kit you fork to start a new
 project. Every layer of the stack ships with rule-enforcement wired in:
 
-- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (11 ESLint rules) + 99-rule
+- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (14 ESLint rules) + 99-rule
   evidence-anchored catalog (`practices-react/rules/`).
 - **Spring Boot side** — `@Tag`-based JUnit + RestAssured tests
   (`./gradlew test{Domain}`) + 187-rule Java/Spring catalog
@@ -39,7 +39,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-25 L4 domains + 11 active recipes · 187 Java rules · 99 React rules · 11 ESLint rules · 76 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+25 L4 domains + 11 active recipes · 187 Java rules · 99 React rules · 14 ESLint rules · 76 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -66,7 +66,7 @@ loop.
 | Frontend reference workload | `frontend/` — React 19 + Next.js 15, OAuth UI, login pages, e2e Playwright tests | self-tests the ESLint plugin |
 | Java/Spring rule catalog | `practices/` — 187 rules / 22+ categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
 | React/Next.js rule catalog | `practices-react/` — 99 rules / 9 families, citing canonical React 19 / Next.js 16 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
-| ESLint plugin (React enforcement) | `practices-react/eslint-plugin-ax/` — 11 custom rules (incl. 3 frontend-decomposition: cross-feature / layer-direction / published-API-barrel) | RuleTester suites; install in any downstream project |
+| ESLint plugin (React enforcement) | `practices-react/eslint-plugin-ax/` — 14 custom rules (incl. 3 frontend-decomposition: cross-feature / layer-direction / published-API-barrel) | RuleTester suites; install in any downstream project |
 | Spec Trio (per domain) | `specs/<domain>.yaml` + `contracts/<domain>-openapi.yaml` + `blueprints/<domain>-manifest.yaml` | enforced by `spec_ref_guard.sh` — every rule must point to a spec item |
 | 4 hard gates | `practices/evals/{spec_ref,substance,time_decay,evidence}_guard.sh` (Java) + `practices-react/evals/run.sh` (React) | block commits / pushes via `.githooks/{pre-commit,pre-push}` when catalog quality degrades |
 | AGENTS.md sentinel | `practices/AGENTS.md` + `practices-react/AGENTS.md` (sha256-anchored, auto-regenerated) | AI agents read this first; never read stale catalog |
@@ -237,7 +237,7 @@ ax-template/
 ├── practices-react/                # React/Next.js catalog
 │   ├── rules/                      # 99 rule.md files
 │   ├── upstream/                   # External doc snapshots
-│   ├── eslint-plugin-ax/           # @ax/eslint-plugin-ax — 11 ESLint rules
+│   ├── eslint-plugin-ax/           # @ax/eslint-plugin-ax — 14 ESLint rules
 │   ├── evals/                      # 3 hard gates
 │   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)
 │   ├── SKILL.md                    # subsystem skill

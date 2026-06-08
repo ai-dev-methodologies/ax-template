@@ -26,6 +26,7 @@ shared_layers:
 # barrel under them), never a slice's internals.
 published_api:
   auth:
+    - "@/features/auth"
     - "@/features/auth/login"
     - "@/features/auth/signup"
     - "@/features/auth/verify-email-result"

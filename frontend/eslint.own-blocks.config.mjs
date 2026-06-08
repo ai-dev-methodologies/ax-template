@@ -40,6 +40,9 @@ export default [
       'ax/no-cross-feature-deep-import': 'error',
       'ax/no-upward-layer-import': 'error',
       'ax/no-feature-internal-import': 'error',
+      'ax/no-route-client-data-fetching': 'error',
+      'ax/no-server-state-in-local-state': 'warn',
+      'ax/no-god-route': 'warn',
     },
   },
 ]

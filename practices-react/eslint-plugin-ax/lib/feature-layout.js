@@ -87,3 +87,31 @@ export function rankOf(layer) {
   return LAYER_RANK[layer] || 0;
 }
 
+/** Is this a Next.js App Router route file (app/**\/page|layout)? */
+export function isRouteFile(filename) {
+  const n = norm(filename);
+  return /(^|\/)src\/app\/.*\/(page|layout)\.(t|j)sx?$/.test(n) ||
+    /(^|\/)src\/app\/(page|layout)\.(t|j)sx?$/.test(n);
+}
+
+/** Does the program start with a `"use client"` directive? */
+export function hasUseClientDirective(programNode) {
+  const body = programNode && programNode.body;
+  if (!Array.isArray(body)) return false;
+  for (const stmt of body) {
+    if (
+      stmt.type === 'ExpressionStatement' &&
+      stmt.expression &&
+      stmt.expression.type === 'Literal' &&
+      stmt.expression.value === 'use client'
+    ) {
+      return true;
+    }
+    // directives are only at the very top; stop at the first non-directive
+    if (stmt.type !== 'ExpressionStatement' || typeof (stmt.expression && stmt.expression.value) !== 'string') {
+      break;
+    }
+  }
+  return false;
+}
+

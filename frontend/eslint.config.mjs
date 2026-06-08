@@ -28,6 +28,11 @@ const sharedRules = {
   'ax/no-cross-feature-deep-import': 'error',
   'ax/no-upward-layer-import': 'error',
   'ax/no-feature-internal-import': 'error',
+  // TIER-1 (Phase 2): route-thin core at error; the heuristic size/state-boundary
+  // signals ship advisory (warn) per the ralplan codex critic (gameable proxy / honest limit).
+  'ax/no-route-client-data-fetching': 'error',
+  'ax/no-server-state-in-local-state': 'warn',
+  'ax/no-god-route': 'warn',
 }
 
 // Per-persona apps must reuse the shared catalog — enforced only under apps/**.

@@ -17,6 +17,9 @@ import noAppLocalUiPrimitives from './rules/no-app-local-ui-primitives.js'
 import noCrossFeatureDeepImport from './rules/no-cross-feature-deep-import.js'
 import noUpwardLayerImport from './rules/no-upward-layer-import.js'
 import noFeatureInternalImport from './rules/no-feature-internal-import.js'
+import noRouteClientDataFetching from './rules/no-route-client-data-fetching.js'
+import noServerStateInLocalState from './rules/no-server-state-in-local-state.js'
+import noGodRoute from './rules/no-god-route.js'
 
 const plugin = {
   meta: {
@@ -35,6 +38,9 @@ const plugin = {
     'no-cross-feature-deep-import': noCrossFeatureDeepImport,
     'no-upward-layer-import': noUpwardLayerImport,
     'no-feature-internal-import': noFeatureInternalImport,
+    'no-route-client-data-fetching': noRouteClientDataFetching,
+    'no-server-state-in-local-state': noServerStateInLocalState,
+    'no-god-route': noGodRoute,
   },
   configs: {},
 }
@@ -54,6 +60,9 @@ plugin.configs.recommended = {
     'ax/no-cross-feature-deep-import': 'error',
     'ax/no-upward-layer-import': 'error',
     'ax/no-feature-internal-import': 'error',
+    'ax/no-route-client-data-fetching': 'error',
+    'ax/no-server-state-in-local-state': 'warn',
+    'ax/no-god-route': 'warn',
   },
 }
 

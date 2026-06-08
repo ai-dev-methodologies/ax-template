@@ -63,7 +63,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 187 Java rules + 99 React rules + 11 ESLint rules + 76 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 187 Java rules + 99 React rules + 14 ESLint rules + 76 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -108,7 +108,7 @@ catalog 시스템.**
 ### 이 skill이 제공하는 것
 
 1. **Spec Trio** — `specs/` + `contracts/` + `blueprints/`. AI가 코드보다 spec을 먼저 읽도록 강제하는 contract-first 구조. AI 환각 차단의 1차 방어선.
-2. **practices/ catalog** — Java/Spring best-practices 187룰 + practices-react 99룰 + ESLint 11룰. evidence-anchored (외부 URL/quote 필수)라 AI가 임의로 룰을 발명하지 못함.
+2. **practices/ catalog** — Java/Spring best-practices 187룰 + practices-react 99룰 + ESLint 14룰. evidence-anchored (외부 URL/quote 필수)라 AI가 임의로 룰을 발명하지 못함.
 3. **Verification feedback loop** — `./gradlew test{Domain}` 단일 명령으로 binary pass/fail. AI가 자기 결과를 self-verify 가능.
 4. **AGENTS.md sentinel** — AI agent가 진입 시 즉시 컨텍스트 받음. sha256 anchoring으로 catalog와 동기화 보장.
 5. **4 hard gates** — spec_ref / substance / time_decay / evidence. AI 결과물이 외부 사실에 anchor 안 되면 통과 불가.
@@ -119,7 +119,7 @@ catalog 시스템.**
 - **Deployment / release** — 어떻게 배포하든 catalog 품질과 무관
 - **Code review** — 1인 maintainer, 팀 review, AI review 어떤 방식이든 OK
 - **CI 정책** — sentinel CI는 catalog quality probe로만 제공. merge gate 여부는 fork받는 팀이 결정
-- **언어/프레임워크 확장** — Java/Spring 카탈로그(187 rules) + React/Next.js 카탈로그(99 rules + 11 ESLint rules) 둘 다 active. 다른 stack(Kotlin/Go/Python 등) 추가는 동일 패턴 (spec → rule → evidence → test) 따라 확장.
+- **언어/프레임워크 확장** — Java/Spring 카탈로그(187 rules) + React/Next.js 카탈로그(99 rules + 14 ESLint rules) 둘 다 active. 다른 stack(Kotlin/Go/Python 등) 추가는 동일 패턴 (spec → rule → evidence → test) 따라 확장.
 
 → 한 줄: **catalog 품질**은 skill이 보장, **인간 협업 정책**은 fork받은 팀 자율.
 
