@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.ax.template.authblueprint.common.MemberWriter;
 
 /**
  * Variable substitution + versioned-update orchestration for {@link EmailTemplate}.
@@ -30,14 +31,14 @@ public class EmailTemplateService {
     private static final Pattern VAR = Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_]+)\\s*}}");
 
     private final EmailTemplateRepository templateRepository;
-    private final EmailTemplateHistoryRepository historyRepository;
+    private final MemberWriter members;
     private final Clock clock;
 
     public EmailTemplateService(EmailTemplateRepository templateRepository,
-                                 EmailTemplateHistoryRepository historyRepository,
+                                 MemberWriter members,
                                  Clock clock) {
         this.templateRepository = templateRepository;
-        this.historyRepository = historyRepository;
+        this.members = members;
         this.clock = clock;
     }
 
@@ -68,14 +69,14 @@ public class EmailTemplateService {
         Instant now = Instant.now(clock);
         return templateRepository.findById(templateCode)
             .map(existing -> {
-                historyRepository.save(EmailTemplateHistory.snapshot(existing, now));
+                members.persist(EmailTemplateHistory.snapshot(existing, now));
                 existing.applyUpdate(subjectTemplate, bodyTemplate);
                 return templateRepository.save(existing);
             })
             .orElseGet(() -> {
                 EmailTemplate fresh = new EmailTemplate(templateCode, subjectTemplate, bodyTemplate, 1);
                 EmailTemplate saved = templateRepository.save(fresh);
-                historyRepository.save(EmailTemplateHistory.snapshot(saved, now));
+                members.persist(EmailTemplateHistory.snapshot(saved, now));
                 return saved;
             });
     }
@@ -86,7 +87,7 @@ public class EmailTemplateService {
      */
     @Transactional(readOnly = true)
     public EmailTemplateHistory getTemplateAtVersion(String templateCode, int version) {
-        return historyRepository.findByTemplateCodeAndVersion(templateCode, version).orElse(null);
+        return templateRepository.findHistoryAtVersion(templateCode, version).orElse(null);
     }
 
     private static String substitute(String template, Map<String, String> vars) {

@@ -180,7 +180,7 @@ items:
     notes: >
       Test: As approver, create-and-submit 3 requests over time → inbox lists 3 entries, oldest first.
       Approve one entry → it disappears from the inbox (status no longer PENDING). Implementation:
-      ApprovalRequestRepository / ApprovalStepRepository join query filtered by step.approverUserId =
+      ApprovalRequestRepository.findInboxFor (JPQL JOIN from ApprovalStep to its request) filtered by step.approverUserId =
       caller AND step.status = PENDING AND request.status = SUBMITTED.
     policy_ref: "blueprints/approval-workflow-manifest.yaml#query"
 

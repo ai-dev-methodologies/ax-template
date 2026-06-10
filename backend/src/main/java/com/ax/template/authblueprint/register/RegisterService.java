@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.MemberWriter;
 
 /**
  * monotone-register-l0 sole orchestrator. Every append acquires the register row under
@@ -24,14 +25,14 @@ public class RegisterService {
     static final int MEASURE_SCALE = 4;
 
     private final RegisterRepository registers;
-    private final RegisterReadingRepository readings;
+    private final MemberWriter members;
     private final RegisterMetrics metrics;
     private final Clock clock;
 
-    public RegisterService(RegisterRepository registers, RegisterReadingRepository readings,
+    public RegisterService(RegisterRepository registers, MemberWriter members,
                            RegisterMetrics metrics, Clock clock) {
         this.registers = registers;
-        this.readings = readings;
+        this.members = members;
         this.metrics = metrics;
         this.clock = clock;
     }
@@ -93,9 +94,9 @@ public class RegisterService {
                 yield BigDecimal.ZERO.setScale(MEASURE_SCALE);    // baseline reset; no seam consumption
             }
         };
-        long seq = readings.maxSequence(r.getId()) + 1;
+        long seq = registers.maxSequence(r.getId()) + 1;
         String storedReason = kind.isGovernedException() ? reason.strip() : null;
-        RegisterReading row = readings.save(new RegisterReading(UUID.randomUUID(), r.getId(), kind,
+        RegisterReading row = members.persist(new RegisterReading(UUID.randomUUID(), r.getId(), kind,
             read, anchor, delta.setScale(MEASURE_SCALE), seq, storedReason, Instant.now(clock)));
         r.advanceAnchor(read);                                   // anchor := read (under the lock)
         metrics.record(kind.name(), "ok");
@@ -110,7 +111,7 @@ public class RegisterService {
     @Transactional(readOnly = true)
     public BigDecimal totalConsumption(String scopeKey) {
         Register r = registers.findByScopeKey(scopeKey).orElseThrow(RegisterException::notFound);
-        return readings.sumDelta(r.getId()).setScale(MEASURE_SCALE);
+        return registers.sumDelta(r.getId()).setScale(MEASURE_SCALE);
     }
 
     @Transactional(readOnly = true)
@@ -118,7 +119,7 @@ public class RegisterService {
         Register r = registers.findByScopeKey(scopeKey).orElseThrow(RegisterException::notFound);
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 200);
-        return readings.findByRegisterIdOrderBySequenceNoAsc(r.getId(), PageRequest.of(safePage, safeSize));
+        return registers.findReadingsPage(r.getId(), PageRequest.of(safePage, safeSize));
     }
 
     private BigDecimal requireInRange(BigDecimal v, BigDecimal modulus, ReadingKind kind) {

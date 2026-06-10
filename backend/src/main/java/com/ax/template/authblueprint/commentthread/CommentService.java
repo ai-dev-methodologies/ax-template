@@ -21,19 +21,20 @@ import com.ax.template.authblueprint.commentthread.CommentExceptions.CrossEntity
 import com.ax.template.authblueprint.commentthread.CommentExceptions.DeleteForbiddenException;
 import com.ax.template.authblueprint.commentthread.CommentExceptions.EditForbiddenException;
 import com.ax.template.authblueprint.commentthread.CommentExceptions.ParentCommentNotFoundException;
+import com.ax.template.authblueprint.common.MemberWriter;
 
 @Service
 public class CommentService {
 
     private final CommentRepository commentRepository;
-    private final CommentEditRepository editRepository;
+    private final MemberWriter members;
     private final Clock clock;
 
     public CommentService(CommentRepository commentRepository,
-                          CommentEditRepository editRepository,
+                          MemberWriter members,
                           Clock clock) {
         this.commentRepository = commentRepository;
-        this.editRepository = editRepository;
+        this.members = members;
         this.clock = clock;
     }
 
@@ -73,7 +74,7 @@ public class CommentService {
             throw new EditForbiddenException("comment " + id + " is deleted");
         }
         // Capture pre-image BEFORE mutating the parent (COMMENT-HISTORY-001).
-        editRepository.save(new CommentEdit(
+        members.persist(new CommentEdit(
             comment.getId(),
             Instant.now(clock),
             auth.getName(),
@@ -121,7 +122,7 @@ public class CommentService {
             // COMMENT-HISTORY-002: 404 (not 403) for IDOR safety
             throw new CommentNotFoundException(id);
         }
-        List<CommentEditResponse> edits = editRepository.findByCommentIdOrderByEditedAtAsc(id).stream()
+        List<CommentEditResponse> edits = commentRepository.findEditsByCommentId(id).stream()
             .map(CommentEditResponse::from)
             .toList();
         return new CommentHistoryResponse(id, edits);

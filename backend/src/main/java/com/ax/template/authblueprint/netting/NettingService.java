@@ -14,6 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.MemberWriter;
 
 /**
  * collection-conservation-l0 sole orchestrator. {@link #net} reduces a run's directed gross
@@ -28,16 +29,14 @@ public class NettingService {
     static final int MONEY_SCALE = 4;
 
     private final NettingRunRepository runs;
-    private final GrossObligationRepository obligations;
-    private final NetPositionRepository positions;
+    private final MemberWriter members;
     private final NettingMetrics metrics;
     private final Clock clock;
 
-    public NettingService(NettingRunRepository runs, GrossObligationRepository obligations,
-                          NetPositionRepository positions, NettingMetrics metrics, Clock clock) {
+    public NettingService(NettingRunRepository runs, MemberWriter members,
+                          NettingMetrics metrics, Clock clock) {
         this.runs = runs;
-        this.obligations = obligations;
-        this.positions = positions;
+        this.members = members;
         this.metrics = metrics;
         this.clock = clock;
     }
@@ -90,7 +89,7 @@ public class NettingService {
             metrics.record("add", "currency_mismatch");
             throw NettingException.currencyMismatch();
         }
-        GrossObligation o = obligations.save(new GrossObligation(UUID.randomUUID(), run.getId(),
+        GrossObligation o = members.persist(new GrossObligation(UUID.randomUUID(), run.getId(),
             from, to, amount.setScale(MONEY_SCALE), ccy, Instant.now(clock)));
         metrics.record("add", "ok");
         return o;
@@ -104,7 +103,7 @@ public class NettingService {
             metrics.record("net", "already_netted");
             throw NettingException.alreadyNetted();
         }
-        List<GrossObligation> gross = obligations.findByRunId(run.getId());   // each row read once
+        List<GrossObligation> gross = runs.findObligations(run.getId());   // each row read once
         Map<String, BigDecimal> nets = new TreeMap<>();                       // deterministic order
         for (GrossObligation o : gross) {
             nets.merge(o.getToMember(), o.getAmount(), BigDecimal::add);          // creditor: + (received)
@@ -116,13 +115,13 @@ public class NettingService {
             // PER-NODE INDEPENDENT cross-check (NET-PER-NODE-001): re-derive net from repository SUM
             // queries — a DIFFERENT code path than the in-memory merge — so a from/to swap, sign error,
             // or dropped obligation (which the set-wide Σ==0 identity CANNOT detect) is caught here.
-            BigDecimal independent = obligations.sumOwedTo(run.getId(), e.getKey())
-                .subtract(obligations.sumOwedBy(run.getId(), e.getKey())).setScale(MONEY_SCALE);
+            BigDecimal independent = runs.sumOwedTo(run.getId(), e.getKey())
+                .subtract(runs.sumOwedBy(run.getId(), e.getKey())).setScale(MONEY_SCALE);
             if (net.compareTo(independent) != 0) {
                 metrics.record("net", "not_conserved");
                 throw NettingException.notConserved();
             }
-            positions.save(new NetPosition(UUID.randomUUID(), run.getId(), e.getKey(), net));
+            members.persist(new NetPosition(UUID.randomUUID(), run.getId(), e.getKey(), net));
             total = total.add(net);
         }
         if (total.signum() != 0) {           // set-wide closure — a structural identity of the two-legged
@@ -142,13 +141,13 @@ public class NettingService {
     @Transactional(readOnly = true)
     public Page<NetPosition> listPositions(String runKey, int page, int size) {
         NettingRun run = runs.findByRunKey(runKey).orElseThrow(NettingException::notFound);
-        return positions.findByRunIdOrderByMemberAsc(run.getId(), PageRequest.of(clampPage(page), clampSize(size)));
+        return runs.findPositionsPage(run.getId(), PageRequest.of(clampPage(page), clampSize(size)));
     }
 
     @Transactional(readOnly = true)
     public Page<GrossObligation> listObligations(String runKey, int page, int size) {
         NettingRun run = runs.findByRunKey(runKey).orElseThrow(NettingException::notFound);
-        return obligations.findByRunIdOrderByCreatedAtAsc(run.getId(), PageRequest.of(clampPage(page), clampSize(size)));
+        return runs.findObligationsPage(run.getId(), PageRequest.of(clampPage(page), clampSize(size)));
     }
 
     private static int clampPage(int p) { return Math.max(p, 0); }

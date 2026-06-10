@@ -21,6 +21,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.ax.template.authblueprint.common.MemberWriter;
 
 /**
  * R51 — email-outbox L4 compliance tests. 8 spec items / 4 families.
@@ -42,8 +43,8 @@ class EmailOutboxComplianceTest {
         outboxRepository = mock(EmailOutboxRepository.class);
         templateRepository = mock(EmailTemplateRepository.class);
         senderService = mock(EmailSenderService.class);
-        EmailTemplateHistoryRepository historyRepository = mock(EmailTemplateHistoryRepository.class);
-        templateService = new EmailTemplateService(templateRepository, historyRepository, clock);
+        MemberWriter members = mock(MemberWriter.class);
+        templateService = new EmailTemplateService(templateRepository, members, clock);
         service = new EmailOutboxService(outboxRepository, templateService, senderService, clock);
     }
 

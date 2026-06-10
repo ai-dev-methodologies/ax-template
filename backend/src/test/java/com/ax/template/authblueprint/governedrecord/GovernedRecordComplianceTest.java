@@ -29,6 +29,10 @@ import static org.hamcrest.Matchers.equalTo;
 class GovernedRecordComplianceTest {
 
     @LocalServerPort int port;
+    @org.springframework.beans.factory.annotation.Autowired
+    com.ax.template.authblueprint.common.MemberWriter memberWriter;
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.transaction.support.TransactionTemplate txTemplate;
     String member;
 
     @BeforeEach
@@ -181,5 +185,27 @@ class GovernedRecordComplianceTest {
         given().header("Authorization", "Bearer " + member).header("Content-Type", "application/json")
             .body("{\"name\":\"" + name + "\",\"value\":\"2\"}")
         .when().post("/api/governed-data").then().statusCode(409).body("code", equalTo("ATTESTED_DUPLICATE_NAME"));
+    }
+
+
+    // ── wave-4 regression pin — MemberWriter MUST be @Repository so a flush-time constraint
+    //    violation translates to Spring's DataIntegrityViolationException (the deleted
+    //    SimpleJpaRepository proxies provided this; GovernedRecordService's sequence-conflict
+    //    catch -> 409 depends on it). A @Component MemberWriter throws the raw JPA exception
+    //    and this test FAILS. ──
+    @Test @Tag("ATTESTED-SEQ-001")
+    void memberWriter_translatesConstraintViolation_toSpringDataIntegrityViolation() {
+        String id = createDatum("seq-pin-" + UUID.randomUUID(), "v1");
+        UUID datumId = UUID.fromString(id);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                txTemplate.executeWithoutResult(tx -> {
+                    // duplicate (datum, field, sequence) — violates uq_governed_change_seq at flush
+                    memberWriter.persistAndFlush(new ChangeRecord(UUID.randomUUID(), datumId, "value",
+                        99L, "a", "b", "pin", null, "tester", java.time.Instant.now()));
+                    memberWriter.persistAndFlush(new ChangeRecord(UUID.randomUUID(), datumId, "value",
+                        99L, "b", "c", "pin", null, "tester", java.time.Instant.now()));
+                }))
+            .as("flush-time unique violation must surface as Spring's translated exception")
+            .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 }

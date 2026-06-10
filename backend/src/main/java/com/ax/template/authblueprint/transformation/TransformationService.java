@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.MemberWriter;
 
 /**
  * transformation-conservation-l0 sole orchestrator. A record is validated by the pure
@@ -23,14 +24,15 @@ public class TransformationService {
     public record RecordResult(TransformationRun run, List<TransformationLeg> legs) {}
 
     private final TransformationRunRepository runRepo;
-    private final TransformationLegRepository legRepo;
+    private final MemberWriter members;
     private final TransformationMetrics metrics;
     private final Clock clock;
 
-    public TransformationService(TransformationRunRepository runRepo, TransformationLegRepository legRepo,
+    public TransformationService(TransformationRunRepository runRepo,
+                                 MemberWriter members,
                                  TransformationMetrics metrics, Clock clock) {
         this.runRepo = runRepo;
-        this.legRepo = legRepo;
+        this.members = members;
         this.metrics = metrics;
         this.clock = clock;
     }
@@ -49,16 +51,16 @@ public class TransformationService {
             r.totalInput().setScale(MONEY_SCALE), r.totalGood().setScale(MONEY_SCALE),
             r.totalResidual().setScale(MONEY_SCALE), Instant.now(clock)));
         for (ConservationCheck.Leg leg : legs) {
-            legRepo.save(new TransformationLeg(UUID.randomUUID(), runId, leg.role(), leg.disposition(),
+            members.persist(new TransformationLeg(UUID.randomUUID(), runId, leg.role(), leg.disposition(),
                 leg.materialCode(), leg.qty().setScale(MONEY_SCALE), leg.unit().trim()));
         }
         metrics.record("recorded");
-        return new RecordResult(run, legRepo.findByRunIdOrderByRoleAsc(runId, PageRequest.of(0, 200)));
+        return new RecordResult(run, runRepo.findLegsByRunId(runId, PageRequest.of(0, 200)));
     }
 
     @Transactional(readOnly = true)
     public RecordResult get(UUID runId) {
         TransformationRun run = runRepo.findById(runId).orElseThrow(TransformationException::notFound);
-        return new RecordResult(run, legRepo.findByRunIdOrderByRoleAsc(runId, PageRequest.of(0, 200)));
+        return new RecordResult(run, runRepo.findLegsByRunId(runId, PageRequest.of(0, 200)));
     }
 }

@@ -421,3 +421,34 @@ the trigger event, do not relitigate.
 - Follow-ups: AX-DDD-MEMBER-REPO ×9 and AX-DDD-ECOM-COMPOSITION ×1 remain (BACKLOG P0-12~20);
   the auth↔user boundary question "merge into identity?" stays open as a future maintainer call.
 - Commits: (this commit)
+
+## AX-DDD-MEMBER-REPO — retire all 9 member-repository exceptions via root-repo JPQL + MemberWriter
+- Status: ACCEPT
+- Date: 2026-06-10
+- Drivers: The DDD wave grandfathered 9 `member-repo` exceptions (an @AggregateMember entity owning
+  its own Spring Data repository — HG-AGG-REPO): ApprovalStep, CommentEdit, SubjectMember,
+  GrossObligation, NetPosition, TransformationLeg, RegisterReading, ChangeRecord,
+  EmailTemplateHistory. BACKLOG P0-12~20, expiry 2026-12-31. Audit found every repo had exactly ONE
+  service consumer (and ApprovalStepRepository was fully dead — 0 methods, 0 callers).
+- Alternatives considered:
+  - **Per-domain custom repository fragments** (interface + impl ×8) — REJECTED: 16 boilerplate
+    files for what one shared seam expresses.
+  - **Cascade via root @OneToMany collections** — REJECTED: changes entity load semantics
+    (a register's thousands of readings cannot ride on the root), touches mappings catalog-wide.
+  - **Reclassify members back to roots** — REJECTED: the 2026-06-08 adversarial re-verification
+    settled the classifications; reversing them to dodge the guard would be gaming it.
+- Why chosen: **load/mutate-through-root, mechanically.** Member READS become explicit JPQL
+  `@Query` methods on the ROOT's repository (a root-typed interface may query any entity in JPQL;
+  derived method names cannot — they parse against the root type). Member WRITES go through ONE
+  shared seam, `common/MemberWriter` (@Component wrapping EntityManager persist/persistAndFlush/find;
+  precedent: `common/OptimisticLockingSupport` is the same EM-backed kind of helper), called only
+  from the owning root's service inside the root's transaction/lock. The netting INDEPENDENT
+  per-node cross-check (repo-SUM vs in-memory reduction — IDW15's false-backstop lesson) is
+  preserved verbatim as root-repo JPQL. Dead code was deleted, not migrated
+  (ApprovalStepRepository; EmailTemplateHistory's caller-less listing query).
+- Consequences: NO @AggregateMember owns a repository; `DddAllowlistBijectionTest` then FORCED the
+  allowlist cleanup (exceptions 10 → 1 — only the deliberate ecommerce composition remains; the
+  member-repo escape-hatch class is EMPTY). 3 emailoutbox tests migrated to mock the MemberWriter
+  seam. 8 per-domain tasks + testPractices GREEN.
+- Follow-ups: none for P0 — this closes the LAST P0 item (P0 26/26, 100%).
+- Commits: (this commit)

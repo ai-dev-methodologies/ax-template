@@ -24,18 +24,18 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
-| P0 (expiry-bound / live defects) | 26 | 17 | 65% |
+| P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 54 | 0 | 0% |
-| P2 (verification escapes) | 9 | 3 | 33% |
+| P2 (verification escapes) | 10 | 3 | 30% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **120** | **20** | **~17%** |
+| **P0–P3 합계 (수렴 분모)** | **121** | **29** | **~24%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
 
 ## P0 — expiry-bound 부채 + live catalog defects (최우선)
 
-DDD allowlist 예외 잔여 10건(member-repo 9 + ecom-composition 1)은 **expiry 2026-12-31** — 만료 6개월 전(2026-07) 착수 필요.
+DDD allowlist 예외는 **ecom-composition 1건만 잔존** (composition은 설계상 의도된 grandfather; expiry 2026-12-31). **P0 전 항목 closed (2026-06-10).**
 
 - [x] **P0-1 ~ P0-11** AX-DDD-AUTH-USER ×11 — **closed 2026-06-10 (IMW, 3-wave)**:
       (A) RefreshToken/VerificationToken reference-by-id (`@ManyToOne UserEntity` →
@@ -47,9 +47,14 @@ DDD allowlist 예외 잔여 10건(member-repo 9 + ecom-composition 1)은 **expir
       allowlist 예외 21→10; AuthServiceImpl verifyEmail/resetPassword는 더 이상 god-service가
       아니게 되어 governed_god_service 4→2 (bijection이 강제). testPractices+testAsvs(26)+
       smoke E2E GREEN.
-- [ ] **P0-12 ~ P0-20** AX-DDD-MEMBER-REPO ×9 — member-repo 직접 접근 grandfather.
-      Pattern B(visibility 축소)는 예외를 retire하지 못함이 검증됨(HG-AGG-REPO는 visibility-agnostic)
-      — mutate-through-root 감사 후 각 repo에 end-state 결정 필요.
+- [x] **P0-12 ~ P0-20** AX-DDD-MEMBER-REPO ×9 — **closed 2026-06-10 (wave-4)**: 어떤
+      @AggregateMember도 repository를 갖지 않음. member READ는 ROOT repository의 명시적 JPQL
+      @Query로 이관(derived-name은 root 타입에서 파싱 불가), member WRITE는 공유
+      `common/MemberWriter`(EM persist/persistAndFlush/find — OptimisticLockingSupport 전례)
+      seam을 root 서비스가 사용. ApprovalStepRepository는 dead(메서드 0/호출 0)라 단순 삭제.
+      netting의 독립 cross-check(repo-SUM ≠ in-memory 경로)는 root-repo JPQL로 보존.
+      bijection이 allowlist 정리를 강제 — **예외 10→1**(ecom composition만 잔존). 8개
+      per-domain task + testPractices GREEN.
 - [x] **P0-21** IDW11-G4 — **closed 2026-06-10**: provenance-dag 룰에 'edge supersession'
       composition note(정정/종료 = supersedes_edge_id를 단 NEW append row, rollup은 LIVE edge만) +
       temporal-validity 룰에 상호 노트(append-only 아티팩트는 supersession-append로 window 종료,
@@ -156,6 +161,9 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       147/86 노출. **closed 2026-06-10 (이번 wave: counts 187/99 수정 + guard 확장).**
 - [ ] P2-7 practices-react/DECISIONS.md 신설 (Java 측 438줄과 비대칭 — React 룰 provenance 부재).
 - [ ] P2-8 검증 비용 시계열(perf-log.jsonl) + 40-도메인 외삽 시 CI sharding 설계.
+- [ ] P2-10 netting addObligation 입력시 상한 부재 — 한 run의 obligation 무제한 적재 시 잠금
+      트랜잭션 내 unbounded heap (transformation MAX_LEGS 유사 가드 부재; pre-existing,
+      wave-4 review 발견 2026-06-10). 입력시 cap + 422 권장.
 - [x] P2-9 NUMERIC(19,4) overflow seam (catalog-wide) — **closed 2026-06-10**:
       `GlobalProblemDetailAdvice.handleNumericOverflow` — DIVE/TSE/JpaSE wrapper 3종을 검사하되
       root-cause SQLState ∈ {22003(PG), 22001(H2 "Value too long")}일 때만 422

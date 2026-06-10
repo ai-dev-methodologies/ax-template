@@ -20,6 +20,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.ax.template.authblueprint.common.MemberWriter;
 
 /**
  * R60 iter1 F10 closure via Wave D2 — pins versioned-update + immutable
@@ -33,15 +34,15 @@ class EmailTemplateVersioningTest {
     private static final Instant FIXED = Instant.parse("2026-05-27T10:00:00Z");
 
     private EmailTemplateRepository templateRepository;
-    private EmailTemplateHistoryRepository historyRepository;
+    private MemberWriter members;
     private EmailTemplateService service;
 
     @BeforeEach
     void setUp() {
         templateRepository = mock(EmailTemplateRepository.class);
-        historyRepository = mock(EmailTemplateHistoryRepository.class);
+        members = mock(MemberWriter.class);
         Clock clock = Clock.fixed(FIXED, ZoneOffset.UTC);
-        service = new EmailTemplateService(templateRepository, historyRepository, clock);
+        service = new EmailTemplateService(templateRepository, members, clock);
     }
 
     @Test
@@ -55,7 +56,7 @@ class EmailTemplateVersioningTest {
         assertThat(saved.getVersion()).isEqualTo(1);
         assertThat(saved.getSubjectTemplate()).isEqualTo("Hi {{name}}");
         verify(templateRepository).save(any(EmailTemplate.class));
-        verify(historyRepository, times(1)).save(any(EmailTemplateHistory.class));
+        verify(members, times(1)).persist(any(EmailTemplateHistory.class));
     }
 
     @Test
@@ -70,7 +71,7 @@ class EmailTemplateVersioningTest {
         assertThat(saved.getVersion()).isEqualTo(4);
         assertThat(saved.getSubjectTemplate()).isEqualTo("New subject {{name}}");
         assertThat(saved.getBodyTemplate()).isEqualTo("New body");
-        verify(historyRepository).save(any(EmailTemplateHistory.class));
+        verify(members).persist(any(EmailTemplateHistory.class));
     }
 
     @Test
@@ -78,7 +79,7 @@ class EmailTemplateVersioningTest {
     void getTemplateAtVersion_returnsHistoricalSnapshot() {
         EmailTemplateHistory snap = new EmailTemplateHistory(
             UUID.randomUUID(), "welcome", 2, "v2 subject", "v2 body", FIXED);
-        when(historyRepository.findByTemplateCodeAndVersion("welcome", 2)).thenReturn(Optional.of(snap));
+        when(templateRepository.findHistoryAtVersion("welcome", 2)).thenReturn(Optional.of(snap));
 
         EmailTemplateHistory result = service.getTemplateAtVersion("welcome", 2);
 
@@ -90,7 +91,7 @@ class EmailTemplateVersioningTest {
     @Test
     @Tag("EMAIL-TEMPLATE-VERSION-003B")
     void getTemplateAtVersion_missingVersion_returnsNull() {
-        when(historyRepository.findByTemplateCodeAndVersion("welcome", 99)).thenReturn(Optional.empty());
+        when(templateRepository.findHistoryAtVersion("welcome", 99)).thenReturn(Optional.empty());
 
         EmailTemplateHistory result = service.getTemplateAtVersion("welcome", 99);
 
@@ -123,6 +124,6 @@ class EmailTemplateVersioningTest {
 
         assertThat(rendered.subject()).isEqualTo("Hi Alice");
         assertThat(rendered.body()).isEqualTo("Hello Alice, body.");
-        verify(historyRepository, never()).save(any(EmailTemplateHistory.class));
+        verify(members, never()).persist(any(EmailTemplateHistory.class));
     }
 }

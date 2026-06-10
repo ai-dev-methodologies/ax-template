@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.ax.template.authblueprint.common.MemberWriter;
 
 /**
  * R84 — pins the hash format that R60 introduced on EmailOutboxService's
@@ -49,9 +50,9 @@ class EmailOutboxAuditHashTest {
         outboxRepository = mock(EmailOutboxRepository.class);
         EmailTemplateRepository templateRepository = mock(EmailTemplateRepository.class);
         EmailSenderService senderService = mock(EmailSenderService.class);
-        EmailTemplateHistoryRepository historyRepository = mock(EmailTemplateHistoryRepository.class);
+        MemberWriter members = mock(MemberWriter.class);
         Clock clock = Clock.fixed(FIXED, ZoneOffset.UTC);
-        EmailTemplateService templateService = new EmailTemplateService(templateRepository, historyRepository, clock);
+        EmailTemplateService templateService = new EmailTemplateService(templateRepository, members, clock);
         service = new EmailOutboxService(outboxRepository, templateService, senderService, clock);
 
         auditLogger = (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(AUDIT_LOGGER);

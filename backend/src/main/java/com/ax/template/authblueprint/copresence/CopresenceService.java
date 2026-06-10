@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.MemberWriter;
 
 /**
  * negative-copresence-gate-l0 sole orchestrator. {@link #addMember} is THE GATE: under the subject's
@@ -25,13 +26,13 @@ import java.util.UUID;
 public class CopresenceService {
 
     private final SubjectRepository subjects;
-    private final SubjectMemberRepository members;
+    private final MemberWriter members;
     private final ConflictRuleRepository conflicts;
     private final KnownConceptRepository knownConcepts;
     private final CopresenceMetrics metrics;
     private final Clock clock;
 
-    public CopresenceService(SubjectRepository subjects, SubjectMemberRepository members,
+    public CopresenceService(SubjectRepository subjects, MemberWriter members,
                              ConflictRuleRepository conflicts, KnownConceptRepository knownConcepts,
                              CopresenceMetrics metrics, Clock clock) {
         this.subjects = subjects;
@@ -114,7 +115,7 @@ public class CopresenceService {
             metrics.record("member", "unassessable");
             throw CopresenceException.unassessable();
         }
-        List<SubjectMember> active = members.findBySubjectIdAndStatus(s.getId(), MemberStatus.ACTIVE);
+        List<SubjectMember> active = subjects.findMembers(s.getId(), MemberStatus.ACTIVE);
         List<String> absolute = new ArrayList<>();
         List<String> relative = new ArrayList<>();
         for (SubjectMember m : active) {                                  // set-intersection on normalized concept
@@ -142,7 +143,7 @@ public class CopresenceService {
             reason = overrideReason.strip();
             overridden = "RELATIVE:" + String.join(",", relative);        // recorded by reference, bound to row
         }
-        SubjectMember added = members.save(new SubjectMember(UUID.randomUUID(), s.getId(), concept, label,
+        SubjectMember added = members.persist(new SubjectMember(UUID.randomUUID(), s.getId(), concept, label,
             MemberStatus.ACTIVE, reason, overridden, Instant.now(clock)));
         metrics.record("member", overridden == null ? "ok" : "overridden");
         return added;
@@ -151,7 +152,7 @@ public class CopresenceService {
     @Transactional
     public SubjectMember removeMember(String subjectKey, UUID memberId) {
         Subject s = subjects.findBySubjectKeyForUpdate(subjectKey).orElseThrow(CopresenceException::subjectNotFound);
-        SubjectMember m = members.findById(memberId).orElseThrow(CopresenceException::subjectNotFound);
+        SubjectMember m = members.find(SubjectMember.class, memberId).orElseThrow(CopresenceException::subjectNotFound);
         if (!m.getSubjectId().equals(s.getId())) throw CopresenceException.subjectNotFound();  // IDOR-safe 404
         m.markRemoved();
         metrics.record("member", "ok");
@@ -163,6 +164,6 @@ public class CopresenceService {
         Subject s = subjects.findBySubjectKey(subjectKey).orElseThrow(CopresenceException::subjectNotFound);
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 200);
-        return members.findBySubjectIdOrderByCreatedAtAsc(s.getId(), PageRequest.of(safePage, safeSize));
+        return subjects.findMembersPage(s.getId(), PageRequest.of(safePage, safeSize));
     }
 }

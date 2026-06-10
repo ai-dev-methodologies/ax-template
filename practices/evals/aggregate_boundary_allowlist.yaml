@@ -59,77 +59,12 @@ exceptions:
     rationale: "ecommerce is the composition capstone (spec §8); OrderService composes the payment aggregate at checkout"
     expiry: 2026-12-31
     remediation_ticket: AX-DDD-ECOM-COMPOSITION
-  # HG-AGG-REPO (TIER-1): the 5 pre-existing member entities that carry their own
-  # *Repository (spec §6). End-state is root-promotion OR mutate-through-root; kept as
-  # explicit debt because each is queried append-only / by composite key today.
-  - from: com.ax.template.authblueprint.approvalworkflow.ApprovalStepRepository
-    to:   com.ax.template.authblueprint.approvalworkflow.ApprovalStep
-    kind: member-repo
-    owner: ax-template
-    rationale: "ApprovalStep is an ApprovalRequest member but has a repository for ordered step queries; mutate-through-root is the end-state"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-MEMBER-REPO
-  - from: com.ax.template.authblueprint.commentthread.CommentEditRepository
-    to:   com.ax.template.authblueprint.commentthread.CommentEdit
-    kind: member-repo
-    owner: ax-template
-    rationale: "CommentEdit is a Comment member (immutable edit history) but has a repository for history listing; load-through-root is the end-state"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-MEMBER-REPO
-  - from: com.ax.template.authblueprint.copresence.SubjectMemberRepository
-    to:   com.ax.template.authblueprint.copresence.SubjectMember
-    kind: member-repo
-    owner: ax-template
-    rationale: "SubjectMember is a Subject member but has a repository for set-intersection queries; mutate-through-root is the end-state"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-MEMBER-REPO
-  - from: com.ax.template.authblueprint.netting.GrossObligationRepository
-    to:   com.ax.template.authblueprint.netting.GrossObligation
-    kind: member-repo
-    owner: ax-template
-    rationale: "GrossObligation is a NettingRun member (append-only) but has a repository for the independent cross-check sum; load-through-root is the end-state"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-MEMBER-REPO
-  - from: com.ax.template.authblueprint.netting.NetPositionRepository
-    to:   com.ax.template.authblueprint.netting.NetPosition
-    kind: member-repo
-    owner: ax-template
-    rationale: "NetPosition is a NettingRun member (computed per run+member) but has a repository for position lookup; load-through-root is the end-state"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-MEMBER-REPO
-  # Reclassified ROOT->MEMBER by the 2026-06-08 ralplan re-verification (adversarial refuter,
-  # HIGH finding): these 4 are append-only composition children with a parent-id-scoped
-  # repository, written only through the parent's service, never referenced by their own id —
-  # the exact profile of the 5 above. Each keeps its repository for parent-scoped/version
-  # queries (member-repo), so the load-through-root end-state is the remediation.
-  - from: com.ax.template.authblueprint.transformation.TransformationLegRepository
-    to:   com.ax.template.authblueprint.transformation.TransformationLeg
-    kind: member-repo
-    owner: ax-template
-    rationale: "TransformationLeg is a TransformationRun member (conservation legs); repo is run-id-scoped (findByRunId); load-through-root is the end-state"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-MEMBER-REPO
-  - from: com.ax.template.authblueprint.register.RegisterReadingRepository
-    to:   com.ax.template.authblueprint.register.RegisterReading
-    kind: member-repo
-    owner: ax-template
-    rationale: "RegisterReading is a Register member (append-only readings); repo is register-id-scoped, written under the parent's row lock; load-through-root is the end-state"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-MEMBER-REPO
-  - from: com.ax.template.authblueprint.governedrecord.ChangeRecordRepository
-    to:   com.ax.template.authblueprint.governedrecord.ChangeRecord
-    kind: member-repo
-    owner: ax-template
-    rationale: "ChangeRecord is a GovernedDatum member (attested-change history); repo is datum-id-scoped, written under the datum row lock; load-through-root is the end-state"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-MEMBER-REPO
-  - from: com.ax.template.authblueprint.emailoutbox.EmailTemplateHistoryRepository
-    to:   com.ax.template.authblueprint.emailoutbox.EmailTemplateHistory
-    kind: member-repo
-    owner: ax-template
-    rationale: "EmailTemplateHistory is an EmailTemplate member (immutable version history, like CommentEdit); repo serves history/version lookup; load-through-root is the end-state"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-MEMBER-REPO
+  # AX-DDD-MEMBER-REPO ×9 RETIRED 2026-06-10 (BACKLOG P0-12~20): no @AggregateMember
+  # entity owns a repository any more — member READS live as explicit JPQL @Query
+  # methods on the ROOT's repository, member WRITES go through the shared
+  # common/MemberWriter seam from the root's service (mutate/load-through-root reached).
+  # ApprovalStepRepository was dead (0 methods, 0 callers) and simply deleted.
+  # See practices/DECISIONS.md.
 
 # ── governed god-service methods (HG-ANTI-GODSERVICE-TX, spec §6/§8) ────────────
 # @Transactional methods that directly mutate >=2 distinct @AggregateRoot entities.

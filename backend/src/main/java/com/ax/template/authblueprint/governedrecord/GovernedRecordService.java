@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.ax.template.authblueprint.common.MemberWriter;
 
 /**
  * attested-change-record-l0 sole orchestrator. A governed datum's value is mutated ONLY through
@@ -33,18 +34,18 @@ public class GovernedRecordService {
     static final int MAX_HISTORY_PAGE_SIZE = 200;
 
     private final GovernedDatumRepository datumRepo;
-    private final ChangeRecordRepository changeRepo;
+    private final MemberWriter members;
     private final GovernedRecordMetrics metrics;
     private final Clock clock;
     private final Set<String> reasonVocabulary;       // empty => free-text reasons allowed
     private final String reasonVocabularyVersion;     // null => not pinned (only valid when vocab empty)
 
-    public GovernedRecordService(GovernedDatumRepository datumRepo, ChangeRecordRepository changeRepo,
+    public GovernedRecordService(GovernedDatumRepository datumRepo, MemberWriter members,
                                  GovernedRecordMetrics metrics, Clock clock,
                                  @Value("${governed-record.reason-vocabulary:}") String reasonVocabularyCsv,
                                  @Value("${governed-record.reason-vocabulary-version:}") String reasonVocabularyVersion) {
         this.datumRepo = datumRepo;
-        this.changeRepo = changeRepo;
+        this.members = members;
         this.metrics = metrics;
         this.clock = clock;
         this.reasonVocabulary = reasonVocabularyCsv == null || reasonVocabularyCsv.isBlank()
@@ -99,12 +100,12 @@ public class GovernedRecordService {
         }
         GovernedDatum d = datumRepo.findByIdForUpdate(id).orElseThrow(AttestedException::notFound);
         String oldValue = d.getValue();                     // pre-image, read under the lock
-        long seq = changeRepo.maxSequence(id, FIELD_VALUE) + 1;   // monotonic per (datum, field), under the lock
+        long seq = datumRepo.maxSequence(id, FIELD_VALUE) + 1;   // monotonic per (datum, field), under the lock
         String vocabVersion = reasonVocabulary.isEmpty() ? null : reasonVocabularyVersion;
         try {
             // saveAndFlush so the uq_governed_change_seq backstop (if the row lock failed to serialize)
             // surfaces as a deterministic, retryable 409 rather than an opaque 500.
-            changeRepo.saveAndFlush(new ChangeRecord(UUID.randomUUID(), id, FIELD_VALUE, seq, oldValue, newValue,
+            members.persistAndFlush(new ChangeRecord(UUID.randomUUID(), id, FIELD_VALUE, seq, oldValue, newValue,
                 reason, vocabVersion, actor, Instant.now(clock)));
         } catch (DataIntegrityViolationException e) {
             metrics.record("change", "conflict");
@@ -130,6 +131,6 @@ public class GovernedRecordService {
         }
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_HISTORY_PAGE_SIZE);
-        return changeRepo.findByDatumIdOrderBySequenceNoAsc(id, PageRequest.of(safePage, safeSize));
+        return datumRepo.findChangesPage(id, PageRequest.of(safePage, safeSize));
     }
 }
