@@ -384,3 +384,40 @@ the trigger event, do not relitigate.
 - Consequences: AX-DDD-AUDITLOG-ENTITY closed (allowlist 25→21 exceptions). Cross-feature audit writes go through a real published contract, not another aggregate's JPA root. One test migrated (`WebhookCircuitBreakerTest`: captor + 3 accessors entity→DTO; `record(any())`→`record(any(AuditLogDto.class))` to resolve the new overload's ambiguity). `IdentityVerificationFlowIT` (reads persisted `AuditLog` rows) and `AuditLogRecordNonBlockingTest` (aspect path on the entity overload) are unaffected — verified.
 - Follow-ups: AX-DDD-AUTH-USER (defer_imw) and the `@PublishedApi` default-deny flip remain open.
 - Commits: (this commit)
+
+## AX-DDD-AUTH-USER — retire 11 grandfather exceptions via UserAccountService + reference-by-id
+- Status: ACCEPT
+- Date: 2026-06-10
+- Drivers: The DDD decomposition wave grandfathered the deepest coupling in the tree — 11 allowlist
+  exceptions (auth↔user, expiry 2026-12-31): 2 token entities + ProviderLink held `@ManyToOne
+  UserEntity` object pointers, their repositories took `UserEntity` parameters, and
+  AuthServiceImpl/OAuthService imported `UserEntity`/`UserRepository` directly (19+20 touchpoints).
+  BACKLOG P0-1~11; the 2026-06-08 design workflow judged it defer_imw. This IMW closes it.
+- Alternatives considered:
+  - **UserLookupPort (read-only SPI)** — REJECTED. Signup/login/verify/reset MUTATE the User
+    aggregate; a lookup-only port covers none of the load-bearing flows.
+  - **Repository-mirror port** (port methods = UserRepository methods) — REJECTED. A port that
+    mirrors a repository decouples nothing (god-port smell); the entity still leaks via returns.
+  - **Feature merge (auth+user → identity)** — REJECTED for now. A package-physical merge is a
+    repo-wide rename; the port approach achieves the same boundary without the churn.
+- Why chosen: **3-wave mechanical retire.** (A) RefreshToken/VerificationToken reference the User
+  aggregate BY ID — `@ManyToOne UserEntity` becomes `@Column(name="user_id") UUID userId`, which is
+  SCHEMA-IDENTICAL (the JoinColumn name is preserved, so the V028 `REFERENCES users(id)` FK still
+  applies); repositories take `UUID userId`. (B) ProviderLink + ProviderLinkRepository +
+  OAuthProvider relocate user→auth (the OAuth identity-link is auth-domain data) and go by-id the
+  same way. (C) `user.UserAccountService` (@PublishedApi) is the use-case port — authenticate /
+  register / registerOAuthAccount / markEmailVerified / resetPassword / changePassword / findBy* —
+  so hashing AND credential verification live next to the aggregate that stores the hash;
+  `UserAccountDto.hasPassword` replaces the raw `hashedPassword` the old coupling exposed (the only
+  cross-feature question ever asked of the hash outside a credential check is the OAuth unlink
+  guard's "does one exist?"). FEAT-ISOLATION flags only `@Entity`/`*Repository` targets, so the
+  service+DTO dependency is legal with ZERO exceptions.
+- Consequences: allowlist exceptions 21→10 (AX-DDD-AUTH-USER fully retired); `DddAllowlistBijectionTest`
+  then FORCED a second cleanup — AuthServiceImpl#verifyEmail/#resetPassword stopped being
+  god-service-tx (they now touch one aggregate's repo + the port), so governed_god_service shrank
+  4→2. The bijection working exactly as designed: a refactor that removes the smell must also remove
+  its grandfather. 4 test files migrated (setUser→setUserId, findByUserAndTokenType→ById). Behaviour
+  preserved: testAsvs 26/26, testPractices, E2E + OAuth smoke GREEN.
+- Follow-ups: AX-DDD-MEMBER-REPO ×9 and AX-DDD-ECOM-COMPOSITION ×1 remain (BACKLOG P0-12~20);
+  the auth↔user boundary question "merge into identity?" stays open as a future maintainer call.
+- Commits: (this commit)

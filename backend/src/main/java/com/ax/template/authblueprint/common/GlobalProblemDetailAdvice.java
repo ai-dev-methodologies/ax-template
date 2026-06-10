@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
 import java.net.URI;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -14,9 +15,12 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.orm.jpa.JpaSystemException;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -114,6 +118,16 @@ public class GlobalProblemDetailAdvice {
             URI.create("urn:problem:lock-conflict");
     private static final URI CONSENT_REQUIRED_TYPE =
             URI.create("https://errors.example.com/consent-required");
+    private static final URI VALUE_OUT_OF_RANGE_TYPE =
+            URI.create("urn:problem:value-out-of-range");
+    /**
+     * SQL:2016 class-22 subcodes raised when a value's MAGNITUDE does not fit the column:
+     * {@code 22003} "numeric value out of range" (PostgreSQL on NUMERIC overflow) and
+     * {@code 22001} "string data, right truncation" (H2 reports NUMERIC(19,4) overflow as
+     * "Value too long for column" under this state). Both dialects must map to the same 422.
+     */
+    private static final java.util.Set<String> SQL_STATES_VALUE_OUT_OF_RANGE =
+            java.util.Set.of("22003", "22001");
 
     /**
      * {@code @Valid}/{@code @Validated} body-binding failures. Reports EVERY field +
@@ -268,6 +282,35 @@ public class GlobalProblemDetailAdvice {
     }
 
     /**
+     * COMMON value-out-of-range seam → {@code 422 Unprocessable Content}
+     * (code {@code VALUE_OUT_OF_RANGE}; named honestly — SQLState 22001 also covers a
+     * VARCHAR that slipped past {@code @Size}, not only numerics). Every NUMERIC(19,4) domain (register, costshare,
+     * netting, thresholdterminal, …) bounds each INPUT with {@code @Digits(integer=15)},
+     * but the SUM of two in-range values can exceed the column precision — the flush then
+     * raises SQLState {@code 22003} (numeric value out of range), which previously
+     * surfaced as an unmapped 500/403 (BACKLOG P2-9, found by the P0-25 adversarial
+     * review). The wrapper type depends on WHEN the flush happens
+     * ({@link DataIntegrityViolationException} on an explicit flush / JdbcTemplate,
+     * {@link TransactionSystemException} / {@link JpaSystemException} on a commit-time
+     * flush), so all three are inspected — but ONLY a root cause whose SQLState is
+     * {@code 22003} is converted; anything else is rethrown unchanged so this never
+     * masks a genuine integrity violation (unique/check constraints keep their existing
+     * local mappings and the /error flow they had before).
+     */
+    @ExceptionHandler({DataIntegrityViolationException.class,
+                       TransactionSystemException.class,
+                       JpaSystemException.class})
+    public ResponseEntity<ProblemDetail> handleNumericOverflow(Exception ex) throws Exception {
+        if (!hasSqlState(ex, SQL_STATES_VALUE_OUT_OF_RANGE)) {
+            throw ex;                       // not an overflow — preserve the original behaviour
+        }
+        ProblemDetail pd = problem(HttpStatus.UNPROCESSABLE_ENTITY, VALUE_OUT_OF_RANGE_TYPE,
+                "Unprocessable Content", "VALUE_OUT_OF_RANGE",
+                "A value exceeds the column's storable size or precision; reduce the operand magnitude.");
+        return entity(HttpStatus.UNPROCESSABLE_ENTITY, pd);
+    }
+
+    /**
      * COMMON purpose-gated consent failure → {@code 403 Forbidden}
      * (code {@code CONSENT_REQUIRED}). Raised by
      * {@link ConsentGate#requireConsent(String, String, java.util.List)} when a
@@ -288,6 +331,16 @@ public class GlobalProblemDetailAdvice {
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    /** Walk the cause chain for an {@link SQLException} carrying one of the given SQLStates. */
+    private static boolean hasSqlState(Throwable ex, java.util.Set<String> sqlStates) {
+        for (Throwable t = ex; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof SQLException sqle && sqlStates.contains(sqle.getSQLState())) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     private static ResponseEntity<ProblemDetail> validationProblem(List<Map<String, String>> errors) {
         ProblemDetail pd = problem(HttpStatus.BAD_REQUEST, VALIDATION_TYPE, "Validation Failed",

@@ -1,12 +1,17 @@
 package com.ax.template.authblueprint.auth;
 
-import com.ax.template.authblueprint.user.UserEntity;
 import jakarta.persistence.*;
 
 import java.time.Instant;
 import java.util.UUID;
 import com.ax.template.authblueprint.common.AggregateRoot;
 
+/**
+ * References the User aggregate BY ID (DDD reference-by-id — AX-DDD-AUTH-USER retire):
+ * the {@code user_id} column is unchanged from the old {@code @ManyToOne} mapping, so the
+ * V028 FK constraint still applies; only the Java-side object pointer is gone. Callers
+ * resolve the account via the published {@code user.UserAccountService} when needed.
+ */
 @AggregateRoot
 @Entity
 @Table(name = "verification_tokens")
@@ -19,9 +24,8 @@ public class VerificationToken {
     @Column(unique = true, nullable = false)
     private String token;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private UserEntity user;
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
 
     @Column(nullable = false)
     private Instant expiresAt;
@@ -38,8 +42,8 @@ public class VerificationToken {
     public String getToken() { return token; }
     public void setToken(String token) { this.token = token; }
 
-    public UserEntity getUser() { return user; }
-    public void setUser(UserEntity user) { this.user = user; }
+    public UUID getUserId() { return userId; }
+    public void setUserId(UUID userId) { this.userId = userId; }
 
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }

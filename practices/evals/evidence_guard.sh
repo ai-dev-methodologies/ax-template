@@ -8,6 +8,13 @@
 #
 # This gate is the answer to "why was this rule made?" — every rule must be auditable.
 #
+# SCOPE — STRUCTURE, not TRUTH (BACKLOG P2-1): this gate verifies the evidence SHAPE
+# (upstream_id resolves in _MANIFEST.yaml, section/quote/citation/url non-empty). It does
+# NOT verify the quote text actually appears in the snapshot or on the live page — a
+# fabricated quote with valid structure passes. The offline half of that escape is covered
+# by evidence_quote_spotcheck_guard.sh (deterministic quote-vs-snapshot sweep, advisory);
+# the online half (quote-vs-live-page) only a live-fetch audit can verify.
+#
 # Usage:
 #   bash practices/evals/evidence_guard.sh                       # default catalog=practices
 #   bash practices/evals/evidence_guard.sh --catalog practices-react

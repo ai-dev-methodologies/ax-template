@@ -39,7 +39,7 @@ class E2ESmokeTest {
 
         // 2. GET VERIFY TOKEN FROM DB
         var user = userRepository.findByEmail(email).orElseThrow();
-        var vt = tokenRepository.findByUserAndTokenType(user, "VERIFY")
+        var vt = tokenRepository.findByUserIdAndTokenType(user.getId(), "VERIFY")
                 .stream().filter(t -> !t.isUsed()).findFirst().orElseThrow();
 
         // 3. VERIFY EMAIL
@@ -100,7 +100,7 @@ class E2ESmokeTest {
                .andExpect(status().isCreated());
 
         var user = userRepository.findByEmail(email).orElseThrow();
-        var vt = tokenRepository.findByUserAndTokenType(user, "VERIFY")
+        var vt = tokenRepository.findByUserIdAndTokenType(user.getId(), "VERIFY")
                 .stream().filter(t -> !t.isUsed()).findFirst().orElseThrow();
 
         mockMvc.perform(post("/api/auth/email/verify-email").contentType(MediaType.APPLICATION_JSON)

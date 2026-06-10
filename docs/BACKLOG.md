@@ -24,23 +24,29 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
-| P0 (expiry-bound / live defects) | 26 | 1 | 4% |
+| P0 (expiry-bound / live defects) | 26 | 12 | 46% |
 | P1 (generic signature backlog) | 54 | 0 | 0% |
-| P2 (verification escapes) | 9 | 1 | 11% |
+| P2 (verification escapes) | 9 | 3 | 33% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **120** | **2** | **~2%** |
+| **P0–P3 합계 (수렴 분모)** | **120** | **15** | **~13%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
 
 ## P0 — expiry-bound 부채 + live catalog defects (최우선)
 
-DDD allowlist 예외 20건은 **expiry 2026-12-31** — 만료 6개월 전(2026-07) 착수 필요.
+DDD allowlist 예외 잔여 10건(member-repo 9 + ecom-composition 1)은 **expiry 2026-12-31** — 만료 6개월 전(2026-07) 착수 필요.
 
-- [ ] **P0-1 ~ P0-11** AX-DDD-AUTH-USER ×11 — auth↔user cross-aggregate coupling
-      (`practices/evals/aggregate_boundary_allowlist.yaml`). Remediation: `UserLookupPort` SPI 공개
-      → AuthServiceImpl/OAuthService가 port 경유 → token은 reference-by-id. defer_imw 판정
-      (2026-06-08 design workflow) — IMW로 닫는다.
+- [x] **P0-1 ~ P0-11** AX-DDD-AUTH-USER ×11 — **closed 2026-06-10 (IMW, 3-wave)**:
+      (A) RefreshToken/VerificationToken reference-by-id (`@ManyToOne UserEntity` →
+      `@Column(name="user_id") UUID userId` — 스키마 동일, V028 FK 유지) + repo by-id;
+      (B) ProviderLink+Repository+OAuthProvider를 user→auth로 이전(OAuth identity-link는
+      auth-domain data) + by-id; (C) `user.UserAccountService` @PublishedApi use-case port
+      (authenticate/register/registerOAuth/markEmailVerified/resetPassword/changePassword/조회;
+      `UserAccountDto.hasPassword`가 raw hash 노출을 대체 — credential 검증은 aggregate 곁으로).
+      allowlist 예외 21→10; AuthServiceImpl verifyEmail/resetPassword는 더 이상 god-service가
+      아니게 되어 governed_god_service 4→2 (bijection이 강제). testPractices+testAsvs(26)+
+      smoke E2E GREEN.
 - [ ] **P0-12 ~ P0-20** AX-DDD-MEMBER-REPO ×9 — member-repo 직접 접근 grandfather.
       Pattern B(visibility 축소)는 예외를 retire하지 못함이 검증됨(HG-AGG-REPO는 visibility-agnostic)
       — mutate-through-root 감사 후 각 repo에 end-state 결정 필요.
@@ -124,13 +130,16 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 
 ## P2 — verification escapes (검증 체계 자체의 갭)
 
-- [ ] P2-1 **evidence_guard quote-truth 미검증** — 구조만 검사, 본문 대조 없음 → 인용 조작이 전
-      gate 통과 (`evidence_guard.sh:89-116`). Remediation: 헤더에 "STRUCTURE not TRUTH" 명시 +
-      랜덤 N건 snapshot 본문 대조 spot-check guard(advisory) 신설.
+- [x] P2-1 evidence_guard quote-truth 미검증 — **closed 2026-06-10**: evidence_guard 헤더에
+      "STRUCTURE, not TRUTH" 명시 + `evidence_quote_spotcheck_guard.sh` 신설(77th guard,
+      run-all-guards [74]). 랜덤 샘플 대신 **결정적 전수** quote-vs-snapshot 대조(R25 멱등성) —
+      HTML strip + entity/typography 정규화 후 substring. live는 advisory(기존 정합 backlog
+      95/190건 — 대부분 live-page 검증 quote vs partial snapshot digest 불일치), fixtures는
+      --strict로 non-vacuity 증명. 후속: 95건 소진 후 --strict 승격.
 - [ ] P2-2 ESLint warn→error 승격: `no-server-state-in-local-state`, `no-god-route`
       (`eslint-plugin-ax/index.js:64-65`) — 측정 기반 기한 부여.
 - [ ] P2-3 enforcement-surface map 문서화 — commit-blocking / push-blocking / manual 3분류를
-      CLAUDE.md 또는 verify 문서에 명시 (75-guard 전체는 수동 run-all-guards 전용임을 포함).
+      CLAUDE.md 또는 verify 문서에 명시 (77-guard 전체는 수동 run-all-guards 전용임을 포함).
 - [ ] P2-4 R25 체크리스트에 frontend lint 단계 추가 (현재 backend만).
 - [ ] P2-5 aggregate `./gradlew test` advisory의 root-cause(ContextCache isolation) 종결 —
       2g heap pin은 workaround.
@@ -138,10 +147,13 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       147/86 노출. **closed 2026-06-10 (이번 wave: counts 187/99 수정 + guard 확장).**
 - [ ] P2-7 practices-react/DECISIONS.md 신설 (Java 측 438줄과 비대칭 — React 룰 provenance 부재).
 - [ ] P2-8 검증 비용 시계열(perf-log.jsonl) + 40-도메인 외삽 시 CI sharding 설계.
-- [ ] P2-9 NUMERIC(19,4) overflow seam (catalog-wide) — `@Digits(integer=15)` 두 입력의 합이 컬럼
-      정밀도를 넘으면 unmapped DataIntegrityViolation → 500. register/costshare/netting/
-      thresholdterminal 등 모든 NUMERIC(19,4) 도메인 공통. 도메인별 패치가 아니라 공통 가드
-      (service-level bound 또는 공용 advice)로 닫을 것. (P0-25 adversarial review 발견, 2026-06-10)
+- [x] P2-9 NUMERIC(19,4) overflow seam (catalog-wide) — **closed 2026-06-10**:
+      `GlobalProblemDetailAdvice.handleNumericOverflow` — DIVE/TSE/JpaSE wrapper 3종을 검사하되
+      root-cause SQLState ∈ {22003(PG), 22001(H2 "Value too long")}일 때만 422
+      `VALUE_OUT_OF_RANGE`(urn:problem:value-out-of-range)로 매핑, 그 외 rethrow(기존 동작 보존,
+      controller-local DIVE 핸들러 우선순위 유지). E2E proof: thresholdterminal 합산 overflow →
+      422 + rollback 검증. KEY: H2는 NUMERIC overflow를 22001로 보고(22003 아님); RestAssured
+      JsonPath는 15+자리 수를 Double로 파싱(정밀도 손실) → BIG_DECIMAL NumberReturnType 필요.
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 

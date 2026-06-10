@@ -147,6 +147,32 @@ class ThresholdTerminalComplianceTest {
             .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
+    // ── BACKLOG P2-9 — two @Digits-valid operands whose SUM overflows NUMERIC(19,4) must surface
+    //    as a clean 422 NUMERIC_OVERFLOW (common advice, SQLState 22003), never an unmapped 500 ──
+    @Test @Tag("TTD-CROSS-001")
+    void numericOverflow_onAccrualSum_isMapped422_notUnmapped500() {
+        String fifteenNines = "999999999999999";                       // @Digits(integer=15) max
+        String s = createRegister("ttd-" + UUID.randomUUID(), fifteenNines, "0");
+        accrue(s, "999999999999998");                                  // ACTIVE (just below the limit)
+
+        ExtractableResponse<Response> overflow = accrue(s, fifteenNines);   // sum needs 16 digits
+        assertThat(overflow.statusCode())
+            .as("P2-9 — a NUMERIC(19,4) overflow at flush must be a mapped 422, not a 500")
+            .isEqualTo(422);
+        assertThat(overflow.jsonPath().getString("code")).isEqualTo("VALUE_OUT_OF_RANGE");
+
+        // the failed accrual rolled back — the register is untouched and still usable.
+        // (RestAssured's default JsonPath parses big JSON numbers as Double — 15+ digits lose
+        // precision — so this assertion needs the BIG_DECIMAL number return type.)
+        ExtractableResponse<Response> after = getRegister(s);
+        io.restassured.path.json.JsonPath exact = after.body().jsonPath(
+            new io.restassured.path.json.config.JsonPathConfig(
+                io.restassured.path.json.config.JsonPathConfig.NumberReturnType.BIG_DECIMAL));
+        assertThat(new BigDecimal(exact.getString("anchor")))
+            .isEqualByComparingTo("999999999999998");
+        assertThat(exact.getString("status")).isEqualTo("ACTIVE");
+    }
+
     // ── TTD-CHECK-001 — registration guards: limit > 0, anchor in [0, limit) ──
     @Test @Tag("TTD-CHECK-001")
     void registration_rejectsNonPositiveLimit_andAnchorAtOrOverLimit() {

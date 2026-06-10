@@ -43,7 +43,7 @@ class VerificationAsvsTest {
     private VerificationToken createToken(UserEntity user, Instant expiresAt) {
         VerificationToken token = new VerificationToken();
         token.setToken(UUID.randomUUID().toString());
-        token.setUser(user);
+        token.setUserId(user.getId());
         token.setExpiresAt(expiresAt);
         token.setUsed(false);
         token.setTokenType("VERIFY");

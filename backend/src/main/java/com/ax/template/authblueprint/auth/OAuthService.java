@@ -1,6 +1,7 @@
 package com.ax.template.authblueprint.auth;
 
-import com.ax.template.authblueprint.user.*;
+import com.ax.template.authblueprint.user.UserAccountDto;
+import com.ax.template.authblueprint.user.UserAccountService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.*;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
@@ -17,12 +18,17 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
+/**
+ * OAuth login/link flows. The User aggregate is reached ONLY through the published
+ * {@link UserAccountService} port (AX-DDD-AUTH-USER retire); {@link ProviderLink} is
+ * auth-domain data and references the account BY ID.
+ */
 @Service
 public class OAuthService {
 
     private final ClientRegistrationRepository clientRegistrationRepository;
     private final OAuthStateStore stateStore;
-    private final UserRepository userRepository;
+    private final UserAccountService accounts;
     private final ProviderLinkRepository providerLinkRepository;
     private final JwtTokenService jwtTokenService;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -30,14 +36,14 @@ public class OAuthService {
 
     public OAuthService(ClientRegistrationRepository clientRegistrationRepository,
                         OAuthStateStore stateStore,
-                        UserRepository userRepository,
+                        UserAccountService accounts,
                         ProviderLinkRepository providerLinkRepository,
                         JwtTokenService jwtTokenService,
                         RefreshTokenRepository refreshTokenRepository, RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
         this.clientRegistrationRepository = clientRegistrationRepository;
         this.stateStore = stateStore;
-        this.userRepository = userRepository;
+        this.accounts = accounts;
         this.providerLinkRepository = providerLinkRepository;
         this.jwtTokenService = jwtTokenService;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -82,10 +88,10 @@ public class OAuthService {
         String email = extractEmail(provider, userInfo);
 
         OAuthProvider oauthProvider = OAuthProvider.valueOf(provider.toUpperCase());
-        UserEntity user = findOrCreateUser(oauthProvider, providerUserId, email);
+        UserAccountDto user = findOrCreateUser(oauthProvider, providerUserId, email);
 
-        String jwt = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail(), user.getRole().name());
-        String refreshToken = createRefreshToken(user);
+        String jwt = jwtTokenService.generateAccessToken(user.id().toString(), user.email(), user.role().name());
+        String refreshToken = createRefreshToken(user.id());
         addRefreshCookie(response, refreshToken);
 
         return new LoginResponse(jwt, "Bearer", 3600);
@@ -98,32 +104,32 @@ public class OAuthService {
         }
 
         OAuthProvider oauthProvider = OAuthProvider.valueOf(request.provider().toUpperCase());
-        UserEntity user = userRepository.findById(UUID.fromString(userId))
+        UserAccountDto user = accounts.findById(UUID.fromString(userId))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (providerLinkRepository.findByUserAndProvider(user, oauthProvider).isPresent()) {
+        if (providerLinkRepository.findByUserIdAndProvider(user.id(), oauthProvider).isPresent()) {
             throw new IllegalStateException("Provider already linked");
         }
 
         ProviderLink link = new ProviderLink();
-        link.setUser(user);
+        link.setUserId(user.id());
         link.setProvider(oauthProvider);
         link.setProviderUserId("pending-" + UUID.randomUUID());
-        link.setProviderEmail(user.getEmail());
+        link.setProviderEmail(user.email());
         providerLinkRepository.save(link);
     }
 
     @Transactional
     public void unlinkProvider(String userId, String provider) {
         OAuthProvider oauthProvider = OAuthProvider.valueOf(provider.toUpperCase());
-        UserEntity user = userRepository.findById(UUID.fromString(userId))
+        UserAccountDto user = accounts.findById(UUID.fromString(userId))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        ProviderLink link = providerLinkRepository.findByUserAndProvider(user, oauthProvider)
+        ProviderLink link = providerLinkRepository.findByUserIdAndProvider(user.id(), oauthProvider)
                 .orElseThrow(() -> new IllegalStateException("Provider not linked"));
 
-        boolean hasPassword = user.getHashedPassword() != null;
-        long otherProviders = providerLinkRepository.countByUser(user) - 1;
+        boolean hasPassword = user.hasPassword();
+        long otherProviders = providerLinkRepository.countByUserId(user.id()) - 1;
         if (!hasPassword && otherProviders == 0) {
             throw new IllegalStateException("Cannot unlink last authentication method");
         }
@@ -132,9 +138,7 @@ public class OAuthService {
     }
 
     public List<String> getLinkedProviders(UUID userId) {
-        UserEntity user = userRepository.findById(userId).orElse(null);
-        if (user == null) return List.of();
-        return providerLinkRepository.findByUser(user).stream()
+        return providerLinkRepository.findByUserId(userId).stream()
                 .map(link -> link.getProvider().name())
                 .toList();
     }
@@ -215,20 +219,21 @@ public class OAuthService {
         };
     }
 
-    private UserEntity findOrCreateUser(OAuthProvider provider, String providerUserId, String email) {
+    private UserAccountDto findOrCreateUser(OAuthProvider provider, String providerUserId, String email) {
         Optional<ProviderLink> existingLink = providerLinkRepository
                 .findByProviderAndProviderUserId(provider, providerUserId);
 
         if (existingLink.isPresent()) {
-            return existingLink.get().getUser();
+            return accounts.findById(existingLink.get().getUserId())
+                    .orElseThrow(() -> new IllegalStateException("Linked user no longer exists"));
         }
 
-        UserEntity user = (email != null)
-                ? userRepository.findByEmail(email).orElseGet(() -> createOAuthUser(email))
-                : createOAuthUser("oauth-" + UUID.randomUUID() + "@placeholder.local");
+        UserAccountDto user = (email != null)
+                ? accounts.findByEmail(email).orElseGet(() -> accounts.registerOAuthAccount(email))
+                : accounts.registerOAuthAccount("oauth-" + UUID.randomUUID() + "@placeholder.local");
 
         ProviderLink link = new ProviderLink();
-        link.setUser(user);
+        link.setUserId(user.id());
         link.setProvider(provider);
         link.setProviderUserId(providerUserId);
         link.setProviderEmail(email);
@@ -237,19 +242,11 @@ public class OAuthService {
         return user;
     }
 
-    private UserEntity createOAuthUser(String email) {
-        UserEntity user = new UserEntity();
-        user.setEmail(email);
-        user.setRole(UserRole.MEMBER);
-        user.setEmailVerified(true);
-        return userRepository.save(user);
-    }
-
-    private String createRefreshToken(UserEntity user) {
+    private String createRefreshToken(UUID userId) {
         String token = UUID.randomUUID().toString();
         RefreshToken rt = new RefreshToken();
         rt.setToken(token);
-        rt.setUser(user);
+        rt.setUserId(userId);
         rt.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
         rt.setRevoked(false);
         refreshTokenRepository.save(rt);

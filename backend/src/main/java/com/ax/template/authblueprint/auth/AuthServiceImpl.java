@@ -1,14 +1,13 @@
 package com.ax.template.authblueprint.auth;
 
-import com.ax.template.authblueprint.user.UserEntity;
-import com.ax.template.authblueprint.user.UserRepository;
+import com.ax.template.authblueprint.user.UserAccountDto;
+import com.ax.template.authblueprint.user.UserAccountService;
 import com.ax.template.authblueprint.user.UserRole;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,11 +20,16 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Auth flows (signup / login / refresh / verify / reset / logout). The User aggregate is
+ * reached ONLY through the published {@link UserAccountService} port (AX-DDD-AUTH-USER
+ * retire) — auth owns token/JWT/cookie/rate-limit policy; the {@code user} feature owns
+ * account storage and credential verification.
+ */
 @Service
 public class AuthServiceImpl {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final UserAccountService accounts;
     private final JwtTokenService jwtTokenService;
     private final LoginRateLimiter rateLimiter;
     private final VerificationTokenRepository verificationTokenRepository;
@@ -35,8 +39,7 @@ public class AuthServiceImpl {
     private final boolean autoVerifyOnSignup;
     private final boolean allowRoleOverride;
 
-    public AuthServiceImpl(UserRepository userRepository,
-                           PasswordEncoder passwordEncoder,
+    public AuthServiceImpl(UserAccountService accounts,
                            JwtTokenService jwtTokenService,
                            LoginRateLimiter rateLimiter,
                            VerificationTokenRepository verificationTokenRepository,
@@ -45,8 +48,7 @@ public class AuthServiceImpl {
                            @Value("${auth.refresh.grace-window-seconds:30}") long graceWindowSeconds,
                            @Value("${auth.signup.auto-verify:false}") boolean autoVerifyOnSignup,
                            @Value("${auth.signup.allow-role-override:true}") boolean allowRoleOverride) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
+        this.accounts = accounts;
         this.jwtTokenService = jwtTokenService;
         this.rateLimiter = rateLimiter;
         this.verificationTokenRepository = verificationTokenRepository;
@@ -58,42 +60,38 @@ public class AuthServiceImpl {
     }
 
     public List<Map<String, Object>> listAllUsers() {
-        return userRepository.findAll().stream()
+        return accounts.listAll().stream()
                 .map(u -> Map.<String, Object>of(
-                        "userId", u.getId().toString(),
-                        "email", u.getEmail(),
-                        "role", u.getRole().name(),
-                        "emailVerified", u.isEmailVerified()
+                        "userId", u.id().toString(),
+                        "email", u.email(),
+                        "role", u.role().name(),
+                        "emailVerified", u.emailVerified()
                 ))
                 .collect(Collectors.toList());
     }
 
     public UserProfileResponse getProfile(UUID userId) {
-        UserEntity user = userRepository.findById(userId)
+        UserAccountDto user = accounts.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         List<String> linkedProviders = oAuthService.getLinkedProviders(userId);
         return new UserProfileResponse(
-                user.getId().toString(),
-                user.getEmail(),
-                user.getRole().name(),
-                user.isEmailVerified(),
+                user.id().toString(),
+                user.email(),
+                user.role().name(),
+                user.emailVerified(),
                 linkedProviders);
     }
 
     public SignupResponse signup(SignupRequest request) {
         String verificationToken = UUID.randomUUID().toString();
 
-        if (!userRepository.existsByEmail(request.getEmail())) {
-            UserEntity user = new UserEntity();
-            user.setEmail(request.getEmail());
-            user.setHashedPassword(passwordEncoder.encode(request.getPassword()));
-            user.setRole(resolveRole(request.getRole()));
-            user.setEmailVerified(autoVerifyOnSignup);
-            UserEntity saved = userRepository.save(user);
+        if (!accounts.existsByEmail(request.getEmail())) {
+            UserAccountDto saved = accounts.register(request.getEmail(), request.getPassword(),
+                    resolveRole(request.getRole()), autoVerifyOnSignup);
 
             VerificationToken vt = new VerificationToken();
             vt.setToken(verificationToken);
-            vt.setUser(saved);
+            vt.setUserId(saved.id());
             vt.setExpiresAt(Instant.now().plus(24, ChronoUnit.HOURS));
             vt.setUsed(false);
             vt.setTokenType("VERIFY");
@@ -101,7 +99,7 @@ public class AuthServiceImpl {
 
             System.out.println("[AUTH-TOKEN] type=VERIFY email=" + request.getEmail() + " token=" + verificationToken);
 
-            return new SignupResponse(saved.getId().toString(), "Signup successful. Check your email for verification.");
+            return new SignupResponse(saved.id().toString(), "Signup successful. Check your email for verification.");
         }
 
         System.out.println("[AUTH-TOKEN] type=VERIFY email=" + request.getEmail() + " token=" + verificationToken);
@@ -127,26 +125,26 @@ public class AuthServiceImpl {
             throw new RateLimitException("Too many login attempts");
         }
 
-        UserEntity user = userRepository.findByEmail(request.getEmail()).orElse(null);
-        if (user == null || user.getHashedPassword() == null
-                || !passwordEncoder.matches(request.getPassword(), user.getHashedPassword())) {
+        UserAccountDto user = accounts.authenticate(request.getEmail(), request.getPassword())
+                .orElse(null);
+        if (user == null) {
             rateLimiter.recordFailedAttempt(request.getEmail());
             throw new InvalidCredentialsException("Invalid credentials");
         }
 
-        if (!user.isEmailVerified()) {
+        if (!user.emailVerified()) {
             throw new EmailNotVerifiedException("Email not verified");
         }
 
         rateLimiter.clearAttempts(request.getEmail());
 
         String accessToken = jwtTokenService.generateAccessToken(
-                user.getId().toString(), user.getEmail(), user.getRole().name());
+                user.id().toString(), user.email(), user.role().name());
         String refreshToken = UUID.randomUUID().toString();
 
         RefreshToken rt = new RefreshToken();
         rt.setToken(refreshToken);
-        rt.setUser(user);
+        rt.setUserId(user.id());
         rt.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
         rt.setRevoked(false);
         refreshTokenRepository.save(rt);
@@ -177,13 +175,14 @@ public class AuthServiceImpl {
         rt.setRevokedAt(Instant.now());
         refreshTokenRepository.save(rt);
 
-        UserEntity user = rt.getUser();
-        String newAccessToken = jwtTokenService.generateAccessToken(user.getId().toString(), user.getEmail(), user.getRole().name());
+        UserAccountDto user = accounts.findById(rt.getUserId())
+                .orElseThrow(() -> new InvalidRefreshTokenException("Invalid refresh token"));
+        String newAccessToken = jwtTokenService.generateAccessToken(user.id().toString(), user.email(), user.role().name());
         String newRefreshToken = UUID.randomUUID().toString();
 
         RefreshToken newRt = new RefreshToken();
         newRt.setToken(newRefreshToken);
-        newRt.setUser(user);
+        newRt.setUserId(user.id());
         newRt.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
         newRt.setRevoked(false);
         refreshTokenRepository.save(newRt);
@@ -216,18 +215,16 @@ public class AuthServiceImpl {
         vt.setUsed(true);
         verificationTokenRepository.save(vt);
 
-        UserEntity user = vt.getUser();
-        user.setEmailVerified(true);
-        userRepository.save(user);
+        accounts.markEmailVerified(vt.getUserId());
 
         return new VerifyEmailResponse("Email verified successfully");
     }
 
     @Transactional
     public ResendVerificationResponse resendVerification(String email) {
-        UserEntity user = userRepository.findByEmail(email).orElse(null);
-        if (user != null && !user.isEmailVerified()) {
-            verificationTokenRepository.findByUserAndTokenType(user, "VERIFY")
+        UserAccountDto user = accounts.findByEmail(email).orElse(null);
+        if (user != null && !user.emailVerified()) {
+            verificationTokenRepository.findByUserIdAndTokenType(user.id(), "VERIFY")
                     .forEach(t -> {
                         t.setUsed(true);
                         verificationTokenRepository.save(t);
@@ -235,7 +232,7 @@ public class AuthServiceImpl {
 
             VerificationToken newToken = new VerificationToken();
             newToken.setToken(UUID.randomUUID().toString());
-            newToken.setUser(user);
+            newToken.setUserId(user.id());
             newToken.setExpiresAt(Instant.now().plus(24, ChronoUnit.HOURS));
             newToken.setUsed(false);
             newToken.setTokenType("VERIFY");
@@ -247,12 +244,12 @@ public class AuthServiceImpl {
     }
 
     public PasswordResetRequestResponse requestPasswordReset(String email) {
-        UserEntity user = userRepository.findByEmail(email).orElse(null);
+        UserAccountDto user = accounts.findByEmail(email).orElse(null);
         if (user != null) {
             String resetToken = UUID.randomUUID().toString();
             VerificationToken vt = new VerificationToken();
             vt.setToken(resetToken);
-            vt.setUser(user);
+            vt.setUserId(user.id());
             vt.setExpiresAt(Instant.now().plus(1, ChronoUnit.HOURS));
             vt.setUsed(false);
             vt.setTokenType("RESET");
@@ -277,9 +274,7 @@ public class AuthServiceImpl {
         vt.setUsed(true);
         verificationTokenRepository.save(vt);
 
-        UserEntity user = vt.getUser();
-        user.setHashedPassword(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
+        accounts.resetPassword(vt.getUserId(), newPassword);
 
         return new PasswordResetResponse("Password reset successful.");
     }
@@ -302,15 +297,11 @@ public class AuthServiceImpl {
     }
 
     public PasswordChangeResponse changePassword(String userId, String currentPassword, String newPassword) {
-        UserEntity user = userRepository.findById(UUID.fromString(userId))
-            .orElseThrow(() -> new RuntimeException("User not found"));
-
-        if (user.getHashedPassword() == null || !passwordEncoder.matches(currentPassword, user.getHashedPassword())) {
+        // a missing user surfaces from the port's own lookup (IllegalStateException → 500,
+        // same surface as the pre-port RuntimeException) — no second lookup here
+        if (!accounts.changePassword(UUID.fromString(userId), currentPassword, newPassword)) {
             throw new InvalidCredentialsException("Current password is incorrect");
         }
-
-        user.setHashedPassword(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
 
         return new PasswordChangeResponse("Password changed successfully.");
     }

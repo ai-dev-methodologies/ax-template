@@ -32,84 +32,19 @@ published_api: {}
 # grandfather / composition couplings that violate HG-FEAT-ISOLATION (a feature
 # referencing another feature's @Entity / *Repository) but are accepted as
 # explicit debt with an expiry + remediation ticket. Each entry MUST have all
-# keys. The 11 entries below are the COMPLETE set of pre-existing cross-feature
-# @Entity/*Repository references on the 52-package tree (authoritative scan
-# 2026-06-08); recording them is what lets HG-FEAT-ISOLATION run in block mode
+# keys. The original 2026-06-08 authoritative scan recorded 15 cross-feature
+# entries; the auth↔user 11 (AX-DDD-AUTH-USER) and the auditlog 4
+# (AX-DDD-AUDITLOG-ENTITY) have since been RETIRED via published ports —
+# recording the remainder is what lets HG-FEAT-ISOLATION run in block mode
 # while keeping the existing tree GREEN (spec §2 grandfather, §8).
 exceptions:
-  # auth ↔ user — deep grandfather coupling (spec §8: UserEntity / UserRepository
-  # / @ManyToOne FK from RefreshToken & VerificationToken). Remediate via a
-  # published user lookup port + reference-by-id (follow-up IMW).
-  - from: com.ax.template.authblueprint.auth.AuthServiceImpl
-    to:   com.ax.template.authblueprint.user.UserEntity
-    kind: cross-aggregate-ref
-    owner: ax-template
-    rationale: "auth↔user deep grandfather (spec §8) — AuthServiceImpl reads the User aggregate root directly"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
-  - from: com.ax.template.authblueprint.auth.AuthServiceImpl
-    to:   com.ax.template.authblueprint.user.UserRepository
-    kind: cross-aggregate-repo
-    owner: ax-template
-    rationale: "auth↔user deep grandfather (spec §8) — AuthServiceImpl uses UserRepository directly"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
-  - from: com.ax.template.authblueprint.auth.RefreshToken
-    to:   com.ax.template.authblueprint.user.UserEntity
-    kind: cross-aggregate-fk
-    owner: ax-template
-    rationale: "auth↔user deep grandfather (spec §8) — RefreshToken @ManyToOne UserEntity FK"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
-  - from: com.ax.template.authblueprint.auth.RefreshTokenRepository
-    to:   com.ax.template.authblueprint.user.UserEntity
-    kind: cross-aggregate-ref
-    owner: ax-template
-    rationale: "auth↔user deep grandfather (spec §8) — RefreshTokenRepository query parameter type"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
-  - from: com.ax.template.authblueprint.auth.VerificationToken
-    to:   com.ax.template.authblueprint.user.UserEntity
-    kind: cross-aggregate-fk
-    owner: ax-template
-    rationale: "auth↔user deep grandfather (spec §8) — VerificationToken @ManyToOne UserEntity FK"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
-  - from: com.ax.template.authblueprint.auth.VerificationTokenRepository
-    to:   com.ax.template.authblueprint.user.UserEntity
-    kind: cross-aggregate-ref
-    owner: ax-template
-    rationale: "auth↔user deep grandfather (spec §8) — VerificationTokenRepository query parameter type"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
-  - from: com.ax.template.authblueprint.auth.OAuthService
-    to:   com.ax.template.authblueprint.user.UserEntity
-    kind: cross-aggregate-ref
-    owner: ax-template
-    rationale: "auth↔user deep grandfather (spec §8) — OAuthService reads the User aggregate root"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
-  - from: com.ax.template.authblueprint.auth.OAuthService
-    to:   com.ax.template.authblueprint.user.UserRepository
-    kind: cross-aggregate-repo
-    owner: ax-template
-    rationale: "auth↔user deep grandfather (spec §8) — OAuthService uses UserRepository directly"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
-  - from: com.ax.template.authblueprint.auth.OAuthService
-    to:   com.ax.template.authblueprint.user.ProviderLink
-    kind: cross-aggregate-ref
-    owner: ax-template
-    rationale: "auth↔user deep grandfather (spec §8: ProviderLink) — OAuthService manages OAuth provider links on the User aggregate"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
-  - from: com.ax.template.authblueprint.auth.OAuthService
-    to:   com.ax.template.authblueprint.user.ProviderLinkRepository
-    kind: cross-aggregate-repo
-    owner: ax-template
-    rationale: "auth↔user deep grandfather (spec §8: ProviderLinkRepository) — OAuthService uses ProviderLinkRepository directly"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
+  # auth ↔ user exceptions RETIRED 2026-06-10 (AX-DDD-AUTH-USER closed, BACKLOG P0-1~11):
+  # RefreshToken / VerificationToken / ProviderLink now reference the User aggregate BY ID
+  # (user_id column unchanged — V028 FKs intact), ProviderLink+Repository+OAuthProvider
+  # relocated to auth (OAuth identity-link is auth-domain data), and AuthServiceImpl /
+  # OAuthService reach the User aggregate ONLY through the published use-case port
+  # user.UserAccountService (+UserAccountDto exposing hasPassword instead of the raw hash).
+  # See practices/DECISIONS.md.
   # *→auditlog.AuditLog exceptions RETIRED 2026-06-08 (AX-DDD-AUDITLOG-ENTITY closed):
   # the 4 cross-feature callers (DsrService / IdentityVerificationService / SecretService /
   # CircuitBreakerPolicy) now build the published AuditLogDto port and hand it to
@@ -124,16 +59,6 @@ exceptions:
     rationale: "ecommerce is the composition capstone (spec §8); OrderService composes the payment aggregate at checkout"
     expiry: 2026-12-31
     remediation_ticket: AX-DDD-ECOM-COMPOSITION
-  # HG-AGG-REF (TIER-1): cross-aggregate object pointer within the user feature.
-  # ProviderLink (root) holds a @ManyToOne to the UserEntity root; reference-by-id
-  # is the target end-state (part of the auth↔user remediation IMW).
-  - from: com.ax.template.authblueprint.user.ProviderLink
-    to:   com.ax.template.authblueprint.user.UserEntity
-    kind: cross-aggregate-fk
-    owner: ax-template
-    rationale: "ProviderLink @ManyToOne UserEntity — cross-aggregate object pointer inside the user context; remediate to reference-by-id"
-    expiry: 2026-12-31
-    remediation_ticket: AX-DDD-AUTH-USER
   # HG-AGG-REPO (TIER-1): the 5 pre-existing member entities that carry their own
   # *Repository (spec §6). End-state is root-promotion OR mutate-through-root; kept as
   # explicit debt because each is queried append-only / by composite key today.
@@ -212,8 +137,9 @@ exceptions:
 # auth↔user grandfather). The shallow heuristic only catches DIRECT save/delete in
 # the method body — delegation through helpers is a documented limitation (spec §6).
 governed_god_service:
-  - com.ax.template.authblueprint.auth.AuthServiceImpl#resetPassword       # UserEntity + VerificationToken (auth↔user grandfather)
-  - com.ax.template.authblueprint.auth.AuthServiceImpl#verifyEmail         # UserEntity + VerificationToken (auth↔user grandfather)
+  # AuthServiceImpl#resetPassword / #verifyEmail RETIRED 2026-06-10 (AX-DDD-AUTH-USER):
+  # they now touch ONE aggregate's repository (VerificationToken) and reach the User
+  # aggregate through the published UserAccountService port — no longer god-service-tx.
   - com.ax.template.authblueprint.billing.BillingService#applyTransition   # Subscription + BillingEvent (BillingEvent is a genuine root: written by providerEventId with no Subscription loaded)
   - com.ax.template.authblueprint.payment.RefundService#refund             # Payment + Refund (refund mutates payment + creates refund)
   # NOTE (2026-06-08 ralplan re-verification): TransformationService#record and

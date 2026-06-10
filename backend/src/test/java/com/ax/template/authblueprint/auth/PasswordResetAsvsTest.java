@@ -149,7 +149,7 @@ class PasswordResetAsvsTest {
 
         // Get token from DB
         UserEntity user = userRepository.findByEmail("reset@example.com").orElseThrow();
-        List<VerificationToken> tokens = tokenRepository.findByUserAndTokenType(user, "RESET");
+        List<VerificationToken> tokens = tokenRepository.findByUserIdAndTokenType(user.getId(), "RESET");
         assertThat(tokens).isNotEmpty();
         String resetToken = tokens.get(0).getToken();
 

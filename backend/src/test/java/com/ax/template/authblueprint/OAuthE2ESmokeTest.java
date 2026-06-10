@@ -1,7 +1,10 @@
 package com.ax.template.authblueprint;
 
 import com.ax.template.authblueprint.auth.JwtTokenService;
+import com.ax.template.authblueprint.auth.OAuthProvider;
 import com.ax.template.authblueprint.auth.OAuthStateStore;
+import com.ax.template.authblueprint.auth.ProviderLink;
+import com.ax.template.authblueprint.auth.ProviderLinkRepository;
 import com.ax.template.authblueprint.user.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -146,7 +149,7 @@ class OAuthE2ESmokeTest {
 
     private void seedProviderLink(String providerUserId) {
         ProviderLink link = new ProviderLink();
-        link.setUser(user);
+        link.setUserId(user.getId());
         link.setProvider(OAuthProvider.GOOGLE);
         link.setProviderUserId(providerUserId);
         link.setProviderEmail(user.getEmail());

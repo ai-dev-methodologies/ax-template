@@ -1065,6 +1065,14 @@ echo "[73] feature_boundary_allowlist_guard.sh (frontend decomposition spec 2026
 run_guard "feature_boundary_allowlist/live" 0 \
     bash "$SCRIPT_DIR/../../practices-react/evals/feature_boundary_allowlist_guard.sh"
 
+echo "[74] evidence_quote_spotcheck_guard.sh (BACKLOG P2-1 — evidence_guard checks STRUCTURE not TRUTH, so a fabricated quote passes every blocking gate; this deterministic quote-vs-snapshot sweep closes the offline half. ADVISORY live (pre-existing quote<->snapshot misalignment backlog); fixtures prove the checker via --strict.)"
+run_guard "evidence_quote_spotcheck/live" 0 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh"
+run_guard "evidence_quote_spotcheck/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_quote_absent"
+run_guard "evidence_quote_spotcheck/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/pass_quote_present"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
