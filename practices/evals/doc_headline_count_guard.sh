@@ -107,6 +107,36 @@ else
     assert_metric "$PLUGIN_LINE" "rules" "$JAVA_RULES" ".claude-plugin/plugin.json"
 fi
 
+# ── skills/ax-transform/SKILL.md (the /ax-transform entry point) ──────────────
+# The skill entry point is the FIRST document a fork-receiver reads via
+# /ax-transform; its counts rotted to 147/86/70 unguarded (found 2026-06-10).
+SKILL_MD="skills/ax-transform/SKILL.md"
+if [ ! -f "$SKILL_MD" ]; then
+    fail "$SKILL_MD: file missing"
+else
+    SKILL_JAVA_LINE="$(grep -F 'practices/ catalog' "$SKILL_MD" | head -1 || true)"
+    if [ -z "$SKILL_JAVA_LINE" ]; then
+        fail "$SKILL_MD: no 'practices/ catalog (<N> rules ...)' claim found"
+    else
+        assert_metric "$SKILL_JAVA_LINE" "rules" "$JAVA_RULES" "$SKILL_MD practices row"
+    fi
+    SKILL_REACT_LINE="$(grep -F 'practices-react/' "$SKILL_MD" | grep -F 'catalog' | head -1 || true)"
+    if [ -z "$SKILL_REACT_LINE" ]; then
+        fail "$SKILL_MD: no 'practices-react/ catalog (<N> rules ...)' claim found"
+    else
+        assert_metric "$SKILL_REACT_LINE" "rules" "$REACT_RULES" "$SKILL_MD practices-react row"
+    fi
+    SKILL_AGENTS_LINE="$(grep -F 'AI-consumable form' "$SKILL_MD" | head -1 || true)"
+    if [ -n "$SKILL_AGENTS_LINE" ]; then
+        assert_metric "$SKILL_AGENTS_LINE" "rules" "$JAVA_RULES" "$SKILL_MD AGENTS row"
+    fi
+    # every "<N> hard guards" claim anywhere in the skill doc must match disk
+    while IFS= read -r gline; do
+        [ -z "$gline" ] && continue
+        assert_metric "$gline" "hard guards" "$HARD_GUARDS" "$SKILL_MD guard claim"
+    done <<< "$(grep -E '[0-9]+ hard guards' "$SKILL_MD" || true)"
+fi
+
 if [ "$violations" -gt 0 ]; then
     echo "" >&2
     echo "doc_headline_count_guard: $violations headline count(s) disagree with disk truth — BLOCKED" >&2

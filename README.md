@@ -58,6 +58,12 @@ next fork inherits a stronger catalog
 loop.
 ```
 
+> **Convergence note (2026-06-10).** 17 industry dogfood waves each surfaced a NEW correctness
+> signature — so "zero gaps" is empirically non-terminating. The catalog's terminal goal is now
+> measured as **backlog convergence** against the canonical [`docs/BACKLOG.md`](docs/BACKLOG.md)
+> (P0–P3 closure rate); opening NEW industry discovery is frozen until convergence ≥ 70%.
+> Spec-ing and closing items already in the backlog remains normal, encouraged catalog growth.
+
 ## What ships in the composition kit
 
 | Layer | Asset | Mechanism |

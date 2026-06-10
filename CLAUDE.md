@@ -53,6 +53,19 @@ Full process: `skills/ax-ledger/SKILL.md`.
 
 ---
 
+## 🪙 ultracode / multi-agent 실행 시 토큰 효율화 (STANDING)
+
+ultracode(Workflow 멀티에이전트 오케스트레이션)로 요청받은 작업은 **서브태스크별로 모델과
+추론(reasoning) 수준을 작업 난이도에 맞게 선택**한다. 전부 최상위 모델로 돌리지 않는다:
+
+- 기계적 수집 / grep / 카운트 검증 → `haiku`
+- 표준 분석 / 리뷰 렌즈 → `sonnet`
+- 아키텍처 판단 / adversarial challenge / 최종 synthesis → `opus` (또는 세션 모델 상속)
+- 렌즈 수·verify 투표 수도 작업 크기에 비례시킨다 (간단 확인 1–2 lens, "철저히"일 때만 5-lens+다수결)
+- 위임한 탐색을 메인 루프에서 중복 수행하지 않는다 (결과만 사용)
+
+---
+
 ## ⭐ Project Vision (READ FIRST — 절대 잊지 말 것)
 
 **ax-template은 React (front) + Spring Boot (backend) full-stack 개발의
@@ -88,6 +101,18 @@ loop
    product 메트릭으로 평가하지 않는다.
 4. **`/react-best-practices` 스타일 코드 템플릿 + 강력한 규칙 + 명확한 개발
    방향** = 어떤 개발이든 이 템플릿과 규칙 내에서만 동작하는 코드 생성.
+
+**종착점 (north star) — 2026-06-10 재정의:**
+
+- **(1) 기계적 강제**: 룰/정책/템플릿 밖 구현 0 허용 — 자체 HEAD에서는 4 hard gates +
+  hard guards + per-domain task + R25로 달성·유지. fork-receiver 측 강제는 vision상
+  영구 optional(자율성 원칙) — 이 비대칭은 결함이 아니라 설계다.
+- **(2) backlog convergence** (구 "100% 완전성"의 재정의): 17개 산업 dogfood(IDW1-17)가
+  매 산업 새 correctness signature를 발견함으로써 "갭 0"은 비종결적임이 경험적으로
+  증명되었다. 따라서 종착점은 **`docs/BACKLOG.md`(canonical backlog)의 P0–P3 수렴률**로
+  측정한다. **신규 산업 dogfood(IDW18+)는 수렴률 ≥ 70% 전까지 동결.** 원칙 2와의 관계:
+  backlog 내 항목의 spec화·구현·룰 추가는 계속 정상 활동이다 — 동결 대상은 *새 산업을
+  열어 새 signature를 찾는 행위*뿐.
 
 → 한 줄: **Korean enterprise standard stack (React + Spring Boot) 위에 AI agent가
 규칙 안에서만 동작하는 코드를 짤 수 있게 하는 composition kit + 자체 강화
