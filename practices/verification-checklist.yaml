@@ -218,6 +218,9 @@ checklist:
       - command: "./gradlew testThresholdTerminal"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testDecisionGov"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testIntegration"
         working_directory: "backend"
         expected_exit: 0

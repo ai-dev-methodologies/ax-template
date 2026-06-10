@@ -1,0 +1,86 @@
+version: "0.1.0"
+scope: "decision-governance-l0 — the generalized GOVERNED COMPUTED DECISION. A system-computed determination (an insurance premium quote, a credit limit, a price/rate calculation, a risk score, an eligibility verdict) MUST (1) SNAPSHOT the basis it was computed from — inputs, assumptions, method/rate-table version — immutably at decision time, with enough fidelity that a qualified peer could re-appraise the determination; (2) treat RECOMPUTATION as a NEW appended version (monotonic per scope) carrying a mandatory reason — never an overwrite of the prior determination; (3) gate a MANUAL OVERRIDE behind a recorded justification AND a four-eyes approver distinct from the requester (separation of duty), DB-backstopped; (4) keep the whole version chain reconstructible with the latest determination cheaply addressable; (5) serialize concurrent re-determinations on the scope's row lock so version slots are never lost or duplicated. The IDW10 insurance dogfood found the catalog had NO decision-governance primitive: attested-change-record governs FIELD edits on a datum (who/when/old/new/reason) but not the COMPUTED-DETERMINATION shape (basis snapshot + versioned re-determination + four-eyes override); approval-workflow routes a REQUEST through approvers but does not version a computed value or pin its basis. Realized by the decisiongov reference workload (com.ax.template.authblueprint.decisiongov). Recurs in: insurance quoting/rating, credit decisioning, payroll calculation, tax assessment, dynamic pricing, benefit eligibility, clinical risk scores — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only immutable version rows + @Version optimistic + PESSIMISTIC_WRITE row lock + @Check four-eyes/reason backstops) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "ASOP No. 41 §3.2 (Actuarial Communications — findings + methods/procedures/assumptions/data identified so a qualified peer can objectively appraise; the canonical decision-basis-documentation formalization) + NIST SP 800-192 Separation of Duty (no user should be given enough privileges to misuse the system on their own — the four-eyes anchor) + CWE-362 (concurrent re-determination race) + RFC 9457 + RFC 9110 §15.5.21 (422) / §15.5.10 (409)"
+domain_mode: backend_only
+introduced_at: "IDW10 2026-06-07 insurance dogfood (decision-governance trio G1/G2/G8 + IDW16-G2 override-with-justification; built 2026-06-10 — BACKLOG P1-1~4)"
+
+# OPT-IN decision-governance catalog. The IDW10 flagship gap cluster: the catalog
+# governs MUTATIONS (attested-change) and REQUEST ROUTING (approval-workflow) but
+# never the COMPUTED DETERMINATION itself — what it was based on, how it may be
+# re-determined, and who may overrule it. Generic; the insurance-quote framing is
+# the anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. DG-BASIS-001      (the primitive — the decision carries its appraisal-sufficient basis, immutably)
+#   2. DG-RECOMPUTE-001  (re-determination = NEW version + mandatory reason; never overwrite)
+#   3. DG-OVERRIDE-001   (manual override = justification + four-eyes approver ≠ requester, DB-backstopped)
+#   4. DG-CHAIN-001      (monotonic per-scope version chain; latest cheaply addressable; duplicates unrepresentable)
+#   5. DG-CONCURRENT-001 (keystone — concurrent re-determinations serialize on the scope row lock)
+
+# ── Composition note ──
+# DISTINCT from attested-change-record (governs a FIELD edit's who/when/old/new/reason
+# on an existing datum — no basis snapshot, no version-as-determination, no four-eyes)
+# and approval-workflow (routes a REQUEST through ordered approvers — the artifact is
+# the approval, not a versioned computed value). The version rows are @AggregateMember
+# of the DecisionScope root: reads live as JPQL on the root's repository and writes go
+# through the shared common/MemberWriter seam (AX-DDD-MEMBER-REPO end-state, applied
+# from birth). The four-eyes inequality is DB-backstopped via @Check so it holds even
+# under ddl-auto.
+
+items:
+  - id: "DG-BASIS-001"
+    chapter: "A computed decision snapshots its basis immutably at decision time"
+    verification:
+      mechanism: rule
+      ref: computed-decision-versioned-basis-and-four-eyes-override
+    requirement: "Every computed decision version MUST persist, in the SAME transaction as the decision itself, a basis snapshot (the inputs, assumptions, and method/rate-table version it was computed from — appraisal-sufficient in the ASOP 41 §3.2 sense: a qualified peer could re-assess the determination from the record alone) as an IMMUTABLE column (`@Column(updatable=false)`, no setter). A decision row whose basis is blank MUST be rejected (422). The basis of a committed version is never edited — a corrected basis is a RECOMPUTE (new version), preserving what the original determination was actually based on."
+    test_method: "RestAssured (compute with basis → 201, basis persisted verbatim; blank basis → 400 (bean validation @NotBlank at the boundary); structural: basisJson @Column(updatable=false))"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (ASOP No. 41 §3.2): "the actuary should state the actuarial
+      findings, and identify the methods, procedures, assumptions, and data used
+      by the actuary with sufficient clarity that another actuary qualified in
+      the same practice area could make an objective appraisal of the
+      reasonableness of the actuary's work"
+      (http://www.actuarialstandardsboard.org/asops/actuarial-communications/)
+  - id: "DG-RECOMPUTE-001"
+    chapter: "Re-determination is a NEW appended version with a mandatory reason — never an overwrite"
+    requirement: "Re-computing a decision (new inputs, corrected data, updated rate table) MUST append a NEW version row (kind=RECOMPUTED, version = current + 1) carrying its OWN basis snapshot and a mandatory non-blank reason; a blank reason is rejected (422, code DECISION_REASON_REQUIRED) BEFORE any change commits. The prior version row is NEVER updated or deleted — every column of a committed version is immutable, so the chain preserves what was decided, on what basis, at every point in time."
+    test_method: "RestAssured (recompute with reason → 201 v2, v1 intact and unchanged; blank reason → 422; structural: version rows fully @Column(updatable=false), no public setters)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The supersession posture of attested-change-record applied to whole
+      determinations: correction-by-append, not correction-by-overwrite.
+  - id: "DG-OVERRIDE-001"
+    chapter: "A manual override requires a justification AND a four-eyes approver distinct from the requester"
+    requirement: "A MANUAL override of a computed decision (a human substituting the outcome) MUST record (a) a mandatory non-blank justification and (b) a four-eyes approver whose identity is REQUIRED and MUST differ from the requesting actor — a missing approver or approver == actor is rejected (422, code DECISION_FOUR_EYES_REQUIRED) with nothing committed. The inequality MUST be DB-backstopped via @Check ((kind <> 'OVERRIDE') OR (approved_by IS NOT NULL AND approved_by <> decided_by)) so a code path that forgets the gate fails at flush even under ddl-auto. The override row records the basis of the version it overrode (what the human deviated FROM), the new outcome, and both identities — the decision trail stays appraisal-complete."
+    test_method: "RestAssured (override with approver≠actor + reason → 201 kind=OVERRIDE; approver==actor → 422; missing approver → 4xx; blank reason → 422; violation-proof: native write past the @Check → constraint violation)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-192, Separation of Duty): "No user should be
+      given enough privileges to misuse the system on their own. For example,
+      the person authorizing a paycheck should not also be the one who can
+      prepare them." (https://csrc.nist.gov/glossary/term/separation_of_duty)
+      Closes IDW16-G2 override-with-justification in the same mechanism.
+  - id: "DG-CHAIN-001"
+    chapter: "The per-scope version chain is strictly monotonic, fully reconstructible, and the latest is cheaply addressable"
+    requirement: "Versions are strictly monotonic per scope starting at 1 with no gaps in the committed chain's ORDER (each committed version is exactly predecessor + 1); a duplicate (scope, version) MUST be unrepresentable (UNIQUE constraint). The scope root carries the current version so the latest determination is addressable without scanning the chain, and the root's stored current version MUST always equal the maximum committed version row. The full chain (every version with kind/basis/reason/identities/timestamps) is retrievable in version order, paginated."
+    test_method: "RestAssured (compute+recompute+override → versions 1,2,3 in order; GET latest == v3; GET versions pages the chain; structural: uq(scope_id, version_no) in entity + migration)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The chain IS the audit artifact; the root's currentVersion is the
+      denormalized latest pointer kept consistent under the same lock.
+  - id: "DG-CONCURRENT-001"
+    chapter: "Keystone — concurrent re-determinations serialize on the scope row lock"
+    requirement: "Across ANY interleaving of concurrent recomputes/overrides on ONE scope, version slots MUST be neither lost nor duplicated (CWE-362): every re-determination acquires the scope row under PESSIMISTIC_WRITE, reads the current version, appends current+1, and advances the root — so N concurrent re-determinations commit exactly N distinct consecutive versions and the final current version equals initial + N. No re-determination computes its version from a stale read."
+    test_method: "RestAssured concurrency proof (N concurrent recomputes via ExecutorService → exactly N new versions, all distinct and consecutive, root currentVersion == initial + N)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The same serialization shape as register/threshold — the scope row is the
+      single serialization point for the version counter.

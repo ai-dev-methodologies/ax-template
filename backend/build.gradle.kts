@@ -175,6 +175,12 @@ tasks.register<Test>("testCopresence") {
     }
 }
 
+tasks.register<Test>("testDecisionGov") {
+    useJUnitPlatform {
+        includeTags("DECISIONGOV")
+    }
+}
+
 tasks.register<Test>("testThresholdTerminal") {
     useJUnitPlatform {
         includeTags("THRESHOLD_TERMINAL")

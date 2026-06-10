@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 54 | 0 | 0% |
+| P1 (generic signature backlog) | 54 | 4 | 7% |
 | P2 (verification escapes) | 10 | 3 | 30% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **121** | **29** | **~24%** |
+| **P0–P3 합계 (수렴 분모)** | **121** | **33** | **~27%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -88,10 +88,15 @@ DDD allowlist 예외는 **ecom-composition 1건만 잔존** (composition은 설�
 R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.*
 
 **결정-거버넌스 / 변경-통제 계열**
-- [ ] P1-1 IDW10 decision-governance trio: 산정-근거 보존(quote-basis snapshot)
-- [ ] P1-2 IDW10 decision-governance: 재산정 시 버전·사유 강제
-- [ ] P1-3 IDW10 decision-governance: 수동 override 시 4-eyes + 근거
-- [ ] P1-4 IDW16-G2 override-with-justification (gate 무시 시 정당화 기록 — EMR/금융 공통)
+- [x] P1-1~3 IDW10 decision-governance trio — **closed 2026-06-10 (wave-5)**:
+      `specs/decision-governance-l0.yaml`(5 items DG-BASIS/RECOMPUTE/OVERRIDE/CHAIN/CONCURRENT) +
+      rule `computed-decision-versioned-basis-and-four-eyes-override`(Java 189; ASOP 41 §3.2 +
+      NIST SP 800-192 SOD live-fetch) + `decisiongov` 도메인 — basis 불변 스냅숏, 재산정=reason
+      필수 append(덮어쓰기 불가), override=정당화+4-eyes(approver≠actor, **@Check DB-backstop**),
+      8-thread 동시성 keystone. MEMBER-REPO end-state를 탄생부터 적용(MemberWriter+root JPQL).
+      testDecisionGov GREEN.
+- [x] P1-4 IDW16-G2 override-with-justification — **closed 2026-06-10**: 동일 메커니즘
+      (DG-OVERRIDE-001의 justification 강제)이 gate-무시 정당화 기록을 포괄.
 - [ ] P1-5 IDW16-G4 executed-matches-authorized (집행본 ↔ 승인본 일치 검증)
 - [ ] P1-6 IDW17 four-eyes-signoff (서명 2인 분리, approval-workflow의 일반화)
 - [ ] P1-7 IDW12-G4 reproducible-draw (감사 가능한 난수 추출 = capability-token의 negative)
