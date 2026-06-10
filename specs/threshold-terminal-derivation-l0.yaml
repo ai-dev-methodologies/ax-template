@@ -1,0 +1,82 @@
+version: "0.1.0"
+scope: "threshold-terminal-derivation-l0 — the generalized VALUE-CROSSES-CEILING terminal. A per-key cumulative register carries a mandatory LIMIT (life-limit / usage ceiling); the accrual that makes the anchor reach or cross the limit MUST, in the SAME transaction, drive the aggregate into an IRREVERSIBLE terminal lifecycle state (zero outgoing edges), after which (a) further accrual is rejected and (b) a DERIVED capability that depends on the aggregate being live (install / dispatch / use) is rejected fail-closed by consulting that same state. The invariant is DB-backstopped: @Check (anchor < limit OR status terminal) — there is never a committed row whose anchor ≥ limit while the lifecycle is live. The IDW17 aviation/MRO dogfood proved the catalog has NO threshold→terminal derivation: monotone-register accrues without any ceiling semantics (its modulus WRAPS — the opposite of terminal), accumulator-consume floors at zero and rejects per-call (no lifecycle conversion), shared-counter-claim refuses past a cap but stays live (retryable, reversible), and the FSM rules govern transitions but never DERIVE one from a value crossing. The new thing: a VALUE fact is converted into an irreversible LIFECYCLE fact atomically, and a second, derived read-path is blocked by it. Realized by the thresholdterminal reference workload (com.ax.template.authblueprint.thresholdterminal). Recurs in: aviation life-limited parts (cycles/hours), driver hours-of-service caps, radiation dosimetry limits, tool calibration-use counts, warranty usage caps, exam attempt limits, prepaid hard stops — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (@Version optimistic + PESSIMISTIC_WRITE row lock + @Check live ceiling/terminal backstop) + exact BigDecimal (NUMERIC(19,4)) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "US 14 CFR §43.10 (life-limited parts — mandatory replacement limit + life status; the canonical crossing-means-retirement formalization) + CWE-362 (race between the crossing accrual, late accrual, and the derived use) + java.time.Clock + RFC 9457 + RFC 9110 §15.5.21 (422) / §15.5.10 (409)"
+domain_mode: backend_only
+introduced_at: "IDW17 2026-06-08 aviation/MRO dogfood (spec rescued to disk 2026-06-10 — BACKLOG P0-25)"
+
+# OPT-IN threshold-terminal catalog. The IDW17 flagship signature
+# ("value-crosses-ceiling → irreversible terminal + derived block"): the catalog
+# reasons about monotone accrual, caps that REJECT, and FSMs whose transitions are
+# commanded by callers — but never a transition DERIVED from a value crossing,
+# fused into the crossing write, with a second read-path blocked by it. Generic;
+# the life-limited-part framing is the anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. TTD-CROSS-001    (the primitive — the crossing accrual drives terminal in the SAME tx)
+#   2. TTD-TERMINAL-001 (terminal is irreversible — zero outgoing edges; late accrual rejected)
+#   3. TTD-DERIVE-001   (the derived capability consults the SAME state — fail-closed once terminal)
+#   4. TTD-CHECK-001    (DB backstop — @Check (anchor < limit OR terminal) holds even under ddl-auto)
+#   5. TTD-CONCURRENT-001 (keystone — crossing vs late accrual vs derived use serialize on the row lock)
+
+# ── Composition note ──
+# DISTINCT from monotone-register (no ceiling; modulus WRAP continues accrual),
+# accumulator-consume (per-call floor/reject, no lifecycle conversion),
+# shared-counter-claim (cap refusal is retryable and the aggregate stays live), and
+# the FSM sole-mutator rules (transitions are caller-commanded, not value-derived).
+# The crossing accrual is accepted ONCE (it may overshoot the limit — the real
+# world does not stop mid-flight); everything AFTER the crossing is rejected.
+
+items:
+  - id: "TTD-CROSS-001"
+    chapter: "The accrual that reaches/crosses the limit drives the terminal state in the SAME transaction"
+    verification:
+      mechanism: rule
+      ref: limit-crossing-drives-irreversible-terminal-and-blocks-derived-use
+    requirement: "Every threshold register MUST carry a mandatory limit (> 0) fixed at registration. An accrual posted under the register's row lock (PESSIMISTIC_WRITE) that makes the anchor reach or exceed the limit (anchor + delta ≥ limit) MUST be ACCEPTED (the crossing accrual — the real world does not stop mid-use, so overshoot is recorded exactly) AND, in the SAME transaction, MUST drive the aggregate's lifecycle to the terminal state (EXPIRED). There MUST be no committed intermediate state in which the anchor is ≥ limit while the lifecycle is still live — the crossing write and the terminal transition are ONE atomic fact. The crossing response MUST expose the terminal status so the caller learns the retirement immediately (200 with status=EXPIRED, not a separate poll)."
+    test_method: "RestAssured (accrual below limit → 200 ACTIVE; the crossing accrual → 200 status=EXPIRED, anchor advanced with exact overshoot; row re-read shows EXPIRED in the same response cycle)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The primitive — a VALUE fact becomes a LIFECYCLE fact atomically.
+      Quote anchor (14 CFR §43.10(a)): "Life-limited part means any part for
+      which a mandatory replacement limit is specified in the type design, the
+      Instructions for Continued Airworthiness, or the maintenance manual."
+      (https://www.ecfr.gov/current/title-14/chapter-I/subchapter-C/part-43/section-43.10)
+  - id: "TTD-TERMINAL-001"
+    chapter: "Terminal is irreversible — zero outgoing edges; late accrual is rejected deterministically"
+    requirement: "The terminal state (EXPIRED) MUST have ZERO outgoing edges: no API endpoint, service method, or state-machine transition may move an EXPIRED register to any other state — there is no un-expire, no reset, no reactivation (a replacement is a NEW register with its own identity and zero anchor). Any accrual posted to an EXPIRED register MUST be rejected with a deterministic 409 (`type=urn:problem:threshold-terminal`, `code=THRESHOLD_TERMINAL`) and MUST NOT advance the anchor — the recorded life status at retirement is immutable evidence. The state machine MUST be the sole mutator of the lifecycle field; the entity exposes no public lifecycle setter."
+    test_method: "RestAssured (accrual on EXPIRED → 409 THRESHOLD_TERMINAL, anchor unchanged; no transition out of EXPIRED exists — state-machine outgoing-edge assertion)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Zero outgoing edges — retirement is evidence, not a phase. 14 CFR §43.10(c)
+      requires disposition that prevents the part from returning to service.
+  - id: "TTD-DERIVE-001"
+    chapter: "The derived capability consults the SAME lifecycle state — fail-closed once terminal"
+    requirement: "A DERIVED operation that requires the register to be live (the reference workload's `use` endpoint — standing for install / dispatch / issue-to-service) MUST consult the SAME persisted lifecycle state under the register's row lock and MUST be rejected with the same deterministic 409 (`THRESHOLD_TERMINAL`) once the register is EXPIRED. The derivation is FAIL-CLOSED: the check is on the authoritative row (locked read), never a cached or eventually-consistent copy, so a use admitted concurrently with the crossing accrual is impossible (CWE-362). A use on a live register succeeds and does NOT advance the anchor (using is not accruing — the two write-paths are distinct but gated by one state)."
+    test_method: "RestAssured (use on ACTIVE → 200; use on EXPIRED → 409 THRESHOLD_TERMINAL; use admitted only on the authoritative locked row)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The SECOND read-path blocked by the derived terminal — this is what no
+      existing cap/accumulator rule encodes.
+  - id: "TTD-CHECK-001"
+    chapter: "DB backstop — @Check (anchor < limit OR status terminal) holds even under ddl-auto"
+    requirement: "The implication `anchor ≥ limit ⇒ status = EXPIRED` MUST be DB-backstopped with a Jakarta @Check constraint on the entity (CHECK (anchor < \"limit\" OR status = 'EXPIRED')) so the invariant holds even when the schema is generated by ddl-auto (the catalog has no Flyway-at-test-time): a code path that advances the anchor past the limit while leaving the lifecycle live MUST fail at flush with a constraint violation, not silently commit. The limit MUST be immutable after registration (@Column(updatable=false)) and positive (@Check (\"limit\" > 0))."
+    test_method: "structural assertion (entity carries the @Check implication + immutable positive limit) + violation-proof (a deliberately broken native write past the limit without terminal → constraint violation)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      The implication-as-CHECK is the IDW17 design's DB anchor; it is NOT
+      tautological because the terminal transition lives in code — the CHECK
+      catches the path that forgets it.
+  - id: "TTD-CONCURRENT-001"
+    chapter: "Keystone — crossing vs late accrual vs derived use serialize on the row lock"
+    requirement: "Across ANY interleaving of concurrent accruals and uses on ONE register: exactly ONE accrual is the crossing accrual (the one whose committed write makes anchor ≥ limit and sets EXPIRED); every accrual serialized AFTER it is rejected 409 with the anchor unchanged; every use serialized after it is rejected 409; and the final committed anchor equals (sum of the accepted accruals' deltas) exactly (NUMERIC(19,4)) — no accepted delta is lost and no rejected delta leaks into the anchor (CWE-362). The register row lock is the serialization point for BOTH write-paths (accrue and use)."
+    test_method: "RestAssured concurrency proof (N concurrent accruals whose total crosses the limit via ExecutorService → exactly one EXPIRED-driving crossing, anchor == Σ accepted deltas, every post-crossing accrual/use 409; no lost or phantom delta)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The conservation-under-concurrency keystone — one crossing, exact anchor,
+      both write-paths gated by one lock.

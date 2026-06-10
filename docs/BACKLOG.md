@@ -24,11 +24,11 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
-| P0 (expiry-bound / live defects) | 26 | 0 | 0% |
+| P0 (expiry-bound / live defects) | 26 | 1 | 4% |
 | P1 (generic signature backlog) | 54 | 0 | 0% |
-| P2 (verification escapes) | 8 | 1 | 13% |
+| P2 (verification escapes) | 9 | 1 | 11% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **119** | **1** | **~1%** |
+| **P0–P3 합계 (수렴 분모)** | **120** | **2** | **~2%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -52,10 +52,12 @@ DDD allowlist 예외 20건은 **expiry 2026-12-31** — 만료 6개월 전(2026-
       live defect (blueprint dangling reference).
 - [ ] **P0-24** IDW13-G15 — tenant quota `@Check`에 no-shrink-path: 한 번 늘린 quota를 줄일
       경로가 스키마상 없음 (live defect).
-- [ ] **P0-25** IDW17-G1 — **threshold-terminal-derivation spec이 disk에 없음** (세션에서
-      발견·설계됐으나 미기록). 우선 spec YAML부터 disk에 기록: register anchor≥limit → same-tx
-      IRREVERSIBLE terminal(outgoing edge 0) + accrual 차단 + derived read-block; `@Check`
-      anchor≥limit IMPLIES terminal. (aviation/MRO flagship, value-crosses-ceiling 일반형)
+- [x] **P0-25** IDW17-G1 — threshold-terminal-derivation spec rescue + FULL 6-step closure.
+      **closed 2026-06-10**: `specs/threshold-terminal-derivation-l0.yaml`(5 items) + rule
+      `limit-crossing-drives-irreversible-terminal-and-blocks-derived-use`(14 CFR §43.10 live-fetch,
+      Java 188) + `thresholdterminal` 도메인(@Check 함의 + sole-mutator FSM zero-outgoing-edges +
+      same-tx crossing + fail-closed use + V042) + `testThresholdTerminal` GREEN(Compliance 5 +
+      ViolationProof 5, 8-thread 동시성 keystone). spec rescue를 넘어 전체 closure로 완료.
 - [ ] **P0-26** Payment#setState raw public setter → SubscriptionStateMachine처럼 sole-mutator로
       (현재 governed_state_mutators로 관리되는 governed 부채; `Payment.java:130`).
 
@@ -136,6 +138,10 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       147/86 노출. **closed 2026-06-10 (이번 wave: counts 187/99 수정 + guard 확장).**
 - [ ] P2-7 practices-react/DECISIONS.md 신설 (Java 측 438줄과 비대칭 — React 룰 provenance 부재).
 - [ ] P2-8 검증 비용 시계열(perf-log.jsonl) + 40-도메인 외삽 시 CI sharding 설계.
+- [ ] P2-9 NUMERIC(19,4) overflow seam (catalog-wide) — `@Digits(integer=15)` 두 입력의 합이 컬럼
+      정밀도를 넘으면 unmapped DataIntegrityViolation → 500. register/costshare/netting/
+      thresholdterminal 등 모든 NUMERIC(19,4) 도메인 공통. 도메인별 패치가 아니라 공통 가드
+      (service-level bound 또는 공용 advice)로 닫을 것. (P0-25 adversarial review 발견, 2026-06-10)
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 

@@ -84,6 +84,10 @@ public class SecurityConfig {
                 // COPRESENCE (negative-copresence-gate-l0): authenticated users run the contraindication
                 // gate; the safety knowledge base (/kb/**) is ADMIN-only via @PreAuthorize on the methods.
                 .requestMatchers("/api/copresence/**").authenticated()
+                // THRESHOLD_TERMINAL (threshold-terminal-derivation-l0): any authenticated user creates
+                // a limited register, accrues life status, and requests a use; the crossing accrual
+                // drives the irreversible EXPIRED terminal that blocks both write-paths.
+                .requestMatchers("/api/threshold-registers/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The
