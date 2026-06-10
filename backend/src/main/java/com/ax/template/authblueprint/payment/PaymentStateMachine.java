@@ -77,4 +77,29 @@ public class PaymentStateMachine {
     public boolean isTerminal(PaymentState state) {
         return TERMINAL.contains(state);
     }
+
+    /**
+     * Apply a transition TO the aggregate — the sole-mutator seam (BACKLOG P0-26):
+     * computes the next state from the payment's CURRENT state and assigns it via the
+     * package-private {@link Payment#setState}. Services never set the state directly;
+     * an illegal event throws {@link IllegalStateTransitionException} (→ 409).
+     */
+    public void apply(Payment payment, PaymentTransition event) {
+        payment.setState(transition(payment.getState(), event));
+    }
+
+    /**
+     * Admin force-void escape hatch (PAYMENT-AUTHZ-004 admin override): best-effort —
+     * voids a CREATED or AUTHORIZED payment, silently leaves any other state untouched
+     * (the ADMIN_OVERRIDE ledger event is still recorded by the caller). The
+     * CREATED→VOIDED move is deliberately NOT an edge in {@code LEGAL} (AUTHORIZED→VOID
+     * already is): the public /void endpoint must keep rejecting CREATED→VOID; only the
+     * audited admin path may take it, and the state machine stays the single place that
+     * encodes the exception.
+     */
+    public void forceVoid(Payment payment) {
+        if (payment.getState() == PaymentState.AUTHORIZED || payment.getState() == PaymentState.CREATED) {
+            payment.setState(PaymentState.VOIDED);
+        }
+    }
 }

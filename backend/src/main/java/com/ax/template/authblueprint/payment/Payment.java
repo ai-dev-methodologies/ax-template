@@ -127,7 +127,8 @@ public class Payment {
     public void setCurrency(String currency) { this.currency = currency; }
 
     public PaymentState getState() { return state; }
-    public void setState(PaymentState state) { this.state = state; }
+    /** Package-private — {@link PaymentStateMachine} is the sole mutator (BACKLOG P0-26). */
+    void setState(PaymentState state) { this.state = state; }
 
     public String getPaymentMethodToken() { return paymentMethodToken; }
     public void setPaymentMethodToken(String paymentMethodToken) { this.paymentMethodToken = paymentMethodToken; }

@@ -110,7 +110,7 @@ public class PaymentService {
         payment.setCurrency(request.currency());
         payment.setPaymentMethodToken(request.paymentMethodToken());
         payment.setIdempotencyKey(idempotencyKey);
-        payment.setState(PaymentState.CREATED);
+        // state: born CREATED (entity field default) — the state machine owns every later move
         payment.setUpdatedAt(Instant.now());
         Payment saved = paymentRepository.save(payment);
 
@@ -146,7 +146,6 @@ public class PaymentService {
                 // hash-chain assertion expects ≥ 2 events on POST /api/payments). The
                 // payment.state remains CREATED so the explicit-flow tests can still
                 // walk the state machine.
-                payment.setState(PaymentState.CREATED);
                 ledger.append(payment.getId(), PaymentEventType.AUTHORIZED, scaledAmount,
                     Map.of("providerRef", String.valueOf(response.providerRef()),
                         "stateAfter", "CREATED",
@@ -155,7 +154,7 @@ public class PaymentService {
                     // The X-Test-CapturedAt override lets PaymentRefundTest back-date
                     // capturedAt for the refund-window-expired negative case. When it
                     // is set, we also pre-capture so the back-dated window check works.
-                    payment.setState(PaymentState.CAPTURED);
+                    stateMachine.apply(payment, PaymentTransition.CAPTURE);
                     payment.setCapturedAmount(scaledAmount);
                     payment.setBalance(scaledAmount);
                     payment.setCapturedAt(overrideCapturedAt);
@@ -163,31 +162,31 @@ public class PaymentService {
                 }
             }
             case TIMEOUT -> {
-                payment.setState(stateMachine.transition(PaymentState.CREATED, PaymentTransition.PROVIDER_TIMEOUT));
+                stateMachine.apply(payment, PaymentTransition.PROVIDER_TIMEOUT);
                 ledger.append(payment.getId(), PaymentEventType.UNKNOWN_STATE_REACHED, scaledAmount,
                     Map.of("cause", "PROVIDER_TIMEOUT"));
             }
             case NETWORK_RESET -> {
-                payment.setState(stateMachine.transition(PaymentState.CREATED, PaymentTransition.NETWORK_RESET));
+                stateMachine.apply(payment, PaymentTransition.NETWORK_RESET);
                 ledger.append(payment.getId(), PaymentEventType.UNKNOWN_STATE_REACHED, scaledAmount,
                     Map.of("cause", "NETWORK_RESET"));
             }
             case DECLINED -> {
-                payment.setState(stateMachine.transition(PaymentState.CREATED, PaymentTransition.PROVIDER_DECLINE));
+                stateMachine.apply(payment, PaymentTransition.PROVIDER_DECLINE);
                 payment.setDeclineReason(response.declineReason());
                 ledger.append(payment.getId(), PaymentEventType.FAILED, scaledAmount,
                     Map.of("declineReason", String.valueOf(response.declineReason())));
                 meterRegistry.counter("payment_failed_total").increment();
             }
             case SERVER_ERROR -> {
-                payment.setState(stateMachine.transition(PaymentState.CREATED, PaymentTransition.PROVIDER_5XX_EXHAUSTED));
+                stateMachine.apply(payment, PaymentTransition.PROVIDER_5XX_EXHAUSTED);
                 payment.setDeclineReason("SERVER_ERROR");
                 ledger.append(payment.getId(), PaymentEventType.FAILED, scaledAmount,
                     Map.of("declineReason", "SERVER_ERROR", "attempts", response.attempts()));
                 meterRegistry.counter("payment_failed_total").increment();
             }
             case MALFORMED -> {
-                payment.setState(stateMachine.transition(PaymentState.CREATED, PaymentTransition.PROVIDER_MALFORMED));
+                stateMachine.apply(payment, PaymentTransition.PROVIDER_MALFORMED);
                 payment.setDeclineReason("SERIALIZATION_ERROR");
                 ledger.append(payment.getId(), PaymentEventType.FAILED, scaledAmount,
                     Map.of("declineReason", "SERIALIZATION_ERROR"));
@@ -200,8 +199,7 @@ public class PaymentService {
     @Transactional
     public Payment authorize(UUID paymentId, UUID userId) {
         Payment payment = loadOwnedPayment(paymentId, userId);
-        PaymentState next = stateMachine.transition(payment.getState(), PaymentTransition.AUTHORIZE);
-        payment.setState(next);
+        stateMachine.apply(payment, PaymentTransition.AUTHORIZE);
         payment.setUpdatedAt(Instant.now());
         ledger.append(payment.getId(), PaymentEventType.AUTHORIZED, payment.getAmount(), Map.of());
         return paymentRepository.save(payment);
@@ -210,8 +208,7 @@ public class PaymentService {
     @Transactional
     public Payment capture(UUID paymentId, UUID userId) {
         Payment payment = loadOwnedPayment(paymentId, userId);
-        PaymentState next = stateMachine.transition(payment.getState(), PaymentTransition.CAPTURE);
-        payment.setState(next);
+        stateMachine.apply(payment, PaymentTransition.CAPTURE);
         payment.setCapturedAmount(payment.getAmount());
         if (payment.getBalance() == null) {
             payment.setBalance(payment.getAmount());
@@ -228,8 +225,7 @@ public class PaymentService {
     @Transactional
     public Payment voidPayment(UUID paymentId, UUID userId) {
         Payment payment = loadOwnedPayment(paymentId, userId);
-        PaymentState next = stateMachine.transition(payment.getState(), PaymentTransition.VOID);
-        payment.setState(next);
+        stateMachine.apply(payment, PaymentTransition.VOID);
         payment.setUpdatedAt(Instant.now());
         ledger.append(payment.getId(), PaymentEventType.VOIDED, payment.getAmount(), Map.of());
         return paymentRepository.save(payment);
@@ -263,10 +259,8 @@ public class PaymentService {
         extras.put("justification", justification == null ? "" : justification);
         extras.put("previousState", payment.getState().name());
         ledger.append(payment.getId(), PaymentEventType.ADMIN_OVERRIDE, payment.getAmount(), extras);
-        // Best-effort transition to VOIDED if legal; otherwise just record the audit event.
-        if (payment.getState() == PaymentState.AUTHORIZED || payment.getState() == PaymentState.CREATED) {
-            payment.setState(PaymentState.VOIDED);
-        }
+        // Best-effort: the state machine owns the admin escape hatch (CREATED/AUTHORIZED → VOIDED).
+        stateMachine.forceVoid(payment);
         payment.setUpdatedAt(Instant.now());
         return paymentRepository.save(payment);
     }

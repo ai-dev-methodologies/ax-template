@@ -150,11 +150,13 @@ governed_god_service:
 
 # ── governed direct state mutators (HG-STATE-SOLE-MUTATOR, spec §6) ─────────────
 # Non-StateMachine callers of a state-machine-governed entity's setStatus/setState.
-# Payment exposes a PUBLIC setState today (spec §6 notes "Payment는 state"); routing
-# all mutation through PaymentStateMachine is the end-state. Product.setStatus is NOT
+# Payment#setState is package-private and PaymentStateMachine is the sole mutator —
+# the end-state was REACHED 2026-06-10 (BACKLOG P0-26). Product.setStatus is NOT
 # listed because Product has no ProductStateMachine — the heuristic only checks an
 # entity X when an XStateMachine exists, which avoids the public-setter overblock the
 # spec warns about.
-governed_state_mutators:
-  - com.ax.template.authblueprint.payment.PaymentService -> com.ax.template.authblueprint.payment.Payment#setState
-  - com.ax.template.authblueprint.payment.RefundService -> com.ax.template.authblueprint.payment.Payment#setState
+governed_state_mutators: []
+  # Payment#setState entries RETIRED 2026-06-10 (BACKLOG P0-26): PaymentService/RefundService
+  # now route every move through PaymentStateMachine.apply(payment, event) (+ the audited
+  # admin escape hatch forceVoid); the setter is package-private and the machine is the
+  # sole mutator — no governed exception remains.

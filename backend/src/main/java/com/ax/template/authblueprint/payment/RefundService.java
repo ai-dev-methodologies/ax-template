@@ -57,9 +57,9 @@ public class RefundService {
         // explicit /capture call. Both ledger events are still appended for audit completeness.
         if (payment.getState() == PaymentState.CREATED) {
             BigDecimal amt = payment.getAmount();
-            payment.setState(PaymentState.AUTHORIZED);
+            stateMachine.apply(payment, PaymentTransition.AUTHORIZE);
             ledger.append(payment.getId(), PaymentEventType.AUTHORIZED, amt, Map.of("implicit", true));
-            payment.setState(PaymentState.CAPTURED);
+            stateMachine.apply(payment, PaymentTransition.CAPTURE);
             payment.setCapturedAmount(amt);
             payment.setBalance(amt);
             if (payment.getCapturedAt() == null) {
@@ -93,8 +93,7 @@ public class RefundService {
         // 4. State transition: full vs partial.
         boolean full = newSum.compareTo(capturedAmount) == 0;
         PaymentTransition transition = full ? PaymentTransition.REFUND : PaymentTransition.PARTIAL_REFUND;
-        PaymentState next = stateMachine.transition(payment.getState(), transition);
-        payment.setState(next);
+        stateMachine.apply(payment, transition);
         BigDecimal newBalance = capturedAmount.subtract(newSum);
         payment.setBalance(newBalance);
         payment.setUpdatedAt(Instant.now());

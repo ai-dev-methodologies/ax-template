@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "79376373f9242e4fa9a56a481f7c1e9ffc7c04a4ede9fe2687d472e64b5f78a0"
+  source_concat_sha256: "4dfe525a2815521fe2e04a7eebf463b7e59da68af0d2fc1537ecc3b992e3bf0f"
   rule_count: 188
   generated_by: "practices/generate_agents.sh"
 ---
@@ -2319,6 +2319,8 @@ public List<Favorite> myFavorites(Authentication auth) {
 There is nothing for an attacker to flip. The userId is server-side, end-to-end. Cross-user enumeration is *structurally impossible*, not just *currently checked*.
 
 This rule applies to read endpoints, mutation endpoints, and aggregation endpoints alike. For admin endpoints that legitimately need to act on arbitrary users, use a dedicated `/api/admin/...` path gated by `hasAuthority("ROLE_ADMIN")` AND record the actor in the resource's `actedByUserId` column for audit — the admin path is the only place where another user's identifier appears.
+
+**Scope — shared-terminal operator attribution is NOT banned (closes IDW11-G23).** This rule governs the request's AUTHORIZATION SUBJECT: who the caller IS must come from `Authentication`, never a parameter. It does NOT ban a separately-named operator-attribution field on shared-terminal flows (a kiosk POS, a clinical workstation, an MES shop-floor terminal) where ONE authenticated device session is operated by MULTIPLE real humans — there, recording WHO physically acted requires an explicit field. The distinction that keeps it safe: (a) authorization still derives ONLY from `Authentication` (the terminal's session/service identity); (b) the operator field is attribution-only — it MUST never select the resource owner, widen access, or substitute for the caller identity; (c) AS A REQUEST FIELD it is named for what it is (`operatorBadgeId` / `actorId` — never `userId` as a parameter name; persisted audit COLUMNS like `actedByUserId` follow their own convention and are out of this clause's scope), so it cannot masquerade as the caller; (d) it is recorded into the audit/event trail alongside the authenticated caller, not instead of it; and (e) the server MUST validate the submitted value against a trusted operator registry for the authenticated terminal (the badge IDs enrolled for that device/tenant) and reject an unrecognized value with 400 — never store a free-text operator string, or the field becomes an audit-log poisoning vector.
 
 Reference: [OWASP API Security Top 10 (2023) — API1:2023 BOLA](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)
 
@@ -10947,20 +10949,28 @@ BigDecimal rollup(Node n) {                         // VIOLATION: no cycle guard
     @Column(updatable=false) Long fromNode;
     @Column(updatable=false) Long toNode;
     @Column(updatable=false) BigDecimal weight;     // immutable; no setter, no delete mutator
-}
+    @Column(updatable=false) Long supersedesEdgeId; // nullable — a correction APPENDS a row
+}                                                   // pointing at the edge it replaces
 ```
 ```sql
 -- cycle-safe recursive CTE; product down each path, summed across paths (DAG-ACYCLIC / DAG-ROLLUP)
-WITH RECURSIVE paths(node, qty) AS (
+WITH RECURSIVE
+live_edge AS (                                              -- LIVE = not referenced by a supersession row
+    SELECT e.* FROM provenance_edge e
+     WHERE NOT EXISTS (SELECT 1 FROM provenance_edge s WHERE s.supersedes_edge_id = e.id)
+),
+paths(node, qty) AS (
     SELECT :root, 1::numeric
   UNION ALL
     SELECT e.to_node, p.qty * e.weight                      -- PRODUCT down the path
-      FROM paths p JOIN provenance_edge e ON e.from_node = p.node
+      FROM paths p JOIN live_edge e ON e.from_node = p.node
 ) CYCLE node SET is_cycle USING path                        -- refuse cycles (DAG-ACYCLIC-PRECOND-001)
 SELECT node, SUM(qty) FROM paths WHERE NOT is_cycle GROUP BY node;  -- SUM across paths
 ```
 
-Verification: review-tier. DAG correctness is a data-model + arithmetic property — a mutable-FK / flat-sum implementation compiles and gives plausible numbers on a single-path graph, corrupting only on multi-path or cyclic graphs. Verify by review against `specs/provenance-dag-l0.yaml`: edges are append-only immutable many-to-many (no edit/delete); acyclicity is guarded at write time or re-checked with 422 on the rollup; the rollup multiplies down each path and sums across paths in scaled BigDecimal; traversal is bounded/cycle-safe. When a fork-receiver wires a real test (a cycle is rejected; a diamond BOM rolls up to the product-sum, not the flat sum), this rule's verification may be upgraded from review to gradle_task+tag.
+**Composition note — edge supersession (closes the IDW11-G4 contradiction with `temporal-validity-record-non-overlap`).** A lineage relationship sometimes needs CORRECTION or has bounded validity (an ingredient substitution, a re-traced contribution, a relationship that ends). Append-only does NOT mean uncorrectable, and it does NOT collide with the effective-dating rule's window-closing: a correction or closure is a NEW APPENDED FACT — a superseding edge row (or a tombstone row) that references the superseded edge's id (`supersedes_edge_id`) — never an in-place UPDATE/DELETE of the original row. The rollup and traversal then read only LIVE edges (those not referenced by a supersession row); the full history remains reconstructible. Where edges carry validity windows, the window "close" is expressed the same way — by appending the superseding fact — so `temporal-validity-record-non-overlap`'s non-overlap constraint applies to the LIVE edge set while this rule's immutability applies to every stored row. The two rules compose; neither licenses an UPDATE.
+
+Verification: review-tier. DAG correctness is a data-model + arithmetic property — a mutable-FK / flat-sum implementation compiles and gives plausible numbers on a single-path graph, corrupting only on multi-path or cyclic graphs. Verify by review against `specs/provenance-dag-l0.yaml`: edges are append-only immutable many-to-many (no edit/delete); acyclicity is guarded at write time or re-checked with 422 on the rollup; the rollup multiplies down each path and sums across paths in scaled BigDecimal OVER THE LIVE EDGE SET ONLY (superseded edges excluded — see the composition note); traversal is bounded/cycle-safe. When a fork-receiver wires a real test (a cycle is rejected; a diamond BOM rolls up to the product-sum, not the flat sum), this rule's verification may be upgraded from review to gradle_task+tag.
 
 Reference: [PostgreSQL — WITH Queries (CTEs / RECURSIVE)](https://www.postgresql.org/docs/current/queries-with.html)
 
@@ -11588,6 +11598,8 @@ public void consume(UUID tenantId, Resource resource, long delta) {
 ```
 
 The `SELECT ... FOR UPDATE` variant is equivalent and preferable when the consume must also touch sibling rows in the same critical section: lock the quota row, re-read `used`, validate, write, all inside the held lock. Pair this rule with `QUOTA-REJECT-001` (deterministic 429 + RFC 9457 `urn:problem:quota-exceeded`) and `QUOTA-RECONCILE-001` (the counter must be reconcilable against the source-of-truth rows and must decrement on release).
+
+**Plan-downgrade / no-shrink trap (IDW13-G15).** `limit_value` MUST stay mutable DOWNWARD even while `used > new-limit` — a plan downgrade is a legal state, and the natural-looking DB backstop `CHECK (used <= limit_value)` is a TRAP: it makes the downgrade UPDATE unrepresentable (the schema has no shrink path). Do not add it. The over-limit-after-downgrade state needs no special handling — every claim already evaluates `used + delta <= limit_value` atomically and rejects, so usage burns down naturally; already-consumed resources are never clawed back.
 
 Verification (review-tier): there is no static @Tag test that proves an atomic claim — atomicity is a runtime property of the SQL statement and the transaction, not a structurally-detectable shape. A reviewer confirms every quota-consume path issues the limit predicate inside a single conditional UPDATE (0-rows = refused) or a held `SELECT ... FOR UPDATE`, and that no path reads `used` and writes `used + delta` in two separate statements. The behavioural proof is the `QUOTA-ATOMIC-001` integration test: fire two concurrent consume calls against a tenant at `limit - 1` and assert exactly one 2xx + one rejection + final persisted `used == limit` (never `limit + 1`).
 
@@ -14564,6 +14576,8 @@ public SalaryRecord setSalary(long employeeId, BigDecimal amount, Instant validF
 ```
 
 **This is distinct from capacity and from optimistic-locking.** `bounded-capacity-claim` (CLAIM-ATOMIC-001) serializes claimants over a cardinality COUNTER — `taken < capacity` — which is set cardinality, not interval geometry; its loser gets 409 CAPACITY_EXHAUSTED. `optimistic-locking` (OPTLOCK-CONFLICT-001) rejects a stale validator with 412. This rule is interval geometry: no two windows for one scope key may overlap, enforced by a range-exclusion constraint, loser gets 409 INTERVAL_OVERLAP. A recipe whose invariant is "must not double-book overlapping time windows" (e.g. booking) belongs here — on `TEMPORAL-NON-OVERLAP-001` — NOT on the capacity counter, because double-booking is two intervals colliding, not a counter exhausting.
+
+**Composition note — append-only artifacts (closes the IDW11-G4 contradiction with `provenance-dag-append-only-acyclic-rollup`).** For tables that are themselves append-only audit artifacts (provenance edges, ledger rows), "closing" a validity window MUST NOT be an UPDATE of `valid_to` — it is a NEW appended supersession row referencing the superseded row's id, and the non-overlap exclusion constraint is evaluated over the LIVE (non-superseded) subset — concretely, a PARTIAL exclusion constraint: `EXCLUDE USING gist (scope_key WITH =, tstzrange(valid_from, valid_to, '[)') WITH &&) WHERE (supersedes_edge_id IS NULL)` (PostgreSQL supports a WHERE predicate on exclusion constraints), so a superseding row may legally share the window of the row it corrects. For ordinary effective-dated tables (salary/price/coverage history) the plain constraint + UPDATE-the-open-window idiom remains correct.
 
 Verification: review-tier. Non-overlap under concurrency is a runtime property — a single-threaded test passes even when the only guard is the broken pre-insert SELECT, and no compile-time signal exists. Verify by review against `specs/temporal-validity-l0.yaml#TEMPORAL-NON-OVERLAP-001`: confirm the effective-dated table carries the `EXCLUDE USING gist (... WITH =, tstzrange(...,'[)') WITH &&)` constraint and `CREATE EXTENSION btree_gist`, and that no handler relies on a pre-insert overlap SELECT as its sole guard. Prove it with a concurrent-insert race harness (two parallel writers submitting overlapping windows for one scope key) asserting exactly one success + one 409 INTERVAL_OVERLAP + a final history with zero overlapping rows. When a fork-receiver wires a real `@Tag("TEMPORAL-NON-OVERLAP-001")` concurrency IT, this rule's verification block may be upgraded from review to gradle_task+tag.
 

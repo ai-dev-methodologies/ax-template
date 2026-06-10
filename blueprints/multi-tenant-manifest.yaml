@@ -1116,9 +1116,12 @@ scheduled-task-tenant-scope:
        * with <root> = acme.
        *
        * Non-TenantOwned bean — the tenant discriminator itself. Reads
-       * the Tenant entity table directly without going through @Filter
-       * activation (see #context-resolution); this is the only entity
-       * type that legitimately bypasses tenant scoping.
+       * the fork-receiver's tenant catalog store directly without going
+       * through @Filter activation (see #context-resolution). ax-template
+       * ships NO Tenant entity (IDW13-G14): the catalog source — a Tenant
+       * table, a registry service, a config list — is the fork-receiver's
+       * to define; this contract pins only the listActive() semantics and
+       * that the catalog read is the one legitimate tenant-scoping bypass.
        */
       public interface TenantCatalog {
           List<UUID> listActive();

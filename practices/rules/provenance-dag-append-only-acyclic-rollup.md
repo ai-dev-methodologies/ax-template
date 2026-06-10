@@ -62,19 +62,27 @@ BigDecimal rollup(Node n) {                         // VIOLATION: no cycle guard
     @Column(updatable=false) Long fromNode;
     @Column(updatable=false) Long toNode;
     @Column(updatable=false) BigDecimal weight;     // immutable; no setter, no delete mutator
-}
+    @Column(updatable=false) Long supersedesEdgeId; // nullable — a correction APPENDS a row
+}                                                   // pointing at the edge it replaces
 ```
 ```sql
 -- cycle-safe recursive CTE; product down each path, summed across paths (DAG-ACYCLIC / DAG-ROLLUP)
-WITH RECURSIVE paths(node, qty) AS (
+WITH RECURSIVE
+live_edge AS (                                              -- LIVE = not referenced by a supersession row
+    SELECT e.* FROM provenance_edge e
+     WHERE NOT EXISTS (SELECT 1 FROM provenance_edge s WHERE s.supersedes_edge_id = e.id)
+),
+paths(node, qty) AS (
     SELECT :root, 1::numeric
   UNION ALL
     SELECT e.to_node, p.qty * e.weight                      -- PRODUCT down the path
-      FROM paths p JOIN provenance_edge e ON e.from_node = p.node
+      FROM paths p JOIN live_edge e ON e.from_node = p.node
 ) CYCLE node SET is_cycle USING path                        -- refuse cycles (DAG-ACYCLIC-PRECOND-001)
 SELECT node, SUM(qty) FROM paths WHERE NOT is_cycle GROUP BY node;  -- SUM across paths
 ```
 
-Verification: review-tier. DAG correctness is a data-model + arithmetic property — a mutable-FK / flat-sum implementation compiles and gives plausible numbers on a single-path graph, corrupting only on multi-path or cyclic graphs. Verify by review against `specs/provenance-dag-l0.yaml`: edges are append-only immutable many-to-many (no edit/delete); acyclicity is guarded at write time or re-checked with 422 on the rollup; the rollup multiplies down each path and sums across paths in scaled BigDecimal; traversal is bounded/cycle-safe. When a fork-receiver wires a real test (a cycle is rejected; a diamond BOM rolls up to the product-sum, not the flat sum), this rule's verification may be upgraded from review to gradle_task+tag.
+**Composition note — edge supersession (closes the IDW11-G4 contradiction with `temporal-validity-record-non-overlap`).** A lineage relationship sometimes needs CORRECTION or has bounded validity (an ingredient substitution, a re-traced contribution, a relationship that ends). Append-only does NOT mean uncorrectable, and it does NOT collide with the effective-dating rule's window-closing: a correction or closure is a NEW APPENDED FACT — a superseding edge row (or a tombstone row) that references the superseded edge's id (`supersedes_edge_id`) — never an in-place UPDATE/DELETE of the original row. The rollup and traversal then read only LIVE edges (those not referenced by a supersession row); the full history remains reconstructible. Where edges carry validity windows, the window "close" is expressed the same way — by appending the superseding fact — so `temporal-validity-record-non-overlap`'s non-overlap constraint applies to the LIVE edge set while this rule's immutability applies to every stored row. The two rules compose; neither licenses an UPDATE.
+
+Verification: review-tier. DAG correctness is a data-model + arithmetic property — a mutable-FK / flat-sum implementation compiles and gives plausible numbers on a single-path graph, corrupting only on multi-path or cyclic graphs. Verify by review against `specs/provenance-dag-l0.yaml`: edges are append-only immutable many-to-many (no edit/delete); acyclicity is guarded at write time or re-checked with 422 on the rollup; the rollup multiplies down each path and sums across paths in scaled BigDecimal OVER THE LIVE EDGE SET ONLY (superseded edges excluded — see the composition note); traversal is bounded/cycle-safe. When a fork-receiver wires a real test (a cycle is rejected; a diamond BOM rolls up to the product-sum, not the flat sum), this rule's verification may be upgraded from review to gradle_task+tag.
 
 Reference: [PostgreSQL — WITH Queries (CTEs / RECURSIVE)](https://www.postgresql.org/docs/current/queries-with.html)

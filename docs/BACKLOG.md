@@ -24,11 +24,11 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
-| P0 (expiry-bound / live defects) | 26 | 12 | 46% |
+| P0 (expiry-bound / live defects) | 26 | 17 | 65% |
 | P1 (generic signature backlog) | 54 | 0 | 0% |
 | P2 (verification escapes) | 9 | 3 | 33% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **120** | **15** | **~13%** |
+| **P0–P3 합계 (수렴 분모)** | **120** | **20** | **~17%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -50,22 +50,31 @@ DDD allowlist 예외 잔여 10건(member-repo 9 + ecom-composition 1)은 **expir
 - [ ] **P0-12 ~ P0-20** AX-DDD-MEMBER-REPO ×9 — member-repo 직접 접근 grandfather.
       Pattern B(visibility 축소)는 예외를 retire하지 못함이 검증됨(HG-AGG-REPO는 visibility-agnostic)
       — mutate-through-root 감사 후 각 repo에 end-state 결정 필요.
-- [ ] **P0-21** IDW11-G4 — provenance-DAG vs temporal-validity edge-supersession: 기존 두 룰이
-      edge 교체 시나리오에서 서로 모순되는 live defect (ledger: IDW11 session).
-- [ ] **P0-22** IDW11-G23 — `no-userid-param` 룰이 shared-terminal attribution(키오스크 POS 등
-      한 세션 다중 실사용자)을 over-ban하는 live defect.
-- [ ] **P0-23** IDW13-G14 — multi-tenant manifest가 정의되지 않은 `Tenant` entity를 참조하는
-      live defect (blueprint dangling reference).
-- [ ] **P0-24** IDW13-G15 — tenant quota `@Check`에 no-shrink-path: 한 번 늘린 quota를 줄일
-      경로가 스키마상 없음 (live defect).
+- [x] **P0-21** IDW11-G4 — **closed 2026-06-10**: provenance-dag 룰에 'edge supersession'
+      composition note(정정/종료 = supersedes_edge_id를 단 NEW append row, rollup은 LIVE edge만) +
+      temporal-validity 룰에 상호 노트(append-only 아티팩트는 supersession-append로 window 종료,
+      일반 effective-dated 테이블은 UPDATE-open-window 유지) — 두 룰이 compose, 모순 해소.
+- [x] **P0-22** IDW11-G23 — **closed 2026-06-10**: no-userid 룰에 'shared-terminal operator
+      attribution은 금지 대상 아님' scope 절 — 인가 주체는 Authentication ONLY, attribution-only
+      operator 필드는 4개 안전조건(a-d: 인가 비사용/리소스 선택 금지/operatorBadgeId 명명/감사
+      병기) 하에 합법.
+- [x] **P0-23** IDW13-G14 — **closed 2026-06-10**: manifest TenantCatalog 계약이 존재하지 않는
+      'Tenant entity table' 대신 fork-receiver-defined catalog store(테이블/레지스트리/설정)를
+      명시 — listActive() 시맨틱 + 합법적 scoping-bypass만 고정.
+- [x] **P0-24** IDW13-G15 — **closed 2026-06-10**: plan-downgrade 계약을 spec 헤더 + 룰에 명시 —
+      limit_value는 used>new-limit 상태에서도 하향 가능(합법·quiescent; 클레임이 이미
+      used+delta<=limit로 거부), `CHECK(used<=limit_value)`는 다운그레이드를 표현 불가능하게
+      만드는 TRAP으로 명명·금지.
 - [x] **P0-25** IDW17-G1 — threshold-terminal-derivation spec rescue + FULL 6-step closure.
       **closed 2026-06-10**: `specs/threshold-terminal-derivation-l0.yaml`(5 items) + rule
       `limit-crossing-drives-irreversible-terminal-and-blocks-derived-use`(14 CFR §43.10 live-fetch,
       Java 188) + `thresholdterminal` 도메인(@Check 함의 + sole-mutator FSM zero-outgoing-edges +
       same-tx crossing + fail-closed use + V042) + `testThresholdTerminal` GREEN(Compliance 5 +
       ViolationProof 5, 8-thread 동시성 keystone). spec rescue를 넘어 전체 closure로 완료.
-- [ ] **P0-26** Payment#setState raw public setter → SubscriptionStateMachine처럼 sole-mutator로
-      (현재 governed_state_mutators로 관리되는 governed 부채; `Payment.java:130`).
+- [x] **P0-26** Payment#setState — **closed 2026-06-10**: PaymentStateMachine.apply(payment,event)
+      sole-mutator seam + forceVoid 감사형 admin escape hatch(LEGAL 맵 불변 — /void 엔드포인트
+      시맨틱 보존). setter package-private; 14 call-site 이관; governed_state_mutators 2→0
+      (bijection 수용 = retire 증명). testPayment GREEN.
 
 ## P1 — generic signature backlog (cross-industry, 산업 dogfood가 발견)
 

@@ -31,6 +31,15 @@ introduced_at: "IDW5 2026-06-01 LMS dogfood"
 # Composition note: layers under existing L4 recipes (multi-tenant-l0 for
 # the tenant axis, billing/invoicing for the plan source-of-truth). Generic
 # pattern; zero Korean-law cite (R102+ generic catalog principle).
+#
+# Plan-downgrade contract (IDW13-G15 closure, BACKLOG P0-24): limit_value MUST
+# remain mutable DOWNWARD even while used > new-limit — a tenant downgrading
+# their plan is a legal, expected state. NEVER add CHECK (used <= limit_value)
+# as a DB backstop: that constraint makes the downgrade UPDATE unrepresentable
+# (no shrink path). The over-limit-after-downgrade state is quiescent by
+# construction — every further claim already evaluates used + delta <= limit
+# and rejects (QUOTA-ATOMIC/REJECT-001), so usage burns down naturally with no
+# clawback of already-consumed resources.
 
 # ── Priority order for fork-receivers (adopt in order) ──
 #   1. QUOTA-ATOMIC-001        (the keystone — atomic check-and-increment)

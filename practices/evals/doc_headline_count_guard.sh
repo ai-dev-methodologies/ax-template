@@ -126,9 +126,14 @@ else
     else
         assert_metric "$SKILL_REACT_LINE" "rules" "$REACT_RULES" "$SKILL_MD practices-react row"
     fi
-    SKILL_AGENTS_LINE="$(grep -F 'AI-consumable form' "$SKILL_MD" | head -1 || true)"
-    if [ -n "$SKILL_AGENTS_LINE" ]; then
-        assert_metric "$SKILL_AGENTS_LINE" "rules" "$JAVA_RULES" "$SKILL_MD AGENTS row"
+    # check EVERY 'AI-consumable form' row (Java AND React — head -1 silently skipped the React row)
+    SKILL_JAVA_AGENTS="$(grep -F 'AI-consumable form' "$SKILL_MD" | grep -v 'React' | head -1 || true)"
+    if [ -n "$SKILL_JAVA_AGENTS" ]; then
+        assert_metric "$SKILL_JAVA_AGENTS" "rules" "$JAVA_RULES" "$SKILL_MD AGENTS row (Java)"
+    fi
+    SKILL_REACT_AGENTS="$(grep -F 'AI-consumable form' "$SKILL_MD" | grep -F 'React rules' | head -1 || true)"
+    if [ -n "$SKILL_REACT_AGENTS" ]; then
+        assert_metric "$SKILL_REACT_AGENTS" "React rules" "$REACT_RULES" "$SKILL_MD AGENTS row (React)"
     fi
     # every "<N> hard guards" claim anywhere in the skill doc must match disk
     while IFS= read -r gline; do
