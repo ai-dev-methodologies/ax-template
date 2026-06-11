@@ -1,0 +1,91 @@
+version: "0.1.0"
+scope: "record-linkage-l0 — the generalized GOVERNED RECORD LINKAGE pipeline (similarity match → banded verdict → human review → merge with survivorship; the reference scorer is normalized-exact per field — fuzzy/phonetic scorers are a fork-receiver swap behind the same governance contract). When two records may denote the SAME real-world entity (two patient registrations, two customer accounts, two counterparty masters), the system MUST (1) SCORE the pair deterministically and RECORD the score, the per-field feature breakdown, and the thresholds in force — never a bare yes/no; (2) BAND the verdict Fellegi-Sunter-style: at/above the upper threshold AUTO_MATCH, between the thresholds REVIEW (a human must decide — the clerical-review class), below NO_MATCH; (3) gate a REVIEW-band merge behind an explicit human confirm/reject recording who/when, while an AUTO_MATCH still leaves the full auditable proposal trail; (4) MERGE with PER-FIELD SURVIVORSHIP decisions recorded (which value won, from which record, by which rule) — the losing record is TOMBSTONED (status MERGED + forward pointer to the survivor), NEVER deleted, and resolving the loser returns the survivor; (5) serialize concurrent confirms/merges on row locks — a proposal decides once (double-confirm 409) and a record merges once (already-merged participant 409). The IDW16 EMR dogfood found the catalog had NO matching/identity-resolution primitive: copresence intersects a candidate against a NORMALIZED concept set (negative gate) but nothing scores record-pair similarity, bands it, routes the indeterminate band to a human, or governs the merge that follows. Realized by the recordlinkage reference workload (com.ax.template.authblueprint.recordlinkage). Recurs in: patient identity (MPI), customer dedup/KYC, counterparty master data, vendor/supplier dedup, court/citizen registries — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only survivorship decisions + @Version optimistic + PESSIMISTIC_WRITE row locks + @Check backstops) + deterministic reference scorer (normalized exact-feature weights) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "Fellegi-Sunter probabilistic record linkage as canonically taught (Big Data and Social Science, 'Record Linkage': pairs above T1 are matches, pairs between the thresholds go to clerical review for a final human determination) + duplicate-record merge governance (PMC2815491: a complete auditing trail must track the process of duplicate merges) + CWE-362 (concurrent confirm/merge race) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW16-G5 fuzzy-match + IDW16-G7 merge/survivorship; built 2026-06-11 — BACKLOG P1-33~34"
+
+# OPT-IN record-linkage catalog. The identity-resolution gap pair: the catalog
+# gates writes (copresence) and governs decisions (decisiongov) but never scores
+# WHETHER TWO RECORDS ARE THE SAME THING, routes the uncertain band to a human,
+# or governs the merge that follows. Generic; the patient/customer framings are
+# anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. LINK-BAND-001       (the primitive — scored, feature-broken-down, threshold-recorded banded verdict)
+#   2. LINK-REVIEW-001     (the REVIEW band decides only by explicit human confirm/reject, who/when)
+#   3. LINK-SURVIVOR-001   (merge records per-field survivorship; loser tombstoned + forward pointer, never deleted)
+#   4. LINK-RESOLVE-001    (resolving a merged record returns the survivor; the trail stays reconstructible)
+#   5. LINK-CONCURRENT-001 (keystone — confirm/merge serialize; double-confirm and re-merge are 409)
+
+# ── Composition note ──
+# DISTINCT from negative-copresence-gate (set-intersection against a knowledge base —
+# a write gate, not pair similarity), decision-governance (versions ONE scope's computed
+# value — no cross-record identity), and attested-change-record (field edits on one
+# datum). SurvivorshipDecision rows are @AggregateMember of MatchProposal: root-JPQL
+# reads + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth).
+# LinkageRecord and MatchProposal are separate roots referencing each other BY ID.
+# The reference scorer is deliberately deterministic (normalized exact-feature weights):
+# the GOVERNANCE contract (record/band/review/merge) is the catalog's claim — a
+# fork-receiver may swap in phonetic/probabilistic scorers without touching it.
+
+items:
+  - id: "LINK-BAND-001"
+    chapter: "A match proposal records its score, per-field feature breakdown, and the thresholds in force — then bands the verdict"
+    verification:
+      mechanism: rule
+      ref: record-linkage-banded-verdict-and-survivorship-merge
+    requirement: "Proposing a match between two records MUST score the pair deterministically and PERSIST, on the proposal row: the total score, the per-field feature breakdown (which fields agreed, each field's weight contribution — the appraisal trail), and the threshold pair in force at proposal time. The verdict is BANDED: score ≥ upper threshold → AUTO_MATCH; lower ≤ score < upper → REVIEW; score < lower → NO_MATCH. A bare unexplained verdict (no score/breakdown/thresholds on the row) MUST be unrepresentable. Proposing a pair where either record is already MERGED is rejected (409); a record paired with itself is rejected (422)."
+    test_method: "RestAssured (propose → 201 with score + breakdownJson + thresholds persisted; identical records → AUTO_MATCH band; partial agreement → REVIEW; disjoint → NO_MATCH; self-pair 422; merged participant → 409 LINKAGE_PARTICIPANT_MERGED)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (Big Data and Social Science, 'Record Linkage' — the
+      Fellegi-Sunter banding as canonically taught): "Record pairs with a match
+      score greater than T₁ are marked as matches and removed from further
+      consideration. The set of record pairs with a match score between T₁ and
+      T₂ are believed to contain significant numbers of matches and nonmatches.
+      These are sent to clerical review, meaning that research assistants will
+      make a final determination of match status."
+      (https://textbook.coleridgeinitiative.org/chap-link.html)
+  - id: "LINK-REVIEW-001"
+    chapter: "The REVIEW band decides only by an explicit human confirm or reject, recording who/when"
+    requirement: "A REVIEW-band proposal MUST NOT merge automatically: it decides ONLY through an explicit human confirm (→ merge proceeds) or reject (→ proposal closed, no merge), each recording the decider and the instant. A NO_MATCH proposal cannot be confirmed (422 — re-propose after the records change instead). An AUTO_MATCH proposal merges without a human in the loop BUT leaves the identical auditable trail (score/breakdown/thresholds + decidedBy = AUTO). Confirming or rejecting an already-decided proposal is a deterministic 409 (LINKAGE_ALREADY_DECIDED)."
+    test_method: "RestAssured (REVIEW proposal stays PROPOSED until confirm/reject; confirm → who/when recorded + merge executed; reject → closed, records untouched; NO_MATCH confirm → 422; double-confirm → 409)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The clerical-review class is the load-bearing governance seam: the band
+      where the algorithm abstains and a human owns the determination.
+  - id: "LINK-SURVIVOR-001"
+    chapter: "A merge records per-field survivorship; the loser is tombstoned with a forward pointer — never deleted"
+    requirement: "Executing a merge MUST (a) choose the survivor (reference choice: the LOW-id record — deterministic and audit-stable; data-quality-based policies are a fork-receiver swap) and, FOR EVERY identity field, append an immutable SurvivorshipDecision recording the field, the winning value, which record supplied it, and the rule that chose it (reference rule: prefer the survivor's non-blank value, else the merged record's — recorded explicitly per field); (b) TOMBSTONE the losing record: status MERGED + mergedIntoId forward pointer, with its own data retained verbatim — the loser is NEVER deleted and never silently rewritten; (c) run in the SAME transaction as the confirm that authorized it, under both records' row locks. A complete auditing trail of the merge (proposal + decisions + tombstone) MUST therefore be reconstructible from the rows alone."
+    test_method: "RestAssured (confirm → survivor ACTIVE, loser MERGED w/ mergedIntoId, per-field SurvivorshipDecision rows incl. rule + source; loser's original values still readable on its row; structural: decision rows fully @Column(updatable=false))"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (PMC2815491, duplicate medical records): "Ensure that there
+      is a complete auditing trail to track the process of duplicate merges."
+      (https://pmc.ncbi.nlm.nih.gov/articles/PMC2815491/)
+  - id: "LINK-RESOLVE-001"
+    chapter: "Resolving a merged record returns the survivor; the chain stays reconstructible"
+    requirement: "Reading a MERGED record through the resolve endpoint MUST return the SURVIVOR's current record (following mergedIntoId, including across chained merges A→B→C), while reading the merged record directly still exposes its tombstone (status MERGED + pointer + retained values). Resolution MUST be cycle-safe (a pointer loop — impossible through the API, possible through corruption — terminates with an error rather than spinning)."
+    test_method: "RestAssured (resolve(loser) == survivor; after survivor itself merges, resolve(first loser) follows the chain to the final survivor; direct GET of loser shows tombstone + retained fields)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The forward pointer is what keeps every old reference usable after
+      consolidation — deletion would orphan them.
+  - id: "LINK-CONCURRENT-001"
+    chapter: "Keystone — confirms and merges serialize on row locks; a proposal decides once, a record merges once"
+    requirement: "Across ANY interleaving of concurrent confirms on one proposal, EXACTLY ONE wins (the rest receive 409 LINKAGE_ALREADY_DECIDED) and the merge executes once (CWE-362). Across concurrent confirms of TWO proposals sharing a participant record, at most one merge captures that record: the second confirm finds the participant MERGED and is rejected (409), never producing a record that is simultaneously survivor and loser or a double tombstone. Both write-paths take the proposal's and both records' PESSIMISTIC_WRITE locks (deterministic lock ORDER by record id to avoid deadlock)."
+    test_method: "Concurrency proof (N concurrent confirms on one REVIEW proposal → exactly one 2xx + N-1 409, exactly one merge; concurrent confirms of two proposals sharing a record → at most one captures it)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Lock-order discipline (ascending record id) is the deadlock guard the
+      dispatch domain already taught the catalog. Duplicate OPEN proposals for
+      the same pair are permitted (no pair-uniqueness): the loser of the race
+      resolves to the deterministic 409 at confirm time when its participant
+      is found MERGED — late but honest; a fork may add a partial-unique index
+      on (low,high) WHERE status='PROPOSED' to fail earlier.

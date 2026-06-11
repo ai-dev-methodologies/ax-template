@@ -224,6 +224,9 @@ checklist:
       - command: "./gradlew testObligation"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testRecordLinkage"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testIntegration"
         working_directory: "backend"
         expected_exit: 0

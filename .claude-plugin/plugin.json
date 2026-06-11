@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "ax-transform",
   "version": "0.1.0",
-  "description": "AI transformation starter — bootstraps a project (or transforms an existing one) into an AI-agent-friendly codebase using contract-first Spec Trio, evidence-anchored Java/Spring practices catalog (190 rules across 22+ categories), and single-command verification feedback loops (testAsvs / testCrud / testPractices).",
+  "description": "AI transformation starter — bootstraps a project (or transforms an existing one) into an AI-agent-friendly codebase using contract-first Spec Trio, evidence-anchored Java/Spring practices catalog (191 rules across 22+ categories), and single-command verification feedback loops (testAsvs / testCrud / testPractices).",
   "author": {
     "name": "AI Dev Methodologies",
     "url": "https://github.com/ai-dev-methodologies"

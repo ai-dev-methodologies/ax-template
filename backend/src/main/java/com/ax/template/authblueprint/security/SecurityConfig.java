@@ -95,6 +95,10 @@ public class SecurityConfig {
                 // multi-axis obligation, advances usage, triggers a deterministic sweep, and
                 // acknowledges (the ONLY terminal — the sweep never auto-expires).
                 .requestMatchers("/api/obligations/**").authenticated()
+                // RECORDLINKAGE (record-linkage-l0): any authenticated user creates identity
+                // records, proposes matches (banded verdicts), and decides the REVIEW band;
+                // merges tombstone the loser — no delete path exists.
+                .requestMatchers("/api/linkage/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

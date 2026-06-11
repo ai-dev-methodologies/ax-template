@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 54 | 8 | 15% |
+| P1 (generic signature backlog) | 54 | 10 | 19% |
 | P2 (verification escapes) | 11 | 3 | 27% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **37** | **~30%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **39** | **~32%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -136,8 +136,15 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [ ] P1-32 IDW15-G12 external-reconciliation (외부 대사)
 
 **매칭/정합 계열**
-- [ ] P1-33 IDW16-G5 fuzzy-match governance (유사 매칭의 임계·감사)
-- [ ] P1-34 IDW16-G7 merge/survivorship (중복 엔티티 병합 + 생존 필드 규칙)
+- [x] P1-33~34 — **closed 2026-06-11 (wave-7, ONE recordlinkage 도메인)**:
+      `specs/record-linkage-l0.yaml`(LINK-BAND/REVIEW/SURVIVOR/RESOLVE/CONCURRENT-001) + rule
+      `record-linkage-banded-verdict-and-survivorship-merge`(Java 191; Coleridge 교과서
+      Fellegi-Sunter 3-class verbatim + PMC2815491 merge 감사추적, live-fetch) + `recordlinkage`
+      도메인 — score/per-field breakdown/threshold가 proposal row에 기록(bare verdict 표현불가),
+      REVIEW 밴드는 인간 confirm/reject(who/when)만, AUTO도 동일 trail, merge는 per-field
+      survivorship 기록 + loser tombstone(포인터, **delete 경로 자체가 없음**), chained resolve
+      cycle-safe, ascending-id lock order. 8-thread confirm race keystone. V045,
+      testRecordLinkage GREEN.
 - [ ] P1-35 IDW16-G11 multi-check-battery (다중 점검 배터리 — 전 항목 통과 게이트)
 - [ ] P1-36 IDW16-G12/G13 positive-gates (필수 동반 조건 게이트 2종)
 - [ ] P1-37 IDW17 one-mandate-fanout (하나의 지시 → N 작업 전개 + 완료 회수)
