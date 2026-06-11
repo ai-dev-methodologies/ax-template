@@ -99,6 +99,10 @@ public class SecurityConfig {
                 // records, proposes matches (banded verdicts), and decides the REVIEW band;
                 // merges tombstone the loser — no delete path exists.
                 .requestMatchers("/api/linkage/**").authenticated()
+                // TRUEUP (remeasurement-trueup-l0): any authenticated user owns settlement
+                // periods — readings supersede append-only, runs version with their basis,
+                // closed-period corrections post forward as net-delta true-ups.
+                .requestMatchers("/api/trueup/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

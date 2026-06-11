@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 54 | 10 | 19% |
+| P1 (generic signature backlog) | 54 | 15 | 28% |
 | P2 (verification escapes) | 11 | 3 | 27% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **39** | **~32%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **44** | **~36%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -115,12 +115,19 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       testObligation GREEN.
 
 **수량/보존 계열 (conservation family 잔여)**
-- [ ] P1-14 IDW14 estimate→actual supersession (추정치→실측치 대체 + 재계산)
-- [ ] P1-15 IDW14 run-version recompute (산정 run 버전 + 멱등 재계산)
-- [ ] P1-16 IDW14 delta-true-up (기간 경계 보정 정산)
-- [ ] P1-17 IDW14 grid-completeness (고정 그리드 결측 검출)
-- [ ] P1-18 IDW14 net-metering signed-dual-register (양방향 부호 레지스터)
-- [ ] P1-19 IDW14 tri-state-sealed-period (open/closed/sealed 기간 3-상태)
+- [x] P1-14~17 + P1-19 — **closed 2026-06-11 (wave-8, ONE trueup 도메인)**:
+      `specs/remeasurement-trueup-l0.yaml`(TUP-SUPERSEDE/RUNVERSION/DELTA/GRID/SEALED/CONCURRENT-001)
+      + rule `remeasurement-supersession-versioned-recompute-and-trueup`(Java 192; IAS 8
+      prospective-recognition verbatim ×2 + PJM Manual 29 §1.5 net-adjustment via pdftotext,
+      live-fetch) + `trueup` 도메인 — (14) reading 불변 + supersession=새 행+forward pointer
+      +slot_version+1, ACTUAL→ESTIMATED 강등 422 / (15) run 버전 per period + input basis
+      (reading rows@versions) 기록 + basis-hash 동일시 멱등(phantom version 0) / (16) CLOSED
+      기간 보정 = run-of-record 불가침, NET delta가 OPEN 기간으로 forward 포스팅, 보존
+      run_of_record+Σpostings==latest (repo-SUM 독립 도출) / (17) 고정 그리드 결측 → 422
+      (슬롯 명명), gap-fill은 명시적 + 방법 기록 / (19) OPEN→CLOSED→SEALED 단방향, SEALED
+      fail-closed 409, @Check closed⇒run-of-record. 8-thread 동시 recompute keystone
+      (ONE version + ONE posting, uq 백스톱). V046, testTrueUp 13/13 GREEN.
+- [ ] P1-18 IDW14 net-metering signed-dual-register (양방향 부호 레지스터 — register 도메인 확장 성격, trueup과 별개 shape)
 - [ ] P1-20 IDW13-G9 internal-stage exactly-once (내부 스테이지 정확히-한-번 전이)
 - [ ] P1-21 IDW13 billing trio: dunning (단계적 미납 처리)
 - [ ] P1-22 IDW13 billing: aging (채권 연령 버킷)

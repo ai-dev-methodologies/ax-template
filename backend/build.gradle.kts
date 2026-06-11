@@ -181,6 +181,12 @@ tasks.register<Test>("testRecordLinkage") {
     }
 }
 
+tasks.register<Test>("testTrueUp") {
+    useJUnitPlatform {
+        includeTags("TRUEUP")
+    }
+}
+
 tasks.register<Test>("testObligation") {
     useJUnitPlatform {
         includeTags("OBLIGATION")

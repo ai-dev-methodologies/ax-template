@@ -1,0 +1,105 @@
+version: "0.1.0"
+scope: "remeasurement-trueup-l0 — the generalized REMEASUREMENT SETTLEMENT pipeline (measured values arrive as estimates, are superseded by actuals, and settled results are corrected forward — never rewritten). When a computed settlement (utility bill, payroll run, premium, tax assessment, royalty statement) is derived from measurements that improve over time, the system MUST (1) SUPERSEDE append-only: a reading row is immutable; a better value is a NEW row with a forward pointer and an incremented slot version — the original is retained, and an ACTUAL is never downgraded back to an ESTIMATED; (2) VERSION every settlement run per period and RECORD its input basis (which reading rows, at which versions) — recomputing with an unchanged basis is idempotent (returns the same run, no phantom versions), a changed basis appends version+1 with prior runs retained; (3) correct a CLOSED period PROSPECTIVELY: the run-of-record is never mutated — the NET DELTA between the recalculated value and what was previously settled posts as a true-up into a designated OPEN period, and conservation holds (run_of_record + Σ true-ups == latest recomputed truth); (4) verify GRID COMPLETENESS before a run: a missing slot either blocks the run (listing the gaps) or is explicitly estimated with the method recorded — a silent gap is unrepresentable; (5) walk the period through ONE-WAY tri-state OPEN→CLOSED→SEALED: CLOSED requires a run-of-record and accepts corrections only as true-ups, SEALED accepts nothing (fail-closed 409). The IDW14 energy dogfood found the catalog had measurement integrity (register) but NO supersession/recompute/true-up governance: nothing modeled estimate→actual replacement, versioned recomputation, or forward-posted corrections. Realized by the trueup reference workload (com.ax.template.authblueprint.trueup). Recurs in: utility settlement, payroll retro-pay, insurance premium audit, tax reassessment, royalty true-up, ad-spend reconciliation — 6+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only readings/runs/postings + @Version optimistic + PESSIMISTIC_WRITE row locks + @Check backstops) + SHA-256 basis hash (idempotent recompute) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "IAS 8 (IFRS) — changes in accounting estimates are new information, not error corrections, and are recognised prospectively + PJM Manual 29 §1.5 Billing Adjustments — the adjustment is the NET of the recalculated and the previously billed line item + CWE-362 (concurrent recompute race) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW14 G-residuals (estimate→actual supersession / run-version recompute / delta-true-up / grid-completeness / tri-state-sealed-period); built 2026-06-11 — BACKLOG P1-14~17 + P1-19"
+
+# OPT-IN remeasurement-trueup catalog. The conservation-family residual cluster:
+# register conserves a monotone measured quantity, balanced-posting conserves a
+# transfer, netting conserves a set — but NOTHING governed what happens when the
+# MEASUREMENT ITSELF IMPROVES after the settlement that consumed it was issued.
+# Generic; the metering framing is an anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. TUP-SUPERSEDE-001  (the primitive — append-only supersession, no downgrade)
+#   2. TUP-RUNVERSION-001 (versioned runs recording their input basis; idempotent recompute)
+#   3. TUP-DELTA-001      (closed-period corrections post forward as net-delta true-ups; conservation)
+#   4. TUP-GRID-001       (a run cannot silently skip a missing slot)
+#   5. TUP-SEALED-001     (OPEN→CLOSED→SEALED one-way; sealed = fail-closed)
+#   6. TUP-CONCURRENT-001 (keystone — concurrent recomputes converge on ONE new version, ONE posting)
+
+# ── Composition note ──
+# DISTINCT from register (monotone cumulative counter — readings there only ever
+# accrue; here a reading is REPLACED by a better one), decision-governance (versions
+# ONE computed decision's basis snapshot — no period settlement, no forward posting),
+# and threshold-terminal (a crossing derives a terminal state — no recomputation).
+# TrueUpPosting rows are @AggregateMember of SettlementRun: root-JPQL reads +
+# common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth).
+# MeterReading / SettlementPeriod / SettlementRun are separate roots referencing
+# each other BY ID. The reference estimator is deliberately simple (CARRY_FORWARD
+# else ZERO_FILL, method recorded per row): the GOVERNANCE contract (supersede /
+# version / true-up / seal) is the catalog's claim — a fork-receiver may swap in
+# regression or profile-based estimators without touching it.
+
+items:
+  - id: "TUP-SUPERSEDE-001"
+    chapter: "A measurement is superseded append-only — new row, forward pointer, version bump; an ACTUAL never degrades to an ESTIMATED"
+    verification:
+      mechanism: rule
+      ref: remeasurement-supersession-versioned-recompute-and-trueup
+    requirement: "A reading row (value, source ESTIMATED|ACTUAL, estimation method when estimated) MUST be immutable once written. Recording a better value for an occupied slot MUST append a NEW row with slot_version+1 and mark the prior row SUPERSEDED with a forward pointer — the prior row's value stays readable verbatim. Replacing an ACTUAL with an ESTIMATED is a deterministic 422 (TRUEUP_DOWNGRADE): estimates fill gaps, they never overwrite facts. An ESTIMATED row without its estimation method (or an ACTUAL with one) MUST be unrepresentable (@Check backstop)."
+    test_method: "RestAssured (record ESTIMATED → supersede with ACTUAL → prior row SUPERSEDED + supersededById pointer + original value retained, new row ACTIVE v2; ACTUAL→ESTIMATED → 422 TRUEUP_DOWNGRADE; structural: value/source/estimationMethod @Column(updatable=false), @Check source-method pairing)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (IAS 8, IFRS Foundation): "Changes in accounting estimates
+      result from new information or new developments and, accordingly, are not
+      corrections of errors." The supersession ledger is what makes that
+      distinction auditable — the estimate was right WHEN MADE, and the row
+      trail proves what was known when.
+      (https://www.ifrs.org/issued-standards/list-of-standards/ias-8-accounting-policies-changes-in-accounting-estimates-and-errors/)
+  - id: "TUP-RUNVERSION-001"
+    chapter: "Settlement runs are versioned and record their input basis; an unchanged basis recomputes to the SAME run"
+    requirement: "Every settlement run for a period MUST persist: a run version unique per period (DB uq backstop), the input basis (which reading rows at which slot versions — the reproducibility trail), a basis hash, and the computed total. Recomputing with an UNCHANGED basis MUST be idempotent — it returns the existing run and appends nothing (no phantom versions). Recomputing after a supersession appends run version+1; ALL prior runs are retained verbatim (a run row has no update path)."
+    test_method: "RestAssured (recompute → run v1 with basisJson naming the reading rows; recompute again unchanged → SAME run id, still 1 run; supersede a reading → recompute → v2; GET runs → both retained; structural: run columns fully @Column(updatable=false) + uq(period_id, run_version))"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The basis is the bridge to decision-governance's lesson: a computed value
+      you cannot re-derive is a value you cannot defend. Here the basis is the
+      exact reading-row set, so any auditor can replay run N years later.
+  - id: "TUP-DELTA-001"
+    chapter: "A CLOSED period is corrected forward — the net delta posts as a true-up into an open period; the run-of-record is never touched"
+    requirement: "Recomputing a CLOSED period (after a supersession changed its basis) MUST NOT mutate the period's run-of-record. The correction posts as a TrueUpPosting into a caller-designated OPEN period, recording the source period, the from/to run versions, and the NET amount = (recalculated total) − (run-of-record total + all previously posted true-ups for that source period). A zero net posts nothing. CONSERVATION MUST hold at every step: run_of_record.total + Σ(true-up postings for the period) == latest run total. Posting into a non-OPEN target is rejected (422)."
+    test_method: "RestAssured (close period at run v1; supersede → recompute(target=open P2) → posting amount = v2−v1 into P2; supersede again → recompute → second posting = v3 − (v1 + first posting); assert run-of-record unchanged AND v1.total + Σpostings == v3.total; recompute targeting a CLOSED target → 422)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (PJM Manual 29: Billing, Rev. 32, §1.5 Billing Adjustments):
+      "The adjustment that appears on the billing statement will be the net of
+      the recalculated billing line item charge/credit and the previously billed
+      line item charge/credit." Prospective correction as the grid settles it —
+      the original statement is never reissued, the NET rides a later statement.
+      (https://www.pjm.com/-/media/documents/manuals/m29.ashx)
+  - id: "TUP-GRID-001"
+    chapter: "A run over a fixed grid verifies completeness — a missing slot blocks or is explicitly estimated, never silently skipped"
+    requirement: "A settlement run over a period with a declared grid (N expected slots) MUST verify every slot carries an ACTIVE reading before computing. A missing slot is a deterministic 422 (TRUEUP_GRID_INCOMPLETE) NAMING the missing slots — the run never silently computes over a partial grid. Filling gaps is an EXPLICIT operation that appends ESTIMATED readings with the estimation method recorded per row (reference estimator: CARRY_FORWARD from the nearest prior slot, else ZERO_FILL) — after which the run proceeds and the estimate is later superseded by the actual through TUP-SUPERSEDE-001."
+    test_method: "RestAssured (grid of 3, record 2 readings → recompute → 422 naming the missing slot; estimate-missing → ESTIMATED row appended with method recorded; recompute → run computes; the estimated slot later superseded by ACTUAL → recompute yields v2)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      The silent-gap failure mode: a run that quietly treats missing as zero
+      undercharges forever and no row says why. Blocking + explicit estimation
+      makes the gap a recorded fact instead of an invisible assumption.
+  - id: "TUP-SEALED-001"
+    chapter: "Period lifecycle is one-way OPEN→CLOSED→SEALED; CLOSED requires a run-of-record; SEALED is fail-closed"
+    requirement: "A period MUST walk OPEN→CLOSED→SEALED one-way only (skip and reverse transitions are 409 TRUEUP_INVALID_STATE). Closing fixes the run-of-record (closing with no run is 422 TRUEUP_NO_RUN; closed-or-sealed-without-run-of-record MUST be unrepresentable — @Check backstop). A CLOSED period accepts new readings and recomputes ONLY through the true-up path (TUP-DELTA-001). A SEALED period is fail-closed: new readings, recomputes, and true-ups against it are ALL deterministic 409s (TRUEUP_PERIOD_SEALED)."
+    test_method: "RestAssured (OPEN→CLOSED→SEALED walk; seal an OPEN period → 409; close without a run → 422; on SEALED: record reading → 409, recompute → 409; structural: close/seal mutators package-private, @Check status='OPEN' OR run_of_record_id IS NOT NULL)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Sealing trades correction capacity for finality — that loss is the point
+      (audit submission, regulatory filing). A fork wanting fact capture past
+      the seal may relax reading-append to allowed-but-never-settleable; the
+      reference stays fail-closed, which is the safer default.
+  - id: "TUP-CONCURRENT-001"
+    chapter: "Keystone — concurrent recomputes converge on ONE new run version and ONE true-up posting"
+    requirement: "Across ANY interleaving of N concurrent recompute calls for the same period after one supersession, EXACTLY ONE new run version is appended and (for a closed period) EXACTLY ONE true-up posting is created — the rest converge idempotently onto that run (CWE-362). The period row's PESSIMISTIC_WRITE lock is the serialization point; uq(period_id, run_version) and uq(run_id) on postings are the DB backstops a code regression cannot slip past."
+    test_method: "Concurrency proof (closed period + one supersession; 8 concurrent service.recompute → all return the SAME run version, runs count grows by exactly 1, postings count grows by exactly 1)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Lock-then-idempotence-check is the same convergence discipline the
+      record-linkage confirm path uses; the uq backstops make a double-post
+      unrepresentable even if the lock discipline regresses.
