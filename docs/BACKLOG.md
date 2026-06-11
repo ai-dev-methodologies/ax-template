@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 54 | 4 | 7% |
-| P2 (verification escapes) | 10 | 3 | 30% |
+| P1 (generic signature backlog) | 54 | 8 | 15% |
+| P2 (verification escapes) | 11 | 3 | 27% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **121** | **33** | **~27%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **37** | **~30%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -104,11 +104,15 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [ ] P1-9 IDW16-G15 reproducible-classification (동일 입력 → 동일 분류 보장)
 
 **기한/시한 계열**
-- [ ] P1-10 IDW12 deadline-ladder (G14-17: 다단 기한 + 단계별 escalation)
-- [ ] P1-11 IDW17 multi-axis-deadline (복수 축(시간/사용량/사이클) 중 선도래 기한)
-- [ ] P1-12 IDW17 deadline-grounding (기한의 산출 근거를 도출식으로 고정)
-- [ ] P1-13 IDW16-G3 closed-loop ack-obligation (critical-result 수신확인 의무: additive
-      escalation, never auto-expire)
+- [x] P1-10~13 — **closed 2026-06-11 (wave-6, ONE obligation 도메인)**:
+      `specs/deadline-obligation-l0.yaml`(OBL-GROUND/AXIS/ACK/LADDER/CONCURRENT-001) + rule
+      `deadline-obligation-grounded-multi-axis-ladder-closed-loop`(Java 190; 14 CFR 91.409
+      (a)+(b) 2축 쌍 + PMC7510293 closed-loop, live-fetch) + `obligation` 도메인 — (12) 기한=
+      기록된 도출식(raw deadline 필드 API에 부재, DerivationRecord append) / (11) multi-axis
+      min(candidates)+사용량 advance 재도출 / (10) APPROACH→IMMINENT→BREACH exactly-once
+      (uq(obligation,rung) DB backstop) additive / (13) ack(who/when)만 terminal — EXPIRED
+      상태 자체가 없음, sweep은 절대 종결 불기록. 8-thread 동시 sweep keystone. V044,
+      testObligation GREEN.
 
 **수량/보존 계열 (conservation family 잔여)**
 - [ ] P1-14 IDW14 estimate→actual supersession (추정치→실측치 대체 + 재계산)
@@ -166,6 +170,9 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       147/86 노출. **closed 2026-06-10 (이번 wave: counts 187/99 수정 + guard 확장).**
 - [ ] P2-7 practices-react/DECISIONS.md 신설 (Java 측 438줄과 비대칭 — React 룰 provenance 부재).
 - [ ] P2-8 검증 비용 시계열(perf-log.jsonl) + 40-도메인 외삽 시 CI sharding 설계.
+- [ ] P2-11 ExportWorker.drainPending의 self-invocation — @Scheduled 틱이 bare this.processOne을
+      호출해 @Transactional(REQUIRES_NEW) 프록시를 우회 (obligation sweeper와 동일 패턴; wave-6
+      review 발견 2026-06-11). @Lazy self 주입 패턴으로 수정 권장.
 - [ ] P2-10 netting addObligation 입력시 상한 부재 — 한 run의 obligation 무제한 적재 시 잠금
       트랜잭션 내 unbounded heap (transformation MAX_LEGS 유사 가드 부재; pre-existing,
       wave-4 review 발견 2026-06-10). 입력시 cap + 422 권장.

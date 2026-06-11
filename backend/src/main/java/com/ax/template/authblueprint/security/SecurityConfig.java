@@ -91,6 +91,10 @@ public class SecurityConfig {
                 // DECISIONGOV (decision-governance-l0): any authenticated user computes a governed
                 // decision, recomputes with a reason, or overrides under four-eyes (approver ≠ actor).
                 .requestMatchers("/api/decisions/**").authenticated()
+                // OBLIGATION (deadline-obligation-l0): any authenticated user creates a grounded
+                // multi-axis obligation, advances usage, triggers a deterministic sweep, and
+                // acknowledges (the ONLY terminal — the sweep never auto-expires).
+                .requestMatchers("/api/obligations/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

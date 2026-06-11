@@ -1,0 +1,91 @@
+version: "0.1.0"
+scope: "deadline-obligation-l0 — the generalized GOVERNED DEADLINE OBLIGATION. An obligation whose deadline is (1) GROUNDED: derived from a recorded anchor + rule (a recomputable derivation string), never a free-typed date an auditor cannot re-derive; (2) MULTI-AXIS: when several axes regulate the same obligation (a calendar interval AND a usage budget — aviation's '12 calendar months' annual vs '100 hours of time in service' inspection axes), the EFFECTIVE deadline is the EARLIEST axis candidate, re-derived (and re-recorded) whenever an axis's usage advances; (3) LADDERED: ordered escalation rungs (APPROACH/IMMINENT/BREACH) each fire EXACTLY ONCE, in order, as APPENDED additive escalation events — escalation adds visibility, never cancels the obligation; (4) CLOSED-LOOP: the obligation reaches its terminal state ONLY through an explicit acknowledgment recording who/when — it NEVER auto-expires; past-deadline it stays OPEN and escalated until a human closes the loop; (5) CONCURRENT-SAFE: the sweep, an acknowledgment, and a usage update serialize on the obligation's row lock so a rung never fires twice and an ack never races a recompute. The IDW12/16/17 dogfoods found the catalog had NO deadline governance: scheduled-task runs jobs but encodes no obligation lifecycle; webhook retry/backoff is transport, not obligation; threshold-terminal derives a TERMINAL from a value but has no ladder, no ack, and a single axis. Realized by the obligation reference workload (com.ax.template.authblueprint.obligation). Recurs in: aviation maintenance due lists, clinical critical-result follow-up, regulatory filing windows, contract cure periods, certificate/credential expiry, safety-inspection scheduling — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only escalation events + @Version optimistic + PESSIMISTIC_WRITE row lock + @Check backstops) + @Scheduled sweep with a synchronous processOne test path (ExportWorker precedent) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "US 14 CFR §91.409(a)/(b) (the canonical MULTI-AXIS inspection regime: a 12-calendar-month axis AND a 100-hours-of-time-in-service axis governing the same airworthiness obligation) + peer-reviewed closed-loop test-result communication (BMJ Open Qual / PMC7510293: results must be sent, received, acknowledged and acted upon) + CWE-362 (sweep vs ack vs usage-update race) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW12 deadline-ladder (G14-17) + IDW17 multi-axis-deadline/deadline-grounding + IDW16-G3 closed-loop ack-obligation; built 2026-06-11 — BACKLOG P1-10~13"
+
+# OPT-IN deadline-obligation catalog. The cross-industry gap cluster: the catalog
+# runs SCHEDULES (scheduled-task) and derives TERMINALS (threshold-terminal) but
+# never governs an OBLIGATION'S deadline — where the date comes from, which of
+# several axes wins, how escalation ladders fire, and what (only) closes the loop.
+# Generic; the aviation/clinical framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. OBL-GROUND-001     (the primitive — every deadline carries its recomputable derivation)
+#   2. OBL-AXIS-001       (effective deadline = EARLIEST axis candidate; usage advance re-derives)
+#   3. OBL-ACK-001        (closed-loop — explicit ack is the ONLY terminal; never auto-expire)
+#   4. OBL-LADDER-001     (ordered rungs fire exactly once, in order, additive)
+#   5. OBL-CONCURRENT-001 (keystone — sweep vs ack vs usage-update serialize on the row lock)
+
+# ── Composition note ──
+# DISTINCT from scheduled-task-l0 (executes jobs; no obligation lifecycle), webhook
+# retry/backoff (transport delivery, auto-terminates on exhaustion — the OPPOSITE of
+# never-auto-expire), and threshold-terminal-derivation (value-crossing derives an
+# IRREVERSIBLE terminal with no ladder/ack; single axis). Escalation events and axes
+# are @AggregateMember of the Obligation root: reads live as JPQL on the root's
+# repository, writes go through the shared common/MemberWriter seam (AX-DDD-MEMBER-REPO
+# end-state, applied from birth). The sweep is a CONCURRENT MUTATOR in the sense of
+# timeout-sweep-is-a-concurrent-mutator (satisfied here by the STRONGER means — the
+# same PESSIMISTIC_WRITE row lock as the API paths, vs that rule's optimistic shape).
+
+items:
+  - id: "OBL-GROUND-001"
+    chapter: "Every deadline is derived from a recorded anchor + rule — never a free-typed date"
+    verification:
+      mechanism: rule
+      ref: deadline-obligation-grounded-multi-axis-ladder-closed-loop
+    requirement: "An obligation's deadline MUST be DERIVED: the caller supplies the axis definitions (anchor instant + interval, or usage limit + declared consumption rate) and the SYSTEM computes each axis's candidate deadline AND records the derivation as a human-readable formula string (e.g. 'CALENDAR: 2026-01-01T00:00Z + P365D' / 'USAGE: anchor + (limit 100 - used 40) / 2.0 per-day') on the axis row, immutably per derivation. A free-typed effective deadline (a date with no recorded derivation) MUST be unrepresentable through the API — the effective deadline is ALWAYS computed from axis candidates, so an auditor can re-derive every deadline from the recorded basis alone."
+    test_method: "RestAssured (create with axes → 201, each axis row carries candidate + derivation string; effective deadline == earliest candidate; no API accepts a raw deadline field)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The grounding posture of decision-governance's basis snapshot applied to
+      TIME: the deadline's provenance is part of the record (IDW17
+      deadline-grounding).
+  - id: "OBL-AXIS-001"
+    chapter: "Multiple axes govern one obligation — the EARLIEST candidate wins; usage advance re-derives"
+    requirement: "When an obligation carries multiple axes (CALENDAR: anchor + interval-days; USAGE: limit units + used units + declared units-per-day consumption rate), the EFFECTIVE deadline MUST equal the EARLIEST of the axis candidates at all times. Advancing an axis's usage (recording flight hours, mileage, doses) MUST recompute that axis's candidate from the NEW remaining budget and the recorded rate, append the new derivation, and re-evaluate the effective deadline — under the obligation's row lock, in the same transaction. The regulated reality this generalizes: one airworthiness obligation governed BOTH by '12 calendar months' AND by '100 hours of time in service' (14 CFR §91.409(a)/(b)) — whichever axis exhausts first governs."
+    test_method: "RestAssured (two axes → effective == earlier; advance usage so the USAGE axis overtakes CALENDAR → effective deadline moves earlier + derivation re-recorded; axis advance on unknown axis → 404)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchors (14 CFR §91.409, two separate subsections — TWO axes over one
+      obligation): (a) "no person may operate an aircraft unless, within the
+      preceding 12 calendar months, it has had—(1) An annual inspection in
+      accordance with part 43"; (b) "unless within the preceding 100 hours of
+      time in service the aircraft has received an annual or 100-hour inspection
+      and been approved for return to service"
+      (https://www.law.cornell.edu/cfr/text/14/91.409)
+  - id: "OBL-ACK-001"
+    chapter: "Closed-loop — an explicit acknowledgment is the ONLY terminal; the obligation never auto-expires"
+    requirement: "The obligation's ONLY terminal transition is an explicit acknowledgment recording WHO acknowledged and WHEN (OPEN → ACKNOWLEDGED). The sweep MUST NOT close, cancel, or expire an obligation — past its effective deadline the obligation stays OPEN with the BREACH rung fired, escalating visibility until a human closes the loop. Acknowledging an already-acknowledged obligation is a deterministic 409 (OBLIGATION_ALREADY_ACKNOWLEDGED); acknowledging records ack_by/ack_at immutably. The acknowledger is the AUTHENTICATED caller (never a parameter); the service additionally rejects a blank acknowledger (422) as a defensive guard — unreachable through the reference API, load-bearing for direct service consumers. This is the clinical closed-loop posture: a critical result is not 'done' when sent — only when received, acknowledged and acted upon."
+    test_method: "RestAssured (ack → ACKNOWLEDGED w/ who+when; double ack → 409; sweep over a PAST-deadline obligation leaves it OPEN with BREACH fired — never closes it; structural: no service/sweep path writes ACKNOWLEDGED except ack)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (peer-reviewed closed-loop review, PMC7510293): "The review
+      highlighted the complex challenge of ensuring that test results are sent,
+      received, acknowledged and acted upon."
+      (https://pmc.ncbi.nlm.nih.gov/articles/PMC7510293/)
+      Auto-expiry is the precise failure mode this spec forbids (IDW16-G3:
+      additive escalation, never auto-expire).
+  - id: "OBL-LADDER-001"
+    chapter: "Ordered escalation rungs fire exactly once, in order, as appended additive events"
+    requirement: "The obligation carries an ordered escalation ladder over the window windowStart→effectiveDeadline, where the window START is the EARLIEST axis anchor (the obligation's true lifecycle start, which may precede registration): APPROACH at 50% elapsed, IMMINENT at 80%, BREACH at 100% (reference constants). The sweep MUST fire each rung EXACTLY ONCE per obligation (a fired rung is recorded as an APPENDED immutable escalation event with rung/firedAt/deadline-at-firing), in ladder order — a later sweep pass that finds multiple rungs due fires the missing ones in order in one pass. Escalation is ADDITIVE: an event only ever ADDS visibility; no rung transition mutates the obligation's lifecycle or deadline. A duplicate (obligation, rung) event MUST be unrepresentable (UNIQUE constraint backstop)."
+    test_method: "RestAssured + sweep processOne (window elapsed past 80% → APPROACH+IMMINENT fired once each in order; re-sweep → no duplicates; past deadline → BREACH appended, obligation still OPEN; structural: uq(obligation_id, rung))"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The IDW12 deadline-ladder (G14-17) generalization; exactly-once firing is
+      the transactional posture of the catalog's outbox/sweep rules applied to
+      escalation.
+  - id: "OBL-CONCURRENT-001"
+    chapter: "Keystone — sweep vs ack vs usage-update serialize on the obligation row lock"
+    requirement: "The sweep is a CONCURRENT MUTATOR (timeout-sweep-is-a-concurrent-mutator): it MUST acquire the obligation's row under PESSIMISTIC_WRITE exactly like the API write paths (ack, axis advance), so across ANY interleaving: a rung fires exactly once (never twice from two sweep passes; CWE-362), an ack and a sweep serialize (the sweep never resurrects or double-escalates an acknowledged obligation — it skips ACKNOWLEDGED rows), and a usage advance and the sweep agree on ONE effective deadline per evaluation."
+    test_method: "Concurrency proof (N concurrent sweep processOne calls on one due obligation via ExecutorService → exactly one event per due rung; ack-then-sweep → no further events)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The same single-serialization-point shape as register/threshold/decisiongov —
+      the obligation row is the lock.

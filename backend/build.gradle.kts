@@ -175,6 +175,12 @@ tasks.register<Test>("testCopresence") {
     }
 }
 
+tasks.register<Test>("testObligation") {
+    useJUnitPlatform {
+        includeTags("OBLIGATION")
+    }
+}
+
 tasks.register<Test>("testDecisionGov") {
     useJUnitPlatform {
         includeTags("DECISIONGOV")
