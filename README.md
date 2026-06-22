@@ -1,6 +1,7 @@
 # ax-template
 
-> **Full-stack React 19 / Next.js 15 + Spring Boot 3 fork-base template that mechanically enforces development rules so AI agents can't drift off the rails.**
+> **Full-stack React 19 / Next.js 15 + Spring Boot 3 fork-base template. The catalog mechanically enforces development rules on its own HEAD (and in any fork that opts into the hooks) so AI agents can't drift off the rails.**
+> This claim is falsifiable — run `bash practices/scripts/ax-prove-gate-blocks-agent.sh` to confirm the block→correct→log triple on the current HEAD (maintainer-run, opt-in; see [`skills/ax-ledger/SKILL.md`](./skills/ax-ledger/SKILL.md)).
 
 ax = **AI transformation**. This repo is the source of the Claude Code skill
 **`/ax-transform`** and a composition kit you fork to start a new
@@ -39,7 +40,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-25 L4 domains + 11 active recipes · 192 Java rules · 99 React rules · 14 ESLint rules · 77 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+25 L4 domains + 11 active recipes · 192 Java rules · 99 React rules · 14 ESLint rules · 80 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -47,7 +48,7 @@ AI agent writes Spring + React code for the new domain
        ↓
 ESLint plugin + ./gradlew test{Domain} + Spec Trio + AGENTS.md + 4 hard gates auto-enforce
        ↓
-non-conforming AI output BLOCKED at commit / push / CI
+non-conforming AI output BLOCKED at commit / push / CI  ← on own HEAD; opt-in for forks
        ↓
 codebase quality stays inside the template's design envelope
        ↓
@@ -103,7 +104,7 @@ cat recipes/_MANIFEST.yaml | head -40
 cat recipes/saas-subscription/RECIPE.md     # example
 
 # 4. Run the full catalog verification (proves the bundle is intact)
-bash practices/evals/run-all-guards.sh       # 77 hard guards (all PASS expected)
+bash practices/evals/run-all-guards.sh       # 80 hard guards (all PASS expected)
 
 # Per-domain catalog tasks — the "binary pass/fail" surface (R64+ baseline)
 cd backend
@@ -234,7 +235,7 @@ ax-template/
 ├── practices/                      # Java/Spring catalog
 │   ├── rules/                      # 192 rule.md files
 │   ├── upstream/                   # External doc snapshots
-│   ├── evals/                      # 4 hard gates + 77 hard guards
+│   ├── evals/                      # 4 hard gates + 80 hard guards
 │   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)
 │   ├── SKILL.md                    # subsystem skill
 │   ├── MAINTAINER.md               # catalog maintainer guide

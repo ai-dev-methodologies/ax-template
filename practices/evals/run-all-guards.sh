@@ -1073,6 +1073,31 @@ run_guard "evidence_quote_spotcheck/fixture_fail" 1 \
 run_guard "evidence_quote_spotcheck/fixture_pass" 0 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/pass_quote_present"
 
+echo ""
+echo "[75] catalog_example_symbol_guard.sh (catalog-example/impl-drift — a rule java fence that names a class with no backing .java teaches an agent a broken shape; iterations 2-3 fixed two such drifts by hand with no mechanical backstop. Scans ONLY java fences: a seed-deny fabricated store call (idempotencyStore.computeIfAbsent) and any *StateMachine/*Store symbol must resolve to a real backend/src/main/java symbol OR be named in a catalog-example-ok annotation. Live exits 0; fixtures prove non-vacuity.)"
+run_guard "catalog_example_symbol/live" 0 \
+    bash "$SCRIPT_DIR/catalog_example_symbol_guard.sh"
+run_guard "catalog_example_symbol/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/catalog_example_symbol_guard.sh" --root "$SCRIPT_DIR/fixtures/catalog-example-symbol/fail_diverged_symbol"
+run_guard "catalog_example_symbol/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/catalog_example_symbol_guard.sh" --root "$SCRIPT_DIR/fixtures/catalog-example-symbol/pass_annotated_ok"
+
+echo "[76] agent_block_proof_guard.sh (falsification-test regression guard — practices/scripts/ax-prove-gate-blocks-agent.sh is the on-disk proof of the headline thesis 'gates mechanically constrain AI agents' (agent writes a Map-returning @ExceptionHandler → real controller_problemdetail_guard BLOCKS → agent corrects → guard PASSES → block→pass logged actor=agent). A proof that silently stops proving is worse than none: this asserts the proof exists, is executable, TOGGLES (run with an isolated AX_LEDGER_DIR so the real ledger is untouched), and is NON-VACUOUS (its 'blocked_rc -ne 1' fail-guard + real-guard reference are present). Live exits 0; fixtures prove non-vacuity.)"
+run_guard "agent_block_proof/live" 0 \
+    bash "$SCRIPT_DIR/agent_block_proof_guard.sh"
+run_guard "agent_block_proof/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/agent_block_proof_guard.sh" --root "$SCRIPT_DIR/fixtures/agent-block-proof/fail_vacuous_proof"
+run_guard "agent_block_proof/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/agent_block_proof_guard.sh" --root "$SCRIPT_DIR/fixtures/agent-block-proof/pass_proof_toggles"
+
+echo "[77] backlog_convergence_integrity_guard.sh (north-star #2 — the BACKLOG convergence rate is the project's redefined end-point, yet nothing read docs/BACKLOG.md, so the 수렴률 table tier counts / 합계 denominator / aggregate % could silently rot or mis-sum. This guard counts '- [x]'/'- [ ]' item IDs per ## P0–P3 section as disk-truth — expanding ranges (P0-1 ~ P0-11), range-plus-extra (P1-14~17 + P1-19), and slash lists; excluding denominator-marked lettered sub-items (P2-1a/b) — and asserts each tier 전체/closed cell, the 합계 == sum of tiers, and aggregate 수렴률 == round(closed/total*100). Live exits 0; fixtures prove non-vacuity.)"
+run_guard "backlog_convergence_integrity/live" 0 \
+    bash "$SCRIPT_DIR/backlog_convergence_integrity_guard.sh"
+run_guard "backlog_convergence_integrity/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/backlog_convergence_integrity_guard.sh" --root "$SCRIPT_DIR/fixtures/backlog-convergence/fail_denominator_shrink"
+run_guard "backlog_convergence_integrity/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/backlog_convergence_integrity_guard.sh" --root "$SCRIPT_DIR/fixtures/backlog-convergence/pass_consistent"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

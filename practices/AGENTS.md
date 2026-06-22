@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "5140f759a19b8c72f48dc5729ab766db15db4b4ddb554196502bd350467428c7"
+  source_concat_sha256: "9678bffea87cf6e41c9614cba409c1bbf3b977d61301ac300c6c2280ba7374ac"
   rule_count: 192
   generated_by: "practices/generate_agents.sh"
 ---
@@ -482,20 +482,24 @@ public PaymentResponse create(@Valid @RequestBody CreatePaymentRequest req) {
 }
 ```
 
-**Correct — required header + dedupe store:**
+**Correct — manual null-check + dedupe store:**
 
 ```java
 @PostMapping("/api/payments")
-public PaymentResponse create(
-        @RequestHeader(name = "Idempotency-Key", required = true) String idempotencyKey,
+public ResponseEntity<PaymentResponse> create(
         @Valid @RequestBody CreatePaymentRequest req,
-        Authentication auth) {
-    String principal = auth.getName();
-    return idempotencyStore.computeIfAbsent(principal, idempotencyKey,
-            () -> paymentService.charge(req));   // executes once per (principal, key)
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @AuthenticationPrincipal Jwt jwt) {
+    if (idempotencyKey == null || idempotencyKey.isBlank()) {
+        throw new PaymentValidationException("Idempotency-Key header is required");
+    }
+    UUID userId = UUID.fromString(jwt.getSubject());
+    UUID paymentId = idempotencyStore.findOrCreate(userId, idempotencyKey,
+            () -> paymentService.charge(req).getId());  // executes once per (userId, key)
+    return ResponseEntity.ok(paymentService.getPayment(paymentId, userId));
 }
-// Missing header → @RequestHeader's required=true returns 400 with an RFC 7807
-// ProblemDetail describing the missing-header constraint.
+// Missing header → manual guard throws a domain exception mapped to 400 with an
+// RFC 7807 ProblemDetail by the global @ExceptionHandler.
 ```
 
 The store layer (Caffeine, Redis, or a database table) MUST be atomic — `putIfAbsent` semantics or `SELECT ... FOR UPDATE` — so that concurrent duplicate requests with the same key collapse to one execution and the losers either wait for the result or receive the same cached payload. A non-atomic implementation re-creates the double-charge bug under racing retries.
@@ -10513,6 +10517,7 @@ public class WorkService {
 
 **Correct — dedicated transition method on the entity + @Version + transactional caller:**
 
+<!-- catalog-example-ok: WorkItem WorkState WorkEvent WorkStateMachine — intentionally generic; the reference impl is PaymentStateMachine -->
 ```java
 @Entity
 public class WorkItem {
@@ -10525,10 +10530,9 @@ public class WorkItem {
     private long version;             // optimistic lock — bumped on every persist
 
     public void transition(WorkEvent event) {
-        WorkState next = WorkStateMachine.next(this.state, event);
-        if (next == null) {
-            throw new IllegalStateTransitionException(this.state, event);
-        }
+        WorkState next = WorkStateMachine.transition(this.state, event);
+        // WorkStateMachine.transition throws IllegalStateTransitionException on an
+        // illegal (from, event) pair — never returns null.
         this.state = next;            // single mutation site, gated by the state machine
     }
 
@@ -10546,7 +10550,7 @@ public class WorkService {
 }
 ```
 
-The `WorkStateMachine.next(state, event)` pure function returns the next state or `null` for an illegal transition. The exception handler maps `IllegalStateTransitionException` to HTTP 409 with an RFC 7807 `application/problem+json` body that includes `currentState` and `attemptedEvent` extensions, so clients can react programmatically.
+The `WorkStateMachine.transition(state, event)` pure function returns the next state or **throws** `IllegalStateTransitionException` on an illegal transition — it never returns `null`. The exception handler maps `IllegalStateTransitionException` to HTTP 409 with an RFC 7807 `application/problem+json` body that includes `currentState` and `attemptedEvent` extensions, so clients can react programmatically.
 
 Verification: `./gradlew testPayment --tests "*StateMachine*"` exercises the legal-transition matrix (all defined transitions succeed; all undefined transitions throw `IllegalStateTransitionException`) and an optimistic-lock check: JPA `@Version` is asserted to reject a stale-version re-transition (the test approximates the race sequentially; the full two-thread CAPTURE race is deferred to the US-011 concurrency suite). The optimistic-lock loser surfaces as a 409.
 

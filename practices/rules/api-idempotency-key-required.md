@@ -44,20 +44,24 @@ public PaymentResponse create(@Valid @RequestBody CreatePaymentRequest req) {
 }
 ```
 
-**Correct — required header + dedupe store:**
+**Correct — manual null-check + dedupe store:**
 
 ```java
 @PostMapping("/api/payments")
-public PaymentResponse create(
-        @RequestHeader(name = "Idempotency-Key", required = true) String idempotencyKey,
+public ResponseEntity<PaymentResponse> create(
         @Valid @RequestBody CreatePaymentRequest req,
-        Authentication auth) {
-    String principal = auth.getName();
-    return idempotencyStore.computeIfAbsent(principal, idempotencyKey,
-            () -> paymentService.charge(req));   // executes once per (principal, key)
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @AuthenticationPrincipal Jwt jwt) {
+    if (idempotencyKey == null || idempotencyKey.isBlank()) {
+        throw new PaymentValidationException("Idempotency-Key header is required");
+    }
+    UUID userId = UUID.fromString(jwt.getSubject());
+    UUID paymentId = idempotencyStore.findOrCreate(userId, idempotencyKey,
+            () -> paymentService.charge(req).getId());  // executes once per (userId, key)
+    return ResponseEntity.ok(paymentService.getPayment(paymentId, userId));
 }
-// Missing header → @RequestHeader's required=true returns 400 with an RFC 7807
-// ProblemDetail describing the missing-header constraint.
+// Missing header → manual guard throws a domain exception mapped to 400 with an
+// RFC 7807 ProblemDetail by the global @ExceptionHandler.
 ```
 
 The store layer (Caffeine, Redis, or a database table) MUST be atomic — `putIfAbsent` semantics or `SELECT ... FOR UPDATE` — so that concurrent duplicate requests with the same key collapse to one execution and the losers either wait for the result or receive the same cached payload. A non-atomic implementation re-creates the double-charge bug under racing retries.

@@ -76,7 +76,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 192 Java rules + 99 React rules + 14 ESLint rules + 77 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 192 Java rules + 99 React rules + 14 ESLint rules + 80 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -312,7 +312,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 192룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 77 hard guards
+│   ├── evals/                 # 4 hard gates + 80 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
@@ -369,6 +369,31 @@ verify/report-kpi.sh        # KPI 리포트
 ```
 
 → template이 제공하는 도구. fork받은 팀의 git/CI 정책에 어떻게 통합할지는 자율.
+
+## Enforcement surfaces (what blocks where)
+
+ax-template의 강제 표면은 **3개 계층**으로 분류된다. 전체 guard suite는 수동 실행 전용이며,
+fork-receiver의 활성화는 opt-in이다.
+
+| Surface | 파일 | 트리거 조건 | 차단 계층 | 활성화 |
+|---------|------|------------|----------|--------|
+| PreToolUse hook (Claude Code) | `.claude/settings.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
+| `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
+| `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 모든 push 시 — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
+| `run-all-guards.sh` (80 guards, 132 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
+| `per-domain ./gradlew test{Domain}` | `backend/build.gradle` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
+
+### 핵심 설명
+
+- **전체 80개 guard는 `run-all-guards.sh` 경유 수동 실행 전용이다.** 커밋마다 자동 실행되지 않는다.
+  R25 완료 선언 전에 `verify-completion.sh`를 실행하면 이 guard들이 모두 돌아간다.
+- **pre-commit / pre-push hook은 opt-in이다.** `install-hooks.sh`를 실행한 클론에서만 활성화된다.
+  ax-template 자체 HEAD에서는 활성화되어 있다; fork-receiver가 활성화 여부를 결정한다.
+- **fork-receiver CI 통합은 완전 자율이다.** ax-template은 catalog quality probe만 제공한다.
+  merge gate, branch protection, PR 정책은 fork-receiver가 결정한다.
+- **commit-blocking은 `practices/` 변경에만 적용된다.** 일반 소스 변경에는 pre-commit gate가 실행되지 않는다.
+
+*(P2-3 진행 중 — enforcement-surface 분류 문서화 완료. done-when: 모든 표면에 예외 없는 binary 테스트 커버리지 추가 시 종결.)*
 
 ## RBAC (reference workload)
 

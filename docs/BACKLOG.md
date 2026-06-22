@@ -173,10 +173,25 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       HTML strip + entity/typography 정규화 후 substring. live는 advisory(기존 정합 backlog
       95/190건 — 대부분 live-page 검증 quote vs partial snapshot digest 불일치), fixtures는
       --strict로 non-vacuity 증명. 후속: 95건 소진 후 --strict 승격.
+- [ ] P2-1a upstream-quote mismatch burn-down *(P2-1 잔여, 분모 불변)* —
+      `evidence_quote_spotcheck_guard.sh` [74]는 현재 ADVISORY (~95 미매칭,
+      대부분 `practices-react/upstream/vercel-react-best-practices.snapshot.md`
+      index-only digest vs 실제 인용문 불일치). done-when:
+      `bash practices/evals/evidence_quote_spotcheck_guard.sh --strict` exits 0
+      **AND** guard [74]가 `run-all-guards.sh`에서 `--strict` 모드로 승격.
+- [ ] P2-1b external-URL evidence entries *(P2-1 잔여, 분모 불변)* —
+      `source_type: external` 항목(URL+citation만, 스냅숏 없음)은 어떤 blocking
+      gate도 내용을 검증하지 않는다 — 조작된 외부 인용이 모든 게이트를 통과한다.
+      done-when: periodic live-fetch `external_url_spot_audit` (ADVISORY) 추가,
+      한 sweep에서 confirmed-fabricated 0 확인.
 - [ ] P2-2 ESLint warn→error 승격: `no-server-state-in-local-state`, `no-god-route`
       (`eslint-plugin-ax/index.js:64-65`) — 측정 기반 기한 부여.
 - [ ] P2-3 enforcement-surface map 문서화 — commit-blocking / push-blocking / manual 3분류를
-      CLAUDE.md 또는 verify 문서에 명시 (77-guard 전체는 수동 run-all-guards 전용임을 포함).
+      CLAUDE.md 또는 verify 문서에 명시 (80-guard 전체는 수동 run-all-guards 전용임을 포함).
+      **진행 중 (2026-06-22)**: CLAUDE.md "Enforcement surfaces (what blocks where)" 섹션 추가 —
+      5개 표면 분류표 (PreToolUse advisory / pre-commit commit-blocking / pre-push push-blocking /
+      run-all-guards manual / per-domain test manual), opt-in 명시, 80 guards 수동 전용 명시.
+      done-when: 모든 표면에 예외 없는 binary 테스트 커버리지 추가.
 - [ ] P2-4 R25 체크리스트에 frontend lint 단계 추가 (현재 backend만).
 - [ ] P2-5 aggregate `./gradlew test` advisory의 root-cause(ContextCache isolation) 종결 —
       2g heap pin은 workaround.

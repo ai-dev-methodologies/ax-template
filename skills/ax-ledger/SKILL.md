@@ -117,3 +117,32 @@ the audit trail of WHY the catalog changed.
 
 The ledger is never a merge gate (reviewing is a human/agent judgment, not a binary) — but capture is
 always-on, so nothing is lost.
+
+## Falsification test — proving a gate blocks an agent
+
+The catalog's headline thesis ("gates mechanically constrain AI agents") is tested by a
+reproducible, self-contained script:
+
+```bash
+bash practices/scripts/ax-prove-gate-blocks-agent.sh
+```
+
+**What it does (block → correct → log triple):**
+
+1. An "agent" writes a `DemoController` whose `@ExceptionHandler` returns `Map<String,String>`
+   — a real RFC-9457 violation — into a throwaway temp tree (the real backend is never touched).
+2. The real guard (`controller_problemdetail_guard.sh`) runs against that tree and **MUST exit 1
+   (BLOCK)**. A `violation … actor=agent` event is written to `.ax-ledger/events.jsonl`.
+3. The "agent" corrects the return type to `ProblemDetail`. The same guard **MUST now exit 0
+   (PASS)**. A `progress … actor=agent` event is written to `.ax-ledger/events.jsonl`.
+4. The script exits 0 only if the block → pass transition held end-to-end.
+
+**Expected ledger pair** (visible in `.ax-ledger/events.jsonl` after the run):
+
+```json
+{"kind":"violation","actor":"agent","gate":"controller_problemdetail_guard","severity":"block","detail":"DemoController @ExceptionHandler returns Map not ProblemDetail — RFC-9457 violation"}
+{"kind":"progress","actor":"agent","gate":"controller_problemdetail_guard","outcome":"pass","detail":"DemoController corrected to return ProblemDetail — gate unblocked"}
+```
+
+This is a **maintainer-run, opt-in** test. No fork-receiver CI is forced. It writes only to the
+gitignored `.ax-ledger/` trace plus a temp tree that is cleaned up on exit.

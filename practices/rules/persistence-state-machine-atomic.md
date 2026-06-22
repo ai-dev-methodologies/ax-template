@@ -62,6 +62,7 @@ public class WorkService {
 
 **Correct — dedicated transition method on the entity + @Version + transactional caller:**
 
+<!-- catalog-example-ok: WorkItem WorkState WorkEvent WorkStateMachine — intentionally generic; the reference impl is PaymentStateMachine -->
 ```java
 @Entity
 public class WorkItem {
@@ -74,10 +75,9 @@ public class WorkItem {
     private long version;             // optimistic lock — bumped on every persist
 
     public void transition(WorkEvent event) {
-        WorkState next = WorkStateMachine.next(this.state, event);
-        if (next == null) {
-            throw new IllegalStateTransitionException(this.state, event);
-        }
+        WorkState next = WorkStateMachine.transition(this.state, event);
+        // WorkStateMachine.transition throws IllegalStateTransitionException on an
+        // illegal (from, event) pair — never returns null.
         this.state = next;            // single mutation site, gated by the state machine
     }
 
@@ -95,7 +95,7 @@ public class WorkService {
 }
 ```
 
-The `WorkStateMachine.next(state, event)` pure function returns the next state or `null` for an illegal transition. The exception handler maps `IllegalStateTransitionException` to HTTP 409 with an RFC 7807 `application/problem+json` body that includes `currentState` and `attemptedEvent` extensions, so clients can react programmatically.
+The `WorkStateMachine.transition(state, event)` pure function returns the next state or **throws** `IllegalStateTransitionException` on an illegal transition — it never returns `null`. The exception handler maps `IllegalStateTransitionException` to HTTP 409 with an RFC 7807 `application/problem+json` body that includes `currentState` and `attemptedEvent` extensions, so clients can react programmatically.
 
 Verification: `./gradlew testPayment --tests "*StateMachine*"` exercises the legal-transition matrix (all defined transitions succeed; all undefined transitions throw `IllegalStateTransitionException`) and an optimistic-lock check: JPA `@Version` is asserted to reject a stale-version re-transition (the test approximates the race sequentially; the full two-thread CAPTURE race is deferred to the US-011 concurrency suite). The optimistic-lock loser surfaces as a 409.
 
