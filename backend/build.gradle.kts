@@ -187,6 +187,24 @@ tasks.register<Test>("testTrueUp") {
     }
 }
 
+tasks.register<Test>("testDunning") {
+    useJUnitPlatform {
+        includeTags("DUNNING")
+    }
+}
+
+tasks.register<Test>("testSettlement") {
+    useJUnitPlatform {
+        includeTags("SETTLEMENT")
+    }
+}
+
+tasks.register<Test>("testAuthzParity") {
+    useJUnitPlatform {
+        includeTags("AUTHZPARITY")
+    }
+}
+
 tasks.register<Test>("testObligation") {
     useJUnitPlatform {
         includeTags("OBLIGATION")

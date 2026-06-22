@@ -103,6 +103,18 @@ public class SecurityConfig {
                 // periods — readings supersede append-only, runs version with their basis,
                 // closed-period corrections post forward as net-delta true-ups.
                 .requestMatchers("/api/trueup/**").authenticated()
+                // DUNNING (dunning-collections-l0): authenticated users open a dunning case,
+                // advance the one-way exactly-once notice ladder, reage the recorded aging bucket,
+                // and cure within the grace window — no delete path.
+                .requestMatchers("/api/dunning/**").authenticated()
+                // SETTLEMENT (settlement-finality-l0): authenticated users create a DvP instruction,
+                // settle both legs atomically to irrevocable finality, novate before finality
+                // (obligation conserved), and walk the fail ladder — no delete path.
+                .requestMatchers("/api/settlement/**").authenticated()
+                // AUTHZPARITY (authorization-parity-l0): authenticated users authorize an action into
+                // an envelope, sign off (four-eyes), satisfy companion gates, and execute only when the
+                // executed params re-hash to the authorized envelope.
+                .requestMatchers("/api/authz-parity/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

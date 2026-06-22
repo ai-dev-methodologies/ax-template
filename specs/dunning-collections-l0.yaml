@@ -1,0 +1,91 @@
+version: "0.1.0"
+scope: "dunning-collections-l0 — the generalized OVERDUE-RECEIVABLE COLLECTIONS LIFECYCLE (a one-way dunning ladder with exactly-once stage transitions + a deterministic recorded aging bucket + a cure-period grace window + serialized concurrent advance). A DunningCase tracks one overdue receivable. The system MUST (1) walk a one-way staged-notice LADDER REMINDER → NOTICE → FINAL_NOTICE → SUSPENDED where each stage transition happens EXACTLY ONCE (a uq(case_id, stage) DB backstop makes a re-emit of an already-reached stage a deterministic 409; the ladder is additive — it never skips a stage or reverses); (2) compute an AGING BUCKET (CURRENT / B1_30 / B2_60 / B3_90_PLUS) DETERMINISTICALLY from days-overdue at a RECORDED as-of instant — the bucket label AND its basis (the as-of instant, the due date, the computed days-overdue) are persisted, never a bare label; (3) open a CURE WINDOW on a partial/full payment — a FULL cure within the window resets the case to CURRENT and HALTS the ladder (the halt is recorded), a LAPSED cure (window expired without full payment) lets the ladder resume at the NEXT stage; (4) serialize concurrent stage-advance calls on the case row (PESSIMISTIC_WRITE) so that across any interleaving EXACTLY ONE advance wins and the rest receive 409 (CWE-362). The IDW13 telecom/billing dogfood found the catalog governed decisions (decisiongov), thresholds (thresholdterminal), and obligations (deadline-obligation) but had NO primitive for the staged, exactly-once, agedand-cured collections lifecycle a billing system runs against every overdue invoice. Realized by the dunning reference workload (com.ax.template.authblueprint.dunning). Recurs in: telecom/utility billing, SaaS subscription dunning, lending/loan servicing, B2B accounts-receivable collections, government fee collection — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only stage transitions with uq(case_id,stage) + @Version optimistic + PESSIMISTIC_WRITE row lock + @Check backstops) + deterministic aging classifier (days-overdue at a recorded as-of instant) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "17 CFR 210.5-02(4) (Regulation S-X — allowances for doubtful accounts on receivables, the accounting backstop the aging bucket feeds) + FDCPA 15 U.S.C. 1692g(a) (the staged collection-notice discipline: a written notice with the amount/creditor/30-day dispute window before escalation) + CWE-362 (concurrent stage-advance race) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW13-G9 internal-stage exactly-once + IDW13 billing trio dunning/aging/cure; built 2026-06-22 — BACKLOG P1-20~23"
+
+# OPT-IN dunning-collections catalog. The collections-lifecycle gap: the catalog
+# governs decisions, thresholds, and obligations but never walks an overdue
+# receivable through a one-way exactly-once notice ladder, classifies its age
+# into a recorded bucket, or models the cure-period grace that halts/resumes it.
+# Generic; the telecom/SaaS/lending framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. DUNNING-LADDER-001    (the primitive — one-way REMINDER→NOTICE→FINAL_NOTICE→SUSPENDED, exactly-once per stage)
+#   2. DUNNING-AGING-001     (deterministic aging bucket from days-overdue at a RECORDED as-of instant + basis)
+#   3. DUNNING-CURE-001      (a payment opens a cure window; full cure resets to CURRENT + halts ladder, lapse resumes)
+#   4. DUNNING-CONCURRENT-001 (keystone — concurrent advances serialize on the case row; exactly one wins, rest 409)
+
+# ── Composition note ──
+# DISTINCT from deadline-obligation (a grounded multi-axis deadline with an
+# ack-only terminal — no staged escalation, no aging), decision-governance
+# (versions one scope's computed value — no lifecycle), and threshold-terminal
+# (a single irreversible crossing — no ordered multi-stage ladder, no cure).
+# DunningStageTransition rows are @AggregateMember of DunningCase: root-JPQL
+# reads + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth).
+# The aging classifier is deliberately deterministic (fixed 30/60/90 day
+# cut-points feeding the allowance-for-doubtful-accounts that 17 CFR 210.5-02(4)
+# governs): a fork-receiver may swap the cut-points or the ladder stages
+# without touching the GOVERNANCE contract (one-way exactly-once + recorded
+# basis + cure halt/resume + serialized advance) the catalog claims.
+
+items:
+  - id: "DUNNING-LADDER-001"
+    chapter: "A dunning case walks a one-way notice ladder with exactly-once stage transitions — additive, never skip or reverse"
+    verification:
+      mechanism: rule
+      ref: dunning-collections-one-way-ladder-aging-and-cure
+    requirement: "A DunningCase MUST advance its dunning stage along the one-way ladder REMINDER → NOTICE → FINAL_NOTICE → SUSPENDED, recording an immutable DunningStageTransition per advance (the stage reached, when, the days-overdue at that point). Each stage transition happens EXACTLY ONCE: a uq(case_id, stage) DB backstop makes re-emitting an already-reached stage a deterministic 409 (DUNNING_STAGE_ALREADY_REACHED). The ladder is ADDITIVE — advancing always moves to the single next stage; it MUST NOT skip a stage, jump backward, or advance past SUSPENDED (the terminal stage — a further advance is 409 DUNNING_LADDER_TERMINAL). A bare un-recorded stage change (no transition row, no days-overdue basis) MUST be unrepresentable."
+    test_method: "RestAssured (advance REMINDER→NOTICE→FINAL_NOTICE→SUSPENDED each → 200 with a recorded transition; advancing past SUSPENDED → 409 DUNNING_LADDER_TERMINAL; the transition rows are append-only one-per-stage; structural: uq(case_id,stage) + @Column(updatable=false) on the transition)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (FDCPA 15 U.S.C. 1692g(a) — the staged collection-notice
+      discipline the ladder generalizes): "Within five days after the initial
+      communication with a consumer in connection with the collection of any
+      debt, a debt collector shall, unless the following information is
+      contained in the initial communication or the consumer has paid the debt,
+      send the consumer a written notice containing— (1) the amount of the debt;
+      (2) the name of the creditor to whom the debt is owed; (3) a statement
+      that unless the consumer, within thirty days after receipt of the notice,
+      disputes the validity of the debt, or any portion thereof, the debt will
+      be assumed to be valid by the debt collector".
+      (https://www.law.cornell.edu/uscode/text/15/1692g)
+  - id: "DUNNING-AGING-001"
+    chapter: "The aging bucket is computed deterministically from days-overdue at a RECORDED as-of instant — never a bare label"
+    requirement: "Computing a case's aging bucket MUST classify it DETERMINISTICALLY by days-overdue (as-of instant minus due date, in whole days) into CURRENT (≤ 0 days overdue), B1_30 (1–30), B2_60 (31–60), or B3_90_PLUS (> 60, i.e. 61 days and beyond — the 90-plus allowance band). The computation MUST PERSIST, on the case row: the computed bucket, the as-of instant used, the due date, and the resulting days-overdue — so the bucket is reconstructible and re-appraisable. A bare bucket label with no recorded basis MUST be unrepresentable. The bucket feeds the allowance-for-doubtful-accounts the receivable is stated net of."
+    test_method: "RestAssured (a case due in the future → CURRENT; 15 days overdue → B1_30; 45 days → B2_60; 120 days → B3_90_PLUS; each response carries asOf + dueDate + daysOverdue; structural: aging columns present and the as-of/days-overdue immutable per recompute is appended, not silently overwritten without basis)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (17 CFR 210.5-02(4), Regulation S-X — the allowance the aging
+      bucket informs): "Allowances for doubtful accounts and notes receivable.
+      The amount is to be set forth separately in the balance sheet or in a note
+      thereto." (https://www.law.cornell.edu/cfr/text/17/210.5-02)
+  - id: "DUNNING-CURE-001"
+    chapter: "A payment opens a cure window; full cure resets to CURRENT and halts the ladder; a lapsed cure resumes it"
+    requirement: "Recording a payment on a case MUST open (or keep open) a CURE WINDOW with a recorded deadline. If the cumulative paid amount reaches the full overdue amount WITHIN the window, the case MUST reset to CURRENT, the dunning ladder MUST HALT, and the halt MUST be recorded (a transition/event noting the cure). A PARTIAL payment within the window does NOT reset the case — it is recorded but the case stays in its current bucket. If the window LAPSES (the recorded deadline passes without a full cure), the ladder MAY RESUME and the next advance proceeds to the next stage. Curing a case that is not in a cure window, or over-curing a CURRENT case, is a 422 (DUNNING_NO_CURE_WINDOW). A full cure is idempotent — a second full-payment after cure is a no-op success, never a double reset."
+    test_method: "RestAssured (partial payment → window open, case unchanged; full payment within window → case CURRENT + ladder halted (recorded) + advance afterward refused until re-aged; full cure on an already-cured case → idempotent; cure with no open window → 422 DUNNING_NO_CURE_WINDOW)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The cure window is the grace seam — the FDCPA dispute/validation window
+      generalized to a payment-grace that suspends escalation; lapse is what
+      lets collection resume.
+  - id: "DUNNING-CONCURRENT-001"
+    chapter: "Keystone — concurrent stage advances serialize on the case row; exactly one advance wins, the rest 409"
+    requirement: "Across ANY interleaving of concurrent advance calls on one case, EXACTLY ONE advance wins (moving the stage forward by one and writing exactly one transition row) and the rest receive 409 (DUNNING_STAGE_ALREADY_REACHED — the uq(case_id,stage) backstop makes the loser deterministic) (CWE-362). The advance path MUST take the case's PESSIMISTIC_WRITE row lock so the read-stage / write-next-stage sequence cannot interleave. Across the keystone, the case MUST NEVER end with two transition rows for the same stage or a stage that skipped a rung."
+    test_method: "Concurrency proof (N concurrent advances on one case at the same stage → exactly one 2xx + N-1 409, exactly one transition row written; the case advances by exactly one rung)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent stage-advance race): "The product
+      contains a concurrent code sequence that requires temporary, exclusive
+      access to a shared resource, but a timing window exists in which the
+      shared resource can be modified by another code sequence operating
+      concurrently." (https://cwe.mitre.org/data/definitions/362.html)
+      The case-row PESSIMISTIC_WRITE lock + the uq(case_id,stage) backstop are
+      the belt-and-suspenders the dispatch and recordlinkage domains taught the
+      catalog: the lock serializes the happy path, the unique index makes the
+      loser of any residual race a deterministic 409.

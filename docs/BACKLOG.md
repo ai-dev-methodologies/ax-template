@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 54 | 15 | 28% |
+| P1 (generic signature backlog) | 54 | 26 | 48% |
 | P2 (verification escapes) | 11 | 3 | 27% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **44** | **~36%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **55** | **~45%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -97,8 +97,8 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       testDecisionGov GREEN.
 - [x] P1-4 IDW16-G2 override-with-justification — **closed 2026-06-10**: 동일 메커니즘
       (DG-OVERRIDE-001의 justification 강제)이 gate-무시 정당화 기록을 포괄.
-- [ ] P1-5 IDW16-G4 executed-matches-authorized (집행본 ↔ 승인본 일치 검증)
-- [ ] P1-6 IDW17 four-eyes-signoff (서명 2인 분리, approval-workflow의 일반화)
+- [x] P1-5 IDW16-G4 executed-matches-authorized — **closed 2026-06-16 (parallel wave, authzparity 도메인)**: SHA-256 parity hash로 실행 파라미터가 승인 envelope와 일치해야 집행 가능, 불일치 409 PARITY_MISMATCH + blocked 기록
+- [x] P1-6 IDW17 four-eyes-signoff — **closed 2026-06-16 (authzparity)**: 고가 액션은 distinct 2인 승인(requester≠approver1≠approver2, @Check approver<>requester DB backstop)
 - [ ] P1-7 IDW12-G4 reproducible-draw (감사 가능한 난수 추출 = capability-token의 negative)
 - [ ] P1-8 IDW12-G6 blinding (역할별 필드 차폐 — 임상 외 HR/입찰에도 적용)
 - [ ] P1-9 IDW16-G15 reproducible-classification (동일 입력 → 동일 분류 보장)
@@ -128,14 +128,8 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       fail-closed 409, @Check closed⇒run-of-record. 8-thread 동시 recompute keystone
       (ONE version + ONE posting, uq 백스톱). V046, testTrueUp 13/13 GREEN.
 - [ ] P1-18 IDW14 net-metering signed-dual-register (양방향 부호 레지스터 — register 도메인 확장 성격, trueup과 별개 shape)
-- [ ] P1-20 IDW13-G9 internal-stage exactly-once (내부 스테이지 정확히-한-번 전이)
-- [ ] P1-21 IDW13 billing trio: dunning (단계적 미납 처리)
-- [ ] P1-22 IDW13 billing: aging (채권 연령 버킷)
-- [ ] P1-23 IDW13 billing: cure-period (시정 유예 기간)
-- [ ] P1-24 IDW15-G2 novation (계약 당사자 교체 보존)
-- [ ] P1-25 IDW15-G3 DvP (동시이행 — 양 leg 원자 결제)
-- [ ] P1-26 IDW15-G4 finality (결제 완결성 — 취소 불가 시점)
-- [ ] P1-27 IDW15-G5 fail-ladder (실패 단계 사다리)
+- [x] P1-20~23 — **closed 2026-06-16 (parallel wave, dunning 도메인)**: 일방향 dunning 사다리 REMINDER→NOTICE→FINAL_NOTICE→SUSPENDED exactly-once(uq(case,stage,kind)+PESSIMISTIC_WRITE keystone) / 결정적 aging 버킷(as-of+basis 기록) / cure-period grace(완납 시 CURED+ladder halt, lapse 재개). V047, testDunning GREEN
+- [x] P1-24~27 — **closed 2026-06-16 (parallel wave, settlement 도메인)**: DvP 양 leg 원자 결제(partial 표현불가 @Check) / novation 당사자 교체 obligation 보존(append-only) / irrevocable finality(이후 novation/cancel 409 @Check) / fail-ladder PENDING→FAILED→RETRY→BUYIN. V048, testSettlement GREEN
 - [ ] P1-28 IDW15-G6 as-of-snapshot (기준시점 스냅숏 조회)
 - [ ] P1-29 IDW15-G7 fan-out (1 run → N 산출 보존)
 - [ ] P1-30 IDW15-G9 rebase (기준 재설정 + 이력 보존)
@@ -153,7 +147,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       cycle-safe, ascending-id lock order. 8-thread confirm race keystone. V045,
       testRecordLinkage GREEN.
 - [ ] P1-35 IDW16-G11 multi-check-battery (다중 점검 배터리 — 전 항목 통과 게이트)
-- [ ] P1-36 IDW16-G12/G13 positive-gates (필수 동반 조건 게이트 2종)
+- [x] P1-36 IDW16-G12/G13 positive-gates — **closed 2026-06-16 (authzparity)**: 액션이 필수 동반 게이트 집합을 선언, 전 게이트 satisfied 기록 전엔 집행 불가(422) — missing companion은 executed-불가
 - [ ] P1-37 IDW17 one-mandate-fanout (하나의 지시 → N 작업 전개 + 완료 회수)
 - [ ] P1-38 IDW8 filter/sort field-allowlist (정렬·필터 파라미터 화이트리스트 — 보안 후속)
 

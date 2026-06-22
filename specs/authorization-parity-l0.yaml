@@ -1,0 +1,97 @@
+version: "0.1.0"
+scope: "authorization-parity-l0 — the generalized AUTHORIZATION-PARITY control: an action is APPROVED into an authorization envelope, and EXECUTION is admissible ONLY when (1) the execution parameters re-hash to the SAME canonical parity hash the envelope recorded — executed-matches-authorized (a substituted/escalated parameter is rejected 409 PARITY_MISMATCH and recorded blocked); (2) a high-value action carries TWO DISTINCT human signoffs separated from the requester — four-eyes/two-person rule (requester≠approver1≠approver2; a duplicate or self signoff is rejected 422, DB-backstopped via @Check approver<>requester); (3) every MANDATORY companion gate the action declared is recorded present — positive-gates (a missing companion makes the action unrepresentable-as-executed, 422). When governance APPROVES one thing but a system EXECUTES another — a wire-transfer approved for ₩1,000,000 executed for ₩10,000,000, a deploy approved for staging executed against prod, a procurement approved with a budget-check that never ran — the authorization is decorative. The catalog's decision-governance versions ONE scope's computed value and its four-eyes is a single approver≠decider inequality on an OVERRIDE; approval-workflow sequences ordered signoffs; but NOTHING binds the executed artifact back to the approved envelope by content hash, requires TWO distinct approvers on the high-value path, or refuses execution until declared companion conditions are all present. Realized by the authzparity reference workload (com.ax.template.authblueprint.authzparity). Recurs in: payments/treasury (dual-authorized wire release), change/release management (approved-build = deployed-build), procurement (PO ↔ goods-receipt ↔ invoice three-way match), clinical order sets (mandatory companion orders), trading (maker-checker order release) — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only signoff rows + required-gate ElementCollection + @Version optimistic + PESSIMISTIC_WRITE row lock + @Check backstops) + canonical SHA-256 parity hash (sorted-key serialization + MessageDigest) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "NIST SP 800-192 (separation of duty / two-person rule: no single user holds enough privilege to misuse the system alone; the second user of a two-person operation must differ from the first) + NIST Dual Authorization (two authorized persons each capable of detecting incorrect procedure) + CWE-362 (concurrent execute race — exactly-once execution) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW16-G4 executed-matches-authorized + IDW17 four-eyes-signoff + IDW16-G12/G13 positive-gates; built 2026-06-22 — BACKLOG P1-5, P1-6, P1-36"
+
+# OPT-IN authorization-parity catalog. The governance-vs-execution gap trio: the
+# catalog approves decisions (decisiongov) and sequences signoffs (approvalworkflow)
+# but never binds the EXECUTED artifact to the APPROVED envelope by content hash,
+# requires TWO distinct approvers on the high-value path, or refuses execution until
+# declared companion conditions are all present. Generic; the wire-transfer / deploy /
+# procurement framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. AUTHZPARITY-ENVELOPE-001 (the primitive — authorize an action into an envelope that records the exact authorized parameters + their canonical parity hash)
+#   2. AUTHZPARITY-EXEC-001     (executed-matches-authorized — re-hash execution params; mismatch is 409 PARITY_MISMATCH and the attempt is recorded BLOCKED)
+#   3. AUTHZPARITY-FOUREYES-001 (high-value actions need TWO distinct signoffs separated from the requester; self/duplicate signoff is 422; @Check approver<>requester backstop)
+#   4. AUTHZPARITY-GATES-001    (positive-gates — execution is refused 422 unless every declared mandatory companion gate is recorded present)
+#   5. AUTHZPARITY-CONCURRENT-001 (keystone — concurrent execute serialize on the action's row lock; EXACTLY ONE executes, the rest 409)
+
+# ── Composition note ──
+# DISTINCT from decision-governance (versions ONE scope's computed value; its four-eyes
+# is a single approved_by<>decided_by inequality on an OVERRIDE row — no content-hash bind
+# between approved and executed, no TWO-approver path, no companion-gate set), from
+# approval-workflow (sequences ordered signoff STEPS but does not hash-bind an executed
+# artifact), and from record-linkage (scores record-pair identity). The parity hash is the
+# load-bearing new primitive: a canonical SHA-256 over the sorted authorized parameters,
+# recomputed at execute time from the actual execution parameters — a structural equality
+# the wire cannot fake. Signoff rows are @AggregateMember of AuthorizedAction: root-JPQL
+# reads + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth). Required
+# gate keys are an @ElementCollection on the root (a small fixed set, declared at authorize
+# time, immutable). The reference parity-hash canonicalization (sorted key=value join) is
+# deliberately simple: the GOVERNANCE contract (envelope-bind / four-eyes / positive-gates)
+# is the catalog's claim — a fork-receiver may swap canonical JSON / JCS (RFC 8785) without
+# touching it.
+
+items:
+  - id: "AUTHZPARITY-ENVELOPE-001"
+    chapter: "Authorizing an action records an immutable envelope: the exact authorized parameters and their canonical parity hash"
+    verification:
+      mechanism: rule
+      ref: authorization-parity-executed-matches-authorized-four-eyes-positive-gates
+    requirement: "Authorizing an action MUST persist, immutably on the action row: the action type, the EXACT authorized parameters (a canonical key=value map), the canonical SHA-256 parity hash computed over those sorted parameters, the set of MANDATORY companion gate keys it declares, whether it is high-value (four-eyes-required), the requester, and the authorize instant. The parity hash and the authorized parameters are @Column(updatable=false) — an envelope cannot be silently re-pointed after authorization. The action starts AUTHORIZED. A bare authorization with no recorded parameters or hash MUST be unrepresentable."
+    test_method: "RestAssured (authorize → 201 with status AUTHORIZED + parityHash present + authorizedParams echoed + requiredGates listed; structural: parityHash + authorizedParams + actionType @Column(updatable=false))"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The envelope is the authorization of record: every later admissibility
+      check (parity, four-eyes, gates) reads from THIS row, never from the
+      execution request, so a forged execution cannot move its own goalposts.
+  - id: "AUTHZPARITY-EXEC-001"
+    chapter: "Executed-matches-authorized — execution re-hashes the actual parameters and MUST match the envelope hash, else 409 and the attempt is recorded BLOCKED"
+    requirement: "Executing an action MUST recompute the canonical parity hash from the ACTUAL execution parameters and compare it to the envelope's recorded hash. On a match (and all other gates satisfied) the action moves to EXECUTED, recording the execution instant. On a MISMATCH the execution is REFUSED (409 PARITY_MISMATCH), the action does NOT move to EXECUTED, and the mismatch attempt is recorded as a BLOCKED execution attempt (an immutable row capturing the offered hash vs the authorized hash and the instant) — a substituted or escalated parameter is unrepresentable-as-executed. Executing an already-EXECUTED action is a deterministic 409 (ALREADY_EXECUTED)."
+    test_method: "RestAssured (execute with matching params → 200 EXECUTED + executedAt set; execute with a changed amount/target → 409 PARITY_MISMATCH + a BLOCKED attempt row recorded with offeredHash<>authorizedHash; re-execute an EXECUTED action → 409 ALREADY_EXECUTED)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      This is IDW16-G4: governance approved ONE artifact; the system must
+      refuse to execute a DIFFERENT one. The hash makes the equality structural
+      — not a field-by-field re-validation the executor could under-check.
+  - id: "AUTHZPARITY-FOUREYES-001"
+    chapter: "Four-eyes — a high-value action needs TWO distinct human signoffs, each separated from the requester; self/duplicate signoff is rejected"
+    requirement: "A high-value (four-eyes-required) action MUST NOT execute until it carries TWO DISTINCT approver signoffs, AND every signer differs from the requester (requester ≠ approver1 ≠ approver2, all three distinct — NIST two-person rule: the second user must differ from the first, and neither initiated the request). A signoff by the requester is rejected (422 SELF_SIGNOFF); a second signoff by an already-recorded approver is rejected (422 DUPLICATE_SIGNOFF); each signoff row records the approver and the instant and is append-only. Attempting to execute a high-value action with fewer than two distinct approvers is refused (422 INSUFFICIENT_SIGNOFFS). The approver<>requester separation is DB-backstopped via @Check on the signoff row so it holds even under ddl-auto. A non-high-value action needs zero signoffs."
+    test_method: "RestAssured (high-value action: requester signoff → 422 SELF_SIGNOFF; first distinct approver → 201; same approver again → 422 DUPLICATE_SIGNOFF; execute with one signoff → 422 INSUFFICIENT_SIGNOFFS; second distinct approver then execute (params matching) → 200 EXECUTED; structural: @Check approver_user_id <> requester_user_id on the signoff)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      This is P1-6, the generalization of approval-workflow's ordered steps into
+      a content-bound two-person rule. Quote anchor (NIST SP 800-192, separation
+      of duty): "no user should be given enough privileges to misuse the system
+      on their own ... The first user to execute a two-person operation can be
+      any authorized user, whereas the second user can be any authorized user
+      different from the first." (https://csrc.nist.gov/glossary/term/separation_of_duty)
+  - id: "AUTHZPARITY-GATES-001"
+    chapter: "Positive-gates — execution is refused unless every declared mandatory companion gate is recorded present"
+    requirement: "An action declares, at authorize time, a set of MANDATORY companion gate keys (e.g. BUDGET_CHECK, AML_SCREEN, INVENTORY_RESERVED). Execution MUST be refused (422 MISSING_COMPANION_GATE) UNLESS, for EVERY declared gate key, a gate-satisfaction record exists for this action — a missing companion is unrepresentable-as-executed. Satisfying a gate records the gate key, who satisfied it, and the instant (append-only; one satisfaction per (action, gateKey), the second is idempotent / rejected as already-satisfied). Satisfying a gate key the action never declared is rejected (422 UNKNOWN_GATE). The declared gate-key set is immutable after authorize. An action declaring zero gates needs none."
+    test_method: "RestAssured (authorize with requiredGates=[BUDGET_CHECK,AML_SCREEN]; execute before any → 422 MISSING_COMPANION_GATE; satisfy an undeclared gate → 422 UNKNOWN_GATE; satisfy BUDGET_CHECK only, execute → 422 MISSING_COMPANION_GATE; satisfy AML_SCREEN, execute → 200 EXECUTED)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      This is IDW16-G12/G13: the action cannot reach EXECUTED while a declared
+      companion condition is absent — the gate set is a positive precondition,
+      not an after-the-fact audit. Default-deny on the declared set.
+  - id: "AUTHZPARITY-CONCURRENT-001"
+    chapter: "Keystone — concurrent executes serialize on the action's row lock; exactly one executes"
+    requirement: "Across ANY interleaving of concurrent execute calls on one action, EXACTLY ONE moves it to EXECUTED (the rest receive 409 ALREADY_EXECUTED) and the side effect happens once (CWE-362). The execute path takes the action's PESSIMISTIC_WRITE row lock before reading status, computing parity, checking signoffs/gates, and transitioning — so the all-gates-pass-then-transition sequence is atomic and a second concurrent caller observes EXECUTED, never a second execution. A blocked (parity-mismatch) attempt under contention still records at most the honest set of attempt rows and never produces a spurious EXECUTED."
+    test_method: "Concurrency proof (N concurrent execute calls on one fully-authorized action → exactly one 200 EXECUTED + N-1 409 ALREADY_EXECUTED; the action is EXECUTED exactly once)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Mirrors the record-linkage decide-once keystone. The row lock is what makes
+      the check-then-transition atomic; without it two callers could both read
+      AUTHORIZED, both pass the gates, and both execute (CWE-362). Quote anchor
+      (CWE-362): "a timing window exists in which the shared resource can be
+      modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)

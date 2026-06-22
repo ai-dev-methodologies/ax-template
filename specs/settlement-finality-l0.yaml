@@ -1,0 +1,94 @@
+version: "0.1.0"
+scope: "settlement-finality-l0 — post-trade DELIVERY-VERSUS-PAYMENT settlement finality (the IDW15 capital-markets residual). A SettlementInstruction settles a trade whose two legs (securities DELIVERY + funds PAYMENT) must commit ATOMICALLY: delivery occurs if and only if payment occurs — partial settlement is unrepresentable (a DB @Check, not just service logic). Before finality the counterparty of a leg may be replaced by NOVATION — the old party is released and the new party assumes the IDENTICAL net obligation (conservation), recorded append-only with the original retained. Settlement reaches an IRREVOCABLE FINAL state at a recorded instant; after finality novation/cancel/amend are all 409 (fail-closed; @Check). A failed settlement walks the FAIL LADDER PENDING→FAILED→RETRY→BUYIN with exactly-once transitions. Concurrency keystone: concurrent settle attempts on one instruction serialize on a PESSIMISTIC_WRITE row lock so exactly one finalizes. Realized by the settlement reference workload (com.ax.template.authblueprint.settlement). Recurs in: securities settlement (CSD/CCP), FX PvP (Herstatt risk), DvP repo legs, post-trade clearing — every market where two value transfers must be linked all-or-nothing."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only novation records + @Version optimistic + PESSIMISTIC_WRITE row lock + @Check DvP/finality backstops) + EnumMap fail-ladder state machine (sole status mutator) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "BIS CPMI 'A glossary of terms used in payments and settlement systems' — delivery versus payment ('a link between a securities transfer system and a funds transfer system that ensures that delivery occurs if, and only if, payment occurs'), final settlement ('settlement which is irrevocable and unconditional'), novation ('satisfaction and discharge of existing contractual obligations by means of their replacement by new obligations... there may additionally be substitution of parties') + CWE-362 (concurrent settle race) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW15-G2~G5 (capital-markets residual); built 2026-06-22 — BACKLOG P1-24~27"
+
+# OPT-IN settlement-finality catalog. The post-trade DvP gap the IDW15 capital-markets
+# dogfood found: netting (collection-conservation) reduces gross obligations to net, but
+# nothing settles the resulting obligation as a LINKED two-leg atomic transfer, governs the
+# counterparty substitution (novation) that may precede it, marks the IRREVOCABLE finality
+# instant after which the trade is locked in, or walks the fail ladder when delivery fails.
+# Generic; the securities/FX framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. SETTLE-DVP-001       (the primitive — two legs commit atomically; partial is unrepresentable)
+#   2. SETTLE-FINAL-001     (SETTLED is irrevocable; after finality novation/cancel/amend are 409)
+#   3. SETTLE-NOVATE-001    (counterparty replaced before finality; net obligation CONSERVED, append-only)
+#   4. SETTLE-LADDER-001    (a failed settlement walks PENDING→FAILED→RETRY→BUYIN, exactly-once edges)
+#   5. SETTLE-CONCURRENT-001 (keystone — concurrent settles serialize; exactly one finalizes)
+
+# ── Composition note ──
+# DISTINCT from collection-conservation-netting (reduces a SET of gross obligations to net —
+# no two-leg atomic settlement, no finality instant), reserve-settle-balance (two-PHASE
+# reserve→settle against a pooled prepaid balance — a quantity drawdown, not a linked DvP
+# transfer), and threshold-terminal-derivation (a crossing accrual drives an irreversible
+# terminal — settlement finality is reached by an explicit atomic commit, not derived from a
+# threshold). NovationRecord rows are @AggregateMember of SettlementInstruction: root-JPQL
+# reads + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth). The fail
+# ladder is a separate EnumMap state machine (SettlementFailLadder), the sole status mutator
+# on the fail path — finality (→ SETTLED) is the DvP commit in the service, not a ladder edge.
+
+items:
+  - id: "SETTLE-DVP-001"
+    chapter: "The two legs of a settlement commit atomically — delivery occurs if and only if payment occurs; partial settlement is unrepresentable"
+    requirement: "Committing a SettlementInstruction MUST settle BOTH legs (securities delivery + funds payment) in ONE transaction or NEITHER: there MUST be no code path and no persistable row state in which one leg is settled and the other is not. The both-legs invariant is a DB-level @Check (delivery_settled = payment_settled), not merely service logic. A settle commit drives the instruction to the SETTLED state and records the finality instant in the same transaction. Settling from a terminal-failed (BUYIN) instruction is rejected (409)."
+    verification:
+      mechanism: rule
+      ref: settlement-finality-dvp-novation-and-fail-ladder
+    test_method: "RestAssured (create → PENDING; settle → 200, status SETTLED, deliverySettled=true AND paymentSettled=true, finalAt recorded; structural: @Check delivery_settled = payment_settled present on entity + migration so partial is unrepresentable; settle from BUYIN → 409 SETTLEMENT_NOT_SETTLEABLE)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (BIS CPMI glossary, 'delivery versus payment'): "a link
+      between a securities transfer system and a funds transfer system that
+      ensures that delivery occurs if, and only if, payment occurs."
+      (https://www.bis.org/cpmi/publ/d00b.htm)
+  - id: "SETTLE-FINAL-001"
+    chapter: "Settlement reaches an irrevocable final state at a recorded instant; after finality, novation, cancel and amend are all refused"
+    requirement: "Once an instruction is SETTLED it is FINAL — irrevocable and unconditional. A final instruction MUST refuse novation, cancel, amend AND any further settle with a deterministic 409 (SETTLEMENT_ALREADY_FINAL); the fail ladder MUST also refuse to move a final instruction. The @Check backstops that SETTLED implies a recorded final instant and that a non-final instruction carries none. Re-settling a final instruction is the idempotent-safe 409 (not a double-commit)."
+    requirement_note: "fail-closed: after finality every mutating verb is blocked, never silently no-op'd."
+    test_method: "RestAssured (settle → SETTLED; novate after finality → 409 SETTLEMENT_ALREADY_FINAL; re-settle → 409 SETTLEMENT_ALREADY_FINAL; fail after finality → 409; finalAt non-null on the SETTLED row)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (BIS CPMI glossary, 'final settlement'): "settlement which
+      is irrevocable and unconditional."
+      (https://www.bis.org/cpmi/publ/d00b.htm)
+  - id: "SETTLE-NOVATE-001"
+    chapter: "A counterparty may be replaced by novation before finality — the obligation is conserved and the substitution recorded append-only"
+    requirement: "Before finality, the counterparty of a leg (delivery or payment) MAY be replaced by NOVATION: the old (released) party is discharged and the new (assuming) party takes on the IDENTICAL net obligation (conservation — the assumed_obligation recorded equals the instruction's net_obligation, which is @Column(updatable=false) and cannot drift). The novation MUST be recorded as an immutable append-only NovationRecord (released party, assuming party, conserved obligation, who/when), with the original instruction retained — never deleted or silently overwritten beyond the party swap. Novating a leg to the party that already owes it is rejected (422)."
+    test_method: "RestAssured (novate DELIVERY before finality → 200, deliveryParty replaced; NovationRecord row records releasedParty + assumingParty + assumedObligation == netObligation + novatedBy; novate to the same party → 422 SETTLEMENT_NOVATION_NO_CHANGE; structural: NovationRecord fully @Column(updatable=false), net_obligation immutable)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (BIS CPMI glossary, 'novation'): "satisfaction and discharge
+      of existing contractual obligations by means of their replacement by new
+      obligations (whose effect, for example, is to replace gross with net
+      payment obligations). The parties to the new obligations may be the same
+      as those to the existing obligations or, in the context of some clearing
+      house arrangements, there may additionally be substitution of parties."
+      (https://www.bis.org/cpmi/publ/d00b.htm)
+  - id: "SETTLE-LADDER-001"
+    chapter: "A failed settlement walks a fail ladder PENDING→FAILED→RETRY→BUYIN with exactly-once transitions"
+    requirement: "A settlement that fails MUST walk a fixed fail ladder PENDING→FAILED→RETRY→BUYIN, each edge taken AT MOST ONCE (exactly-once): a state machine (the sole status mutator on the fail path) MUST reject any edge not in the graph (skip, reverse, or repeat) with a 409 (SETTLEMENT_ILLEGAL_LADDER_EDGE). BUYIN is terminal-failed (zero outgoing edges). A non-final instruction on the ladder MAY still recover to finality via an explicit settle (the ladder does not trap it). A final instruction refuses every ladder edge."
+    test_method: "RestAssured (fail PENDING → FAILED; retry FAILED → RETRY; buyin RETRY → BUYIN; illegal edges — retry on PENDING, fail on RETRY, buyin on FAILED, any edge on BUYIN — each 409 SETTLEMENT_ILLEGAL_LADDER_EDGE; a FAILED instruction can still settle to SETTLED)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The ladder mirrors real securities-settlement fails handling: a fail is
+      retried, and an unresolved fail is closed out by a buy-in. The
+      exactly-once discipline keeps the audit trail of the fail unambiguous.
+  - id: "SETTLE-CONCURRENT-001"
+    chapter: "Keystone — concurrent settle attempts serialize on the instruction's row lock; exactly one finalizes"
+    requirement: "Across ANY interleaving of concurrent settle calls on one instruction, EXACTLY ONE reaches finality (commits the DvP and records the instant); the rest find the instruction already SETTLED and receive 409 (CWE-362). Every write-path (settle, novate, fail/retry/buyin) takes the instruction's PESSIMISTIC_WRITE row lock so the decide-once finality and the after-finality blocks are deterministic even under contention. The DvP commit and the finality stamp happen in the SAME transaction under that lock — a partial or double settlement is impossible."
+    test_method: "Concurrency proof (N concurrent settle calls on one PENDING instruction → exactly one 2xx + N-1 409 SETTLEMENT_ALREADY_FINAL; the instruction is SETTLED exactly once with both legs true and a single finalAt)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362): "The product contains a concurrent code sequence
+      that requires temporary, exclusive access to a shared resource, but a
+      timing window exists in which the shared resource can be modified by
+      another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)

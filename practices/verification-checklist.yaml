@@ -230,6 +230,15 @@ checklist:
       - command: "./gradlew testTrueUp"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testDunning"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testSettlement"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testAuthzParity"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testIntegration"
         working_directory: "backend"
         expected_exit: 0

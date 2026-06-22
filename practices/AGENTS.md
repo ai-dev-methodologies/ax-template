@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "9678bffea87cf6e41c9614cba409c1bbf3b977d61301ac300c6c2280ba7374ac"
-  rule_count: 192
+  source_concat_sha256: "01b76c5c38959d54cfaddc18c2e1cc981e21fa37c55dbfd4bb1dd4151351aaa1"
+  rule_count: 195
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -1166,6 +1166,135 @@ to justify lifting to L0/fork-receiver-kit (the R53 pattern).
 - "Hashing makes debugging harder" — same input → same hash, so an SRE
   filters logs by `recipientHash=<value>` after retrieving the value
   from the DB once. The investigation pattern is one extra SQL query.
+
+
+<!-- @source rules/authorization-parity-executed-matches-authorized-four-eyes-positive-gates.md -->
+
+---
+title: An authorized action must bind its EXECUTION to the approved envelope by canonical parity hash (executed-matches-authorized), require TWO distinct human signoffs separated from the requester on the high-value path (four-eyes / NIST two-person rule), and refuse execution until every declared mandatory companion gate is recorded present (positive-gates) — all under the action's row lock so it executes exactly once
+impact: HIGH
+impactDescription: "When governance APPROVES one artifact but the system EXECUTES another — a wire approved for ₩1,000,000 released for ₩10,000,000, a build approved for staging deployed to prod, a procurement approved with a budget-check that never ran — the authorization is decorative and the loss is total. A single approver on a sensitive action is the maker-checker hole every dual-control standard exists to close; and a missing companion condition (no AML screen, no inventory reservation) makes the action executable in a state the policy forbade. Without the row lock two concurrent executes can both pass the gates and both fire the side effect (CWE-362)."
+tags:
+  - audit
+  - state-machine
+  - governance
+  - authorization
+  - concurrency
+spec_ref: "specs/authorization-parity-l0.yaml#AUTHZPARITY-EXEC-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/authzparity/AuthorizationParityService.java + backend/src/main/java/com/ax/template/authblueprint/authzparity/AuthorizedAction.java + backend/src/main/java/com/ax/template/authblueprint/authzparity/ActionSignoff.java"
+  pattern: "Authorizing an action records an immutable envelope (action type + EXACT authorized parameters + canonical SHA-256 parity hash over them + declared mandatory companion gate keys + high-value flag + requester, all @Column(updatable=false)); executing recomputes the parity hash from the ACTUAL execution parameters and on a MISMATCH refuses (409 PARITY_MISMATCH) while recording an immutable BlockedAttempt (offered<>authorized hash) — never moving to EXECUTED; a high-value action needs TWO DISTINCT approver signoffs each different from the requester (self → 422 SELF_SIGNOFF, duplicate → 422 DUPLICATE_SIGNOFF, fewer than two at execute → 422 INSUFFICIENT_SIGNOFFS; @Check approver_user_id <> requester_user_id backstop); execution is refused (422 MISSING_COMPANION_GATE) until every DECLARED gate key has a satisfaction record (an undeclared gate → 422 UNKNOWN_GATE); the execute path takes the action's PESSIMISTIC_WRITE row lock before the check-then-transition so exactly one of N concurrent executes wins (the rest 409 ALREADY_EXECUTED)"
+upstream:
+  - "https://csrc.nist.gov/glossary/term/separation_of_duty"
+  - "https://csrc.nist.gov/glossary/term/dual_authorization"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "NIST Computer Security Resource Center glossary, 'Separation of Duty (SOD)' (source: NIST SP 800-192) — the separation-of-duty principle and the two-person rule as a dynamic SoD control"
+    url: "https://csrc.nist.gov/glossary/term/separation_of_duty"
+    quote: "refers to the principle that no user should be given enough privileges to misuse the system on their own. For example, the person authorizing a paycheck should not also be the one who can prepare them. Separation of duties can be enforced either statically (by defining conflicting roles, i.e., roles which cannot be executed by the same user) or dynamically (by enforcing the control at access time). An example of dynamic separation of duty is the two-person rule. The first user to execute a two-person operation can be any authorized user, whereas the second user can be any authorized user different from the first"
+    quoted_at: "2026-06-22"
+  - source_type: external
+    citation: "NIST Computer Security Resource Center glossary, 'Dual Authorization' (source: NIST SP 800-172r3, adapted from NIST SP 800-53A Rev. 5) — the two-person control anchor for the four-eyes path"
+    url: "https://csrc.nist.gov/glossary/term/dual_authorization"
+    quote: "A system of storage and handling that is designed to prohibit individual access to certain resources by requiring the presence and actions of at least two authorized persons, each capable of detecting incorrect or unauthorized security procedures with respect to the task being performed."
+    quoted_at: "2026-06-22"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (concurrent execute calls racing one action's transition)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-22"
+---
+
+## The executed artifact must be the approved artifact; sensitive actions take two; mandatory companions must all be present
+
+**Impact: HIGH — an approval that does not bind the executed parameters back to the approved envelope is decorative; a single approver on a sensitive action is the maker-checker hole; a missing companion condition lets the action fire in a forbidden state.**
+
+Authorization that is not bound to execution is theatre. Governance approves a wire for ₩1,000,000, the executor releases ₩10,000,000; governance approves a deploy to staging, the pipeline targets prod; procurement approves a PO conditioned on a budget check that never ran. The catalog already *versions* a decision (`decision-governance`) and *sequences* signoff steps (`approval-workflow`), but neither binds the executed artifact to the approved envelope by content, requires TWO distinct approvers on the high-value path, or refuses execution until declared companion conditions are all present. Three controls close the gap:
+
+```text
+authorize(type, params, highValue, requiredGates):
+                envelope RECORDS canonical params + SHA-256 parityHash + gate-key set (immutable)
+execute(actualParams):  re-hash actualParams; offeredHash != parityHash → 409 PARITY_MISMATCH
+                        + an immutable BlockedAttempt(offered, authorized) — NEVER EXECUTED
+four-eyes:      highValue → need 2 DISTINCT approvers, each != requester
+                self → 422 SELF_SIGNOFF · dup → 422 DUPLICATE_SIGNOFF · <2 at execute → 422
+positive-gates: every DECLARED gate key needs a satisfaction → else 422 MISSING_COMPANION_GATE
+                undeclared gate → 422 UNKNOWN_GATE
+lock:           the action row, PESSIMISTIC_WRITE — check-then-transition is atomic (exactly once)
+```
+
+**1. Executed-matches-authorized (AUTHZPARITY-EXEC-001).** The envelope records the EXACT authorized parameters and a canonical SHA-256 over them. Executing recomputes the hash from the ACTUAL execution parameters; equality is structural — a substituted or escalated parameter changes the digest and is *unrepresentable-as-executed*. A mismatch is refused (409) and recorded as a `BlockedAttempt`, so the violation is loud, never silently dropped.
+
+**2. Four-eyes is the two-person rule (AUTHZPARITY-FOUREYES-001).** NIST states the principle plainly: *"no user should be given enough privileges to misuse the system on their own"*, and the dynamic control — *"The first user to execute a two-person operation can be any authorized user, whereas the second user can be any authorized user different from the first."* A high-value action therefore needs TWO distinct approvers, each different from the requester. The `approver <> requester` separation is `@Check`-backstopped on the signoff row.
+
+**3. Positive-gates (AUTHZPARITY-GATES-001).** The action declares its mandatory companion conditions at authorize time; execution is refused until EVERY declared gate has a satisfaction record. The gate set is a positive precondition (default-deny), not an after-the-fact audit.
+
+**Incorrect — approve a flag, execute whatever was passed, one approver, no companions:**
+
+```java
+public void execute(UUID actionId, BigDecimal amount, String executor) {
+    Action a = repo.findById(actionId).orElseThrow();
+    if (a.isApproved()) {                 // ❌ "approved" is a bare boolean — not bound to amount
+        wireGateway.release(amount);      // ❌ executes WHATEVER amount was passed in
+        a.setStatus("EXECUTED");          // ❌ no row lock — two callers both release
+    }                                     // ❌ one approver; no companion-gate check
+}
+```
+
+**Correct — re-hash the execution params, enforce two distinct signoffs + every declared gate, under the row lock:**
+
+```java
+@Transactional
+public AuthorizedAction execute(UUID actionId, Map<String, String> executionParams, String executor) {
+    AuthorizedAction a = actions.findByIdForUpdate(actionId)        // ✅ PESSIMISTIC_WRITE row lock
+        .orElseThrow(AuthorizationParityException::notFound);
+    if (a.getStatus() == ActionStatus.EXECUTED) throw AuthorizationParityException.alreadyExecuted(); // 409
+    // (1) executed-matches-authorized — a changed parameter changes the digest
+    String offered = ParityHasher.hash(executionParams);
+    if (!offered.equals(a.getParityHash())) {
+        members.persistAndFlush(new BlockedAttempt(UUID.randomUUID(), actionId, offered,
+            a.getParityHash(), executor, Instant.now(clock)));     // ✅ recorded, not dropped
+        throw AuthorizationParityException.parityMismatch();        // 409 PARITY_MISMATCH
+    }
+    // (2) four-eyes — two DISTINCT approvers on the high-value path
+    if (a.isHighValue()) {
+        long distinct = actions.findSignoffs(actionId).stream()
+            .map(ActionSignoff::getApproverUserId).distinct().count();
+        if (distinct < 2) throw AuthorizationParityException.insufficientSignoffs();   // 422
+    }
+    // (3) positive-gates — every DECLARED companion must be present
+    Set<String> satisfied = actions.findGates(actionId).stream()
+        .map(GateSatisfaction::getGateKey).collect(Collectors.toSet());
+    for (String required : a.getRequiredGates()) {
+        if (!satisfied.contains(required)) throw AuthorizationParityException.missingCompanionGate(required); // 422
+    }
+    a.markExecuted(Instant.now(clock));                            // ✅ sole-mutator hook, under the lock
+    return a;
+}
+
+@Transactional
+public ActionSignoff signoff(UUID actionId, String approver) {
+    AuthorizedAction a = actions.findByIdForUpdate(actionId).orElseThrow(AuthorizationParityException::notFound);
+    if (approver.equals(a.getRequesterUserId())) throw AuthorizationParityException.selfSignoff();   // 422
+    boolean dup = actions.findSignoffs(actionId).stream()
+        .anyMatch(s -> s.getApproverUserId().equals(approver));
+    if (dup) throw AuthorizationParityException.duplicateSignoff();                                    // 422
+    return members.persistAndFlush(new ActionSignoff(UUID.randomUUID(), actionId, approver,
+        a.getRequesterUserId(), Instant.now(clock)));              // ✅ @Check approver <> requester
+}
+```
+
+The parity hash is the load-bearing primitive: a canonical SHA-256 (`ParityHasher`) over the sorted authorized parameters, recomputed at execute time — a structural equality the wire cannot fake. The row lock makes the all-gates-pass-then-transition sequence atomic, so exactly one of N concurrent executes wins (CWE-362: *"a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."*). `ActionSignoff`, `GateSatisfaction` and `BlockedAttempt` are `@AggregateMember` of `AuthorizedAction` — root-JPQL reads, `common/MemberWriter` writes.
+
+Verification: review-tier — confirm the envelope records canonical params + parity hash + gate-key set immutably; execute re-hashes the actual params and refuses + records a blocked attempt on mismatch; a high-value action needs two distinct approvers each different from the requester (self/duplicate rejected, `@Check approver <> requester` present); execution is refused until every declared gate is satisfied (undeclared gate rejected); the execute path takes the action's PESSIMISTIC_WRITE lock. The behavioural proofs a fork-receiver keeps green: the parity-mismatch block (409 + recorded attempt), the two-distinct-approvers requirement, the missing-companion-gate refusal, and the concurrent-execute keystone (exactly one EXECUTED).
+
+Reference: [NIST CSRC glossary — Separation of Duty (SP 800-192)](https://csrc.nist.gov/glossary/term/separation_of_duty)
+
+Reference: [NIST CSRC glossary — Dual Authorization](https://csrc.nist.gov/glossary/term/dual_authorization)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
 
 
 <!-- @source rules/background-poll-must-show-refresh-state.md -->
@@ -5008,6 +5137,127 @@ public ClaimResult claim(String resource) {
 Verification: review-tier. Refusal-response correctness is an API-contract property with no compile-time signal — a bare-500 refusal compiles and "works" while being unbranchable and sometimes half-applied. Verify by review against the reject items of `bounded-capacity-claim`, `ordered-collection`, and `per-tenant-resource-quota`: refusals return an RFC 9457 problem with the declared type/code; the status matches the refusal class (409 conflict / 429 rate); diagnostic members are present; no partial side effect occurred; Retry-After appears only on a time-resetting limit. When a fork-receiver wires a real IT (claim at capacity → 409 with the type and no row mutated; quota hit → 429 with the members), this rule's verification may be upgraded from review to gradle_task+tag.
 
 Reference: [RFC 9457 — Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)
+
+
+<!-- @source rules/dunning-collections-one-way-ladder-aging-and-cure.md -->
+
+---
+title: An overdue-receivable collections lifecycle must walk a ONE-WAY dunning ladder with EXACTLY-ONCE stage transitions (a uq(case,stage) DB backstop, never skip or reverse), compute its aging bucket DETERMINISTICALLY from days-overdue at a RECORDED as-of instant (never a bare label), open a cure window on payment that resets to CURRENT and HALTS the ladder on full cure / resumes it on lapse, and serialize concurrent advances on the case row so exactly one wins
+impact: HIGH
+impactDescription: "A collections ladder that can skip a rung, reverse, or fire the same notice twice produces wrong-amount/wrong-stage dunning a regulator can sanction (the FDCPA staged-notice discipline exists precisely to bound escalation); an aging bucket with no recorded basis cannot be reconciled to the allowance-for-doubtful-accounts the receivable is stated net of; and an unsynchronized advance lets two threads double-escalate one case (CWE-362) — the case ends with two transition rows for one rung or a stage that jumped a rung"
+tags:
+  - state-machine
+  - audit
+  - concurrency
+  - billing
+  - governance
+spec_ref: "specs/dunning-collections-l0.yaml#DUNNING-LADDER-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/dunning/DunningService.java + backend/src/main/java/com/ax/template/authblueprint/dunning/DunningCase.java + backend/src/main/java/com/ax/template/authblueprint/dunning/DunningStageTransition.java"
+  pattern: "The dunning ladder advances one-way REMINDER→NOTICE→FINAL_NOTICE→SUSPENDED, one rung per advance, appending an immutable DunningStageTransition whose uq(case_id, stage, kind) makes a re-emit a deterministic 409; advancing past SUSPENDED is 409; the advance gates on the OBSERVED fromStage under the case's PESSIMISTIC_WRITE row lock so concurrent advances converge to exactly one winner; the aging bucket is computed deterministically by days-overdue (CURRENT/B1_30/B2_60/B3_90_PLUS) and PERSISTED with its basis (as-of instant + due date + days-overdue) so a bare label is unrepresentable; a payment opens a cure window, a full cure within it resets aging to CURRENT + halts the ladder (recorded as a CURED transition) and is idempotent, a lapse releases the halt so the ladder resumes; NO delete path exists on the case"
+upstream:
+  - "https://www.law.cornell.edu/uscode/text/15/1692g"
+  - "https://www.law.cornell.edu/cfr/text/17/210.5-02"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "Fair Debt Collection Practices Act, 15 U.S.C. § 1692g(a) (Cornell LII) — the staged collection-notice discipline the dunning ladder generalizes: a written notice with the amount, the creditor, and a 30-day dispute window before the debt is treated as valid"
+    url: "https://www.law.cornell.edu/uscode/text/15/1692g"
+    quote: "Within five days after the initial communication with a consumer in connection with the collection of any debt, a debt collector shall, unless the following information is contained in the initial communication or the consumer has paid the debt, send the consumer a written notice containing— (1) the amount of the debt; (2) the name of the creditor to whom the debt is owed; (3) a statement that unless the consumer, within thirty days after receipt of the notice, disputes the validity of the debt, or any portion thereof, the debt will be assumed to be valid by the debt collector"
+    quoted_at: "2026-06-22"
+  - source_type: external
+    citation: "17 CFR § 210.5-02(4) (Regulation S-X, Cornell LII) — the allowance for doubtful accounts the aging bucket informs, stated separately on the balance sheet"
+    url: "https://www.law.cornell.edu/cfr/text/17/210.5-02"
+    quote: "Allowances for doubtful accounts and notes receivable. The amount is to be set forth separately in the balance sheet or in a note thereto."
+    quoted_at: "2026-06-22"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (concurrent advances racing one dunning case)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-01"
+---
+
+## A collections lifecycle is a one-way exactly-once ladder, a recorded-basis aging bucket, and a cure window — not an ad-hoc status flag
+
+**Impact: HIGH — a ladder that skips/reverses/double-fires produces sanctionable dunning; an aging label with no recorded basis cannot reconcile to the allowance; an unsynchronized advance double-escalates one case (CWE-362).**
+
+A *dunning* (overdue-receivable collections) lifecycle is the staged escalation a billing system runs against every overdue invoice. The discipline is statutory: the FDCPA requires a debt collector to *"send the consumer a written notice containing— (1) the amount of the debt; (2) the name of the creditor to whom the debt is owed; (3) a statement that unless the consumer, within thirty days after receipt of the notice, disputes the validity of the debt … the debt will be assumed to be valid"* — a STAGED, bounded escalation, not an arbitrary one. The catalog governed decisions (`decision-governance`), thresholds (`threshold-terminal`), and obligations (`deadline-obligation`) but had no primitive for the aged, cured, exactly-once collections ladder:
+
+```text
+advance(case, fromStage):  one-way REMINDER→NOTICE→FINAL_NOTICE→SUSPENDED, one rung per call
+                           append an immutable DunningStageTransition; uq(case,stage,kind) =
+                           the exactly-once backstop; past SUSPENDED → 409; gated on the
+                           OBSERVED fromStage under the case's PESSIMISTIC_WRITE lock
+aging:                     bucket = f(days-overdue): CURRENT / B1_30 / B2_60 / B3_90_PLUS,
+                           PERSISTED with its basis (as-of instant + due date + days) — never bare
+cure:                      a payment opens a cure window; full cure within it → aging CURRENT +
+                           ladder HALTED (recorded CURED transition), idempotent; lapse → resume
+locks:                     the case row, PESSIMISTIC_WRITE — concurrent advances → exactly one wins
+```
+
+**1. The ladder is one-way and exactly-once (DUNNING-LADDER-001).** Each advance moves to the single next rung and appends an immutable transition row; the `uq(case_id, stage, kind)` index makes re-emitting a reached rung a deterministic 409, and the `fromStage` precondition under the row lock makes concurrent advances converge. SUSPENDED is terminal.
+
+**2. The aging bucket carries its own basis (DUNNING-AGING-001).** A bucket is computed deterministically from whole days overdue at a recorded as-of instant; the as-of, the due date, and the days-overdue are persisted so the bucket reconciles to the *"Allowances for doubtful accounts"* the receivable is stated net of. A bare label is unrepresentable.
+
+**3. A payment opens a cure window; a full cure halts, a lapse resumes (DUNNING-CURE-001).** Full payment within the window resets aging to CURRENT and HALTS the ladder (recorded), idempotently; a lapsed window releases the halt so the next advance resumes the one-way walk where it left off — the reached rungs keep their exactly-once transitions.
+
+**Incorrect — a mutable status flag, a bare aging label, an unsynchronized advance:**
+
+```java
+public void escalate(UUID caseId) {
+    DunningCase c = repo.findById(caseId).orElseThrow();   // ❌ no row lock — two threads both read REMINDER
+    c.setStage(nextStage(c.getStage()));                   // ❌ public setter; no exactly-once backstop;
+    c.setAgingBucket("90+");                               // ❌ bare label — no as-of, no days-overdue basis
+    repo.save(c);                                          // ❌ both threads write → double escalation (CWE-362)
+}
+```
+
+**Correct — one-way exactly-once advance under the case lock, recorded-basis aging, cure halt:**
+
+```java
+@Transactional
+public DunningCase advance(UUID caseId, DunningStage fromStage, String actor) {
+    DunningCase c = cases.findByIdForUpdate(caseId).orElseThrow(DunningException::notFound); // ✅ PESSIMISTIC_WRITE
+    if (c.getStage() == DunningStage.SUSPENDED) throw DunningException.ladderTerminal();      // 409 — terminal
+    if (c.getStage() != fromStage) throw DunningException.stageAlreadyReached();              // ✅ exactly-once gate
+    DunningStage nextStage = c.getStage().next();
+    Instant now = Instant.now(clock);
+    long days = daysOverdue(c.getDueDate(), now);
+    try {
+        members.persistAndFlush(new DunningStageTransition(UUID.randomUUID(), c.getId(),
+            nextStage, "ADVANCE", days, actor, now));      // ✅ uq(case,stage,kind) backstop
+    } catch (DataIntegrityViolationException dup) {
+        throw DunningException.stageAlreadyReached();       // ✅ loser of any residual race → 409
+    }
+    c.advanceTo(nextStage);
+    c.reage(AgingBucket.of(days), now, days);               // ✅ bucket + basis (as-of + days) recorded
+    return c;
+}
+
+@Transactional
+public DunningCase cure(UUID caseId, String actor) {
+    DunningCase c = cases.findByIdForUpdate(caseId).orElseThrow(DunningException::notFound);
+    if (c.isLadderHalted() && c.getAgingBucket() == AgingBucket.CURRENT) return c;            // ✅ idempotent
+    Instant now = Instant.now(clock);
+    boolean windowOpen = c.getCureDeadline() != null && now.isBefore(c.getCureDeadline());
+    if (!windowOpen || !c.isFullyPaid()) throw DunningException.noCureWindow();               // 422
+    members.persistAndFlush(new DunningStageTransition(UUID.randomUUID(), c.getId(),
+        c.getStage(), "CURED", c.getDaysOverdue(), actor, now));   // ✅ the halt is recorded
+    c.cure();                                                       // ✅ aging→CURRENT, ladder halted
+    return c;
+}
+```
+
+The case-row PESSIMISTIC_WRITE lock serializes the read-stage / write-next-stage sequence; the `fromStage` precondition makes N concurrent advances from one rung resolve to exactly one winner; the `uq(case_id, stage, kind)` index is the suspenders for any residual race (CWE-362). The aging columns carry their own basis so the bucket is reconstructible. `DunningStageTransition` rows are `@AggregateMember` of `DunningCase` — root-JPQL reads, `common/MemberWriter` writes; no delete path exists on the case.
+
+Verification: review-tier — confirm the ladder advances one rung one-way, the transition rows are append-only one-per-(case,stage,kind), the aging bucket persists its as-of/days-overdue basis, the cure path halts on full payment and resumes on lapse, and the advance/cure both take the case's PESSIMISTIC_WRITE lock. The behavioural proof a fork-receiver keeps green: the N-thread advance race (exactly one 2xx + N-1 409, exactly one transition row).
+
+Reference: [FDCPA 15 U.S.C. § 1692g](https://www.law.cornell.edu/uscode/text/15/1692g)
+
+Reference: [17 CFR § 210.5-02 (Regulation S-X — allowance for doubtful accounts)](https://www.law.cornell.edu/cfr/text/17/210.5-02)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
 
 
 <!-- @source rules/e-government-approval-gpki-approval-line.md -->
@@ -13848,6 +14098,133 @@ modules converge to justify a shared library.
 - "We trust the sender adapter to throw clean errors" — sender adapters
   bubble up upstream library exceptions (JavaMail, AWS SES SDK, SendGrid
   client) whose error strings the catalog cannot control.
+
+
+<!-- @source rules/settlement-finality-dvp-novation-and-fail-ladder.md -->
+
+---
+title: Post-trade settlement must commit its two legs ATOMICALLY (delivery occurs if and only if payment occurs), reach an IRREVOCABLE final state after which novation/cancel/amend are all refused, conserve the obligation across any pre-finality counterparty novation (recorded append-only), and walk the fail ladder with exactly-once transitions under a row lock that lets exactly one settle finalize
+impact: HIGH
+impactDescription: "Settling one leg without the other is principal risk — the Herstatt failure that destroys a counterparty (you delivered the securities and never got paid); allowing a 'cancel' or re-settle after finality unwinds a trade other parties already relied on as irrevocable; a novation that changes the obligation amount silently transfers value off the books; and a settle with no row lock lets two concurrent attempts double-settle or interleave a partial commit — every one of these is a real, money-losing post-trade defect that no amount of after-the-fact reconciliation can reverse"
+tags:
+  - state-machine
+  - concurrency
+  - conservation
+  - finality
+  - audit
+spec_ref: "specs/settlement-finality-l0.yaml#SETTLE-DVP-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/settlement/SettlementService.java + backend/src/main/java/com/ax/template/authblueprint/settlement/SettlementInstruction.java + backend/src/main/java/com/ax/template/authblueprint/settlement/SettlementFailLadder.java"
+  pattern: "A SettlementInstruction settles both legs in ONE transaction or neither (DvP: a @Check delivery_settled = payment_settled makes partial settlement unrepresentable, not just service logic); SETTLED is the irrevocable final state (@Check SETTLED implies both legs settled + a recorded final instant) after which novation/cancel/amend/re-settle and every fail-ladder edge are deterministic 409s; a pre-finality novation replaces ONE leg's counterparty while CONSERVING the net obligation (net_obligation is @Column(updatable=false); an append-only immutable NovationRecord records released party, assuming party, the conserved obligation, who/when); the fail ladder PENDING→FAILED→RETRY→BUYIN is walked by a state machine that is the sole status mutator on the fail path and rejects every off-graph edge (skip/reverse/repeat) 409; and every write-path takes the instruction's PESSIMISTIC_WRITE row lock so of N concurrent settles exactly one finalizes (CWE-362)"
+upstream:
+  - "https://www.bis.org/cpmi/publ/d00b.htm"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "BIS CPMI, 'A glossary of terms used in payments and settlement systems' — the canonical definition of delivery versus payment (the all-or-nothing link between the two transfers)"
+    url: "https://www.bis.org/cpmi/publ/d00b.htm"
+    quote: "a link between a securities transfer system and a funds transfer system that ensures that delivery occurs if, and only if, payment occurs."
+    quoted_at: "2026-06-22"
+  - source_type: external
+    citation: "BIS CPMI, 'A glossary of terms used in payments and settlement systems' — final settlement (the irrevocability of finality) and novation (the obligation-conserving substitution of parties)"
+    url: "https://www.bis.org/cpmi/publ/d00b.htm"
+    quote: "final settlement: settlement which is irrevocable and unconditional. novation: satisfaction and discharge of existing contractual obligations by means of their replacement by new obligations (whose effect, for example, is to replace gross with net payment obligations). The parties to the new obligations may be the same as those to the existing obligations or, in the context of some clearing house arrangements, there may additionally be substitution of parties."
+    quoted_at: "2026-06-22"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (concurrent settles racing one instruction toward finality)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-22"
+---
+
+## Settlement links its two legs all-or-nothing, locks in at finality, conserves the obligation through novation, and walks its fail ladder once each
+
+**Impact: HIGH — settling one leg without the other is principal risk (Herstatt); a cancel after finality unwinds a trade others relied on; a novation that changes the amount moves value off the books; an unlocked settle double-commits.**
+
+*Post-trade settlement* — turning an agreed trade into the actual exchange of securities for funds — is the moment value irreversibly changes hands. BIS CPMI defines the governing discipline: *delivery versus payment* is *"a link between a securities transfer system and a funds transfer system that ensures that delivery occurs if, and only if, payment occurs"*, and *final settlement* is *"settlement which is irrevocable and unconditional."* The catalog's adjacent primitives cover none of this (`collection-conservation-netting` reduces a SET of gross obligations to net — no two-leg atomic settlement, no finality instant; `reserve-settle-balance` is a quantity drawdown against a pooled prepaid balance — not a linked DvP transfer):
+
+```text
+settle(id):     BOTH legs commit in ONE tx or NEITHER (DvP) — partial is a @Check violation
+                drives PENDING/FAILED/RETRY → SETTLED + records the finality instant
+finality:       SETTLED is irrevocable — novation/cancel/amend/re-settle + every ladder edge → 409
+novate(leg,p):  before finality, replace ONE leg's counterparty; net obligation CONSERVED
+                (net_obligation @Column(updatable=false)); append-only immutable NovationRecord
+fail ladder:    PENDING→FAILED→RETRY→BUYIN, each edge once; off-graph edge → 409; BUYIN terminal
+locks:          every write-path takes the instruction's PESSIMISTIC_WRITE row lock (settle-once)
+```
+
+**1. Atomic DvP (SETTLE-DVP-001).** The two legs are not two operations — they are one. The instruction carries `delivery_settled` and `payment_settled` flags constrained by a DB `@Check (delivery_settled = payment_settled)`, so a row in which one leg settled and the other did not cannot be persisted at all. Settlement flips both and stamps finality in the same transaction.
+
+**2. Finality is irrevocable (SETTLE-FINAL-001).** Once `SETTLED`, the trade is locked in: novation, cancel, amend, a second settle, and every fail-ladder edge are deterministic `409`s. The `@Check` backstops that `SETTLED` implies a recorded `final_at` and that a non-final instruction carries none — the finality instant is the auditable proof of irrevocability.
+
+**3. Novation conserves the obligation (SETTLE-NOVATE-001).** Before finality a counterparty may be substituted — *"there may additionally be substitution of parties"* — but the obligation the new party assumes is identical to the one the old party was released from. `net_obligation` is `@Column(updatable=false)`, so a novation cannot drift it; an immutable append-only `NovationRecord` records the released party, the assuming party, the conserved obligation, and who/when. The original instruction is retained.
+
+**Incorrect — settle one leg at a time, mutable after finality, novation that changes the amount, no lock:**
+
+```java
+public void settle(UUID id) {
+    SettlementInstruction s = repo.findById(id).orElseThrow();   // ❌ no row lock — concurrent double-settle
+    s.setDeliverySettled(true);                                  // ❌ one leg flips alone — partial DvP
+    repo.save(s);
+    chargeFunds(s);                                              // ❌ if THIS throws, delivery already stuck true
+    s.setPaymentSettled(true);
+    s.setStatus(SETTLED);                                        // ❌ no finality instant recorded
+}
+public void novate(UUID id, String newParty, BigDecimal newAmount) {
+    SettlementInstruction s = repo.findById(id).orElseThrow();
+    s.setPaymentParty(newParty);
+    s.setNetObligation(newAmount);                              // ❌ obligation NOT conserved — value moved
+}                                                              // ❌ nothing blocks novation after finality
+```
+
+**Correct — atomic two-leg commit under a row lock; irrevocable after finality; conserving append-only novation; exactly-once fail ladder:**
+
+```java
+@Transactional
+public SettlementInstruction settle(UUID id) {
+    SettlementInstruction s = instructions.findByIdForUpdate(id).orElseThrow(SettlementException::notFound);
+    if (s.isFinal()) throw SettlementException.alreadyFinal();              // ✅ settle-once 409 under lock
+    if (s.getStatus() == SettlementStatus.BUYIN) throw SettlementException.notSettleable(s.getStatus());
+    s.settleBothLegs(Instant.now(clock));                                  // ✅ both legs + finality instant, one tx
+    return s;
+}
+
+@Transactional
+public SettlementInstruction novate(UUID id, SettlementLeg leg, String assumingParty, String novatedBy) {
+    SettlementInstruction s = instructions.findByIdForUpdate(id).orElseThrow(SettlementException::notFound);
+    if (s.isFinal()) throw SettlementException.alreadyFinal();              // ✅ irrevocable — counterparty locked in
+    String released = leg == SettlementLeg.DELIVERY ? s.getDeliveryParty() : s.getPaymentParty();
+    if (Objects.equals(released, assumingParty)) throw SettlementException.novationNoChange();   // 422
+    BigDecimal conserved = s.getNetObligation();                           // ✅ net_obligation is updatable=false
+    members.persist(new NovationRecord(UUID.randomUUID(), s.getId(), leg, released, assumingParty,
+        conserved, novatedBy, Instant.now(clock)));                        // ✅ append-only, obligation conserved
+    if (leg == SettlementLeg.DELIVERY) s.replaceDeliveryParty(assumingParty);
+    else s.replacePaymentParty(assumingParty);
+    return s;
+}
+```
+
+```java
+// the fail ladder is the SOLE status mutator on the fail path (HG-STATE-SOLE-MUTATOR)
+public void advance(SettlementInstruction instruction, SettlementStatus next) {
+    SettlementStatus from = instruction.getStatus();
+    if (!ALLOWED.getOrDefault(from, Set.of()).contains(next)) {            // PENDING→FAILED→RETRY→BUYIN
+        throw SettlementException.illegalLadderEdge(from, next);           // ✅ off-graph edge → 409
+    }
+    instruction.moveStatus(next);                                         // package-private hook
+}
+```
+
+**4. The fail ladder is walked once each (SETTLE-LADDER-001).** A failed settlement walks `PENDING→FAILED→RETRY→BUYIN`; `SettlementFailLadder` is the only mutator of `status` on the fail path and rejects any off-graph edge (skip/reverse/repeat) with a `409`. `BUYIN` is terminal-failed (zero outgoing edges). A non-final instruction on the ladder may still recover to finality via an explicit settle.
+
+**5. Exactly one settle finalizes (SETTLE-CONCURRENT-001).** Every write-path takes the instruction's `PESSIMISTIC_WRITE` row lock. Of N concurrent settles, exactly one finds the instruction non-final and commits the DvP; the rest see `SETTLED` and get `409` — *"a timing window exists in which the shared resource can be modified by another code sequence operating concurrently"* is closed by the lock. The DvP commit and finality stamp are in the same transaction under that lock, so a partial or double settlement is impossible.
+
+Verification: review-tier — confirm settle flips both legs in one transaction and the `@Check` makes partial unrepresentable on both entity and migration; `SETTLED` implies a recorded `final_at` and every mutating verb after finality returns `409`; novation reads `net_obligation` (which is `updatable=false`) into the `NovationRecord` so the amount cannot drift, and the record is fully `@Column(updatable=false)`; the fail ladder rejects off-graph edges; and all write-paths use `findByIdForUpdate`. The behavioural proof a fork-receiver keeps green: the concurrent-settle race (exactly one 2xx, the rest 409).
+
+Reference: [BIS CPMI — A glossary of terms used in payments and settlement systems](https://www.bis.org/cpmi/publ/d00b.htm)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
 
 
 <!-- @source rules/shared-counter-claim-must-be-atomic.md -->
