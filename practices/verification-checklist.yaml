@@ -360,6 +360,40 @@ checklist:
          bash practices/evals/spec_policy_ref_guard.sh
       3. Do NOT hand-edit AGENTS.md; the generator script is the source of truth.
 
+  # ── 4b. Frontend lint (React catalog ESLint rules on the 6 reference apps) ──
+  # BACKLOG P2-4: R25 previously gated only the backend. The 14 ax/* React catalog
+  # rules were enforced on the reference apps only by manual lint, so violations
+  # accrued unobserved (P2-12 census: 48 problems). After the P2-12 decomposition
+  # wave drove the apps to 0 violations and P2-2 promoted no-god-route +
+  # no-server-state-in-local-state to error, this step wires the frontend lint into
+  # the gate so a React-catalog regression HARD-FAILS R25 exactly like a backend one.
+  # Uses `npm run lint` (= local eslint `. --max-warnings 0`) — fails fast if
+  # frontend/node_modules is absent (fix_playbook: npm ci); no npx auto-download.
+  - id: frontend-lint
+    title: "Frontend ESLint (ax/* React catalog rules — 6 reference apps, --max-warnings 0)"
+    parallel: false
+    commands:
+      - command: "npm run lint"
+        working_directory: "frontend"
+        expected_exit: 0
+    fix_playbook: |
+      Frontend lint failed — a reference app violates an ax/* React catalog rule.
+      1. Reproduce: cd frontend && npx eslint .
+      2. If it errors "eslint: not found" / cannot resolve @ax/eslint-plugin-ax,
+         deps are missing → cd frontend && npm ci  (then re-run).
+      3. Common violations + the canonical fix (see practices-react/rules/<id>.md):
+         • ax/no-upward-layer-import → a shared components/ file imports a
+           features/ hook. MOVE the component into features/<f>/components/ and
+           re-export via a features/<f>/components/index.ts barrel; importers use
+           the barrel path @/features/<f>/components (NOT a deep path).
+         • ax/no-god-route (error since P2-2) → a "use client" route > 100 lines.
+           Extract the body verbatim into features/<f>/components/<name>-screen.tsx
+           (named export) and leave the route a thin delegate that renders it.
+         • ax/no-server-state-in-local-state (error since P2-2) → server data held
+           in useState; read it from the feature hook (TanStack Query etc.) instead.
+      4. Behaviour-preserving MOVES only — do not rewrite component logic to silence
+         the rule. Verify per app: cd apps/<app> && npx tsc --noEmit.
+
   # ── 5. Aggregate regression (final binary pass/fail) ────────────────────────
   - id: aggregate-regression
     title: "Aggregate ./gradlew test (catch cross-domain regression)"

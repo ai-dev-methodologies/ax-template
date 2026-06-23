@@ -61,8 +61,10 @@ plugin.configs.recommended = {
     'ax/no-upward-layer-import': 'error',
     'ax/no-feature-internal-import': 'error',
     'ax/no-route-client-data-fetching': 'error',
-    'ax/no-server-state-in-local-state': 'warn',
-    'ax/no-god-route': 'warn',
+    // BACKLOG P2-2 (2026-06-24): promoted warn→error after the P2-12 decomposition
+    // wave proved 0 violations across all 6 reference apps under --max-warnings 0.
+    'ax/no-server-state-in-local-state': 'error',
+    'ax/no-god-route': 'error',
   },
 }
 

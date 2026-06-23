@@ -26,9 +26,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 54 | 54 | **100%** |
-| P2 (verification escapes) | 12 | 8 | 67% |
+| P2 (verification escapes) | 12 | 11 | 92% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **123** | **88** | **~72%** |
+| **P0–P3 합계 (수렴 분모)** | **123** | **91** | **~74%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -175,26 +175,38 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       gate도 내용을 검증하지 않는다 — 조작된 외부 인용이 모든 게이트를 통과한다.
       done-when: periodic live-fetch `external_url_spot_audit` (ADVISORY) 추가,
       한 sweep에서 confirmed-fabricated 0 확인.
-- [ ] P2-2 ESLint warn→error 승격: `no-server-state-in-local-state`, `no-god-route`
-      (`eslint-plugin-ax/index.js:64-65`) — 측정 기반 기한 부여.
+- [x] P2-2 — **closed 2026-06-24**: ESLint warn→error 승격 (`no-server-state-in-local-state`,
+      `no-god-route`). 측정 게이트 충족 = 아래 frontend 부채 정리 wave 이후 6개 reference 앱
+      전부 `eslint . --max-warnings 0` 0-위반(rule이 gaming 아닌 real decomposition으로
+      satisfiable함을 입증). 두 곳 승격: 실효 config `frontend/eslint.config.mjs` + recommended
+      preset `practices-react/eslint-plugin-ax/index.js`. `eslint --print-config`로 severity=2(error)
+      라이브 검증(vacuous 아님). 이제 새 god-route / server-state-in-useState 회귀가 HARD-FAIL.
 - [ ] P2-3 enforcement-surface map 문서화 — commit-blocking / push-blocking / manual 3분류를
       CLAUDE.md 또는 verify 문서에 명시 (80-guard 전체는 수동 run-all-guards 전용임을 포함).
       **진행 중 (2026-06-22)**: CLAUDE.md "Enforcement surfaces (what blocks where)" 섹션 추가 —
       5개 표면 분류표 (PreToolUse advisory / pre-commit commit-blocking / pre-push push-blocking /
       run-all-guards manual / per-domain test manual), opt-in 명시, 80 guards 수동 전용 명시.
       done-when: 모든 표면에 예외 없는 binary 테스트 커버리지 추가.
-- [ ] P2-4 R25 체크리스트에 frontend lint 단계 추가 (현재 backend만). **blocked-on 아래 frontend 부채 항목**:
-      frontend lint이 현재 48 problems라 R25에 넣으면 즉시 red — 부채 정리 후 추가.
-- [ ] P2-12 frontend reference 앱이 자체 React ESLint 룰을 위반(enforcement-asymmetry의 frontend판,
-      2026-06-16 발견) — `eslint .` census: **48 problems = 8 errors `ax/no-upward-layer-import`
-      (도메인 컴포넌트가 shared `components/`에 오배치, features/ 훅을 상향 import; consumer/publish/
-      studio) + 40 warnings `ax/no-god-route` (route 파일 >100줄; 6앱 전반 consumer/devconsole/
-      enterprise/pay/publish/studio)**. 근본: frontend lint이 R25 게이트에 없어 React 카탈로그
-      룰이 자체 reference 앱에 강제된 적 없음. done-when: 8 errors는 feature-UI 클러스터를
-      features/<f>/components/로 이전(cascade — media-thumb→media-card 연쇄, typecheck 검증),
-      40 warnings는 route business-logic을 feature 컨테이너로 추출 → `eslint . --max-warnings 0`
-      green → ESLint warn→error 승격 + R25 frontend-lint 단계 동시 unblock. 6앱 × 판단-heavy
-      리팩터라 별도 frontend wave 필요(blind 일괄 refactor 금지 — regression 위험).
+- [x] P2-4 — **closed 2026-06-24**: R25 체크리스트에 frontend lint 단계 추가 (이전엔 backend만).
+      blocked-on 부채(아래)가 0-위반으로 정리된 뒤 `practices/verification-checklist.yaml`에
+      `id: frontend-lint` step 추가 — `npm run lint`(= `eslint . --max-warnings 0`, working_dir
+      `frontend`, expected_exit 0, npx 자동설치 회피). 이제 React 카탈로그 룰 회귀가 backend 회귀와
+      동일하게 R25를 HARD-FAIL시킨다(pre-push recency guard 포함). fix_playbook에 canonical 수정법
+      (컴포넌트 feature 이전 + barrel / route→container 추출) 명시.
+- [x] P2-12 — **closed 2026-06-24**: frontend reference 앱이 자체 React ESLint 룰을 위반
+      (enforcement-asymmetry의 frontend판, 2026-06-16 발견) — `eslint .` census였던 **48 problems
+      (8 errors `ax/no-upward-layer-import` + 40 warnings `ax/no-god-route`)을 0으로** 종결.
+      **8 errors**: feature-UI 컴포넌트 5개(studio media-thumb/media-card/reaction-button, publish
+      article-editor, consumer comment-thread/favorite-toggle)를 `features/<f>/components/`로 이전 +
+      barrel 생성 + importer를 barrel 경유로 rewire. flat feature 레이아웃(`features/<f>/hooks.ts`)에서
+      `@/features/<B>/hooks`는 isBarrel→cross-feature 허용이라 violation-trade 없이 clean(초기 "tangle"
+      우려는 룰 정독으로 반증). **40 warnings**: 6앱 전 god-route를 behaviour-preserving move로
+      `features/<f>/components/<name>-screen.tsx` 컨테이너로 추출(route는 thin delegate), 앱별 executor
+      병렬 처리 + 앱별 `tsc --noEmit` exit 0 self-verify. 독립 검증: `eslint . --max-warnings 0` exit 0,
+      6앱 tsc 전부 clean. unused `shortId`/`Button`은 원본 route에도 있던 pre-existing dead import의
+      verbatim 이동(회귀 아님, surgical 원칙상 유지). 동시 unblock된 warn→error 승격 + R25 frontend-lint
+      step도 함께 종결(각 별도 항목). blind 일괄 refactor 금지 원칙 준수 — 패턴 입증(8 errors) 후
+      앱별 tsc+eslint mechanical 검증으로만 진행.
 - [x] P2-5 — **closed 2026-06-16**: ContextCache 401 증상 종결 확인. root-cause = 136 @SpringBootTest 중 고유-config(BillingFlowIT auto-verify=true 등) context가 ContextCache LRU(기본 32)에서 evict→stale @LocalServerPort 401. fix = 해당 2 IT에 @DirtiesContext(BEFORE_CLASS)(R22). **증상 소멸 검증**: 이번 세션 전 R25에서 aggregate `./gradlew test`는 외부 fixture PortabilityCyclic 1건만 실패(우리 코드 0). 2g heap은 별개(OOM 방지). 관측 기반 추적은 perf-log/sharding 설계 문서로 이관.
 - [x] P2-6 doc_headline_count_guard가 `skills/ax-transform/SKILL.md`를 미검사 → stale counts
       147/86 노출. **closed 2026-06-10 (이번 wave: counts 187/99 수정 + guard 확장).**

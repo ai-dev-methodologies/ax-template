@@ -6,8 +6,8 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, MessageCircle } from 'lucide-react';
 import { useAuthStore } from '@ax/core';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@ax/ui';
-import { CommentThread } from '@/components/comment-thread';
-import { FavoriteToggle } from '@/components/favorite-toggle';
+import { CommentThread } from '@/features/comments/components';
+import { FavoriteToggle } from '@/features/favorites/components';
 import { useProfile } from '@/features/profile/hooks';
 
 const ENTITY_TYPE = 'post';

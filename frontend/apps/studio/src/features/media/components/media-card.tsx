@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { StatusBadge, type StatusKind } from '@ax/blocks';
 import { cn } from '@ax/ui';
-import { MediaThumb } from '@/components/media-thumb';
+import { MediaThumb } from './media-thumb';
 import { formatBytes } from '@/lib/format';
 import type { StoredFile } from '@/lib/api/fileClient';
 

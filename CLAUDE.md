@@ -287,7 +287,13 @@ cd backend && ./gradlew testPortability  # advisory: 외부 fixture에 룰 적�
 # Frontend
 cd frontend && npm run build
 cd frontend && npm run test
+cd frontend && npm run lint   # ax/* React 카탈로그 룰 (--max-warnings 0) — R25 frontend-lint step (P2-4)
 ```
+
+> **R25 frontend-lint (P2-4, 2026-06-24~)**: `verification-checklist.yaml`의 `frontend-lint`
+> step이 `npm run lint`를 돌린다. 6개 reference 앱이 14 ax/* React 룰을 0-위반으로 통과해야 R25 PASS —
+> backend 회귀와 동일하게 React 카탈로그 회귀도 게이트를 HARD-FAIL시킨다. `no-god-route` +
+> `no-server-state-in-local-state`는 P2-2에서 warn→error 승격됨.
 
 ## Architecture
 

@@ -6,7 +6,7 @@ import { ImageOff, Upload } from 'lucide-react';
 import { useAuthStore } from '@ax/core';
 import { Button } from '@ax/ui';
 import { PageHeader } from '@/components/page-header';
-import { MediaCard } from '@/components/media-card';
+import { MediaCard } from '@/features/media/components';
 import { FeaturedSwiper } from '@/components/featured-swiper';
 import { ScreenEmpty, ScreenError, ScreenLoading } from '@/components/screen-states';
 import { useMediaIndex, useMediaList } from '@/features/media/hooks';

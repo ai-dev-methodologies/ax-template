@@ -1,7 +1,7 @@
 'use client';
 
 import React, { use } from 'react';
-import { ArticleEditor } from '@/components/article-editor';
+import { ArticleEditor } from '@/features/articles/components';
 import { LoadingState, ErrorState } from '@/components/screen-states';
 import { useArticle } from '@/features/articles/hooks';
 import { errorMessage } from '@/lib/errors';

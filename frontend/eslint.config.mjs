@@ -28,11 +28,17 @@ const sharedRules = {
   'ax/no-cross-feature-deep-import': 'error',
   'ax/no-upward-layer-import': 'error',
   'ax/no-feature-internal-import': 'error',
-  // TIER-1 (Phase 2): route-thin core at error; the heuristic size/state-boundary
-  // signals ship advisory (warn) per the ralplan codex critic (gameable proxy / honest limit).
+  // TIER-1 (Phase 2): route-thin core at error.
+  // no-god-route + no-server-state-in-local-state shipped advisory (warn) per the
+  // ralplan codex critic (line-count is a gameable proxy; state-boundary is a heuristic).
+  // BACKLOG P2-2 promotion (2026-06-24): the measurement gate is now met — after the
+  // P2-12 decomposition wave all 6 reference apps lint at 0 violations under
+  // `eslint . --max-warnings 0`, proving both rules are satisfiable with real
+  // decomposition rather than gaming. Promoted to error so a regression (a new god
+  // route / server-state-in-useState) HARD-FAILS rather than silently accruing.
   'ax/no-route-client-data-fetching': 'error',
-  'ax/no-server-state-in-local-state': 'warn',
-  'ax/no-god-route': 'warn',
+  'ax/no-server-state-in-local-state': 'error',
+  'ax/no-god-route': 'error',
 }
 
 // Per-persona apps must reuse the shared catalog — enforced only under apps/**.
