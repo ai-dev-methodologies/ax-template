@@ -187,6 +187,42 @@ tasks.register<Test>("testTrueUp") {
     }
 }
 
+tasks.register<Test>("testReproducibility") {
+    useJUnitPlatform {
+        includeTags("REPRODUCIBILITY")
+    }
+}
+
+tasks.register<Test>("testMandate") {
+    useJUnitPlatform {
+        includeTags("MANDATE")
+    }
+}
+
+tasks.register<Test>("testValuationRun") {
+    useJUnitPlatform {
+        includeTags("VALUATIONRUN")
+    }
+}
+
+tasks.register<Test>("testReconciliation") {
+    useJUnitPlatform {
+        includeTags("RECONCILIATION")
+    }
+}
+
+tasks.register<Test>("testNetMetering") {
+    useJUnitPlatform {
+        includeTags("NETMETERING")
+    }
+}
+
+tasks.register<Test>("testTimedOffer") {
+    useJUnitPlatform {
+        includeTags("TIMEDOFFER")
+    }
+}
+
 tasks.register<Test>("testDunning") {
     useJUnitPlatform {
         includeTags("DUNNING")

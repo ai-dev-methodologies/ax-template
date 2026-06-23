@@ -35,5 +35,11 @@ domains:
   dunning-collections: backend_only # P1-20~23: overdue-receivable collections lifecycle (one-way exactly-once notice ladder + recorded aging bucket + cure-period grace); no UI in scope
   settlement-finality: backend_only # P1-24~27: post-trade DvP + novation + irrevocable finality + fail-ladder; no UI in scope
   authorization-parity: backend_only # P1-5/6/36: executed-matches-authorized parity hash + four-eyes signoff + positive companion gates; no UI in scope
+  reproducible-procedure: backend_only # P1-7/8/9: seeded replayable draw + version-pinned classification + role-blinding; no UI in scope
+  mandate-fanout: backend_only # P1-37/35/31: conserved fan-out recall + multi-check battery + deemed-election; no UI in scope
+  valuation-run-projection: backend_only # P1-28/29/30: as-of snapshot + conserving fan-out + rebase-with-history; no UI in scope
+  external-reconciliation: backend_only # P1-32: classify/dispose breaks + idempotent re-run; no UI in scope
+  signed-dual-register: backend_only # P1-18: bidirectional monotone import/export + derived net + period close; no UI in scope
+  timed-offer-exclusive-assignment: backend_only # P1-39/40/41: timed-offer expiry + exclusive assignment + re-offer ladder; no UI in scope
   # security: backend_only  # no specs/security-*.yaml yet — add when backend domain is scaffolded
   # user: backend_only      # no specs/user-*.yaml yet — add when backend domain is scaffolded

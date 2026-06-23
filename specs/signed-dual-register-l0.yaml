@@ -1,0 +1,71 @@
+version: "0.1.0"
+scope: "signed-dual-register-l0 — the bidirectional SIGNED dual register (net-metering). A NetMeter tracks TWO independently VALUE-monotone direction registers — IMPORT (energy drawn from the grid, +) and EXPORT (energy fed back to the grid, −) — and derives a SIGNED NET = cumulativeImport − cumulativeExport. Each direction register is the monotone-register odometer discipline applied per direction: an appended reading is ≥ the current cumulative for THAT direction (a reading below it is rejected 422); the per-reading delta is curr − prior, computed under the meter's row lock. The NET is DERIVED and CONSERVED: net == Σimport-deltas − Σexport-deltas at every point, recorded as a basis (both cumulatives + the net) and cross-checked against an INDEPENDENT recompute (never trusted by-construction). A billing-period close snapshots both cumulatives + the period net delta (period net = net_end − net_start) and the period becomes IMMUTABLE — a reading backdated into a closed period is rejected 409. Cross-cutting, framework-agnostic. The IDW14 energy dogfood's monotone-register closed the SINGLE value-monotone odometer; this closes its bidirectional residual (P1-18): two coupled monotone registers whose DERIVED signed difference is the billed quantity and whose period close freezes a net delta. Realized by the netmetering reference workload (com.ax.template.authblueprint.netmetering). Recurs in: net energy metering (solar/EV/storage), gross-vs-net production accounting, dual-direction byte counters (ingress/egress), any signed accumulation derived from two monotone one-way registers — 3+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only immutable readings + @Version optimistic + PESSIMISTIC_WRITE meter-row lock + @Check live per-direction monotone/non-negative-delta backstop) + exact BigDecimal (NUMERIC(19,4)) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "16 U.S.C. § 2621(d)(11) (PURPA — net metering service: on-site generation delivered to the local distribution facilities OFFSETS electric energy provided by the utility within the applicable billing period — the canonical signed-net-within-a-period definition) + IETF RFC 2578 (SMIv2) §7.1.6 Counter32 (the per-direction monotone-cumulative-register formalization) + CWE-362 (concurrent dual-register update race) + java.time.Clock + RFC 9457 + RFC 9110 §15.5.21 (422) / §15.5.10 (409)"
+domain_mode: backend_only
+introduced_at: "P1-18 2026-06-23 (IDW14 energy residual — net-metering signed-dual-register)"
+
+# OPT-IN signed-dual-register catalog. The IDW14 energy dogfood's monotone-register
+# closed the SINGLE value-monotone odometer (one direction). Its bidirectional residual
+# (P1-18): a net meter is TWO monotone registers (import +, export −) whose DERIVED
+# signed net = Σimport − Σexport is the billed quantity, and a billing-period close
+# freezes a net delta and makes the period immutable. Generic; the solar-PV net-metering
+# framing is the anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. NETM-DIRECTION-001 (each direction register is independently value-monotone, per the odometer discipline)
+#   2. NETM-NET-001       (the net is DERIVED = Σimport − Σexport, recorded as a basis, cross-checked by independent recompute)
+#   3. NETM-PERIOD-001    (a billing-period close snapshots both cumulatives + the net delta and freezes the period — backdate 409)
+#   4. NETM-CONCURRENT-001 (keystone — concurrent appends to one meter serialize on the meter row; every delta is vs the true prior cumulative)
+
+# ── Composition note ──
+# Builds on monotone-register-l0 (one value-monotone register). The DUAL coupling is the
+# new signature: two registers + a DERIVED signed difference that is conserved and
+# independently cross-checked (never trusted by-construction, mirroring the netting
+# set-wide-conservation discipline), plus a period close that snapshots a net delta and
+# makes the period immutable. recordedAt is read from an injected Clock; the meter row
+# lock serializes concurrent appends across BOTH directions so neither delta is computed
+# against a stale cumulative (CWE-362).
+
+items:
+  - id: "NETM-DIRECTION-001"
+    chapter: "Each direction register (IMPORT +, EXPORT −) is independently value-monotone; a reading below its cumulative is rejected"
+    verification:
+      mechanism: rule
+      ref: net-meter-signed-net-is-derived-from-two-monotone-direction-registers
+    requirement: "A reading appended to a net meter for a direction (IMPORT or EXPORT) MUST be ≥ that direction's current cumulative (the latest reading FOR THAT DIRECTION), under the meter's row lock (PESSIMISTIC_WRITE). The per-reading delta is read − cumulative (≥ 0) and that direction's cumulative advances to the read. A reading BELOW the direction's cumulative MUST be REJECTED with a deterministic 422 (`type=urn:problem:netmeter-not-monotone`, `code=NETMETER_NOT_MONOTONE`) — never silently accepted (which would post a negative direction delta and corrupt the derived net). The two directions are INDEPENDENT: an IMPORT reading is compared ONLY to the import cumulative, an EXPORT reading ONLY to the export cumulative. The per-direction monotone invariant (direction cumulative never decreases; direction delta ≥ 0) MUST be DB-backstopped via @Check so it holds even under ddl-auto."
+    test_method: "RestAssured (IMPORT read ≥ import cumulative → 201 + delta = read − import cumulative, import cumulative advances, export untouched; EXPORT independent; either direction read < its cumulative → 422 NETMETER_NOT_MONOTONE, cumulatives unchanged)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Per-direction value-monotone odometer; a decrease in either direction is a 422,
+      never a negative direction delta. Quote anchor (RFC 2578 §7.1.6 Counter32): "The
+      Counter32 type represents a non-negative integer which monotonically increases
+      until it reaches a maximum value of 2^32-1 (4294967295 decimal), when it wraps
+      around and starts increasing again from zero." (https://www.rfc-editor.org/rfc/rfc2578.txt)
+  - id: "NETM-NET-001"
+    chapter: "The signed NET is DERIVED = Σimport − Σexport, recorded as a basis, cross-checked by independent recompute"
+    requirement: "The meter's SIGNED NET MUST be the DERIVED difference net = cumulativeImport − cumulativeExport (equivalently Σimport-deltas − Σexport-deltas), and the identity `net == cumulativeImport − cumulativeExport` MUST hold at EVERY point (after every append). The net is SIGNED: it is positive when import dominates (the consumer is a net drawer from the grid) and NEGATIVE when export dominates (the consumer is a net feeder). Each reading records a BASIS row: the two post-append cumulatives AND the post-append net. The recorded net MUST be CROSS-CHECKED against an INDEPENDENT recompute (Σimport-deltas − Σexport-deltas summed from the immutable reading chain) — NEVER trusted by-construction; a divergence MUST fail (the derived-net mismatch is a 422 `code=NETMETER_NET_MISMATCH`, surfacing a defect rather than billing a corrupted net). Readings are APPEND-ONLY: every column is `@Column(updatable=false)`, no setter, never UPDATEd or deleted."
+    test_method: "RestAssured (after a sequence of IMPORT + EXPORT reads, GET net == cumulativeImport − cumulativeExport; net is negative once export > import; independent Σ(import deltas) − Σ(export deltas) recompute equals the recorded net; basis rows immutable)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Signed net is derived and conserved; the recorded net is cross-checked against an
+      independent recompute (mirrors netting set-wide conservation — never by-construction).
+  - id: "NETM-PERIOD-001"
+    chapter: "A billing-period close snapshots both cumulatives + the net delta and freezes the period; a backdated reading is rejected 409"
+    requirement: "Closing a billing period MUST snapshot both direction cumulatives AND the period net delta (period net = net_end − net_start, where net_start is the net at the prior period boundary and net_end is the net at close), and the closed period becomes IMMUTABLE. After a period is closed, a reading whose effective instant falls AT or BEFORE the period's close boundary (a backdate into the closed period) MUST be REJECTED with a deterministic 409 (`type=urn:problem:netmeter-period-closed`, `code=NETMETER_PERIOD_CLOSED`) — a closed period's net delta, once snapshotted and (in production) billed, MUST NOT shift retroactively (PURPA: the offset is settled 'during the applicable billing period'). The period close itself is governed: only a forward-moving boundary is accepted; closing a period whose boundary is at or before the latest already-closed boundary is rejected 409."
+    test_method: "RestAssured (close period → snapshot has importCumulative, exportCumulative, periodNetDelta = net_end − net_start; subsequent reading backdated at/before the close boundary → 409 NETMETER_PERIOD_CLOSED; re-closing at/before the latest boundary → 409)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Period close freezes a net delta; closed periods are immutable (PURPA billing-period offset).
+  - id: "NETM-CONCURRENT-001"
+    chapter: "Keystone — concurrent appends to one meter serialize on the meter row; every delta is vs the true prior cumulative"
+    requirement: "Across ANY interleaving of concurrent appends to ONE net meter (in EITHER direction), each reading's delta MUST be computed against the TRUE prior cumulative for its direction (the value left by the previously-committed reading for that direction), never a stale cumulative (which would double-count or lose energy — CWE-362). The meter row lock (PESSIMISTIC_WRITE on the meter, NOT per-direction) serializes ALL concurrent appenders regardless of direction, so the derived net is never computed from a half-applied pair. Under concurrency, for a run of committed reads, the recorded net equals the independent recompute Σ(committed import deltas) − Σ(committed export deltas), with exact decimal arithmetic (NUMERIC(19,4)), and committed readings are strictly monotone in sequence order per direction."
+    test_method: "RestAssured concurrency proof (N concurrent appends across both directions via ExecutorService → recorded net == Σ committed import deltas − Σ committed export deltas; no delta vs a stale cumulative; per-direction readings monotone by sequence)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The conservation-under-concurrency keystone — meter-row-lock serialization across
+      both directions, exact signed net.

@@ -1,0 +1,86 @@
+version: "0.1.0"
+scope: "reproducible-procedure-l0 — the generalized AUDITABLE-DETERMINISTIC-PROCEDURE primitive: a Procedure records its inputs + a server-recorded SEED and produces a deterministic, REPLAYABLE result, so any draw or classification can be re-derived and audited after the fact, and sensitive result fields are role-masked (BLINDED) for non-privileged callers. A Procedure pins, at record time: the canonical SHA-256 hash of its input set, the algorithm + the SEED (for a draw) or the classifier VERSION (for a classification), and the produced result (the selected ids of a draw, or the resolved class of a classification). The system MUST (1) REPRODUCIBLE-DRAW: a random selection records the seed + algorithm + input-set hash at draw time (the seed is captured server-side, never client-supplied-and-forgotten); RE-RUNNING the recorded procedure with the SAME seed yields the IDENTICAL draw (verified by replay → byte-identical selected ids), making any draw auditable after the fact; (2) REPRODUCIBLE-CLASSIFICATION: classifying the same input (by canonical SHA-256 input hash) under the SAME pinned classifier version MUST yield the same class + version — a later classifier change MUST NOT silently re-label history, because each result pins its classifier version (a re-classify with the same version + input is byte-identical; a uq(input_hash, classifier_version) backstop makes a recompute deterministic, never a duplicate divergent row); (3) BLINDING: a result row carries a sensitive field stored raw (@JsonIgnore) plus a masked projection — the DTO a MEMBER sees never contains the blinded raw value, only a privileged role (ADMIN) unmasks (NIST SP 800-53 least-privilege: each entity is granted the minimum it needs). The IDW12 clinical-trials and IDW16 EMR dogfoods found the catalog recorded attested CHANGES (attested-change-record) and gated negative co-presence (copresence) but had NO primitive for an AUDITABLE DETERMINISTIC PROCEDURE — a seeded draw or a versioned classification whose result is replayable and whose sensitive fields are role-blinded. Realized by the reproducibility reference workload (com.ax.template.authblueprint.reproducibility)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only procedure rows with @Column(updatable=false) on inputs/seed/version/result + @Version optimistic + PESSIMISTIC_WRITE row lock on the replay-record path + uq(input_hash, classifier_version) + @Check backstops) + java.security.SecureRandom seeded deterministically (new SecureRandom not used for the draw; a seeded java.util.Random / SHA1PRNG reproduces the sequence from the recorded seed) + SHA-256 canonical input hash + injected java.time.Clock + role-based field masking (@JsonIgnore raw + masked projection) + RFC 9457 Problem Details + Micrometer"
+standard: "NIST SP 800-90A Rev. 1 (Deterministic Random Bit Generator — a DRBG produces a sequence of bits from a secret initial value called a seed; the same seed reproduces the sequence, which is what makes a recorded-seed draw replayable + auditable) + NIST SP 800-53 Rev. 5 (least privilege — each entity is granted the minimum authorizations it needs, the basis for role-based field blinding) + CWE-330 (use of insufficiently random values — a draw without a recorded seed cannot be reproduced or audited) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW12-G4 reproducible-draw + IDW12-G6 blinding + IDW16-G15 reproducible-classification; built 2026-06-23 — BACKLOG P1-7~9"
+
+# OPT-IN reproducible-procedure catalog. The auditable-determinism gap: the catalog
+# recorded attested changes and gated co-presence but never recorded a SEED so a
+# random draw could be replayed, never pinned a CLASSIFIER VERSION so history could
+# not be silently re-labeled, and never role-BLINDED a sensitive result field.
+# Generic; the clinical-trial randomization / claims-classification framings are
+# anchors, not lock-ins (jury selection, A/B bucketing, lottery allocation, fraud
+# scoring, content moderation classification all recur).
+
+# ── Priority order for fork-receivers ──
+#   1. PROC-DRAW-001     (the primitive — a draw records seed + algorithm + input-hash; replay reproduces the IDENTICAL selection)
+#   2. PROC-CLASS-001    (classifying the same input under the SAME pinned version is byte-identical; a version change never re-labels history)
+#   3. PROC-BLIND-001    (a sensitive result field is role-masked — MEMBER sees the masked projection, only ADMIN unmasks)
+#   4. PROC-REPLAY-001   (keystone — replaying a recorded procedure re-derives the byte-identical result from the recorded seed)
+
+# ── Composition note ──
+# DISTINCT from attested-change-record (records WHO/WHEN/OLD/NEW/REASON of a field
+# EDIT — no seed, no replay, no classification), copresence (a negative set-gate —
+# no recorded determinism), decision-governance (versions one scope's computed
+# value with a reason trail — no seed-reproducible draw, no input-hash classifier
+# pin), and record-linkage (a banded match verdict — no recorded seed, no replay).
+# The Procedure is the AUDITABLE-DETERMINISM primitive: a recorded seed makes a
+# draw replayable; a pinned classifier version makes a classification stable; a
+# blinded field makes the sensitive result role-scoped. The reference draw uses a
+# seeded java.util.Random over a stable-sorted candidate list — a fork-receiver may
+# swap the PRNG or the classifier without touching the GOVERNANCE contract
+# (recorded seed + replay-identical + version-pinned + role-blinded) the catalog claims.
+
+items:
+  - id: "PROC-DRAW-001"
+    chapter: "A random draw records its seed + algorithm + canonical input-set hash at draw time — the seed is captured server-side, never client-supplied-and-forgotten"
+    verification:
+      mechanism: rule
+      ref: reproducible-procedure-recorded-seed-replay-and-blinding
+    requirement: "Performing a random selection (drawing k of n candidates) MUST record, immutably on the procedure row: a server-generated SEED, the draw ALGORITHM identifier, the canonical SHA-256 hash of the (stable-sorted) candidate input set, the requested k, and the produced SELECTED IDS. The seed MUST be generated server-side at draw time (never accepted from the request body) so the draw is auditable after the fact (CWE-330 — a draw without a recorded seed cannot be reproduced). A bare result with no recorded seed / input-hash MUST be unrepresentable (the seed, algorithm, input_hash, and selected_ids columns are NOT NULL + updatable=false). The same recorded inputs + seed deterministically reproduce the same selection."
+    test_method: "RestAssured (POST a draw of k=3 over 10 candidates → 201 with a recorded seed (non-blank), algorithm, inputHash (64 hex chars), and selectedIds of size 3; the seed is server-generated even when the caller omits it; structural: seed/algorithm/input_hash/selected_ids columns @Column(updatable=false) NOT NULL)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-90A Rev. 1 via NIST CSRC Glossary — a DRBG
+      reproduces a sequence from a recorded seed, which is what makes a
+      recorded-seed draw replayable and auditable): "An RBG that includes a
+      DRBG mechanism and (at least initially) has access to a randomness
+      source. The DRBG produces a sequence of bits from a secret initial value
+      called a seed, along with other possible inputs."
+      (https://csrc.nist.gov/glossary/term/drbg)
+  - id: "PROC-CLASS-001"
+    chapter: "Classifying the same input under the SAME pinned classifier version is byte-identical — a later classifier change never silently re-labels history"
+    requirement: "Classifying an input MUST record, immutably on the procedure row: the canonical SHA-256 hash of the input, the classifier VERSION used, and the resolved CLASS. Re-classifying the SAME input (same SHA-256 input hash) under the SAME classifier version MUST yield the byte-identical class + version (idempotent — a uq(input_hash, classifier_version, kind) backstop returns the existing row, never writes a divergent duplicate). A classifier version is PINNED per result so that running a NEWER classifier version on the same input produces a NEW, separately-recorded result and MUST NOT mutate or overwrite the older result — history is never silently re-labeled. A bare class label with no recorded input-hash + version MUST be unrepresentable."
+    test_method: "RestAssured (classify input X under version v1 → CLASS_A recorded with inputHash + classifierVersion; re-classify X under v1 → byte-identical (same id, same class, same version); classify X under v2 → a SEPARATE new result row, the v1 result row unchanged; structural: input_hash/classifier_version/resolved_class @Column(updatable=false) + uq(input_hash, classifier_version, kind))"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The pinned classifier version is the stability seam — the same input under
+      the same version is byte-identical, and a version bump records a new result
+      rather than re-labeling the old one (the audit posture the EMR dogfood
+      found missing).
+  - id: "PROC-BLIND-001"
+    chapter: "A sensitive result field is role-blinded — a MEMBER sees only the masked projection, only a privileged role (ADMIN) unmasks"
+    requirement: "A procedure result row MAY carry a sensitive field (e.g. the raw subject identifier behind a draw selection). The raw value MUST be stored @JsonIgnore so it never serializes by default; the DTO a MEMBER sees MUST contain only a MASKED projection of it (never the raw value). Only a privileged role (ADMIN, via @PreAuthorize) may retrieve the UNMASKED value, through a distinct endpoint. This realizes NIST SP 800-53 least-privilege: each caller is granted the minimum it needs — a MEMBER gets the blinded view, an ADMIN unmasks. The masked projection MUST be derived deterministically from the raw value (same raw → same mask) so the blinding is itself reproducible."
+    test_method: "RestAssured (a MEMBER GET of a result returns the masked field (e.g. first+last char with middle stars) and NEVER the raw value; an ADMIN GET of the unmask endpoint returns the raw value; a MEMBER GET of the unmask endpoint → 403; structural: the raw field carries @JsonIgnore and there is no public getter that leaks it into the MEMBER DTO)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-53 Rev. 5 via NIST CSRC Glossary — least
+      privilege, the basis for role-based field blinding): "The principle that
+      a security architecture is designed so that each entity is granted the
+      minimum system resources and authorizations that the entity needs to
+      perform its function." (https://csrc.nist.gov/glossary/term/least_privilege)
+  - id: "PROC-REPLAY-001"
+    chapter: "Keystone — replaying a recorded procedure re-derives the byte-identical result from the recorded seed"
+    requirement: "Replaying a recorded draw procedure (by id) MUST re-run the recorded algorithm with the RECORDED seed over the RECORDED input set and MUST produce the byte-identical selected ids as the original draw. Replay MUST be a pure verification — it MUST NOT mutate the recorded procedure (no new seed, no changed selection). If a replay ever diverges from the recorded result, the procedure is NOT reproducible and the replay MUST fail closed (422 PROC_REPLAY_DIVERGED) rather than silently overwrite. Across the keystone, the recorded seed + algorithm + input set are the complete, sufficient basis to reconstruct the draw — nothing else (no wall-clock, no un-recorded entropy) may influence the outcome."
+    test_method: "Replay proof (draw k=3 over 10 candidates → record; replay the recorded procedure N times → every replay reproduces the byte-identical selectedIds; the recorded procedure row is unchanged after replay (same seed, same selectedIds, same version); a deliberately tampered seed would diverge)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The replay is the auditable-determinism proof: the recorded seed +
+      algorithm + input set fully reconstruct the draw. This is the behavioural
+      keystone a fork-receiver keeps green — replay reproduces the identical
+      selection, and the recorded procedure is never mutated by a replay.

@@ -230,6 +230,24 @@ checklist:
       - command: "./gradlew testTrueUp"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testReproducibility"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testMandate"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testValuationRun"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testReconciliation"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testNetMetering"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testTimedOffer"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testDunning"
         working_directory: "backend"
         expected_exit: 0

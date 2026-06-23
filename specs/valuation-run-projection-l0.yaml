@@ -1,0 +1,107 @@
+version: "0.1.0"
+scope: "valuation-run-projection-l0 — the generalized VERSIONED VALUATION RUN with point-in-time as-of correctness, conserving fan-out, and rebase-with-history. A ValuationRun computes a portfolio/total value at a recorded AS-OF instant against a recorded input BASIS and projects it. The system MUST (1) AS-OF-SNAPSHOT: pin every run to an as-of instant + a recorded basis and make a run IMMUTABLE once computed (no update path — a correction is a NEW run, the remeasurement-trueup discipline); querying 'value as of T' returns the run whose as-of ≤ T with the GREATEST as-of (point-in-time correctness — never a later run that did not yet exist at T); (2) FAN-OUT: fan one run out to N per-position ValuationOutput rows whose values SUM EXACTLY to the run total — conservation enforced by a DB @Check on the persisted total AND cross-checked by an INDEPENDENT repo SUM query (a by-construction Σ is tautological, so the netting/trueup lesson: derive the sum a second way); a partial fan-out (Σ ≠ total) is UNREPRESENTABLE (422); (3) REBASE: rebasing resets the input BASIS (e.g. a corporate-action split ratio) and creates a NEW BASELINE run while RETAINING every prior run VERBATIM (a forward pointer, never a rewrite); resolving 'current' follows the forward pointers to the latest baseline and the history stays reconstructible. Keystone: concurrent recompute/rebase on one subject serialize on the subject row (PESSIMISTIC_WRITE) so EXACTLY ONE new version is created (CWE-362). The IDW15 capital-markets dogfood found the catalog had decision-governance (versions one scope's computed value, no projection/fan-out) and remeasurement-trueup (versioned settlement runs with forward net-delta postings) but NO primitive for the as-of-pinned, conservation-fanning-out, rebase-with-history VALUATION RUN a portfolio/NAV system computes against every position book. Realized by the valuationrun reference workload (com.ax.template.authblueprint.valuationrun). Recurs in: fund/NAV valuation, portfolio mark-to-market, index recomputation, insurance reserve runs, actuarial/pension valuation — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (immutable versioned runs with @Version optimistic + PESSIMISTIC_WRITE subject-row lock + @Check fan-out conservation + append-only forward-pointer rebase chain) + independent repo-SUM conservation cross-check + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "17 CFR 270.2a-4 (Rule 2a-4 — current net asset value computed as of a time, portfolio securities at current market value: the as-of valuation discipline) + 17 CFR 210.3-04 (Regulation S-X — retroactive adjustment of the opening balance for items applied to prior periods: the rebase-with-retained-history discipline) + CWE-362 (concurrent recompute/rebase race) + RFC 9457 + RFC 9110 §15.5.21 (422) / §15.5.10 (409)"
+domain_mode: backend_only
+introduced_at: "IDW15-G6/G7/G9 capital-markets valuation residual; built 2026-06-23 — BACKLOG P1-28~30"
+
+# OPT-IN valuation-run-projection catalog. The versioned-valuation gap: the
+# catalog versions a governed decision and a settlement run but never pins a
+# valuation to an as-of instant for point-in-time read, fans a run out to N
+# per-position outputs that must conserve, or rebases the basis while retaining
+# the prior runs verbatim. Generic; the NAV/portfolio/index framings are
+# anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. VALRUN-ASOF-001     (the primitive — a run pinned to an as-of instant + recorded basis, immutable; as-of read returns the greatest as-of ≤ T)
+#   2. VALRUN-FANOUT-001   (one run fans out to N outputs whose Σ EXACTLY equals the run total — @Check + INDEPENDENT repo-SUM cross-check; partial fan-out unrepresentable)
+#   3. VALRUN-REBASE-001   (rebase resets the basis + creates a NEW baseline run while RETAINING prior runs verbatim; resolve 'current' follows forward pointers)
+#   4. VALRUN-IMMUTABLE-001 (a computed run has NO update path — a correction is a new run; the run's basis/total/as-of columns are @Column(updatable=false))
+#   5. VALRUN-CONCURRENT-001 (keystone — concurrent recompute/rebase on one subject serialize on the subject row; exactly ONE new version, the rest 409)
+
+# ── Composition note ──
+# DISTINCT from decision-governance (versions ONE scope's scalar computed value
+# with a re-computation reason — no projection, no fan-out, no rebase chain),
+# remeasurement-trueup (versioned settlement runs whose CLOSED-period correction
+# posts a forward NET delta into an OPEN period — a delta-posting, not a
+# conserving fan-out, and no as-of point-in-time read), and threshold-terminal
+# (a single irreversible crossing — no versioning). ValuationOutput rows are
+# @AggregateMember of ValuationRun: root-JPQL reads + common/MemberWriter writes
+# (AX-DDD-MEMBER-REPO end-state from birth). The fan-out conservation is checked
+# TWICE — a DB @Check on the run's persisted output-sum column AND a separate
+# repo SUM(value) over the output rows (a different code path) — because a
+# by-construction equality (total := Σ outputs) is tautological and proves
+# nothing; the netting and remeasurement-trueup domains taught the catalog to
+# derive the sum a second, independent way. A fork-receiver may swap the basis
+# shape (split ratio, FX rate, curve) without touching the GOVERNANCE contract
+# (as-of point-in-time read + conserving fan-out + rebase-with-retained-history
+# + serialized version creation) the catalog claims.
+
+items:
+  - id: "VALRUN-ASOF-001"
+    chapter: "A valuation run is pinned to an as-of instant + recorded basis; an as-of read returns the run with the greatest as-of ≤ T (point-in-time correctness)"
+    verification:
+      mechanism: rule
+      ref: valuation-run-projection-as-of-snapshot-conserving-fan-out-and-rebase
+    requirement: "A ValuationRun MUST record the as-of instant it values, the basis it was computed against (recorded verbatim), a monotically increasing run version per subject, and the computed total. Querying a subject's value 'as of T' MUST return the run whose as-of ≤ T with the GREATEST as-of — never a run whose as-of is after T (a run that did not yet exist at T MUST NOT answer an as-of-T query), and never silently the latest. If no run has an as-of ≤ T the as-of read MUST be a 404. The as-of instant and the basis MUST be persisted so the run is reconstructible; a bare total with no as-of or basis MUST be unrepresentable."
+    test_method: "RestAssured (create runs at as-of t1 < t2 < t3; as-of read at t2 → the t2 run (not t3); as-of read between t1 and t2 → the t1 run; as-of read before t1 → 404; each run response carries asOf + basis + total; structural: as-of/basis/total columns @Column(updatable=false))"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (17 CFR 270.2a-4(a)(1), Rule 2a-4 — the as-of valuation
+      discipline a valuation run generalizes): "Portfolio securities with
+      respect to which market quotations are readily available shall be valued
+      at current market value". The current net asset value is computed AS OF a
+      time against the portfolio at that time; the as-of read returns the run
+      that was the current value at T, not a later one.
+      (https://www.law.cornell.edu/cfr/text/17/270.2a-4)
+  - id: "VALRUN-FANOUT-001"
+    chapter: "One run fans out to N per-position outputs whose values SUM EXACTLY to the run total — conservation @Check AND an independent repo-SUM cross-check"
+    requirement: "Computing a run MUST fan it out to one ValuationOutput row per position, each carrying the position reference and its value, in the SAME transaction as the run. The sum of the output values MUST EXACTLY equal the run total — enforced by a DB @Check on the run's persisted output-sum column (which equals the total) AND cross-checked by an INDEPENDENT repo SUM(value) query over the output rows (a different code path than the in-memory fold that produced the total). If the two derivations disagree, or the output sum ≠ the run total, the fan-out MUST be rejected (422 VALRUN_FANOUT_NOT_CONSERVED) and NOTHING persisted — a partial fan-out is unrepresentable. Output rows are immutable and append-only (one set per run version)."
+    test_method: "RestAssured (compute a run with positions [a:30, b:70] total 100 → 2 output rows summing to 100; the run's outputs each carry positionRef + value; structural: a run whose declared total disagrees with Σ outputs → 422 VALRUN_FANOUT_NOT_CONSERVED and no run row written; ValuationOutput @Column(updatable=false), no public setter)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The independent repo-SUM cross-check is the netting/remeasurement-trueup
+      lesson: total := Σ outputs is a by-construction tautology that proves
+      nothing, so conservation is derived a SECOND way (a repo SUM over the
+      persisted rows) and the two must agree before commit.
+  - id: "VALRUN-REBASE-001"
+    chapter: "Rebase resets the basis + creates a NEW baseline run while RETAINING prior runs verbatim; resolving 'current' follows the forward pointers"
+    requirement: "Rebasing a subject (e.g. applying a corporate-action split ratio) MUST create a NEW baseline ValuationRun recording the new basis and a forward reference to the run it rebased from, while RETAINING every prior run VERBATIM — no prior run's basis, as-of, total, or outputs may be rewritten or deleted. Resolving a subject's CURRENT run MUST follow the forward pointers to the latest baseline; the full run history MUST stay reconstructible (every prior run still readable at its own as-of). A rebase from a run that is not the current head MUST be rejected (409 VALRUN_NOT_CURRENT) so the forward chain stays linear."
+    test_method: "RestAssured (compute run v1; rebase → run v2 with a recorded rebasedFromRunVersion pointing at v1 and v1 still readable verbatim; current resolves to v2; rebase again from v1 (stale head) → 409 VALRUN_NOT_CURRENT; the run trail lists v1 then v2 in order; structural: NO delete path on the run repository)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (17 CFR 210.3-04, Regulation S-X — the rebase-with-retained-
+      history discipline: a retroactive adjustment restates the opening balance
+      while the prior periods remain disclosed): "Also, state separately the
+      adjustments to the balance at the beginning of the earliest period
+      presented for items which were retroactively applied to periods prior to
+      that period." (https://www.law.cornell.edu/cfr/text/17/210.3-04)
+  - id: "VALRUN-IMMUTABLE-001"
+    chapter: "A computed run has NO update path — a correction is a new run; the basis/total/as-of columns are immutable"
+    requirement: "Once a ValuationRun is computed it MUST NOT be updated — there is NO mutating endpoint and no public setter; the as-of instant, the basis, the total, and the output rows are @Column(updatable=false). A correction MUST be a NEW run (a recompute appends version+1) or a rebase (a new baseline), never an in-place edit. No delete path may exist anywhere in the domain."
+    test_method: "RestAssured (a recompute of a subject with a changed basis appends a new version; the prior version is unchanged; structural: ValuationRun has no public setter, the basis/total/asOf/version columns are updatable=false, @Version present, and no .delete(/deleteBy in the service or controller)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The immutability discipline mirrors remeasurement-trueup: a valuation is a
+      point-in-time fact; correcting it means recording a NEW fact at a new
+      as-of, never editing the recorded one.
+  - id: "VALRUN-CONCURRENT-001"
+    chapter: "Keystone — concurrent recompute/rebase on one subject serialize on the subject row; exactly ONE new version, the rest 409"
+    requirement: "Across ANY interleaving of concurrent recompute and/or rebase calls on one subject, EXACTLY ONE creates the next version (writing exactly one run row at version n+1) and the rest receive 409 (VALRUN_VERSION_CONFLICT) (CWE-362). The write path MUST take the subject's PESSIMISTIC_WRITE row lock so the read-current-version / write-next-version sequence cannot interleave; a uq(subject_id, run_version) DB backstop makes the loser of any residual race a deterministic 409. Across the keystone the subject MUST NEVER end with two runs at the same version."
+    test_method: "Concurrency proof (N concurrent recomputes on one subject at the same head → exactly one 2xx + N-1 409, exactly one run row at the next version; the head advances by exactly one version)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent recompute/rebase race): "The
+      product contains a concurrent code sequence that requires temporary,
+      exclusive access to a shared resource, but a timing window exists in which
+      the shared resource can be modified by another code sequence operating
+      concurrently." (https://cwe.mitre.org/data/definitions/362.html)
+      The subject-row PESSIMISTIC_WRITE lock + the uq(subject_id, run_version)
+      backstop are the belt-and-suspenders the remeasurement-trueup and dunning
+      domains taught the catalog: the lock serializes the happy path, the unique
+      index makes the loser of any residual race a deterministic 409.

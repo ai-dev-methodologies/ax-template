@@ -156,6 +156,21 @@ PATH_SHARING_RE = re.compile(
     re.I,
 )
 
+# ── Allowlist: methods that match a sharing VERB by NAME but are domain-confirmed
+# NON-sharing because the verb collides with a domain term. "export" is the one
+# ambiguous verb in the set (data-export/disclosure VS energy/file/report export).
+# In net-metering, "export" is the ENERGY EXPORT meter direction — a numeric
+# BigDecimal reading sent to the grid, NOT a data-disclosure path. Each entry is
+# "ClassName#method" with a reason; exemptions are PRINTED (never silent). This does
+# NOT weaken real detection: share / disclose / thirdParty / toThirdParty /
+# syndicate / publishExternal remain unconditionally enforced, as does any sharing
+# request-mapping PATH (/share, /disclose, /export, ...).
+SHARING_SIGNAL_ALLOWLIST = {
+    "NetMeter#getCumulativeExport",        # energy exported to grid (BigDecimal kWh) — not data export
+    "NetMeterPeriod#getExportCumulative",  # period-end export register (BigDecimal kWh) — not data export
+    "NetMeterReading#getExportAfter",      # export cumulative on this reading (BigDecimal kWh) — not data export
+}
+
 # A method head: optional annotations are scanned separately; here we capture the
 # return-type + name + '(' so we can resolve the body span. We only treat methods
 # inside a @RestController/@Controller/@Service class as candidates — but to stay
@@ -222,6 +237,7 @@ def annotation_block_before(text: str, head_start: int) -> str:
 
 violations = []   # (file_rel, lineno, method, why)
 candidates = 0
+exemptions = []   # (file_rel, lineno, method) — name matched a verb but allowlisted as non-sharing
 
 for jf in java_files:
     text = per_file_text[jf]
@@ -244,8 +260,13 @@ for jf in java_files:
                 break
         if not (name_hit or path_hit):
             continue
-        candidates += 1
         lineno = text.count("\n", 0, m.start()) + 1
+        # documented allowlist: a NAME-only match on the ambiguous "export" verb that
+        # is a domain-confirmed non-sharing accessor (path matches are NOT exemptible).
+        if name_hit and not path_hit and f"{jf.stem}#{name}" in SHARING_SIGNAL_ALLOWLIST:
+            exemptions.append((rel, lineno, name))
+            continue
+        candidates += 1
         body = text[body_span[0]:body_span[1]]
         # The gate may be referenced in the body OR in the method annotations
         # (e.g. a custom @RequiresConsent meta-annotation that wraps ConsentGate —
@@ -280,9 +301,15 @@ if violations:
     )
     sys.exit(1)
 
+for rel, lineno, name in exemptions:
+    print(
+        f"  EXEMPT {rel}:{lineno} → {name}(...) — allowlisted non-sharing 'export' "
+        f"(energy meter direction, not data disclosure)"
+    )
 print(
     f"consent_gate_guard: PASS — {candidates} data-sharing method(s) all reference "
     f"ConsentGate (ConsentRecord ledger adopted)"
+    + (f"; {len(exemptions)} allowlisted non-sharing exemption(s)" if exemptions else "")
 )
 sys.exit(0)
 PYEOF

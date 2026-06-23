@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 54 | 26 | 48% |
+| P1 (generic signature backlog) | 54 | 40 | 74% |
 | P2 (verification escapes) | 11 | 3 | 27% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **55** | **~45%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **69** | **~57%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -99,9 +99,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       (DG-OVERRIDE-001의 justification 강제)이 gate-무시 정당화 기록을 포괄.
 - [x] P1-5 IDW16-G4 executed-matches-authorized — **closed 2026-06-16 (parallel wave, authzparity 도메인)**: SHA-256 parity hash로 실행 파라미터가 승인 envelope와 일치해야 집행 가능, 불일치 409 PARITY_MISMATCH + blocked 기록
 - [x] P1-6 IDW17 four-eyes-signoff — **closed 2026-06-16 (authzparity)**: 고가 액션은 distinct 2인 승인(requester≠approver1≠approver2, @Check approver<>requester DB backstop)
-- [ ] P1-7 IDW12-G4 reproducible-draw (감사 가능한 난수 추출 = capability-token의 negative)
-- [ ] P1-8 IDW12-G6 blinding (역할별 필드 차폐 — 임상 외 HR/입찰에도 적용)
-- [ ] P1-9 IDW16-G15 reproducible-classification (동일 입력 → 동일 분류 보장)
+- [x] P1-7~9 — **closed 2026-06-16 (parallel wave2/3), reproducibility 도메인**: 서버생성 seed(SecureRandom, CWE-330) 기록→동일 seed 재현 byte-identical(PROC-REPLAY, divergence 422) + classifier 버전 pin(동일 input+version 멱등, uq(input_hash,version,kind), 이력 무-재라벨) + role-blinding(@JsonIgnore raw, ADMIN unmask). V050, testReproducibility 14/14. 앵커 NIST SP 800-90A DRBG + SP 800-53 least-privilege.
 
 **기한/시한 계열**
 - [x] P1-10~13 — **closed 2026-06-11 (wave-6, ONE obligation 도메인)**:
@@ -127,14 +125,12 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       (슬롯 명명), gap-fill은 명시적 + 방법 기록 / (19) OPEN→CLOSED→SEALED 단방향, SEALED
       fail-closed 409, @Check closed⇒run-of-record. 8-thread 동시 recompute keystone
       (ONE version + ONE posting, uq 백스톱). V046, testTrueUp 13/13 GREEN.
-- [ ] P1-18 IDW14 net-metering signed-dual-register (양방향 부호 레지스터 — register 도메인 확장 성격, trueup과 별개 shape)
+- [x] P1-18 — **closed 2026-06-16 (parallel wave2/3), netmetering 도메인**: 양방향 monotone register(import+/export−, 후퇴 422) + 파생 net=Σimport−Σexport(독립 recompute cross-check) + billing-period close 불변(409). V054, testNetMetering 10/10. 기존 register 패키지 무수정.
 - [x] P1-20~23 — **closed 2026-06-16 (parallel wave, dunning 도메인)**: 일방향 dunning 사다리 REMINDER→NOTICE→FINAL_NOTICE→SUSPENDED exactly-once(uq(case,stage,kind)+PESSIMISTIC_WRITE keystone) / 결정적 aging 버킷(as-of+basis 기록) / cure-period grace(완납 시 CURED+ladder halt, lapse 재개). V047, testDunning GREEN
 - [x] P1-24~27 — **closed 2026-06-16 (parallel wave, settlement 도메인)**: DvP 양 leg 원자 결제(partial 표현불가 @Check) / novation 당사자 교체 obligation 보존(append-only) / irrevocable finality(이후 novation/cancel 409 @Check) / fail-ladder PENDING→FAILED→RETRY→BUYIN. V048, testSettlement GREEN
-- [ ] P1-28 IDW15-G6 as-of-snapshot (기준시점 스냅숏 조회)
-- [ ] P1-29 IDW15-G7 fan-out (1 run → N 산출 보존)
-- [ ] P1-30 IDW15-G9 rebase (기준 재설정 + 이력 보존)
-- [ ] P1-31 IDW15-G11 deemed-election (무응답 시 간주 선택)
-- [ ] P1-32 IDW15-G12 external-reconciliation (외부 대사)
+- [x] P1-28~30 — **closed 2026-06-16 (parallel wave2/3), valuationrun 도메인**: as-of 스냅숏(run as-of≤T 최댓값, 불변 run·correction=새 run) + fan-out N output Σ==run total(독립 SUM cross-check) + rebase 새 baseline+prior 보존(forward pointer). V052, testValuationRun 12/12.
+- [x] P1-31 / P1-35 / P1-37 — **closed 2026-06-16 (parallel wave2/3), mandate 도메인**: one-mandate-fanout(N child 원자생성, 완료=Σterminal==N 파생 recall, @Check partial 불가) + multi-check-battery(전 check 통과 전 SATISFIED 불가 422, per-check verdict 기록) + deemed-election(@Scheduled @Lazy-self sweep, deadline 무응답→DEEMED exactly-once). V051, testMandate 19/19.
+- [x] P1-32 — **closed 2026-06-16 (parallel wave2/3), reconciliation 도메인**: feed vs 내부 MATCHED/BREAK/INTERNAL_ONLY/EXTERNAL_ONLY 분류(basis 기록) + BREAK는 명시 disposition 후에만 RESOLVED(422) + 멱등 재실행(uq(run,item), feed-hash). V053, testReconciliation 10/10. 앵커 PCAOB AS 2305.
 
 **매칭/정합 계열**
 - [x] P1-33~34 — **closed 2026-06-11 (wave-7, ONE recordlinkage 도메인)**:
@@ -146,13 +142,12 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       survivorship 기록 + loser tombstone(포인터, **delete 경로 자체가 없음**), chained resolve
       cycle-safe, ascending-id lock order. 8-thread confirm race keystone. V045,
       testRecordLinkage GREEN.
-- [ ] P1-35 IDW16-G11 multi-check-battery (다중 점검 배터리 — 전 항목 통과 게이트)
 - [x] P1-36 IDW16-G12/G13 positive-gates — **closed 2026-06-16 (authzparity)**: 액션이 필수 동반 게이트 집합을 선언, 전 게이트 satisfied 기록 전엔 집행 불가(422) — missing companion은 executed-불가
-- [ ] P1-37 IDW17 one-mandate-fanout (하나의 지시 → N 작업 전개 + 완료 회수)
 - [ ] P1-38 IDW8 filter/sort field-allowlist (정렬·필터 파라미터 화이트리스트 — 보안 후속)
 
 **dispatch/예약 계열 (IDW9 잔여)**
-- [ ] P1-39 IDW9-G6 / P1-40 G7 / P1-41 G8 / P1-42 G11 / P1-43 G12 / P1-44 G13 / P1-45 G16
+- [x] P1-39~41 — **closed 2026-06-16 (parallel wave2/3), timedoffer 도메인**: timed-offer(deadline까지 OPEN, @Lazy-self sweep로 EXPIRED exactly-once) + exclusive-assignment(subject당 최대1 ACCEPTED, 동시 accept 1승 409, uq backstop) + re-offer ladder(append-only, prior 참조). V055, testTimedOffer 14/14. 기존 dispatch 패키지 무수정.
+- [ ] P1-42 IDW9-G11 / P1-43 G12 / P1-44 G13 / P1-45 G16 (timed-offer 일반화 잔여 4건)
       (timed-offer 일반화 잔여 7건 — 상세는 IDW9 세션 기록)
 
 **IDW11/12/17 미명명 잔여 (이름 복원 필요 — 차기 정리 시 세분화)**

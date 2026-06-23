@@ -103,6 +103,18 @@ public class SecurityConfig {
                 // periods — readings supersede append-only, runs version with their basis,
                 // closed-period corrections post forward as net-delta true-ups.
                 .requestMatchers("/api/trueup/**").authenticated()
+                // REPRODUCIBILITY — auditable deterministic procedures — seeded replayable draw + version-pinned classification + role-blinded fields
+                .requestMatchers("/api/reproducibility/**").authenticated()
+                // MANDATE — one directive fans out to N tasks (conserved recall) + multi-check battery + deemed-election sweep
+                .requestMatchers("/api/mandate/**").authenticated()
+                // VALUATIONRUN — versioned valuation run — as-of snapshot + conserving fan-out + rebase-with-history
+                .requestMatchers("/api/valuation-run/**").authenticated()
+                // RECONCILIATION — external feed reconciliation — classify/dispose breaks + idempotent re-run
+                .requestMatchers("/api/reconciliation/**").authenticated()
+                // NETMETERING — bidirectional signed dual register — monotone import/export, derived net, period close
+                .requestMatchers("/api/netmetering/**").authenticated()
+                // TIMEDOFFER — timed offer with deadline expiry + exclusive assignment + re-offer ladder
+                .requestMatchers("/api/timed-offer/**").authenticated()
                 // DUNNING (dunning-collections-l0): authenticated users open a dunning case,
                 // advance the one-way exactly-once notice ladder, reage the recorded aging bucket,
                 // and cure within the grace window — no delete path.

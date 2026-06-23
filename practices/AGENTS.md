@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "01b76c5c38959d54cfaddc18c2e1cc981e21fa37c55dbfd4bb1dd4151351aaa1"
-  rule_count: 195
+  source_concat_sha256: "233dd12692b4458a9c24c33ca75774e7b2934b5876bc95c50ee704d6f168d037"
+  rule_count: 201
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -5832,6 +5832,147 @@ Verification: `./gradlew testPractices --tests "*Rfc7807ProblemDetail*"` asserts
 Reference: [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) · [Spring `@ExceptionHandler` + `ProblemDetail`](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-exceptionhandler.html)
 
 
+<!-- @source rules/external-reconciliation-classify-dispose-resolve-and-idempotent-rerun.md -->
+
+---
+title: An external-feed reconciliation must CLASSIFY each internal/external pair EXACTLY ONCE with its recorded basis (internal value, external value, delta — never a bare aggregate count), require EXPLICIT human DISPOSITION of every BREAK (who/when/reason) before the run can be RESOLVED (an undisposed break is 422), be IDEMPOTENT on the feed snapshot hash (same feed → same run, changed feed → new run, prior retained), and serialize concurrent disposes on one break so exactly one wins
+impact: HIGH
+impactDescription: "A reconciliation that reports a bare aggregate count (matched: 412, breaks: 3) with no per-item basis cannot be re-derived, audited, or reconciled to the allowance the receivable is stated net of; a run that can be marked RESOLVED while a break is unexplained defeats the entire control (a back office signs off on differences it never investigated); a non-idempotent re-run double-books the same statement; and an unsynchronized dispose lets two operators write conflicting dispositions on one break (CWE-362) — the break ends with two verdicts or a half-written one"
+tags:
+  - state-machine
+  - audit
+  - concurrency
+  - billing
+  - governance
+spec_ref: "specs/external-reconciliation-l0.yaml#RECON-CLASSIFY-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/reconciliation/ReconciliationService.java + backend/src/main/java/com/ax/template/authblueprint/reconciliation/ReconciliationItem.java + backend/src/main/java/com/ax/template/authblueprint/reconciliation/ReconciliationRun.java"
+  pattern: "A run matches an internal record set against an external feed snapshot, classifying every distinct key EXACTLY ONCE into MATCHED / BREAK / INTERNAL_ONLY / EXTERNAL_ONLY and PERSISTING each item's basis (internal amount + external amount + delta) so a bare aggregate count is unrepresentable; a BREAK requires an explicit human disposition (ACCEPT_INTERNAL / ACCEPT_EXTERNAL / ADJUST) recording who/when/reason, taken under the item's PESSIMISTIC_WRITE row lock so concurrent disposes converge to exactly one winner (the disposed-once precondition makes the loser a deterministic 409); a run cannot be RESOLVED while any break is undisposed (a service gate counting undisposed breaks + a @Check on the item making a disposed non-break / half-written disposition unrepresentable); the run is idempotent on (sourceKey, feedSnapshotHash) — a re-run on the SAME feed returns the existing run verbatim (uq(source_key, feed_snapshot_hash) + uq(run_id, item_key) backstops), a CHANGED feed appends a NEW run and the prior is retained; NO delete path exists"
+upstream:
+  - "https://pcaobus.org/oversight/standards/auditing-standards/details/AS2305"
+  - "https://www.law.cornell.edu/cfr/text/17/210.5-02"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "PCAOB AS 2305 .02 (Substantive Analytical Procedures) — the evaluate-plausible-relationships discipline an external-feed reconciliation realizes (matching recorded data against an independent expectation)"
+    url: "https://pcaobus.org/oversight/standards/auditing-standards/details/AS2305"
+    quote: "Analytical procedures are an important part of the audit process and consist of evaluations of financial information made by a study of plausible relationships among both financial and nonfinancial data."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "PCAOB AS 2305 .21 (Investigation and Evaluation of Significant Differences) — the investigate-every-significant-difference requirement a BREAK disposition realizes (a difference is explained, not silently accepted)"
+    url: "https://pcaobus.org/oversight/standards/auditing-standards/details/AS2305"
+    quote: "The auditor should evaluate significant unexpected differences. Reconsidering the methods and factors used in developing the expectation and inquiry of management may assist the auditor in this regard."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "17 CFR § 210.5-02(4) (Regulation S-X, Cornell LII) — the allowance for doubtful accounts a receivable reconciliation feeds, stated separately on the balance sheet"
+    url: "https://www.law.cornell.edu/cfr/text/17/210.5-02"
+    quote: "Allowances for doubtful accounts and notes receivable. The amount is to be set forth separately in the balance sheet or in a note thereto."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (concurrent disposes racing one break)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-23"
+---
+
+## A reconciliation is classify-with-basis, dispose-every-break, resolve-only-when-clean, and idempotent-on-the-feed — not a pair of aggregate counts
+
+**Impact: HIGH — a bare matched/break count cannot be re-derived or audited; a run resolved over an unexplained break defeats the control; a non-idempotent re-run double-books a statement; an unsynchronized dispose writes two verdicts on one break (CWE-362).**
+
+An *external-feed reconciliation* is the periodic control a back office runs against every counterparty / custodian / bank statement: match the internal record set against an external feed snapshot, classify each pair, and explain every difference before signing off. The discipline is the audit standard generalized: PCAOB AS 2305 defines analytical procedures as *"evaluations of financial information made by a study of plausible relationships among both financial and nonfinancial data"* and requires that the auditor *"evaluate significant unexpected differences"* — a difference is **investigated and explained**, never silently accepted. The catalog governed decisions (`decision-governance`), netted obligations (`netting`), and matched identity records (`record-linkage`) but had no primitive for the classify-with-basis, dispose-every-break, idempotent-on-the-feed reconciliation:
+
+```text
+run(source, feedHash, internal, external):  classify EVERY key once into MATCHED / BREAK /
+                                             INTERNAL_ONLY / EXTERNAL_ONLY; PERSIST each item's
+                                             basis (internal amount + external amount + delta);
+                                             idempotent on (source, feedHash) — same feed → same run
+dispose(break):                              ACCEPT_INTERNAL / ACCEPT_EXTERNAL / ADJUST + who/when/
+                                             reason, under the item's PESSIMISTIC_WRITE lock; only
+                                             a BREAK; disposed-once → the loser of any race is 409
+resolve(run):                                refused 422 while ANY break is undisposed; a @Check makes
+                                             a disposed non-break / half-written disposition impossible
+```
+
+**1. Each pair is classified exactly once, with its basis (RECON-CLASSIFY-001).** The classification AND the internal amount, external amount, and delta are persisted on the item row; the items ARE the record, so a bare aggregate count is unrepresentable. `uq(run_id, item_key)` makes a duplicate key within one run impossible.
+
+**2. Every break is explicitly disposed (RECON-DISPOSE-001).** Only a BREAK is disposed (a MATCHED / INTERNAL_ONLY / EXTERNAL_ONLY item is refused 422); the disposition records who (the authenticated caller), when (the injected clock), and a non-blank reason — the difference is explained, mirroring AS 2305 .21.
+
+**3. A run resolves only when clean, and re-runs idempotently (RECON-RESOLVE/IDEMPOTENT-001).** A run cannot be RESOLVED while any break is undisposed (422); a re-run on the SAME feed snapshot hash returns the existing run verbatim, a CHANGED feed appends a new run and the prior is retained.
+
+**Incorrect — a pair of aggregate counts, a resolve with no gate, an unsynchronized dispose:**
+
+```java
+public ReconResult reconcile(String source, List<Line> internal, List<Line> external) {
+    int matched = 0, breaks = 0;
+    for (Line in : internal) {                              // ❌ no per-item basis recorded
+        if (external.stream().noneMatch(e -> e.key().equals(in.key()))) breaks++;
+        else matched++;                                     // ❌ a bare count — un-re-derivable, un-auditable
+    }
+    return new ReconResult(matched, breaks);                // ❌ no break disposition, no run identity
+}
+
+public void resolve(UUID runId) {
+    var run = repo.findById(runId).orElseThrow();           // ❌ no row lock; no undisposed-break gate
+    run.setStatus("RESOLVED");                               // ❌ public setter; resolves over unexplained breaks
+    repo.save(run);
+}
+```
+<!-- catalog-example-ok: ReconResult — illustrative aggregate-count anti-pattern; the reference impl records per-item basis on ReconciliationItem -->
+<!-- catalog-example-ok: Line — illustrative request line in the anti-pattern -->
+
+**Correct — classify with basis, dispose under the item lock, resolve only when clean:**
+
+```java
+@Transactional
+public ReconciliationRun run(String sourceKey, String feedSnapshotHash,
+                             Map<String, BigDecimal> internal, Map<String, BigDecimal> external) {
+    var existing = runs.findBySourceKeyAndFeedSnapshotHash(sourceKey, feedSnapshotHash);
+    if (existing.isPresent()) return existing.get();        // ✅ idempotent — same feed → same run
+    Instant now = Instant.now(clock);
+    ReconciliationRun saved = runs.save(new ReconciliationRun(UUID.randomUUID(), sourceKey, feedSnapshotHash, now));
+    TreeSet<String> keys = new TreeSet<>();
+    keys.addAll(internal.keySet());
+    keys.addAll(external.keySet());
+    for (String key : keys) {
+        members.persist(new ReconciliationItem(UUID.randomUUID(), saved.getId(), key,
+            internal.get(key), external.get(key), now));     // ✅ classification + basis (amounts + delta)
+    }
+    return saved;
+}
+
+@Transactional
+public ReconciliationItem dispose(UUID runId, UUID itemId, DispositionType type, String reason, String actor) {
+    ReconciliationItem item = runs.findItemByIdForUpdate(itemId).orElseThrow(ReconciliationException::notFound); // ✅ PESSIMISTIC_WRITE
+    if (!item.getRunId().equals(runId)) throw ReconciliationException.notFound();      // ✅ IDOR-safe 404
+    if (!item.isBreak()) throw ReconciliationException.notABreak();                    // 422 — only a break disposes
+    if (reason == null || reason.isBlank()) throw ReconciliationException.blankReason(); // 422
+    if (item.isDisposed()) throw ReconciliationException.alreadyDisposed();            // ✅ disposed-once → 409 loser
+    item.dispose(type, actor, Instant.now(clock), reason);                             // ✅ who / when / reason recorded
+    return item;
+}
+
+@Transactional
+public ReconciliationRun resolve(UUID runId) {
+    ReconciliationRun run = runs.findByIdForUpdate(runId).orElseThrow(ReconciliationException::notFound);
+    if (run.isResolved()) return run;                       // ✅ idempotent
+    if (runs.countUndisposedBreaks(runId) > 0) throw ReconciliationException.undisposedBreak();  // 422 gate
+    run.resolve(Instant.now(clock));                        // ✅ resolved only when every break is explained
+    return run;
+}
+```
+
+The item-row PESSIMISTIC_WRITE lock serializes the read-undisposed / write-disposition sequence; the disposed-once precondition makes N concurrent disposes on one break resolve to exactly one winner (the rest → 409). The resolve gate counts undisposed breaks and the item `@Check` (`disposed = FALSE OR classification = 'BREAK'` and a disposed row carries every disposition field) makes a disposed non-break or a half-written disposition unrepresentable (CWE-362). `ReconciliationItem` rows are `@AggregateMember` of `ReconciliationRun` — root-JPQL reads, `common/MemberWriter` writes; no delete path exists.
+
+Verification: review-tier — confirm each pair is classified once with its basis persisted, only a break is disposed (with who/when/reason), the resolve path refuses an undisposed break, the re-run is idempotent on the feed hash, and the dispose takes the item's PESSIMISTIC_WRITE lock. The behavioural proof a fork-receiver keeps green: the N-thread dispose race on one break (exactly one 2xx + N-1 409).
+
+Reference: [PCAOB AS 2305 (Substantive Analytical Procedures)](https://pcaobus.org/oversight/standards/auditing-standards/details/AS2305)
+
+Reference: [17 CFR § 210.5-02 (Regulation S-X — allowance for doubtful accounts)](https://www.law.cornell.edu/cfr/text/17/210.5-02)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
+
+
 <!-- @source rules/externally-verifiable-artifact-uses-asymmetric-signature.md -->
 
 ---
@@ -7906,6 +8047,137 @@ Reference: [GDPR Article 22 — Automated individual decision-making, including 
 Reference: [OWASP ASVS V7 — Error Handling and Logging (7.1.3)](https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x15-V7-Error-Logging.md)
 
 
+<!-- @source rules/mandate-fanout-conserved-recall-check-battery-and-deemed-election.md -->
+
+---
+title: A one-directive fan-out must create EXACTLY N child tasks atomically and report completion as a DERIVED conserved recall (Σ terminal == N, never a stored flag), gate the mandate behind a pass-ALL check battery (every declared check recorded passed, else 422), auto-resolve a child's silence past its deadline to a recorded DEEMED default election EXACTLY ONCE via a @Scheduled poller driving a proxied @Transactional worker, and serialize the explicit child-complete against the deemed sweep on the task row so each child reaches a terminal state exactly once
+impact: HIGH
+impactDescription: "A mandate whose completion is a stored boolean drifts from its children — it can report DONE while a child is still pending (the WCP-3 synchronization barrier broken), and partial fan-out (recorded N but fewer rows) silently under-delivers a directive; a battery gate that trusts a bare aggregate clears a mandate while a required safety/authz check is still failing or missing; a deemed default that is not recorded (or fires twice) either silently terminates a task with no audit trail or double-resolves it; and a deemed sweep that races an explicit complete without the task-row lock double-terminates one task (CWE-362) — two resolvers, two resolved_at, a corrupted terminal"
+tags:
+  - state-machine
+  - audit
+  - concurrency
+  - governance
+spec_ref: "specs/mandate-fanout-l0.yaml#MANDATE-FANOUT-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/mandate/MandateService.java + backend/src/main/java/com/ax/template/authblueprint/mandate/Mandate.java + backend/src/main/java/com/ax/template/authblueprint/mandate/MandateTask.java + backend/src/main/java/com/ax/template/authblueprint/mandate/MandateDeemedSweeper.java"
+  pattern: "Issuing a mandate creates EXACTLY N MandateTask children in one transaction and records issuedCount = N (a @Check keeps issuedCount positive; uq(mandate_id, task_seq) makes partial fan-out unrepresentable); completion is a DERIVED recall — count terminal children and compare to issuedCount (Σ terminal == issuedCount), never a stored boolean; the mandate is SATISFIED only when EVERY declared check key has a recorded PASSED MandateCheck verdict, else 422; a MandateTask past its deadline with no explicit response is auto-resolved to DEEMED (resolver SYSTEM, reason DEEMED) exactly once via MandateService.resolveDeemed, a @Transactional worker the @Scheduled MandateDeemedSweeper drives through a CROSS-BEAN proxied call (never a bare same-bean self-invocation — the dunning/obligation lesson); the explicit complete path and the deemed worker BOTH take the task's PESSIMISTIC_WRITE row lock and resolve only a PENDING task, so across any interleaving the task reaches a terminal state exactly once (CWE-362); NO delete path exists on the mandate or its children"
+upstream:
+  - "https://en.wikipedia.org/wiki/Workflow_patterns"
+  - "https://www.law.cornell.edu/cfr/text/16/310.2"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "van der Aalst et al., Workflow Patterns — WCP-2 Parallel Split and WCP-3 Synchronization (Wikipedia summary of the van der Aalst classification): the AND-split fan-out and the barrier-synchronization completion recall the mandate generalizes"
+    url: "https://en.wikipedia.org/wiki/Workflow_patterns"
+    quote: "synchronize two or more activities that may execute in any order or in parallel; do not proceed with the execution of subsequent activities until all preceding activities have completed"
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "16 CFR § 310.2(w) (Telemarketing Sales Rule, Cornell LII) — the negative-option / deemed-acceptance authority the deemed-default election generalizes: a customer's silence is interpreted as acceptance"
+    url: "https://www.law.cornell.edu/cfr/text/16/310.2"
+    quote: "a provision under which the customer's silence or failure to take an affirmative action to reject goods or services or to cancel the agreement is interpreted by the seller as acceptance of the offer"
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (the explicit child-complete racing the deemed sweep on one task)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-01"
+---
+
+## A directive fan-out is exactly-N children, a derived conserved recall, a pass-all battery, and a deemed default — not a stored completion flag
+
+**Impact: HIGH — a stored completion boolean drifts from its children (DONE while a child is still pending); a battery gate on a bare aggregate clears a mandate with a failing check; an unrecorded or double-firing deemed default loses the audit trail or double-terminates; an unsynchronized deemed sweep double-resolves a task (CWE-362).**
+
+A *mandate* is one directive that fans out to N child tasks and is complete only when every child finishes — the van der Aalst WCP-2 Parallel Split (the AND-split fan-out) followed by the WCP-3 Synchronization barrier: *"do not proceed with the execution of subsequent activities until all preceding activities have completed."* The catalog governed obligations (`deadline-obligation`: ONE grounded deadline, ack-only terminal), sequential approvals (`approval-workflow`: ordered steps along one chain), and positive companion gates (`authorization-parity`), but had no primitive for ONE directive fanning out to N tasks with a CONSERVED completion recall, a pass-all check battery, and a deemed default on silence:
+
+```text
+issue(mandate, N, checks):  ONE transaction creates EXACTLY N MandateTask children (task_seq
+                            unique per mandate); issuedCount = N recorded; @Check ties the count
+                            to the created rows so partial fan-out is unrepresentable
+complete:                   a DERIVED recall — count terminal children, compare to issuedCount
+                            (Σ terminal == issuedCount); NEVER a stored boolean that can drift
+battery:                    SATISFIED only when EVERY declared check key has a recorded PASSED
+                            MandateCheck verdict; a missing/failing check → 422
+deemed:                     a task past its deadline with no response → DEEMED (resolver SYSTEM,
+                            reason DEEMED), exactly once, via @Scheduled poller → cross-bean
+                            proxied @Transactional worker (MandateService.resolveDeemed)
+locks:                      the task row, PESSIMISTIC_WRITE — explicit complete vs the deemed sweep
+                            resolve a PENDING task → terminal exactly once
+```
+
+**1. Fan-out is exactly-N and completion is a derived recall (MANDATE-FANOUT-001).** Issue creates exactly N children in one transaction and records `issuedCount`; the `@Check issued_count >= 0` plus `uq(mandate_id, task_seq)` keep partial fan-out unrepresentable, and `complete` is computed by counting terminal children — never stored.
+
+**2. The check battery is pass-all (MANDATE-BATTERY-001).** Every declared check key must have a recorded PASSED `MandateCheck` verdict before `satisfy` clears the mandate; a single FAILED or still-missing check is a 422. Verdicts are recorded per key (`uq(mandate_id, check_key)`), idempotent on the key, never a bare aggregate.
+
+**3. Silence past the deadline is a recorded deemed default (MANDATE-DEEMED-001).** A `@Scheduled` poller (`MandateDeemedSweeper`) drives the `@Transactional` worker `MandateService.resolveDeemed` through a CROSS-BEAN proxied call — never a bare same-bean `this.resolveDeemed(...)` self-invocation, which would bypass the proxy and silently drop the row lock on the production path (the dunning/obligation lesson; an @Lazy self-reference would be required only if the worker lived on the poller itself). It resolves an overdue, unanswered task to DEEMED (resolver SYSTEM, reason DEEMED) exactly once.
+
+**Incorrect — a stored completion flag, an aggregate battery gate, an unrecorded + unsynchronized deemed default:**
+
+```java
+public void completeTask(UUID taskId) {
+    MandateTask t = repo.findById(taskId).orElseThrow();   // ❌ no row lock — deemed sweep races this
+    t.setState("DONE");                                    // ❌ public setter; resolves a non-PENDING task too
+    Mandate m = t.getMandate();
+    m.setComplete(m.allTasksDoneFlag());                   // ❌ stored boolean — drifts from the children
+    repo.save(t);                                          // ❌ sweep + this both write → double-terminal (CWE-362)
+}
+public boolean canSatisfy(Mandate m) { return m.isAllChecksOk(); }   // ❌ bare aggregate, not per-check verdicts
+```
+
+**Correct — exactly-N fan-out, derived recall, pass-all battery, locked deemed default:**
+
+```java
+@Transactional
+public Mandate issue(String directive, int taskCount, List<String> checkKeys, String actor) {
+    if (taskCount <= 0) throw MandateException.emptyFanout();                  // 422 — N must be positive
+    Instant now = Instant.now(clock);
+    Mandate m = new Mandate(UUID.randomUUID(), directive, taskCount, now);     // issuedCount = N
+    mandates.saveAndFlush(m);
+    Instant deemedDeadline = now.plus(deemedWindowDays, ChronoUnit.DAYS);      // each child's deemed deadline
+    for (int seq = 0; seq < taskCount; seq++) {
+        members.persist(new MandateTask(UUID.randomUUID(), m.getId(), seq,     // ✅ exactly N children, one tx
+            deemedDeadline, now));
+    }
+    for (String key : Set.copyOf(checkKeys)) {
+        members.persist(MandateCheck.declared(UUID.randomUUID(), m.getId(), key, now));  // declared, no verdict
+    }
+    return m;
+}
+
+@Transactional
+public MandateTask completeTask(UUID taskId, MandateTaskState target, String actor) {
+    MandateTask t = mandates.findTaskByIdForUpdate(taskId)                     // ✅ PESSIMISTIC_WRITE on the task
+        .orElseThrow(MandateException::notFound);
+    if (t.getState() != MandateTaskState.PENDING)                              // ✅ resolve only a PENDING task
+        throw MandateException.taskAlreadyResolved();                          // 409 — loser of any race
+    t.resolve(target, actor, MandateTask.REASON_EXPLICIT, Instant.now(clock));
+    return t;
+}
+
+@Transactional
+public Mandate satisfy(UUID mandateId, String actor) {
+    Mandate m = mandates.findByIdForUpdate(mandateId).orElseThrow(MandateException::notFound);
+    List<MandateCheck> battery = mandates.findChecks(m.getId());
+    boolean allPassed = !battery.isEmpty()
+        && battery.stream().allMatch(c -> c.getVerdict() == MandateCheckVerdict.PASSED);  // ✅ per-check, pass-ALL
+    if (!allPassed) throw MandateException.batteryIncomplete();                // 422 — a missing/failing check blocks
+    m.markSatisfied(actor, Instant.now(clock));
+    return m;
+}
+```
+
+The completion recall is computed, not stored: `countTerminalTasks(mandateId) == m.getIssuedCount()` — it cannot drift from the children (the WCP-3 barrier). The deemed sweep (`MandateDeemedSweeper`) drives the `@Transactional MandateService.resolveDeemed` worker through a cross-bean proxied call (never a same-bean self-invocation), which takes the same task-row `PESSIMISTIC_WRITE` lock and resolves only a PENDING-and-overdue task, so the explicit-complete path and the sweep converge to exactly one terminal resolution per task (CWE-362). `MandateTask` and `MandateCheck` rows are `@AggregateMember` of `Mandate` — root-JPQL reads, `common/MemberWriter` writes; no delete path exists.
+
+Verification: review-tier — confirm issue creates exactly N children in one transaction with a recorded issuedCount, completion is a derived count of terminal children (never a stored flag), `satisfy` requires every declared check recorded PASSED, the deemed sweep resolves an overdue unanswered task to DEEMED exactly once through an `@Lazy`-self `@Transactional` worker under the task-row lock, and no delete path exists. The behavioural proof a fork-receiver keeps green: the N-thread explicit-complete race (exactly one 2xx + N-1 409, one resolver/resolved_at) and the derived-recall completion check.
+
+Reference: [van der Aalst Workflow Patterns (WCP-2 Parallel Split / WCP-3 Synchronization)](https://en.wikipedia.org/wiki/Workflow_patterns)
+
+Reference: [16 CFR § 310.2 (negative option feature — silence interpreted as acceptance)](https://www.law.cornell.edu/cfr/text/16/310.2)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
+
+
 <!-- @source rules/messaging-payload-record.md -->
 
 ---
@@ -8990,6 +9262,121 @@ Verification: review-tier — confirm the activation path locks the subject, fai
 Reference: [Saltzer & Schroeder — Fail-safe defaults](https://web.mit.edu/Saltzer/www/publications/protection/Basic.html)
 
 Reference: [PostgreSQL — Explicit Locking (FOR UPDATE)](https://www.postgresql.org/docs/current/explicit-locking.html)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
+
+
+<!-- @source rules/net-meter-signed-net-is-derived-from-two-monotone-direction-registers.md -->
+
+---
+title: A net meter's SIGNED net must be DERIVED from two independently value-monotone direction registers (IMPORT +, EXPORT −) — net = cumulativeImport − cumulativeExport, recorded as a basis and CROSS-CHECKED against an independent recompute (never trusted by-construction) — with each direction reading taken under the meter row lock and a closed billing period frozen (a backdate is 409)
+impact: HIGH
+impactDescription: "Storing the net as an independent mutable field instead of deriving it lets the net drift from the registers; computing a direction delta against a stale cumulative under concurrency double-counts or loses energy (CWE-362); accepting a reading below its direction cumulative posts a negative direction delta that corrupts the signed net; mutating a closed billing period shifts an already-settled net delta retroactively — each corrupts the net quantity the whole system bills on"
+tags:
+  - concurrency
+  - bigdecimal
+  - conservation
+  - monotonic
+  - metering
+  - state-machine
+spec_ref: "specs/signed-dual-register-l0.yaml#NETM-NET-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/netmetering/NetMeterRepository.java + backend/src/main/java/com/ax/template/authblueprint/netmetering/NetMeterService.java"
+  pattern: "An append reads the meter row under PESSIMISTIC_WRITE (SELECT ... FOR UPDATE) in the same transaction so BOTH directions serialize on the one meter row; a reading is compared ONLY to its own direction cumulative (import vs cumulativeImport, export vs cumulativeExport), requires read >= that cumulative (else 422 NETMETER_NOT_MONOTONE), records delta = read - directionCumulative, advances that direction's cumulative; the signed net is DERIVED = cumulativeImport - cumulativeExport and re-derived after the advance, never stored as an independent settable field; the recorded net is cross-checked against an independent recompute (sumImportDelta - sumExportDelta from the immutable reading chain) and a mismatch throws (422 NETMETER_NET_MISMATCH); closing a period snapshots both cumulatives + periodNetDelta = net_end - net_start and rejects a forward-or-equal re-close (409) and a later backdated reading at/before the close boundary (409); reading rows are @Column(updatable=false) append-only; @Check (delta >= 0) and (cumulative_import >= 0 AND cumulative_export >= 0) backstop the invariants under ddl-auto"
+upstream:
+  - "https://www.law.cornell.edu/uscode/text/16/2621"
+  - "https://www.rfc-editor.org/rfc/rfc2578.txt"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "16 U.S.C. § 2621(d)(11) — PURPA, definition of 'net metering service' (the canonical signed-net-within-a-billing-period offset)"
+    url: "https://www.law.cornell.edu/uscode/text/16/2621"
+    quote: "net metering service' means service to an electric consumer under which electric energy generated by that electric consumer from an eligible on-site generating facility and delivered to the local distribution facilities may be used to offset electric energy provided by the electric utility to the electric consumer during the applicable billing period."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "IETF RFC 2578 — Structure of Management Information Version 2 (SMIv2), §7.1.6 Counter32 (each direction register is a monotone-cumulative counter)"
+    url: "https://www.rfc-editor.org/rfc/rfc2578.txt"
+    quote: "The Counter32 type represents a non-negative integer which monotonically increases until it reaches a maximum value of 2^32-1 (4294967295 decimal), when it wraps around and starts increasing again from zero."
+    quoted_at: "2026-06-08"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-23"
+---
+
+## A net meter's signed net must be DERIVED from two monotone direction registers and cross-checked, with a frozen billing period
+
+**Impact: HIGH — a stored (settable) net drifts from the registers; a stale-cumulative direction delta under concurrency double-counts or loses energy (CWE-362); a reading below its direction cumulative posts a negative delta that corrupts the signed net; mutating a closed period shifts an already-settled net delta retroactively.**
+
+A *net meter* (the bidirectional revenue meter of solar/EV/storage net metering) is not one register — it is **two** independently **value-monotone** registers and a **derived** signed difference:
+
+```text
+IMPORT register (+): energy drawn FROM the grid — cumulativeImport, monotone, delta ≥ 0
+EXPORT register (−): energy fed BACK to the grid — cumulativeExport, monotone, delta ≥ 0
+net = cumulativeImport − cumulativeExport          // SIGNED: + when net drawer, − when net feeder
+// invariant at EVERY point: net == cumulativeImport − cumulativeExport
+//                        == Σ(import deltas) − Σ(export deltas)
+```
+
+This is exactly what PURPA settles: on-site generation *"delivered to the local distribution facilities may be used to **offset** electric energy provided by the electric utility … during the applicable billing period"* (16 U.S.C. § 2621(d)(11)) — a **signed net within a billing period**. Each direction register is the RFC 2578 monotone counter applied per direction: *"a non-negative integer which monotonically increases."* The single value-monotone register (`monotone-register-l0`) does ONE direction; this rule does the **dual coupling**.
+
+Three defects recur, and one rule closes them.
+
+**Defect 1 — storing the net as an independent mutable field.** A `net` column with a setter, updated separately from the two cumulatives, drifts: a bug on one path advances a cumulative but not the net, or vice versa, and now the billed quantity disagrees with the registers. The net must be **derived** (`cumulativeImport − cumulativeExport`), re-derived after every advance, and never settable. And because "derive it" can ITSELF be miswired, the recorded net is **cross-checked** against an independent recompute summed from the immutable reading chain (`Σ import-deltas − Σ export-deltas`) — a divergence is a defect (422), never billed (the same set-wide-conservation discipline as multilateral netting: never trust by-construction).
+
+**Defect 2 — a stale-cumulative delta under concurrency (CWE-362).** Reading a direction cumulative in one statement and writing the new reading in a later statement is a race: *"a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."* The lock is on the **meter row**, not per-direction, so an IMPORT append and an EXPORT append to the same meter serialize and the derived net is never computed from a half-applied pair.
+
+**Defect 3 — mutating a closed billing period.** Once a period is closed its net delta is snapshotted (and, in production, billed). A reading backdated at/before the close boundary would shift an already-settled delta retroactively — it must be **rejected (409)**, and re-closing at/before the latest boundary is likewise a 409.
+
+**Incorrect — stored settable net + per-direction reads (no meter lock) + decrease as negative + no period freeze:**
+
+```java
+public BigDecimal record(String meterKey, MeterDirection dir, BigDecimal read) {
+    NetMeter m = repo.findByMeterKey(meterKey).orElseThrow();      // ❌ plain read, no lock (DEFECT 2)
+    BigDecimal cum = dir == MeterDirection.IMPORT ? m.getCumulativeImport() : m.getCumulativeExport();
+    BigDecimal delta = read.subtract(cum);                          // ❌ DEFECT 1/3: negative if read < cum
+    m.advance(dir, read);
+    m.setNet(read.subtract(m.getCumulativeExport()));               // ❌ DEFECT 1: net stored, drifts
+    repo.save(m);                                                   // ❌ another tx moved a cumulative in between
+    return m.getNet();                                              // ❌ no closed-period check (DEFECT 3)
+}
+```
+
+**Correct — meter row lock + per-direction monotone + derived & cross-checked net + period freeze:**
+
+```java
+@Transactional
+public NetMeterReading append(String meterKey, MeterDirection dir, BigDecimal read, Instant effectiveAt) {
+    NetMeter m = repo.findByMeterKeyForUpdate(meterKey)             // ✅ SELECT ... FOR UPDATE on the METER row
+        .orElseThrow(NetMeterException::notFound);                  //    (serializes BOTH directions — DEFECT 2)
+    if (effectiveAt.compareTo(m.getClosedThroughAt()) <= 0)        // ✅ DEFECT 3: backdate into a closed period
+        throw NetMeterException.periodClosed();                     //    → 409, no retroactive shift
+    BigDecimal cum = m.cumulativeFor(dir);                          // import↔cumulativeImport, export↔cumulativeExport
+    if (read.compareTo(cum) < 0)                                    // ✅ DEFECT 1: reject, never a negative delta
+        throw NetMeterException.notMonotone();
+    BigDecimal delta = read.subtract(cum);                          // delta ≥ 0 (CHECK delta >= 0 backstop)
+    long seq = repo.maxSequence(m.getId(), dir) + 1;
+    BigDecimal signed = dir == MeterDirection.IMPORT ? delta : delta.negate();
+    m.advance(dir, read);                                           // ✅ that direction's cumulative := read, derives net
+    BigDecimal recomputed = m.getBaselineNet()                      // ✅ DEFECT 1: independent recompute,
+        .add(repo.sumImportDelta(m.getId()))                        //    NOT by-construction (baseline + chain Σ)
+        .subtract(repo.sumExportDelta(m.getId())).add(signed);
+    if (m.getNet().compareTo(recomputed) != 0)                      // ✅ derived net cross-check — divergence is a bug
+        throw NetMeterException.netMismatch();
+    return members.persist(new NetMeterReading(/* immutable */ m.getId(), dir, read, cum, delta,
+        m.getNet(), m.getCumulativeImport(), m.getCumulativeExport(), seq, effectiveAt, Instant.now(clock)));
+}
+```
+
+`FOR UPDATE` on the meter row serializes concurrent appenders **across both directions** so each direction delta is computed against the true prior cumulative and the recorded `net == cumulativeImport − cumulativeExport` holds at every point; the net is **derived** (never a settable field) and **cross-checked** against the independent chain recompute (a divergence surfaces a defect rather than billing a corrupted net); a closed period's net delta is frozen (`closedThroughAt` gate → 409). Reading rows are `@Column(updatable=false)` append-only, so the chain reconstructs both cumulatives and the signed net at every step.
+
+Verification: review-tier — confirm every append locks the **meter** row (`@Lock(PESSIMISTIC_WRITE)`), a reading is compared only to its own direction cumulative and `read < cumulative` is a 422, the net is derived (`cumulativeImport − cumulativeExport`, no public `setNet`) and cross-checked against `sumImportDelta − sumExportDelta`, a period close snapshots both cumulatives + `periodNetDelta = net_end − net_start` and rejects a forward-or-equal re-close and a backdated reading (409), reads are immutable, and `@Check (delta >= 0)` + `(cumulative_import >= 0 AND cumulative_export >= 0)` are declared. The canonical proof a fork-receiver writes is a concurrency test over both directions: N concurrent appends, asserting the recorded net equals `Σ committed import deltas − Σ committed export deltas`.
+
+Reference: [16 U.S.C. § 2621(d)(11) — PURPA net metering service](https://www.law.cornell.edu/uscode/text/16/2621)
+
+Reference: [IETF RFC 2578 — SMIv2 (Counter32)](https://www.rfc-editor.org/rfc/rfc2578.txt)
 
 Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
 
@@ -12893,6 +13280,124 @@ Reference: [PJM Manual 29: Billing §1.5 Billing Adjustments](https://www.pjm.co
 Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
 
 
+<!-- @source rules/reproducible-procedure-recorded-seed-replay-and-blinding.md -->
+
+---
+title: An auditable deterministic procedure must record its SEED (a draw), pin its classifier VERSION (a classification), and BLIND its sensitive result fields — so a draw is replayable from the recorded seed, the same input under the same version is byte-identical, and a non-privileged caller never sees the raw blinded value
+impact: HIGH
+impactDescription: "A random draw with no recorded seed cannot be reproduced or audited (CWE-330) — a regulator or losing party cannot verify the selection was fair, and the result is unfalsifiable; a classification with no pinned version silently re-labels history when the classifier changes (an EMR/claims auditor can no longer reconstruct why a record was classed); and a sensitive result field with no role-blinding leaks the raw subject identity to every caller (a least-privilege violation, NIST SP 800-53). All three are the same defect: a procedure whose result is not anchored to a recorded, reproducible, role-scoped basis"
+tags:
+  - audit
+  - determinism
+  - access-control
+  - governance
+  - concurrency
+spec_ref: "specs/reproducible-procedure-l0.yaml#PROC-DRAW-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/reproducibility/ReproducibilityService.java + backend/src/main/java/com/ax/template/authblueprint/reproducibility/Procedure.java + backend/src/main/java/com/ax/template/authblueprint/reproducibility/SeededDraw.java"
+  pattern: "A draw records a server-generated SEED + algorithm + canonical SHA-256 input-set hash + selected ids, all @Column(updatable=false); the seed is generated server-side (never read from the request body) so the draw is replayable (CWE-330); replaying the recorded procedure re-runs the recorded algorithm with the recorded seed over the recorded input set and reproduces the byte-identical selection, mutating nothing (a divergence fails closed 422); a classification records the SHA-256 input hash + classifier version + resolved class, and re-classifying the same input under the same version is idempotent via uq(input_hash, classifier_version, kind) (a newer version records a SEPARATE result, never re-labeling the old one); a sensitive field is stored @JsonIgnore raw + exposed only as a deterministic masked projection to a MEMBER, with the unmasked value reachable only by ADMIN via @PreAuthorize"
+upstream:
+  - "https://csrc.nist.gov/glossary/term/drbg"
+  - "https://csrc.nist.gov/glossary/term/least_privilege"
+  - "https://cwe.mitre.org/data/definitions/330.html"
+evidence:
+  - source_type: external
+    citation: "NIST SP 800-90A Rev. 1 — Deterministic Random Bit Generator, via the NIST CSRC Glossary: a DRBG produces a sequence of bits from a recorded seed, which is exactly what makes a recorded-seed draw reproducible and auditable after the fact"
+    url: "https://csrc.nist.gov/glossary/term/drbg"
+    quote: "An RBG that includes a DRBG mechanism and (at least initially) has access to a randomness source. The DRBG produces a sequence of bits from a secret initial value called a seed, along with other possible inputs."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "NIST SP 800-53 Rev. 5 — Least Privilege, via the NIST CSRC Glossary: the principle behind role-based field blinding — a MEMBER is granted only the masked view, only an ADMIN unmasks the raw value"
+    url: "https://csrc.nist.gov/glossary/term/least_privilege"
+    quote: "The principle that a security architecture is designed so that each entity is granted the minimum system resources and authorizations that the entity needs to perform its function."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-330: Use of Insufficiently Random Values — MITRE: a draw with no recorded, reproducible seed cannot be audited or reproduced"
+    url: "https://cwe.mitre.org/data/definitions/330.html"
+    quote: "The product uses insufficiently random numbers or values in a security context that depends on unpredictable numbers."
+    quoted_at: "2026-06-23"
+---
+
+## An auditable procedure records its seed, pins its classifier version, and blinds its sensitive fields — it does not produce a bare, un-reproducible, fully-disclosed result
+
+**Impact: HIGH — an un-seeded draw cannot be reproduced or audited (CWE-330); an un-versioned classification silently re-labels history; an un-blinded result leaks the raw subject identity to every caller (NIST SP 800-53 least-privilege).**
+
+An *auditable deterministic procedure* is a draw or a classification whose result can be re-derived and audited after the fact. The discipline has three parts:
+
+```text
+draw(candidates, k):   record a SERVER-generated seed + algorithm + SHA-256(input-set) + selected ids,
+                       all immutable; replay(id) re-runs the recorded algorithm with the recorded seed
+                       over the recorded input set → byte-identical selection, mutating nothing
+classify(input, ver):  record SHA-256(input) + classifier version + resolved class; same input + same
+                       version is idempotent (uq backstop); a NEWER version records a SEPARATE result
+blind(rawField):       store @JsonIgnore raw + expose only a deterministic masked projection to a MEMBER;
+                       the raw value is reachable only by ADMIN (@PreAuthorize) — least privilege
+```
+
+**1. A draw records its seed (PROC-DRAW-001 / PROC-REPLAY-001).** The seed is generated server-side at draw time — never read from the request body — and recorded immutably with the algorithm, the canonical input hash, and the selected ids. Replaying the recorded procedure re-runs the recorded algorithm with the recorded seed and reproduces the byte-identical selection; a divergence fails closed (422) rather than silently overwriting. A DRBG *"produces a sequence of bits from a secret initial value called a seed"* — the recorded seed is the complete basis to reconstruct the draw (CWE-330: a draw with no recorded seed is not reproducible).
+
+**2. A classification pins its version (PROC-CLASS-001).** The result records the SHA-256 input hash + the classifier version + the resolved class. The same input under the same version is byte-identical (a `uq(input_hash, classifier_version, kind)` backstop returns the existing row); a newer classifier version records a SEPARATE result and never mutates the older one — history is not silently re-labeled.
+
+**3. A sensitive field is role-blinded (PROC-BLIND-001).** The raw value is `@JsonIgnore` and reaches a MEMBER only as a deterministic masked projection; the unmasked value is reachable only by an ADMIN — *"each entity is granted the minimum … it needs to perform its function."*
+
+**Incorrect — a bare un-seeded draw, an un-versioned re-labeling classify, a fully-disclosed sensitive field:**
+
+```java
+public DrawResult draw(List<String> candidates, int k, long clientSeed) {
+    Random r = new Random(clientSeed);                 // ❌ seed comes from the caller, not recorded server-side
+    Collections.shuffle(candidates, r);                // ❌ candidate order not canonicalized — input hash unstable
+    List<String> picked = candidates.subList(0, k);
+    return new DrawResult(picked);                      // ❌ no recorded seed/algorithm/input-hash → not replayable (CWE-330)
+}
+
+public void classify(String input, String klass) {
+    Procedure p = repo.findByInput(input).orElseGet(Procedure::new);
+    p.setResolvedClass(klass);                          // ❌ overwrites — a new classifier silently re-labels history
+    p.setRawSubject(input);                             // ❌ raw subject serializes to every caller — no blinding
+    repo.save(p);
+}
+```
+
+**Correct — a server-seeded replayable draw, a version-pinned idempotent classify, a blinded field:**
+
+```java
+@Transactional
+public Procedure draw(String inputSetRef, List<String> candidates, int k, String actor) {
+    long seed = secureRandom.nextLong();                            // ✅ seed generated SERVER-side
+    List<String> sorted = candidates.stream().sorted().toList();    // ✅ canonical order → stable input hash
+    String inputHash = Hashing.sha256Hex(String.join(",", sorted)); // ✅ recorded basis
+    List<String> selected = SeededDraw.select(sorted, k, seed);     // ✅ deterministic from (sorted, k, seed)
+    Procedure p = Procedure.draw(UUID.randomUUID(), inputSetRef, inputHash, SeededDraw.ALGORITHM,
+        seed, k, String.join(",", selected), actor, Instant.now(clock));
+    metrics.record("draw", "ok");
+    return procedures.save(p);                                      // ✅ seed/algorithm/input_hash/selected all immutable
+}
+
+@Transactional(readOnly = true)
+public List<String> replay(UUID id) {
+    Procedure p = procedures.findById(id).orElseThrow(ReproducibilityException::notFound);
+    List<String> replayed = SeededDraw.select(p.sortedCandidates(), p.getDrawK(), p.getSeed());
+    if (!replayed.equals(p.selectedIdList())) {                     // ✅ pure verification; divergence fails closed
+        metrics.record("replay", "diverged");
+        throw ReproducibilityException.replayDiverged();            // 422 — never silently overwrite
+    }
+    metrics.record("replay", "ok");
+    return replayed;                                                // ✅ byte-identical to the recorded selection
+}
+```
+
+The seed is the complete, recorded basis for the draw; replay re-derives the byte-identical selection and mutates nothing. The classify path pins the classifier version (a `uq(input_hash, classifier_version, kind)` backstop makes a same-version recompute idempotent and a newer version a separate row). The blinded raw field is `@JsonIgnore`, exposed to a MEMBER only as a deterministic mask and unmasked only for an ADMIN. `Procedure` rows are append-only — no delete path exists.
+
+Verification: review-tier — confirm the seed is server-generated and recorded immutably, replay reproduces the byte-identical selection without mutation, the classifier version is pinned (a newer version records a separate result), and the sensitive field is `@JsonIgnore` raw + masked-to-MEMBER + ADMIN-only unmask. The behavioural proof a fork-receiver keeps green: replay the recorded procedure N times → every replay reproduces the byte-identical selectedIds.
+
+Reference: [NIST SP 800-90A Rev. 1 — DRBG (CSRC Glossary)](https://csrc.nist.gov/glossary/term/drbg)
+
+Reference: [NIST SP 800-53 Rev. 5 — Least Privilege (CSRC Glossary)](https://csrc.nist.gov/glossary/term/least_privilege)
+
+Reference: [CWE-330: Use of Insufficiently Random Values](https://cwe.mitre.org/data/definitions/330.html)
+
+
 <!-- @source rules/resilience-circuit-breaker-retry-bulkhead.md -->
 
 ---
@@ -16060,6 +16565,130 @@ Reference (sibling — scale/round the amount once, do not conflate): [practices
 Reference (sibling — read the clock + period bounds from an injected Clock): [practices/rules/time-gated-decisions-read-injected-clock.md](time-gated-decisions-read-injected-clock.md)
 
 
+<!-- @source rules/timed-offer-exclusive-assignment-and-reoffer-ladder.md -->
+
+---
+title: A timed-assignment workflow must extend an offer to a candidate with a DEADLINE (OPEN until accept/decline/deadline; a @Scheduled sweep expires past-deadline OPEN offers EXACTLY ONCE, recorded SYSTEM/when), hold EXCLUSIVITY so at most ONE offer per subject is accepted (the loser of a competing accept gets 409 via a uq(subject_id) backstop under the subject row lock), and re-offer a declined/expired offer to the next candidate as a NEW row in an ordered append-only ladder
+impact: HIGH
+impactDescription: "A timed-offer workflow with no exclusivity backstop double-assigns one subject when two candidates accept competing offers at the same instant (CWE-362) — two drivers dispatched to one ride, two bidders winning one lot, two clinicians paged for one bed; a sweep that self-invokes its own @Transactional method silently runs WITHOUT the row lock and REQUIRES_NEW on the production tick (green in every test, broken only in prod); and a re-offer that MUTATES the prior offer row instead of appending loses the auditable record of who was offered the subject and in what order"
+tags:
+  - state-machine
+  - concurrency
+  - audit
+  - governance
+spec_ref: "specs/timed-offer-exclusive-assignment-l0.yaml#TIMEDOFFER-EXCLUSIVE-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/timedoffer/TimedOfferService.java + backend/src/main/java/com/ax/template/authblueprint/timedoffer/TimedOfferSweeper.java + backend/src/main/java/com/ax/template/authblueprint/timedoffer/Assignment.java + backend/src/main/java/com/ax/template/authblueprint/timedoffer/TimedOffer.java"
+  pattern: "A TimedOffer is extended to a candidate for a subject with a recorded deadline and stays OPEN until accept/decline/deadline; the accept path locks EVERY offer row for the subject (PESSIMISTIC_WRITE) and creates an Assignment row whose uq(subject_id) makes a competing accept a deterministic 409, so exactly one offer per subject is ACCEPTED (CWE-362 lock + unique-index suspenders); the @Scheduled deadline sweep expires past-deadline OPEN offers EXACTLY ONCE recording SYSTEM + when, reaching its REQUIRES_NEW per-row handler through an @Lazy self proxy (never a bare self-invocation) and LOSING cleanly to a live accept; a declined/expired offer is re-offered as a NEW append-only TimedOffer row referencing the prior with a strictly monotonic attemptSeq; NO delete path exists"
+upstream:
+  - "https://cwe.mitre.org/data/definitions/362.html"
+  - "https://www.rfc-editor.org/rfc/rfc9110.html"
+  - "https://www.law.cornell.edu/uscode/text/15/1692g"
+evidence:
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (the concurrent-accept race for one subject across competing timed offers)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "RFC 9110 (HTTP Semantics) §15.5.10 — the 409 Conflict the loser of a competing accept receives because the subject's current state (already assigned) conflicts with the request"
+    url: "https://www.rfc-editor.org/rfc/rfc9110.html"
+    quote: "The 409 (Conflict) status code indicates that the request could not be completed due to a conflict with the current state of the target resource."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "Fair Debt Collection Practices Act, 15 U.S.C. § 1692g(a) (Cornell LII) — the timed offer-then-escalate discipline the deadline + re-offer ladder generalizes: a statutory five-day clock and a thirty-day window gate escalation"
+    url: "https://www.law.cornell.edu/uscode/text/15/1692g"
+    quote: "Within five days after the initial communication with a consumer in connection with the collection of any debt, a debt collector shall, unless the following information is contained in the initial communication or the consumer has paid the debt, send the consumer a written notice containing— (1) the amount of the debt;"
+    quoted_at: "2026-06-23"
+---
+
+## A timed assignment is an exclusive offer with a deadline and an append-only re-offer ladder — not a mutable status flag
+
+**Impact: HIGH — no exclusivity backstop double-assigns one subject under a concurrent accept (CWE-362); a self-invoked @Transactional sweep runs without its lock on the production tick; a mutated re-offer destroys the attempt audit trail.**
+
+A *timed offer* is the shape every timed-assignment workflow runs: extend an offer to a candidate for a *subject* (the thing being assigned) with a *deadline*, keep it OPEN until the candidate accepts/declines or the deadline passes, and on decline/timeout re-offer to the next candidate. The IDW9 dispatch dogfood realized this — but welded it to the Provider/ServiceRequest/Offer reference workload. Lifted out, the primitive is:
+
+```text
+extend(subject, candidate, deadline): a NEW OPEN TimedOffer; attemptSeq monotonic for the subject
+accept(offer, candidate):  lock EVERY offer row for the subject (PESSIMISTIC_WRITE); re-check OPEN +
+                           deadline; create an Assignment whose uq(subject_id) is the exactly-one
+                           backstop → the competing accept is a deterministic 409 (CWE-362)
+decline(offer):            OPEN → DECLINED through the state machine (records who/when)
+sweep:                     a @Scheduled poller; expires past-deadline OPEN offers EXACTLY ONCE
+                           (records SYSTEM/when) THROUGH an @Lazy self proxy so REQUIRES_NEW + the
+                           row lock survive on the production tick; LOSES cleanly to a live accept
+reoffer(prior, next):      a NEW append-only row referencing prior; attemptSeq strictly monotonic
+```
+
+**1. Exclusivity is a subject-wide lock plus a unique-index backstop (TIMEDOFFER-EXCLUSIVE-001).** Concurrent accepts of *competing* offers for one subject must serialize on the SUBJECT, not on one offer row — so the accept path locks every offer row for the subject (`PESSIMISTIC_WRITE`) and inserts an `Assignment` whose `uq(subject_id)` makes any residual-race second insert a deterministic 409. *"The 409 (Conflict) status code indicates that the request could not be completed due to a conflict with the current state of the target resource."*
+
+**2. The deadline sweep is a concurrent writer reached through a proxy (TIMEDOFFER-LIFECYCLE-001).** A `@Scheduled` sweep expires past-deadline OPEN offers exactly once, recording the SYSTEM actor and when. It MUST reach its `REQUIRES_NEW` per-row handler through an `@Lazy` self proxy — a bare `this.expireOne(...)` self-invocation bypasses the `@Transactional` proxy, silently dropping the lock on the production tick while every tested path keeps it.
+
+**3. The re-offer ladder is append-only (TIMEDOFFER-LADDER-001).** A declined/expired offer is re-offered as a NEW row referencing the prior with a strictly monotonic `attemptSeq`; no existing row is ever mutated to point at a different candidate or deleted.
+
+**Incorrect — no exclusivity backstop, a self-invoked sweep, a mutated re-offer:**
+
+```java
+public void accept(UUID offerId, String candidate) {
+    var o = offerRepo.findById(offerId).orElseThrow();     // ❌ no subject lock — two competing accepts read "unassigned"
+    o.setStatus(OfferStatus.ACCEPTED);                     // ❌ public setter; no uq(subject_id) backstop
+    offerRepo.save(o);                                     // ❌ both threads assign one subject (CWE-362)
+}
+@Scheduled(fixedDelayString = "60000")
+public void sweep() {
+    for (UUID id : dueOfferIds()) this.expireOne(id);      // ❌ self-invocation bypasses @Transactional → no lock in prod
+}
+public void reoffer(UUID priorId, String next) {
+    var prior = offerRepo.findById(priorId).orElseThrow();
+    prior.setCandidate(next);                              // ❌ mutates the prior row — destroys the attempt trail
+    offerRepo.save(prior);
+}
+```
+
+**Correct — subject-locked exclusive accept with a uq backstop, @Lazy-proxied sweep, append-only re-offer:**
+
+```java
+@Transactional
+public TimedOffer accept(UUID offerId, String candidate) {
+    TimedOffer o = offers.findById(offerId).orElseThrow(TimedOfferException::notFound);
+    offers.findBySubjectIdForUpdate(o.getSubjectId());                  // ✅ lock the whole subject
+    TimedOffer fresh = offers.findById(offerId).orElseThrow(TimedOfferException::notFound);
+    Instant now = Instant.now(clock);
+    if (fresh.getStatus() != OfferStatus.OPEN) throw TimedOfferException.notOpen(fresh.getStatus().name());
+    if (fresh.isPastDeadline(now)) throw TimedOfferException.offerExpired();
+    if (assignments.findBySubjectId(fresh.getSubjectId()).isPresent())
+        throw TimedOfferException.subjectAlreadyAssigned();             // ✅ exclusivity loser → 409
+    try {
+        assignments.saveAndFlush(new Assignment(UUID.randomUUID(), fresh.getSubjectId(),
+            fresh.getId(), candidate, now));                            // ✅ uq(subject_id) backstop
+    } catch (DataIntegrityViolationException dup) {
+        throw TimedOfferException.subjectAlreadyAssigned();             // ✅ residual-race loser → 409
+    }
+    sm.accept(fresh, candidate, now);                                   // ✅ status through the state machine
+    return fresh;
+}
+
+// ✅ the @Scheduled tick reaches expireOne THROUGH the @Lazy self proxy (REQUIRES_NEW + row lock honored)
+public int sweepOnce() {
+    for (UUID offerId : service.dueOfferIds(SWEEP_BATCH)) {
+        try { self.expireOne(offerId); } catch (RuntimeException ex) { /* live accept won — skip */ }
+    }
+    return /* swept count */ 0;
+}
+```
+
+The subject-wide `PESSIMISTIC_WRITE` lock serializes competing accepts; the `uq(subject_id)` Assignment index is the suspenders for any residual race (CWE-362). The sweep reaches its `REQUIRES_NEW` handler through the `@Lazy` self proxy so the lock survives the production tick. `Assignment` references the winning `TimedOffer` by IDENTITY (a `UUID offerId`, never an object pointer — HG-AGG-REF); the re-offer ladder is append-only; no delete path exists.
+
+Verification: review-tier — confirm the accept locks the subject and the `uq(subject_id)` backstop is present, the sweep reaches `expireOne` through the `@Lazy self` proxy (not a bare self-invocation), and re-offer appends a new row. The behavioural proof a fork-receiver keeps green: the N-thread competing-accept race (exactly one 2xx + N-1 409, exactly one Assignment row).
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
+
+Reference: [RFC 9110 §15.5.10 (409 Conflict)](https://www.rfc-editor.org/rfc/rfc9110.html)
+
+Reference: [FDCPA 15 U.S.C. § 1692g](https://www.law.cornell.edu/uscode/text/15/1692g)
+
+
 <!-- @source rules/timeout-sweep-is-a-concurrent-mutator.md -->
 
 ---
@@ -17310,6 +17939,141 @@ public User update(@PathVariable Long id, @RequestBody @Valid UserUpdateDto dto)
 Verification: `./gradlew testPractices --tests "*MassAssignment*"` asserts that direct entity binding propagates the attacker's `role` field, while DTO-mediated binding preserves the server default `USER`.
 
 Reference: [Spring MVC — @ModelAttribute method arguments](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/modelattrib-method-args.html)
+
+
+<!-- @source rules/valuation-run-projection-as-of-snapshot-conserving-fan-out-and-rebase.md -->
+
+---
+title: A versioned valuation run must be pinned to an AS-OF instant + recorded basis and IMMUTABLE once computed (an as-of read returns the GREATEST as-of ≤ T, never a later run), fan out to N per-position outputs whose values SUM EXACTLY to the run total (a DB @Check AND an INDEPENDENT repo-SUM cross-check, never a by-construction tautology), and rebase by creating a NEW baseline run that RETAINS every prior run verbatim via a forward pointer — all serialized on the subject row so concurrent recompute/rebase create exactly one new version
+impact: HIGH
+impactDescription: "A valuation read that returns the latest run instead of the one current AS OF the queried time reports a value that did not exist at T — a point-in-time correctness break a fund/NAV regulator can sanction (Rule 2a-4 requires the current net asset value as of a time); a fan-out whose per-position outputs do not sum to the run total silently loses or invents value (and a by-construction total := Σ outputs proves nothing — it is tautological); a rebase that rewrites the prior run instead of appending a new baseline destroys the reconstructible history Regulation S-X requires; and an unserialized recompute lets two threads both write version n+1 (CWE-362), leaving the subject with two runs at one version"
+tags:
+  - state-machine
+  - audit
+  - concurrency
+  - governance
+  - billing
+spec_ref: "specs/valuation-run-projection-l0.yaml#VALRUN-ASOF-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/valuationrun/ValuationRunService.java + backend/src/main/java/com/ax/template/authblueprint/valuationrun/ValuationRun.java + backend/src/main/java/com/ax/template/authblueprint/valuationrun/ValuationOutput.java"
+  pattern: "Every recompute/rebase takes the subject's PESSIMISTIC_WRITE row lock (findByIdForUpdate) before reading the current head and writing version+1, and a uq(subject_id, run_version) backstop makes the loser of any residual race a deterministic 409 (CWE-362); a run records its as-of instant + basis + total as @Column(updatable=false) with @Version and NO public setter, so a correction is a new run, never an edit; the as-of read selects the run with the GREATEST as-of ≤ T (404 if none); a run fans out to ValuationOutput rows in the same transaction and conservation is checked TWICE — the run's persisted output_sum column carries a DB @Check that it equals the total, AND the service derives Σ a SECOND way via a repo SUM(value) query before commit, rejecting a disagreement with 422; a rebase appends a NEW baseline run with a forward rebasedFromRunVersion pointer while retaining prior runs verbatim, and resolving current follows the forward chain; NO delete path exists on the run"
+upstream:
+  - "https://www.law.cornell.edu/cfr/text/17/270.2a-4"
+  - "https://www.law.cornell.edu/cfr/text/17/210.3-04"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "17 CFR § 270.2a-4(a)(1) (Rule 2a-4 under the Investment Company Act, Cornell LII) — the as-of valuation discipline: portfolio securities with readily available market quotations are valued at current market value, and the current net asset value is computed as of a time"
+    url: "https://www.law.cornell.edu/cfr/text/17/270.2a-4"
+    quote: "Portfolio securities with respect to which market quotations are readily available shall be valued at current market value"
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "17 CFR § 210.3-04 (Regulation S-X, Cornell LII) — the rebase-with-retained-history discipline: a retroactive adjustment restates the opening balance while prior periods remain disclosed"
+    url: "https://www.law.cornell.edu/cfr/text/17/210.3-04"
+    quote: "Also, state separately the adjustments to the balance at the beginning of the earliest period presented for items which were retroactively applied to periods prior to that period."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (concurrent recompute/rebase racing one subject's version counter)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-23"
+---
+
+## A valuation run is an as-of-pinned, immutable, conserving, rebase-with-history fact — not a mutable scalar you overwrite
+
+**Impact: HIGH — an as-of read that returns the latest run reports a value that did not exist at T (a point-in-time break); a fan-out that does not conserve loses or invents value (and total := Σ outputs is a tautology); a rebase that rewrites the prior run destroys reconstructible history; an unserialized recompute writes two runs at one version (CWE-362).**
+
+A *valuation run* is the versioned computation a portfolio/NAV system runs against a position book: it values a subject AS OF an instant, against a recorded basis, and projects the total down to per-position outputs. The discipline is regulatory: Rule 2a-4 requires *"Portfolio securities with respect to which market quotations are readily available shall be valued at current market value"* — the current net asset value computed *as of* a time, so a read for time T must return the run that was current at T, not a later one. The catalog versioned a governed decision (`decision-governance`) and a settlement run (`remeasurement-trueup`) but had no primitive for the as-of-pinned, conserving-fan-out, rebase-with-history valuation run:
+
+```text
+recompute(subject):  read current head under the subject's PESSIMISTIC_WRITE lock; append version+1
+                     pinned to an as-of instant + recorded basis; fan out to N ValuationOutput rows;
+                     uq(subject_id, run_version) = the exactly-once backstop
+fan-out:             Σ output values MUST equal the run total — @Check on a persisted output_sum
+                     column AND an INDEPENDENT repo SUM(value) cross-check (NOT total := Σ; tautology)
+as-of read:          return the run with the GREATEST as-of ≤ T (404 if none) — never the latest
+rebase(subject):     append a NEW baseline run with a forward rebasedFromRunVersion pointer; prior
+                     runs retained VERBATIM; resolve current by following the forward chain
+locks:               the subject row, PESSIMISTIC_WRITE — concurrent recompute/rebase → exactly one wins
+```
+
+**1. As-of point-in-time read (VALRUN-ASOF-001).** A run records its as-of instant, basis, version, and total as immutable columns. An as-of-T read returns the run with the greatest as-of ≤ T — a run that did not yet exist at T can never answer the query.
+
+**2. Fan-out conserves, checked twice (VALRUN-FANOUT-001).** The run fans out to one output row per position; the persisted `output_sum` carries a DB `@Check` that it equals the total, AND the service derives Σ a SECOND way via a repo `SUM(value)` query before commit. A by-construction `total := Σ outputs` is tautological and proves nothing — the independent derivation is the netting/true-up lesson.
+
+**3. Rebase appends a baseline, retains history (VALRUN-REBASE-001).** A rebase resets the basis and appends a NEW baseline run with a forward `rebasedFromRunVersion` pointer; every prior run stays readable verbatim at its own as-of, and resolving current follows the forward chain.
+
+**Incorrect — a mutable scalar, a tautological sum, a rewriting rebase, an unsynchronized recompute:**
+
+```java
+public void revalue(UUID subjectId, BigDecimal total, Map<String, BigDecimal> positions) {
+    Subject s = repo.findById(subjectId).orElseThrow();   // ❌ no row lock — two threads both read version n
+    s.setTotal(total);                                    // ❌ public setter; overwrites the as-of fact in place
+    s.setOutputSum(positions.values().stream()            // ❌ total := Σ outputs is a by-construction tautology —
+        .reduce(BigDecimal.ZERO, BigDecimal::add));       //    it can NEVER detect a lost/invented position
+    s.setBasis(newSplitRatioBasis());                     // ❌ rebase rewrites the prior run — history destroyed
+    repo.save(s);                                         // ❌ both threads write version n+1 (CWE-362)
+}
+```
+
+**Correct — immutable versioned run under the subject lock, independent conservation cross-check, rebase appends a baseline:**
+
+```java
+@Transactional
+public ValuationRun recompute(UUID subjectId, int expectedHeadVersion, BigDecimal declaredTotal,
+                              String basis, Map<String, BigDecimal> positions) {
+    ValuationSubject subject = subjects.findByIdForUpdate(subjectId)               // ✅ PESSIMISTIC_WRITE
+        .orElseThrow(ValuationRunException::notFound);
+    if (subject.getHeadRunVersion() != expectedHeadVersion) {
+        throw ValuationRunException.versionConflict();          // ✅ N concurrent recomputes → exactly one wins (409)
+    }
+    return appendVersion(subject, declaredTotal, basis, positions, null);          // forward pointer null on recompute
+}
+
+@Transactional
+public ValuationRun rebase(UUID subjectId, int fromRunVersion, BigDecimal declaredTotal,
+                           String newBasis, Map<String, BigDecimal> positions) {
+    ValuationSubject subject = subjects.findByIdForUpdate(subjectId)
+        .orElseThrow(ValuationRunException::notFound);
+    if (subject.getHeadRunVersion() != fromRunVersion) {
+        throw ValuationRunException.notCurrent();               // ✅ rebase only from the current head — chain stays linear
+    }
+    return appendVersion(subject, declaredTotal, newBasis, positions, fromRunVersion); // ✅ NEW baseline, prior retained
+}
+
+private ValuationRun appendVersion(ValuationSubject subject, BigDecimal declaredTotal, String basis,
+                                   Map<String, BigDecimal> positions, Integer rebasedFrom) {
+    int nextVersion = subject.getHeadRunVersion() + 1;
+    Instant now = Instant.now(clock);
+    ValuationRun run;
+    try {
+        run = runs.saveAndFlush(new ValuationRun(UUID.randomUUID(), subject.getId(), nextVersion,
+            now, basis, declaredTotal, declaredTotal, rebasedFrom, now));  // total + output_sum (== DB @Check)
+    } catch (DataIntegrityViolationException dup) {
+        throw ValuationRunException.versionConflict();          // ✅ uq(subject,version) loser → 409 (CWE-362)
+    }
+    for (Map.Entry<String, BigDecimal> e : positions.entrySet()) {
+        members.persist(new ValuationOutput(UUID.randomUUID(), run.getId(), e.getKey(), e.getValue()));
+    }
+    BigDecimal crossCheck = runs.sumOutputValues(run.getId());  // ✅ INDEPENDENT repo-SUM, a different code path
+    if (crossCheck.compareTo(run.getTotalValue()) != 0) {
+        throw ValuationRunException.fanOutNotConserved();       // ✅ 422; tx rolls back → partial fan-out unrepresentable
+    }
+    subject.advanceHead(run.getRunVersion());
+    return run;
+}
+```
+
+The subject-row PESSIMISTIC_WRITE lock serializes the read-version / write-next-version sequence; the `uq(subject_id, run_version)` index is the suspenders for any residual race (CWE-362). Conservation is derived twice — a DB `@Check` on the persisted `output_sum` column AND an independent repo `SUM(value)` — so a tautological equality can never pass for a real check. A rebase appends a baseline with a forward pointer and never rewrites a prior run. `ValuationOutput` rows are `@AggregateMember` of `ValuationRun` — root-JPQL reads, `common/MemberWriter` writes; no delete path exists.
+
+Verification: review-tier — confirm the as-of read selects the greatest as-of ≤ T (404 if none), the run columns are `@Column(updatable=false)` with `@Version` and no public setter, the fan-out conservation is checked both by the DB `@Check` and an independent repo SUM before commit, the rebase appends a forward-pointing baseline retaining prior runs, and every write path takes the subject's PESSIMISTIC_WRITE lock. The behavioural proof a fork-receiver keeps green: the N-thread recompute race (exactly one 2xx + N-1 409, exactly one run at the next version).
+
+Reference: [17 CFR § 270.2a-4 (Rule 2a-4 — current net asset value)](https://www.law.cornell.edu/cfr/text/17/270.2a-4)
+
+Reference: [17 CFR § 210.3-04 (Regulation S-X — retroactive adjustment of opening balance)](https://www.law.cornell.edu/cfr/text/17/210.3-04)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
 
 
 <!-- @source rules/value-transfer-must-be-balanced.md -->

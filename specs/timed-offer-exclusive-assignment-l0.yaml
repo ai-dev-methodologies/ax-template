@@ -1,0 +1,91 @@
+version: "0.1.0"
+scope: "timed-offer-exclusive-assignment-l0 — the generalized TIMED-OFFER WITH EXCLUSIVE ASSIGNMENT AND RE-OFFER LADDER (an offer extended to a candidate with a DEADLINE; at most ONE accepted offer per subject; an ordered append-only re-offer ladder). A TimedOffer is extended to a candidate for a SUBJECT (the thing being assigned) with a recorded DEADLINE. The system MUST (1) keep the offer OPEN until the candidate accepts/declines OR the deadline passes; a @Scheduled sweep expires past-deadline OPEN offers to EXPIRED EXACTLY ONCE (recording who=SYSTEM and when), and a sweep is just another concurrent writer that must LOSE the race to a live accept (the sweep takes the offer's row lock and re-checks OPEN+deadline before expiring); (2) hold the EXCLUSIVITY invariant — at most ONE offer per subject can ever reach ACCEPTED; concurrent accepts across competing offers for the same subject converge so EXACTLY ONE wins, the rest find the subject already assigned and receive 409 — enforced by a PESSIMISTIC_WRITE lock on the assignment row PLUS a uniqueness backstop (uq(subject_id) on the Assignment row, the deterministic loser-selector under any residual race); (3) re-offer a declined/expired offer to the NEXT candidate as a NEW TimedOffer row in an ordered, append-only ladder (monotonic attemptSeq, each re-offer referencing the prior offer) — the ladder is append-only, no row is ever mutated to point elsewhere or deleted. The IDW9 dispatch dogfood found the exclusive-assignment + timed-offer pattern but coupled it to the dispatch reference workload (Provider/ServiceRequest/Offer); this is that pattern GENERALIZED as a standalone primitive any timed-assignment workflow composes. Recurs in: ride/delivery dispatch, on-call/incident assignment, auction/lot allotment, appointment-slot holds, task/ticket claiming, seat reservation — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only re-offer ladder + @Version optimistic + PESSIMISTIC_WRITE row lock on subject/assignment + uq(subject_id) Assignment backstop + @Check) + @Scheduled timeout sweep (@Lazy self-injection to honor the per-row REQUIRES_NEW transaction) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "CWE-362 (the concurrent-accept race on one subject) + RFC 9110 §15.5.10 (409 Conflict — the loser of a concurrent accept) + RFC 9110 §15.5.21 (422) + RFC 9457 + FDCPA 15 U.S.C. 1692g(a) (the timed/staged offer-then-escalate discipline the deadline+ladder generalizes)"
+domain_mode: backend_only
+introduced_at: "IDW9 dispatch residual GENERALIZED — BACKLOG P1-39 (G6 timed-offer) / P1-40 (G7 exclusive-assignment) / P1-41 (G8 re-offer ladder); built 2026-06-23"
+
+# OPT-IN timed-offer-exclusive-assignment catalog. The assignment-lifecycle gap:
+# dispatch realized exclusive-assignment + the timed offer, but welded it to the
+# Provider/ServiceRequest/Offer reference workload. This is the GENERALIZED
+# primitive — a subject, a candidate, a deadline, an exclusivity backstop, and an
+# ordered re-offer ladder — that any timed-assignment workflow composes. Generic;
+# the dispatch/auction/appointment framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. TIMEDOFFER-LIFECYCLE-001 (the primitive — OPEN until accept/decline/deadline; sweep expires past-deadline EXACTLY ONCE, recorded SYSTEM/when)
+#   2. TIMEDOFFER-EXCLUSIVE-001 (at most ONE accepted offer per subject; the loser of a concurrent accept gets 409 — uq(subject_id) Assignment backstop)
+#   3. TIMEDOFFER-LADDER-001    (an ordered append-only re-offer ladder; each re-offer a NEW row referencing the prior, monotonic attemptSeq)
+#   4. TIMEDOFFER-CONCURRENT-001 (keystone — N concurrent accepts for ONE subject across competing offers → exactly one assignment, the rest 409)
+
+# ── Composition note ──
+# DISTINCT from dunning-collections (a one-way notice ladder on ONE receivable —
+# no exclusivity across competing claimants, no timed deadline that auto-expires),
+# decision-governance (versions one scope's computed value — no offer/accept), and
+# threshold-terminal (a single irreversible crossing — no candidate, no re-offer).
+# This primitive is the dispatch domain's exclusive-assignment + timed-offer lifted
+# out of Provider/ServiceRequest/Offer: the catalog's dispatch reference workload
+# stays as-is; this is the reusable shape. TimedOffer rows form an append-only
+# re-offer ladder (each a NEW row referencing the prior). The Assignment row is a
+# second aggregate root carrying the uq(subject_id) exclusivity backstop; the
+# subject id and the deadline policy are a fork-receiver swap behind the
+# GOVERNANCE contract (one accepted offer per subject + timed auto-expiry +
+# append-only ladder + serialized concurrent accept).
+
+items:
+  - id: "TIMEDOFFER-LIFECYCLE-001"
+    chapter: "An offer is OPEN until the candidate accepts/declines or the deadline passes; a sweep expires past-deadline OPEN offers exactly once, recorded"
+    verification:
+      mechanism: rule
+      ref: timed-offer-exclusive-assignment-and-reoffer-ladder
+    requirement: "A TimedOffer is extended to a candidate for a subject with a recorded DEADLINE (an Instant on the injected Clock). It MUST stay OPEN until the candidate ACCEPTS, DECLINES, or the deadline passes. A @Scheduled timeout sweep MUST expire past-deadline OPEN offers to EXPIRED EXACTLY ONCE, recording WHO expired it (the SYSTEM actor, distinct from a human decline) and WHEN. The sweep is just another concurrent writer: it MUST take the offer's row lock and re-check OPEN + deadline-passed inside its own transaction before expiring, so a live accept that committed in the gap makes the sweep cleanly LOSE (skip the row). Accepting or declining an already-terminal (ACCEPTED/DECLINED/EXPIRED) offer is a 409 (TIMEDOFFER_NOT_OPEN). The sweep MUST use @Lazy self-injection so the per-row REQUIRES_NEW transaction is honored on the production tick (a bare self-invocation would bypass the @Transactional proxy)."
+    test_method: "RestAssured (extend an offer with a future deadline → OPEN; accept → ACCEPTED; accepting/declining a terminal offer → 409 TIMEDOFFER_NOT_OPEN; an offer past its deadline swept → EXPIRED with decidedBy=SYSTEM recorded; a second sweep pass is an idempotent no-op; structural: the offer carries @Version + immutable deadline/subject/candidate columns)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (FDCPA 15 U.S.C. 1692g(a) — the timed offer-then-escalate
+      discipline the deadline+ladder generalizes; the five-day clock and the
+      thirty-day dispute window are statutory timed gates before escalation):
+      "Within five days after the initial communication with a consumer in
+      connection with the collection of any debt, a debt collector shall, unless
+      the following information is contained in the initial communication or the
+      consumer has paid the debt, send the consumer a written notice
+      containing— (1) the amount of the debt;"
+      (https://www.law.cornell.edu/uscode/text/15/1692g)
+  - id: "TIMEDOFFER-EXCLUSIVE-001"
+    chapter: "At most ONE offer per subject can be ACCEPTED — the loser of a competing accept finds the subject already assigned and gets 409"
+    requirement: "At most ONE TimedOffer per subject MAY ever reach ACCEPTED. Accepting an offer MUST atomically create an Assignment row for the subject; a uniqueness backstop (uq(subject_id) on the Assignment row) makes a second accept for the SAME subject — even via a DIFFERENT competing offer — a deterministic 409 (TIMEDOFFER_SUBJECT_ALREADY_ASSIGNED). The accept path MUST take a PESSIMISTIC_WRITE lock keyed on the subject (the Assignment / subject row) so the check-then-assign sequence cannot interleave; the uq(subject_id) index is the suspenders for any residual race. Once a subject is assigned, every other OPEN offer for that subject is moot — a later accept of one of them is the 409 loser, not a second assignment."
+    test_method: "RestAssured (two competing OPEN offers A and B for one subject; accept A → ACCEPTED + Assignment created; accept B → 409 TIMEDOFFER_SUBJECT_ALREADY_ASSIGNED; the subject has exactly one Assignment row; structural: Assignment carries uq(subject_id) + @Column(updatable=false) on subject_id/offer_id)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (RFC 9110 §15.5.10 — the 409 the loser of a competing accept
+      receives): "The 409 (Conflict) status code indicates that the request
+      could not be completed due to a conflict with the current state of the
+      target resource." (https://www.rfc-editor.org/rfc/rfc9110.html)
+  - id: "TIMEDOFFER-LADDER-001"
+    chapter: "A declined/expired offer is re-offered to the next candidate as a NEW row in an ordered, append-only ladder"
+    requirement: "A DECLINED or EXPIRED offer MAY be re-offered to the NEXT candidate. Each re-offer MUST be a NEW TimedOffer row referencing the prior offer (priorOfferId) with a strictly monotonic attemptSeq (1, 2, 3, …) for the same subject. The ladder is APPEND-ONLY: no existing offer row is ever mutated to point at a different candidate, reused, or deleted; re-offering always inserts a new row. Re-offering an offer that is still OPEN, or whose subject is already ASSIGNED, MUST be refused (422 TIMEDOFFER_NOT_REOFFERABLE / 409 TIMEDOFFER_SUBJECT_ALREADY_ASSIGNED respectively). The attempt sequence is the auditable record of who was offered the subject and in what order."
+    test_method: "RestAssured (decline offer attempt#1 → re-offer to a new candidate → attempt#2 with priorOfferId pointing at #1; re-offering an OPEN offer → 422 TIMEDOFFER_NOT_REOFFERABLE; the ladder for a subject is append-only with monotonic attemptSeq; structural: no delete path; priorOfferId/attemptSeq/subjectId immutable)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The re-offer ladder is the cascade the dispatch domain runs when a chosen
+      provider declines or times out — generalized to an ordered, auditable,
+      append-only attempt sequence over candidates for one subject.
+  - id: "TIMEDOFFER-CONCURRENT-001"
+    chapter: "Keystone — N concurrent accepts for one subject across competing offers serialize on the subject; exactly one assignment, the rest 409"
+    requirement: "Across ANY interleaving of concurrent accept calls for ONE subject — whether the same offer accepted twice or two competing offers for the same subject — EXACTLY ONE accept wins (one ACCEPTED offer + one Assignment row) and the rest receive 409 (TIMEDOFFER_SUBJECT_ALREADY_ASSIGNED, the uq(subject_id) backstop making the loser deterministic) (CWE-362). The accept path MUST take the subject's PESSIMISTIC_WRITE lock so the check-assignment / write-assignment sequence cannot interleave. Across the keystone the subject MUST NEVER end with two Assignment rows or two ACCEPTED offers."
+    test_method: "Concurrency proof (N concurrent accepts across competing OPEN offers for one subject → exactly one 2xx + N-1 409, exactly one Assignment row, exactly one ACCEPTED offer)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent-accept race on one subject): "The
+      product contains a concurrent code sequence that requires temporary,
+      exclusive access to a shared resource, but a timing window exists in which
+      the shared resource can be modified by another code sequence operating
+      concurrently." (https://cwe.mitre.org/data/definitions/362.html)
+      The subject-row PESSIMISTIC_WRITE lock + the uq(subject_id) Assignment
+      backstop are the belt-and-suspenders the dispatch and dunning domains
+      taught the catalog: the lock serializes the happy path, the unique index
+      makes the loser of any residual race a deterministic 409.

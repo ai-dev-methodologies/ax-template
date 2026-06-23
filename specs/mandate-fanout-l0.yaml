@@ -1,0 +1,94 @@
+version: "0.1.0"
+scope: "mandate-fanout-l0 — the generalized DIRECTIVE-FAN-OUT WITH COMPLETION CONSERVATION, A CHECK BATTERY, AND DEEMED-DEFAULT ELECTION (one mandate fans out to N child tasks whose completion is a derived recall over the children, gated by a battery of required checks, with no-response children auto-resolved to a recorded deemed default). A Mandate carries one directive. The system MUST (1) on ISSUE atomically create EXACTLY N MandateTask children (the recorded issued_count) — partial fan-out is unrepresentable (a @Check issued_count = created-children backstop) and the mandate is COMPLETE only when every child reaches a terminal state, a DERIVED recall over the children (Σ terminal == issued_count), NEVER a bare flag; (2) declare a BATTERY of required check keys and record a per-check verdict (passed/failed) — the mandate cannot be marked SATISFIED until EVERY check in the battery is recorded passed; a single failing or still-missing check blocks with 422 (the per-check verdicts are recorded, never a bare aggregate); (3) auto-resolve a child task that has NO explicit response by its recorded deadline to a DEEMED default election at/after the deadline (a @Scheduled sweep using @Lazy self-injection to avoid @Transactional proxy self-invocation — the dunning/obligation lesson), recording who=SYSTEM / when / reason=DEEMED, EXACTLY ONCE; (4) serialize a concurrent explicit child-complete against the deemed sweep on the task row (PESSIMISTIC_WRITE) so a child reaches a terminal state EXACTLY ONCE — no double-terminal across any interleaving (CWE-362). The IDW17 aviation/MRO and IDW16 EMR dogfoods found the catalog governed obligations (deadline-obligation: one grounded deadline, ack-only terminal), approvals (approval-workflow: sequential ordered steps), and positive companion gates (authorization-parity), but had NO primitive for ONE directive fanning out to N tasks with a CONSERVED completion recall, a multi-check pass-all gate, and a deemed default on silence. Realized by the mandate reference workload (com.ax.template.authblueprint.mandate). Recurs in: aviation/MRO work-order task fan-out + sign-off battery, EMR order-set fan-out + safety-check battery, governance/board mandate delegation, regulatory filing checklists, subscription negative-option renewals — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only children with uq(mandate_id, task_seq) + uq(mandate_id, check_key) + @Version optimistic + PESSIMISTIC_WRITE row lock on the task row + @Check backstops: issued_count = created children, terminal-task carries resolver/resolved_at) + a @Scheduled deemed-default sweep with @Lazy self-injection + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "van der Aalst Workflow Patterns WCP-2 Parallel Split / WCP-3 Synchronization (the AND-split fan-out + barrier-synchronization completion recall — proceed only after ALL branches complete) + 16 CFR 310.2(w) (negative option feature — silence/failure to take affirmative action interpreted as acceptance, the deemed-election authority) + CWE-362 (concurrent explicit-complete vs deemed-sweep race) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW17 one-mandate-fanout + IDW16-G11 multi-check-battery + IDW15-G11 deemed-election; built 2026-06-23 — BACKLOG P1-37 / P1-35 / P1-31"
+
+# OPT-IN mandate-fanout catalog. The directive-fan-out gap: the catalog governs
+# obligations, sequential approvals, and positive companion gates but never fans
+# ONE directive out to N child tasks whose completion is a CONSERVED derived recall,
+# gates a mandate behind a pass-all check battery, or auto-elects a deemed default
+# on a child's silence past its deadline. Generic; the aviation/EMR/governance
+# framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. MANDATE-FANOUT-001  (the primitive — issue atomically creates exactly N children; completion is Σ terminal == N, never a flag)
+#   2. MANDATE-BATTERY-001 (a battery of required checks; SATISFIED only when EVERY check is recorded passed, else 422)
+#   3. MANDATE-DEEMED-001  (a child with no response by its deadline auto-resolves to a recorded DEEMED default, exactly-once)
+#   4. MANDATE-CONCURRENT-001 (keystone — explicit child-complete vs the deemed sweep serialize on the task row; terminal exactly-once)
+
+# ── Composition note ──
+# DISTINCT from deadline-obligation (ONE grounded deadline with an ack-only terminal —
+# no fan-out, no completion conservation, no battery), approval-workflow (sequential
+# ORDERED steps along a single chain — no parallel N-way fan-out, no derived recall),
+# authorization-parity (positive companion gates on ONE action's execution — no child
+# task fan-out, no deemed default), and threshold-terminal (a single irreversible
+# crossing). MandateTask + MandateCheck rows are @AggregateMember of Mandate: root-JPQL
+# reads + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth). The
+# completion recall is deliberately DERIVED (count terminal children == issued_count)
+# rather than a stored boolean, so it cannot drift from the children — the WCP-3
+# synchronization barrier ("proceed only after ALL branches complete"). A fork-receiver
+# may swap the task semantics or the check set without touching the GOVERNANCE contract
+# (exactly-N fan-out + derived conserved recall + pass-all battery + deemed-default
+# exactly-once + serialized terminal) the catalog claims.
+
+items:
+  - id: "MANDATE-FANOUT-001"
+    chapter: "Issuing a mandate atomically creates EXACTLY N child tasks; completion is a DERIVED recall (Σ terminal == N), never a bare flag — partial fan-out is unrepresentable"
+    verification:
+      mechanism: rule
+      ref: mandate-fanout-conserved-recall-check-battery-and-deemed-election
+    requirement: "Issuing a Mandate with a target count N MUST, in a SINGLE transaction, create EXACTLY N MandateTask children (each with a recorded task sequence, deadline, and PENDING state) and record N as the mandate's issued_count. Partial fan-out MUST be unrepresentable: a @Check issued_count = (count of created children) DB backstop ties the recorded count to the rows actually created, and each task's (mandate_id, task_seq) is unique. A mandate is COMPLETE only when EVERY child has reached a terminal state — completion is a DERIVED RECALL computed by counting terminal children against issued_count (Σ terminal == issued_count), the WCP-3 synchronization barrier; it MUST NOT be a stored boolean that can drift from the children. Issuing N <= 0 is a 422 (MANDATE_EMPTY_FANOUT)."
+    test_method: "RestAssured (issue a mandate with N=3 → 201 with issuedCount 3 and exactly 3 PENDING tasks; the mandate reports complete=false; complete one task → still false; complete all 3 → complete=true is a derived recall (terminalCount == issuedCount); issue with N=0 → 422 MANDATE_EMPTY_FANOUT; structural: uq(mandate_id, task_seq) + @Check issued_count tied to created children + @Column(updatable=false) on issued_count)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (van der Aalst Workflow Patterns — WCP-2 Parallel Split +
+      WCP-3 Synchronization, the AND-split fan-out and the barrier-synchronization
+      completion recall the mandate generalizes): Parallel Split — "execute two or
+      more activities in any order or in parallel"; Synchronization — "synchronize
+      two or more activities that may execute in any order or in parallel; do not
+      proceed with the execution of subsequent activities until all preceding
+      activities have completed" (also known as barrier synchronization).
+      (https://en.wikipedia.org/wiki/Workflow_patterns)
+  - id: "MANDATE-BATTERY-001"
+    chapter: "A mandate declares a battery of required checks; it cannot be SATISFIED until EVERY check is recorded passed — a missing/failing check blocks with 422"
+    requirement: "A Mandate MAY declare a BATTERY — a set of required check keys recorded at issue time. Each check's verdict (PASSED / FAILED) is recorded individually as a MandateCheck row keyed unique per (mandate_id, check_key); recording a verdict is idempotent on the key (a later verdict supersedes the earlier one, append-or-update, never a duplicate row). Marking the mandate SATISFIED MUST be refused with 422 (MANDATE_BATTERY_INCOMPLETE) unless EVERY declared check key has a recorded PASSED verdict — a single FAILED check or a still-missing check blocks. The gate reads the recorded per-check verdicts (never a bare stored aggregate boolean). Recording a verdict for a check key not in the declared battery is a 422 (MANDATE_UNKNOWN_CHECK)."
+    test_method: "RestAssured (issue a mandate declaring checks [SAFETY, AUTHZ]; satisfy with only SAFETY passed → 422 MANDATE_BATTERY_INCOMPLETE; record AUTHZ failed → satisfy still 422; record AUTHZ passed → satisfy 200 SATISFIED; record a verdict for an undeclared key DOCS → 422 MANDATE_UNKNOWN_CHECK; re-recording SAFETY passed is idempotent on the key — no duplicate row)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The check battery is the multi-check pass-all gate (IDW16-G11): every required
+      check must be individually recorded passed before the mandate clears — the
+      catalog's authorization-parity covers positive companion gates on ONE action's
+      execution, but not a recorded-verdict battery gating a directive's satisfaction.
+  - id: "MANDATE-DEEMED-001"
+    chapter: "A child task with no explicit response by its deadline auto-resolves to a recorded DEEMED default election at/after the deadline, exactly once"
+    requirement: "A MandateTask whose recorded deadline has passed WITHOUT an explicit response (DONE or DECLINED) MUST be auto-resolved to a DEEMED default election at or after the deadline. The deemed resolution MUST record resolver = SYSTEM, the resolution instant, and reason = DEEMED, and reach the terminal DEEMED state EXACTLY ONCE (a second sweep pass over an already-terminal task is a no-op). The deemed worker MUST be invoked through a Spring proxy so its @Transactional boundary + the task-row PESSIMISTIC_WRITE lock are NOT bypassed: the @Scheduled poller MUST NOT call the worker via a bare same-bean this.method(...) self-invocation (the dunning/obligation lesson — self-invocation silently drops the proxy on the production path). Here the worker is MandateService.resolveDeemed (a SEPARATE bean), so the poller's cross-bean call already crosses the proxy; were the worker a method on the poller itself it would have to be reached via an @Lazy self-reference. A task whose deadline has NOT yet passed MUST NOT be deemed; an explicitly resolved task MUST NOT be re-resolved to DEEMED."
+    test_method: "RestAssured + synchronous worker path (a task past its deadline with no response → resolveDeemed resolves it to DEEMED with resolver SYSTEM + reason DEEMED; a task not yet past deadline → untouched; an explicitly DONE task → never DEEMED; a second resolveDeemed pass → no-op, still DONE/DEEMED with the original resolver; structural: the worker is @Transactional and the poller calls it cross-bean, never via same-bean self-invocation)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (16 CFR 310.2(w) — negative option feature, the deemed-election
+      authority: a consumer's silence is interpreted as acceptance): "a provision
+      under which the customer's silence or failure to take an affirmative action to
+      reject goods or services or to cancel the agreement is interpreted by the seller
+      as acceptance of the offer." (https://www.law.cornell.edu/cfr/text/16/310.2)
+      Generalized: a child task's silence past its deadline is interpreted as the
+      DEEMED default election — recorded, never silent.
+  - id: "MANDATE-CONCURRENT-001"
+    chapter: "Keystone — a concurrent explicit child-complete and the deemed sweep serialize on the task row; the task reaches a terminal state exactly once"
+    requirement: "Across ANY interleaving of a concurrent explicit child-complete (DONE/DECLINED) and the deemed-default sweep on ONE task, the task MUST reach a terminal state EXACTLY ONCE — the first writer wins and the second is a no-op (it observes the task already terminal). The resolve path and the sweep worker MUST both take the task's PESSIMISTIC_WRITE row lock so the read-state / write-terminal sequence cannot interleave (CWE-362). The task MUST NEVER end with two terminal resolutions or a resolver that disagrees with the recorded reason. Under N concurrent explicit completes on one PENDING task, EXACTLY ONE wins (200) and the rest observe it already terminal (409 MANDATE_TASK_ALREADY_RESOLVED)."
+    test_method: "Concurrency proof (N concurrent explicit completes on one PENDING task → exactly one 2xx + N-1 409 MANDATE_TASK_ALREADY_RESOLVED, the task terminal with exactly one resolver/resolved_at; a deemed sweep racing an explicit complete → the task is terminal exactly once, never double-resolved)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent explicit-complete vs deemed-sweep race):
+      "The product contains a concurrent code sequence that requires temporary,
+      exclusive access to a shared resource, but a timing window exists in which the
+      shared resource can be modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)
+      The task-row PESSIMISTIC_WRITE lock serializes the happy path; the terminal-state
+      precondition (resolve only a PENDING task) makes the loser of any residual race a
+      deterministic no-op / 409 — the dunning and obligation domains' belt-and-suspenders.

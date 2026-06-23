@@ -1,0 +1,105 @@
+version: "0.1.0"
+scope: "external-reconciliation-l0 — the generalized EXTERNAL-FEED RECONCILIATION LIFECYCLE (match an internal record set against an external feed snapshot by a key, CLASSIFY each pair exactly once with its recorded basis, require explicit human DISPOSITION of every break before the run can be RESOLVED, and re-run IDEMPOTENTLY on the same feed snapshot hash). A ReconciliationRun ingests one external feed snapshot (identified by its content hash) and matches it against the internal record set by an item key. Each pair is CLASSIFIED exactly once into one of MATCHED (key present both sides + amounts agree), BREAK (key present both sides + amounts differ — the delta is recorded), INTERNAL_ONLY (key present internally, absent externally), or EXTERNAL_ONLY (key present externally, absent internally). The system MUST (1) RECORD each item's classification WITH its basis (the internal value, the external value, the computed delta) — never a bare aggregate count; (2) require EXPLICIT HUMAN DISPOSITION of every BREAK (ACCEPT_INTERNAL / ACCEPT_EXTERNAL / ADJUST, recording who/when/reason) before the run may be marked RESOLVED — an undisposed break blocks resolution (422); (3) be IDEMPOTENT under re-run: re-running with the SAME feed snapshot hash returns the SAME run (no duplicate items; uq(run_id, item_key)), a CHANGED feed appends a NEW run and the prior run is retained; (4) NEVER allow a run to be RESOLVED while any break is undisposed (a @Check on each item + the service gate). The IDW15 capital-markets dogfood found the catalog governed decisions (decisiongov), netted obligations (netting), and matched identity records (recordlinkage) but had NO primitive for the periodic external-feed reconciliation a back office runs against every counterparty/custodian/bank statement: match → classify-with-basis → dispose-breaks → resolve, idempotent on the feed. Realized by the reconciliation reference workload (com.ax.template.authblueprint.reconciliation). Recurs in: bank/cash reconciliation, custodian position reconciliation, payment-processor settlement reconciliation, inter-system ledger reconciliation, inventory cycle-count reconciliation — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only classified items with uq(run_id, item_key) + run keyed by feed_snapshot_hash for idempotent re-run + @Version optimistic + PESSIMISTIC_WRITE row lock on the break under dispose + @Check backstops) + deterministic classifier (key membership + amount comparison) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "PCAOB AS 2305 (substantive analytical procedures — the evaluate-plausible-relationships discipline reconciliation generalizes, and the investigate-significant-differences requirement a BREAK disposition realizes) + 17 CFR 210.5-02(4) (Regulation S-X — the allowance for doubtful accounts the receivable reconciliation feeds, the accounting backstop) + CWE-362 (concurrent dispose-on-one-break race) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW15-G12 external-reconciliation (외부 대사) — BACKLOG P1-32; built 2026-06-23"
+
+# OPT-IN external-reconciliation catalog. The reconciliation-lifecycle gap: the
+# catalog governs decisions, nets obligations, and matches identity records but
+# never ingests an external feed snapshot, classifies each internal/external pair
+# into a recorded-basis verdict, requires human disposition of every break before
+# the run resolves, or makes the re-run idempotent on the feed hash. Generic; the
+# bank/custodian/payment-processor framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. RECON-CLASSIFY-001   (the primitive — each pair classified EXACTLY ONCE into
+#                            MATCHED / BREAK / INTERNAL_ONLY / EXTERNAL_ONLY with its
+#                            recorded basis: internal value, external value, delta)
+#   2. RECON-DISPOSE-001    (a BREAK requires explicit human disposition —
+#                            ACCEPT_INTERNAL / ACCEPT_EXTERNAL / ADJUST + who/when/reason)
+#   3. RECON-RESOLVE-001    (a run cannot be RESOLVED while any break is undisposed → 422)
+#   4. RECON-IDEMPOTENT-001 (re-run with the SAME feed snapshot hash returns the SAME run;
+#                            a CHANGED feed appends a NEW run, prior retained)
+#   5. RECON-CONCURRENT-001 (keystone — concurrent dispose on one break: exactly one wins, rest 409)
+
+# ── Composition note ──
+# DISTINCT from collection-conservation/netting (reduces a SET of gross obligations
+# to net positions — no per-pair external-vs-internal classification, no break
+# disposition), record-linkage (matches identity records by similarity bands with a
+# survivor/loser merge — no external feed snapshot, no aggregate run lifecycle), and
+# decision-governance (versions one scope's computed value — no matching, no break).
+# ReconciliationItem rows are @AggregateMember of ReconciliationRun: root-JPQL reads +
+# common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth). The classifier
+# is deliberately deterministic (key membership + BigDecimal.compareTo on the amounts):
+# a fork-receiver may swap the key extraction or the amount-tolerance without touching
+# the GOVERNANCE contract (classify-with-basis + dispose-every-break + resolve-gate +
+# idempotent-on-feed-hash + serialized dispose) the catalog claims.
+
+items:
+  - id: "RECON-CLASSIFY-001"
+    chapter: "Each internal/external pair is classified EXACTLY ONCE into MATCHED / BREAK / INTERNAL_ONLY / EXTERNAL_ONLY, with its basis recorded — never a bare aggregate count"
+    verification:
+      mechanism: rule
+      ref: external-reconciliation-classify-dispose-resolve-and-idempotent-rerun
+    requirement: "Running a reconciliation MUST take an internal record set and an external feed snapshot (each entry a (key, amount) pair) and classify EVERY distinct key EXACTLY ONCE into: MATCHED (key present both sides AND amounts equal), BREAK (key present both sides AND amounts differ — the delta = internal - external MUST be recorded), INTERNAL_ONLY (key present internally, absent externally), or EXTERNAL_ONLY (key present externally, absent internally). Each classified item MUST PERSIST its basis on the item row: the item key, the classification, the internal value (nullable for EXTERNAL_ONLY), the external value (nullable for INTERNAL_ONLY), and the delta. A bare aggregate count with no per-item basis MUST be unrepresentable — the items are the record. The items are append-only and uq(run_id, item_key) makes a duplicate key within one run impossible."
+    test_method: "RestAssured (create a run with a 4-key feed: one MATCHED, one BREAK (delta recorded), one INTERNAL_ONLY, one EXTERNAL_ONLY → the run reports 4 classified items each carrying internalValue/externalValue/delta; the BREAK item's delta equals internal minus external; structural: item columns present and immutable, uq(run_id, item_key) on the migration)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (PCAOB AS 2305 .02 — the evaluate-plausible-relationships
+      discipline reconciliation realizes): "Analytical procedures are an important
+      part of the audit process and consist of evaluations of financial information
+      made by a study of plausible relationships among both financial and
+      nonfinancial data."
+      (https://pcaobus.org/oversight/standards/auditing-standards/details/AS2305)
+  - id: "RECON-DISPOSE-001"
+    chapter: "A BREAK requires explicit human disposition (ACCEPT_INTERNAL / ACCEPT_EXTERNAL / ADJUST) recording who/when/reason"
+    requirement: "A BREAK item MUST require an EXPLICIT human DISPOSITION before it is considered handled: one of ACCEPT_INTERNAL (the internal value stands), ACCEPT_EXTERNAL (the external value stands), or ADJUST (a corrective entry is warranted). The disposition MUST record the actor (who, the authenticated caller — never a body/path param), the instant (when, from the injected Clock), and a non-blank reason (why). Disposing a non-BREAK item (MATCHED / INTERNAL_ONLY / EXTERNAL_ONLY) MUST be refused (422 RECON_NOT_A_BREAK) — only breaks are disposed. Disposing with a blank reason MUST be refused (the service rejects it). A disposition is recorded on the item row; the item is never deleted."
+    test_method: "RestAssured (dispose the BREAK item with ACCEPT_INTERNAL + reason → 200, item carries dispositionType/disposedBy/disposedAt/dispositionReason; dispose a MATCHED item → 422 RECON_NOT_A_BREAK; dispose with blank reason → 422)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (PCAOB AS 2305 .21 — the investigate-significant-differences
+      requirement a break disposition realizes): "The auditor should evaluate
+      significant unexpected differences. Reconsidering the methods and factors
+      used in developing the expectation and inquiry of management may assist the
+      auditor in this regard."
+      (https://pcaobus.org/oversight/standards/auditing-standards/details/AS2305)
+  - id: "RECON-RESOLVE-001"
+    chapter: "A run cannot be RESOLVED while any break is undisposed — an undisposed break blocks resolution (422)"
+    requirement: "A ReconciliationRun MUST NOT transition to RESOLVED while ANY of its BREAK items is undisposed. Attempting to resolve a run with an undisposed break MUST be refused with 422 (RECON_UNDISPOSED_BREAK). Once EVERY break carries a disposition (and MATCHED / INTERNAL_ONLY / EXTERNAL_ONLY items need none), the run MAY be resolved and its status becomes RESOLVED (the resolved instant recorded). Resolving an already-RESOLVED run is idempotent (a no-op success). The invariant — a RESOLVED run has zero undisposed breaks — MUST be enforced both at the service gate AND structurally (a @Check on the item: a disposed flag implies the disposition fields are present, so a RESOLVED run with an undisposed break is unrepresentable once the gate has run)."
+    test_method: "RestAssured (a run with an undisposed break → resolve → 422 RECON_UNDISPOSED_BREAK; dispose the break, then resolve → 200 status RESOLVED with resolvedAt; resolve again → idempotent 200)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      The resolve gate is the back-office sign-off seam — a reconciliation is not
+      "done" until every difference is explained, mirroring AS 2305 .21's evaluate-
+      every-significant-difference discipline.
+  - id: "RECON-IDEMPOTENT-001"
+    chapter: "Re-run with the SAME feed snapshot hash returns the SAME run; a CHANGED feed appends a NEW run, prior retained"
+    requirement: "A ReconciliationRun is identified by its (reconciliation source key + feed_snapshot_hash). Re-running with the SAME source key AND the SAME feed_snapshot_hash MUST return the EXISTING run verbatim — no new run, no duplicate items (the uq(run_id, item_key) and the run's uq(source_key, feed_snapshot_hash) are the backstops). Re-running with the SAME source key but a CHANGED feed_snapshot_hash MUST append a NEW run; the prior run is RETAINED (never overwritten, never deleted) — the reconciliation history is append-only. The feed_snapshot_hash is recorded on the run, immutable."
+    test_method: "RestAssured (create a run with feed hash H → run R1; re-create with the same source key + hash H → returns R1 (same id, same item count); re-create with the same source key + a different hash H2 → a NEW run R2, and R1 still GET-able unchanged)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The feed snapshot hash is the idempotency seam — a back office re-runs the
+      same statement many times; only a materially changed feed warrants a new run.
+      Mirrors the idempotency-key discipline (common/IdempotencyKeyStore) lifted to
+      a domain identity.
+  - id: "RECON-CONCURRENT-001"
+    chapter: "Keystone — concurrent dispose on one break serializes on the break row; exactly one wins, the rest 409"
+    requirement: "Across ANY interleaving of concurrent dispose calls on ONE break item, EXACTLY ONE dispose wins (recording the disposition + actor/instant/reason) and the rest receive 409 (RECON_ALREADY_DISPOSED) (CWE-362). The dispose path MUST take the item's PESSIMISTIC_WRITE row lock so the read-undisposed / write-disposition sequence cannot interleave; a disposed item re-disposed is the deterministic 409. Across the keystone, the break MUST NEVER end with two conflicting dispositions or a partially-written disposition."
+    test_method: "Concurrency proof (N concurrent disposes on one break → exactly one 2xx + N-1 409; the break ends with exactly one recorded disposition)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent dispose race): "The product contains a
+      concurrent code sequence that requires temporary, exclusive access to a shared
+      resource, but a timing window exists in which the shared resource can be
+      modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)
+      The item-row PESSIMISTIC_WRITE lock + the disposed-once precondition are the
+      belt-and-suspenders the dispatch / dunning / settlement domains taught the
+      catalog: the lock serializes the happy path, the precondition makes the loser
+      of any residual race a deterministic 409.
