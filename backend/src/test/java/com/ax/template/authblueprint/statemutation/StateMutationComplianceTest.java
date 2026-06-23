@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * state-conditional-mutability-l0 compliance — verified against the live statemutation reference
@@ -212,14 +213,21 @@ class StateMutationComplianceTest {
         // the form ends SUBMITTED (the submit cannot be lost)
         assertThat(getForm(id).jsonPath().getString("state")).isEqualTo("SUBMITTED");
 
-        // CWE-367 invariant: every editor that did NOT win the DRAFT window was rejected with the
-        // declared FIELD_LOCKED_IN_STATE against the advanced state — never a stale-state lost-update,
-        // never a different error. An editor that WON ran while DRAFT still held (serialized by the lock).
+        // CWE-367 invariant (deterministic, race-interleaving-independent): every editor either
+        // ran legitimately while DRAFT still held (OK, serialized by the lock) or was cleanly
+        // rejected with the declared FIELD_LOCKED_IN_STATE — NEVER a stale-state lost-update and
+        // NEVER a different error. (We do NOT assert HOW MANY lost the race: if the submit commits
+        // last, all 8 edits legitimately land during DRAFT — correct behaviour, not a violation.
+        // Asserting ">=1 rejected" was a flaky race-outcome assumption and is removed.)
         for (String outcome : editOutcomes) {
             assertThat(outcome).isIn("OK", "FIELD_LOCKED_IN_STATE");
         }
-        assertThat(editOutcomes.stream().filter("FIELD_LOCKED_IN_STATE"::equals).count())
-            .as("at least the editors that ran after the freeze were rejected").isGreaterThanOrEqualTo(1L);
+        // deterministic proof the freeze actually blocks: the form is now SUBMITTED, so a fresh
+        // edit of the frozen TITLE MUST be rejected — no timing dependence.
+        assertThatThrownBy(() -> service.editField(formId, FormField.TITLE, "after-freeze"))
+            .isInstanceOf(StateMutationException.class)
+            .extracting(e -> ((StateMutationException) e).code())
+            .isEqualTo("FIELD_LOCKED_IN_STATE");
     }
 
     // ── IDOR / 404 — an unknown form is 404, never a leak ──
