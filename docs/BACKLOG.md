@@ -26,9 +26,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 54 | 54 | **100%** |
-| P2 (verification escapes) | 11 | 5 | 45% |
+| P2 (verification escapes) | 11 | 6 | 55% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **85** | **~70%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **86** | **~70%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -188,7 +188,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       2g heap pin은 workaround.
 - [x] P2-6 doc_headline_count_guard가 `skills/ax-transform/SKILL.md`를 미검사 → stale counts
       147/86 노출. **closed 2026-06-10 (이번 wave: counts 187/99 수정 + guard 확장).**
-- [ ] P2-7 practices-react/DECISIONS.md 신설 (Java 측 438줄과 비대칭 — React 룰 provenance 부재).
+- [x] P2-7 — **closed 2026-06-16**: practices-react/DECISIONS.md 신설 — 카탈로그-레벨 acceptance trail(Java DECISIONS.md 미러): 3-phase build pipeline(multi-source→4check audit→codex consensus) + 99룰 패밀리(rerender/js/rendering/server/async/bundle/client/nextjs/advanced)별 출처(Vercel RBP+MDN+CWV) + 14 ESLint + category ACCEPT/REJECT/DEFER 결정 + freshness 한계. per-rule provenance 블록과의 row/catalog 트레일 비대칭 해소.
 - [ ] P2-8 검증 비용 시계열(perf-log.jsonl) + 40-도메인 외삽 시 CI sharding 설계.
 - [x] P2-11 — **closed 2026-06-16 (P2 wave)**: ExportWorker.drainPending(@Scheduled 틱)이 bare this.processOne 호출로 @Transactional(REQUIRES_NEW) 프록시 우회(per-job 격리가 prod에서만 죽고 테스트는 green) → @Lazy ExportWorker self 주입 + self.processOne()로 프록시 경유. testReportExport GREEN.
 - [x] P2-10 — **closed 2026-06-16 (P2 wave)**: netting addObligation에 run당 gross obligation 상한 부재(무제한 적재 시 락-hold/메모리) → MAX_OBLIGATIONS_PER_RUN=100k + countObligations 체크(run row PESSIMISTIC_WRITE 락 하에 race-safe) → 초과 시 422 NETTING_TOO_MANY_OBLIGATIONS. testNetting GREEN.
