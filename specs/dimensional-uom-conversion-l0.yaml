@@ -1,0 +1,100 @@
+version: "0.1.0"
+scope: "dimensional-uom-conversion-l0 — the generalized CROSS-DIMENSION UNIT CONVERSION LIFECYCLE (a dimensional-compatibility precondition + a versioned bridging material property + a recorded reconstructible basis + deterministic BigDecimal arithmetic). Converting a quantity from one unit to another is a PURE UNIT RATIO only when both units share a physical DIMENSION (L kg ↔ g, both mass; m ↔ cm, both length). Converting between DIFFERENT dimensions (volume L ↔ mass kg, or count ↔ mass) is NOT a pure ratio — it requires a MATERIAL PROPERTY (a density / unit-weight) that bridges the two dimensions: mass = volume × density. The system MUST (1) enforce a DIMENSIONAL-COMPATIBILITY precondition — a conversion is admissible ONLY if either (a) the from/to units share a dimension (pure ratio) OR (b) a recorded bridging material property exists for the (fromDimension → toDimension) pair; an incompatible conversion with no bridge is REJECTED 422 INCOMPATIBLE_DIMENSIONS naming both dimensions, NEVER a silent wrong number; (2) carry a MATERIAL whose density / unit-weight is RECORDED and VERSIONED — a corrected density is a new immutable version, never an in-place overwrite, and a conversion cites the version it used; (3) RECORD the conversion's BASIS (the from-quantity, from-unit, to-unit, the dimension verdict, the ratio or material-density factor applied, the material version, and the result) so the result is reconstructible and auditable; (4) be DETERMINISTIC and idempotent — the same (from-quantity, from-unit, to-unit, material-version) yields the SAME result (BigDecimal at a recorded scale, half-up), and re-requesting an identical conversion returns the recorded one verbatim. The IDW11 manufacturing dogfood found the catalog had a SAME-DIMENSION unit conversion primitive (order-multiple-quantization rounds within one dimension) but NO primitive for the CROSS-dimension conversion a BOM/recipe/packing system runs constantly (a recipe in litres consumed against a stock kept in kg; a count of parts weighed at goods-in). Realized by the uom-conversion reference workload (com.ax.template.authblueprint.uomconversion). Recurs in: manufacturing BOM/recipe explosion, food & beverage production, chemical/pharma batching, logistics dimensional weight, agriculture yield — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (versioned immutable Material rows + append-only Conversion records + @Version optimistic on the material version pointer + @Check backstops) + a dimensional-compatibility classifier (a fixed Dimension enum; same-dimension ⇒ pure ratio, cross-dimension ⇒ require a bridging MaterialProperty) + deterministic BigDecimal arithmetic (recorded scale + RoundingMode.HALF_UP) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "NIST SP 811 (Guide for the Use of the International System of Units) §7.1 (the value of a quantity is the product of a number and a unit) + §7.14 (the dimension of a quantity, dim Q, is a structured exponent over the base quantities) — the metrology basis that a conversion between two units is a pure ratio ONLY within one dimension; CWE-682 (Incorrect Calculation — a cross-dimension conversion done as a bare ratio is a wrong-result calculation) + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW11-G16 cross-dimension unit conversion + dimensional-compatibility precondition; built 2026-06-24 — BACKLOG P1-53"
+
+# OPT-IN dimensional-uom-conversion catalog. The cross-dimension-conversion gap:
+# the catalog rounds quantities WITHIN one dimension (order-multiple-quantization
+# = MOQ/lot-size round-up, mass→mass or count→count) but never converts ACROSS
+# dimensions (volume→mass, count→mass), which is not a pure unit ratio — it needs
+# a recorded material property (density / unit-weight). Generic; the BOM/recipe/
+# packing framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. UOMCONV-COMPAT-001    (the primitive — dimensional-compatibility precondition: same-dim ⇒ ratio, cross-dim ⇒ require a bridge, else 422)
+#   2. UOMCONV-MATERIAL-001  (a versioned immutable Material density/unit-weight bridges two dimensions: mass = volume × density)
+#   3. UOMCONV-BASIS-001     (the conversion records its full basis — from-qty/unit, to-unit, dimension verdict, factor, material version, result — reconstructible)
+#   4. UOMCONV-DETERMINISM-001 (deterministic + idempotent — same inputs + same material version ⇒ same BigDecimal result at a recorded scale)
+#   5. UOMCONV-VERSION-001   (a corrected density is a new immutable version, never an in-place overwrite; a recorded conversion keeps citing the version it used)
+
+# ── Composition note ──
+# DISTINCT from order-multiple-quantization (rounds a quantity UP to a lot
+# multiple WITHIN a single dimension — no dimension change, no material), from
+# decision-governance (versions one scope's computed value — no dimensional
+# precondition), and from valuation-run (as-of snapshot projection — no unit
+# algebra). The Conversion rows are @AggregateMember of Material: root-JPQL
+# reads + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth).
+# The metrology is deliberately principled (NIST SP 811 §7.1/§7.14): a unit
+# carries a Dimension; a conversion is a pure ratio ONLY when from/to share a
+# Dimension; a cross-dimension conversion is admissible ONLY with a recorded
+# bridging material property — anything else is a wrong-result calculation
+# (CWE-682), not a silent best-effort number. A fork-receiver may extend the
+# unit table or the bridge set without touching the GOVERNANCE contract
+# (compatibility precondition + recorded versioned bridge + reconstructible
+# basis + deterministic arithmetic) the catalog claims.
+
+items:
+  - id: "UOMCONV-COMPAT-001"
+    chapter: "A conversion is admissible only when the from/to units share a dimension (pure ratio) or a recorded bridge exists — else 422, never a silent wrong number"
+    verification:
+      mechanism: rule
+      ref: dimensional-uom-conversion-compatibility-bridge-and-basis
+    requirement: "Converting a quantity from one unit to another MUST first enforce a DIMENSIONAL-COMPATIBILITY precondition. The conversion is admissible ONLY if EITHER (a) the from-unit and to-unit share the same physical Dimension (a pure unit ratio applies — e.g. kg→g, L→mL) OR (b) the units belong to DIFFERENT dimensions AND a recorded bridging material property exists for the (from-dimension → to-dimension) pair (e.g. VOLUME→MASS bridged by a density). A conversion between units of different dimensions with NO recorded bridge MUST be REJECTED with 422 INCOMPATIBLE_DIMENSIONS, and the error MUST NAME both dimensions — it MUST NOT silently apply a bare ratio and return a wrong number (CWE-682). An unknown unit MUST be rejected (422 UNKNOWN_UNIT)."
+    test_method: "RestAssured (same-dimension kg→g → 200 with a pure ratio; cross-dimension L→kg WITH a material density → 200; cross-dimension L→kg with NO material → 422 INCOMPATIBLE_DIMENSIONS naming VOLUME and MASS; an unknown unit → 422 UNKNOWN_UNIT; structural: the dimension verdict is recorded on the conversion row)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 811 §7.14 — the dimension of a quantity is a
+      structured exponent over the base quantities, so two units share a
+      dimension iff their dimensional exponents match; a pure ratio is meaningful
+      ONLY within one dimension): "The dimension of Q is defined to be dim Q =
+      L_α_M_β_T_γ_I_δ_θ_ε_N_ζ_J_η_."
+      (https://www.nist.gov/pml/special-publication-811/nist-guide-si-chapter-7-rules-and-style-conventions-expressing-values)
+  - id: "UOMCONV-MATERIAL-001"
+    chapter: "A material carries its density / unit-weight as a recorded property; a cross-dimension conversion bridges via mass = volume × density"
+    requirement: "A Material MUST carry a recorded bridging property — a density (mass per unit volume) and/or a unit-weight (mass per unit count) — keyed by the (from-dimension → to-dimension) pair it bridges. A cross-dimension conversion MUST compute the result by APPLYING that property as the bridging factor (volume→mass: mass = volume-in-base-unit × density; count→mass: mass = count × unit-weight), then converting the resulting base-dimension quantity to the requested to-unit by its in-dimension ratio. The material's property value MUST be a recorded BigDecimal (never an implicit constant), so the bridging factor used is always an explicit, inspectable number."
+    test_method: "RestAssured (register a material density 1.03 kg/L; convert 2 L → kg → 2.06 kg via mass = volume × density; convert 500 mL → g of the same material → 515 g; the recorded factor on the conversion equals the material density; absent a material the same cross-dimension request is 422 per UOMCONV-COMPAT-001)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 811 §7.1 — a quantity value is a number times a unit,
+      so a cross-dimension conversion CANNOT be a bare number scaling; it must go
+      through a property that relates the two dimensions): "The value of a
+      quantity is its magnitude expressed as the product of a number and a unit,
+      and the number multiplying the unit is the numerical value of the quantity
+      expressed in that unit."
+      (https://www.nist.gov/pml/special-publication-811/nist-guide-si-chapter-7-rules-and-style-conventions-expressing-values)
+  - id: "UOMCONV-BASIS-001"
+    chapter: "Every conversion records its full reconstructible basis — from-quantity/unit, to-unit, dimension verdict, factor applied, material version, result"
+    requirement: "Performing a conversion MUST persist an immutable Conversion record carrying its complete basis: the from-quantity, the from-unit, the to-unit, the from-dimension and to-dimension, whether it was a SAME_DIMENSION pure ratio or a CROSS_DIMENSION bridged conversion, the numeric factor applied (the in-dimension ratio or the material density/unit-weight), the material version cited (null for a same-dimension conversion), the recorded result scale, and the result quantity. The record MUST be reconstructible — given the recorded basis the result MUST be re-derivable exactly. A bare result with no recorded basis MUST be unrepresentable."
+    test_method: "RestAssured (perform a cross-dimension conversion; GET the conversion record → it carries fromQuantity, fromUnit, toUnit, fromDimension, toDimension, mode=CROSS_DIMENSION, factor, materialVersion, resultScale, toQuantity; structural: the Conversion columns are @Column(updatable=false))"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The recorded basis is the audit seam — given (from-quantity, from-unit,
+      to-unit, factor, scale) the result is re-derivable, so a conversion can be
+      reconciled to the material version that produced it (CWE-682 traceability).
+  - id: "UOMCONV-DETERMINISM-001"
+    chapter: "A conversion is deterministic and idempotent — same inputs + same material version yield the same BigDecimal result at a recorded scale"
+    requirement: "A conversion MUST be DETERMINISTIC: the same (from-quantity, from-unit, to-unit, material-version) MUST always yield the SAME result, computed with BigDecimal at a RECORDED scale and RoundingMode.HALF_UP (no double arithmetic, no locale/default-scale ambiguity). Re-requesting an identical conversion (same idempotency basis: from-quantity + from-unit + to-unit + material-version) MUST return the previously recorded conversion VERBATIM, never compute a second (possibly drifting) result. The recorded result scale MUST be carried on the record so the rounding is reconstructible."
+    test_method: "RestAssured (convert 2 L → kg twice with the same material version → byte-identical toQuantity + same conversion id (idempotent replay); a BigDecimal-exact comparison via isEqualByComparingTo; structural: the result scale is recorded)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Determinism is the reconciliation precondition — a conversion that drifts
+      between two identical requests cannot be reconciled to a single recorded
+      basis. BigDecimal + recorded scale + HALF_UP makes the arithmetic exact
+      and replayable.
+  - id: "UOMCONV-VERSION-001"
+    chapter: "A corrected material property is a new immutable version, never an in-place overwrite; a recorded conversion keeps citing the version it used"
+    requirement: "Correcting a material's density / unit-weight MUST append a NEW immutable MaterialProperty version (a higher version number, with the prior versions preserved), never overwrite the existing value in place. The material's CURRENT version pointer advances under the material's optimistic-lock guard. A Conversion that cited an earlier version MUST keep citing that version verbatim — re-deriving an old conversion uses the version it recorded, not the latest. Requesting a conversion against a non-existent material version MUST be rejected (422)."
+    test_method: "RestAssured (register density v1=1.03; convert 2L→kg citing v1; append a corrected density v2=1.05; the prior conversion still cites v1 and re-derives the v1 result; a new conversion uses v2; structural: MaterialProperty rows are append-only @Column(updatable=false), uq(material_id, version))"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Versioning the bridge is what makes the basis durable — a density
+      correction must not silently rewrite the factor an already-recorded
+      conversion was computed with. The prior version is preserved (append-only),
+      mirroring the remeasurement-trueup supersession discipline.

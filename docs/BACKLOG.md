@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 54 | 52 | 96% |
+| P1 (generic signature backlog) | 54 | 54 | **100%** |
 | P2 (verification escapes) | 11 | 3 | 27% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **81** | **~66%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **83** | **~68%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -154,7 +154,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 **IDW11/12/17 미명명 잔여 (이름 복원 필요 — 차기 정리 시 세분화)**
 - [x] P1-46~50 — **closed 2026-06-16 (parallel wave5/6) (IDW11/17 residual 복원→5 도메인)**: (46) inventoryreservation 2축 available=on_hand−reserved + reserve→commit→release hold(보존 @Check, 8-thread keystone) / (47) orgscope 계층 org-tree containment-scope authz(노드 grant가 subtree로 cascade, 형제/조상 403) / (48) variancegate standard-vs-actual 비대칭 tolerance-band 게이트 + breach disposition(verdict 무재작성) / (49) statemutation state-conditional mutability(현 상태가 mutable 필드집합 결정, monotone tightening, TOCTOU 재검) / (50) recurringinterval 완료 시 윈도우 reset(다음을 완료시점부터, OVERDUE 재계산). V059~063, 각 per-domain GREEN. 앵커 APICS/SPC/NIST RBAC-hierarchy 등.
 - [x] P1-51~52 — **closed 2026-06-16 (parallel wave7) (IDW12/11 residual 복원→2 도메인)**: (51) calendardeadline 법정기한 calendar vs business-day 산술(주말+versioned 공휴일 제외, roll convention 기록, overdue 재계산; V065) / (52) orderquantization 비보존 round-UP-to-order-multiple(MOQ/lot-size, orderQty=max(MOQ,ceil(req/mult)*mult), overage 명시 기록 — rounded-split의 비보존 대척; V066). testCalendarDeadline/testOrderQuantization GREEN. 앵커 ISDA business-day convention / APICS lot-sizing.
-- [ ] P1-53~54 IDW11/12/17 미명명 잔여 2건 (각 IDW 재감사로 이름 복원 후 등재 — 복원 전 1건씩 카운트)
+- [x] P1-53~54 — **closed 2026-06-16 (parallel wave8 FINAL, IDW11 residual 복원→2 도메인)**: (53) uomconversion cross-dimension UoM 변환 — same-dim 순수비율 vs cross-dim은 recorded material density bridge 필수(불가시 422 INCOMPATIBLE_DIMENSIONS), basis+versioned, 멱등 byte-identical; V067 / (54) divisibility per-material INTEGER_ONLY(분수 422 거부 — 반올림 아님, orderquantization 대척) vs FRACTIONAL(max-scale 422); V068. testUomConversion/testDivisibility GREEN. 앵커 NIST SP 811 §7 / APICS UoM. **→ P1 54/54 (100%) 도달.**
 
 ## P2 — verification escapes (검증 체계 자체의 갭)
 

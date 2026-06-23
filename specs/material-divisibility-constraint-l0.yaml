@@ -1,0 +1,117 @@
+version: "0.1.0"
+scope: "material-divisibility-constraint-l0 — the per-material INTEGER-VS-FRACTIONAL DIVISIBILITY CONSTRAINT (a recorded, versioned divisibility policy per material + a deterministic quantity check that REJECTS — never rounds — a quantity the policy forbids). A MaterialDivisibilityPolicy declares, per material, a divisibility policy: INTEGER_ONLY (the material may be transacted only in whole units — a discrete item, a motor, a license) or FRACTIONAL (any positive amount is allowed, bounded by a maximum decimal scale — bulk liquid, powder, sheet stock). The system MUST (1) RECORD the policy as a versioned per-material property — a new declaration for an already-declared material APPENDS a new policy version (the prior version is retained, never overwritten), so the policy in force at any check is reconstructible; (2) REJECT a quantity whose fractional part is non-zero against an INTEGER_ONLY material with 422 NON_INTEGRAL_QUANTITY naming the material — it MUST NOT silently round the quantity to a whole unit (rounding-up-to-a-multiple is the DISTINCT order-multiple-quantization domain's job; THIS constraint rejects, it does not quantize); (3) REJECT a quantity whose decimal scale exceeds the FRACTIONAL material's recorded maximum scale with 422 EXCESS_PRECISION (a quantity carrying more precision than the material's unit of measure admits is unrepresentable) — and accept a quantity at or under the max scale; (4) be DETERMINISTIC — integrality is tested by BigDecimal.stripTrailingZeros (scale <= 0 after stripping, equivalently remainder mod ONE compares 0), so 5, 5.0 and 5.00 are all integral and 5.5 is not, independent of how the client formatted the literal; (5) RECORD every quantity check as an immutable check record carrying the material, the submitted quantity, the verdict (ACCEPTED / NON_INTEGRAL / EXCESS_PRECISION), and the policy VERSION in force at the time of the check, so the basis of any acceptance or rejection is reconstructible. The IDW11 manufacturing/ERP dogfood found the catalog modeled NON-CONSERVING round-up-to-a-lot-multiple (order-multiple-quantization) but had NO primitive for the prior, orthogonal question every item master answers first: MAY this material carry a fractional quantity at all, and if so to what precision — a REJECT-not-round divisibility gate. Realized by the divisibility reference workload (com.ax.template.authblueprint.divisibility). Recurs in: ERP item-master / unit-of-measure setup, warehouse / WMS receiving, procurement, manufacturing BOM explosion, point-of-sale (each vs weighed goods) — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only versioned policy rows with uq(material_ref, policy_version) + immutable check records + @Version optimistic + @Check backstops) + deterministic BigDecimal integrality/scale test (stripTrailingZeros) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "CWE-682 (Incorrect Calculation — the integrality test must be exact, not a lossy round) + CWE-1339 (Insufficient Precision or Accuracy of a Real Number — a quantity carrying more fractional precision than the material's unit admits) + the discrete-vs-continuous variable distinction (a discrete quantity takes only countable/integer values; a continuous quantity takes any value between two values) the INTEGER_ONLY / FRACTIONAL policy generalizes + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW11-G17 per-material integer-vs-fractional divisibility; built 2026-06-24 — BACKLOG P1-54"
+
+# OPT-IN material-divisibility-constraint catalog. The divisibility gap: the
+# catalog models the round-UP-to-a-lot-multiple quantizer (order-multiple-
+# quantization) but never the PRIOR question — may this material be transacted
+# in a fractional amount at all, and to what precision? This is a REJECT gate,
+# the deliberate opposite of a quantizer: it never rounds, it refuses.
+# Generic; the ERP/WMS/POS framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. DIV-INTEGRAL-001    (the primitive — INTEGER_ONLY rejects any fractional quantity 422, names the material, NEVER rounds)
+#   2. DIV-PRECISION-001   (FRACTIONAL enforces a max decimal scale; excess precision is 422, within-scale accepts)
+#   3. DIV-POLICY-001      (the policy is a RECORDED, versioned per-material property — a re-declaration appends a version)
+#   4. DIV-RECORD-001      (every quantity check records an immutable check record carrying the policy VERSION in force)
+#   5. DIV-DETERMINISM-001 (integrality tested by BigDecimal.stripTrailingZeros — 5 == 5.0 == 5.00 integral; format-independent)
+
+# ── Composition note (DISTINCT from order-multiple-quantization) ──
+# This domain REJECTS; order-multiple-quantization ROUNDS. order-multiple-
+# quantization (orderQuantity = max(MOQ, ceil(required / multiple) * multiple))
+# takes a required net quantity and rounds it UP to the next placeable lot,
+# recording the non-conserving overage — it CHANGES the number. THIS domain
+# never changes the number: an INTEGER_ONLY material with a fractional quantity
+# is a 422 NON_INTEGRAL_QUANTITY (rounding it would be the quantizer's job, and
+# would silently corrupt the requirement), and a FRACTIONAL material with a
+# quantity above its max scale is a 422 EXCESS_PRECISION. The two compose: a
+# system asks divisibility FIRST (is this quantity even representable for this
+# material?) and quantizes SECOND (round the representable requirement up to a
+# lot). DISTINCT also from variance-tolerance-band (a magnitude gate, not a
+# representability gate) and state-conditional-mutability (a lifecycle gate).
+# DivisibilityCheck rows are @AggregateMember of MaterialDivisibilityPolicy:
+# root-JPQL reads + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state
+# from birth). The max-scale and the policy set (INTEGER_ONLY / FRACTIONAL) are
+# a fork-receiver swap behind the GOVERNANCE contract (reject-not-round +
+# recorded versioned policy + recorded check basis + deterministic integrality).
+
+items:
+  - id: "DIV-INTEGRAL-001"
+    chapter: "An INTEGER_ONLY material rejects any quantity with a non-zero fractional part — 422, naming the material; it is NEVER silently rounded"
+    verification:
+      mechanism: rule
+      ref: material-divisibility-reject-not-round-integer-vs-fractional
+    requirement: "Checking a quantity against a material whose divisibility policy is INTEGER_ONLY MUST REJECT any quantity whose fractional part is non-zero, returning 422 (NON_INTEGRAL_QUANTITY) whose detail NAMES the material. The system MUST NOT silently round, truncate, or quantize the quantity to a whole unit — rounding a requirement up to a placeable lot multiple is the DISTINCT order-multiple-quantization domain's job; THIS constraint rejects an unrepresentable quantity, it does not change it. A whole-unit quantity (e.g. 3, or equivalently 3.0 / 3.00) against an INTEGER_ONLY material MUST be ACCEPTED. The verdict and the policy version in force MUST be recorded."
+    test_method: "RestAssured (declare a material INTEGER_ONLY; check qty 3 → 200 ACCEPTED; check qty 3.00 → 200 ACCEPTED (trailing zeros are integral); check qty 2.5 → 422 NON_INTEGRAL_QUANTITY with the material named in the detail; assert the response does NOT echo a rounded quantity — the submitted 2.5 is rejected, not turned into 3)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (the discrete-vs-continuous variable distinction the
+      INTEGER_ONLY policy generalizes — a discrete quantity takes only countable
+      integer values): "A continuous variable is a variable such that there are
+      possible values between any two values." and the contrasting discrete case:
+      "Common examples are variables that must be integers, non-negative
+      integers, positive integers, or only the integers 0 and 1."
+      (https://en.wikipedia.org/wiki/Continuous_or_discrete_variable)
+      An INTEGER_ONLY material is the discrete case: a fractional quantity is not
+      one of its permissible values, so the gate REJECTS it rather than rounding
+      it onto the nearest permissible value (which would silently corrupt the
+      requirement — CWE-682).
+  - id: "DIV-PRECISION-001"
+    chapter: "A FRACTIONAL material enforces a maximum decimal scale — a quantity carrying more precision than allowed is 422 EXCESS_PRECISION"
+    requirement: "Checking a quantity against a material whose divisibility policy is FRACTIONAL MUST enforce the material's recorded MAXIMUM DECIMAL SCALE: a quantity whose decimal scale (number of fractional digits, after stripping trailing zeros) exceeds the maximum MUST be REJECTED with 422 (EXCESS_PRECISION). A quantity AT or UNDER the maximum scale MUST be ACCEPTED (including a whole quantity, whose scale is 0). The system MUST NOT silently round the quantity down to the allowed scale — it rejects an over-precise quantity, it does not truncate it. A FRACTIONAL material MUST carry a non-negative maximum scale (declared with the policy). The verdict and the policy version in force MUST be recorded."
+    test_method: "RestAssured (declare a material FRACTIONAL maxScale=3; check qty 1.250 → 200 ACCEPTED (stripped scale 2 <= 3); check qty 1.2345 → 422 EXCESS_PRECISION; check qty 5 → 200 ACCEPTED (whole, scale 0); assert the rejected 1.2345 is NOT silently truncated to 1.234 in the response)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-1339, Insufficient Precision or Accuracy of a Real
+      Number — MITRE — the over-precise quantity the max-scale gate refuses):
+      "The product processes a real number with an implementation in which the
+      number's representation does not preserve required accuracy and precision
+      in its fractional part, causing an incorrect result."
+      (https://cwe.mitre.org/data/definitions/1339.html)
+      The material's unit of measure admits only a bounded fractional precision;
+      a quantity carrying more is not representable for that material, so the
+      gate rejects it rather than silently dropping the excess digits.
+  - id: "DIV-POLICY-001"
+    chapter: "The divisibility policy is a RECORDED, versioned per-material property — a re-declaration appends a new version, never overwrites"
+    requirement: "A material's divisibility policy MUST be a RECORDED per-material property: the policy kind (INTEGER_ONLY / FRACTIONAL), and for FRACTIONAL its maximum decimal scale, are persisted against the material reference. Re-declaring the policy for an already-declared material MUST APPEND a NEW policy version (a monotonically increasing per-material version, uq(material_ref, policy_version)); the prior version MUST be retained, never overwritten — so the policy in force at any past check is reconstructible. A bare policy with no recorded basis (kind, version, declared-at) MUST be unrepresentable."
+    test_method: "RestAssured (declare material M INTEGER_ONLY → version 1; re-declare M FRACTIONAL maxScale=2 → version 2; GET the material's policy history → both versions present in order, version 1 INTEGER_ONLY retained; a check after the re-declaration records version 2; structural: uq(material_ref, policy_version) + @Column(updatable=false) on the version columns)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The versioned policy is the reconstructible basis: a check made under
+      version 1 is judged under version 1's policy, and a later re-declaration to
+      version 2 does not retroactively rewrite that history (the append-only
+      discipline the governed-records and remeasurement-trueup domains taught the
+      catalog).
+  - id: "DIV-RECORD-001"
+    chapter: "Every quantity check is recorded as an immutable check record carrying the verdict and the policy version in force"
+    requirement: "Each quantity check MUST persist an IMMUTABLE check record carrying: the material reference, the submitted quantity (verbatim, not rounded), the VERDICT (ACCEPTED / NON_INTEGRAL / EXCESS_PRECISION), the policy VERSION in force at the time of the check, and the as-of instant. The check record columns MUST be immutable (no update path, no public setter). The submitted quantity MUST be recorded EXACTLY as submitted — a rejected over-precise or fractional quantity is recorded as it was sent, never normalized, so the rejection basis is reconstructible. No delete path may exist anywhere in the domain."
+    test_method: "RestAssured (run an ACCEPTED check and a NON_INTEGRAL check; GET the material's check history → both recorded with their verdict + policy version; the rejected quantity is recorded verbatim; structural: every DivisibilityCheck @Column(updatable=false), no public setter, no delete method in the repository or service)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The check record is the audit trail the rejection rests on: NON_INTEGRAL
+      and EXCESS_PRECISION are not exceptions thrown into the void — each is a
+      recorded verdict against a recorded policy version, so a fork-receiver can
+      reconstruct WHY a quantity was refused.
+  - id: "DIV-DETERMINISM-001"
+    chapter: "Integrality is tested deterministically by BigDecimal.stripTrailingZeros — 5, 5.0 and 5.00 are all integral, independent of literal format"
+    requirement: "The integrality test MUST be DETERMINISTIC and format-independent: a quantity is integral iff, after BigDecimal.stripTrailingZeros, its scale is <= 0 (equivalently its remainder mod ONE compares equal to ZERO). Thus 5, 5.0 and 5.00 are ALL integral (an INTEGER_ONLY material accepts them) and 5.5 is not, regardless of how the client formatted the decimal literal. The decimal SCALE for the EXCESS_PRECISION check MUST likewise be measured AFTER stripTrailingZeros (so 1.250 has effective scale 2, not 3). The test MUST NOT depend on string formatting, locale, or float arithmetic — it is exact BigDecimal arithmetic."
+    test_method: "Structural + RestAssured (against an INTEGER_ONLY material: 5, 5.0, 5.00 all → ACCEPTED; 5.5 → 422 NON_INTEGRAL_QUANTITY; against FRACTIONAL maxScale=2: 1.250 → ACCEPTED (stripped scale 2); 1.255 → 422 EXCESS_PRECISION; the integrality/scale predicate is computed via stripTrailingZeros, not Double parsing or string length)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-682, Incorrect Calculation — MITRE — the exact arithmetic
+      the integrality test must use rather than a lossy float/round):
+      "The product performs a calculation that generates incorrect or unintended
+      results that are later used in security-critical decisions or resource
+      management." (https://cwe.mitre.org/data/definitions/682.html)
+      BigDecimal.stripTrailingZeros gives an EXACT, format-independent integrality
+      and scale test; a Double parse or a string-length heuristic would be the
+      incorrect calculation CWE-682 warns against (0.1 + 0.2 != 0.3 in binary
+      floating point).

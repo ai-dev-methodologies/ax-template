@@ -103,6 +103,12 @@ public class SecurityConfig {
                 // periods — readings supersede append-only, runs version with their basis,
                 // closed-period corrections post forward as net-delta true-ups.
                 .requestMatchers("/api/trueup/**").authenticated()
+                // UOMCONVERSION (dimensional-uom-conversion-l0): cross-dimension 변환은 material
+                // density bridge + dimensional-compatibility 전제(불가시 422), basis 기록.
+                .requestMatchers("/api/uom-conversion/**").authenticated()
+                // DIVISIBILITY (material-divisibility-constraint-l0): INTEGER_ONLY 자재의 분수 수량은
+                // 422 거부(반올림 아님), FRACTIONAL은 max-scale 강제.
+                .requestMatchers("/api/divisibility/**").authenticated()
                 // INPUTPLAUSIBILITY — 자가보고 server-unverifiable 입력 plausibility(범위·변화율 + unverified provenance 기록)
                 .requestMatchers("/api/input-plausibility/**").authenticated()
                 // CALENDARDEADLINE — 법정기한 calendar vs business-day 산술(주말/공휴일 제외 + roll + versioned holidays)

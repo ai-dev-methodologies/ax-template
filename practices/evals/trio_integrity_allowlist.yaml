@@ -35,6 +35,8 @@ domains:
   dunning-collections: backend_only # P1-20~23: overdue-receivable collections lifecycle (one-way exactly-once notice ladder + recorded aging bucket + cure-period grace); no UI in scope
   settlement-finality: backend_only # P1-24~27: post-trade DvP + novation + irrevocable finality + fail-ladder; no UI in scope
   authorization-parity: backend_only # P1-5/6/36: executed-matches-authorized parity hash + four-eyes signoff + positive companion gates; no UI in scope
+  dimensional-uom-conversion: backend_only # P1-53: cross-dimension UoM 변환 + density bridge + compatibility 전제; no UI
+  material-divisibility-constraint: backend_only # P1-54: per-material 정수전용/분수 divisibility 거부(round 아님); no UI
   self-reported-input-plausibility: backend_only # P1-42: 자가보고 입력 plausibility 게이트 + unverified provenance; no UI
   business-day-deadline-arithmetic: backend_only # P1-51: calendar/business-day 기한 산술 + versioned holidays; no UI
   order-multiple-quantization: backend_only # P1-52: 비보존 MOQ/lot-size round-up quantization; no UI

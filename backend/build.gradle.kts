@@ -187,6 +187,18 @@ tasks.register<Test>("testTrueUp") {
     }
 }
 
+tasks.register<Test>("testUomConversion") {
+    useJUnitPlatform {
+        includeTags("UOMCONVERSION")
+    }
+}
+
+tasks.register<Test>("testDivisibility") {
+    useJUnitPlatform {
+        includeTags("DIVISIBILITY")
+    }
+}
+
 tasks.register<Test>("testInputPlausibility") {
     useJUnitPlatform {
         includeTags("INPUTPLAUSIBILITY")

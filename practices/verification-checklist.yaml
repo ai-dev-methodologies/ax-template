@@ -230,6 +230,12 @@ checklist:
       - command: "./gradlew testTrueUp"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testUomConversion"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testDivisibility"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testInputPlausibility"
         working_directory: "backend"
         expected_exit: 0
