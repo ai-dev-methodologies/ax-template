@@ -103,6 +103,12 @@ public class SecurityConfig {
                 // periods — readings supersede append-only, runs version with their basis,
                 // closed-period corrections post forward as net-delta true-ups.
                 .requestMatchers("/api/trueup/**").authenticated()
+                // QUERYGUARD (query-field-allowlist-l0): sort/filter params validated against a
+                // per-resource allowlist — non-allowlisted field rejected (no injection/enumeration).
+                .requestMatchers("/api/query-guard/**").authenticated()
+                // SENSITIVEACCESS (sensitive-read-audit-l0): reading a sensitive field records an
+                // append-only access log (who/when/what/purpose) before returning the value.
+                .requestMatchers("/api/sensitive-access/**").authenticated()
                 // REPRODUCIBILITY — auditable deterministic procedures — seeded replayable draw + version-pinned classification + role-blinded fields
                 .requestMatchers("/api/reproducibility/**").authenticated()
                 // MANDATE — one directive fans out to N tasks (conserved recall) + multi-check battery + deemed-election sweep

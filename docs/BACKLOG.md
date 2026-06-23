@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 54 | 40 | 74% |
+| P1 (generic signature backlog) | 54 | 42 | 78% |
 | P2 (verification escapes) | 11 | 3 | 27% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **69** | **~57%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **71** | **~58%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -143,11 +143,12 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       cycle-safe, ascending-id lock order. 8-thread confirm race keystone. V045,
       testRecordLinkage GREEN.
 - [x] P1-36 IDW16-G12/G13 positive-gates — **closed 2026-06-16 (authzparity)**: 액션이 필수 동반 게이트 집합을 선언, 전 게이트 satisfied 기록 전엔 집행 불가(422) — missing companion은 executed-불가
-- [ ] P1-38 IDW8 filter/sort field-allowlist (정렬·필터 파라미터 화이트리스트 — 보안 후속)
+- [x] P1-38 — **closed 2026-06-16 (wave4, queryguard 도메인)**: 리소스별 sort/filter 필드 allowlist(public→internal 매핑) — 비-allowlist 필드 422(필드 명명), 닫힌 direction/operator enum, raw 필드/SQL이 Sort.by·쿼리에 도달 불가. 앵커 OWASP API3:2023 + CWE-89/639.
 
 **dispatch/예약 계열 (IDW9 잔여)**
 - [x] P1-39~41 — **closed 2026-06-16 (parallel wave2/3), timedoffer 도메인**: timed-offer(deadline까지 OPEN, @Lazy-self sweep로 EXPIRED exactly-once) + exclusive-assignment(subject당 최대1 ACCEPTED, 동시 accept 1승 409, uq backstop) + re-offer ladder(append-only, prior 참조). V055, testTimedOffer 14/14. 기존 dispatch 패키지 무수정.
-- [ ] P1-42 IDW9-G11 / P1-43 G12 / P1-44 G13 / P1-45 G16 (timed-offer 일반화 잔여 4건)
+- [x] P1-43 — **closed 2026-06-16 (wave4, sensitiveaccess 도메인)**: @SensitiveField read는 반환 전 append-only access log(누가/언제/무엇/목적) 기록 — @Phi에서 분리한 generic read-audit, 무기록 reveal 불가. 앵커 NIST SP 800-53 AU-2/AU-3.
+- [ ] P1-42 IDW9-G11 / P1-44 G13 / P1-45 G16 (timed-offer/dispatch 일반화 잔여 3건)
       (timed-offer 일반화 잔여 7건 — 상세는 IDW9 세션 기록)
 
 **IDW11/12/17 미명명 잔여 (이름 복원 필요 — 차기 정리 시 세분화)**

@@ -35,6 +35,8 @@ domains:
   dunning-collections: backend_only # P1-20~23: overdue-receivable collections lifecycle (one-way exactly-once notice ladder + recorded aging bucket + cure-period grace); no UI in scope
   settlement-finality: backend_only # P1-24~27: post-trade DvP + novation + irrevocable finality + fail-ladder; no UI in scope
   authorization-parity: backend_only # P1-5/6/36: executed-matches-authorized parity hash + four-eyes signoff + positive companion gates; no UI in scope
+  query-field-allowlist: backend_only # P1-38: sort/filter field allowlist (injection/enumeration guard); no UI in scope
+  sensitive-read-audit: backend_only # P1-43: generic sensitive-field read-audit (append-only access log); no UI in scope
   reproducible-procedure: backend_only # P1-7/8/9: seeded replayable draw + version-pinned classification + role-blinding; no UI in scope
   mandate-fanout: backend_only # P1-37/35/31: conserved fan-out recall + multi-check battery + deemed-election; no UI in scope
   valuation-run-projection: backend_only # P1-28/29/30: as-of snapshot + conserving fan-out + rebase-with-history; no UI in scope

@@ -187,6 +187,18 @@ tasks.register<Test>("testTrueUp") {
     }
 }
 
+tasks.register<Test>("testQueryGuard") {
+    useJUnitPlatform {
+        includeTags("QUERYGUARD")
+    }
+}
+
+tasks.register<Test>("testSensitiveAccess") {
+    useJUnitPlatform {
+        includeTags("SENSITIVEACCESS")
+    }
+}
+
 tasks.register<Test>("testReproducibility") {
     useJUnitPlatform {
         includeTags("REPRODUCIBILITY")

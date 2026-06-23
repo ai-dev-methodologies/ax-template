@@ -230,6 +230,12 @@ checklist:
       - command: "./gradlew testTrueUp"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testQueryGuard"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testSensitiveAccess"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testReproducibility"
         working_directory: "backend"
         expected_exit: 0

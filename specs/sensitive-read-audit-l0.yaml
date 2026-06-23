@@ -1,0 +1,91 @@
+version: "0.1.0"
+scope: "sensitive-read-audit-l0 — the generalized SENSITIVE-DATA READ-AUDIT primitive (reading a governed sensitive field is itself an audited event). A SensitiveRecord carries one sensitive datum (a governed identifier / financial / contact value), tagged with the generic @SensitiveField marker. The system MUST (1) on EVERY service read that returns the raw sensitive value, append an IMMUTABLE SensitiveAccessLog row {accessor (Authentication principal), occurredAt (injected Clock), recordRef, fieldName, purpose} in the SAME transaction as — and BEFORE returning — the value: a read path that returns the sensitive value WITHOUT recording the access is the violation this primitive forbids (the reveal-without-record is unrepresentable); (2) expose the record through a NON-PRIVILEGED projection that carries ONLY a masked form of the sensitive value — the raw value is reached only via the audited /reveal path, which REQUIRES a stated non-blank purpose; (3) make the access log QUERYABLE (admin-only) to reconstruct who saw what, when, and why. This GENERALIZES the catalog's audit-on-read off the clinical @Phi annotation (which keys only PHI) to a domain-agnostic @SensitiveField marker — the same audit-on-read obligation attaches the moment a fork-receiver tags any sensitive field, not only health data. The IDW9 dispatch / IDW12 clinical-trials dogfoods found the catalog had read-on-audit ONLY for @Phi (clinical) — there was NO GENERIC 'reading a sensitive field is an audited event' primitive. Realized by the sensitiveaccess reference workload (com.ax.template.authblueprint.sensitiveaccess). Recurs in: PII vaults, payment-card / bank-account stores, KYC identifier stores, HR compensation records, any regulated-identifier custody — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only access-log rows, NO delete path + @Column(updatable=false) immutable columns + @Version optimistic on the record) + injected java.time.Clock (the recorded occurredAt basis) + RFC 9457 Problem Details + Micrometer bounded-cardinality counters + the generic @SensitiveField marker generalizing common/@Phi"
+standard: "NIST SP 800-53 Rev 5 AU-2 (Event Logging) + AU-3 (Content of Audit Records — what an audit record must establish: type/when/where/source/outcome/identity) + AC-6 (Least Privilege — masked non-privileged projection, raw value only via the audited purpose-stated path) + ISO/IEC 27001:2022 A.8.15 (Logging) + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW9-G12 generic sensitive-data read-audit (lift off @Phi) + IDW12 sibling; built 2026-06-23 — BACKLOG P1-43"
+
+# OPT-IN sensitive-read-audit catalog. The read-audit-generality gap: the catalog
+# audits PHI reads (audit_on_read_guard keys on the CLINICAL @Phi tag) but has NO
+# generic primitive for 'reading any sensitive field is itself an audited event'.
+# A PII vault, a payment-card store, or a KYC identifier store needs the SAME
+# audit-on-read discipline but carries no PHI. Generic; the vault/card/KYC framings
+# are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. SENSITIVE-READ-001    (the primitive — every raw-value service read appends an immutable access-log row in the same tx, BEFORE returning)
+#   2. SENSITIVE-MASK-001    (the non-privileged projection masks the value; raw is reached only via the audited /reveal path)
+#   3. SENSITIVE-PURPOSE-001 (the /reveal path REQUIRES a stated non-blank purpose; a blank/absent purpose is 422)
+#   4. SENSITIVE-QUERY-001   (keystone — the access log is admin-queryable to reconstruct who saw what, when, and why; append-only, no delete)
+
+# ── Composition note ──
+# DISTINCT from the clinical audit-on-read (common/@Phi + audit_on_read_guard,
+# which keys ONLY health data and wires AuditLogService.record), data-subject-rights
+# (access/erase/portability over personal data — no per-read audit), and
+# session-management (who is logged in — not what sensitive field they read).
+# SensitiveAccessLog rows are @AggregateMember of SensitiveRecord: root-JPQL reads
+# + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth). The
+# @SensitiveField marker is the domain-agnostic generalization of common/@Phi:
+# the same WHO/WHEN/WHAT/WHY audit record AU-3 demands attaches to any tagged
+# field, not only PHI. A fork-receiver swaps the masked projection (last-4, hash,
+# fixed-asterisks) without touching the GOVERNANCE contract (record-before-return +
+# purpose-required + append-only queryable log) the catalog claims.
+
+items:
+  - id: "SENSITIVE-READ-001"
+    chapter: "Reading the raw sensitive value through the service is itself an audited event — an immutable access-log row is appended in the same tx, BEFORE the value is returned"
+    verification:
+      mechanism: rule
+      ref: sensitive-read-audit-record-before-return-mask-and-purpose
+    requirement: "Every service read that returns the RAW value of a @SensitiveField MUST append an IMMUTABLE SensitiveAccessLog row recording the accessor (the Authentication principal — never a body/path param), the occurredAt instant (from the injected Clock), the recordRef, the fieldName read, and the stated purpose — in the SAME @Transactional method as, and BEFORE, the value is returned. A read path that returns the raw sensitive value WITHOUT writing the access-log row MUST be unrepresentable: the reveal and the record are one transaction (if the record write fails the read rolls back). The log row columns MUST be @Column(updatable=false); NO delete path exists on the record or the log. This is AU-3 content-of-audit-records (what / when / who) made structural."
+    test_method: "RestAssured (reveal a record's sensitive value → 200 with the raw value AND a new access-log row recording accessor=caller + occurredAt + recordRef + fieldName + purpose; a second reveal appends a second row — append-only; structural: SensitiveAccessLog columns @Column(updatable=false), no delete method anywhere, the service reveal method writes the log via MemberWriter before returning)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-53 Rev 5 AU-3, Content of Audit Records — what
+      an audit record must establish): "Ensure that audit records contain
+      information that establishes the following: a. What type of event
+      occurred; b. When the event occurred; c. Where the event occurred; d.
+      Source of the event; e. Outcome of the event; and f. Identity of any
+      individuals, subjects, or objects/entities associated with the event."
+      (https://csf.tools/reference/nist-sp-800-53/r5/au/au-3/) The access-log row
+      records the event type (REVEAL), when (occurredAt from the injected Clock),
+      who (accessor = Authentication principal), what (recordRef + fieldName),
+      and why (purpose).
+  - id: "SENSITIVE-MASK-001"
+    chapter: "The non-privileged projection masks the sensitive value; the raw value is reached ONLY via the audited /reveal path"
+    requirement: "The default (non-privileged) projection of a SensitiveRecord MUST carry only a MASKED form of the sensitive value (e.g. last-4 / fixed-asterisks) — the raw value MUST NOT appear in the default GET response. The raw value MUST be reachable ONLY through the dedicated /reveal path, which is the path that writes the access-log row (SENSITIVE-READ-001). Listing or getting the record without revealing MUST NOT write an access-log row (a mask read is not a sensitive read) and MUST NOT leak the raw value. This realizes least privilege (AC-6): only the explicit, audited, purpose-stated access reaches the raw datum."
+    test_method: "RestAssured (GET a record → masked value only, raw value absent, NO new access-log row; POST /reveal → raw value present AND an access-log row written; the masked projection never equals the raw value for a non-trivial datum)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-53 Rev 5 AC-6, Least Privilege): "Employ the
+      principle of least privilege, allowing only authorized accesses for users
+      (or processes acting on behalf of users) that are necessary to accomplish
+      assigned organizational tasks."
+      (https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-6/) The masked default
+      projection is the least-privilege surface; the raw value is the
+      authorized-access-only surface reached through the audited /reveal path.
+  - id: "SENSITIVE-PURPOSE-001"
+    chapter: "The /reveal path REQUIRES a stated non-blank purpose — a blank or absent purpose is a 422"
+    requirement: "Revealing the raw sensitive value MUST require a STATED non-blank purpose recorded on the access-log row (AU-2 — the rationale/why for the access). A reveal request with a blank, whitespace-only, or absent purpose MUST be rejected 422 (SENSITIVE_PURPOSE_REQUIRED) and MUST NOT write an access-log row or return the raw value. The recorded purpose makes the log reconstructible to WHY each access happened, not only who/when."
+    test_method: "RestAssured (reveal with a stated purpose → 200 + the purpose recorded on the access-log row; reveal with a blank/whitespace purpose → 422 SENSITIVE_PURPOSE_REQUIRED, no row written, no value returned)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-53 Rev 5 AU-2, Event Logging — the rationale
+      requirement the recorded purpose generalizes): "Provide a rationale for why
+      the event types selected for logging are deemed to be adequate to support
+      after-the-fact investigations of incidents."
+      (https://csf.tools/reference/nist-sp-800-53/r5/au/au-2/)
+  - id: "SENSITIVE-QUERY-001"
+    chapter: "Keystone — the access log is admin-queryable to reconstruct who saw what, when, and why; append-only, never deleted"
+    requirement: "The SensitiveAccessLog MUST be QUERYABLE by an administrator (ROLE_ADMIN) to reconstruct, for any record, the full append-only trail of who accessed the raw sensitive value, when, and for what stated purpose. A non-admin caller MUST NOT reach the access-log query (403 / not-authorized). The trail MUST be append-only — across the keystone there is NEVER a delete path and the log preserves one row per reveal in occurredAt order. A record that was revealed N times MUST show exactly N access-log rows."
+    test_method: "RestAssured/admin (reveal a record 3 times with distinct purposes → admin GET /access-log shows exactly 3 rows in occurredAt order, each with accessor + occurredAt + fieldName + purpose; a MEMBER caller GET /access-log → 403/forbidden; structural: no delete method on the record repository)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-53 Rev 5 AU-3 again — the reconstructible record):
+      the admin query reads back the WHO/WHEN/WHAT/WHY each AU-3 row established,
+      so an after-the-fact investigation can reconstruct every access to the raw
+      sensitive datum. ISO/IEC 27001:2022 A.8.15 (Logging) is the ISO companion.

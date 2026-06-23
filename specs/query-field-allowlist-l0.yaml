@@ -1,0 +1,102 @@
+version: "0.1.0"
+scope: "query-field-allowlist-l0 — the generalized SAFE LIST/SEARCH QUERY SURFACE (a per-resource allowlist of the EXACT field names a caller may sort or filter on, mapping each PUBLIC field name to an internal entity property, restricting sort direction and filter operator to a closed safe set, and rejecting any non-allowlisted field by NAME — never silently ignoring it, never forwarding it). A list/search endpoint that accepts client-supplied SORT and FILTER field names and forwards them unchecked into a JPA Sort / Specification / query string is three vulnerabilities at once: (a) an INJECTION vector when the field name is interpolated into a query (CWE-89); (b) a FIELD-ENUMERATION / property-probing vector — a caller can sort/filter on `password`, `internalNotes`, or any private property to infer or order by data the API never meant to expose (OWASP API3:2023 Broken Object Property Level Authorization); (c) an IDOR-flavoured ACCESS vector when the probed field is a foreign key a caller controls (CWE-639). The primitive a reusable QueryFieldAllowlist component provides: a resource declares ONE allowlist binding {public-name → internal-property} for the fields it permits sorting on and the fields it permits filtering on, with the allowed sort directions (asc/desc) and the allowed filter operators (a closed enum: eq/ne/gt/gte/lt/lte/like). Any sort/filter param naming a field NOT in the relevant allowlist is rejected with a 422 that NAMES the offending field (QUERY_FIELD_NOT_SORTABLE / QUERY_FIELD_NOT_FILTERABLE); any disallowed direction or operator is rejected the same way. The list response is a bounded PageEnvelope. The IDW8 fintech-ledger dogfood (2026-06-01) deferred this as a security follow-up: filter/sort field-allowlist hardening — the catalog had pagination (PageEnvelope/OffsetPageSupport) and a stable-sort tiebreaker but NO primitive that bounds WHICH fields a client may name. Realized by the query-guard reference workload (com.ax.template.authblueprint.queryguard) over a demonstrating CatalogItem resource. Recurs in: any admin/data-table list API, search result sorting, faceted-filter UIs, report query builders, GraphQL/REST filter params — every list endpoint that lets the client pick the sort/filter column."
+stack: "Spring Boot 3.2.x + Spring Data JPA (Sort built ONLY from an allowlisted internal property + Specification built ONLY from an allowlisted property/operator pair — never from a raw client string) + a reusable QueryFieldAllowlist value component (public→internal field map + allowed directions + allowed operators) + bounded PageEnvelope offset pagination + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "OWASP API Security Top 10 — API3:2023 Broken Object Property Level Authorization (cherry-pick exposed properties; do not bind arbitrary client input to object properties) + CWE-89 (Improper Neutralization of Special Elements used in an SQL Command — a client-named sort/filter column interpolated into a query) + CWE-639 (Authorization Bypass Through User-Controlled Key — a user-controlled field name as a record/property key) + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW8 fintech-ledger deferred security follow-up (filter/sort field-allowlist) + IDW8 arc backlog; built 2026-06-23 — BACKLOG P1-38"
+
+# OPT-IN query-field-allowlist catalog. The list-surface gap: the catalog
+# bounds page SIZE (pagination-l0) and appends a stable-sort tiebreaker
+# (PAGE-STABLE-SORT-001) but never bounds WHICH field a client may name in a
+# sort or filter param — so a hand-rolled list endpoint that passes the
+# client's `sort=` / `filter=` straight into Sort.by(...) or a Specification
+# is an injection + property-enumeration + IDOR surface. Generic; the
+# admin-table / search / report-builder framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. QUERY-ALLOWLIST-SORT-001    (a sort field MUST be in the resource's sortable allowlist; direction asc/desc only; else 422)
+#   2. QUERY-ALLOWLIST-FILTER-001  (a filter field MUST be in the resource's filterable allowlist; operator in a closed safe set; else 422)
+#   3. QUERY-ALLOWLIST-MAPPING-001 (the allowlist maps the PUBLIC field name to the internal entity property — internal names never leak, arbitrary properties unprobeable)
+#   4. QUERY-ALLOWLIST-PAGE-001    (the list response is a bounded PageEnvelope — never an unbounded list)
+#   5. QUERY-ALLOWLIST-KEYSTONE-001 (keystone — a malicious sort/filter field ('password', 'internalNotes', a SQL fragment) → 422 named-field rejection, never a pass-through)
+
+# ── Composition note ──
+# COMPOSES pagination-l0 (PageEnvelope bounds the page; OffsetPageSupport bounds
+# the size) — query-field-allowlist adds the missing FIELD bound. DISTINCT from
+# caching/search (those scope tenant rows; this bounds the queryable column set)
+# and from authorization-parity (which re-hashes executed-vs-authorized params;
+# this rejects a param naming a field outside a static allowlist BEFORE any
+# query is built). QueryFieldAllowlist is a stateless value component (no entity,
+# no repository of its own) bound per resource; CatalogItem is the demonstrating
+# resource whose four exposed fields (name, createdAt, status, priceMinor) are
+# the only sortable/filterable surface — every other property is unrepresentable
+# in a sort/filter param by construction.
+
+items:
+  - id: "QUERY-ALLOWLIST-SORT-001"
+    chapter: "A sort field must be in the resource's sortable allowlist; direction restricted to asc/desc; else 422 named-field"
+    verification:
+      mechanism: rule
+      ref: query-field-allowlist-sort-filter-bound
+    requirement: "A list/search endpoint that accepts a client-supplied sort field MUST validate the field name against the resource's SORTABLE allowlist BEFORE building any Spring Data Sort. A sort param naming a field NOT in the allowlist MUST be rejected with 422 (QUERY_FIELD_NOT_SORTABLE) whose detail NAMES the offending field — never silently ignored, never defaulted to a different column, and never passed through to Sort.by(rawClientString). The sort DIRECTION MUST be restricted to a closed set {asc, desc}; any other direction is rejected the same way (QUERY_DIRECTION_INVALID). The Sort is built ONLY from the internal property the allowlist maps the public field to, so a raw client string can never reach Sort.by(...)."
+    test_method: "RestAssured (sort=name asc → 200 sorted; sort=createdAt desc → 200; sort=password → 422 QUERY_FIELD_NOT_SORTABLE naming 'password'; sort=name with direction 'sideways' → 422 QUERY_DIRECTION_INVALID; structural: the controller never calls Sort.by on a raw request param)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (OWASP API3:2023 Broken Object Property Level Authorization —
+      the cherry-pick discipline the allowlist generalizes to the query surface):
+      "When exposing an object using an API endpoint, always make sure that the
+      user should have access to the object's properties you expose."
+      (https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/)
+  - id: "QUERY-ALLOWLIST-FILTER-001"
+    chapter: "A filter field must be in the resource's filterable allowlist; operator restricted to a closed safe set; else 422 named-field"
+    verification:
+      mechanism: rule
+      ref: query-field-allowlist-sort-filter-bound
+    requirement: "A list/search endpoint that accepts a client-supplied filter (field, operator, value) MUST validate the field name against the resource's FILTERABLE allowlist BEFORE building any predicate. A filter param naming a field NOT in the allowlist MUST be rejected with 422 (QUERY_FIELD_NOT_FILTERABLE) whose detail NAMES the offending field. The filter OPERATOR MUST be restricted to a closed safe set {eq, ne, gt, gte, lt, lte, like}; an unrecognized operator is rejected (QUERY_OPERATOR_INVALID). The predicate MUST be built ONLY from the internal property the allowlist maps the public field to and a parameter-bound value (never a string concatenated into a query), so a SQL fragment in the field name cannot reach the query (CWE-89)."
+    test_method: "RestAssured (filter=status:eq:ACTIVE → 200 filtered; filter=internalNotes:eq:x → 422 QUERY_FIELD_NOT_FILTERABLE naming 'internalNotes'; filter=name:DROP TABLE:x → 422 QUERY_OPERATOR_INVALID; a SQL-fragment field name → 422 QUERY_FIELD_NOT_FILTERABLE, never executed)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-89 — a client-named sort/filter column interpolated into
+      a query): "The product constructs all or part of an SQL command using
+      externally-influenced input from an upstream component, but it does not
+      neutralize or incorrectly neutralizes special elements that could modify
+      the intended SQL command when it is sent to a downstream component."
+      (https://cwe.mitre.org/data/definitions/89.html)
+  - id: "QUERY-ALLOWLIST-MAPPING-001"
+    chapter: "The allowlist maps the PUBLIC field name to the internal entity property — internal column names never leak, arbitrary properties unprobeable"
+    requirement: "The allowlist binding MUST map a PUBLIC field name (the name a client uses) to the INTERNAL entity property (the name the persistence layer uses). The endpoint MUST accept ONLY public names and translate to the internal property internally, so (a) internal property/column names are never required from or revealed to the client, and (b) a client cannot probe an arbitrary entity property by guessing its internal name — only the declared public names resolve. A public name with no internal mapping is treated as not-allowlisted (422)."
+    test_method: "RestAssured (sort=name maps to the internal property and sorts correctly; a request naming the internal property directly when it differs from the public name → 422 not-sortable; the 422 detail names only the public field the client sent)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-639 — a user-controlled field name as a record/property
+      key): "The system's authorization functionality does not prevent one user
+      from gaining access to another user's data or record by modifying the key
+      value identifying the data."
+      (https://cwe.mitre.org/data/definitions/639.html)
+  - id: "QUERY-ALLOWLIST-PAGE-001"
+    chapter: "The list response is a bounded PageEnvelope — never an unbounded list"
+    requirement: "The list/search response MUST be the canonical bounded PageEnvelope {data, pagination:{page,pageSize,totalElements,totalPages,hasMore}} (pagination-l0 PAGE-OFFSET-001), with the page size clamped to a bounded maximum (OffsetPageSupport / PAGE-LIMIT-001). The endpoint MUST NEVER return an unbounded list, and the stable-sort tiebreaker (PAGE-STABLE-SORT-001) MUST be applied so pages do not skip/duplicate rows."
+    test_method: "RestAssured (a list call returns the {data, pagination} envelope with the five pagination members; an oversized page size is clamped/rejected; the default order is stable)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Composes pagination-l0 — PageEnvelope.from(page, mapper) + OffsetPageSupport.clamp/stableSort.
+      query-field-allowlist adds the FIELD bound the page primitive lacked.
+  - id: "QUERY-ALLOWLIST-KEYSTONE-001"
+    chapter: "Keystone — a malicious sort/filter field ('password', 'internalNotes', a SQL fragment) → 422 named-field rejection, never a pass-through"
+    requirement: "Across ANY client-supplied sort or filter naming a field outside the resource's allowlist — a private property ('password'), an internal-only field ('internalNotes'), or a SQL fragment ('name; DROP TABLE catalog_items') — the endpoint MUST reject the request with a 422 whose detail names the offending field, and MUST NOT execute the query, build a Sort/Specification from the raw string, or fall back to a default that silently honours a different column. The rejection MUST happen BEFORE any persistence access."
+    test_method: "Keystone proof (sort=password → 422 QUERY_FIELD_NOT_SORTABLE; filter=internalNotes:eq:x → 422 QUERY_FIELD_NOT_FILTERABLE; sort with an embedded SQL fragment → 422, query never executed; each 422 names the offending field; no 200/empty-list pass-through for any of them)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (OWASP API3:2023 — the prevention discipline): "Keep returned
+      data structures to the bare minimum, according to the business/functional
+      requirements for the endpoint."
+      (https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/)
+      The allowlist makes the queryable column set the bare minimum: a field the
+      resource did not declare sortable/filterable is unrepresentable in a
+      sort/filter param, so the injection / enumeration / IDOR surface is closed
+      by construction, not by neutralizing a dangerous string after the fact.
