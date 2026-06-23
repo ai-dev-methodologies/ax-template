@@ -1,0 +1,102 @@
+version: "0.1.0"
+scope: "self-reported-input-plausibility-l0 — the generalized PLAUSIBILITY GATE for SELF-REPORTED, SERVER-UNVERIFIABLE INPUT. A self-reported value is one the server CANNOT independently verify against an authoritative source: a claimed GPS location, a self-declared utility meter reading, a self-reported odometer/quantity, a self-attested task completion. Such a value MUST NOT be trusted as authoritative — it is run through deterministic PLAUSIBILITY checks and RECORDED as self-reported-unverified together with the checks that ran, so a downstream consumer always knows its provenance is unverified rather than server-confirmed. A PlausibilityChannel pins the plausible bounds (a configured min/max) and the rate-of-change limit (a max delta per elapsed second) for one kind of self-reported value. A submission against the channel: (1) RANGE — the reported value MUST lie within [min, max] else 422 IMPLAUSIBLE_RANGE; (2) RATE-OF-CHANGE — the jump from the prior accepted reading over the elapsed time MUST NOT exceed the channel's max delta-per-second else 422 IMPLAUSIBLE_RATE (catches teleport / odometer-rollback / impossible-jump); (3) an accepted reading is PERSISTED with verification_status = SELF_REPORTED_UNVERIFIED (NEVER CONFIRMED) plus the plausibility basis (which checks ran, the prior value, the elapsed seconds, the computed rate) so the unverified provenance travels with the value; (4) an implausible submission is REJECTED and RECORDED (the rejected attempt is auditable, never silently dropped). The IDW9 dispatch/timed-offer dogfood found the catalog modeled exclusive assignment, timed offers, and registers but had NO primitive for the cross-cutting problem every self-service intake faces: accepting a number a user typed that the server cannot check, neither blindly trusting it nor silently discarding it. Realized by the input-plausibility reference workload (com.ax.template.authblueprint.inputplausibility). Recurs in: ride-hail/delivery location claims, utility self-meter-reads, fleet odometer entry, field-service completion attestation, IoT sensor self-report — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only readings + recorded rejected attempts + @Version optimistic + PESSIMISTIC_WRITE channel-row lock for the prior-reading read/append + @Check backstops) + deterministic plausibility classifier (range bounds + rate-of-change over elapsed time) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "OWASP Input Validation Cheat Sheet (syntactic + SEMANTIC validation — a value's correctness in its specific business context, which is exactly what a plausibility bound is) + CWE-20 (Improper Input Validation) + CWE-1284 (Improper Validation of Specified Quantity in Input — a self-reported quantity/reading whose range or rate is not validated) + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW9-G11 plausibility-gate for self-reported server-unverifiable input; built 2026-06-23 — BACKLOG P1-42"
+
+# OPT-IN self-reported-input-plausibility catalog. The unverifiable-intake gap:
+# the catalog governs decisions, registers, and exclusive assignment but never
+# models the universal problem of a value the user supplies that the server
+# CANNOT independently confirm. The wrong answers are (a) trust it as
+# authoritative (fraud/error propagates) or (b) silently drop it (the attempt
+# vanishes, no audit). The right answer — plausibility-check it, accept it as
+# explicitly UNVERIFIED with its basis, and record the rejected attempts — is
+# what this primitive ships. Generic; the location/meter/odometer framings are
+# anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. PLAUSIBILITY-RANGE-001   (the value within the channel's configured [min, max] else 422 IMPLAUSIBLE_RANGE)
+#   2. PLAUSIBILITY-RATE-001    (delta vs prior accepted value over elapsed time within max rate else 422 IMPLAUSIBLE_RATE)
+#   3. PLAUSIBILITY-PROVENANCE-001 (an accepted reading persists as SELF_REPORTED_UNVERIFIED + the recorded plausibility basis)
+#   4. PLAUSIBILITY-REJECT-001  (an implausible submission is rejected AND recorded — the attempt is auditable)
+#   5. PLAUSIBILITY-CONCURRENT-001 (keystone — concurrent submissions serialize on the channel row; the prior-reading read/append is atomic)
+
+# ── Composition note ──
+# DISTINCT from monotone-register (a register's reads only ever increase and are
+# trusted/authoritative — here the values may move either way and are explicitly
+# UNVERIFIED), from threshold-terminal (a single irreversible crossing — no
+# accept/reject-with-record), and from query-field-allowlist (which validates a
+# field NAME against an allowlist — here we validate a VALUE against a plausible
+# range/rate). The rejected-attempt rows and accepted-reading rows are
+# @AggregateMember of PlausibilityChannel: root-JPQL reads + common/MemberWriter
+# writes (AX-DDD-MEMBER-REPO end-state from birth). The bounds + rate limit are a
+# fork-receiver swap behind the GOVERNANCE contract (range-gate + rate-gate +
+# unverified-provenance + recorded-rejection + serialized intake) the catalog claims.
+
+items:
+  - id: "PLAUSIBILITY-RANGE-001"
+    chapter: "A self-reported value must fall within the channel's configured plausible [min, max] — else 422 IMPLAUSIBLE_RANGE"
+    verification:
+      mechanism: rule
+      ref: self-reported-input-plausibility-range-rate-and-unverified-provenance
+    requirement: "Submitting a self-reported value against a PlausibilityChannel MUST validate the value against the channel's configured plausible bounds: the value MUST satisfy min <= value <= max. A value below min or above max MUST be rejected with 422 (IMPLAUSIBLE_RANGE) and MUST NOT be accepted as a reading. The bounds are pinned on the channel (a configured min/max for that kind of self-reported value, e.g. a plausible odometer range, a plausible meter-reading range), so the same value is plausible on one channel and implausible on another. Because the value is self-reported and server-unverifiable, the range check is a SEMANTIC plausibility bound (a value's correctness in its business context), not a syntactic format check — a syntactically valid number that is physically implausible MUST still be rejected."
+    test_method: "RestAssured (a value inside [min, max] → 201 accepted; a value below min → 422 IMPLAUSIBLE_RANGE; a value above max → 422 IMPLAUSIBLE_RANGE; the rejected value is NOT persisted as a reading)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (OWASP Input Validation Cheat Sheet — syntactic vs SEMANTIC
+      validation, the plausibility bound being semantic): "Input validation
+      should be applied at both syntactic and semantic levels: Syntactic
+      validation should enforce correct syntax of structured fields (e.g. SSN,
+      date, currency symbol). Semantic validation should enforce correctness of
+      their values in the specific business context."
+      (https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html)
+  - id: "PLAUSIBILITY-RATE-001"
+    chapter: "A self-reported value's jump from the prior accepted reading over elapsed time must not exceed the channel's max rate — else 422 IMPLAUSIBLE_RATE"
+    requirement: "When a channel has a prior accepted reading, a new submission MUST validate the RATE OF CHANGE: the absolute delta between the new value and the prior accepted value, divided by the elapsed seconds between the prior reading's recorded instant and now (injected Clock), MUST NOT exceed the channel's configured max delta-per-second. A jump exceeding the rate limit MUST be rejected with 422 (IMPLAUSIBLE_RATE) and MUST NOT be accepted (this is what catches a teleport in a location claim, an odometer rollback or impossible forward jump, an impossible meter spike). The elapsed time MUST be measured from the prior reading's recorded instant to the current Clock instant; a zero-elapsed resubmission of a differing value MUST be treated as an infinite rate and rejected. The FIRST reading on a channel (no prior) is range-checked only — the rate gate is inapplicable with no prior basis."
+    test_method: "RestAssured (first reading accepted on range alone; a small plausible change over enough elapsed time → accepted; a large jump over little elapsed time → 422 IMPLAUSIBLE_RATE; the implausible-rate value is NOT persisted as a reading)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-1284 Improper Validation of Specified Quantity in
+      Input — a self-reported quantity/reading whose range or rate is not
+      validated): "The product receives input that is expected to specify a
+      quantity (such as size or length), but it does not validate or
+      incorrectly validates that the quantity has the required properties."
+      (https://cwe.mitre.org/data/definitions/1284.html)
+  - id: "PLAUSIBILITY-PROVENANCE-001"
+    chapter: "An accepted reading is persisted as SELF_REPORTED_UNVERIFIED with its plausibility basis — never CONFIRMED"
+    requirement: "An accepted reading MUST be persisted with a verification_status of SELF_REPORTED_UNVERIFIED — NEVER a CONFIRMED / server-verified status (the server has no authoritative source to confirm it against). The reading MUST also persist the plausibility BASIS: which checks ran (range, and rate when a prior existed), the prior accepted value (or that there was none), the elapsed seconds, and the computed rate. A downstream consumer reading the value MUST therefore be able to see that its provenance is self-reported-unverified, not server-confirmed, and on what basis it was admitted. A bare value with no recorded verification status and no basis MUST be unrepresentable."
+    test_method: "RestAssured (an accepted reading response carries verificationStatus = SELF_REPORTED_UNVERIFIED and the basis fields: checksRan, priorValue/hadPrior, elapsedSeconds, computedRate; structural: the status column has no CONFIRMED constant and the reading columns are immutable updatable=false)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-20 Improper Input Validation — why an unverifiable input
+      must not be trusted as processed safely): "The product receives input or
+      data, but it does not validate or incorrectly validates that the input has
+      the properties that are required to process the data safely and
+      correctly." (https://cwe.mitre.org/data/definitions/20.html)
+  - id: "PLAUSIBILITY-REJECT-001"
+    chapter: "An implausible submission is rejected AND recorded — the rejected attempt is auditable, never silently dropped"
+    requirement: "A submission rejected by either the range gate or the rate gate MUST be RECORDED as an immutable rejected-attempt row (the channel, the reported value, the reason code IMPLAUSIBLE_RANGE or IMPLAUSIBLE_RATE, the prior value and elapsed/rate basis where applicable, the actor, the instant) BEFORE the 422 is returned. A rejected attempt MUST NOT mutate the channel's accepted-reading state (it does not become the new prior). The rejected attempt MUST be queryable so the rejection is auditable. A silent drop — returning 422 with no recorded attempt — MUST be unrepresentable."
+    test_method: "RestAssured (a range rejection and a rate rejection each create a queryable rejected-attempt row with the correct reason code and the reported value; the channel's prior accepted value is unchanged after a rejection; the rejected-attempt list is append-only)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The recorded rejection is the audit seam — OWASP places input validation
+      "as early as possible in the data flow" and an implausible self-report is
+      a signal worth keeping (fraud detection, calibration), not discarding.
+  - id: "PLAUSIBILITY-CONCURRENT-001"
+    chapter: "Keystone — concurrent submissions serialize on the channel row; the prior-reading read / new-reading append is atomic"
+    requirement: "Across ANY interleaving of concurrent submissions against one channel, the read-prior-reading / evaluate-rate / append-new-reading sequence MUST be serialized on the channel's PESSIMISTIC_WRITE row lock so two submissions cannot both read the same prior and both append (which would let an implausible jump slip through by racing the rate gate) (CWE-362). The channel MUST never end with two accepted readings that each used the same prior as their rate basis when only one could plausibly follow that prior. The accepted readings remain an append-only ordered history; concurrency MUST NOT corrupt the prior-reading pointer the rate gate depends on."
+    test_method: "Concurrency proof (N concurrent submissions of values that are each individually plausible only relative to the original prior → the rate gate is evaluated against a serialized prior so the accepted-reading history stays a consistent ordered chain; no two readings share the same prior basis inconsistently)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent intake race the channel-row lock
+      closes): "The product contains a concurrent code sequence that requires
+      temporary, exclusive access to a shared resource, but a timing window
+      exists in which the shared resource can be modified by another code
+      sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)

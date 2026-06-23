@@ -230,6 +230,15 @@ checklist:
       - command: "./gradlew testTrueUp"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testInputPlausibility"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testCalendarDeadline"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testOrderQuantization"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testAccessGrant"
         working_directory: "backend"
         expected_exit: 0

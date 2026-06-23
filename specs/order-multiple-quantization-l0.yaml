@@ -1,0 +1,107 @@
+version: "0.1.0"
+scope: "order-multiple-quantization-l0 — the generalized NON-CONSERVING MOQ / ORDER-MULTIPLE QUANTIZATION of a required net quantity into a placeable procurement order. A required net quantity (what is actually needed) is quantized UP to the procurement constraints a supplier imposes: a minimum order quantity (MOQ) and an order multiple (lot / pack / case size). The placed orderQuantity = max(MOQ, ceil(required / multiple) * multiple). The system MUST (1) quantize DETERMINISTICALLY by that formula — the result is the smallest placeable quantity that is at least the required amount AND at least the MOQ AND an exact multiple of the order multiple; (2) DELIBERATELY produce orderQuantity >= required and RECORD the excess as overage = orderQuantity - required — this is NON-CONSERVING by design and the excess is NEVER hidden (it is the procurement cost of the lot constraint, the OPPOSITE of the catalog's conserving rounded-split which preserves a total); (3) RECORD the full basis (required, MOQ, multiple, orderQuantity, overage) so the quantization is reconstructible and auditable, never a bare order number; (4) enforce MOQ >= 1 AND order_multiple >= 1 AND required >= 0 as @Check DB backstops; (5) be IDEMPOTENT — the same (required, MOQ, multiple) always yields the same orderQuantity. The IDW11 manufacturing dogfood (transformation-conservation flagship) found the catalog modeled CONSERVING transformations (input == output + classified loss) and CONSERVING rounded-splits (the parts sum to the whole) but had NO primitive for the NON-conserving sibling every procurement / replenishment system runs: rounding a net requirement UP to a supplier's MOQ and lot multiple, where the surplus is real and must be recorded as overage. Realized by the orderquantization reference workload (com.ax.template.authblueprint.orderquantization). Recurs in: manufacturing MRP/replenishment, retail purchase-order generation, pharmaceutical case-pack ordering, wholesale distribution, packaging/case quantization — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (immutable append-only quantization records with @Check positivity backstops + @Version optimistic lock + recorded basis columns) + deterministic long-arithmetic CEILING quantizer (max(MOQ, ceil(required/multiple)*multiple)) + RFC 9457 Problem Details + Micrometer bounded-cardinality counter"
+standard: "FAR 52.207-4 / FAR 7.204 (Economic Purchase Quantity & Economic Order Quantity — the federal-acquisition lot-sizing authority: buying in the quantity at which a price break occurs, the procurement-constraint discipline MOQ/order-multiple quantization generalizes) + APICS/ASCM lot-sizing (fixed-order-quantity / order multiple) + CWE-682 (Incorrect Calculation — the non-conserving ceiling arithmetic must be exact and the overage reconstructible) + RFC 9457 + RFC 9110 §15.5.21 (422 invalid constraint)"
+domain_mode: backend_only
+introduced_at: "IDW11-G6 non-conserving order-multiple / MOQ quantization — the NON-conserving sibling of the conserving rounded-split; built 2026-06-23 — BACKLOG P1-52"
+
+# OPT-IN order-multiple-quantization catalog. The non-conserving-quantization gap:
+# the catalog models conserving transformations (input == output + classified
+# loss) and conserving rounded-splits (parts sum to the whole) but never the
+# NON-conserving procurement quantization where a net requirement is rounded UP
+# to a supplier MOQ + lot multiple and the surplus (overage) is real, recorded,
+# and intentional. Generic; the MRP/retail/pharma framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. ORDERQUANT-QUANTIZE-001   (the primitive — orderQuantity = max(MOQ, ceil(required/multiple)*multiple), deterministic)
+#   2. ORDERQUANT-OVERAGE-001    (NON-conserving by design — orderQuantity >= required; overage = orderQuantity - required is RECORDED, never hidden)
+#   3. ORDERQUANT-BASIS-001      (records the full basis required/MOQ/multiple/orderQuantity/overage so it is reconstructible)
+#   4. ORDERQUANT-CONSTRAINT-001 (MOQ >= 1 AND order_multiple >= 1 AND required >= 0 — @Check DB backstops)
+#   5. ORDERQUANT-IDEMPOTENT-001 (same (required, MOQ, multiple) → same orderQuantity)
+
+# ── Composition note ──
+# This is the deliberate NON-CONSERVING counterpart to the conserving
+# rounded-split / transformation-conservation primitives. A conserving
+# rounded-split apportions a whole so the parts sum back to it (zero net
+# created); a transformation records input == output + classified loss (mass
+# balance). Order-multiple quantization does the OPPOSITE on purpose: it
+# CREATES surplus (orderQuantity > required) because the supplier's lot
+# constraint cannot be subdivided, and that surplus is the recorded overage —
+# the procurement cost of the MOQ/multiple. The rule prose MUST state it does
+# NOT conserve and WHY (you cannot buy a fraction of a case; you cannot order
+# below the MOQ). The quantizer uses integer/long quantities and NEVER a column
+# named 'value' / 'order' (it stores order_quantity / order_multiple). A
+# fork-receiver may swap the units (eaches / cases / kg-scaled-to-grams) without
+# touching the GOVERNANCE contract (deterministic ceiling to a positive lot
+# multiple at or above a positive MOQ + recorded non-conserving overage + recorded
+# reconstructible basis) the catalog claims.
+
+items:
+  - id: "ORDERQUANT-QUANTIZE-001"
+    chapter: "A required net quantity is quantized UP to the smallest placeable order: orderQuantity = max(MOQ, ceil(required / multiple) * multiple)"
+    verification:
+      mechanism: rule
+      ref: order-multiple-quantization-non-conserving-ceiling-to-moq
+    requirement: "Quantizing a required net quantity MUST compute orderQuantity = max(MOQ, ceil(required / multiple) * multiple) DETERMINISTICALLY in integer/long arithmetic: round the required amount UP to the next whole order multiple (the lot/pack size), then take the larger of that and the MOQ. The result is the SMALLEST placeable quantity that is (a) at least the required amount AND (b) at least the MOQ; the rounded-up term ceil(required / multiple) * multiple is an exact integer multiple of the order multiple, so the result is an exact multiple WHENEVER the rounded-up term dominates (it is the MOQ exactly when the MOQ floor dominates — a supplier MOQ is typically itself a whole lot). required == 0 with MOQ >= 1 still yields the MOQ (you cannot place a sub-MOQ order). A bare order number with no recorded quantization basis MUST be unrepresentable."
+    test_method: "RestAssured (required=10, MOQ=1, multiple=1 → 10; required=23, MOQ=1, multiple=10 → 30 (ceil 23→30); required=5, MOQ=50, multiple=10 → 50 (MOQ floor dominates); required=0, MOQ=25, multiple=5 → 25; required=100, MOQ=1, multiple=12 → 108 (ceil 100→108); each response carries orderQuantity AND the recorded basis)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (FAR 52.207-4(b), Economic Purchase Quantity — Supplies — the
+      federal-acquisition lot-sizing authority the MOQ/order-multiple quantization
+      generalizes): "An economic purchase quantity is that quantity at which a
+      significant price break occurs." The order multiple and MOQ are the
+      supplier-imposed lot constraints that force a net requirement up to such a
+      placeable quantity. (https://www.acquisition.gov/far/52.207-4)
+  - id: "ORDERQUANT-OVERAGE-001"
+    chapter: "Quantization is NON-CONSERVING by design — orderQuantity >= required and the excess (overage = orderQuantity - required) is RECORDED, never hidden"
+    requirement: "The quantization MUST be NON-CONSERVING: orderQuantity is DELIBERATELY >= required (a surplus is created because the supplier lot constraint cannot be subdivided). The excess overage = orderQuantity - required MUST be computed and PERSISTED on the quantization record — it is the procurement cost of the MOQ/order-multiple and MUST NEVER be silently dropped or hidden. This is the OPPOSITE of a conserving rounded-split (whose parts sum back to the whole): here the orderQuantity exceeds the requirement and the difference is real surplus. overage MUST equal orderQuantity - required EXACTLY (a @Check DB backstop binds overage = order_quantity - required); overage MUST be >= 0."
+    test_method: "RestAssured (required=23, MOQ=1, multiple=10 → orderQuantity 30, overage 7; required=5, MOQ=50, multiple=10 → orderQuantity 50, overage 45; required=10, MOQ=1, multiple=1 → orderQuantity 10, overage 0 (exact fit, still non-conserving-capable); each response reports overage == orderQuantity - required; structural: a @Check binding overage = order_quantity - required AND overage >= 0)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-682: Incorrect Calculation — the non-conserving ceiling
+      arithmetic must be exact and the overage reconstructible, never an
+      after-the-fact estimate): "The product performs a calculation that
+      generates incorrect or unintended results that are later used in
+      security-critical decisions or resource management."
+      (https://cwe.mitre.org/data/definitions/682.html) Recording overage =
+      orderQuantity - required exactly (DB @Check) is what makes the surplus an
+      auditable fact rather than a hidden inflation of the order.
+  - id: "ORDERQUANT-BASIS-001"
+    chapter: "The quantization records its full basis (required, MOQ, multiple, orderQuantity, overage) so it is reconstructible"
+    requirement: "A quantization record MUST PERSIST its full basis: the required net quantity, the MOQ used, the order multiple used, the computed orderQuantity, and the computed overage. These columns are immutable (@Column(updatable=false)) — a quantization is an append-only fact, never edited in place. Given the recorded (required, MOQ, multiple), re-running the deterministic quantizer MUST reproduce the recorded orderQuantity and overage EXACTLY (reconstructibility). A bare orderQuantity with no recorded inputs MUST be unrepresentable."
+    test_method: "RestAssured (GET a quantization record → it carries required, moq, orderMultiple, orderQuantity, overage; re-quantizing the same recorded inputs reproduces the same orderQuantity and overage; structural: the basis columns are present and @Column(updatable=false))"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (FAR 7.204 — Economic order quantities, the inventory-manager
+      discipline the recorded basis supports): "The economic purchase quantity
+      data so obtained are intended to assist inventory managers in establishing
+      and evaluating economic order quantities for supplies under their
+      cognizance." (https://www.acquisition.gov/far/7.204)
+  - id: "ORDERQUANT-CONSTRAINT-001"
+    chapter: "MOQ and the order multiple are positive; the required amount is non-negative — @Check DB backstops"
+    requirement: "The procurement constraints MUST be valid: moq >= 1 AND order_multiple >= 1 (a zero or negative MOQ / lot multiple is meaningless — you cannot divide by a zero multiple), and required >= 0. These MUST be enforced as @Check DB backstops on the quantization entity so an invalid record is unrepresentable at the storage layer, AND validated at the API boundary so an invalid request is rejected 422 (ORDERQUANT_INVALID_CONSTRAINT) rather than producing a divide-by-zero or a sub-MOQ order. The arithmetic MUST never divide by a zero multiple."
+    test_method: "RestAssured (MOQ=0 → 422 ORDERQUANT_INVALID_CONSTRAINT; order multiple=0 → 422; negative required → 422; structural: a @Check binding moq >= 1 AND order_multiple >= 1 AND required >= 0 on the entity and in the migration)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-682: Incorrect Calculation — guarding the divisor and the
+      bounds before the calculation): "When product performs a security-critical
+      calculation incorrectly, it might lead to incorrect resource allocations,
+      incorrect privilege assignments, or failed comparisons among other things."
+      (https://cwe.mitre.org/data/definitions/682.html) A zero order multiple
+      would be a divide-by-zero in ceil(required / multiple); the @Check + 422
+      make it unrepresentable.
+  - id: "ORDERQUANT-IDEMPOTENT-001"
+    chapter: "Quantization is idempotent — the same (required, MOQ, multiple) always yields the same orderQuantity"
+    requirement: "The quantizer MUST be a pure deterministic function of its inputs: the same (required, MOQ, multiple) MUST always produce the same orderQuantity and the same overage, with no dependence on time, ordering, or prior calls. Re-quantizing identical inputs (whether as a fresh request or by replaying a recorded basis) MUST yield byte-identical results. There is no hidden state that could make a second identical quantization differ from the first."
+    test_method: "RestAssured (quantize required=23, MOQ=1, multiple=10 twice → both orderQuantity 30, overage 7; quantize required=5, MOQ=50, multiple=10 across separate records → all orderQuantity 50, overage 45; the deterministic quantizer reproduces a recorded basis exactly)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Idempotency here is the consequence of the quantizer being a pure function
+      max(MOQ, ceil(required/multiple)*multiple) over its three recorded inputs —
+      no clock, no sequence, no accumulator. The recorded basis (ORDERQUANT-BASIS-001)
+      is what lets a fork-receiver replay and confirm the determinism.

@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "f3c870bc64bbb952d1f34b60d12565a59bbb1f3afbee1176fb9c751e6ab19eaa"
-  rule_count: 209
+  source_concat_sha256: "5a13ffdc92881f96ecfffc721db678eb05572740bcb4d8d598cc69c8bbb91fc2"
+  rule_count: 212
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -1974,6 +1974,118 @@ Verification: review-tier. Partial-success handling is an API-contract property 
 Reference: [MDN — 207 Multi-Status](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/207)
 
 Reference: [RFC 9457 — Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)
+
+
+<!-- @source rules/business-day-deadline-arithmetic-calendar-vs-business-roll-and-versioned-holidays.md -->
+
+---
+title: A statutory/regulatory deadline computed by CALENDAR-vs-BUSINESS-day arithmetic must RECORD its full reconstructible basis (start date, N, mode, holiday-calendar id + version, raw date, roll convention, adjusted date — never a bare stored date), skip weekends + the configured holiday set in BUSINESS mode (CALENDAR counts every day), apply and RECORD a roll convention off a non-business day, RECOMPUTE 'overdue' on read (never a stored boolean), and pin the holiday calendar as a VERSIONED input so a later edit does not silently move an already-computed deadline
+impact: HIGH
+impactDescription: "A deadline stored as a bare date with no recorded inputs cannot be reconstructed or audited when a filing is challenged (the FRCP time-computation rule presumes the triggering day, the intervening days, and the holiday set are all known); business-day arithmetic that does not skip weekends/holidays or a roll convention that is not recorded produces a wrong statutory deadline a court or regulator rejects; a stored 'overdue' boolean drifts out of band; and a holiday calendar edited in place silently moves every past computed deadline, breaking reproducibility of an already-served filing date"
+tags:
+  - state-machine
+  - audit
+  - governance
+  - billing
+spec_ref: "specs/business-day-deadline-arithmetic-l0.yaml#CALDLINE-BASIS-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/calendardeadline/DeadlineArithmetic.java + backend/src/main/java/com/ax/template/authblueprint/calendardeadline/CalendarDeadlineService.java + backend/src/main/java/com/ax/template/authblueprint/calendardeadline/CalendarDeadline.java + backend/src/main/java/com/ax/template/authblueprint/calendardeadline/HolidayCalendar.java"
+  pattern: "DeadlineArithmetic.rawDeadline adds N in CALENDAR mode (every day) or BUSINESS mode (skipping Saturdays/Sundays + the holiday set, the day-0 start excluded per FRCP Rule 6(a)(1)(A)); DeadlineArithmetic.roll applies FOLLOWING (forward to the next business day) or NONE; CalendarDeadlineService.compute reads the HolidayCalendar's holiday set + its published version, computes raw + adjusted, and persists a CalendarDeadline recording the full basis (start/periodCount/mode/holidayCalendarId/holidayCalendarVersion/raw/rollConvention/adjusted) with every basis column @Column(updatable=false); CalendarDeadline.isOverdueAt RECOMPUTES overdue from the recorded adjusted deadline and the as-of instant (no stored boolean); HolidayCalendar.republishWith increments publishedVersion (a deadline keeps the version it pinned, so an edit never moves it); NO delete path exists on either root"
+upstream:
+  - "https://www.law.cornell.edu/rules/frcp/rule_6"
+  - "https://en.wikipedia.org/wiki/Date_rolling"
+evidence:
+  - source_type: external
+    citation: "Federal Rules of Civil Procedure, Rule 6(a)(1)(A)-(C) (Cornell LII) — the legal time-computation rule the calendar/business-day arithmetic generalizes: exclude the triggering day, count every intervening day including weekends and holidays, and roll the last day forward off a Saturday, Sunday, or legal holiday"
+    url: "https://www.law.cornell.edu/rules/frcp/rule_6"
+    quote: "(A) exclude the day of the event that triggers the period; (B) count every day, including intermediate Saturdays, Sundays, and legal holidays; and (C) include the last day of the period, but if the last day is a Saturday, Sunday, or legal holiday, the period continues to run until the end of the next day that is not a Saturday, Sunday, or legal holiday."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "Date rolling — Wikipedia (the 'Following' business-day date-rolling convention the FOLLOWING roll generalizes): a non-business-day settlement date is rolled to the next business day"
+    url: "https://en.wikipedia.org/wiki/Date_rolling"
+    quote: "the payment date is rolled to the next business day."
+    quoted_at: "2026-06-23"
+---
+
+## A computed statutory deadline is reconstructible-by-basis, business-day-aware, roll-recorded, recompute-overdue, and pinned to a versioned holiday calendar — not a bare stored date
+
+**Impact: HIGH — a bare stored deadline cannot be reconstructed or audited; business-day arithmetic that ignores weekends/holidays or an unrecorded roll produces a wrong statutory date; a stored 'overdue' boolean drifts; an in-place holiday-calendar edit silently moves every past computed deadline.**
+
+A *statutory/regulatory deadline* (a court filing deadline, a tax-filing window, a statutory cure or notice period) is computed by adding N units to a start date where the unit is EITHER calendar-days OR business-days. The discipline is legal: FRCP Rule 6(a) requires you to *"exclude the day of the event that triggers the period … count every day, including intermediate Saturdays, Sundays, and legal holidays … include the last day of the period, but if the last day is a Saturday, Sunday, or legal holiday, the period continues to run until the … next day that is not a Saturday, Sunday, or legal holiday."* The catalog modelled grounded multi-axis obligation deadlines (`deadline-obligation`) and irreversible threshold terminals (`threshold-terminal`) but had no primitive for the calendar-vs-business-day arithmetic a regulated deadline is actually computed by:
+
+```text
+rawDeadline(start, N, mode, holidays):  CALENDAR → start + N days (every day counted);
+                                        BUSINESS → advance N days skipping Sat/Sun + holidays
+                                        (day-0 start excluded; FRCP 6(a)(1)(A))
+roll(raw, convention, holidays):        FOLLOWING → next business day off a non-business day;
+                                        NONE → raw unchanged
+compute:                                persist start/N/mode/calendar id + pinned version/raw/
+                                        roll/adjusted — the FULL reconstructible basis
+overdue:                                RECOMPUTED: nowUTC > adjustedDeadline — never stored
+calendar:                               VERSIONED — republish increments publishedVersion; a
+                                        deadline keeps the version it pinned (no silent move)
+```
+
+**1. The deadline records its full reconstructible basis (CALDLINE-BASIS-001).** Every input — start date, N, mode, holiday-calendar id, the pinned version, the raw date, the roll convention, and the adjusted date — is persisted with `@Column(updatable=false)`, so the date is reconstructible and a recompute is a NEW row, never an overwrite.
+
+**2. Business-day arithmetic skips weekends + holidays; CALENDAR counts every day (CALDLINE-BUSINESS-001).** The two modes diverge whenever a weekend or holiday intervenes.
+
+**3. A roll convention is applied and recorded off a non-business day (CALDLINE-ROLL-001).** FOLLOWING rolls forward to the next business day; both raw and adjusted are recorded.
+
+**4. Overdue is recomputed, the calendar is versioned (CALDLINE-OVERDUE/CALVER-001).** Overdue is re-derived on read from the recorded adjusted deadline and the injected Clock; the holiday calendar is a versioned input so a later edit publishes a new version and cannot move an already-computed deadline.
+
+**Incorrect — a bare stored date, naive calendar add, a stored overdue flag, an in-place calendar edit:**
+
+```java
+public LocalDate deadline(LocalDate start, int n) {
+    LocalDate d = start.plusDays(n);                 // ❌ no business-day skip, no holiday set, no roll
+    repo.save(new Deadline(d, d.isBefore(today)));    // ❌ bare date + stored 'overdue' boolean (drifts)
+    calendar.getHolidays().add(newHoliday);           // ❌ in-place edit silently moves every past deadline
+    return d;                                         // ❌ no recorded basis — unreconstructible
+}
+```
+
+**Correct — calendar/business arithmetic with a recorded roll, a recomputed overdue, a pinned versioned calendar:**
+
+```java
+@Transactional
+public CalendarDeadline compute(String obligationRef, LocalDate startDate, int periodCount,
+                                DeadlineMode mode, UUID calendarId, RollConvention rollConvention) {
+    if (periodCount < 0) throw CalendarDeadlineException.invalidPeriod();
+    HolidayCalendar calendar = calendars.findById(calendarId)
+        .orElseThrow(CalendarDeadlineException::calendarNotFound);
+    Set<LocalDate> holidays = calendar.getHolidays();
+    long pinnedVersion = calendar.getPublishedVersion();        // ✅ the version in force, pinned
+
+    LocalDate raw = DeadlineArithmetic.rawDeadline(startDate, periodCount, mode, holidays);  // ✅ skips wknd/holiday in BUSINESS
+    LocalDate adjusted = DeadlineArithmetic.roll(raw, rollConvention, holidays);             // ✅ FOLLOWING/NONE, recorded
+
+    CalendarDeadline d = new CalendarDeadline(UUID.randomUUID(), obligationRef, startDate,
+        periodCount, mode, calendarId, pinnedVersion, raw, rollConvention, adjusted,
+        Instant.now(clock));                                    // ✅ FULL reconstructible basis, immutable
+    return deadlines.save(d);
+}
+
+// overdue is RECOMPUTED, never stored:
+public boolean isOverdueAt(Instant asOf) {
+    return asOf.atZone(ZoneOffset.UTC).toLocalDate().isAfter(adjustedDeadline);   // ✅ re-derived from the basis
+}
+
+// the calendar versions explicitly — an edit cannot move an already-computed deadline:
+void republishWith(Set<LocalDate> nextHolidays) {
+    this.holidays = new LinkedHashSet<>(nextHolidays);
+    this.publishedVersion = this.publishedVersion + 1L;          // ✅ NEW version; the old deadline keeps its pin
+}
+```
+
+`DeadlineArithmetic` is a pure `LocalDate` function (no clock, no persistence) so the computation is reproducible from the recorded basis. `CalendarDeadline`'s basis columns are immutable; `isOverdueAt` re-derives the predicate; `HolidayCalendar.republishWith` increments `publishedVersion` so a deadline computed against version K keeps K. No delete path exists on either root.
+
+Verification: review-tier — confirm the arithmetic skips weekends + the holiday set in BUSINESS mode and counts every day in CALENDAR mode, the roll convention is applied + recorded, the full basis columns are `@Column(updatable=false)`, overdue is recomputed (no stored boolean), and the holiday calendar publishes a new version on edit so a past computed deadline is never moved. The behavioural proof a fork-receiver keeps green: a deadline computed against calendar v0 is unchanged after the calendar is edited to v1.
+
+Reference: [FRCP Rule 6(a) — Computing Time](https://www.law.cornell.edu/rules/frcp/rule_6)
+
+Reference: [Date rolling — the Following business-day convention](https://en.wikipedia.org/wiki/Date_rolling)
 
 
 <!-- @source rules/business-domain-must-declare-applied-recipe.md -->
@@ -10412,6 +10524,115 @@ Reference: [TanStack Query v5 — Optimistic Updates](https://tanstack.com/query
 Reference: [TanStack Query v5 — Mutations](https://tanstack.com/query/latest/docs/framework/react/guides/mutations)
 
 
+<!-- @source rules/order-multiple-quantization-non-conserving-ceiling-to-moq.md -->
+
+---
+title: A net requirement quantized to a procurement constraint must round UP deterministically to the supplier lot multiple at or above the MOQ (orderQuantity = max(MOQ, ceil(required / multiple) * multiple)), and because this is NON-CONSERVING by design — the placed order exceeds the requirement — the surplus overage = orderQuantity − required MUST be computed exactly and RECORDED (never hidden), the full basis persisted so it is reconstructible, and MOQ / multiple held positive — the deliberate opposite of the catalog's conserving rounded-split
+impact: HIGH
+impactDescription: "A replenishment/purchase-order quantizer that rounds DOWN, ignores the MOQ, or silently drops the overage places wrong-quantity orders a supplier rejects or that strand surplus stock with no recorded reason; a quantizer that divides by a zero order multiple throws or corrupts; and a non-conserving surplus that is not recorded inflates the order with no audit trail (CWE-682) — the procurement cost of the lot constraint becomes invisible and cannot be reconciled. Conserving primitives (transformation-conservation, rounded-split) are the WRONG model here: the order MUST exceed the requirement and the excess is real"
+tags:
+  - calculation
+  - audit
+  - validation
+  - billing
+  - governance
+spec_ref: "specs/order-multiple-quantization-l0.yaml#ORDERQUANT-QUANTIZE-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/orderquantization/Quantizer.java + backend/src/main/java/com/ax/template/authblueprint/orderquantization/OrderQuantizationService.java + backend/src/main/java/com/ax/template/authblueprint/orderquantization/OrderQuantization.java"
+  pattern: "Quantizer.quantize computes orderQuantity = max(moq, ceilDiv(required, multiple) * multiple) in exact long arithmetic (round the requirement UP to the next whole order multiple, then floor at the MOQ); OrderQuantizationService.quantize validates required >= 0 AND moq >= 1 AND multiple >= 1 (else 422 ORDERQUANT_INVALID_CONSTRAINT, guarding the divide-by-zero), computes the NON-CONSERVING overage = orderQuantity - required, and persists the full basis (required, moq, multiple, orderQuantity, overage) on an immutable OrderQuantization whose @Check binds overage = order_quantity - required_quantity AND overage >= 0 AND moq >= 1 AND order_multiple >= 1 AND required_quantity >= 0; the quantizer is a pure function of its three inputs so the same (required, moq, multiple) is idempotent; columns are order_quantity / order_multiple (never value / order); NO delete path exists"
+upstream:
+  - "https://www.acquisition.gov/far/52.207-4"
+  - "https://www.acquisition.gov/far/7.204"
+  - "https://cwe.mitre.org/data/definitions/682.html"
+evidence:
+  - source_type: external
+    citation: "FAR 52.207-4(b), Economic Purchase Quantity—Supplies (Acquisition.gov) — the federal-acquisition lot-sizing authority the MOQ / order-multiple quantization generalizes: buying in the quantity at which a price break occurs"
+    url: "https://www.acquisition.gov/far/52.207-4"
+    quote: "An economic purchase quantity is that quantity at which a significant price break occurs."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "FAR 7.204, Responsibilities of the requirements and supply personnel for economic order quantities (Acquisition.gov) — the inventory-manager discipline the recorded quantization basis supports"
+    url: "https://www.acquisition.gov/far/7.204"
+    quote: "The economic purchase quantity data so obtained are intended to assist inventory managers in establishing and evaluating economic order quantities for supplies under their cognizance."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-682: Incorrect Calculation — MITRE (the non-conserving ceiling arithmetic must be exact and the overage reconstructible, the divisor guarded before the calculation)"
+    url: "https://cwe.mitre.org/data/definitions/682.html"
+    quote: "The product performs a calculation that generates incorrect or unintended results that are later used in security-critical decisions or resource management."
+    quoted_at: "2026-06-23"
+---
+
+## A procurement quantization rounds UP to a positive lot multiple at or above the MOQ — and because it is NON-conserving, the surplus is recorded, not hidden
+
+**Impact: HIGH — a quantizer that rounds down, ignores the MOQ, divides by a zero multiple, or drops the overage places wrong-quantity orders and erases the procurement cost of the lot constraint (CWE-682).**
+
+Order-multiple / MOQ quantization is the arithmetic every replenishment and purchase-order system runs against a net requirement: a supplier imposes a **minimum order quantity** (you cannot order below it) and an **order multiple** (a lot / pack / case size you cannot subdivide), so a required net quantity must be quantized UP to the smallest *placeable* order. The federal-acquisition discipline names the same idea — *"An economic purchase quantity is that quantity at which a significant price break occurs"* — and *"The economic purchase quantity data … are intended to assist inventory managers in establishing and evaluating economic order quantities."* The catalog already modeled **conserving** primitives — transformation-conservation (input == output + classified loss) and the conserving rounded-split (the parts sum back to the whole) — but had no primitive for their **non-conserving sibling**:
+
+```text
+quantize(required, moq, multiple):  orderQuantity = max(moq, ceil(required / multiple) * multiple)
+                                     — round the requirement UP to the next whole order multiple,
+                                       then floor at the MOQ
+overage:                            orderQuantity - required  (>= 0)  — the REAL surplus the lot
+                                     constraint forces; recorded, NEVER hidden
+constraint:                         moq >= 1 AND multiple >= 1 AND required >= 0 (422 + @Check) —
+                                     a zero multiple would be a divide-by-zero
+basis:                              (required, moq, multiple, orderQuantity, overage) persisted,
+                                     immutable, reconstructible
+```
+
+**1. The quantizer rounds UP deterministically (ORDERQUANT-QUANTIZE-001).** `orderQuantity = max(moq, ceil(required / multiple) * multiple)` is the smallest quantity that is at least `required`, at least `moq`, and an exact integer multiple of `multiple`. It is a pure function of three inputs — no clock, no sequence — so it is idempotent (ORDERQUANT-IDEMPOTENT-001).
+
+**2. It does NOT conserve — and that is the point (ORDERQUANT-OVERAGE-001).** `orderQuantity >= required` by construction; the surplus `overage = orderQuantity - required` is the procurement cost of a lot constraint that cannot be subdivided. This is the *opposite* of a conserving rounded-split (whose parts sum back to the whole): the rounded-split creates nothing, this deliberately creates surplus. The surplus is RECORDED on the row and a `@Check` binds `overage = order_quantity - required_quantity` so it can never be faked or dropped.
+
+**3. The basis is recorded and the constraints are positive (ORDERQUANT-BASIS/CONSTRAINT-001).** All five inputs/outputs are persisted on an immutable row so the quantization is reconstructible; `moq >= 1 AND order_multiple >= 1 AND required >= 0` is enforced both at the API boundary (422) and as a DB `@Check`, guarding the divide-by-zero before the calculation runs.
+
+**Incorrect — rounds down, ignores the MOQ, divides by a possibly-zero multiple, drops the surplus:**
+
+```java
+public long orderQty(long required, long moq, long multiple) {
+    long lots = required / multiple;          // ❌ integer DIVISION rounds DOWN — orders too little
+    long qty = lots * multiple;               // ❌ result can be < required and < moq
+    return qty;                               // ❌ MOQ ignored; ❌ multiple==0 → ArithmeticException;
+}                                             // ❌ overage never computed — the surplus is invisible
+```
+
+**Correct — pure ceiling quantizer floored at the MOQ, recorded non-conserving overage, guarded divisor:**
+
+```java
+// Quantizer — the pure deterministic function the whole domain turns on
+static long quantize(long required, long moq, long multiple) {
+    long roundedUp = ceilDiv(required, multiple) * multiple;   // ✅ round UP to the next lot
+    return Math.max(moq, roundedUp);                           // ✅ floor at the MOQ
+}
+private static long ceilDiv(long required, long multiple) {
+    return (required + multiple - 1) / multiple;               // ✅ ceiling, multiple already > 0
+}
+
+@Transactional
+public OrderQuantization quantize(String itemRef, long required, long moq, long multiple) {
+    if (required < 0 || moq < 1 || multiple < 1) {             // ✅ guard the bounds + the divisor
+        metrics.record("invalid_constraint");
+        throw OrderQuantizationException.invalidConstraint(/* … */);   // 422
+    }
+    long orderQuantity = Quantizer.quantize(required, moq, multiple);  // ✅ deterministic, idempotent
+    long overage = orderQuantity - required;                           // ✅ NON-CONSERVING surplus, >= 0
+    return records.save(new OrderQuantization(UUID.randomUUID(), itemRef,
+        required, moq, multiple, orderQuantity, overage, Instant.now(clock)));  // ✅ full basis recorded
+}
+```
+
+The `OrderQuantization` row is immutable (every `@Column(updatable=false)`) with a `@Check` that binds `overage = order_quantity - required_quantity AND overage >= 0 AND moq >= 1 AND order_multiple >= 1 AND required_quantity >= 0`, so a record that drops or fakes the surplus, or carries a non-positive constraint, is unrepresentable at the storage layer. The columns are `order_quantity` / `order_multiple` (never `value` / `order`); no delete path exists.
+
+Verification: review-tier — confirm the quantizer rounds UP (`ceilDiv`) and floors at the MOQ (`Math.max`), the service rejects `required < 0 || moq < 1 || multiple < 1` with 422 before any division, the overage is computed as `orderQuantity - required` and recorded, the `@Check` binds the overage identity, and the basis columns are immutable. The behavioural proof a fork-receiver keeps green: `required=23, MOQ=1, multiple=10 → orderQuantity 30, overage 7` and `required=5, MOQ=50, multiple=10 → orderQuantity 50, overage 45`.
+
+Reference: [FAR 52.207-4 — Economic Purchase Quantity—Supplies](https://www.acquisition.gov/far/52.207-4)
+
+Reference: [FAR 7.204 — Economic order quantities](https://www.acquisition.gov/far/7.204)
+
+Reference: [CWE-682: Incorrect Calculation](https://cwe.mitre.org/data/definitions/682.html)
+
+
 <!-- @source rules/ordered-siblings-reorder-atomic.md -->
 
 ---
@@ -14836,6 +15057,126 @@ Verification: review-tier. Tree acyclicity under reparent is a cross-row runtime
 Reference: [Wikipedia — Directed acyclic graph (a directed graph with no directed cycles)](https://en.wikipedia.org/wiki/Directed_acyclic_graph)
 
 Reference: [PostgreSQL — 7.8 WITH Queries: Recursive Queries (hierarchical/tree traversal; must terminate or loop indefinitely)](https://www.postgresql.org/docs/current/queries-with.html)
+
+
+<!-- @source rules/self-reported-input-plausibility-range-rate-and-unverified-provenance.md -->
+
+---
+title: A self-reported, server-unverifiable value (claimed location, self-meter-read, odometer entry, attestation) must NOT be trusted as authoritative — it must pass a RANGE bound and a RATE-OF-CHANGE limit vs the prior accepted reading, be persisted as SELF_REPORTED_UNVERIFIED with its plausibility basis (never CONFIRMED), and an implausible submission must be rejected (422) AND recorded as an auditable attempt — never silently dropped
+impact: HIGH
+impactDescription: "A self-reported value the server cannot verify, if trusted as authoritative, propagates fraud or error straight into billing/settlement/safety (a spoofed GPS, a rolled-back odometer, an impossible meter spike); if silently dropped, the implausible attempt — a fraud/calibration signal — vanishes with no audit. The two real failures are (a) accept it as server-confirmed and (b) reject it without a record. The correct posture is a deterministic RANGE + RATE-OF-CHANGE plausibility gate that admits the value ONLY as explicitly SELF_REPORTED_UNVERIFIED with its basis, and records every rejected attempt — CWE-20 / CWE-1284: input whose required quantity properties (range, rate) are not validated"
+tags:
+  - input-validation
+  - audit
+  - concurrency
+  - data-quality
+  - governance
+spec_ref: "specs/self-reported-input-plausibility-l0.yaml#PLAUSIBILITY-RANGE-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/inputplausibility/PlausibilityService.java + backend/src/main/java/com/ax/template/authblueprint/inputplausibility/PlausibilityChannel.java + backend/src/main/java/com/ax/template/authblueprint/inputplausibility/PlausibilityReading.java"
+  pattern: "A submission against a PlausibilityChannel is plausibility-gated under the channel's PESSIMISTIC_WRITE row lock: the RANGE gate (min <= value <= max) runs first and a breach is 422 IMPLAUSIBLE_RANGE; when a prior accepted reading exists the RATE gate compares |value - priorValue| against maxDeltaPerSecond * elapsedSeconds (a zero-elapsed non-zero jump is infinite rate) and a breach is 422 IMPLAUSIBLE_RATE; a passing submission appends an immutable PlausibilityReading marked SELF_REPORTED_UNVERIFIED (the enum has no CONFIRMED constant) carrying its basis (checksRan, hadPrior/priorValue, elapsedSeconds, computedRate) and advances the channel's prior pointer; a failing gate records an immutable RejectedAttempt BEFORE the 422 and leaves the accepted state untouched; NO delete path exists"
+upstream:
+  - "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html"
+  - "https://cwe.mitre.org/data/definitions/20.html"
+  - "https://cwe.mitre.org/data/definitions/1284.html"
+evidence:
+  - source_type: external
+    citation: "OWASP Input Validation Cheat Sheet — syntactic vs SEMANTIC validation; a plausibility bound on a self-reported value is semantic validation (correctness in the specific business context), not a format check"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html"
+    quote: "Input validation should be applied at both syntactic and semantic levels: Syntactic validation should enforce correct syntax of structured fields (e.g. SSN, date, currency symbol). Semantic validation should enforce correctness of their values in the specific business context."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-20: Improper Input Validation — MITRE; why a self-reported value the server cannot verify must not be trusted as processed safely"
+    url: "https://cwe.mitre.org/data/definitions/20.html"
+    quote: "The product receives input or data, but it does not validate or incorrectly validates that the input has the properties that are required to process the data safely and correctly."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-1284: Improper Validation of Specified Quantity in Input — MITRE; a self-reported quantity/reading whose range or rate of change is not validated"
+    url: "https://cwe.mitre.org/data/definitions/1284.html"
+    quote: "The product receives input that is expected to specify a quantity (such as size or length), but it does not validate or incorrectly validates that the quantity has the required properties."
+    quoted_at: "2026-06-23"
+---
+
+## A self-reported, server-unverifiable value is plausibility-gated and recorded as unverified — never trusted as authoritative, never silently dropped
+
+**Impact: HIGH — a trusted-as-authoritative self-report propagates fraud/error into billing/settlement/safety; a silently-dropped implausible attempt loses a fraud/calibration signal (CWE-20 / CWE-1284).**
+
+A *self-reported* value is one the server **cannot independently verify** against an authoritative source: a claimed GPS location, a self-declared utility meter reading, a self-reported odometer or quantity, a self-attested task completion. Every self-service intake faces it, and the two intuitive answers are both wrong: *trusting* it as authoritative lets a spoofed coordinate or a rolled-back odometer flow straight into a charge or a safety decision; *silently discarding* an implausible one throws away exactly the signal a fraud/calibration system wants. OWASP frames the right move as *semantic* validation — *"Semantic validation should enforce correctness of their values in the specific business context"* — which is precisely what a plausibility bound is. The value is admitted, but only as explicitly unverified, with its basis recorded:
+
+```text
+submit(channel, value):  RANGE gate   — min <= value <= max               else 422 IMPLAUSIBLE_RANGE
+                         RATE gate    — |value - prior| <= maxRate * elapsed  (prior only) else 422 IMPLAUSIBLE_RATE
+                         accept       — append PlausibilityReading SELF_REPORTED_UNVERIFIED + basis;
+                                        advance the channel prior pointer
+                         reject       — record an immutable RejectedAttempt (reason + basis) BEFORE the 422
+locks:                   the channel row, PESSIMISTIC_WRITE — concurrent submits serialize the read-prior/append
+```
+
+**1. RANGE — a semantic plausibility bound (PLAUSIBILITY-RANGE-001).** The channel pins a configured `[min, max]`; a value outside it is `422 IMPLAUSIBLE_RANGE`. A syntactically valid number that is physically implausible is still rejected.
+
+**2. RATE-OF-CHANGE — the jump vs the prior accepted value over elapsed time (PLAUSIBILITY-RATE-001).** When a prior accepted reading exists, `|value - prior| / elapsedSeconds` must not exceed the channel's `maxDeltaPerSecond` — this is what catches a teleport, an odometer rollback, an impossible spike. A zero-elapsed change of a non-zero amount is an infinite rate and is rejected. The first reading (no prior) is range-checked only.
+
+**3. UNVERIFIED provenance + recorded rejection (PLAUSIBILITY-PROVENANCE/REJECT-001).** An accepted reading is persisted as `SELF_REPORTED_UNVERIFIED` (the enum has *no* CONFIRMED constant) with its basis, so a downstream consumer always knows the origin is a self-report. An implausible submission is recorded as an immutable `RejectedAttempt` before the 422 — never silently dropped.
+
+**Incorrect — trust the self-report as authoritative, or drop the implausible one silently:**
+
+```java
+public void recordReading(UUID channelId, BigDecimal value) {
+    Channel c = repo.findById(channelId).orElseThrow();    // ❌ no row lock — two submits race the rate gate
+    if (value.compareTo(c.getMax()) > 0) return;           // ❌ silent drop — the implausible attempt vanishes
+    c.setLastReading(value);                               // ❌ stored as fact — no UNVERIFIED status, no basis,
+    repo.save(c);                                          //    no rate-of-change check vs the prior
+}
+```
+
+**Correct — plausibility-gate under the channel lock, persist as SELF_REPORTED_UNVERIFIED with basis, record rejections:**
+
+```java
+@Transactional
+public PlausibilityReading submit(UUID channelId, BigDecimal reportedValue, String actor) {
+    PlausibilityChannel c = channels.findByIdForUpdate(channelId)        // ✅ PESSIMISTIC_WRITE row lock
+        .orElseThrow(PlausibilityException::notFound);
+    Instant now = Instant.now(clock);
+    boolean hadPrior = c.hasPrior();
+    long elapsedSeconds = hadPrior ? elapsedSeconds(c.getPriorAt(), now) : 0L;
+
+    if (!c.inRange(reportedValue)) {                                     // ✅ RANGE gate (semantic plausibility)
+        recordRejection(c, reportedValue, RejectReason.IMPLAUSIBLE_RANGE,
+            hadPrior ? c.getPriorValue() : null, elapsedSeconds, null, actor, now);  // ✅ recorded BEFORE 422
+        throw PlausibilityException.implausibleRange();
+    }
+    BigDecimal computedRate = null;
+    String checksRan = CHECKS_RANGE;
+    if (hadPrior) {                                                      // ✅ RATE gate only with a prior basis
+        checksRan = CHECKS_RANGE_RATE;
+        BigDecimal delta = reportedValue.subtract(c.getPriorValue()).abs();
+        boolean rateExceeded = exceedsRate(delta, elapsedSeconds, c.getMaxDeltaPerSecond());
+        computedRate = (elapsedSeconds == 0L) ? null
+            : delta.divide(BigDecimal.valueOf(elapsedSeconds), RATE_MC);
+        if (rateExceeded) {
+            recordRejection(c, reportedValue, RejectReason.IMPLAUSIBLE_RATE,
+                c.getPriorValue(), elapsedSeconds, computedRate, actor, now);
+            throw PlausibilityException.implausibleRate();
+        }
+    }
+    PlausibilityReading reading = members.persist(new PlausibilityReading(UUID.randomUUID(),
+        c.getId(), reportedValue, checksRan, hadPrior, hadPrior ? c.getPriorValue() : null,
+        elapsedSeconds, computedRate, actor, now));     // ✅ SELF_REPORTED_UNVERIFIED + basis
+    c.recordAccepted(reportedValue, now);               // ✅ advance the prior pointer (accepted only)
+    return reading;
+}
+```
+
+The channel-row PESSIMISTIC_WRITE lock serializes the read-prior / evaluate-rate / append-reading sequence so two concurrent submits cannot both read the same prior and both append (CWE-362). The rate gate is compared as `|delta| > max * elapsed` rather than dividing, so a zero-elapsed jump is handled without a divide-by-zero. `PlausibilityReading` and `RejectedAttempt` rows are `@AggregateMember` of `PlausibilityChannel` — root-JPQL reads, `common/MemberWriter` writes; no delete path exists.
+
+Verification: review-tier — confirm the RANGE gate runs first and a breach is 422 IMPLAUSIBLE_RANGE, the RATE gate runs only with a prior and a breach is 422 IMPLAUSIBLE_RATE, an accepted reading is SELF_REPORTED_UNVERIFIED with its basis (and the enum has no CONFIRMED constant), every rejection is recorded as an immutable attempt before the 422, and the submit path takes the channel's PESSIMISTIC_WRITE lock.
+
+Reference: [OWASP Input Validation Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html)
+
+Reference: [CWE-20: Improper Input Validation](https://cwe.mitre.org/data/definitions/20.html)
+
+Reference: [CWE-1284: Improper Validation of Specified Quantity in Input](https://cwe.mitre.org/data/definitions/1284.html)
 
 
 <!-- @source rules/sensitive-read-audit-record-before-return-mask-and-purpose.md -->

@@ -103,6 +103,12 @@ public class SecurityConfig {
                 // periods — readings supersede append-only, runs version with their basis,
                 // closed-period corrections post forward as net-delta true-ups.
                 .requestMatchers("/api/trueup/**").authenticated()
+                // INPUTPLAUSIBILITY — 자가보고 server-unverifiable 입력 plausibility(범위·변화율 + unverified provenance 기록)
+                .requestMatchers("/api/input-plausibility/**").authenticated()
+                // CALENDARDEADLINE — 법정기한 calendar vs business-day 산술(주말/공휴일 제외 + roll + versioned holidays)
+                .requestMatchers("/api/calendar-deadline/**").authenticated()
+                // ORDERQUANTIZATION — 비보존 round-UP-to-order-multiple(MOQ/lot-size, overage 기록)
+                .requestMatchers("/api/order-quantization/**").authenticated()
                 // ACCESSGRANT — time-bounded ReBAC grant(만료 fail-closed) + 다중 자격 만료 게이트
                 .requestMatchers("/api/access-grant/**").authenticated()
                 // INVENTORYRESERVATION — 2축 available=on_hand−reserved, reserve→commit→release hold

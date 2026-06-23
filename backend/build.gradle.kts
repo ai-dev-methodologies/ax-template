@@ -187,6 +187,24 @@ tasks.register<Test>("testTrueUp") {
     }
 }
 
+tasks.register<Test>("testInputPlausibility") {
+    useJUnitPlatform {
+        includeTags("INPUTPLAUSIBILITY")
+    }
+}
+
+tasks.register<Test>("testCalendarDeadline") {
+    useJUnitPlatform {
+        includeTags("CALENDARDEADLINE")
+    }
+}
+
+tasks.register<Test>("testOrderQuantization") {
+    useJUnitPlatform {
+        includeTags("ORDERQUANTIZATION")
+    }
+}
+
 tasks.register<Test>("testAccessGrant") {
     useJUnitPlatform {
         includeTags("ACCESSGRANT")

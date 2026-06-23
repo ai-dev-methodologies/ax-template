@@ -1,0 +1,107 @@
+version: "0.1.0"
+scope: "business-day-deadline-arithmetic-l0 — the generalized STATUTORY/REGULATORY DEADLINE computed by CALENDAR-vs-BUSINESS-DAY ARITHMETIC. A CalendarDeadline is the deadline for one obligation, computed by adding N units to a start date where the unit is EITHER calendar-days OR business-days (weekends + a configured holiday set excluded). The system MUST (1) RECORD the deadline's full BASIS (the start date, N, the mode CALENDAR|BUSINESS, the holiday-calendar id + version in force, the raw computed date, the applied roll convention, and the rolled/adjusted date) so the deadline is RECONSTRUCTIBLE — never a bare stored date; (2) compute BUSINESS-day arithmetic by skipping Saturdays, Sundays, and the holiday set, while CALENDAR mode counts every day (FRCP Rule 6(a)(1): exclude the triggering day, count every intervening day, the last-day roll); (3) apply and RECORD a ROLL convention (FOLLOWING — roll forward to the next business day — or NONE) for when the raw deadline lands on a non-business day; (4) treat 'overdue' as a RECOMPUTED predicate (now > adjusted deadline at the as-of instant) — NEVER a stored boolean; (5) pin the HOLIDAY CALENDAR as a versioned recorded input, so a later edit publishes a NEW version and does NOT silently move already-computed deadlines (a computed deadline keeps the version it was computed against). The IDW12 clinical-trials dogfood (G15) found the catalog modelled grounded multi-axis obligation deadlines (deadline-obligation) and irreversible threshold terminals (threshold-terminal) but had NO primitive for the calendar-vs-business-day arithmetic a regulated filing deadline (court rule, tax filing, statutory cure window) is actually computed by. Realized by the calendardeadline reference workload (com.ax.template.authblueprint.calendardeadline). Recurs in: court/litigation filing deadlines, tax filing windows, securities-disclosure deadlines, statutory cure/notice periods, SLA business-day clocks — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (recorded-basis deadline + versioned holiday calendar with an @ElementCollection holiday set + @Version optimistic + @Check backstops + immutable basis columns updatable=false) + a pure java.time.LocalDate calendar/business-day arithmetic helper + injected java.time.Clock (overdue recomputed at the as-of instant) + RFC 9457 Problem Details + Micrometer"
+standard: "FRCP Rule 6(a)(1)(A)-(C) + 6(a)(6) (the legal time-computation rule: exclude the triggering day, count every intervening day including weekends/holidays, roll the last day forward off a Saturday/Sunday/legal holiday; the legal-holiday definition) + the Following business-day date-rolling convention (roll a non-business-day settlement to the next business day) + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW12-G15 calendar-arithmetic statutory deadlines; built 2026-06-23 — BACKLOG P1-51"
+
+# OPT-IN business-day-deadline-arithmetic catalog. The calendar-arithmetic gap:
+# the catalog models grounded multi-axis obligation deadlines and irreversible
+# threshold terminals but never computes a deadline by calendar-vs-business-day
+# arithmetic, never records the basis that makes the date reconstructible, never
+# applies/records a roll convention off a non-business day, and never pins the
+# holiday calendar as a versioned input so a later edit cannot silently move a
+# past computed deadline. Generic; the court-rule/tax/SLA framings are anchors.
+
+# ── Priority order for fork-receivers ──
+#   1. CALDLINE-BASIS-001    (the primitive — a computed deadline records its full reconstructible basis, never a bare date)
+#   2. CALDLINE-BUSINESS-001 (business-day arithmetic skips weekends + the holiday set; CALENDAR counts every day)
+#   3. CALDLINE-ROLL-001     (a roll convention — FOLLOWING/NONE — is applied and recorded when the raw date lands off a business day)
+#   4. CALDLINE-OVERDUE-001  (overdue is a RECOMPUTED predicate now>adjusted at the as-of instant — never a stored boolean)
+#   5. CALDLINE-CALVER-001   (keystone — the holiday calendar is a versioned recorded input; editing it publishes a NEW version and does not move already-computed deadlines)
+
+# ── Composition note ──
+# DISTINCT from deadline-obligation (a grounded multi-axis MIN-of-candidates
+# deadline with an ack-only terminal and a usage ladder — it does NOT do
+# calendar-vs-business-day arithmetic, does NOT roll off a non-business day, and
+# does NOT pin a versioned holiday calendar), threshold-terminal (a single
+# irreversible value-crossing — no date arithmetic), and dunning-collections (a
+# staged notice ladder — no deadline computation). The arithmetic helper is a
+# pure java.time.LocalDate function (FRCP Rule 6(a): exclude the day-0 event,
+# count intervening days, roll the last day forward off a weekend/holiday); a
+# fork-receiver may swap the holiday set or the roll convention without touching
+# the GOVERNANCE contract (recorded reconstructible basis + versioned holiday
+# calendar + recomputed overdue) the catalog claims. The holiday set is an
+# @ElementCollection on the HolidayCalendar root (no member repository); a
+# CalendarDeadline references the calendar by id + version (identity reference,
+# never an object pointer — HG-AGG-REF).
+
+items:
+  - id: "CALDLINE-BASIS-001"
+    chapter: "A computed deadline records its full reconstructible basis — start date, N, mode, holiday-calendar id + version, raw date, roll convention, adjusted date — never a bare stored date"
+    verification:
+      mechanism: rule
+      ref: business-day-deadline-arithmetic-calendar-vs-business-roll-and-versioned-holidays
+    requirement: "Computing a CalendarDeadline MUST persist, on the deadline row, the FULL basis: the start date, the period count N, the mode (CALENDAR or BUSINESS), the holiday-calendar id and the holiday-calendar VERSION in force at compute time, the raw computed date (before any roll), the applied roll convention, and the rolled/adjusted deadline date. The deadline MUST therefore be RECONSTRUCTIBLE from its recorded basis — a bare stored date with no recorded inputs MUST be unrepresentable. The basis columns MUST be immutable (@Column(updatable=false)): a recompute against a different calendar or a changed N produces a NEW CalendarDeadline, it never silently overwrites the recorded basis of an existing one."
+    test_method: "RestAssured (compute a deadline → response carries startDate + periodCount + mode + holidayCalendarId + holidayCalendarVersion + rawDeadline + rollConvention + adjustedDeadline; structural: those basis columns are @Column(updatable=false) and there is no public setter)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (FRCP Rule 6(a)(1) — the legal time-computation rule the
+      arithmetic generalizes, exclude the triggering day and count intervening
+      days): "(A) exclude the day of the event that triggers the period; (B)
+      count every day, including intermediate Saturdays, Sundays, and legal
+      holidays; and (C) include the last day of the period, but if the last day
+      is a Saturday, Sunday, or legal holiday, the period continues to run until
+      the end of the next day that is not a Saturday, Sunday, or legal holiday."
+      (https://www.law.cornell.edu/rules/frcp/rule_6)
+  - id: "CALDLINE-BUSINESS-001"
+    chapter: "Business-day arithmetic skips Saturdays, Sundays, and the configured holiday set; CALENDAR mode counts every day"
+    requirement: "In BUSINESS mode the arithmetic MUST advance N business days from the start date, counting only days that are NOT a Saturday, NOT a Sunday, and NOT in the holiday-calendar's recorded holiday set for the version in force; weekend and holiday days are skipped and do not consume a unit (FRCP Rule 6(a): the day-0 triggering event is excluded, every intervening day is examined). In CALENDAR mode the arithmetic MUST add N calendar days counting EVERY day (weekends and holidays included). The two modes MUST produce different raw deadlines whenever an intervening weekend or holiday exists, and the chosen mode MUST be recorded on the deadline (CALDLINE-BASIS-001)."
+    test_method: "RestAssured (CALENDAR mode adds N raw calendar days; BUSINESS mode skips intervening weekends + holidays so its raw date is later than CALENDAR's when a weekend/holiday intervenes; a holiday inside the window pushes the BUSINESS raw date one further day)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (FRCP Rule 6(a)(6) — the legal-holiday definition the holiday
+      set generalizes): "'Legal holiday' means: (A) the day set aside by statute
+      for observing New Year's Day, Martin Luther King Jr.'s Birthday,
+      Washington's Birthday, Memorial Day, Juneteenth National Independence Day,
+      Independence Day, Labor Day, Columbus Day, Veterans' Day, Thanksgiving Day,
+      or Christmas Day; (B) any day declared a holiday by the President or
+      Congress; and (C) for periods that are measured after an event, any other
+      day declared a holiday by the state where the district court is located."
+      (https://www.law.cornell.edu/rules/frcp/rule_6)
+  - id: "CALDLINE-ROLL-001"
+    chapter: "A roll convention (FOLLOWING or NONE) is applied and recorded when the raw deadline lands on a non-business day"
+    requirement: "When the raw computed deadline lands on a non-business day (a Saturday, a Sunday, or a holiday in the version in force), the recorded ROLL convention MUST be applied: FOLLOWING rolls the adjusted deadline forward to the next business day (the date-rolling 'Following' convention; FRCP Rule 6(a)(1)(C): the period continues to run until the next day that is not a Saturday, Sunday, or legal holiday); NONE leaves the adjusted deadline equal to the raw deadline. The applied roll convention AND both the raw and the adjusted deadline MUST be recorded so the adjustment is reconstructible. When the raw deadline already falls on a business day, FOLLOWING is a no-op (adjusted == raw)."
+    test_method: "RestAssured (a raw deadline landing on a Saturday with FOLLOWING → adjusted is the next Monday business day, both dates recorded; the same raw with NONE → adjusted == raw; a raw deadline on a business day with FOLLOWING → adjusted == raw)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (the 'Following' date-rolling convention — roll a
+      non-business-day date forward to the next business day): "the payment date
+      is rolled to the next business day."
+      (https://en.wikipedia.org/wiki/Date_rolling)
+  - id: "CALDLINE-OVERDUE-001"
+    chapter: "Overdue is a RECOMPUTED predicate (now > adjusted deadline at the as-of instant) — never a stored boolean"
+    requirement: "Whether a deadline is overdue MUST be computed on read by comparing the as-of instant (the injected Clock, in UTC) against the recorded ADJUSTED deadline — overdue is true iff the as-of date is strictly after the adjusted deadline date. There MUST be NO stored 'overdue' / 'isLate' boolean column on the deadline row: the predicate is always re-derived from the recorded adjusted deadline and the current time, so it cannot drift or be set out of band. A deadline whose adjusted date is today or in the future is NOT overdue."
+    test_method: "RestAssured (a deadline computed into the past → overdue true on read; a deadline computed into the future → overdue false; structural: no 'overdue'/'isLate' boolean field on the entity)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The recomputed-predicate discipline mirrors dunning's recomputed-overdue
+      and threshold-terminal's derived-read: a stored boolean is the bug — the
+      truth is always re-derived from the recorded basis + the injected Clock.
+  - id: "CALDLINE-CALVER-001"
+    chapter: "Keystone — the holiday calendar is a versioned recorded input; editing it publishes a NEW version and does not move already-computed deadlines"
+    requirement: "The holiday calendar MUST be a VERSIONED recorded input. Editing the holiday set (adding or removing a holiday) MUST publish a NEW version (a monotonically increasing version number); it MUST NOT mutate the holiday set of an already-published version in place. A CalendarDeadline records the holiday-calendar version it was computed against, so a later edit to the calendar produces a new version and DOES NOT silently move (re-roll) any already-computed deadline — the computed deadline keeps its recorded version and its recorded adjusted date. Recomputing a deadline against the latest calendar version is an explicit NEW computation that records the new version; it never back-dates the old one."
+    test_method: "Versioning proof (compute a deadline against calendar v1; add a holiday that would have changed the roll → publishes calendar v2; the original deadline still reports holidayCalendarVersion v1 and its original adjustedDeadline unchanged; a fresh computation now records v2 and may roll differently)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The versioned-input keystone mirrors remeasurement-trueup's versioned-run
+      and reproducible-procedure's version-pinned classification: the input that
+      drives a recorded computation must itself be versioned so the computation
+      is reproducible and a later input change is an explicit new event, never a
+      silent retroactive move of a past result (FRCP Rule 6(a)(1)(C) presumes a
+      fixed holiday set at the moment the period is computed).
