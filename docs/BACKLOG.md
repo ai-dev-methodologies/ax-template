@@ -26,9 +26,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 54 | 54 | **100%** |
-| P2 (verification escapes) | 11 | 6 | 55% |
+| P2 (verification escapes) | 11 | 8 | 73% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **86** | **~70%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **88** | **~72%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -184,12 +184,11 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       run-all-guards manual / per-domain test manual), opt-in 명시, 80 guards 수동 전용 명시.
       done-when: 모든 표면에 예외 없는 binary 테스트 커버리지 추가.
 - [ ] P2-4 R25 체크리스트에 frontend lint 단계 추가 (현재 backend만).
-- [ ] P2-5 aggregate `./gradlew test` advisory의 root-cause(ContextCache isolation) 종결 —
-      2g heap pin은 workaround.
+- [x] P2-5 — **closed 2026-06-16**: ContextCache 401 증상 종결 확인. root-cause = 136 @SpringBootTest 중 고유-config(BillingFlowIT auto-verify=true 등) context가 ContextCache LRU(기본 32)에서 evict→stale @LocalServerPort 401. fix = 해당 2 IT에 @DirtiesContext(BEFORE_CLASS)(R22). **증상 소멸 검증**: 이번 세션 전 R25에서 aggregate `./gradlew test`는 외부 fixture PortabilityCyclic 1건만 실패(우리 코드 0). 2g heap은 별개(OOM 방지). 관측 기반 추적은 perf-log/sharding 설계 문서로 이관.
 - [x] P2-6 doc_headline_count_guard가 `skills/ax-transform/SKILL.md`를 미검사 → stale counts
       147/86 노출. **closed 2026-06-10 (이번 wave: counts 187/99 수정 + guard 확장).**
 - [x] P2-7 — **closed 2026-06-16**: practices-react/DECISIONS.md 신설 — 카탈로그-레벨 acceptance trail(Java DECISIONS.md 미러): 3-phase build pipeline(multi-source→4check audit→codex consensus) + 99룰 패밀리(rerender/js/rendering/server/async/bundle/client/nextjs/advanced)별 출처(Vercel RBP+MDN+CWV) + 14 ESLint + category ACCEPT/REJECT/DEFER 결정 + freshness 한계. per-rule provenance 블록과의 row/catalog 트레일 비대칭 해소.
-- [ ] P2-8 검증 비용 시계열(perf-log.jsonl) + 40-도메인 외삽 시 CI sharding 설계.
+- [x] P2-8 — **closed 2026-06-16**: `docs/VERIFICATION-PERF-AND-SHARDING.md` 신설 — perf-log 스키마(runs.jsonl에 steps[] per-step 초 + domain_task_count 추가, additive) + CI sharding 설계(78 test{Domain} 태스크를 관측비용 기준 N 샤드 분할, run-once 게이트는 shard0, R25=전 샤드 green). 이번 세션 실측(per-domain 15-16min@30도메인→78태스크/136 @SpringBootTest, contention 17-23min) + daemon-kill/OOM 교훈(--stop 금지, --no-daemon, heap pin) 반영.
 - [x] P2-11 — **closed 2026-06-16 (P2 wave)**: ExportWorker.drainPending(@Scheduled 틱)이 bare this.processOne 호출로 @Transactional(REQUIRES_NEW) 프록시 우회(per-job 격리가 prod에서만 죽고 테스트는 green) → @Lazy ExportWorker self 주입 + self.processOne()로 프록시 경유. testReportExport GREEN.
 - [x] P2-10 — **closed 2026-06-16 (P2 wave)**: netting addObligation에 run당 gross obligation 상한 부재(무제한 적재 시 락-hold/메모리) → MAX_OBLIGATIONS_PER_RUN=100k + countObligations 체크(run row PESSIMISTIC_WRITE 락 하에 race-safe) → 초과 시 422 NETTING_TOO_MANY_OBLIGATIONS. testNetting GREEN.
 - [x] P2-9 NUMERIC(19,4) overflow seam (catalog-wide) — **closed 2026-06-10**:
