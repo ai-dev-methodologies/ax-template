@@ -26,9 +26,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 54 | 54 | **100%** |
-| P2 (verification escapes) | 11 | 3 | 27% |
+| P2 (verification escapes) | 11 | 5 | 45% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **83** | **~68%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **85** | **~70%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -190,12 +190,8 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       147/86 노출. **closed 2026-06-10 (이번 wave: counts 187/99 수정 + guard 확장).**
 - [ ] P2-7 practices-react/DECISIONS.md 신설 (Java 측 438줄과 비대칭 — React 룰 provenance 부재).
 - [ ] P2-8 검증 비용 시계열(perf-log.jsonl) + 40-도메인 외삽 시 CI sharding 설계.
-- [ ] P2-11 ExportWorker.drainPending의 self-invocation — @Scheduled 틱이 bare this.processOne을
-      호출해 @Transactional(REQUIRES_NEW) 프록시를 우회 (obligation sweeper와 동일 패턴; wave-6
-      review 발견 2026-06-11). @Lazy self 주입 패턴으로 수정 권장.
-- [ ] P2-10 netting addObligation 입력시 상한 부재 — 한 run의 obligation 무제한 적재 시 잠금
-      트랜잭션 내 unbounded heap (transformation MAX_LEGS 유사 가드 부재; pre-existing,
-      wave-4 review 발견 2026-06-10). 입력시 cap + 422 권장.
+- [x] P2-11 — **closed 2026-06-16 (P2 wave)**: ExportWorker.drainPending(@Scheduled 틱)이 bare this.processOne 호출로 @Transactional(REQUIRES_NEW) 프록시 우회(per-job 격리가 prod에서만 죽고 테스트는 green) → @Lazy ExportWorker self 주입 + self.processOne()로 프록시 경유. testReportExport GREEN.
+- [x] P2-10 — **closed 2026-06-16 (P2 wave)**: netting addObligation에 run당 gross obligation 상한 부재(무제한 적재 시 락-hold/메모리) → MAX_OBLIGATIONS_PER_RUN=100k + countObligations 체크(run row PESSIMISTIC_WRITE 락 하에 race-safe) → 초과 시 422 NETTING_TOO_MANY_OBLIGATIONS. testNetting GREEN.
 - [x] P2-9 NUMERIC(19,4) overflow seam (catalog-wide) — **closed 2026-06-10**:
       `GlobalProblemDetailAdvice.handleNumericOverflow` — DIVE/TSE/JpaSE wrapper 3종을 검사하되
       root-cause SQLState ∈ {22003(PG), 22001(H2 "Value too long")}일 때만 422

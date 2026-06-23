@@ -27,6 +27,9 @@ import com.ax.template.authblueprint.common.MemberWriter;
 public class NettingService {
 
     static final int MONEY_SCALE = 4;
+    /** BACKLOG P2-10 — hard cap on gross obligations per run; bounds lock-hold + memory of the
+     *  reduction (the run row is already PESSIMISTIC_WRITE-locked here, so the count is race-safe). */
+    static final int MAX_OBLIGATIONS_PER_RUN = 100_000;
 
     private final NettingRunRepository runs;
     private final MemberWriter members;
@@ -88,6 +91,10 @@ public class NettingService {
         if (!run.getCurrency().equals(ccy)) {                // NET-PARTITION-001 — one currency per run
             metrics.record("add", "currency_mismatch");
             throw NettingException.currencyMismatch();
+        }
+        if (runs.countObligations(run.getId()) >= MAX_OBLIGATIONS_PER_RUN) {   // P2-10 — bound accumulation
+            metrics.record("add", "too_many");
+            throw NettingException.tooManyObligations(MAX_OBLIGATIONS_PER_RUN);
         }
         GrossObligation o = members.persist(new GrossObligation(UUID.randomUUID(), run.getId(),
             from, to, amount.setScale(MONEY_SCALE), ccy, Instant.now(clock)));

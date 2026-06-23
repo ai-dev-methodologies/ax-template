@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -45,6 +46,15 @@ public class ExportWorker {
     private final ReportRowSource rowSource;
     private final ReportExportProperties properties;
     private final ObjectMapper objectMapper;
+    /**
+     * Self-reference for proxy-routed self-invocation: the @Scheduled tick MUST call
+     * processOne THROUGH the Spring proxy, otherwise its @Transactional(REQUIRES_NEW)
+     * is silently bypassed (proxy-self-invocation trap) and the per-job transaction
+     * isolation that keeps a poison job from corrupting the batch is dead in production
+     * (tests calling processOne directly never exercise the new-transaction boundary,
+     * so the defect stays green). @Lazy breaks the constructor self-cycle. (BACKLOG P2-11)
+     */
+    private final ExportWorker self;
 
     public ExportWorker(ExportJobRepository repository,
                         ExportJobStateMachine stateMachine,
@@ -52,7 +62,8 @@ public class ExportWorker {
                         XlsxWriter xlsxWriter,
                         ReportRowSource rowSource,
                         ReportExportProperties properties,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper,
+                        @Lazy ExportWorker self) {
         this.repository = repository;
         this.stateMachine = stateMachine;
         this.csvWriter = csvWriter;
@@ -60,6 +71,7 @@ public class ExportWorker {
         this.rowSource = rowSource;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.self = self;
     }
 
     @Scheduled(fixedDelayString = "${report-export.worker-poll-interval-ms:1000}")
@@ -69,7 +81,7 @@ public class ExportWorker {
             repository.findByStatusOrderByCreatedAtAsc(ExportJobStatus.PENDING, PageRequest.of(0, batch));
         for (ExportJob job : ready) {
             try {
-                processOne(job.getId());
+                self.processOne(job.getId());   // proxy-routed → REQUIRES_NEW actually applies
             } catch (RuntimeException ex) {
                 LOG.warn("export-worker: unexpected failure for job {}: {}", job.getId(), ex.getMessage());
             }

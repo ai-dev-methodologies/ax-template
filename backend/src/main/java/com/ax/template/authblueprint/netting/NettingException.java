@@ -66,4 +66,12 @@ public class NettingException extends RuntimeException {
             "urn:problem:netting-invalid-obligation", "NETTING_INVALID_OBLIGATION",
             "Obligation amount must be positive and fromMember must differ from toMember");
     }
+
+    /** BACKLOG P2-10 — a run cannot accumulate gross obligations without bound. */
+    public static NettingException tooManyObligations(int max) {
+        return new NettingException(HttpStatus.UNPROCESSABLE_ENTITY,
+            "urn:problem:netting-too-many-obligations", "NETTING_TOO_MANY_OBLIGATIONS",
+            "A netting run accepts at most " + max + " gross obligations; close/net this run "
+                + "or open another");
+    }
 }

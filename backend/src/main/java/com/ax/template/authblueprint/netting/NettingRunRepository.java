@@ -32,6 +32,10 @@ public interface NettingRunRepository extends JpaRepository<NettingRun, UUID> {
     @Query("SELECT o FROM GrossObligation o WHERE o.runId = :runId")
     List<GrossObligation> findObligations(@Param("runId") UUID runId);
 
+    /** Current gross-row count for a run — bounds unbounded accumulation (BACKLOG P2-10). */
+    @Query("SELECT COUNT(o) FROM GrossObligation o WHERE o.runId = :runId")
+    long countObligations(@Param("runId") UUID runId);
+
     /** Paginated gross listing for the API. */
     @Query("SELECT o FROM GrossObligation o WHERE o.runId = :runId ORDER BY o.createdAt ASC")
     Page<GrossObligation> findObligationsPage(
