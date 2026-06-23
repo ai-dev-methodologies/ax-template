@@ -26,9 +26,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 54 | 54 | **100%** |
-| P2 (verification escapes) | 11 | 8 | 73% |
+| P2 (verification escapes) | 12 | 8 | 67% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **88** | **~72%** |
+| **P0–P3 합계 (수렴 분모)** | **123** | **88** | **~72%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -183,7 +183,18 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       5개 표면 분류표 (PreToolUse advisory / pre-commit commit-blocking / pre-push push-blocking /
       run-all-guards manual / per-domain test manual), opt-in 명시, 80 guards 수동 전용 명시.
       done-when: 모든 표면에 예외 없는 binary 테스트 커버리지 추가.
-- [ ] P2-4 R25 체크리스트에 frontend lint 단계 추가 (현재 backend만).
+- [ ] P2-4 R25 체크리스트에 frontend lint 단계 추가 (현재 backend만). **blocked-on 아래 frontend 부채 항목**:
+      frontend lint이 현재 48 problems라 R25에 넣으면 즉시 red — 부채 정리 후 추가.
+- [ ] P2-12 frontend reference 앱이 자체 React ESLint 룰을 위반(enforcement-asymmetry의 frontend판,
+      2026-06-16 발견) — `eslint .` census: **48 problems = 8 errors `ax/no-upward-layer-import`
+      (도메인 컴포넌트가 shared `components/`에 오배치, features/ 훅을 상향 import; consumer/publish/
+      studio) + 40 warnings `ax/no-god-route` (route 파일 >100줄; 6앱 전반 consumer/devconsole/
+      enterprise/pay/publish/studio)**. 근본: frontend lint이 R25 게이트에 없어 React 카탈로그
+      룰이 자체 reference 앱에 강제된 적 없음. done-when: 8 errors는 feature-UI 클러스터를
+      features/<f>/components/로 이전(cascade — media-thumb→media-card 연쇄, typecheck 검증),
+      40 warnings는 route business-logic을 feature 컨테이너로 추출 → `eslint . --max-warnings 0`
+      green → ESLint warn→error 승격 + R25 frontend-lint 단계 동시 unblock. 6앱 × 판단-heavy
+      리팩터라 별도 frontend wave 필요(blind 일괄 refactor 금지 — regression 위험).
 - [x] P2-5 — **closed 2026-06-16**: ContextCache 401 증상 종결 확인. root-cause = 136 @SpringBootTest 중 고유-config(BillingFlowIT auto-verify=true 등) context가 ContextCache LRU(기본 32)에서 evict→stale @LocalServerPort 401. fix = 해당 2 IT에 @DirtiesContext(BEFORE_CLASS)(R22). **증상 소멸 검증**: 이번 세션 전 R25에서 aggregate `./gradlew test`는 외부 fixture PortabilityCyclic 1건만 실패(우리 코드 0). 2g heap은 별개(OOM 방지). 관측 기반 추적은 perf-log/sharding 설계 문서로 이관.
 - [x] P2-6 doc_headline_count_guard가 `skills/ax-transform/SKILL.md`를 미검사 → stale counts
       147/86 노출. **closed 2026-06-10 (이번 wave: counts 187/99 수정 + guard 확장).**
