@@ -230,6 +230,24 @@ checklist:
       - command: "./gradlew testTrueUp"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testAccessGrant"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testInventoryReservation"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testOrgScope"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testVarianceGate"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testStateMutation"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testRecurringInterval"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testQueryGuard"
         working_directory: "backend"
         expected_exit: 0

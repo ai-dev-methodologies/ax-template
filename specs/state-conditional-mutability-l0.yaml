@@ -1,0 +1,90 @@
+version: "0.1.0"
+scope: "state-conditional-mutability-l0 — the generalized STATE-CONDITIONAL FIELD-MUTATION AUTHORITY (which FIELDS of an aggregate are mutable is a function of the aggregate's CURRENT STATE, declared as a recorded per-(state,field) authority table, monotonically tightened by governed transitions, and re-checked under a row lock so a concurrent state advance cannot let a stale field edit through). A GovernedForm walks a lifecycle DRAFT → SUBMITTED → APPROVED → LOCKED. The MUTABLE FIELD-SET is a DECLARED function of state: in DRAFT all editable fields (title, body, reviewerNote) are mutable; in SUBMITTED only a declared subset (reviewerNote) is mutable; in APPROVED and LOCKED none are. The system MUST (1) reject an attempt to mutate a field NOT in the current state's mutable-set with a 409 (FIELD_LOCKED_IN_STATE) that NAMES the field and the state — the authority is a per-(state,field) table looked up, never an ad-hoc if-scatter; (2) keep the per-state mutable-set DECLARED as a recorded policy so an auditor can reconstruct what was editable when; (3) tighten the mutable-set MONOTONICALLY across forward transitions (DRAFT ⊇ SUBMITTED ⊇ APPROVED ⊇ LOCKED) — widening (re-opening a tightened form) requires an explicit GOVERNED transition that is RECORDED, never an ad-hoc unlock; (4) serialize concurrent edits on the form row (PESSIMISTIC_WRITE) and re-check the CURRENT state under the lock so a field edit that raced a concurrent forward transition is rejected against the state that actually holds (TOCTOU — CWE-367). The IDW11 manufacturing dogfood (BACKLOG P1-49) found the catalog governed lifecycle STATUS (approvalworkflow / dunning / threshold) and four-eyes SIGN-OFF (authorization-parity) but had NO primitive for state-conditional FIELD-level mutation authority: which fields a given state lets you touch. Realized by the statemutation reference workload (com.ax.template.authblueprint.statemutation). Recurs in: regulatory filings (a SUBMITTED filing freezes its body but allows reviewer notes), manufacturing batch records (an APPROVED record is read-only, a re-opened one re-permits edits), insurance policy endorsement, contract redlining, clinical case-report forms — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (@Version optimistic + PESSIMISTIC_WRITE row lock + @Check backstops + append-only governed transitions with uq(form_id,seq)) + a DECLARED state→mutable-field authority table (an EnumMap looked up, never an if-scatter) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "NIST SP 800-162 / CNSSI 4009-2015 access-control (an authorization decision is a function of subject + resource attributes, here the resource's STATE — the access-control state is part of the policy, not an ad-hoc check) + CWE-367 (Time-of-check Time-of-use — the field edit re-checked under the row lock) + CWE-362 (concurrent edit/advance race) + RFC 9457 + RFC 9110 §15.5.10 (409 — a request that conflicts with the current state of the target resource)"
+domain_mode: backend_only
+introduced_at: "IDW11-G24 state-conditional mutation authority; built 2026-06-23 — BACKLOG P1-49"
+
+# OPT-IN state-conditional-mutability catalog. The mutation-authority gap: the
+# catalog governs lifecycle STATUS and four-eyes SIGN-OFF but never declares
+# WHICH FIELDS a given state lets you mutate. A blanket "editable while not
+# terminal" is wrong — a SUBMITTED filing freezes its body but still allows a
+# reviewer note; an APPROVED record is fully read-only; a re-opened record
+# re-permits edits, but only through a recorded governed transition.
+# Generic; the filings/batch-record/policy-endorsement framings are anchors.
+
+# ── Priority order for fork-receivers ──
+#   1. STATEMUTATION-AUTHORITY-001  (the primitive — a per-(state,field) DECLARED table; mutate a field
+#                                    not in the current state's mutable-set → 409 FIELD_LOCKED_IN_STATE naming field+state)
+#   2. STATEMUTATION-DECLARED-001   (the per-state mutable-set is a RECORDED policy an auditor can read — never an if-scatter)
+#   3. STATEMUTATION-MONOTONE-001   (forward transitions only SHRINK the mutable-set; widening = an explicit RECORDED governed transition)
+#   4. STATEMUTATION-TOCTOU-001     (keystone — a field edit re-checks the CURRENT state under the form's PESSIMISTIC_WRITE lock;
+#                                    a concurrent submit that froze the field makes the racing edit 409, never a stale-state write)
+
+# ── Composition note ──
+# DISTINCT from approvalworkflow (which governs the lifecycle STATUS itself —
+# DRAFT→SUBMITTED→APPROVED — but says nothing about which FIELDS each status
+# permits), authorization-parity (four-eyes sign-off + executed-matches-
+# authorized — a single action, not a per-field-per-state table), and
+# dunning (a one-way exactly-once NOTICE ladder + aging — no field-mutation
+# authority). FormTransition rows are @AggregateMember of GovernedForm:
+# root-JPQL reads + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state
+# from birth). The state→mutable-field table is deliberately DECLARED (an
+# EnumMap the service looks up): a fork-receiver may swap the fields or the
+# states without touching the GOVERNANCE contract (declared table + monotone
+# tightening + recorded widening + TOCTOU re-check under the lock) the
+# catalog claims.
+
+items:
+  - id: "STATEMUTATION-AUTHORITY-001"
+    chapter: "Which fields are mutable is a function of the current state — a field not in the state's mutable-set is rejected 409 naming the field + state"
+    verification:
+      mechanism: rule
+      ref: state-conditional-mutation-authority-is-a-declared-monotone-table
+    requirement: "Editing a field of a GovernedForm MUST consult the per-(state, field) mutable-field authority table for the form's CURRENT state. In DRAFT every editable field (title, body, reviewerNote) is mutable; in SUBMITTED only the declared subset (reviewerNote) is mutable; in APPROVED and LOCKED none are. An attempt to mutate a field that is NOT in the current state's mutable-set MUST be rejected with a 409 (FIELD_LOCKED_IN_STATE) whose detail NAMES the offending field AND the state that locked it. The authority MUST be a TABLE looked up — never an ad-hoc if-scatter scattered through the edit path. A blanket 'editable while not terminal' MUST be unrepresentable: SUBMITTED permits reviewerNote but freezes title/body."
+    test_method: "RestAssured (DRAFT edit title/body/reviewerNote → 200; submit → SUBMITTED; edit reviewerNote → 200; edit title in SUBMITTED → 409 FIELD_LOCKED_IN_STATE naming 'title' + 'SUBMITTED'; approve → APPROVED; edit reviewerNote in APPROVED → 409; structural: the policy is a single declared EnumMap, no field-name if-scatter in the edit path)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-162 / CNSSI 4009-2015 — access control as a
+      decision over resource attributes, here the resource's STATE): "The
+      process of granting or denying specific requests to 1) obtain and use
+      information and related information processing services and 2) enter
+      specific physical facilities."
+      (https://csrc.nist.gov/glossary/term/access_control)
+  - id: "STATEMUTATION-DECLARED-001"
+    chapter: "The per-state mutable-set is a DECLARED recorded policy an auditor can reconstruct — never an ad-hoc check"
+    requirement: "The mutable-field-set for each state MUST be a DECLARED policy — a single authority table the service looks up by state — so an auditor can see exactly what was editable in each state without reading the imperative edit path. The form MUST expose its current state's mutable-set (the set of field names mutable now) so a caller/auditor can read what is editable BEFORE attempting an edit. The declared table MUST be the SAME object both the read-what-is-editable path and the enforce-on-edit path consult — they cannot diverge."
+    test_method: "RestAssured (GET the form → it reports its current mutableFields; in DRAFT the set is {title, body, reviewerNote}; in SUBMITTED it is {reviewerNote}; in APPROVED/LOCKED it is empty; the reported set matches what the edit path actually enforces — an edit of a field in the reported set succeeds, one outside it is 409)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The declared table is the audit seam — the same EnumMap that the GET
+      surfaces is the one the edit path enforces, so what-was-editable-when is
+      reconstructible from the policy, not inferred from scattered conditionals.
+  - id: "STATEMUTATION-MONOTONE-001"
+    chapter: "Forward transitions only SHRINK the mutable-set; widening (re-opening) requires an explicit RECORDED governed transition"
+    requirement: "Across the forward lifecycle DRAFT → SUBMITTED → APPROVED → LOCKED the mutable-field-set MUST tighten MONOTONICALLY: DRAFT ⊇ SUBMITTED ⊇ APPROVED ⊇ LOCKED (each forward transition removes fields, never adds). A status transition MUST go only through the GovernedForm state machine (the sole status mutator) along the declared transition graph; an illegal edge (skip, reverse not declared, advance past LOCKED) is a 409. WIDENING the mutable-set — re-opening a SUBMITTED or APPROVED form back to DRAFT so frozen fields become editable again — MUST be an EXPLICIT governed transition that is RECORDED as an immutable FormTransition (the reason + actor + the state it re-opened from), never an ad-hoc unlock. A LOCKED form is terminal — it cannot be re-opened."
+    test_method: "RestAssured (the declared mutable-sets satisfy DRAFT ⊇ SUBMITTED ⊇ APPROVED ⊇ LOCKED; submit then approve then attempt to skip/reverse illegally → 409; re-open a SUBMITTED form → 200 back to DRAFT with a recorded REOPEN transition + reason; re-opening a LOCKED form → 409; structural: monotone tightening asserted over the declared table)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Monotone tightening is what makes 'frozen' meaningful: once a field
+      leaves the mutable-set it stays out until an auditable governed re-open
+      puts it back — the re-open is a recorded event, not a silent widening.
+  - id: "STATEMUTATION-TOCTOU-001"
+    chapter: "Keystone — a field edit re-checks the CURRENT state under the form's PESSIMISTIC_WRITE row lock; a concurrent state advance cannot let a stale-state edit through"
+    requirement: "An edit MUST take the form's PESSIMISTIC_WRITE row lock and re-check the mutable-field authority against the state that holds UNDER the lock — not the state the caller observed when composing the request. If a concurrent forward transition advanced the form past the state in which the field was mutable (e.g. a SUBMIT froze the title between the caller's read and the edit), the racing edit MUST be rejected 409 FIELD_LOCKED_IN_STATE against the CURRENT (advanced) state — never written against the stale state (CWE-367 time-of-check/time-of-use). Across ANY interleaving of a concurrent submit and a title-edit-while-DRAFT, the form MUST NEVER end with a title written after it was frozen."
+    test_method: "Concurrency proof (open a DRAFT form; fire a concurrent SUBMIT and an edit-title on the SAME form; the SUBMIT freezes title — across the race exactly one of {edit-before-submit succeeds, edit-after-submit 409s} holds, and the form NEVER shows a title write timestamped after the submit; the edit re-checks state under findByIdForUpdate)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-367 — the time-of-check/time-of-use the under-lock
+      re-check defeats): "The product checks the state of a resource before
+      using that resource, but the resource's state can change between the
+      check and the use in a way that invalidates the results of the check."
+      (https://cwe.mitre.org/data/definitions/367.html)
+      The PESSIMISTIC_WRITE lock + the under-lock re-check are the
+      belt-and-suspenders the dunning and recordlinkage domains taught the
+      catalog: the lock serializes the read-state / enforce / write sequence so
+      the field authority is evaluated against the state that actually holds.

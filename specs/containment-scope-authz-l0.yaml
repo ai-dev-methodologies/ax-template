@@ -1,0 +1,102 @@
+version: "0.1.0"
+scope: "containment-scope-authz-l0 — HIERARCHICAL CONTAINMENT-SCOPE AUTHORIZATION: a role granted at a NODE of an org-unit tree cascades to the ENTIRE SUBTREE under it. The catalog's existing relationship-authz is FLAT (a direct edge subject↔resource — owner/participant of one resource); nothing expressed 'a grant at a tree node CONTAINS every resource located at or below it'. OrgUnits form a TREE (each node has a parentId; a root has none; no self-parent; a MATERIALIZED PATH — the /-delimited chain of ancestor ids — makes subtree containment a deterministic prefix test at arbitrary depth). A ScopeGrant gives a principal a role at a specific node. AUTHORIZATION: a principal may act on a target node (or a resource located at one) with a required role IFF they hold a satisfying grant at that node OR ANY ANCESTOR of it (the grant's node CONTAINS the target) — containment is the cascade. (1) CONTAINMENT-CHECK: access is allowed iff the target is in the subtree of some node where the principal holds the required role; otherwise 403 OUT_OF_SCOPE. (2) the cascade is DERIVED from the tree at decision time, never a denormalized per-node ACL that drifts; the tree is append-structured here (no reparent/move) but the containment query MUST be correct for arbitrary depth. (3) a grant at a LEAF does NOT cascade upward (only downward/containment); a grant at a mid-tree node is allowed on its descendants and DENIED on its siblings and ancestors. (4) concurrent same-key grants serialize on the node row → exactly one row. The IDW11 manufacturing/BoM dogfood found the catalog had no primitive for the hierarchical containment scope an org-tree / location-tree / category-tree authorization runs against. Realized by the orgscope reference workload (com.ax.template.authblueprint.orgscope). Recurs in: org-chart/department-tree authz, location/site hierarchy authz, product-category-tree authz, file-system folder ACL inheritance, GCP/AWS resource-hierarchy (folder→project) IAM — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (org-unit tree with a materialized ancestor path → O(1) prefix containment at arbitrary depth + append-only immutable ScopeGrant members with uq(node,principal,role) + @Version optimistic + PESSIMISTIC_WRITE node-row lock + @Check no-self-parent) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "NIST RBAC role hierarchy / hierarchical RBAC (INCITS 359 — permissions acquired through assigned roles or roles inherited through the role hierarchy; least privilege) + NIST SP 800-162 ABAC (authorization determined by evaluating attributes/relationship of subject to object against policy) + CWE-362 (concurrent same-key grant race) + RFC 9457 + RFC 9110 §15.5.4 (403)"
+domain_mode: backend_only
+introduced_at: "IDW11-G7 residual — hierarchical/containment-scope authz; built 2026-06-23 — BACKLOG P1-47"
+
+# OPT-IN containment-scope-authz catalog. The hierarchical-authz gap: the catalog
+# governs FLAT relationship authz (owner/participant of ONE resource) but never
+# expressed a role granted at a TREE NODE cascading to its whole subtree. Generic;
+# the org-chart / location-tree / resource-hierarchy framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. ORGSCOPE-TREE-001       (the primitive — an org-unit tree with a materialized ancestor path; subtree = prefix)
+#   2. ORGSCOPE-GRANT-001      (a ScopeGrant gives a principal a role AT a node; idempotent, immutable)
+#   3. ORGSCOPE-CONTAINMENT-001 (keystone — allowed iff a satisfying grant is held at the target node OR an ancestor; else 403)
+#   4. ORGSCOPE-CASCADE-001    (the cascade is DERIVED from the tree, never a denormalized per-node ACL; leaf grant never cascades upward)
+#   5. ORGSCOPE-CONCURRENT-001 (concurrent same-key grants serialize on the node row → exactly one row)
+
+# ── Composition note ──
+# DISTINCT from decision-governance (versions one scope's computed value — no tree,
+# no cascade), deadline-obligation (a grounded multi-axis deadline — no hierarchy),
+# and the FLAT relationship-authz the catalog already ships (common/CallerScope +
+# owner/participant of ONE resource — a direct edge, no containment). The novel
+# correctness property is the DOWNWARD-ONLY CONTAINMENT CASCADE derived from the
+# tree path: a grant at node A authorizes every node in A's subtree (A itself + all
+# descendants at arbitrary depth) and NOTHING ELSE — not A's siblings, not A's
+# ancestors. ScopeGrant rows are @AggregateMember of OrgUnit: root-JPQL reads +
+# common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth). The role
+# ladder (VIEWER<EDITOR<MANAGER) and the tree shape are a fork-receiver swap behind
+# the GOVERNANCE contract (tree-derived downward containment + 403 out-of-scope +
+# idempotent immutable grants + serialized same-key grant) the catalog claims.
+
+items:
+  - id: "ORGSCOPE-TREE-001"
+    chapter: "Org units form a tree with a materialized ancestor path — subtree containment is a deterministic prefix test at arbitrary depth"
+    verification:
+      mechanism: rule
+      ref: containment-scope-authz-tree-derived-downward-cascade
+    requirement: "An OrgUnit MUST be a node in a TREE: it carries a parentId (NULL only for a tree root) and MUST NOT be its own parent (a @Check forbids a self-loop). Each node MUST carry a MATERIALIZED ANCESTOR PATH — the /-delimited chain of its ancestor ids ending in its own id (e.g. /root/.../self/) — set at creation from the parent's path. The path makes subtree containment a deterministic prefix test: a node N is in the subtree of node A iff N.path starts with A.path. The path MUST be correct for ARBITRARY depth. The tree is append-structured (no reparent/move in scope), so the path is immutable once set."
+    test_method: "RestAssured (create a root → path /rootId/; create a child → path /rootId/childId/; create a grandchild → path /rootId/childId/grandchildId/; structural: parent_id @Check no-self-parent + path/id/parent_id @Column(updatable=false))"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST RBAC — permissions are acquired through assigned roles or
+      roles inherited through the role hierarchy; the org-unit tree is the structural
+      hierarchy the grant-cascade generalizes): "A role is essentially a collection of
+      permissions, and all users receive permissions only through the roles to which
+      they are assigned, or through roles they inherit through the role hierarchy."
+      (https://csrc.nist.gov/projects/role-based-access-control/faqs)
+  - id: "ORGSCOPE-GRANT-001"
+    chapter: "A ScopeGrant gives a principal a role AT one node — immutable, idempotent, one per (node, principal, role)"
+    requirement: "A ScopeGrant MUST record that one principal holds one role (VIEWER / EDITOR / MANAGER) AT one OrgUnit node, with the grantor and the grant instant. The grant is IMMUTABLE (all columns updatable=false) and the SOLE input to authorization — the cascade to the node's subtree is DERIVED at decision time, never stored on the grant. There MUST be at most ONE grant per (node, principal, role): a uq backstop makes a re-grant IDEMPOTENT (it returns the existing row, never a duplicate). A ScopeGrant has no repository of its own — it is an @AggregateMember of OrgUnit (root-JPQL reads, common/MemberWriter writes)."
+    test_method: "RestAssured (grant VIEWER to a principal at a node → 201; re-grant the same (node, principal, role) → idempotent, same id, no duplicate row; the grants-at-node listing shows exactly one)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The grant is the relationship; the cascade is a derived property of the tree.
+      A ScopeRole is NOT a JWT authority (the auth system mints only
+      ADMIN/MANAGER/MEMBER/AUDITOR) — it is the subject↔node relationship NIST
+      SP 800-162 ABAC evaluates.
+  - id: "ORGSCOPE-CONTAINMENT-001"
+    chapter: "Keystone — a caller may act on a target node IFF they hold a satisfying grant at that node OR any ANCESTOR of it; otherwise 403 OUT_OF_SCOPE"
+    requirement: "A containment check MUST allow a principal to act on a target node with a required role IFF the principal holds a grant whose role is at-least-as-strong as the required role AND whose node CONTAINS the target (the target's path is prefixed by the granted node's path — true for the granted node itself and every descendant at arbitrary depth). If NO such grant exists the check MUST return 403 OUT_OF_SCOPE. The decision MUST be derived from the caller's grants and the tree — the principal is the AUTHENTICATED CALLER, never a request param. A principal granted at a MID-TREE node is allowed on that node and its descendants, and 403 on its SIBLINGS and its ANCESTORS."
+    test_method: "RestAssured (keystone: grant MANAGER at a mid-tree node → 200 allowed on that node + a descendant; 403 OUT_OF_SCOPE on a sibling subtree, on the parent/root (ancestor), and for a principal with no grant; a VIEWER grant is 403 when MANAGER is required)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-162 — ABAC, the relationship-of-subject-to-object
+      authorization the containment check realizes): "ABAC is a logical access
+      control methodology where authorization to perform a set of operations is
+      determined by evaluating attributes associated with the subject, object,
+      requested operations, and, in some cases, environment conditions against
+      policy, rules, or relationships that describe the allowable operations for a
+      given set of attributes." (https://csrc.nist.gov/pubs/sp/800/162/upd2/final)
+  - id: "ORGSCOPE-CASCADE-001"
+    chapter: "The cascade is DERIVED from the tree, never a denormalized per-node ACL; a grant at a leaf does NOT cascade upward"
+    requirement: "The authorization cascade MUST be computed from the tree at decision time (the materialized-path prefix test) and MUST NOT be a denormalized per-node ACL that is written once and can drift from the tree. The cascade is DOWNWARD ONLY: a grant at node A authorizes A and every node in A's subtree (descendants at arbitrary depth) and NOTHING above or beside A. A grant at a LEAF authorizes ONLY that leaf — it MUST NOT cascade upward to the leaf's parent or any ancestor. No persisted ACL row may exist that records per-target access independent of the tree."
+    test_method: "RestAssured (grant at a LEAF → allowed on the leaf, 403 on its parent and every ancestor; grant at the ROOT → allowed on the whole tree; structural: the service derives the decision from the grant's node path and the target path — no per-node ACL table)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The downward-only containment cascade is the novel property: it is what a
+      flat owner/participant edge cannot express. Deriving it from the tree (rather
+      than materializing a per-node ACL) is what keeps it from drifting when the
+      tree grows.
+  - id: "ORGSCOPE-CONCURRENT-001"
+    chapter: "Concurrent same-key grants serialize on the node row; exactly one grant row results"
+    requirement: "Across ANY interleaving of concurrent grant calls for the SAME (node, principal, role), EXACTLY ONE grant row MUST result (CWE-362). The grant path MUST take the node's PESSIMISTIC_WRITE row lock so the check-exists / insert sequence cannot interleave; the uq(node, principal, role) index is the backstop that makes the loser of any residual race a deterministic idempotent no-op (it returns the row that won, never a 5xx or a duplicate). The result MUST NEVER be two grant rows for one (node, principal, role)."
+    test_method: "Concurrency proof (N concurrent grant calls for one (node, principal, role) → exactly one row persisted, every caller gets a success with the same grant id; the grants-at-node listing shows exactly one)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent same-key grant race): "The product
+      contains a concurrent code sequence that requires temporary, exclusive access
+      to a shared resource, but a timing window exists in which the shared resource
+      can be modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)
+      The node-row PESSIMISTIC_WRITE lock + the uq(node, principal, role) backstop
+      are the belt-and-suspenders the dunning and recordlinkage domains taught the
+      catalog: the lock serializes the happy path, the unique index makes the loser
+      a deterministic idempotent no-op.

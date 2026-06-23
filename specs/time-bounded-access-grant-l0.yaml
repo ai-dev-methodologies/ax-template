@@ -1,0 +1,93 @@
+version: "0.1.0"
+scope: "time-bounded-access-grant-l0 — a TIME-BOUNDED RELATIONSHIP GRANT (ReBAC) + a MULTI-CREDENTIAL ELIGIBILITY GATE, both fail-closed against a wall clock. The catalog's relationship-authorization is ATEMPORAL (a (subject, resource, relation) tuple is either present or absent) and its capability-token is a caller-less bearer; NOTHING composes a RELATIONSHIP grant WITH AN EXPIRY. An AccessGrant carries (subjectId, resourceRef, relation) PLUS validFrom + validUntil; access is allowed ONLY while now ∈ [validFrom, validUntil) AND status = ACTIVE — a grant outside its window, or REVOKED, FAILS CLOSED (403 GRANT_EXPIRED / GRANT_REVOKED). 'expired' is a RECOMPUTED PREDICATE over the injected Clock, never a stored boolean that goes stale: the same row is allowed at T and denied at validUntil with no write in between. Grants are APPEND-ONLY and REVOCABLE (a revoke records who + when; there is NO delete). Separately, a MULTI-CREDENTIAL ELIGIBILITY GATE requires a SET of credential classes each currently-valid: an operation passes ONLY when EVERY required class is held and non-expired at now; a single missing/expired credential FAILS CLOSED (403 naming the missing/expired class). Recurs in: dispatch (a courier's time-boxed delivery authorization + license/insurance/background-check set), field service, healthcare visit authorizations, contractor site access, equipment operation licensing — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only grants + @Version optimistic + PESSIMISTIC_WRITE row lock on revoke + @Check window/terminal backstops) + a RECOMPUTED-over-now access predicate (NEVER a stored expired flag) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "NIST SP 800-162 (Guide to Attribute Based Access Control — attribute/policy validity, time-of-access decision) + NIST SP 800-53 Rev 5 AC-2 (Account Management — time-bound accounts) and AC-3 (Access Enforcement) + RFC 9457 (Problem Details) + RFC 9110 §15.5.4 (403)"
+domain_mode: backend_only
+introduced_at: "IDW9-G13 (time-bounded relationship grant) + IDW9-G16 (multi-credential eligibility gate); built 2026-06-23 — BACKLOG P1-44 + P1-45 (REBUILD; wave4 attempt was rate-limited, nothing committed)"
+
+# OPT-IN time-bounded-access-grant catalog. The temporal-ReBAC gap: the catalog
+# governs atemporal relationships and caller-less capability tokens but never
+# composes a (subject, resource, relation) grant with an expiry window, and never
+# gates an operation on a SET of currently-valid credentials. Generic; the
+# dispatch/field-service/healthcare framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. AGRANT-WINDOW-001    (the primitive — access allowed ONLY while now ∈ [validFrom, validUntil) AND ACTIVE)
+#   2. AGRANT-REVOKE-001    (append-only + revoke records who/when; a revoked grant fails closed; no delete)
+#   3. AGRANT-ELIGIBILITY-001 (a SET of credential classes each currently-valid; one missing/expired → fail closed)
+#   4. AGRANT-BOUNDARY-001  (keystone — a grant exactly AT/AFTER validUntil → 403, decided on the injected Clock)
+
+# ── Composition note ──
+# DISTINCT from a plain relationship tuple (atemporal — present/absent, no window),
+# a capability token (a caller-less bearer — no subject relation, no expiry
+# recompute), and threshold-terminal (a one-way irreversible crossing — no window
+# to re-enter, no per-credential set gate). The defining move here is that
+# 'expired' is NEVER persisted: AccessGrant.isActiveAt(now) recomputes the verdict
+# from validFrom/validUntil/status against the injected Clock, so the SAME row is
+# allowed at T and denied at validUntil with zero intervening write. A fork-receiver
+# may swap the relation vocabulary or the credential classes without touching the
+# GOVERNANCE contract (window-recompute fail-closed + append-only revoke + set-gate)
+# the catalog claims.
+
+items:
+  - id: "AGRANT-WINDOW-001"
+    chapter: "Access is allowed ONLY while now ∈ [validFrom, validUntil) AND the grant is ACTIVE — a recomputed predicate, never a stored flag"
+    verification:
+      mechanism: rule
+      ref: time-bounded-access-grant-rebac-window-and-eligibility-gate
+    requirement: "An AccessGrant carries (subjectId, resourceRef, relation) PLUS validFrom + validUntil (half-open [validFrom, validUntil)) and a status. A check that the subject holds the relation on the resource MUST be allowed ONLY when the injected Clock's now is in [validFrom, validUntil) AND status = ACTIVE. A check BEFORE validFrom is denied (403 GRANT_NOT_YET_VALID); a check AT or AFTER validUntil is denied (403 GRANT_EXPIRED). The 'expired' decision MUST be RECOMPUTED over now (AccessGrant.isActiveAt(now)) — there MUST be no stored boolean 'expired'/'active' column that a passing clock could leave stale. A grant whose window has not been entered or has elapsed FAILS CLOSED."
+    test_method: "RestAssured (create a grant with validFrom in the past + validUntil in the future → check 200 allowed; a grant with validFrom in the future → check 403 GRANT_NOT_YET_VALID; a grant with validUntil in the past → check 403 GRANT_EXPIRED; structural: no 'expired'/'active' boolean column on the entity)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-162 ABAC, via the NIST glossary — the access
+      decision is computed from attributes AND environment conditions AT the time
+      of access, so a validity window is an environment condition the policy
+      evaluates, not a stored verdict): "An access control method where subject
+      requests to perform operations on objects are granted or denied based on
+      assigned attributes of the subject, assigned attributes of the object,
+      environment conditions, and a set of policies that are specified in terms
+      of those attributes and conditions."
+      (https://csrc.nist.gov/glossary/term/attribute_based_access_control)
+  - id: "AGRANT-REVOKE-001"
+    chapter: "Grants are append-only and revocable — a revoke records who + when and fails the grant closed; there is NO delete path"
+    requirement: "A grant MUST be REVOCABLE before its validUntil: revoking sets status = REVOKED and RECORDS the revoking actor + the revoke instant (both immutable once written). A REVOKED grant FAILS CLOSED on every subsequent check (403 GRANT_REVOKED) regardless of the window. Revocation MUST be append-only in posture — the (subjectId, resourceRef, relation, validFrom) identity and validUntil are immutable (@Column(updatable=false)); a grant is NEVER deleted (no delete method anywhere in the domain). Revoking an already-revoked grant is idempotent (no second actor/instant overwrite). The revoke path takes the grant row's PESSIMISTIC_WRITE lock so a concurrent revoke records exactly one (actor, instant)."
+    test_method: "RestAssured (revoke an ACTIVE grant → 200, status REVOKED, revokedBy + revokedAt recorded; a check on the revoked grant → 403 GRANT_REVOKED even though the window is still open; a second revoke → idempotent 200, same revokedBy/revokedAt; structural: revokedBy/revokedAt immutable, no delete method on the repository)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-53 Rev 5, AC-2(3) Disable Accounts — accounts and
+      their access are disabled on a defined trigger including expiry, the revoke
+      discipline a time-bounded grant generalizes): "Disable accounts within
+      [Assignment: organization-defined time period] when the accounts: Have
+      expired; Are no longer associated with a user or individual; Are in violation
+      of organizational policy; or Have been inactive for [Assignment:
+      organization-defined time period]."
+      (https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-2/)
+  - id: "AGRANT-ELIGIBILITY-001"
+    chapter: "A multi-credential eligibility gate passes ONLY when EVERY required credential class is held and non-expired at now"
+    requirement: "An operation MAY require a SET of credential classes (e.g. LICENSE, INSURANCE, BACKGROUND_CHECK). The eligibility gate MUST pass ONLY when, for EVERY required class, the subject holds a credential of that class that is non-expired at the injected Clock's now. A single MISSING required class, or a single HELD-but-EXPIRED credential, FAILS CLOSED (403 CREDENTIAL_INELIGIBLE) and the failure MUST NAME the missing/expired class. The eligibility verdict MUST be RECOMPUTED over now (a credential's expiry is evaluated against the Clock, never a stored 'valid' flag). A credential's expiry is itself a [validFrom, validUntil) window evaluated identically to a grant's."
+    test_method: "RestAssured (hold LICENSE + INSURANCE both valid, require {LICENSE, INSURANCE} → eligible 200; require {LICENSE, INSURANCE, BACKGROUND_CHECK} when BACKGROUND_CHECK is absent → 403 CREDENTIAL_INELIGIBLE naming BACKGROUND_CHECK; hold an EXPIRED LICENSE → 403 CREDENTIAL_INELIGIBLE naming LICENSE)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST SP 800-53 Rev 5, AC-3 Access Enforcement — the gate
+      enforces ALL approved authorizations, i.e. EVERY required attribute must
+      hold, not just one): "Enforce approved authorizations for logical access
+      to information and system resources in accordance with applicable access
+      control policies."
+      (https://csrc.nist.gov/projects/cprt/catalog#/cprt/framework/version/SP_800_53_5_1_1/home?element=AC-3)
+  - id: "AGRANT-BOUNDARY-001"
+    chapter: "Keystone — a grant checked EXACTLY AT or AFTER validUntil is denied (403), decided on the injected Clock"
+    requirement: "The window is HALF-OPEN [validFrom, validUntil): a check at an instant STRICTLY LESS THAN validUntil (and ≥ validFrom, ACTIVE) is allowed; a check at an instant EQUAL TO or GREATER THAN validUntil is denied (403 GRANT_EXPIRED). The boundary decision MUST be taken on the injected java.time.Clock so it is deterministic and testable — advancing the Clock to validUntil (with NO write to the grant row) MUST flip the same grant from allowed to denied. There MUST be no off-by-one that admits the instant equal to validUntil."
+    test_method: "Boundary proof (injected fixed Clock: at validUntil.minusSeconds(1) → 200 allowed; advance the Clock to exactly validUntil → 403 GRANT_EXPIRED on the SAME grant with no intervening write; assert instants robustly via the injected Clock, UTC)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The half-open interval is the standard exclusive-upper-bound convention
+      (the instant equal to validUntil is the first instant OUTSIDE the window),
+      mirroring the catalog's threshold-terminal @Check anchor<limit discipline:
+      the boundary instant belongs to the denied side. Recomputing over the
+      injected Clock is what makes the SAME row allowed at T and denied at
+      validUntil with zero intervening write — the proof that 'expired' is a
+      predicate, not a persisted flag (NIST SP 800-162 time-of-access decision).

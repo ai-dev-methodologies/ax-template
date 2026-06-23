@@ -1,0 +1,93 @@
+version: "0.1.0"
+scope: "completion-reset-recurring-interval-l0 — a RECURRING obligation whose interval RESETS ON COMPLETION. DISTINCT from a fixed-cadence grid (every 1st of the month, every Monday) where the next window is a calendar function of the previous window's start: here completing the current occurrence ATOMICALLY closes the current window AND opens the NEXT window measured FROM the completion instant. A RecurringObligation carries an immutable intervalSeconds; the CURRENT window is [windowStart, windowStart + interval). 'due'/'overdue' is a RECOMPUTED predicate (now >= windowStart + interval AND the current window has no occurrence yet) — NEVER a stored boolean a writer could lie about. (1) COMPLETE records an append-only Occurrence {completedAt, completedBy, windowStart-snapshot} AND advances windowStart := completedAt, so doing the task EARLY shifts the whole future schedule forward (the defining property vs a fixed grid, where early completion changes nothing). (2) exactly-once per window: a second complete on the SAME window is a deterministic 409 — the window already carries its occurrence; the occurrence history is the full append-only trail. (3) OVERDUE is derived from now vs windowStart + interval and can flip from time passing ALONE, with no write. (4) a @Scheduled sweep may DERIVE/record a non-authoritative overdue flag (operational visibility) but uses @Lazy self-injection (proxy-safe) and NEVER auto-completes the obligation. (5) CONCURRENT-SAFE: concurrent completes on one obligation serialize on its PESSIMISTIC_WRITE row so EXACTLY ONE advances the window, the rest 409. The catalog's deadline-obligation-l0 governs a ONE-SHOT deadline closed by a single ack; scheduled-task-l0 runs jobs on a cron with no obligation lifecycle; threshold-terminal derives an IRREVERSIBLE terminal — NONE model a window that recurs by resetting from each completion. Realized by the recurringinterval reference workload (com.ax.template.authblueprint.recurringinterval). Recurs in: condition/usage-based maintenance intervals (next inspection runs from the last), recurring compliance attestations (re-attest within N days of the last attestation), periodic re-certification, recurring safety walk-downs, subscription-style recurring checklists — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only Occurrence rows + @Version optimistic + PESSIMISTIC_WRITE row lock + @Check backstops) + @Scheduled sweep with a synchronous sweepOne test path (ObligationSweeper / ExportWorker precedent) and @Lazy self-injection (proxy-safe) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "US 14 CFR §91.409(b) (the canonical COMPLETION-RESET interval: the next 100 hours of time in service is computed FROM the last inspection, not on a fixed grid) + CWE-362 (concurrent complete-vs-complete and complete-vs-sweep racing one obligation row) + RFC 9457 + RFC 9110 §15.5.10 (409 Conflict)"
+domain_mode: backend_only
+introduced_at: "IDW17-G12 recurring-interval-reset-on-completion; built 2026-06-23 — BACKLOG P1-50"
+
+# OPT-IN completion-reset-recurring-interval catalog. The gap deadline-obligation-l0
+# did NOT close: a deadline that RECURS by resetting from each completion, where the
+# window slides forward as the obligation is satisfied. A fixed calendar grid and a
+# one-shot acknowledged deadline are both representable; a self-resetting recurring
+# window is not. Generic; the maintenance-interval framing is an anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. CRI-RESET-001      (the primitive — completing advances the window FROM the completion instant)
+#   2. CRI-ONCE-001       (exactly-once per window — a second complete on the same window is 409)
+#   3. CRI-DUE-001        (due/overdue is a RECOMPUTED predicate, never a stored boolean)
+#   4. CRI-SWEEP-001      (the @Scheduled @Lazy-self sweep records an overdue flag, NEVER auto-completes)
+#   5. CRI-CONCURRENT-001 (keystone — concurrent completes serialize; exactly one advances, the rest 409)
+
+# ── Composition note ──
+# DISTINCT from deadline-obligation-l0 (one-shot grounded deadline closed by a single
+# explicit ack — no recurrence; completing is terminal, not a window advance) and from
+# scheduled-task-l0 (cron job execution, no obligation window) and threshold-terminal
+# (irreversible terminal, never reopens). The flagship distinction vs a FIXED-CADENCE
+# grid: there, the next window is a pure calendar function of the previous window start,
+# so completing early changes nothing; HERE windowStart := completedAt, so an early
+# completion shifts the entire future schedule. Occurrences are @AggregateMember of the
+# RecurringObligation root: reads are JPQL on the root's repository, writes go through the
+# shared common/MemberWriter seam (AX-DDD-MEMBER-REPO end-state, applied from birth). The
+# sweep is a CONCURRENT MUTATOR (timeout-sweep-is-a-concurrent-mutator) satisfied by the
+# STRONGER means — the same PESSIMISTIC_WRITE row lock as the complete path.
+
+items:
+  - id: "CRI-RESET-001"
+    chapter: "Completing the current occurrence advances the window FROM the completion instant (reset, not fixed cadence)"
+    verification:
+      mechanism: rule
+      ref: completion-reset-recurring-interval
+    requirement: "Completing the current occurrence MUST atomically (a) append an immutable Occurrence row recording the windowStart it closed, who completed it, and the completion instant, AND (b) advance the obligation's windowStart to the completion instant, so the NEXT current window is [completedAt, completedAt + intervalSeconds). The next window MUST be measured FROM the completion instant — NOT from the previous windowStart on a fixed grid. The defining consequence the test pins: completing EARLY (before the current window elapses) moves the next due instant EARLIER than a fixed cadence would, because windowStart slid forward to the early completion. intervalSeconds is immutable; windowStart is mutated ONLY by the service under the row lock; no API accepts a windowStart or a due/overdue value directly."
+    test_method: "RestAssured (create with intervalSeconds → 201; complete → 200, an Occurrence appended with completedBy + the closed windowStart; the obligation's windowStart now equals the completion instant; the recomputed nextDueAt == completedAt + interval, strictly earlier than create-anchored + 2*interval would be — early completion slid the schedule forward)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      14 CFR §91.409(b) is the regulated reality this generalizes — the next
+      100 hours of time in service is computed FROM the last inspection, not on
+      a fixed calendar grid (https://www.law.cornell.edu/cfr/text/14/91.409).
+  - id: "CRI-ONCE-001"
+    chapter: "Exactly-once per window — a second complete on the SAME window is a deterministic 409"
+    requirement: "Each window OCCUPANCY MUST carry AT MOST ONE occurrence. A completion opens the next window [completedAt, completedAt + intervalSeconds); completing the obligation AGAIN before that window has elapsed (become due again) is a deterministic 409 (RECURRING_INTERVAL_WINDOW_ALREADY_COMPLETED) — the current window already carries its occurrence. Under the row lock this serializes N concurrent completes so EXACTLY ONE advances (the first, on the open window) and the rest observe the just-opened, not-yet-elapsed window → 409. The UNIQUE(obligation_id, closed_window_start) constraint is the DB backstop that makes the loser deterministic even if the in-code occupancy guard's lock ever slipped (because completing advances windowStart, the closed window's start uniquely identifies a window). The occurrence history is the FULL append-only trail — there is no update or delete path on an Occurrence. After the window elapses the obligation is due again and a fresh completion legitimately appends a NEW occurrence for the new window."
+    test_method: "RestAssured (complete → 200, occurrence count 1; a second complete BEFORE the new window is due again → 409 with code RECURRING_INTERVAL_WINDOW_ALREADY_COMPLETED; occurrence count stays 1; structural: uq(obligation_id, closed_window_start))"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Exactly-once is the transactional posture of the catalog's outbox/sweep
+      rules applied to per-window completion; the UNIQUE pair is the DB backstop.
+  - id: "CRI-DUE-001"
+    chapter: "Due/overdue is a RECOMPUTED predicate, never a stored boolean a writer could lie about"
+    requirement: "Whether the obligation is currently 'due' or 'overdue' MUST be DERIVED on read from now vs windowStart + intervalSeconds (overdue iff now >= windowStart + interval AND the current window carries no occurrence yet) — it MUST NOT be a persisted authoritative boolean that a write sets. The entity MAY persist a NON-authoritative swept overdue flag for operational visibility (see CRI-SWEEP-001), but the obligation's true due/overdue status on every read is recomputed from the clock and windowStart so it can flip from time passing ALONE with no write. A free-typed nextDueAt or due flag accepted from a caller MUST be unrepresentable through the API."
+    test_method: "RestAssured (create with a short interval; immediately read → not overdue; with NO write, read again after the interval has elapsed (injected Clock advanced) → overdue == true purely from time; the create/complete contracts carry no due/overdue/nextDueAt input field)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The recomputed-predicate posture: an obligation's liveness is a function
+      of the clock, not a latched flag; mirrors threshold-terminal's derived
+      read-block being recomputed, not a stored verdict a writer owns.
+  - id: "CRI-SWEEP-001"
+    chapter: "The @Scheduled @Lazy-self sweep records a non-authoritative overdue flag and NEVER auto-completes"
+    requirement: "A @Scheduled sweep MAY scan OPEN obligations and, for those whose current window has elapsed with no occurrence, DERIVE and record a non-authoritative overdueFlag (operational visibility only — the authoritative status is still recomputed per CRI-DUE-001). The sweep MUST NOT complete, advance, or otherwise satisfy any obligation — only a real completion (a human/caller action) advances the window. The @Scheduled tick MUST invoke its transactional per-row worker THROUGH an injected @Lazy self-reference, never a bare this.sweepOne(...) (a self-invocation would BYPASS the @Transactional proxy, silently dropping REQUIRES_NEW and the row lock on the PRODUCTION path while every tested path kept them). The synchronous sweepOne is the deterministic test path (ObligationSweeper precedent); the @Scheduled sweep is the production poller."
+    test_method: "RestAssured + sweepOne (an obligation past its window with no occurrence → sweepOne records overdueFlag=true, status STILL OPEN, occurrence count 0 — the sweep auto-completes nothing; structural: the sweeper source contains no complete(/advance windowStart and injects @Lazy self)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The @Lazy self-injection proxy-safety lesson the deadline-obligation
+      sweeper encodes (a bare this.sweepOne would die only in production).
+  - id: "CRI-CONCURRENT-001"
+    chapter: "Keystone — concurrent completes serialize on the row lock; exactly one advances, the rest 409"
+    requirement: "Completing acquires the obligation's row under PESSIMISTIC_WRITE exactly like all write paths, so across ANY interleaving of N concurrent completes on ONE obligation against the SAME current window: EXACTLY ONE advances the window and appends the occurrence; every other gets a deterministic 409 (the window it observed already carries its occurrence; CWE-362). The sweep and a complete also serialize on the same row — the sweep never races a window advance, and it never resurrects or double-flags. The UNIQUE(obligation_id, window_start) backstop makes the loser deterministic even if a residual race slipped the lock."
+    test_method: "Concurrency proof (N concurrent complete calls on one obligation via ExecutorService → exactly ONE 200 with an appended occurrence and an advanced windowStart, the other N-1 are 409; occurrence count == 1)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The same single-serialization-point shape as deadline-obligation /
+      threshold / decisiongov — the obligation row is the lock.
+  - id: "CRI-AUTHZ-001"
+    chapter: "The completer is the authenticated caller — never a body/path parameter"
+    requirement: "completedBy MUST be the AUTHENTICATED caller (Authentication.getName()), never a request parameter. Every endpoint requires a valid JWT (authenticated). The deterministic sweep trigger is an OPERATIONAL action, ADMIN-only (@PreAuthorize ROLE_ADMIN) — a sweep is not a member capability. A not-found obligation key is a 404 problem+json (RESOURCE_NOT_FOUND). The service additionally rejects a blank completer (422) as a defensive guard, unreachable through the reference API but load-bearing for direct service consumers."
+    test_method: "RestAssured (unauthenticated → 401; complete records completedBy == the caller's principal, not any body field; ADMIN-only sweep trigger → MEMBER gets 403, ADMIN 200; unknown key → 404 with code RESOURCE_NOT_FOUND)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      caller-authentication-only-no-userid-param applied to a recurring
+      completion; the sweep is ADMIN-only like the obligation sweep trigger.

@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 54 | 42 | 78% |
+| P1 (generic signature backlog) | 54 | 49 | 91% |
 | P2 (verification escapes) | 11 | 3 | 27% |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **122** | **71** | **~58%** |
+| **P0–P3 합계 (수렴 분모)** | **122** | **78** | **~64%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -148,12 +148,12 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 **dispatch/예약 계열 (IDW9 잔여)**
 - [x] P1-39~41 — **closed 2026-06-16 (parallel wave2/3), timedoffer 도메인**: timed-offer(deadline까지 OPEN, @Lazy-self sweep로 EXPIRED exactly-once) + exclusive-assignment(subject당 최대1 ACCEPTED, 동시 accept 1승 409, uq backstop) + re-offer ladder(append-only, prior 참조). V055, testTimedOffer 14/14. 기존 dispatch 패키지 무수정.
 - [x] P1-43 — **closed 2026-06-16 (wave4, sensitiveaccess 도메인)**: @SensitiveField read는 반환 전 append-only access log(누가/언제/무엇/목적) 기록 — @Phi에서 분리한 generic read-audit, 무기록 reveal 불가. 앵커 NIST SP 800-53 AU-2/AU-3.
-- [ ] P1-42 IDW9-G11 / P1-44 G13 / P1-45 G16 (timed-offer/dispatch 일반화 잔여 3건)
-      (timed-offer 일반화 잔여 7건 — 상세는 IDW9 세션 기록)
+- [x] P1-44 / P1-45 — **closed 2026-06-16 (parallel wave5/6), accessgrant 도메인**: 시한부 ReBAC grant((subject,resource,relation)+validFrom/Until, 만료/철회 fail-closed 403, expired=재계산 predicate·저장 boolean 없음) + 다중 자격 만료 게이트(전 credential 현재유효 AND, 결손시 클래스 명명 403). V057, testAccessGrant 13/13. 앵커 NIST SP 800-53 AC-2/AC-3 + ABAC.
+- [ ] P1-42 IDW9-G11 anti-spoofing/plausibility (자가보고 server-unverifiable 입력 — 정의 복원 후 차기)
 
 **IDW11/12/17 미명명 잔여 (이름 복원 필요 — 차기 정리 시 세분화)**
-- [ ] P1-46 ~ P1-54 IDW11 generic 잔여(~9) · IDW12 잔여(~7) · IDW17 잔여(~9) 중 우선 9건 —
-      각 IDW 재감사로 이름 복원 후 본 섹션에 정식 등재 (복원 전에는 1건씩만 카운트)
+- [x] P1-46~50 — **closed 2026-06-16 (parallel wave5/6) (IDW11/17 residual 복원→5 도메인)**: (46) inventoryreservation 2축 available=on_hand−reserved + reserve→commit→release hold(보존 @Check, 8-thread keystone) / (47) orgscope 계층 org-tree containment-scope authz(노드 grant가 subtree로 cascade, 형제/조상 403) / (48) variancegate standard-vs-actual 비대칭 tolerance-band 게이트 + breach disposition(verdict 무재작성) / (49) statemutation state-conditional mutability(현 상태가 mutable 필드집합 결정, monotone tightening, TOCTOU 재검) / (50) recurringinterval 완료 시 윈도우 reset(다음을 완료시점부터, OVERDUE 재계산). V059~063, 각 per-domain GREEN. 앵커 APICS/SPC/NIST RBAC-hierarchy 등.
+- [ ] P1-51~54 IDW11/12/17 미명명 잔여 4건 (각 IDW 재감사로 이름 복원 후 등재 — 복원 전 1건씩 카운트)
 
 ## P2 — verification escapes (검증 체계 자체의 갭)
 

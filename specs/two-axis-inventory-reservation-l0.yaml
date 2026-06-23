@@ -1,0 +1,105 @@
+version: "0.1.0"
+scope: "two-axis-inventory-reservation-l0 — the generalized TWO-AXIS AVAILABLE/RESERVED INVENTORY with a two-phase reserve → commit → release hold. An InventoryItem tracks two persisted quantities, onHand and reserved; AVAILABLE = onHand − reserved is a DERIVED quantity (never a stored field that can drift). The system MUST (1) RESERVE q: reserving requires AVAILABLE ≥ q else 422 INSUFFICIENT_AVAILABLE; a successful reserve increments reserved by q (writing a Reservation row, status HELD) so available shrinks while onHand is untouched (the hold); (2) COMMIT a HELD reservation: committing decrements BOTH onHand and reserved by q (the goods physically leave) → reservation COMMITTED; (3) RELEASE a HELD reservation: releasing decrements reserved by q (frees the hold) → reservation RELEASED, onHand untouched; (4) CONSERVATION: reserved == Σ(HELD reservation quantities) and 0 ≤ reserved ≤ onHand at EVERY step (@Check reserved >= 0 AND reserved <= on_hand). A reservation moves HELD → (COMMITTED | RELEASED) EXACTLY ONCE — a double-commit or double-release is 409. Concurrency keystone: N concurrent reserves against limited available succeed exactly available/q times and the rest get 422 (PESSIMISTIC_WRITE on the item row, CWE-362). The IDW11 manufacturing dogfood found the catalog had a transformation-conservation primitive (transformations) and a monotone register (registers) but NO primitive for the two-axis available/reserved hold a warehouse/order system runs against every line item — the two-phase reservation (reserve then commit-or-release) that every available-to-promise system depends on. Realized by the inventory-reservation reference workload (com.ax.template.authblueprint.inventoryreservation). Recurs in: e-commerce order fulfillment, warehouse/WMS allocation, ticketing/seat holds, hotel/airline seat blocks, manufacturing component allocation — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (two persisted quantities on_hand/reserved + derived available + append Reservation rows + @Version optimistic + PESSIMISTIC_WRITE row lock on the item + @Check reserved >= 0 AND reserved <= on_hand backstop) + a HELD → (COMMITTED|RELEASED) exactly-once state machine + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "ASCM/APICS available-to-promise discipline (available = uncommitted on-hand: quantityOnStock − reserved) as realized in inventory APIs (commercetools availableQuantity = quantityOnStock − reserved) + the two-phase reservation/reserve-then-confirm pattern (Microsoft Saga: compensable transactions reserve, a pivot commits, a compensating transaction releases) + CWE-362 (concurrent reserve race) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW11-G1 two-axis available/reserved residual + the long-open two-phase hold; built 2026-06-23 — BACKLOG P1-46"
+
+# OPT-IN two-axis-inventory-reservation catalog. The available/reserved gap: the
+# catalog conserves a transformation (transformations) and walks a monotone
+# register (registers) but never models the two-axis hold an order or warehouse
+# system runs — reserve a hold against derived available, then commit (goods
+# leave) or release (hold freed), with reserved conserved as the sum of live
+# holds. Generic; the e-commerce/WMS/ticketing framings are anchors, not lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. INVRES-RESERVE-001    (the primitive — reserve q requires derived available ≥ q (422 else); reserved += q, onHand untouched, a HELD row appended)
+#   2. INVRES-COMMIT-001     (committing a HELD reservation decrements BOTH onHand and reserved by q → COMMITTED, exactly-once)
+#   3. INVRES-RELEASE-001    (releasing a HELD reservation decrements reserved by q (onHand untouched) → RELEASED, exactly-once; double-commit/release 409)
+#   4. INVRES-CONSERVE-001   (invariant — reserved == Σ(HELD quantities) and 0 ≤ reserved ≤ onHand at every step; available is DERIVED, never stored)
+#   5. INVRES-CONCURRENT-001 (keystone — N concurrent reserves against limited available; exactly available/q win, rest 422; PESSIMISTIC_WRITE on the item)
+
+# ── Composition note ──
+# DISTINCT from transformation-conservation (a one-shot input→output mass
+# balance — no standing two-axis hold, no reserve/commit lifecycle),
+# monotone-register (a single non-decreasing odometer — one axis, no reserved
+# counter-axis, no release), and threshold-terminal (a single irreversible
+# crossing — no hold, no commit/release). AVAILABLE is the DERIVED axis
+# (onHand − reserved): it is NEVER a stored column, so it cannot drift from its
+# two backing axes. Reservation rows are @AggregateMember of InventoryItem:
+# root-JPQL reads + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state
+# from birth). The two phases are the reserve-then-confirm pattern Microsoft's
+# Saga writeup calls a compensable transaction (reserve) followed by either a
+# pivot (commit) or a compensating transaction (release): a fork-receiver may
+# add an expiry-sweep on stale HELD rows without touching the GOVERNANCE
+# contract (derived available + conservation + exactly-once commit/release +
+# serialized reserve) the catalog claims.
+
+items:
+  - id: "INVRES-RESERVE-001"
+    chapter: "Reserving q requires DERIVED available ≥ q (422 else); a successful reserve increments reserved and appends a HELD row, onHand untouched"
+    verification:
+      mechanism: rule
+      ref: two-axis-inventory-reservation-reserve-commit-release-hold
+    requirement: "Reserving a quantity q against an InventoryItem MUST first check the DERIVED available = onHand − reserved. If available < q the reserve MUST be refused with 422 (INVENTORY_INSUFFICIENT_AVAILABLE) and NOTHING is mutated. If available ≥ q the system MUST increment the item's reserved by q and append an immutable Reservation row with status HELD recording q, leaving onHand UNCHANGED (the hold shrinks available without removing goods). available MUST be a computed quantity — it MUST NOT be persisted as a stored column that can drift from onHand and reserved."
+    test_method: "RestAssured (reserve q within available → 201 with status HELD, item reserved += q, onHand unchanged, available = onHand − reserved; reserve q > available → 422 INVENTORY_INSUFFICIENT_AVAILABLE with nothing mutated; structural: no 'available' stored column on the entity)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (commercetools Composable Commerce API, InventoryEntry —
+      the available/reserved derivation the two-axis model generalizes):
+      "Available amount of stock (quantityOnStock - reserved)."
+      (https://docs.commercetools.com/api/projects/inventory) — available is
+      DERIVED from on-stock minus reserved, never a third stored axis.
+  - id: "INVRES-COMMIT-001"
+    chapter: "Committing a HELD reservation decrements BOTH onHand and reserved by q — the goods leave — exactly once"
+    requirement: "Committing a HELD Reservation MUST decrement the item's onHand by q AND its reserved by q (the held goods physically leave the location), and transition the reservation HELD → COMMITTED. After commit, onHand has fallen by q and reserved has fallen by q, so the DERIVED available is unchanged by the commit itself (the hold that was already subtracted from available simply becomes a permanent on-hand reduction). The commit MUST be EXACTLY-ONCE: committing a reservation that is not HELD (already COMMITTED or RELEASED) MUST be refused with 409 (INVENTORY_RESERVATION_NOT_HELD)."
+    test_method: "RestAssured (commit a HELD reservation → 200 status COMMITTED, item onHand -= q AND reserved -= q; committing an already-COMMITTED reservation → 409 INVENTORY_RESERVATION_NOT_HELD; committing a RELEASED reservation → 409)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (Microsoft Azure Architecture Center, Saga design pattern —
+      the pivot/commit phase of the reserve-then-confirm two-phase hold):
+      "Pivot transactions serve as the point of no return in the saga. After a
+      pivot transaction succeeds, compensable transactions are no longer
+      relevant." (https://learn.microsoft.com/en-us/azure/architecture/patterns/saga)
+      — commit is the pivot that consumes the reserved hold permanently.
+  - id: "INVRES-RELEASE-001"
+    chapter: "Releasing a HELD reservation decrements reserved by q (onHand untouched) — the hold is freed — exactly once; a double-commit/release is 409"
+    requirement: "Releasing a HELD Reservation MUST decrement the item's reserved by q (freeing the hold so available grows back), leaving onHand UNCHANGED, and transition the reservation HELD → RELEASED. The release MUST be EXACTLY-ONCE: releasing a reservation that is not HELD (already COMMITTED or RELEASED) MUST be refused with 409 (INVENTORY_RESERVATION_NOT_HELD). A reservation therefore moves HELD → (COMMITTED | RELEASED) exactly once — neither phase can fire twice, and a committed reservation can never be released nor vice versa."
+    test_method: "RestAssured (release a HELD reservation → 200 status RELEASED, item reserved -= q, onHand unchanged, available grows back; releasing an already-RELEASED reservation → 409 INVENTORY_RESERVATION_NOT_HELD; releasing a COMMITTED reservation → 409)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (Microsoft Azure Architecture Center, Saga design pattern —
+      release is the compensating transaction of the reserve): "If a step in
+      the saga fails, compensating transactions undo the changes that the
+      compensable transactions made."
+      (https://learn.microsoft.com/en-us/azure/architecture/patterns/saga)
+  - id: "INVRES-CONSERVE-001"
+    chapter: "Invariant — reserved == Σ(HELD reservation quantities) and 0 ≤ reserved ≤ onHand at every step; available is DERIVED, never stored"
+    requirement: "At EVERY step the item's reserved counter MUST equal the sum of the quantities of its HELD reservations (a committed or released reservation no longer contributes), and the item MUST satisfy 0 ≤ reserved ≤ onHand (a @Check DB backstop: reserved >= 0 AND reserved <= on_hand). available = onHand − reserved is the DERIVED projection of those two axes and MUST NOT be a stored column. Reserving cannot push reserved above onHand (it is gated on available ≥ q), and committing decrements both axes together so the invariant is preserved across the pivot."
+    test_method: "RestAssured (after a mix of reserve/commit/release the item's reserved equals the summed quantity of its still-HELD reservations and 0 ≤ reserved ≤ onHand; structural: @Check reserved >= 0 AND reserved <= on_hand on the entity and in the migration; no stored 'available' column)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The conservation invariant is the dual of transformation-conservation:
+      there the input mass equals output + classified loss; here the reserved
+      axis equals the sum of live holds and is bounded by on-hand. available is
+      a pure function of the two axes, so it can never silently drift.
+  - id: "INVRES-CONCURRENT-001"
+    chapter: "Keystone — concurrent reserves against limited available serialize on the item row; exactly available/q win, the rest 422"
+    requirement: "Across ANY interleaving of concurrent reserve calls of the same quantity q against one item with limited available, EXACTLY ⌊available/q⌋ reserves win (each incrementing reserved by q and appending a HELD row) and the rest receive 422 (INVENTORY_INSUFFICIENT_AVAILABLE) (CWE-362). The reserve path MUST take the item's PESSIMISTIC_WRITE row lock so the read-available / write-reserved sequence cannot interleave and over-reserve. Across the keystone, reserved MUST NEVER exceed onHand and the number of HELD rows MUST equal the number of winning reserves."
+    test_method: "Concurrency proof (N concurrent reserves of q against an item with available = k*q where k<N → exactly k 2xx + (N-k) 422, item reserved = k*q ≤ onHand, exactly k HELD reservation rows)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent reserve race): "The product
+      contains a concurrent code sequence that requires temporary, exclusive
+      access to a shared resource, but a timing window exists in which the
+      shared resource can be modified by another code sequence operating
+      concurrently." (https://cwe.mitre.org/data/definitions/362.html)
+      The item-row PESSIMISTIC_WRITE lock serializes the read-available /
+      write-reserved sequence so two threads cannot both pass the available ≥ q
+      gate against the same headroom — the dispatch and dunning domains taught
+      the catalog this exact belt (lock) discipline.

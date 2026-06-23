@@ -187,6 +187,42 @@ tasks.register<Test>("testTrueUp") {
     }
 }
 
+tasks.register<Test>("testAccessGrant") {
+    useJUnitPlatform {
+        includeTags("ACCESSGRANT")
+    }
+}
+
+tasks.register<Test>("testInventoryReservation") {
+    useJUnitPlatform {
+        includeTags("INVENTORYRESERVATION")
+    }
+}
+
+tasks.register<Test>("testOrgScope") {
+    useJUnitPlatform {
+        includeTags("ORGSCOPE")
+    }
+}
+
+tasks.register<Test>("testVarianceGate") {
+    useJUnitPlatform {
+        includeTags("VARIANCEGATE")
+    }
+}
+
+tasks.register<Test>("testStateMutation") {
+    useJUnitPlatform {
+        includeTags("STATEMUTATION")
+    }
+}
+
+tasks.register<Test>("testRecurringInterval") {
+    useJUnitPlatform {
+        includeTags("RECURRINGINTERVAL")
+    }
+}
+
 tasks.register<Test>("testQueryGuard") {
     useJUnitPlatform {
         includeTags("QUERYGUARD")

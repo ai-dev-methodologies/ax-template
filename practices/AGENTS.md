@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "77fbeddf332d75ee4149d5c36d048f2b9372f489e7625ccfc2589236542fc3a7"
-  rule_count: 203
+  source_concat_sha256: "f3c870bc64bbb952d1f34b60d12565a59bbb1f3afbee1176fb9c751e6ab19eaa"
+  rule_count: 209
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -2748,6 +2748,126 @@ Reference: [GDPR Article 5 — Lawfulness, fairness, accuracy](https://gdpr-info
 Reference: [OWASP ASVS V8 — Data Protection & Logging](https://owasp.org/www-project-application-security-verification-standard/)
 
 
+<!-- @source rules/completion-reset-recurring-interval.md -->
+
+---
+title: A recurring obligation whose interval RESETS ON COMPLETION must advance its window FROM the completion instant (not on a fixed calendar grid), carry at most one append-only occurrence per window (exactly-once 409), recompute due/overdue from the clock rather than a stored boolean, let a @Lazy-self @Scheduled sweep record only a non-authoritative overdue flag (never auto-complete), and serialize concurrent completes on the row lock so exactly one advances
+impact: HIGH
+impactDescription: "Modelling a self-resetting recurring window as a fixed calendar grid silently breaks the schedule the moment a task is done early or late (the next inspection must run from the LAST inspection, not from a frozen grid); a stored due/overdue boolean goes stale the instant the clock passes the window with no write, so the obligation reads 'fine' while actually overdue; without a per-window UNIQUE backstop two racing completes append two occurrences for one window and double-advance; and a sweep that auto-completes (or a @Scheduled tick that self-invokes past the @Transactional proxy) either satisfies an obligation nobody actually performed or silently runs unlocked in production while every test stays green"
+tags:
+  - state-machine
+  - scheduling
+  - concurrency
+  - audit
+  - temporal
+spec_ref: "specs/completion-reset-recurring-interval-l0.yaml#CRI-RESET-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/recurringinterval/RecurringObligationService.java + backend/src/main/java/com/ax/template/authblueprint/recurringinterval/RecurringIntervalSweeper.java"
+  pattern: "No API accepts a windowStart, nextDueAt, or due/overdue value — the obligation carries an immutable intervalSeconds and a windowStart mutated ONLY by the service under the obligation's PESSIMISTIC_WRITE row lock; completing appends an immutable Occurrence (recording the closed windowStart, completedBy, completedAt) and advances windowStart := completedAt in the SAME locked transaction, so the next window is [completedAt, completedAt + interval) — measured from the completion, not a fixed grid; UNIQUE(obligation_id, window_start) makes a second complete on the same window a deterministic 409; due/overdue is recomputed on read from now vs windowStart + interval (a persisted swept overdueFlag is non-authoritative, operational only); the @Scheduled sweep invokes its per-row worker through an injected @Lazy self-reference, locks the row exactly like the complete path, records the overdue flag, and NEVER completes/advances; completedBy is Authentication.getName() (blank-422 is service-level defensive)"
+upstream:
+  - "https://www.law.cornell.edu/cfr/text/14/91.409"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "US 14 CFR §91.409(b) — the COMPLETION-RESET interval: the next 100 hours of time in service is computed FROM the last inspection (a self-resetting window), not on a fixed calendar grid"
+    url: "https://www.law.cornell.edu/cfr/text/14/91.409"
+    quote: "The excess time used to reach a place where the inspection can be done must be included in computing the next 100 hours of time in service."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (two completes, or a complete and the sweep, racing one obligation row)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-01"
+---
+
+## A completion-reset recurring window slides forward from each completion, recomputes its own due-ness, and is advanced by exactly one writer
+
+**Impact: HIGH — a fixed-grid model of a self-resetting interval, a latched due/overdue boolean, a missing per-window UNIQUE backstop, or a sweep that auto-completes (or self-invokes past its transactional proxy) each defeats the reason the recurring obligation was tracked.**
+
+A *completion-reset recurring obligation* — a usage/condition-based maintenance interval (the next inspection runs from the last), a recurring re-attestation due N days after the last attestation, a periodic re-certification, a recurring safety walk-down — is a deadline that RECURS by **resetting from each completion**. It is the gap `deadline-obligation-l0` does not cover (that governs a ONE-SHOT deadline closed by a single ack) and is fundamentally distinct from a FIXED-CADENCE grid:
+
+```text
+FIXED CADENCE:  nextWindowStart = f(previousWindowStart)   — a pure calendar function;
+                completing EARLY changes nothing (the grid is frozen)
+RESET-ON-DONE:  windowStart := completedAt                 — the window slides forward;
+                completing EARLY moves the whole future schedule earlier
+```
+
+**1. Reset on completion (CRI-RESET-001).** 14 CFR §91.409(b) is the regulated reality this generalizes — *"The excess time used to reach a place where the inspection can be done must be included in computing the next 100 hours of time in service."* The NEXT interval is computed FROM the last inspection, not on a fixed grid. Completing appends an immutable `Occurrence` (the closed window's start, who, when) and advances `windowStart := completedAt` in one locked transaction.
+
+**2. Exactly-once per window (CRI-ONCE-001).** Each window carries at most one occurrence; `UNIQUE(obligation_id, window_start)` makes a racing second complete on the same window a deterministic 409. After a completion the obligation is OPEN again on the next window — it is never "done".
+
+**3. Due/overdue is recomputed, never latched (CRI-DUE-001).** `overdue iff now >= windowStart + interval AND the current window has no occurrence` is computed on every read from the clock and `windowStart`, so it flips from time passing ALONE — no write. A persisted swept flag is non-authoritative, operational only. A caller cannot supply a `due`/`nextDueAt`.
+
+**4. The sweep only flags, never completes (CRI-SWEEP-001).** A `@Scheduled` sweep records the non-authoritative `overdueFlag` for visibility and NEVER advances or completes — only a real completion slides the window. The `@Scheduled` tick calls its per-row worker through an injected `@Lazy` self-reference: a bare `this.sweepOne(...)` would BYPASS the `@Transactional` proxy (self-invocation), dropping `REQUIRES_NEW` and the row lock in production while every test stayed green.
+
+**Incorrect — fixed-grid recurrence, stored due flag, no per-window backstop, auto-completing self-invoking sweep:**
+
+```java
+public Obligation complete(String key) {
+    Obligation o = repo.findByKey(key);                       // ❌ no row lock (CWE-362)
+    o.setNextDueAt(o.getNextDueAt().plus(o.getInterval()));   // ❌ fixed grid from PREVIOUS due,
+    o.setOverdue(false);                                      //    not from the completion instant;
+    return repo.save(o);                                      // ❌ latched boolean goes stale on its own
+}                                                             // ❌ no Occurrence, no per-window UNIQUE → races double-advance
+
+@Scheduled(fixedDelay = 60_000)
+public void sweep() {
+    for (Obligation o : repo.findOverdue(now())) {
+        this.complete(o.getKey());                            // ❌ self-invocation bypasses @Transactional;
+    }                                                         // ❌ the sweep auto-completes work nobody did
+}
+```
+
+**Correct — window resets from completion, append-only occurrence, recomputed due-ness, flag-only @Lazy-self sweep:**
+
+```java
+@Transactional
+public RecurringObligation complete(String obligationKey, String completedBy) {
+    requireNonBlank(completedBy);                                  // 422 (defensive; API derives it)
+    RecurringObligation o = obligations.findByObligationKeyForUpdate(obligationKey) // ✅ row lock (CWE-362)
+        .orElseThrow(RecurringIntervalException::notFound);
+    Instant now = Instant.now(clock);
+    // ✅ at most one completion per window OCCUPANCY: completing again before the just-opened
+    //    window is due again is a duplicate of the current cycle → 409. Under the lock this
+    //    serializes N concurrent completes so exactly ONE advances and the rest 409.
+    if (o.getLastCompletedAt() != null && now.isBefore(o.nextDueAt())) {
+        throw RecurringIntervalException.windowAlreadyCompleted(); // 409 — already completed this window
+    }
+    try {
+        members.persistAndFlush(new Occurrence(UUID.randomUUID(), o.getId(),
+            o.getWindowStart(), completedBy, now));                // ✅ append-only; uq(obligation_id, closed_window_start)
+    } catch (DataIntegrityViolationException dup) {
+        throw RecurringIntervalException.windowAlreadyCompleted(); // ✅ DB backstop if the lock slipped
+    }
+    o.completeAndAdvance(now);                                     // ✅ windowStart := completedAt (reset, not grid)
+    return o;                                                      // next window = [now, now + interval)
+}
+
+public boolean isOverdue(RecurringObligation o, Instant now) {     // ✅ recomputed, never a stored verdict
+    return !now.isBefore(o.getWindowStart().plusSeconds(o.getIntervalSeconds()));
+}
+
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+public boolean sweepOne(UUID obligationId) {                       // the @Scheduled tick calls this
+    RecurringObligation o = obligations.findByIdForUpdate(obligationId) //  THROUGH the injected @Lazy proxy
+        .orElseThrow(RecurringIntervalException::notFound);        //  self-reference (a bare this.sweepOne
+    boolean overdue = sweepClockOverdue(o);                        //  would bypass the @Transactional proxy)
+    o.recordSweptOverdue(overdue);                                 // ✅ NON-authoritative flag only
+    return overdue;                                                // ✅ NEVER completes / advances
+}
+```
+
+The sweep is a CONCURRENT MUTATOR in the sense of `timeout-sweep-is-a-concurrent-mutator` (that rule names the optimistic `@Version` lose-the-race shape; this sweeper satisfies the same requirement by the STRONGER means — the same `PESSIMISTIC_WRITE` row lock as the complete path), so two completes serialize (exactly one advances, the other 409) and a complete and the sweep never race. `Occurrence` rows are `@AggregateMember` of the `RecurringObligation` root — root-JPQL reads, `common/MemberWriter` writes (the AX-DDD-MEMBER-REPO end-state, applied from birth).
+
+Verification: review-tier — confirm no API accepts a `windowStart`/`nextDueAt`/`due` value; completing appends an immutable `Occurrence` and advances `windowStart := completedAt` under the row lock; the next window is measured from the completion (early completion slides the schedule forward); `UNIQUE(obligation_id, window_start)` backstops exactly-once (409); due/overdue is recomputed on read; the sweep records only the non-authoritative flag, locks the row, injects `@Lazy` self, and never completes. The behavioural proofs a fork-receiver keeps green: the concurrency test (N racing completes → one occurrence, one advance, N-1 → 409) and the time-only-overdue test (overdue flips with no write).
+
+Reference: [US 14 CFR §91.409 — Inspections](https://www.law.cornell.edu/cfr/text/14/91.409)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
+
+
 <!-- @source rules/computed-decision-versioned-basis-and-four-eyes-override.md -->
 
 ---
@@ -3382,6 +3502,114 @@ Verification (review-tier): confirm a single `BlockingStatusGate`-style componen
 Reference: [OWASP ASVS 4.0 — V4.1.5 access controls fail securely](https://owasp.org/www-project-application-security-verification-standard/)
 
 Reference: [OWASP — Fail securely (default-deny on failure)](https://owasp.org/www-community/Fail_securely)
+
+
+<!-- @source rules/containment-scope-authz-tree-derived-downward-cascade.md -->
+
+---
+title: Hierarchical containment-scope authorization must model org units as a TREE with a materialized ancestor path, derive the DOWNWARD-ONLY containment cascade from that path at decision time (a grant at a node authorizes that node and its whole subtree — never its siblings or ancestors, never a leaf grant cascading upward), return 403 OUT_OF_SCOPE when no satisfying grant is held at the target node or any ancestor, and keep grants immutable + idempotent with concurrent same-key grants serialized on the node row
+impact: HIGH
+impactDescription: "A containment-scope authz that materializes a per-node ACL (instead of deriving the cascade from the tree) DRIFTS the moment the tree grows — a new descendant silently escapes a grant made at its ancestor, or a stale ACL row authorizes a node that has been restructured away; an upward-leaking cascade (a leaf grant treated as authorizing the parent) is a privilege escalation that breaks least-privilege; and an unsynchronized grant lets two threads write two rows for one (node, principal, role) (CWE-362). Authorization MUST be derived from the tree, downward-only, and fail-closed at the containment boundary"
+tags:
+  - authorization
+  - access-control
+  - governance
+  - concurrency
+spec_ref: "specs/containment-scope-authz-l0.yaml#ORGSCOPE-CONTAINMENT-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/orgscope/OrgScopeService.java + backend/src/main/java/com/ax/template/authblueprint/orgscope/OrgUnit.java + backend/src/main/java/com/ax/template/authblueprint/orgscope/ScopeGrant.java"
+  pattern: "OrgUnit is a tree node carrying a materialized ancestor path (/ancestor/.../self/) set at creation so subtree containment is a deterministic prefix test at arbitrary depth (OrgUnit.isContainedBy = target.path startsWith ancestor.path); a ScopeGrant gives a principal a ScopeRole AT one node, immutable + idempotent (uq(node,principal,role)); OrgScopeService.check derives the decision from the caller's grants and the tree — allowed iff a grant's role satisfies the required role AND the grant's node CONTAINS the target (downward-only: the node itself + descendants, never siblings or ancestors), else 403 OUT_OF_SCOPE; no per-node ACL table exists; the grant write path takes the node's PESSIMISTIC_WRITE lock; ScopeGrant is an @AggregateMember of OrgUnit (root-JPQL reads + common/MemberWriter writes); no delete path exists"
+upstream:
+  - "https://csrc.nist.gov/projects/role-based-access-control/faqs"
+  - "https://csrc.nist.gov/pubs/sp/800/162/upd2/final"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "NIST Role Based Access Control FAQ (CSRC) — permissions are acquired through assigned roles or roles inherited through the role hierarchy; the org-unit tree is the structural hierarchy the grant-cascade generalizes"
+    url: "https://csrc.nist.gov/projects/role-based-access-control/faqs"
+    quote: "A role is essentially a collection of permissions, and all users receive permissions only through the roles to which they are assigned, or through roles they inherit through the role hierarchy."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "NIST SP 800-162, Guide to Attribute Based Access Control (ABAC) Definition and Considerations (CSRC) — authorization determined by evaluating the attributes/relationship of subject to object, which the containment check realizes"
+    url: "https://csrc.nist.gov/pubs/sp/800/162/upd2/final"
+    quote: "ABAC is a logical access control methodology where authorization to perform a set of operations is determined by evaluating attributes associated with the subject, object, requested operations, and, in some cases, environment conditions against policy, rules, or relationships that describe the allowable operations for a given set of attributes."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (concurrent same-key grants racing one node)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-01"
+---
+
+## Hierarchical authorization is a TREE-DERIVED downward containment cascade — not a flat per-resource ACL
+
+**Impact: HIGH — a materialized per-node ACL drifts as the tree grows; an upward-leaking cascade is a privilege escalation; an unsynchronized grant double-writes one (node, principal, role) (CWE-362).**
+
+The catalog's existing relationship-authz is FLAT: a direct edge between a subject and ONE resource (owner / participant, via `common/CallerScope`). Many real authorization models are HIERARCHICAL instead — an org chart, a location/site tree, a product-category tree, a cloud resource hierarchy (folder → project). There, a role granted at a *node* must cascade to the *entire subtree* under it. NIST frames this as the role hierarchy: *"all users receive permissions only through the roles to which they are assigned, or through roles they inherit through the role hierarchy"* — and NIST SP 800-162 frames the decision itself as evaluating the *"relationships that describe the allowable operations"* of subject to object. The containment cascade is exactly that relationship, derived from the tree:
+
+```text
+OrgUnit:        a tree node; parentId (root has none); a MATERIALIZED PATH /ancestor/.../self/
+                so subtree containment is a prefix test at ARBITRARY depth (no recursive query)
+ScopeGrant:     a principal holds a ScopeRole AT one node; immutable; uq(node,principal,role) idempotent
+containment:    allowed iff a held grant's role satisfies the required role AND the grant's node
+                CONTAINS the target (target.path startsWith grantedNode.path) — DOWNWARD ONLY
+out-of-scope:   no satisfying grant at the target node or any ancestor → 403 OUT_OF_SCOPE (fail-closed)
+locks:          the node row, PESSIMISTIC_WRITE — concurrent same-key grants → exactly one row
+```
+
+**1. The cascade is DERIVED from the tree, never stored (ORGSCOPE-CASCADE-001).** A grant authorizes a node and its descendants because the target's materialized path is prefixed by the granted node's path — computed at decision time. A denormalized per-node ACL would have to be rewritten every time a descendant is added, and silently drifts when it is not.
+
+**2. The cascade is DOWNWARD ONLY (ORGSCOPE-CONTAINMENT-001).** A grant at a mid-tree node authorizes that node and everything under it, and is 403 on the node's siblings and on its ancestors. A grant at a *leaf* authorizes only that leaf — it never cascades upward. Treating a leaf grant as authorizing the parent is a privilege escalation that breaks least privilege.
+
+**3. Grants are immutable + idempotent, same-key grants serialize (ORGSCOPE-GRANT/CONCURRENT-001).** One row per `(node, principal, role)`; the node-row `PESSIMISTIC_WRITE` lock + the `uq` index make a concurrent same-key grant a deterministic idempotent no-op (CWE-362).
+
+**Incorrect — a flat per-target ACL, an upward-leaking cascade, an unsynchronized grant:**
+
+```java
+// ❌ a denormalized per-node ACL row, written once — drifts the moment the tree grows
+public boolean canAccess(String principal, UUID targetNodeId, String role) {
+    AclRow acl = aclRepo.findByPrincipalAndNode(principal, targetNodeId);   // ❌ no cascade at all,
+    if (acl != null && acl.getRole().equals(role)) return true;             //    or a stored cascade
+    UUID p = nodeRepo.findById(targetNodeId).get().getParentId();           // ❌ walks UPWARD —
+    while (p != null) {                                                     //    a leaf grant now
+        if (aclRepo.findByPrincipalAndNode(principal, p) != null) return true; // authorizes ancestors
+        p = nodeRepo.findById(p).get().getParentId();                      // ❌ escalation; N queries
+    }
+    return false;                                                          // ❌ direction inverted
+}
+```
+
+**Correct — containment derived from the materialized path, downward-only, fail-closed at the boundary:**
+
+```java
+@Transactional(readOnly = true)
+public ScopeDecision check(String principal, UUID targetId, ScopeRole required) {
+    OrgUnit target = units.findById(targetId).orElseThrow(OrgScopeException::nodeNotFound);
+    List<ScopeGrant> grants = units.findGrantsByPrincipal(principal);      // ✅ the caller's grants
+    Map<UUID, OrgUnit> grantedNodes = grants.stream().map(ScopeGrant::getOrgUnitId).distinct()
+        .map(units::findById).filter(Optional::isPresent).map(Optional::get)
+        .collect(Collectors.toMap(OrgUnit::getId, u -> u));
+    for (ScopeGrant g : grants) {
+        if (!g.getRole().satisfies(required)) continue;                    // ✅ role at-least-as-strong
+        OrgUnit grantedNode = grantedNodes.get(g.getOrgUnitId());
+        if (grantedNode != null && target.isContainedBy(grantedNode)) {   // ✅ DOWNWARD containment:
+            return new ScopeDecision(true, g.getOrgUnitId(), g.getRole()); //    target.path startsWith
+        }                                                                  //    grantedNode.path
+    }
+    throw OrgScopeException.outOfScope();                                  // ✅ 403, fail-closed
+}
+```
+
+`OrgUnit.isContainedBy(ancestor)` is the whole cascade: `target.path.startsWith(ancestor.path)` is true for the granted node itself and every descendant at arbitrary depth, and false for siblings and strict ancestors — so a leaf grant never reaches upward. The decision consults only the caller's grants and the tree; no per-node ACL table exists to drift. The grant write path takes the node's `PESSIMISTIC_WRITE` lock and relies on `uq(node, principal, role)` so concurrent same-key grants converge to one row. `ScopeGrant` rows are `@AggregateMember` of `OrgUnit` — root-JPQL reads, `common/MemberWriter` writes; no delete path exists.
+
+Verification: review-tier — confirm the node carries a materialized ancestor path, the containment check is a path-prefix test (downward only), an out-of-scope target is 403 (fail-closed), grants are immutable + idempotent, and the grant write path takes the node lock. The behavioural proof a fork-receiver keeps green: grant at a mid-tree node → allowed on its descendants, 403 on its siblings and ancestors; the N-thread same-key grant race (exactly one row).
+
+Reference: [NIST RBAC FAQ (role hierarchy)](https://csrc.nist.gov/projects/role-based-access-control/faqs)
+
+Reference: [NIST SP 800-162 (ABAC)](https://csrc.nist.gov/pubs/sp/800/162/upd2/final)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
 
 
 <!-- @source rules/core-aop-proxy-no-final.md -->
@@ -15439,6 +15667,136 @@ tree exists but the matching `specs/<domain>-l0.yaml#domain_mode` is
   burden on every fork-receiver instead of zero burden if absent.
 
 
+<!-- @source rules/state-conditional-mutation-authority-is-a-declared-monotone-table.md -->
+
+---
+title: Which fields of an aggregate are mutable must be a function of its CURRENT STATE — a DECLARED per-(state,field) authority table (never a blanket "editable while not terminal", never an if-scatter), monotonically tightened by forward transitions with widening only through a RECORDED governed re-open, and re-checked under the row's PESSIMISTIC_WRITE lock so a concurrent state advance cannot let a stale-state edit through
+impact: HIGH
+impactDescription: "A 'editable while not terminal' blanket lets a reviewer rewrite the BODY of a SUBMITTED regulatory filing that is supposed to be frozen, or edit an APPROVED batch record that must be read-only — a control failure a regulator can sanction. An if-scatter authority (field checks sprinkled through the edit path) drifts: one path forgets the freeze and the field leaks through. And a field edit that checks the state the CALLER observed, not the state under the row lock, lets a title-edit race a concurrent SUBMIT and land AFTER the field was frozen (CWE-367 time-of-check/time-of-use) — the record ends with a value written into a state that forbids it"
+tags:
+  - state-machine
+  - authorization
+  - audit
+  - concurrency
+  - governance
+spec_ref: "specs/state-conditional-mutability-l0.yaml#STATEMUTATION-AUTHORITY-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/statemutation/StateFieldPolicy.java + backend/src/main/java/com/ax/template/authblueprint/statemutation/StateMutationService.java + backend/src/main/java/com/ax/template/authblueprint/statemutation/GovernedForm.java + backend/src/main/java/com/ax/template/authblueprint/statemutation/GovernedFormStateMachine.java"
+  pattern: "The mutable-field-set is a DECLARED EnumMap<FormState, Set<FormField>> (StateFieldPolicy) the service looks up by the form's current state — NOT an if-scatter; the SAME table the GET surfaces (mutableFields) is the one the edit path enforces; an edit of a field not in the current state's mutable-set is a 409 FIELD_LOCKED_IN_STATE naming the field + state; the table tightens monotonically DRAFT ⊇ SUBMITTED ⊇ APPROVED ⊇ LOCKED (asserted), widening is an explicit recorded REOPEN governed transition through GovernedFormStateMachine (the sole status mutator) appending an immutable FormTransition, and a LOCKED form is terminal; the edit takes the form's PESSIMISTIC_WRITE row lock and re-checks the authority against the state UNDER the lock so a concurrent advance makes the racing edit 409 rather than a stale-state write (CWE-367)"
+upstream:
+  - "https://csrc.nist.gov/glossary/term/access_control"
+  - "https://cwe.mitre.org/data/definitions/367.html"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+  - "https://www.rfc-editor.org/rfc/rfc9457"
+  - "https://httpwg.org/specs/rfc9110.html"
+evidence:
+  - source_type: external
+    citation: "NIST Computer Security Resource Center Glossary — 'access control' (FIPS 201-3, sourced from CNSSI 4009-2015): an authorization decision granting or denying specific requests; here the request is a field mutation and the deciding attribute is the resource's STATE"
+    url: "https://csrc.nist.gov/glossary/term/access_control"
+    quote: "The process of granting or denying specific requests to 1) obtain and use information and related information processing services and 2) enter specific physical facilities (e.g., federal buildings, military establishments, border crossing entrances)."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition — MITRE (a field edit that checks the state the caller observed, then writes against a state a concurrent transition has already advanced)"
+    url: "https://cwe.mitre.org/data/definitions/367.html"
+    quote: "The product checks the state of a resource before using that resource, but the resource's state can change between the check and the use in a way that invalidates the results of the check."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (a concurrent field-edit and state-advance racing one form row)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "RFC 9457 §1 (Problem Details for HTTP APIs) — a FIELD_LOCKED_IN_STATE rejection is returned as a machine-readable problem+json carrying the offending field + state"
+    url: "https://www.rfc-editor.org/rfc/rfc9457"
+    quote: "This document defines a \"problem detail\" to carry machine-readable details of errors in HTTP response content"
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "RFC 9110 §15.5.10 (HTTP Semantics) — 409 Conflict, the status for a field edit that conflicts with the form's current state"
+    url: "https://httpwg.org/specs/rfc9110.html"
+    quote: "The 409 (Conflict) status code indicates that the request could not be completed due to a conflict with the current state of the target resource."
+    quoted_at: "2026-06-23"
+---
+
+## Mutation authority is per-(state,field), declared as a table — not a blanket "editable while not terminal"
+
+**Impact: HIGH — a blanket freeze lets a SUBMITTED filing's body be rewritten; an if-scatter authority drifts a field through a state that should freeze it; an edit that checks the observed (not the under-lock) state lands a write after a concurrent transition froze the field (CWE-367).**
+
+Which FIELDS of an aggregate you may mutate is a function of its CURRENT STATE — and that function is an authorization decision (NIST: *"the process of granting or denying specific requests"*). A `GovernedForm` walks `DRAFT → SUBMITTED → APPROVED → LOCKED`. The mutable field-set is NOT "everything while not terminal": in `DRAFT` all editable fields are mutable; in `SUBMITTED` only a declared subset (the reviewer note) is; in `APPROVED`/`LOCKED` none are. The catalog governs lifecycle STATUS (`approvalworkflow`, `dunning`) and four-eyes SIGN-OFF (`authorization-parity`) but had no primitive for state-conditional FIELD-level authority:
+
+```text
+edit(form, field, value):  look up StateFieldPolicy.mutableFields(form.state);
+                           field ∉ that set → 409 FIELD_LOCKED_IN_STATE (names field + state)
+declared table:            EnumMap<FormState, Set<FormField>> — the ONE place the authority lives;
+                           the GET surfaces it (mutableFields) AND the edit path enforces it — same object
+monotone:                  DRAFT ⊇ SUBMITTED ⊇ APPROVED ⊇ LOCKED — forward transitions only SHRINK
+widening:                  re-open = an explicit RECORDED governed transition (reason + actor), never a silent unlock
+lock:                      the form row, PESSIMISTIC_WRITE — the edit re-checks state UNDER the lock (CWE-367)
+```
+
+**1. The authority is a DECLARED table, not an if-scatter (STATEMUTATION-AUTHORITY/DECLARED-001).** The per-state mutable-set is a single `EnumMap<FormState, Set<FormField>>` the service looks up by the form's current state. The same table the form's GET surfaces (`mutableFields`) is the one the edit path enforces — they cannot diverge. A field not in the current state's set is a 409 naming the field and the state.
+
+**2. Forward transitions tighten monotonically; widening is recorded (STATEMUTATION-MONOTONE-001).** `DRAFT ⊇ SUBMITTED ⊇ APPROVED ⊇ LOCKED` — each forward step removes fields. Re-opening a tightened form (so frozen fields become editable again) is an explicit governed transition through the state machine, recorded as an immutable `FormTransition`. `LOCKED` is terminal.
+
+**3. The edit re-checks state under the row lock (STATEMUTATION-TOCTOU-001).** The edit takes the form's `PESSIMISTIC_WRITE` lock and evaluates the field authority against the state that holds UNDER the lock — so a concurrent `SUBMIT` that froze the field makes a racing edit a deterministic 409, never a stale-state write.
+
+**Incorrect — a blanket "editable while not terminal", an if-scatter authority, an unlocked check:**
+
+```java
+public void editField(UUID formId, String field, String value) {
+    GovernedForm f = repo.findById(formId).orElseThrow();   // ❌ no row lock — checks the OBSERVED state (CWE-367)
+    if (f.getState() == FormState.LOCKED) {                 // ❌ blanket "editable while not terminal":
+        throw new IllegalStateException("locked");          //    SUBMITTED is allowed to edit the body — wrong
+    }
+    if (field.equals("title")) { f.setTitle(value); }       // ❌ if-scatter — one path forgets the per-state freeze
+    else if (field.equals("body")) { f.setBody(value); }    //    and the field leaks through a state that froze it
+    repo.save(f);
+}
+```
+
+**Correct — a declared per-(state,field) table, looked up under the row lock, monotone, recorded widening:**
+
+```java
+// StateFieldPolicy — the ONE declared authority table; the GET surfaces it, the edit enforces it
+public final class StateFieldPolicy {
+    private static final Map<FormState, Set<FormField>> MUTABLE = new EnumMap<>(FormState.class);
+    static {
+        MUTABLE.put(FormState.DRAFT,     EnumSet.of(FormField.TITLE, FormField.BODY, FormField.REVIEWER_NOTE));
+        MUTABLE.put(FormState.SUBMITTED, EnumSet.of(FormField.REVIEWER_NOTE));   // body/title frozen
+        MUTABLE.put(FormState.APPROVED,  EnumSet.noneOf(FormField.class));        // read-only
+        MUTABLE.put(FormState.LOCKED,    EnumSet.noneOf(FormField.class));        // terminal, read-only
+    }
+    public static Set<FormField> mutableFields(FormState state) {
+        return MUTABLE.getOrDefault(state, EnumSet.noneOf(FormField.class));
+    }
+}
+
+@Transactional
+public GovernedForm editField(UUID formId, FormField field, String value) {
+    GovernedForm f = forms.findByIdForUpdate(formId).orElseThrow(StateMutationException::notFound); // ✅ PESSIMISTIC_WRITE
+    if (!StateFieldPolicy.mutableFields(f.getState()).contains(field)) {          // ✅ re-check UNDER the lock
+        throw StateMutationException.fieldLocked(field, f.getState());            // 409 — names field + state (CWE-367)
+    }
+    f.applyEdit(field, value, Instant.now(clock));                               // ✅ package-private sole mutator
+    return f;
+}
+```
+
+The `PESSIMISTIC_WRITE` lock serializes the read-state / enforce / write sequence so the authority is evaluated against the state that actually holds; a concurrent `SUBMIT` between the caller's read and the edit makes the racing edit 409 rather than a stale-state write (CWE-367). `GovernedFormStateMachine` is the sole status mutator: it tightens forward along the declared graph and records a widening (re-open) as an immutable `FormTransition` (root-JPQL reads, `common/MemberWriter` writes); no delete path exists.
+
+Verification: review-tier — confirm the mutable-field authority is a single declared `EnumMap` (the GET's `mutableFields` and the edit path consult the SAME table, no field-name if-scatter), the table tightens monotonically `DRAFT ⊇ SUBMITTED ⊇ APPROVED ⊇ LOCKED`, widening goes only through the recorded governed re-open, and the edit takes the `PESSIMISTIC_WRITE` lock and re-checks the state under it. The behavioural proof a fork-receiver keeps green: the concurrent submit-vs-edit race (the frozen field never accepts a write timestamped after the freeze).
+
+Reference: [NIST CSRC Glossary — access control](https://csrc.nist.gov/glossary/term/access_control)
+
+Reference: [CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition](https://cwe.mitre.org/data/definitions/367.html)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
+
+Reference: [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)
+
+Reference: [RFC 9110 §15.5.10: 409 Conflict](https://httpwg.org/specs/rfc9110.html)
+
+
 <!-- @source rules/storage-reclaim-must-be-reconciled.md -->
 
 ---
@@ -16538,6 +16896,126 @@ Verification: `./gradlew testPractices --tests "*RestAssured*"` hits `/actuator/
 Reference: [RestAssured](https://rest-assured.io/) · [Spring Boot Testing](https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#features.testing.spring-boot-applications)
 
 
+<!-- @source rules/time-bounded-access-grant-rebac-window-and-eligibility-gate.md -->
+
+---
+title: A time-bounded relationship grant (ReBAC) must decide access by RECOMPUTING the window predicate over the injected Clock (now ∈ [validFrom, validUntil) AND ACTIVE) — never a stored 'expired' flag — be append-only + revocable (who/when recorded, no delete, fail-closed when revoked), and a multi-credential eligibility gate must pass ONLY when EVERY required credential class is held and non-expired at now (a single missing/expired class fails closed naming the class)
+impact: HIGH
+impactDescription: "A stored 'expired'/'active' boolean goes stale the instant the wall clock crosses validUntil with no writer to flip it — the grant keeps admitting a subject whose authorization has lapsed (NIST SP 800-53 AC-2 expiry-disable, AC-3 enforce-approved-authorizations); a half-open off-by-one that admits the instant equal to validUntil over-grants by one tick; an eligibility gate that passes on ANY held credential instead of requiring ALL required classes lets an un-licensed/un-insured subject act; and a delete path on grants destroys the revoke audit trail a regulator relies on"
+tags:
+  - authorization
+  - access-control
+  - time-bound
+  - concurrency
+  - governance
+spec_ref: "specs/time-bounded-access-grant-l0.yaml#AGRANT-WINDOW-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/accessgrant/AccessGrant.java + backend/src/main/java/com/ax/template/authblueprint/accessgrant/AccessGrantService.java + backend/src/main/java/com/ax/template/authblueprint/accessgrant/Credential.java"
+  pattern: "AccessGrant.isActiveAt(now) recomputes the verdict from (status, validFrom, validUntil) against the injected Clock — there is NO stored expired/active boolean column; access is allowed only while now ∈ [validFrom, validUntil) (half-open — the instant equal to validUntil is denied) AND status == ACTIVE; a check before the window is GRANT_NOT_YET_VALID, at/after is GRANT_EXPIRED, a revoked grant is GRANT_REVOKED regardless of the window; revoke records (revokedBy, revokedAt) write-once (idempotent — never overwriting a prior revoke) under the grant row's PESSIMISTIC_WRITE lock; there is NO delete path; AccessGrantService.requireEligible passes only when every required class is held by a credential whose Credential.isValidAt(now) is true, else throws CREDENTIAL_INELIGIBLE naming the first missing/expired class"
+upstream:
+  - "https://csrc.nist.gov/glossary/term/attribute_based_access_control"
+  - "https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-3/"
+  - "https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-2/"
+evidence:
+  - source_type: external
+    citation: "NIST SP 800-162 Attribute Based Access Control, via the NIST CSRC glossary — the access decision is computed from attributes AND environment conditions at the time of access (a validity window is an environment condition the policy evaluates, not a stored verdict)"
+    url: "https://csrc.nist.gov/glossary/term/attribute_based_access_control"
+    quote: "An access control method where subject requests to perform operations on objects are granted or denied based on assigned attributes of the subject, assigned attributes of the object, environment conditions, and a set of policies that are specified in terms of those attributes and conditions."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "NIST SP 800-53 Rev 5, AC-3 Access Enforcement (csf.tools mirror) — the gate enforces ALL approved authorizations, i.e. every required attribute must hold, not just one"
+    url: "https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-3/"
+    quote: "Enforce approved authorizations for logical access to information and system resources in accordance with applicable access control policies."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "NIST SP 800-53 Rev 5, AC-2(3) Disable Accounts (csf.tools mirror) — access is disabled on a defined trigger including expiry, the revoke discipline a time-bounded grant generalizes"
+    url: "https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-2/"
+    quote: "Disable accounts within [Assignment: organization-defined time period] when the accounts: Have expired; Are no longer associated with a user or individual; Are in violation of organizational policy; or Have been inactive for [Assignment: organization-defined time period]."
+    quoted_at: "2026-06-23"
+---
+
+## A time-bounded grant is a RECOMPUTED predicate over the clock, not a stored 'expired' flag
+
+**Impact: HIGH — a stored expiry flag goes stale the moment the wall clock crosses validUntil; a half-open off-by-one over-grants by one tick; an ANY-of eligibility gate admits an un-licensed subject; a delete path destroys the revoke trail.**
+
+A *time-bounded relationship grant* binds a subject to a `(resourceRef, relation)` for a window `[validFrom, validUntil)` and is the composition the catalog lacked: relationship-authorization was ATEMPORAL (a tuple is present or absent) and the capability token was a caller-less bearer — nothing carried an EXPIRY a check recomputes. ABAC is precisely *"an access control method where subject requests … are granted or denied based on assigned attributes of the subject, … environment conditions, and a set of policies"* — a validity window is an *environment condition* the policy evaluates AT the time of access, so it MUST NOT be frozen into a stored verdict:
+
+```text
+check(grant):       allowed IFF status == ACTIVE AND now ∈ [validFrom, validUntil)
+                    recomputed every call over the injected Clock — NO stored 'expired' column;
+                    before validFrom → 403 GRANT_NOT_YET_VALID; at/after validUntil → 403 GRANT_EXPIRED;
+                    revoked → 403 GRANT_REVOKED regardless of the window
+revoke(grant):      append-only — record (revokedBy, revokedAt) write-once under PESSIMISTIC_WRITE;
+                    idempotent; NO delete path anywhere in the domain
+eligibility(set):   pass IFF for EVERY required class the subject holds a credential valid at now
+                    (each credential's own [validFrom, validUntil) recomputed) — a single missing/
+                    expired class → 403 CREDENTIAL_INELIGIBLE naming that class (AC-3: enforce ALL)
+```
+
+**1. The window is a recomputed predicate (AGRANT-WINDOW/BOUNDARY-001).** `isActiveAt(now)` is a pure function of `(status, validFrom, validUntil, now)`; the SAME row is allowed at `T` and denied at `validUntil` with zero intervening write. The interval is HALF-OPEN — the instant equal to `validUntil` is the first instant of the denied side (no off-by-one that admits it).
+
+**2. Grants are append-only + revocable (AGRANT-REVOKE-001).** A revoke records who and when (write-once — the idempotent hook never overwrites a prior revoke; the columns are deliberately NOT `@Column(updatable=false)`, since the single revoke UPDATE must write them) under the grant row's `PESSIMISTIC_WRITE` lock; a revoked grant fails closed regardless of the window; there is NO delete path — the revoke trail is what AC-2 *"Disable accounts … when … Have expired"* relies on.
+
+**3. The eligibility gate requires ALL classes (AGRANT-ELIGIBILITY-001).** AC-3 says *"Enforce approved authorizations … in accordance with applicable access control policies"* — ALL of them. The gate passes only when EVERY required class is held by a credential non-expired at `now`; one missing/expired class fails closed naming the class.
+
+**Incorrect — a stored 'expired' flag, an inclusive upper bound, an ANY-of eligibility gate:**
+
+```java
+// catalog-example-ok: AccessGrantRepo — illustrative anti-pattern, not the shipped repository shape
+public boolean canAccess(UUID grantId, List<String> required) {
+    AccessGrant g = repo.findById(grantId).orElseThrow();
+    if (g.isExpired()) return false;                       // ❌ stored boolean — stale once now passes validUntil
+    if (now().isAfter(g.getValidUntil())) return true;     // ❌ inclusive upper bound admits the validUntil instant
+    return required.stream().anyMatch(this::subjectHas);   // ❌ ANY-of — admits an un-insured/un-licensed subject
+}
+```
+
+**Correct — recompute the window over the injected Clock, fail closed, require every credential class:**
+
+```java
+@Transactional(readOnly = true)
+public AccessGrant check(UUID grantId) {
+    AccessGrant g = grants.findById(grantId).orElseThrow(AccessGrantException::notFound);
+    Instant now = Instant.now(clock);
+    if (g.isRevoked()) throw AccessGrantException.revoked();          // ✅ fail closed regardless of window
+    if (g.isBeforeWindow(now)) throw AccessGrantException.notYetValid();
+    if (!g.isActiveAt(now)) throw AccessGrantException.expired();     // ✅ now >= validUntil → 403 (half-open)
+    return g;                                                        // ✅ allowed only inside [from, until) + ACTIVE
+}
+
+// AccessGrant — the recomputed predicate; NO stored 'expired'/'active' boolean column
+public boolean isActiveAt(Instant now) {
+    return status == GrantStatus.ACTIVE
+        && !now.isBefore(validFrom)        // now >= validFrom
+        && now.isBefore(validUntil);        // now <  validUntil (the instant == validUntil is OUTSIDE)
+}
+
+@Transactional(readOnly = true)
+public void requireEligible(String subjectId, List<String> requiredClasses) {
+    Instant now = Instant.now(clock);
+    Set<String> validClasses = new LinkedHashSet<>();
+    for (Credential c : credentials.findBySubjectId(subjectId)) {
+        if (c.isValidAt(now)) validClasses.add(c.getCredentialClass());   // ✅ each credential recomputed over now
+    }
+    for (String required : requiredClasses) {
+        if (!validClasses.contains(required))
+            throw AccessGrantException.credentialIneligible(required);    // ✅ ALL required — name the missing class
+    }
+}
+```
+
+The grant carries no stored expiry; `isActiveAt(now)` recomputes the verdict so the boundary keystone (advance the injected Clock to `validUntil` with no write → the same grant flips allowed→denied) holds. Revoke is append-only under the row lock; no delete path exists. The eligibility gate is AND-over-the-set, naming the first missing/expired class.
+
+Verification: review-tier — confirm there is no `expired`/`active` boolean column, the window check is half-open and recomputed over the injected Clock, revoke records `(revokedBy, revokedAt)` write-once with no delete path, and the eligibility gate requires every class (not any). The behavioural proof a fork-receiver keeps green: the boundary test (at `validUntil.minusSeconds(1)` allowed; at exactly `validUntil` denied on the SAME row).
+
+Reference: [NIST SP 800-162 ABAC (CSRC glossary)](https://csrc.nist.gov/glossary/term/attribute_based_access_control)
+
+Reference: [NIST SP 800-53 Rev 5 AC-3 Access Enforcement](https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-3/)
+
+Reference: [NIST SP 800-53 Rev 5 AC-2 Account Management (Disable Accounts)](https://csf.tools/reference/nist-sp-800-53/r5/ac/ac-2/)
+
+
 <!-- @source rules/time-gated-decisions-read-injected-clock.md -->
 
 ---
@@ -17603,6 +18081,129 @@ Reference: [Wikipedia — Mass balance (conservation of mass; input = output + a
 Reference: [Martin Fowler — Money pattern (penny conservation)](https://martinfowler.com/eaaCatalog/money.html)
 
 
+<!-- @source rules/two-axis-inventory-reservation-reserve-commit-release-hold.md -->
+
+---
+title: A two-axis available/reserved inventory must derive AVAILABLE = onHand − reserved (never store it), reserve a HELD hold only when derived available ≥ q (422 else, reserved += q, onHand untouched), COMMIT a held reservation by decrementing BOTH onHand and reserved (the goods leave), RELEASE it by decrementing reserved alone (the hold frees), move HELD → (COMMITTED|RELEASED) EXACTLY once (409 otherwise), keep reserved == Σ(HELD quantities) with 0 ≤ reserved ≤ onHand, and serialize concurrent reserves on the item row so exactly available/q win
+impact: HIGH
+impactDescription: "A two-axis inventory that stores 'available' as a third column lets it drift from on-hand and reserved (an order promises stock that is not there, or holds stock that was already shipped); a reserve that does not take the item row lock lets two threads both pass the available ≥ q gate against the same headroom and over-reserve below zero available (CWE-362 — oversell); a commit that forgets to decrement reserved (or a release that touches on-hand) breaks the reserved == Σ(HELD) conservation so the available projection is permanently wrong; and a non-exactly-once commit/release double-counts goods leaving or double-frees a hold"
+tags:
+  - state-machine
+  - concurrency
+  - inventory
+  - conservation
+  - governance
+spec_ref: "specs/two-axis-inventory-reservation-l0.yaml#INVRES-RESERVE-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/inventoryreservation/InventoryReservationService.java + backend/src/main/java/com/ax/template/authblueprint/inventoryreservation/InventoryItem.java + backend/src/main/java/com/ax/template/authblueprint/inventoryreservation/InventoryReservation.java + backend/src/main/java/com/ax/template/authblueprint/inventoryreservation/ReservationStateMachine.java"
+  pattern: "AVAILABLE is derived (onHand − reserved) and never persisted; reserving takes the item's PESSIMISTIC_WRITE row lock, refuses with 422 INVENTORY_INSUFFICIENT_AVAILABLE when available < q, else increments reserved by q and appends an immutable Reservation row (status HELD via ReservationStateMachine) leaving onHand untouched; committing a HELD reservation decrements BOTH onHand and reserved by q and moves HELD → COMMITTED; releasing a HELD reservation decrements reserved by q (onHand untouched) and moves HELD → RELEASED; a commit/release on a non-HELD reservation is 409 INVENTORY_RESERVATION_NOT_HELD (exactly-once); a @Check reserved >= 0 AND reserved <= on_hand backstops the conservation reserved == Σ(HELD quantities); NO delete path exists"
+upstream:
+  - "https://docs.commercetools.com/api/projects/inventory"
+  - "https://learn.microsoft.com/en-us/azure/architecture/patterns/saga"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "commercetools Composable Commerce HTTP API, InventoryEntry representation (official API reference) — the available/reserved derivation the two-axis model generalizes: available is on-stock minus reserved, not a separately stored third axis"
+    url: "https://docs.commercetools.com/api/projects/inventory"
+    quote: "Available amount of stock (quantityOnStock - reserved)."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "Microsoft Azure Architecture Center, Saga design pattern — the reserve-then-confirm two-phase hold: a compensable transaction reserves, a pivot transaction commits (the point of no return), and a compensating transaction releases on failure"
+    url: "https://learn.microsoft.com/en-us/azure/architecture/patterns/saga"
+    quote: "If a step in the saga fails, compensating transactions undo the changes that the compensable transactions made."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (concurrent reserves racing one item's available headroom)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-01"
+---
+
+## A two-axis inventory is a derived available over an on-hand/reserved pair with a two-phase hold — not three drift-prone counters
+
+**Impact: HIGH — a stored 'available' drifts from its axes (oversell or phantom holds); an unlocked reserve over-reserves under concurrency (CWE-362); a commit that skips reserved, or a release that touches on-hand, breaks conservation; a non-exactly-once commit/release double-ships or double-frees.**
+
+A two-axis inventory tracks exactly two persisted quantities per item — `onHand` (the physical goods present) and `reserved` (the quantity currently held against open demand). The third quantity every order system needs, *available*, is a **pure function of the two**: as the commercetools inventory API states it, the available amount of stock is *"(quantityOnStock - reserved)"*. Storing `available` as a third column is the canonical defect: it drifts the instant a reserve updates `reserved` but not the cached `available`, and the system promises stock that is not there. The catalog conserved a transformation (`transformations`) and walked a monotone register (`registers`) but had no primitive for the two-axis hold:
+
+```text
+available(item):         DERIVED = onHand − reserved        (never a stored column)
+reserve(item, q):        take the item's PESSIMISTIC_WRITE lock; if available < q → 422;
+                         else reserved += q, append a HELD Reservation(q); onHand UNCHANGED  (the hold)
+commit(reservation):     HELD → COMMITTED; onHand −= q AND reserved −= q                     (the goods leave)
+release(reservation):    HELD → RELEASED;  reserved −= q; onHand UNCHANGED                   (the hold frees)
+exactly-once:            commit/release on a non-HELD reservation → 409                       (HELD→one terminal)
+conservation:            reserved == Σ(HELD quantities)  AND  0 ≤ reserved ≤ onHand           (@Check backstop)
+```
+
+**1. AVAILABLE is derived, never stored (INVRES-RESERVE-001 / INVRES-CONSERVE-001).** The entity has `on_hand` and `reserved` columns and NO `available` column; available is computed on read. This makes drift unrepresentable — the projection always reflects the two axes.
+
+**2. The hold is a two-phase reserve → commit-or-release (INVRES-COMMIT/RELEASE-001).** Reserving only increments `reserved` (the goods stay on hand but stop being available); committing is the *pivot* that lets the goods leave (decrement BOTH axes); releasing is the *compensating* transaction that frees the hold (decrement `reserved` only). A reservation moves `HELD → (COMMITTED | RELEASED)` exactly once — the `ReservationStateMachine` rejects any second transition with a 409.
+
+**3. Concurrent reserves serialize on the item row (INVRES-CONCURRENT-001).** The reserve path takes the item's `PESSIMISTIC_WRITE` lock so the read-available / write-reserved sequence cannot interleave; N concurrent reserves against `available = k·q` resolve to exactly k winners and N−k `422`s (CWE-362).
+
+**Incorrect — a stored available, an unlocked over-reserving reserve, a commit that forgets reserved:**
+
+```java
+public void reserve(UUID itemId, long q) {
+    InventoryItem item = repo.findById(itemId).orElseThrow();  // ❌ no row lock — two threads both read available
+    if (item.getAvailable() < q) throw new IllegalStateException();  // ❌ 'available' is a STORED column that drifts
+    item.setAvailable(item.getAvailable() - q);                // ❌ public setter; decremented a stored axis
+    item.setReserved(item.getReserved() + q);                  // ❌ both threads pass the gate → over-reserve (CWE-362)
+    repo.save(item);
+}
+public void commit(UUID reservationId) {
+    Reservation r = reservationRepo.findById(reservationId).orElseThrow();
+    r.setStatus(COMMITTED);                                    // ❌ no exactly-once guard; double-commit double-ships
+    item.setOnHand(item.getOnHand() - r.getQty());             // ❌ forgot reserved -= q → conservation broken forever
+}
+```
+
+**Correct — derived available, locked reserve gated on available ≥ q, two-phase commit/release decrementing the right axes:**
+
+```java
+@Transactional
+public InventoryReservation reserve(UUID itemId, long quantity, String actor) {
+    InventoryItem item = items.findByIdForUpdate(itemId).orElseThrow(InventoryReservationException::itemNotFound); // ✅ PESSIMISTIC_WRITE
+    if (item.available() < quantity) {                          // ✅ available() is DERIVED: onHand − reserved
+        throw InventoryReservationException.insufficientAvailable();   // 422 — nothing mutated
+    }
+    item.reserve(quantity);                                     // ✅ reserved += q; onHand untouched (the hold)
+    InventoryReservation r = new InventoryReservation(UUID.randomUUID(), item.getId(), quantity,
+        ReservationStatus.HELD, actor, Instant.now(clock));     // ✅ immutable HELD row appended
+    return members.persistAndFlush(r);
+}
+
+@Transactional
+public InventoryReservation commit(UUID reservationId) {
+    InventoryReservation r = items.findReservation(reservationId).orElseThrow(InventoryReservationException::reservationNotFound);
+    InventoryItem item = items.findByIdForUpdate(r.getItemId()).orElseThrow(InventoryReservationException::itemNotFound);
+    stateMachine.commit(r);                                     // ✅ HELD → COMMITTED, exactly-once (409 if not HELD)
+    item.commitReservation(r.getQuantity());                   // ✅ onHand −= q AND reserved −= q (goods leave)
+    return r;
+}
+
+@Transactional
+public InventoryReservation release(UUID reservationId) {
+    InventoryReservation r = items.findReservation(reservationId).orElseThrow(InventoryReservationException::reservationNotFound);
+    InventoryItem item = items.findByIdForUpdate(r.getItemId()).orElseThrow(InventoryReservationException::itemNotFound);
+    stateMachine.release(r);                                    // ✅ HELD → RELEASED, exactly-once (409 if not HELD)
+    item.releaseReservation(r.getQuantity());                  // ✅ reserved −= q only (the hold frees, onHand untouched)
+    return r;
+}
+```
+
+The item-row `PESSIMISTIC_WRITE` lock serializes the read-available / write-reserved sequence so two threads cannot both pass the `available ≥ q` gate against the same headroom (CWE-362); the `@Check reserved >= 0 AND reserved <= on_hand` is the DB backstop that makes an over-reserve or a conservation break unrepresentable. `available()` is a derived method (`onHand − reserved`), never a stored column, so it cannot drift. `InventoryReservation` rows are `@AggregateMember` of `InventoryItem` — root-JPQL reads, `common/MemberWriter` writes; the `ReservationStateMachine` is the sole status mutator; no delete path exists on either entity.
+
+Verification: review-tier — confirm `available` is computed and never persisted, the reserve gate is `available ≥ q` under the item's `PESSIMISTIC_WRITE` lock, commit decrements BOTH on-hand and reserved while release decrements reserved alone, the `ReservationStateMachine` makes `HELD → (COMMITTED|RELEASED)` exactly-once (409 otherwise), and the `@Check reserved >= 0 AND reserved <= on_hand` backstops conservation. The behavioural proof a fork-receiver keeps green: the N-thread reserve race against `available = k·q` (exactly k 2xx + N−k 422, reserved = k·q ≤ onHand).
+
+Reference: [commercetools Inventory API — availableQuantity = quantityOnStock − reserved](https://docs.commercetools.com/api/projects/inventory)
+
+Reference: [Microsoft Azure Architecture Center — Saga design pattern (compensating transactions)](https://learn.microsoft.com/en-us/azure/architecture/patterns/saga)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
+
+
 <!-- @source rules/two-factor-auth-totp-webauthn.md -->
 
 ---
@@ -18421,6 +19022,115 @@ Verification: review-tier. Value conservation is a correctness property of the p
 Reference: [Martin Fowler — Accounting Transaction (entries must sum to zero, conserving money)](https://martinfowler.com/eaaDev/AccountingTransaction.html)
 
 Reference: [PostgreSQL — Constraints (CHECK constraint enforcing a Boolean condition on stored rows)](https://www.postgresql.org/docs/current/ddl-constraints.html)
+
+
+<!-- @source rules/variance-tolerance-band-asymmetric-gate-and-disposition.md -->
+
+---
+title: A standard-vs-actual appraisal must DERIVE the variance (actual − standard, never an entered field), PIN the asymmetric tolerance band that governed THIS verdict on the row, render the verdict by a two-sided gate (WITHIN_TOLERANCE iff variance ∈ [−lowerTolerance, +upperTolerance], else OUT_OF_TOLERANCE), BLOCK any dependent operation on a breach (422 naming the variance + band) until an explicit who/when/reason DISPOSITION is recorded, and serialize concurrent dispositions on the appraisal row so exactly one wins
+impact: HIGH
+impactDescription: "A variance entered as a field rather than derived can silently disagree with actual − standard (the breach is hidden); a verdict stored as a bare pass/fail boolean with no recorded standard/actual/variance/band cannot be reconciled to the allowance the books are stated against or the spec the lot is released against; a SYMMETRIC ±band collapses an asymmetric favorable/unfavorable tolerance and passes values that should breach (or breaches values that should pass); a breach that flows downstream with no block lets an out-of-tolerance cost post / lot release / budget draw proceed unaccountably; and an unsynchronized disposition lets two threads both override one breach (CWE-362), leaving two disposition rows for one accountable decision"
+tags:
+  - state-machine
+  - audit
+  - concurrency
+  - governance
+  - validation
+spec_ref: "specs/variance-tolerance-band-l0.yaml#VG-DERIVE-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/variancegate/VarianceService.java + backend/src/main/java/com/ax/template/authblueprint/variancegate/VarianceAppraisal.java + backend/src/main/java/com/ax/template/authblueprint/variancegate/VarianceDisposition.java"
+  pattern: "The appraisal DERIVES variance = actualValue.subtract(standardValue) (BigDecimal at a recorded scale; never a caller-supplied field) and PERSISTS it immutably alongside the standard, the actual, and the band in force (lowerTolerance, upperTolerance) so the verdict is re-derivable; the verdict is the ASYMMETRIC two-sided gate WITHIN_TOLERANCE iff variance ≥ −lowerTolerance AND variance ≤ +upperTolerance (compareTo, inclusive), else OUT_OF_TOLERANCE; a dependent operation on an OUT_OF_TOLERANCE appraisal is blocked 422 (VARIANCE_OUT_OF_TOLERANCE) with the variance + band named, until an explicit VarianceDisposition (actor + injected-Clock timestamp + non-blank reason) is recorded; the disposition is append-only one-per-appraisal (uq(appraisal_id)) and never rewrites the verdict to WITHIN_TOLERANCE; the dispose path takes the appraisal's PESSIMISTIC_WRITE row lock so concurrent dispositions converge to exactly one; NO delete path exists on the appraisal"
+upstream:
+  - "https://www.itl.nist.gov/div898/handbook/pmc/section1/pmc16.htm"
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "NIST/SEMATECH e-Handbook of Statistical Methods, §6.1.6 'What is Process Capability?' — the SPC tolerance band (a measured value within the upper/lower specification limits) that the asymmetric variance gate generalizes"
+    url: "https://www.itl.nist.gov/div898/handbook/pmc/section1/pmc16.htm"
+    quote: "A process where almost all the measurements fall inside the specification limits is a capable process."
+    quoted_at: "2026-06-23"
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (concurrent dispositions racing one breached appraisal)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-06-23"
+---
+
+## A standard-vs-actual appraisal is a derived variance, a pinned asymmetric band, a two-sided verdict, and a breach that blocks until disposed — not a bare pass/fail flag
+
+**Impact: HIGH — an entered (vs derived) variance hides the breach; a bare pass/fail with no recorded basis cannot reconcile to the allowance/spec; a symmetric ±band mis-gates an asymmetric tolerance; an un-blocked breach flows downstream unaccountably; an unsynchronized disposition double-overrides one breach (CWE-362).**
+
+A *variance appraisal* compares a measured ACTUAL against a recorded STANDARD and gates a dependent operation on the result. The discipline is standard from two directions: managerial standard-cost variance analysis (the favorable/unfavorable variance = actual − standard, feeding the allowance the books are stated against) and statistical process control, where — per the NIST/SEMATECH handbook — *"A process where almost all the measurements fall inside the specification limits is a capable process."* The catalog conserved transformations, versioned computed values, and crossed irreversible thresholds, but had no primitive for the asymmetric appraise-and-gate:
+
+```text
+appraise(standard, actual, lower, upper):  variance = actual − standard (DERIVED, BigDecimal, recorded scale)
+                                           PERSIST standard, actual, variance, AND the band (lower, upper) — basis
+                                           verdict = WITHIN_TOLERANCE iff variance ∈ [−lower, +upper] (asymmetric, inclusive)
+gate(dependent op):                        OUT_OF_TOLERANCE + not disposed → block 422 naming variance + band
+dispose(breach, reason):                   record actor + injected-Clock when + non-blank reason; one per appraisal
+                                           verdict is NOT rewritten — the breach stays visible WITH an override on record
+locks:                                     the appraisal row, PESSIMISTIC_WRITE — concurrent dispositions → exactly one wins
+```
+
+**1. The variance is derived and the band is pinned (VG-DERIVE-001).** The variance is `actual.subtract(standard)` — never a caller field — and the standard, actual, variance, and the band in force (lower/upper) are all persisted immutably, so the verdict is re-derivable. Bands drift; the row pins which band governed THIS verdict (the way remeasurement-trueup pins the thresholds that governed a run).
+
+**2. The gate is asymmetric (VG-GATE-001).** `WITHIN_TOLERANCE` iff `variance ≥ −lower AND variance ≤ +upper` by `BigDecimal.compareTo` (inclusive both bounds); the favorable allowance (lower) and unfavorable allowance (upper) are independent magnitudes — collapsing them into a symmetric ±band mis-gates.
+
+**3. A breach blocks the dependent operation until disposed (VG-BLOCK-001 / VG-DISPOSE-001).** An operation depending on an OUT_OF_TOLERANCE appraisal is blocked 422 naming the variance and band, until an explicit `VarianceDisposition` (actor + timestamp + non-blank reason) is recorded. The override never erases the breach — it records an accountable decision to proceed despite it.
+
+**Incorrect — an entered variance, a bare boolean verdict, a symmetric band, an unsynchronized override:**
+
+```java
+public boolean appraise(BigDecimal standard, BigDecimal actual, BigDecimal variance, BigDecimal tol) {
+    boolean pass = variance.abs().compareTo(tol) <= 0;   // ❌ symmetric ±tol — collapses favorable/unfavorable
+    repo.save(new Row(standard, actual, variance, pass));// ❌ variance is an ENTERED field, may disagree with actual−standard
+    return pass;                                          // ❌ bare boolean — band not pinned, verdict not re-derivable
+}
+public void override(UUID id) {
+    Row r = repo.findById(id).orElseThrow();             // ❌ no row lock — two threads both override (CWE-362)
+    r.setVerdict("WITHIN_TOLERANCE");                    // ❌ rewrites the verdict — the breach vanishes from the record
+    repo.save(r);                                        // ❌ no who/when/reason — silent acceptance, not a disposition
+}
+```
+
+**Correct — derived variance, pinned asymmetric band, recorded breach, audited disposition under the appraisal lock:**
+
+```java
+@Transactional
+public VarianceAppraisal appraise(String subject, BigDecimal standard, BigDecimal actual,
+                                  BigDecimal lower, BigDecimal upper) {
+    BigDecimal variance = actual.subtract(standard);                       // ✅ DERIVED, never entered
+    VarianceVerdict verdict = (variance.compareTo(lower.negate()) >= 0
+            && variance.compareTo(upper) <= 0)
+        ? VarianceVerdict.WITHIN_TOLERANCE : VarianceVerdict.OUT_OF_TOLERANCE;   // ✅ asymmetric, inclusive
+    return appraisals.save(new VarianceAppraisal(UUID.randomUUID(), subject, standard, actual,
+        variance, lower, upper, verdict, Instant.now(clock)));             // ✅ standard/actual/variance/band pinned
+}
+
+@Transactional
+public VarianceAppraisal dispose(UUID id, String actor, String reason) {
+    VarianceAppraisal a = appraisals.findByIdForUpdate(id).orElseThrow(VarianceException::notFound); // ✅ PESSIMISTIC_WRITE
+    if (a.getVerdict() != VarianceVerdict.OUT_OF_TOLERANCE) throw VarianceException.nothingToDispose();// 422
+    if (reason == null || reason.isBlank()) throw VarianceException.blankReason();                     // 422
+    if (appraisals.findDisposition(id).isPresent()) return a;             // ✅ idempotent — one per appraisal
+    try {
+        members.persistAndFlush(new VarianceDisposition(UUID.randomUUID(), a.getId(),
+            DispositionDecision.OVERRIDE, actor, reason, Instant.now(clock)));   // ✅ uq(appraisal_id) backstop
+    } catch (DataIntegrityViolationException dup) {
+        throw VarianceException.alreadyDisposed();                        // ✅ loser of any residual race → 409
+    }
+    return a;                                                             // ✅ verdict stays OUT_OF_TOLERANCE — breach visible
+}
+```
+
+The appraisal-row `PESSIMISTIC_WRITE` lock serializes the check-not-disposed / write-disposition sequence; the `uq(appraisal_id)` index is the suspenders for any residual race (CWE-362). The standard/actual/variance/band columns carry the basis so the verdict is reconstructible. `VarianceDisposition` rows are `@AggregateMember` of `VarianceAppraisal` — root-JPQL reads, `common/MemberWriter` writes; no delete path exists on the appraisal.
+
+Verification: review-tier — confirm the variance is derived (not entered), the band (lower/upper) is persisted on the row, the gate is the asymmetric two-sided inclusive comparison, a dependent operation on a breach is blocked 422 with the variance + band named, the disposition records actor/when/non-blank-reason and never rewrites the verdict, and the dispose path takes the appraisal's `PESSIMISTIC_WRITE` lock. The behavioural proof a fork-receiver keeps green: the N-thread disposition race (exactly one accountable disposition row).
+
+Reference: [NIST/SEMATECH e-Handbook §6.1.6 — Process Capability](https://www.itl.nist.gov/div898/handbook/pmc/section1/pmc16.htm)
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
 
 
 <!-- @source rules/waitlist-promotion-is-atomic-fifo.md -->

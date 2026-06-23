@@ -103,6 +103,18 @@ public class SecurityConfig {
                 // periods — readings supersede append-only, runs version with their basis,
                 // closed-period corrections post forward as net-delta true-ups.
                 .requestMatchers("/api/trueup/**").authenticated()
+                // ACCESSGRANT — time-bounded ReBAC grant(만료 fail-closed) + 다중 자격 만료 게이트
+                .requestMatchers("/api/access-grant/**").authenticated()
+                // INVENTORYRESERVATION — 2축 available=on_hand−reserved, reserve→commit→release hold
+                .requestMatchers("/api/inventory-reservation/**").authenticated()
+                // ORGSCOPE — 계층 org-tree containment-scope authz(노드 grant가 subtree로 cascade)
+                .requestMatchers("/api/org-scope/**").authenticated()
+                // VARIANCEGATE — standard-vs-actual 분산 + 비대칭 tolerance-band 게이트 + disposition
+                .requestMatchers("/api/variance-gate/**").authenticated()
+                // STATEMUTATION — state-conditional mutability(현 상태가 mutable 필드집합 결정, monotone tightening)
+                .requestMatchers("/api/state-mutation/**").authenticated()
+                // RECURRINGINTERVAL — 완료 시 현 윈도우 닫고 다음을 완료시점부터 여는 recurring interval
+                .requestMatchers("/api/recurring-interval/**").authenticated()
                 // QUERYGUARD (query-field-allowlist-l0): sort/filter params validated against a
                 // per-resource allowlist — non-allowlisted field rejected (no injection/enumeration).
                 .requestMatchers("/api/query-guard/**").authenticated()

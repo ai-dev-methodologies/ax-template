@@ -1,0 +1,106 @@
+version: "0.1.0"
+scope: "variance-tolerance-band-l0 — the generalized STANDARD-VS-ACTUAL VARIANCE WITH AN ASYMMETRIC TOLERANCE-BAND GATE. A VarianceAppraisal records one measured ACTUAL against a recorded STANDARD; the VARIANCE = actual − standard is DERIVED (never an entered field) and persisted with its full basis (the standard, the actual, the derived variance, AND the tolerance band in force at evaluation time). The gate is ASYMMETRIC: a separate lowerTolerance (favorable side, often allowed wide) and upperTolerance (unfavorable side, often allowed narrow) — the evaluation PASSES (WITHIN_TOLERANCE) iff variance ∈ [−lowerTolerance, +upperTolerance], else it is flagged OUT_OF_TOLERANCE and a breach is recorded. The system MUST (1) RECORD the band per evaluation — tolerance bands drift, so the row PINS exactly which lower/upper governed THIS verdict (the way remeasurement-trueup pins the thresholds that governed a run); (2) make the variance + verdict a RECONSTRUCTIBLE appraisal basis — never a bare pass/fail boolean, the standard/actual/variance/band are all persisted so the verdict is re-derivable; (3) GATE the dependent operation on a breach: an operation that depends on an OUT_OF_TOLERANCE appraisal is blocked (422) with the variance and the named band in the problem body, UNTIL an explicit DISPOSITION (an override/justification recording who, when, and the reason) is attached — disposition is distinct from silent acceptance; (4) serialize concurrent dispositions on the appraisal row so exactly one wins (CWE-362). Generalizes standard-costing variance analysis (favorable/unfavorable standard-cost variance feeding the allowance the books are stated against) and SPC tolerance gating (a measured value within upper/lower specification limits). Realized by the variancegate reference workload (com.ax.template.authblueprint.variancegate). Recurs in: manufacturing cost accounting (standard vs actual material/labor cost), SPC quality gating (measured dimension vs spec band), budget-vs-actual financial control, SLA/threshold monitoring, energy settlement (metered vs contracted) — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (immutable appraisal basis with @Column(updatable=false) + @Version optimistic + PESSIMISTIC_WRITE row lock + uq(appraisal_id) disposition backstop + @Check band/verdict invariants) + BigDecimal at a recorded scale (derived variance = actual.subtract(standard)) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "Managerial accounting standard-cost variance analysis (the favorable/unfavorable variance = actual − standard, feeding the allowance the books are stated against) + NIST/SEMATECH e-Handbook of Statistical Methods §6.1.6 (process capability — a measured value WITHIN the upper/lower specification limits, the SPC tolerance band the asymmetric gate generalizes) + CWE-362 (concurrent disposition race) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "IDW11-G3 standard-vs-actual variance tolerance-band; built 2026-06-23 — BACKLOG P1-48"
+
+# OPT-IN variance-tolerance-band catalog. The variance-gating gap: the catalog
+# conserves transformations (transformation-conservation), versions computed
+# values (decision-governance), and crosses irreversible thresholds
+# (threshold-terminal) — but never appraises a measured ACTUAL against a recorded
+# STANDARD through an ASYMMETRIC tolerance band, pins the band that governed the
+# verdict, and gates the dependent operation on a breach until it is explicitly
+# disposed. Generic; the manufacturing-cost and SPC framings are anchors, not
+# lock-ins.
+
+# ── Priority order for fork-receivers ──
+#   1. VG-DERIVE-001     (the primitive — variance = actual − standard, DERIVED and recorded with the band in force)
+#   2. VG-GATE-001       (the asymmetric gate — PASS iff variance ∈ [−lowerTolerance, +upperTolerance], else OUT_OF_TOLERANCE)
+#   3. VG-BLOCK-001      (a dependent op gated on a breach is blocked 422 with the variance + named band)
+#   4. VG-DISPOSE-001    (a breach requires explicit disposition who/when/reason to proceed; idempotent; distinct from silent acceptance)
+#   5. VG-CONCURRENT-001 (keystone — concurrent dispositions serialize on the appraisal row; exactly one wins, rest 409)
+
+# ── Composition note ──
+# DISTINCT from transformation-conservation (input mass == output + classified
+# loss — no tolerance band, no gate), decision-governance (versions one scope's
+# computed value with a reason — no measured-vs-standard appraisal, no asymmetric
+# band), threshold-terminal (a single irreversible monotone crossing — no
+# two-sided band, no disposition path), and remeasurement-trueup (estimate→actual
+# supersession + net-delta posting — no pass/fail gate). variance-tolerance-band
+# is the APPRAISAL-AND-GATE primitive: it derives the gap, pins the band, renders
+# an asymmetric verdict, and blocks the downstream until a breach is dispositioned.
+# VarianceDisposition rows are @AggregateMember of VarianceAppraisal: root-JPQL
+# reads + common/MemberWriter writes (AX-DDD-MEMBER-REPO end-state from birth).
+# The band is pinned PER appraisal (lower/upper persisted on the row) — a
+# fork-receiver swaps the band source (per-product spec, contract clause, SLA
+# tier) without touching the GOVERNANCE contract (derived variance + pinned band
+# + reconstructible basis + breach-blocks-until-disposed + serialized disposition).
+
+items:
+  - id: "VG-DERIVE-001"
+    chapter: "The variance is DERIVED (actual − standard) and recorded with its full basis AND the tolerance band in force — never an entered field, never a bare verdict"
+    verification:
+      mechanism: rule
+      ref: variance-tolerance-band-asymmetric-gate-and-disposition
+    requirement: "Appraising an actual against a standard MUST DERIVE the variance as actual.subtract(standard) (BigDecimal, at a recorded scale) — the variance MUST NOT be an entered/caller-supplied field. The appraisal row MUST PERSIST, immutably (@Column(updatable=false)): the standardValue, the actualValue, the derived variance, AND the tolerance band in force at evaluation time (lowerTolerance, upperTolerance). The band is PINNED per evaluation — bands drift, so the row records exactly which lower/upper governed THIS verdict. A bare pass/fail with no recorded standard/actual/variance/band MUST be unrepresentable: the verdict is re-derivable from the persisted basis."
+    test_method: "RestAssured (create an appraisal with standard + actual + a band; the response carries the derived variance == actual − standard NUMERICALLY, plus the echoed standard/actual/lowerTolerance/upperTolerance; structural: variance/standard/actual/lowerTolerance/upperTolerance columns @Column(updatable=false))"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (managerial accounting standard-cost variance): a variance is
+      the difference between a recorded STANDARD (budgeted/expected) and the
+      measured ACTUAL; a favorable variance lies on one side of zero, an
+      unfavorable on the other. The asymmetric band generalizes the favorable
+      side (often allowed wide) vs the unfavorable side (often allowed narrow).
+      The variance feeds the allowance the books are stated against — so it must
+      be reconstructible, not a discarded intermediate.
+  - id: "VG-GATE-001"
+    chapter: "The gate is ASYMMETRIC — PASS iff variance ∈ [−lowerTolerance, +upperTolerance], else OUT_OF_TOLERANCE"
+    requirement: "The appraisal's verdict MUST be computed by an ASYMMETRIC two-sided gate: WITHIN_TOLERANCE iff the derived variance is ≥ −lowerTolerance AND ≤ +upperTolerance (BigDecimal compareTo, inclusive on both bounds), otherwise OUT_OF_TOLERANCE. lowerTolerance and upperTolerance are SEPARATE non-negative magnitudes (e.g. a −2.00 favorable allowance that is wider than a +0.50 unfavorable allowance) — the gate MUST NOT collapse them into a single symmetric ±band. A breach (OUT_OF_TOLERANCE) MUST record the verdict on the row so a downstream read sees the breach without re-deriving."
+    test_method: "RestAssured (variance inside the band → WITHIN_TOLERANCE; a favorable variance beyond −lowerTolerance → OUT_OF_TOLERANCE; an unfavorable variance beyond +upperTolerance → OUT_OF_TOLERANCE; an asymmetric case where the same magnitude passes on the favorable side but breaches on the unfavorable side proves the two bounds are independent; decimals asserted NUMERICALLY)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (NIST/SEMATECH e-Handbook §6.1.6, Process Capability — the SPC
+      tolerance band the gate generalizes): "A process where almost all the
+      measurements fall inside the specification limits is a capable process."
+      (https://www.itl.nist.gov/div898/handbook/pmc/section1/pmc16.htm) The
+      asymmetric upper/lower tolerance is the two-sided specification band; the
+      gate is the per-measurement in/out-of-tolerance verdict.
+  - id: "VG-BLOCK-001"
+    chapter: "A dependent operation gated on a breached appraisal is BLOCKED (422) with the variance and the named band in the problem body"
+    requirement: "An operation that DEPENDS on an appraisal (proceeding only if the appraisal is acceptable) MUST be BLOCKED with 422 (VARIANCE_OUT_OF_TOLERANCE) while the appraisal is OUT_OF_TOLERANCE and not yet dispositioned. The 422 problem body MUST NAME the breach: the derived variance and the lower/upper tolerance band that governed the verdict — so the blocked caller can see WHY and by HOW MUCH, not a bare refusal. A WITHIN_TOLERANCE appraisal lets the dependent operation proceed (200). The gate MUST be fail-closed: an unknown/missing appraisal is a 404, never an implicit pass."
+    test_method: "RestAssured (proceed on a WITHIN_TOLERANCE appraisal → 200; proceed on an OUT_OF_TOLERANCE appraisal with no disposition → 422 VARIANCE_OUT_OF_TOLERANCE whose body carries the variance + lowerTolerance + upperTolerance; proceed on an unknown appraisal → 404)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The dependent operation is the seam the gate protects — a cost posting, a
+      lot release, a budget draw. The block is the whole point of the tolerance
+      band: an out-of-tolerance value does not silently flow downstream.
+  - id: "VG-DISPOSE-001"
+    chapter: "A breach requires an explicit DISPOSITION (who, when, reason) to proceed — distinct from silent acceptance — and is idempotent"
+    requirement: "An OUT_OF_TOLERANCE appraisal MAY be allowed to proceed ONLY via an explicit DISPOSITION that records the actor (the authenticated caller), the timestamp (injected Clock), and a non-blank reason. The disposition is an immutable, append-only record (one per appraisal — uq(appraisal_id) backstop). Once an OVERRIDE disposition is attached, the dependent operation proceeds (200) and the breach remains visible (the verdict is NOT rewritten to WITHIN_TOLERANCE — the appraisal stays OUT_OF_TOLERANCE WITH an override on record). A disposition with a blank reason is a 422. Disposing a WITHIN_TOLERANCE appraisal (nothing to override) is a 422. A repeat OVERRIDE on an already-disposed appraisal is idempotent (no second row, no error). Disposition is DISTINCT from silent acceptance: there is no path to proceed past a breach without a recorded who/when/reason."
+    test_method: "RestAssured (dispose OUT_OF_TOLERANCE with OVERRIDE + reason → proceed afterward is 200 and the appraisal still reads OUT_OF_TOLERANCE with a disposition on record; dispose with a blank reason → 422; dispose a WITHIN_TOLERANCE appraisal → 422; a second OVERRIDE is idempotent — still exactly one disposition row)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The disposition is the audited escape hatch — the variance-analysis analog
+      of a recorded management override of a cost/quality breach. It never erases
+      the breach; it records an accountable decision to proceed despite it.
+  - id: "VG-CONCURRENT-001"
+    chapter: "Keystone — concurrent dispositions serialize on the appraisal row; exactly one wins, the rest 409"
+    requirement: "Across ANY interleaving of concurrent disposition calls on one breached appraisal, EXACTLY ONE disposition wins (writing exactly one disposition row) and the rest receive 409 (VARIANCE_ALREADY_DISPOSED — the uq(appraisal_id) backstop makes the loser deterministic) (CWE-362). The disposition path MUST take the appraisal's PESSIMISTIC_WRITE row lock so the check-not-disposed / write-disposition sequence cannot interleave. Across the keystone, the appraisal MUST NEVER end with two disposition rows."
+    test_method: "Concurrency proof (N concurrent OVERRIDE dispositions on one breached appraisal → exactly one 2xx + N-1 409 (or idempotent-success, never a second row); exactly one disposition row written)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent disposition race): "The product
+      contains a concurrent code sequence that requires temporary, exclusive
+      access to a shared resource, but a timing window exists in which the shared
+      resource can be modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html) The appraisal-row
+      PESSIMISTIC_WRITE lock serializes the happy path; the uq(appraisal_id)
+      unique index makes the loser of any residual race a deterministic outcome
+      (a single recorded disposition), the belt-and-suspenders the dunning and
+      recordlinkage domains taught the catalog.
