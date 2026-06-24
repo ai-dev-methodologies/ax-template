@@ -157,6 +157,10 @@ public class SecurityConfig {
                 // an envelope, sign off (four-eyes), satisfy companion gates, and execute only when the
                 // executed params re-hash to the authorized envelope.
                 .requestMatchers("/api/authz-parity/**").authenticated()
+                // QUORUM (quorum-resolution-l0): any authenticated user opens a motion,
+                // casts a ballot (must be an eligible voter), or resolves (convener only).
+                // All tally arithmetic is integer cross-multiplication — no floating point.
+                .requestMatchers("/api/quorum/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

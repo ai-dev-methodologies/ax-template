@@ -1,0 +1,154 @@
+version: "0.1.0"
+scope: "quorum-resolution-l0 — the generalized COLLECTIVE WEIGHTED DECISION. A decision body resolves a motion by collecting IMMUTABLE ballots from eligible WEIGHTED voters and then resolving the outcome by a policy FROZEN at motion-open: a weighted tally, a threshold (majority / supermajority / M-of-N / percentage), an explicit abstention mode, a DETERMINISTIC tie-break, and a QUORUM gate measured against ELIGIBLE weight. The resolution is a PURE, reproducible function of the cast ballots + the frozen policy — re-resolving yields the identical record. Distinct from the catalog's existing governance primitives, which all model ASYMMETRIC authority: decision-governance versions ONE system-computed determination (basis snapshot + four-eyes override); approval-workflow routes a REQUEST through ORDERED single-approver steps (first dissent short-circuits); e-government-approval is a PKI-signed 결재선 routing vertical. NONE expresses SYMMETRIC collective authority — N peers whose aggregate weighted preference, against a frozen rule, collapses ONCE into PASSED / REJECTED / NO_DECISION, where NO_DECISION (quorum not met) is a terminal distinct from REJECTED (quorum met, threshold not met). Realized by the quorumresolution reference workload (com.ax.template.authblueprint.quorumresolution). Recurs in: board/shareholder resolutions, condo/HOA votes, multi-sig wallet authorization, credit/investment committees, scientific peer review, standards bodies — 5+ industries, jurisdiction- and framework-agnostic."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only immutable ballot/resolution rows + frozen policy snapshot columns @Column(updatable=false) + @Version optimistic + PESSIMISTIC_WRITE per-motion row lock + @Check tally/quorum backstops + UNIQUE(motion_id,voter_id) double-vote constraint) + integer/BigDecimal exact threshold arithmetic + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "BIP-11 M-of-N Standard Transactions (the canonical M-of-N threshold-authorization formalization) + NIST IR 8214 Threshold Schemes for Cryptographic Primitives (distributed t-of-n authority — no single party can act alone) + Robert's Rules of Order Revised, Art. VIII §40 Quorum (the parliamentary quorum-as-participation-gate: in the absence of a quorum no business can be transacted) + CWE-362 (concurrent ballot/resolve race) + RFC 9457 + RFC 9110 §15.5.21 (422) / §15.5.10 (409). Zero jurisdiction-specific law cited — generic cross-industry collective-decision primitive."
+domain_mode: backend_only
+introduced_at: "IDW18 2026-06-24 governance dogfood — promoted GENERIC. Novel signature: the catalog's governance primitives all model ASYMMETRIC authority (computed determination / ordered approval / signed routing); the missing one is SYMMETRIC collective weighted authority (M-of-N weighted tally + quorum gate + deterministic tie-break + frozen policy, resolution reproducible from immutable ballots). Anti-re-find verified against decision-governance-l0, approval-workflow-l0, e-government-approval-l0."
+
+# OPT-IN quorum-resolution catalog. Adopted by any recipe whose outcome is a
+# COLLECTIVE weighted decision of peers — a body votes, the votes are tallied
+# against a frozen rule, and the result is one of PASSED / REJECTED / NO_DECISION.
+# The board-resolution framing is the anchor, not a lock-in (multi-sig, committee,
+# HOA, peer-review all share the shape). Generic; zero Korean-law cite (R102+).
+
+# ── Priority order for fork-receivers ──
+# Adopt in order; earlier items are foundational.
+#   1. QR-BALLOT-001    (immutable cast-once ballot — the append-only primitive)
+#   2. QR-POLICY-001    (resolution policy FROZEN at open — the reproducibility precondition)
+#   3. QR-RESOLVE-001   (quorum gate vs ELIGIBLE weight → NO_DECISION distinct from REJECTED)
+#   4. QR-TALLY-002     (EXACT integer/BigDecimal threshold arithmetic — never floating point)
+#   5. QR-RESOLVE-005   (resolution is a PURE reproducible function of immutable inputs)
+
+items:
+  # ── BALLOT (immutability + cast-once) ──
+  - id: "QR-BALLOT-001"
+    chapter: "A cast ballot is immutable and append-only"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "Every ballot column MUST be @Column(updatable=false) with no public setter; a correction is a new motion, never an edit. A committed ballot is never UPDATEd."
+    test_method: "structural (no set* on Ballot; all fields @Column(updatable=false)) + RestAssured (cast → 201, no edit endpoint exists)"
+    verification_type: "positive"
+    applicable: true
+  - id: "QR-BALLOT-002"
+    chapter: "Exactly one ballot per (motion, voter) — double-vote unrepresentable"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "A UNIQUE(motion_id, voter_id) constraint makes a double-vote structurally impossible; the second cast returns 409 QR_DOUBLE_VOTE."
+    test_method: "RestAssured (second cast by same voter → 409) + structural (@Table uniqueConstraints + V069 UNIQUE index)"
+    verification_type: "negative"
+    applicable: true
+  - id: "QR-BALLOT-003"
+    chapter: "A ballot records a choice in {YES, NO, ABSTAIN}; ABSTAIN is a distinct cast act"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "choice is constrained to YES|NO|ABSTAIN (@Check + 400 on absent/unknown). ABSTAIN is a CAST act (counts toward quorum participation), NOT the absence of a ballot."
+    test_method: "RestAssured (abstain → 201 + counted in participation; unknown choice → 400)"
+    verification_type: "positive"
+    applicable: true
+  # ── ELIGIBILITY ──
+  - id: "QR-ELIG-001"
+    chapter: "Only an enrolled eligible voter may cast; roster frozen at open"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "A non-eligible caller gets 403 QR_NOT_ELIGIBLE (404 if the motion is not visible — IDOR-safe). The eligibility roster is captured at motion-open and frozen alongside the policy."
+    test_method: "RestAssured (non-eligible cast → 403; unknown motion → 404)"
+    verification_type: "negative"
+    applicable: true
+  - id: "QR-ELIG-002"
+    chapter: "Each eligible voter carries a positive weight fixed at enrollment"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "weight is @Column(updatable=false) and @Check(weight > 0). Default weight is 1."
+    test_method: "structural (EligibleVoter.weight updatable=false; @Check weight>0 in entity + V069)"
+    verification_type: "positive"
+    applicable: true
+  # ── POLICY (frozen at open) ──
+  - id: "QR-POLICY-001"
+    chapter: "The resolution policy is snapshotted immutably at motion-open"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "rule type, threshold, quorum fraction, abstention mode, tie-break ordering are @Column(updatable=false); they cannot change after the motion opens (no setter, DB-backstopped). The reproducibility precondition (mirrors decision-governance basis snapshot)."
+    test_method: "structural (all policy columns updatable=false)"
+    verification_type: "positive"
+    applicable: true
+  - id: "QR-POLICY-002"
+    chapter: "An inconsistent policy is rejected before the motion opens"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "threshold and quorum denominators > 0, numerators in range, and CHAIR_CASTING requires a tie_break_voter — else 422 QR_POLICY_INVALID before OPEN."
+    test_method: "RestAssured (zero denominator / CHAIR_CASTING without voter → 422)"
+    verification_type: "negative"
+    applicable: true
+  # ── TALLY (weighted correctness) ──
+  - id: "QR-TALLY-001"
+    chapter: "The tally is the exact sum of weights per choice and never exceeds eligible weight"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "yes_weight + no_weight + abstain_weight <= total_eligible_weight, @Check-backstopped on the resolution row. Each ballot contributes its frozen weight_at_cast."
+    test_method: "RestAssured (weighted motion resolves with exact tallies) + structural (@Check on Resolution + V069)"
+    verification_type: "positive"
+    applicable: true
+  - id: "QR-TALLY-002"
+    chapter: "Threshold comparison uses EXACT integer/BigDecimal arithmetic, never floating point"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "yes_weight * threshold_denominator >= threshold_numerator * base, evaluated in integer/BigDecimal space — a 1/3 or 2/3 supermajority MUST be reproducible (no FP drift)."
+    test_method: "RestAssured (supermajority 2/3 threshold resolves identically across runs)"
+    verification_type: "positive"
+    applicable: true
+  - id: "QR-TALLY-003"
+    chapter: "Abstentions count toward quorum participation but the threshold base is policy-frozen"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "abstention_mode is frozen at open: EXCLUDE_FROM_BASE (default — base = yes+no) vs COUNT_AS_NO. Abstentions always count toward quorum participation regardless of mode."
+    test_method: "RestAssured (same ballots, EXCLUDE_FROM_BASE vs COUNT_AS_NO → different outcome, each reproducible)"
+    verification_type: "positive"
+    applicable: true
+  # ── RESOLVE (quorum gate + tie-break + reproducibility) ──
+  - id: "QR-RESOLVE-001"
+    chapter: "Quorum is measured against ELIGIBLE weight, not cast weight → NO_DECISION distinct from REJECTED"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "cast_eligible_weight * quorum_denominator >= quorum_numerator * total_eligible_weight; if NOT met the outcome is NO_DECISION (a terminal distinct from REJECTED), produced by neither the PASSED nor the REJECTED path. Measuring against cast weight (always trivially met) is the canonical quorum bug and is forbidden."
+    test_method: "RestAssured (sparse turnout below quorum → outcome NO_DECISION, asserted distinct from REJECTED)"
+    verification_type: "positive"
+    applicable: true
+  - id: "QR-RESOLVE-002"
+    chapter: "Quorum met + threshold met → PASSED; quorum met + threshold not met → REJECTED"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "PASSED / REJECTED / NO_DECISION are the only resolved outcomes; the motion goes terminal RESOLVED."
+    test_method: "RestAssured (threshold met → PASSED; not met → REJECTED)"
+    verification_type: "positive"
+    applicable: true
+  - id: "QR-RESOLVE-003"
+    chapter: "Tie-break is a deterministic total order declared in the frozen policy"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "A motion PASSES iff it STRICTLY EXCEEDS the threshold (yes*threshold_denominator > threshold_numerator*base); below is REJECTED; EXACTLY meeting the threshold (yes*threshold_denominator == threshold_numerator*base) is the DEADLOCK resolved via the FROZEN tie_break_mode (TIE_FAILS → REJECTED; CHAIR_CASTING → the named tie-break voter's choice), never via map/collection iteration order. A 'tie' is threshold-equality, NOT yes==no (which only coincides with the bar at a 1/2 majority and would spuriously flip a 1/3 or 2/3 motion that cleared its threshold). The same ballot set always yields the identical outcome."
+    test_method: "RestAssured (exact-tie motion → deterministic outcome per tie_break_mode, identical across runs)"
+    verification_type: "positive"
+    applicable: true
+  - id: "QR-RESOLVE-004"
+    chapter: "A ballot cast after the motion is no longer OPEN is rejected"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "A cast on a CLOSED/TALLYING/RESOLVED motion returns 409 QR_MOTION_CLOSED; nothing persists."
+    test_method: "RestAssured (cast after resolve → 409)"
+    verification_type: "negative"
+    applicable: true
+  - id: "QR-RESOLVE-005"
+    chapter: "Resolution is a pure, reproducible function of immutable ballots + frozen policy"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "resolve reads ONLY the frozen policy + immutable ballot columns (never wall-clock or mutable state); re-resolving an already-RESOLVED motion returns the identical Resolution record (UNIQUE(motion_id) prevents a second insert). The resolution row is itself @Column(updatable=false)."
+    test_method: "RestAssured (resolve twice → byte-identical outcome + tallies; Resolution UNIQUE(motion_id))"
+    verification_type: "positive"
+    applicable: true
+  - id: "QR-RESOLVE-006"
+    chapter: "Concurrent casts and the resolve transition serialize on the motion row"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "castBallot and the open→tallying/resolve transition both acquire the motion row under PESSIMISTIC_WRITE (CWE-362); N concurrent casts by N distinct eligible voters commit exactly N ballots, and no ballot slips in between the close decision and the tally read."
+    test_method: "concurrency (N-thread distinct-voter casts → exactly N ballots; cast racing resolve cannot land post-close)"
+    verification_type: "positive"
+    applicable: true
+  # ── AUTHZ ──
+  - id: "QR-AUTHZ-001"
+    chapter: "All quorum endpoints require authentication; voter identity is the caller"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "/api/quorum/** requires a valid JWT (401 unauthenticated). The voting identity is ALWAYS Authentication.getName(), never a body/path parameter (caller-authentication-only)."
+    test_method: "RestAssured (no token → 401; ballot voter is always the JWT subject)"
+    verification_type: "negative"
+    applicable: true
+  - id: "QR-AUTHZ-002"
+    chapter: "Only the motion convener may open/close/resolve"
+    verification: { mechanism: rule, ref: quorum-weighted-tally-with-quorum-gate-and-frozen-policy }
+    requirement: "A non-convener attempting to resolve gets 404 (IDOR-safe, never a 403 existence leak)."
+    test_method: "RestAssured (non-convener resolve → 404)"
+    verification_type: "negative"
+    applicable: true

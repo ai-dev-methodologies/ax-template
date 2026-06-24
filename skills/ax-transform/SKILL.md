@@ -17,7 +17,7 @@ A starter / transformation skill for projects that want AI agents (Claude Code e
 | Asset | Purpose for AI agent |
 |---|---|
 | **Spec Trio** (`specs/` + `contracts/` + `blueprints/`) | Spec is read before code. AI hallucination's 1st line of defense. |
-| **practices/ catalog** (214 rules, 22+ categories) | Evidence-anchored Java/Spring rules. AI cannot invent rules at random — every rule has an external URL / quote / RFC / JEP citation. |
+| **practices/ catalog** (215 rules, 22+ categories) | Evidence-anchored Java/Spring rules. AI cannot invent rules at random — every rule has an external URL / quote / RFC / JEP citation. |
 | **`./gradlew test{Domain}`** | Single binary command per domain (testAsvs, testCrud, testPractices, testPortability). AI self-verifies in one shot. |
 | **`AGENTS.md`** (auto-regenerated, sha256-sentinel) | AI agent's primary context file. Stays sync'd to `practices/rules/*.md` automatically. |
 | **4 hard gates** (spec_ref / substance / time_decay / evidence) | Binary checks that block AI output if it diverges from external facts. |
@@ -61,7 +61,7 @@ bash practices/scripts/install-hooks.sh
 |---|---|
 | `CLAUDE.md` | Top-level project identity + methodology summary. **Read this first.** |
 | `METHODOLOGY.md` | 5-step blueprint playbook for adding a new domain |
-| `practices/AGENTS.md` | The 214 rules in AI-consumable form, with sha256 sentinel |
+| `practices/AGENTS.md` | The 215 rules in AI-consumable form, with sha256 sentinel |
 | `practices/SKILL.md` | The practices subsystem entry point |
 | `practices/MAINTAINER.md` | Maintainer guide for evolving the catalog |
 | `practices/DECISIONS.md` | Rule provenance trail — every accepted / rejected rule with reasoning |

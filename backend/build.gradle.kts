@@ -331,6 +331,12 @@ tasks.register<Test>("testDecisionGov") {
     }
 }
 
+tasks.register<Test>("testQuorum") {
+    useJUnitPlatform {
+        includeTags("QUORUM")
+    }
+}
+
 tasks.register<Test>("testThresholdTerminal") {
     useJUnitPlatform {
         includeTags("THRESHOLD_TERMINAL")
