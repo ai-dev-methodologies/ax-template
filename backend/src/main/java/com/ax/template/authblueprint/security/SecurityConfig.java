@@ -161,6 +161,14 @@ public class SecurityConfig {
                 // casts a ballot (must be an eligible voter), or resolves (convener only).
                 // All tally arithmetic is integer cross-multiplication — no floating point.
                 .requestMatchers("/api/quorum/**").authenticated()
+                // COMMERCECATALOG (commercecatalog-l0): product detail/browse is public so
+                // anonymous shoppers can view products before signing in. Mutations (create
+                // product, add variant, resolve-sku, link-category) and category creates
+                // require JWT. The GET permitAll MUST appear BEFORE the authenticated
+                // catch-all to avoid a Spring Security 401 on unauthenticated GETs.
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/catalog/products/**").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/catalog/skus/**").authenticated()
+                .requestMatchers("/api/catalog/**").authenticated()
                 // Redirect-style PG callbacks (KG이니시스 / NICE페이먼츠 / KCP / Toss V1)
                 // are unauthenticated by user JWT — authentication is the PG signature
                 // verified by PaymentCallbackVerifier per PAYMENT-CALLBACK-001. The

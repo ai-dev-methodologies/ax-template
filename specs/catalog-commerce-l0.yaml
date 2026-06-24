@@ -1,0 +1,118 @@
+version: "0.1.0"
+scope: "catalog-commerce-l0 — the purchasable-catalog core of an e-commerce platform: a Product with exactly one default SKU plus option-derived variant SKUs, a deterministic option-value-set → SKU resolution, a category graph with ordered product↔category membership, an active-date/archival purchasability lifecycle, and price/inventory HOOKS (presence, not computation). Absorbed from Broadleaf Commerce's catalog subsystem (org.broadleafcommerce.core.catalog) and STRENGTHENED at two points Broadleaf leaves to convention: (INV-1) Broadleaf resolves an ambiguous option-value set by an arbitrary `iterator().next()` pick with no uniqueness constraint — this spec makes a duplicate sku-generating signature UNREPRESENTABLE (DB UNIQUE) and resolution an EXACT match; (INV-5) Broadleaf's retailPrice is nullable so a sellable SKU can be priceless — this spec gates price-presence at the catalog boundary. Realized by the commercecatalog reference workload (com.ax.template.authblueprint.commercecatalog). The first vertical of a Broadleaf-absorption program; pricing computation, discounts, fulfillment, inventory reservation, media/CMS/i18n, and dynamic pricing are DEFERRED to later verticals (this vertical exposes only the hooks). Recurs in every variant-product catalog: apparel (size/color), electronics (configuration), grocery (modifiers), marketplaces — jurisdiction- and framework-agnostic."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (two aggregate roots CatalogProduct + Category; @AggregateMember Sku/ProductOption/ProductOptionValue/SkuOptionValueXref/CategoryProductXref; immutable identity columns @Column(updatable=false); @Version optimistic + PESSIMISTIC_WRITE on the product row for variant mutations; UNIQUE(product_id, option_signature) backstop for variant uniqueness; @Check sale<=retail and window well-formedness) + injected java.time.Clock (active-window gate) + integer minor-unit money + RFC 9457 Problem Details + Micrometer"
+domain_mode: backend_only
+introduced_at: "Broadleaf-absorption vertical 1 (catalog) 2026-06-24 — grounded in Broadleaf Commerce develop-7.0.x catalog subsystem; STRENGTHENS two Broadleaf gaps (variant-resolution ambiguity, price-presence). Generic across all variant-product commerce; zero jurisdiction-specific law."
+
+# OPT-IN purchasable-catalog catalog. The foundational e-commerce vertical: a
+# Product + its default/variant SKUs, deterministic variant resolution, category
+# membership, and a purchasability lifecycle. Pricing/discount/fulfillment are
+# separate verticals — this one owns only the catalog shape + its hooks. Generic
+# (apparel/electronics/grocery/marketplace); the Broadleaf framing is the pattern
+# source, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. CAT-PRODUCT-001  (every product has exactly one default SKU — the base of the variant model)
+#   2. CAT-VARIANT-002  (a duplicate sku-generating signature is unrepresentable — determinism backstop)
+#   3. CAT-VARIANT-001  (an option-value set resolves to EXACTLY one active SKU — no silent pick)
+#   4. CAT-LIFECYCLE-001 (purchasable only within the active window AND not archived — re-gated at cart time)
+#   5. CAT-PRICING-HOOK-001 (a sellable SKU must resolve a non-null price — no listed-but-priceless)
+
+items:
+  # ── PRODUCT ──
+  - id: "CAT-PRODUCT-001"
+    chapter: "Every product has exactly one non-null default SKU"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "A product MUST be created with exactly one default SKU (the base of the variant model + the fallback source for variant name/price/dates). Creating a product without a default SKU is rejected (422 CATALOG_DEFAULT_SKU_REQUIRED)."
+    test_method: "RestAssured (create without default SKU → 422; with → 201)"
+    verification_type: "negative"
+    applicable: true
+  - id: "CAT-PRODUCT-002"
+    chapter: "Variant SKU fields fall back to the default SKU"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "A variant SKU with a null name/price/active-date inherits the value from the product's default SKU at read time; the default SKU itself may not rely on a fallback."
+    test_method: "RestAssured (variant with null name resolves to default SKU's name)"
+    verification_type: "positive"
+    applicable: true
+  # ── SKU ──
+  - id: "CAT-SKU-001"
+    chapter: "A SKU belongs to exactly one product; identity + role immutable"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "Sku.product_id and Sku.is_default are @Column(updatable=false); a SKU never migrates products and never changes its default/variant role."
+    test_method: "structural (product_id + is_default updatable=false)"
+    verification_type: "positive"
+    applicable: true
+  - id: "CAT-SKU-002"
+    chapter: "Sale price never exceeds retail price"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "sale_price <= retail_price, DB @Check-backstopped; a SKU with sale > retail is rejected (422)."
+    test_method: "RestAssured (sale>retail → 422) + structural (@Check in entity + V070)"
+    verification_type: "negative"
+    applicable: true
+  # ── VARIANT ──
+  - id: "CAT-VARIANT-001"
+    chapter: "A chosen option-value set resolves to EXACTLY one active SKU"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "resolveSku(product, {attribute→value}) computes the option_signature and does an EXACT-match lookup → returns exactly one active SKU. It NEVER silently picks the first of several candidates (the Broadleaf iterator().next() defect this vertical absorbs-and-strengthens)."
+    test_method: "RestAssured (resolve a complete option set → the one matching SKU)"
+    verification_type: "positive"
+    applicable: true
+  - id: "CAT-VARIANT-002"
+    chapter: "A duplicate sku-generating signature is unrepresentable"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "Two SKUs of one product sharing an identical sku-generating option-value signature are forbidden — UNIQUE(product_id, option_signature); a create that would collide returns 409 CATALOG_SKU_OPTION_AMBIGUOUS, and the DB constraint backstops it under ddl-auto."
+    test_method: "RestAssured (second SKU with identical signature → 409) + structural (UNIQUE in entity + V070)"
+    verification_type: "negative"
+    applicable: true
+  - id: "CAT-VARIANT-003"
+    chapter: "An option-value set matching no SKU yields 404, never a silent pick"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "resolveSku with a set that matches no SKU returns 404 CATALOG_NO_MATCHING_SKU."
+    test_method: "RestAssured (unknown option set → 404)"
+    verification_type: "negative"
+    applicable: true
+  # ── CATEGORY ──
+  - id: "CAT-CATEGORY-001"
+    chapter: "Product↔category membership is a many-to-many ordered xref"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "A product belongs to many categories via an xref carrying display_order; UNIQUE(product_id, category_id) so a duplicate membership is rejected. The category_id is an identity reference (never a Category object pointer across the aggregate boundary)."
+    test_method: "RestAssured (duplicate membership → rejected) + structural (UNIQUE)"
+    verification_type: "negative"
+    applicable: true
+  - id: "CAT-CATEGORY-002"
+    chapter: "The category graph is acyclic"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "A category parent edge that would close a cycle is rejected (409 CATALOG_CATEGORY_CYCLE) via an ancestor walk, so every recursive traversal (breadcrumb, nav) terminates."
+    test_method: "RestAssured (A→B then B→A → 409)"
+    verification_type: "negative"
+    applicable: true
+  # ── LIFECYCLE ──
+  - id: "CAT-LIFECYCLE-001"
+    chapter: "Purchasable only within the active window AND not archived"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "assertPurchasable(sku) succeeds only when now ∈ [active_start, active_end) (via an injected Clock) AND the product is active AND not archived; a stale/archived/not-yet-launched SKU returns 409 CATALOG_SKU_NOT_PURCHASABLE even though the row exists. The gate is re-checked at the purchase path, not only at display."
+    test_method: "RestAssured (Clock advanced past active_end → assertPurchasable 409; archived → 409)"
+    verification_type: "negative"
+    applicable: true
+  - id: "CAT-LIFECYCLE-002"
+    chapter: "Active window is well-formed"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "active_end_date > active_start_date (DB @Check); an inverted window is rejected (422)."
+    test_method: "structural (@Check in entity + V070)"
+    verification_type: "positive"
+    applicable: true
+  # ── PRICING-HOOK ──
+  - id: "CAT-PRICING-HOOK-001"
+    chapter: "A sellable SKU must resolve a non-null price"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "An active sellable SKU MUST resolve a non-null price (own retail_price or the inherited default-SKU retail_price); a listed-but-priceless sellable SKU is rejected at the catalog boundary (422 CATALOG_PRICE_REQUIRED) — gated where the data lives, not deferred to checkout. Discount/tax/dynamic pricing are DEFERRED to the pricing vertical."
+    test_method: "RestAssured (sellable SKU with no own + no default price → 422)"
+    verification_type: "negative"
+    applicable: true
+  - id: "CAT-PRICING-HOOK-002"
+    chapter: "Inventory availability is a deferred scope boundary"
+    verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
+    requirement: "Inventory availability (the UNAVAILABLE-forces-not-purchasable gate + stock quantity / reservation / decrement) is DEFERRED ENTIRELY to a future inventory vertical — the catalog Sku deliberately carries NO inventory field. The catalog vertical owns product/variant/lifecycle/price-presence; inventory is a separate consistency boundary (mirrors how pricing computation is deferred to the pricing vertical). A structural test asserts the scope boundary holds (Sku exposes no inventory field), so the deferral is explicit, not an accidental omission."
+    test_method: "structural (ViolationProofTest asserts Sku carries no inventoryType field — the deferral is the contract)"
+    verification_type: "positive"
+    applicable: true
