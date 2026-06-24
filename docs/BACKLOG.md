@@ -26,9 +26,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 54 | 54 | **100%** |
-| P2 (verification escapes) | 12 | 11 | 92% |
+| P2 (verification escapes) | 12 | 12 | **100%** |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **123** | **91** | **~74%** |
+| **P0–P3 합계 (수렴 분모)** | **123** | **92** | **~75%** |
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -170,23 +170,31 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       index-only digest vs 실제 인용문 불일치). done-when:
       `bash practices/evals/evidence_quote_spotcheck_guard.sh --strict` exits 0
       **AND** guard [74]가 `run-all-guards.sh`에서 `--strict` 모드로 승격.
-- [ ] P2-1b external-URL evidence entries *(P2-1 잔여, 분모 불변)* —
-      `source_type: external` 항목(URL+citation만, 스냅숏 없음)은 어떤 blocking
-      gate도 내용을 검증하지 않는다 — 조작된 외부 인용이 모든 게이트를 통과한다.
-      done-when: periodic live-fetch `external_url_spot_audit` (ADVISORY) 추가,
-      한 sweep에서 confirmed-fabricated 0 확인.
+- [x] P2-1b — **closed 2026-06-24** *(P2-1 잔여, 분모 불변)*: external-URL evidence entries.
+      `source_type: external` 항목(URL+citation만, 스냅숏 없음)은 어떤 blocking gate도 내용을
+      검증하지 않아 조작된 외부 인용이 통과 가능 — 이 차원은 live fetch만 검증 가능.
+      도구 신설 `practices/scripts/external_url_spot_audit.sh` (periodic ADVISORY, R25 guard 아님 —
+      네트워크 비결정성): 341 고유 external URL을 3-bucket 분류(OK / SUSPICIOUS = reachable인데
+      URL이 claim한 id가 페이지에 없음 = confirmed-fabricated 후보 / UNREACHABLE = bot-block·404·
+      timeout, fabrication 아님). baseline sweep(verifiable subset = rfc/cwe/datatracker 42 URL,
+      URL이 자기 id를 claim해 강신호): **OK 42 · UNREACHABLE 0 · SUSPICIOUS 0 = confirmed-fabricated 0**
+      (done-when 충족). 비-verifiable 호스트는 reachability-only(id 없어 내용-판정 불가, 설계상 OK).
 - [x] P2-2 — **closed 2026-06-24**: ESLint warn→error 승격 (`no-server-state-in-local-state`,
       `no-god-route`). 측정 게이트 충족 = 아래 frontend 부채 정리 wave 이후 6개 reference 앱
       전부 `eslint . --max-warnings 0` 0-위반(rule이 gaming 아닌 real decomposition으로
       satisfiable함을 입증). 두 곳 승격: 실효 config `frontend/eslint.config.mjs` + recommended
       preset `practices-react/eslint-plugin-ax/index.js`. `eslint --print-config`로 severity=2(error)
       라이브 검증(vacuous 아님). 이제 새 god-route / server-state-in-useState 회귀가 HARD-FAIL.
-- [ ] P2-3 enforcement-surface map 문서화 — commit-blocking / push-blocking / manual 3분류를
-      CLAUDE.md 또는 verify 문서에 명시 (80-guard 전체는 수동 run-all-guards 전용임을 포함).
-      **진행 중 (2026-06-22)**: CLAUDE.md "Enforcement surfaces (what blocks where)" 섹션 추가 —
-      5개 표면 분류표 (PreToolUse advisory / pre-commit commit-blocking / pre-push push-blocking /
-      run-all-guards manual / per-domain test manual), opt-in 명시, 80 guards 수동 전용 명시.
-      done-when: 모든 표면에 예외 없는 binary 테스트 커버리지 추가.
+- [x] P2-3 — **closed 2026-06-24**: enforcement-surface map 문서화 + surface별 binary 테스트 커버리지.
+      (1) CLAUDE.md "Enforcement surfaces" 5표면 분류표(2026-06-22). (2) surface별 binary-test-coverage
+      map 추가 — 각 차단 표면이 "실제로 차단함"을 falsification 증명으로 backstop: pre-commit 주력
+      게이트 evidence_guard에 신규 `ax-prove-evidence-gate-blocks-agent.sh`(agent가 placeholder evidence
+      날조→evidence_guard BLOCK→실제 출처 anchor→PASS, actor=agent 기록), 기존 `agent_block_proof_guard`를
+      두 증명(problemdetail+evidence) backstop으로 일반화(guard count 80 불변, fixture에 evidence stub
+      쌍 추가). pre-push=recency `--fixtures`, run-all-guards=problemdetail 증명+`--include-fixtures`,
+      per-domain=각 task binary+ViolationProofTest by-construction. PreToolUse는 session-bound이라
+      by-construction 예외(shell 호출 불가, 트리거 게이트는 proven)로 honest 명시. run-all-guards
+      132 invocations GREEN.
 - [x] P2-4 — **closed 2026-06-24**: R25 체크리스트에 frontend lint 단계 추가 (이전엔 backend만).
       blocked-on 부채(아래)가 0-위반으로 정리된 뒤 `practices/verification-checklist.yaml`에
       `id: frontend-lint` step 추가 — `npm run lint`(= `eslint . --max-warnings 0`, working_dir

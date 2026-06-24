@@ -188,6 +188,14 @@ AI agent (Claude Code 등)가 코드를 작성할 때 가장 큰 risk:
 
 `evidence_guard.sh`가 binary로 검증. 빈 evidence / placeholder / 존재하지 않는 snapshot 모두 BLOCK.
 
+evidence **내용 진위**는 3계층으로 backstop된다(structure만으로는 조작 quote/URL이 통과하므로):
+- `evidence_guard.sh` (blocking) — 구조(upstream_id 해석, section/quote/citation/url 비어있지 않음).
+- `evidence_quote_spotcheck_guard.sh` [74] (advisory, offline) — `upstream_id` quote가 snapshot body에
+  실제 substring으로 존재하는지 결정론적 sweep.
+- `external_url_spot_audit.sh` (periodic ADVISORY, network — R25 guard 아님) — `source_type: external`
+  URL을 live-fetch해 OK / SUSPICIOUS(reachable인데 URL이 claim한 id 부재 = 조작 후보) / UNREACHABLE
+  3-bucket 분류. P2-1b baseline: verifiable subset 42 URL에서 confirmed-fabricated 0.
+
 ## Anti-Patterns (금지)
 
 ### 거버넌스 무한루프 ❌
@@ -399,7 +407,24 @@ fork-receiver의 활성화는 opt-in이다.
   merge gate, branch protection, PR 정책은 fork-receiver가 결정한다.
 - **commit-blocking은 `practices/` 변경에만 적용된다.** 일반 소스 변경에는 pre-commit gate가 실행되지 않는다.
 
-*(P2-3 진행 중 — enforcement-surface 분류 문서화 완료. done-when: 모든 표면에 예외 없는 binary 테스트 커버리지 추가 시 종결.)*
+### Surface별 binary 테스트 커버리지 (P2-3)
+
+각 강제 표면은 "실제로 차단하는가"를 증명하는 binary 테스트로 backstop된다 — vacuous(항상-통과)
+enforcement을 막기 위한 falsification 증명. (적대적 감사 thesis: gate는 **non-vacuously** 차단해야 한다.)
+
+| Surface | binary 테스트 커버리지 |
+|---------|----------------------|
+| PreToolUse hook | **by-construction 예외** — Claude Code 세션 hook이라 shell에서 호출 불가. 단, 이 hook이 트리거하는 게이트(pre-commit의 4 guard)는 아래에서 falsification-proven. |
+| pre-commit (4 gate) | 주력 게이트 evidence_guard에 falsification 증명 `practices/scripts/ax-prove-evidence-gate-blocks-agent.sh` (agent가 placeholder/빈 url evidence 작성→BLOCK→실제 출처 anchor→PASS, actor=agent 기록). `agent_block_proof_guard.sh`[76]가 존재·toggle·non-vacuity backstop. |
+| pre-push (recency) | `completion_checklist_recency_guard.sh --fixtures` (pass_*/fail_* — HEAD 최신 audit면 통과, stale/없으면 차단). |
+| run-all-guards | falsification 증명 `practices/scripts/ax-prove-gate-blocks-agent.sh` (agent가 Map-반환 @ExceptionHandler→BLOCK→ProblemDetail→PASS). [76]가 backstop. 추가로 모든 guard가 `--include-fixtures`로 pass/fail fixture 쌍 실행. |
+| per-domain test{Domain} | 각 task 자체가 binary pass/fail. 모든 도메인이 ViolationProofTest를 동봉 — 위반이 구조적으로 불가능함을 단언(by-construction falsification). |
+
+→ shell-testable 차단 표면(pre-commit · pre-push · run-all-guards · per-domain)은 전부 binary/falsification
+커버리지 보유. PreToolUse만 session-bound이라 by-construction 예외(gap 아님 — 트리거하는 게이트는 proven).
+
+*(P2-3 — **closed 2026-06-24**: enforcement-surface 분류 문서화 + 위 surface별 binary 테스트 커버리지 map.
+shell-testable 표면 전부 커버, 세션 hook은 구조적 예외로 honest 명시.)*
 
 ## RBAC (reference workload)
 
