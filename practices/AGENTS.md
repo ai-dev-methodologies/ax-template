@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "1db0472fd3733ae050572e6d3ad2e4d01c0862f2abf7c6195546efce90e53a92"
+  source_concat_sha256: "215e8da535cd9f05a8cd15b40578af0fc0dcf14749ed90515bd6c0241b9ced86"
   rule_count: 223
   generated_by: "practices/generate_agents.sh"
 ---
@@ -7686,7 +7686,7 @@ evidence:
 
 ## Rule
 
-A **guest** accretes records — a cart, an order, a wishlist, a draft — keyed by a session id or a guest email, while **anonymous**. When they **authenticate for the first time** (login or register), those records must be **claimed** by the now-authenticated identity. Per Broadleaf, `MergeOrdersByEmailPostRegistrationObserver` finds anonymous orders by email and `o.setCustomer(customer)`. Three obligations the naive observer does not guarantee:
+A **guest** accretes records — a cart, an order, a wishlist, a draft — keyed by an **unguessable claim token** possessed by the guest session, while **anonymous**. When they **authenticate for the first time** (login or register), those records must be **claimed** by the now-authenticated identity. Per Broadleaf, `MergeOrdersByEmailPostRegistrationObserver` finds anonymous orders **by email** and `o.setCustomer(customer)` — but a bare email is **guessable**, so a different user registering with a victim's guest email could claim their unclaimed records. ax **strengthens** the binding: the claim key is an **unguessable token** the guest session holds (a high-entropy opaque key in the cart cookie), so **possession** of the token is the proof that the records are the caller's own anonymous work. Three obligations the naive observer does not guarantee:
 
 1. **Atomic claim (IDCLAIM-CLAIM-001).** All N matching unclaimed records transfer in **one transaction** — a crash mid-claim cannot strand half the cart. The claim sets `owner_user_id` from null to the authenticated user; the records are thereafter user-scoped (`order-l0` ORDER-AUTHZ-001).
 2. **Idempotent claim (IDCLAIM-IDEMPOTENT-001).** A replayed claim, or a concurrent first-login from a second device, is a **no-op** — the conditional update hits zero still-null rows the second time. Never a duplicate transfer, never a lost record. Composes `idempotency-l0`.

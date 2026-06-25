@@ -5,7 +5,7 @@
 - spec_items: IDCLAIM-CLAIM-001, IDCLAIM-IDEMPOTENT-001, IDCLAIM-GUARD-001
 - rule: practices/rules/identity-claim-on-auth-atomic-idempotent-guarded.md
 - behavioral_test: backend/src/test/java/com/ax/template/authblueprint/identityclaim/IdentityClaimComplianceTest.java
-- adversarial_review: ACCEPT-WITH-RESERVATIONS → 2 MINOR fixed. All 3 invariants + atomic CAS HELD (no read-then-write race / CWE-367 eliminated by construction; idempotent replay = 0 rows; guard test genuine A/B principal ids; anti-re-find justified vs ownership-transfer[inverse]/record-linkage[probabilistic]; 3 evidence quotes byte-accurate; no-hand-edit proven). MINOR fixed: scoped the inspection GET (caller-owned / unclaimed only — closed the IDOR in a leak-prevention domain) + @Modifying consistency.
+- adversarial_review: opus critic ACCEPT-WITH-RESERVATIONS → 2 MINOR fixed (scoped inspection GET — closed an IDOR + routed through service to fix a controller→repository layering break; @Modifying flags). codex final review flagged the claimKey↔caller BINDING gap (an arbitrary caller-supplied key could claim another guest's unclaimed records) → reconciled spec+rule: the claim key is an UNGUESSABLE possession token (high-entropy, not a guessable email), so possession IS the binding — an ax STRENGTHENING over Broadleaf's guessable findOrdersByEmail. All 3 invariants + atomic CAS HELD (CWE-367 eliminated by construction; idempotent replay=0; guard test genuine A/B; anti-re-find justified; 3 quotes byte-accurate; no-hand-edit proven).
 
 ## Verification-goal parity (Broadleaf test intent → our coverage)
 
