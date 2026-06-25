@@ -356,6 +356,9 @@ public class SecurityConfig {
                 // COMMERCEPRICING (commerce-pricing-l0): stateless quote endpoint, JWT required.
                 // Pure computation — no JPA entity, no migration. Caller = Authentication.getName().
                 .requestMatchers("/api/pricing/**").authenticated()
+                // COMMERCEORDER (commerceorder-l0): cart + order lifecycle (IN_PROCESS→SUBMITTED→CANCELLED).
+                // All endpoints require a valid JWT. Caller = Authentication.getName() for IDOR-safe scoping.
+                .requestMatchers("/api/orders/**").authenticated()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers

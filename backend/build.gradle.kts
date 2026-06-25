@@ -337,6 +337,12 @@ tasks.register<Test>("testCommerceCatalog") {
     }
 }
 
+tasks.register<Test>("testCommerceOrder") {
+    useJUnitPlatform {
+        includeTags("COMMERCEORDER")
+    }
+}
+
 tasks.register<Test>("testCommercePromotion") {
     useJUnitPlatform {
         includeTags("PROMOTION")

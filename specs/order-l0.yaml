@@ -1,0 +1,68 @@
+version: "0.1.0"
+scope: "order-l0 — the cart→order SPINE of an e-commerce platform: a single Order entity that is a mutable CART while IN_PROCESS and an immutable ORDER once SUBMITTED, whose line items capture a PRICE SNAPSHOT at add-time (the price the customer saw, frozen against later catalog drift), where adding the same SKU MERGES quantity (never a duplicate line), whose units PARTITION into fulfillment groups conservingly (Σ group-item quantity per line == line quantity), and whose total is SNAPSHOTTED at submit. Absorbed from Broadleaf Commerce's order subsystem (org.broadleafcommerce.core.order) as the GROUNDED, richer, stricter replacement of the toy `ecommerce` Cart/Order demo (which has no immutable-after-submit guard, no updatable=false price snapshot, no quantity merge on the order, and no fulfillment groups). ANTI-RE-FIND: this vertical COMPOSES rather than re-implements — the pricing math (discount-before-tax, total closure) is owned by pricing-l0; terminal-state irreversibility (CANCELLED has no outgoing edges) by thresholdterminal-l0; generic state-conditional mutability by state-conditional-mutability (statemutation); SKU/variant/price-presence by catalog-commerce-l0. It absorbs only the order-spine specializations. Realized by the commerceorder reference workload (backend_only). Recurs in every cart/checkout/order-management system; jurisdiction- and framework-agnostic."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (Order @AggregateRoot unifying cart+order by status; @AggregateMember OrderItem/FulfillmentGroup/FulfillmentGroupItem; price-snapshot columns @Column(updatable=false); @Version optimistic lock for concurrent cart ops; @Check quantity>0 + non-negative snapshot price; sole-mutator OrderStateMachine like ApprovalRequestStateMachine) + injected java.time.Clock (submittedAt) + integer minor-unit money + RFC 9457 Problem Details + Micrometer"
+domain_mode: backend_only
+introduced_at: "Broadleaf-absorption vertical (order) 2026-06-24 — grounded in Broadleaf Commerce develop-7.0.x order subsystem; the grounded replacement of the toy ecommerce Cart/Order. ANTI-RE-FIND parents cited: pricing math → pricing-l0; terminal irreversibility → thresholdterminal-derivation-l0; state-conditional mutability → state-conditional-mutability; SKU/price-presence → catalog-commerce-l0. Absorbs only the 5 order-spine specializations. Tables prefixed commerce_* to avoid collision with the toy ecommerce orders table. Generic; zero jurisdiction-specific law."
+
+# OPT-IN cart→order spine. A single Order is a mutable cart (IN_PROCESS) then an
+# immutable order (SUBMITTED); lines freeze a price snapshot; quantity merges;
+# fulfillment partitions conservingly; total snapshots at submit. Composes
+# pricing-l0 / thresholdterminal / statemutation / catalog — does not re-implement.
+
+# ── Priority order ──
+#   1. ORDER-SNAPSHOT-001    (line freezes unit price + name at add-time — the customer's price)
+#   2. ORDER-IMMUTABLE-001   (SUBMITTED order is frozen — no add/update/remove)
+#   3. ORDER-MERGE-001       (same SKU merges quantity — no duplicate line)
+#   4. ORDER-FULFILL-001     (fulfillment partition conserves — no unit lost or double-shipped)
+#   5. ORDER-TOTAL-SNAPSHOT-001 (total frozen at submit — composes pricing-l0)
+
+items:
+  - id: "ORDER-SNAPSHOT-001"
+    chapter: "An order line freezes the unit price + name at add-time"
+    verification: { mechanism: rule, ref: order-cart-spine-price-snapshot-immutable-after-submit-merge-and-fulfillment-conserves }
+    requirement: "An OrderItem captures unit_price_at_add, name_at_add, and sku_id at add-time as @Column(updatable=false); reads NEVER re-derive the price from the live catalog. A later catalog price change must not rewrite the customer's existing line — the line charges the price the customer saw."
+    test_method: "structural (OrderItem snapshot columns @Column(updatable=false)) + RestAssured (line price unchanged after a catalog price edit)"
+    verification_type: "negative"
+    applicable: true
+  - id: "ORDER-IMMUTABLE-001"
+    chapter: "A SUBMITTED order is immutable; only IN_PROCESS is editable"
+    verification: { mechanism: rule, ref: order-cart-spine-price-snapshot-immutable-after-submit-merge-and-fulfillment-conserves }
+    requirement: "add/update/remove-item is allowed only while status is IN_PROCESS (editable); once SUBMITTED the item set, quantities, snapshots, and total are frozen — any mutation returns 409 ORDER_NOT_EDITABLE. (Order-spine specialization of generic state-conditional mutability — see state-conditional-mutability; the frozen field set is {items, quantities, snapshots, total}.)"
+    test_method: "RestAssured (mutating a SUBMITTED order → 409)"
+    verification_type: "negative"
+    applicable: true
+  - id: "ORDER-MERGE-001"
+    chapter: "Adding the same SKU merges quantity, never duplicates a line"
+    verification: { mechanism: rule, ref: order-cart-spine-price-snapshot-immutable-after-submit-merge-and-fulfillment-conserves }
+    requirement: "Adding an already-present SKU (same sku_id + options) to an IN_PROCESS order increments that line's quantity; it does not create a second line for the same SKU. Prevents line-count explosion and per-line proration drift."
+    test_method: "RestAssured (add SKU qty 2, then qty 3 → one line, quantity 5)"
+    verification_type: "positive"
+    applicable: true
+  - id: "ORDER-LIFECYCLE-001"
+    chapter: "Submit is one-way; CANCELLED is terminal"
+    verification: { mechanism: rule, ref: order-cart-spine-price-snapshot-immutable-after-submit-merge-and-fulfillment-conserves }
+    requirement: "The status FSM allows IN_PROCESS→SUBMITTED (one-way), IN_PROCESS→CANCELLED, SUBMITTED→CANCELLED; CANCELLED has no outgoing edges (terminal — composes thresholdterminal-derivation-l0). Status is mutated ONLY by the sole-mutator OrderStateMachine; an illegal transition → 409."
+    test_method: "RestAssured (SUBMITTED→IN_PROCESS rejected; CANCELLED→any rejected) + structural (state machine ALLOWED map)"
+    verification_type: "negative"
+    applicable: true
+  - id: "ORDER-FULFILL-001"
+    chapter: "Fulfillment partition conserves — every unit assigned exactly once"
+    verification: { mechanism: rule, ref: order-cart-spine-price-snapshot-immutable-after-submit-merge-and-fulfillment-conserves }
+    requirement: "Fulfillment assignment is a POST-SUBMIT operation: it is allowed only when status == SUBMITTED (an IN_PROCESS cart or a CANCELLED order is rejected 409 — you partition a placed order for shipment, not a mutable cart). For each OrderItem, Σ(fulfillment-group-item quantity) == OrderItem quantity — no unit unassigned, none double-assigned; a requested order_item_id that does not belong to the order is rejected (no phantom units); and assignment is IDEMPOTENT (re-assigning REPLACES the prior groups, it does not append duplicates). A partition that does not conserve is rejected (422 ORDER_FULFILLMENT_NOT_CONSERVED)."
+    test_method: "RestAssured (5 units split 2+3 on a SUBMITTED order → ok; 2+2 → 422; phantom item id → 422; assign on IN_PROCESS → 409; re-assign → replaces, not doubles)"
+    verification_type: "negative"
+    applicable: true
+  - id: "ORDER-TOTAL-SNAPSHOT-001"
+    chapter: "The order total is snapshotted at submit and frozen"
+    verification: { mechanism: rule, ref: order-cart-spine-price-snapshot-immutable-after-submit-merge-and-fulfillment-conserves }
+    requirement: "The persisted total/subTotal/tax are written at submit-time (via the FSM) and frozen thereafter; the total equals the pricing closure at submit (COMPOSES pricing-l0 PRICING-TOTAL-001 for the math — this item adds the persistence + freeze, not the computation) and does not drift with later catalog/tax changes."
+    test_method: "RestAssured (total after submit == priced total; unchanged after a later catalog edit)"
+    verification_type: "positive"
+    applicable: true
+  - id: "ORDER-AUTHZ-001"
+    chapter: "Every order lookup is user-scoped (IDOR-safe)"
+    verification: { mechanism: rule, ref: order-cart-spine-price-snapshot-immutable-after-submit-merge-and-fulfillment-conserves }
+    requirement: "An order is looked up scoped to the caller's user id (Authentication.getName()); another user requesting it gets 404 (IDOR-safe, never a 403 existence leak), mirroring WF-AUTHZ-002. The order user_id is @Column(updatable=false)."
+    test_method: "RestAssured (other user GET order → 404)"
+    verification_type: "negative"
+    applicable: true
