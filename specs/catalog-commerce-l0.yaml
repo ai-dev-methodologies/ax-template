@@ -109,10 +109,21 @@ items:
     test_method: "RestAssured (sellable SKU with no own + no default price → 422)"
     verification_type: "negative"
     applicable: true
-  - id: "CAT-PRICING-HOOK-002"
-    chapter: "Inventory availability is a deferred scope boundary"
+  - id: "CAT-INVENTORY-GATE-001"
+    chapter: "Purchasability is gated by a tri-state inventory type (quantity axis still deferred)"
     verification: { mechanism: rule, ref: catalog-variant-resolves-unique-active-sku-and-purchasability-gated }
-    requirement: "Inventory availability (the UNAVAILABLE-forces-not-purchasable gate + stock quantity / reservation / decrement) is DEFERRED ENTIRELY to a future inventory vertical — the catalog Sku deliberately carries NO inventory field. The catalog vertical owns product/variant/lifecycle/price-presence; inventory is a separate consistency boundary (mirrors how pricing computation is deferred to the pricing vertical). A structural test asserts the scope boundary holds (Sku exposes no inventory field), so the deferral is explicit, not an accidental omission."
-    test_method: "structural (ViolationProofTest asserts Sku carries no inventoryType field — the deferral is the contract)"
-    verification_type: "positive"
+    requirement: "A SKU carries a tri-state inventory_type POLICY flag ∈ {UNAVAILABLE, ALWAYS_AVAILABLE, CHECK_QUANTITY} that gates purchasability BEFORE any quantity arithmetic: UNAVAILABLE → never purchasable regardless of any stock (rejected at the catalog boundary); ALWAYS_AVAILABLE (or null) → purchasable WITHOUT consulting any quantity (a service / digital / made-to-order SKU); CHECK_QUANTITY → purchasability DEFERS the quantity check to the inventory-reservation vertical (two-axis-inventory-reservation-l0 owns the available≥q arithmetic). The catalog deliberately carries ONLY the policy flag, NOT a quantity/stock field. This realizes the per-SKU POLICY half of the former blanket inventory deferral (CAT-PRICING-HOOK-002, now lifted); the QUANTITY/reservation/decrement axis remains deferred to two-axis-inventory-reservation-l0 (inventory conservation there is a RE-FIND, not re-absorbed). The policy gate is a SKU/catalog concern (which of the 3 availability modes); the quantity conservation is the inventory vertical's."
+    test_method: "RestAssured (UNAVAILABLE SKU → purchasable check rejects regardless of stock; ALWAYS_AVAILABLE → purchasable with no quantity consulted; CHECK_QUANTITY → gate defers quantity to inventory-reservation) + structural (ViolationProofTest asserts Sku carries inventory_type BUT still NO quantity/stock field — the quantity deferral holds)"
+    verification_type: "negative"
     applicable: true
+    notes: >
+      Broadleaf-absorption inventory vertical (2026-06-25). Grounded in Broadleaf
+      InventoryType (ALWAYS_AVAILABLE / UNAVAILABLE / CHECK_QUANTITY) +
+      InventoryServiceImpl (checkBasicAvailablility rejects UNAVAILABLE; the gate
+      consults quantity only for CHECK_QUANTITY, else "definitely available").
+      LIFTS the former CAT-PRICING-HOOK-002 blanket inventory deferral — but ONLY
+      the policy flag is absorbed; the quantity/reservation/decrement axis stays
+      deferred to two-axis-inventory-reservation-l0 (Sku still carries no quantity
+      field — the ViolationProofTest now asserts inventory_type present + no
+      quantity field, the residual deferral). Inventory decrement/increment
+      conservation is a RE-FIND of INVRES-COMMIT-001 / INVRES-RELEASE-001.

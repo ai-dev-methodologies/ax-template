@@ -2,6 +2,8 @@ package com.ax.template.authblueprint.commercecatalog;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -79,12 +81,36 @@ public class Sku {
     @Column(name = "option_signature", length = 4000)
     private String optionSignature;
 
+    /**
+     * CAT-INVENTORY-GATE-001: tri-state inventory policy flag consulted by assertPurchasable
+     * BEFORE any quantity arithmetic.
+     * - UNAVAILABLE → never purchasable (catalog rejects immediately, 409).
+     * - ALWAYS_AVAILABLE (default) → purchasable without consulting any quantity.
+     * - CHECK_QUANTITY → catalog does NOT block; quantity check deferred to inventory-reservation vertical.
+     *
+     * <p>Defaults to ALWAYS_AVAILABLE so existing SKUs stay purchasable after the migration.
+     * The catalog carries NO quantity/stock field — only this policy flag.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "inventory_type", nullable = false)
+    private InventoryType inventoryType = InventoryType.ALWAYS_AVAILABLE;
+
     protected Sku() {}
 
     public Sku(UUID id, UUID productId, boolean isDefault,
                Long retailPrice, Long salePrice, String currency,
                Instant activeStartDate, Instant activeEndDate,
                String externalId, String upc, String optionSignature) {
+        this(id, productId, isDefault, retailPrice, salePrice, currency,
+             activeStartDate, activeEndDate, externalId, upc, optionSignature,
+             InventoryType.ALWAYS_AVAILABLE);
+    }
+
+    public Sku(UUID id, UUID productId, boolean isDefault,
+               Long retailPrice, Long salePrice, String currency,
+               Instant activeStartDate, Instant activeEndDate,
+               String externalId, String upc, String optionSignature,
+               InventoryType inventoryType) {
         this.id = id;
         this.productId = productId;
         this.isDefault = isDefault;
@@ -96,6 +122,7 @@ public class Sku {
         this.externalId = externalId;
         this.upc = upc;
         this.optionSignature = optionSignature;
+        this.inventoryType = inventoryType != null ? inventoryType : InventoryType.ALWAYS_AVAILABLE;
     }
 
     public UUID getId() { return id; }
@@ -110,4 +137,5 @@ public class Sku {
     public String getExternalId() { return externalId; }
     public String getUpc() { return upc; }
     public String getOptionSignature() { return optionSignature; }
+    public InventoryType getInventoryType() { return inventoryType; }
 }

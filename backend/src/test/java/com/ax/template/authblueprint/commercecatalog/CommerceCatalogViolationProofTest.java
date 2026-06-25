@@ -142,18 +142,14 @@ class CommerceCatalogViolationProofTest {
         assertThat(nullable).as("Sku.retailPrice must be nullable so variant SKUs can inherit from the default SKU").isTrue();
     }
 
-    // ── CAT-PRICING-HOOK-002: inventory hook structural presence ──
-    // Spec note: inventory_type=UNAVAILABLE is a HOOK — the inventory vertical is DEFERRED.
-    // This structural assertion confirms the spec item is acknowledged: the hook is absent by design
-    // (the catalog vertical exposes only the purchasability gate via active window + archive, not
-    // inventory quantity). The assertPurchasable path is the extension point; adding inventory_type
-    // as a field is the deferred vertical's responsibility.
-    @Test @Tag("CAT-PRICING-HOOK-002")
-    void violation_inventoryHookIsDeferred() {
-        // CAT-PRICING-HOOK-002 scope: inventory quantity / UNAVAILABLE type is DEFERRED to the inventory
-        // vertical. This test is the non-vacuous binding that records the acknowledged deferral.
-        // The catalog boundary enforces only price presence (INV-5) — not stock quantity.
-        // Assert that Sku does NOT carry an inventory_type field (it would be premature).
+    // ── CAT-INVENTORY-GATE-001: inventory policy flag realized on Sku; quantity axis still deferred ──
+    // CAT-INVENTORY-GATE-001 is now REALIZED: Sku carries inventoryType (UNAVAILABLE /
+    // ALWAYS_AVAILABLE / CHECK_QUANTITY) consulted by assertPurchasable before window/archival checks.
+    // The QUANTITY axis (stock count, availableQuantity, onHand, etc.) remains deferred to the
+    // inventory-reservation vertical — the catalog carries NO quantity/stock field by design.
+    @Test @Tag("CAT-INVENTORY-GATE-001")
+    void violation_inventoryTypePolicyFlagPresentQuantityStillDeferred() {
+        // Assert Sku DOES carry inventoryType (policy gate realized)
         boolean hasInventoryTypeField = false;
         Class<?> c = Sku.class;
         while (c != null && c != Object.class) {
@@ -161,8 +157,25 @@ class CommerceCatalogViolationProofTest {
             catch (NoSuchFieldException e) { c = c.getSuperclass(); }
         }
         assertThat(hasInventoryTypeField)
-            .as("Sku must NOT carry an inventoryType field — inventory-unavailable hook is DEFERRED to the inventory vertical (CAT-PRICING-HOOK-002 scope)")
-            .isFalse();
+            .as("Sku MUST carry an inventoryType field — CAT-INVENTORY-GATE-001 tri-state policy gate is realized")
+            .isTrue();
+
+        // Assert Sku carries NO quantity/stock field — quantity axis stays deferred to inventory-reservation
+        String[] quantityFieldNames = {
+            "quantity", "quantityAvailable", "availableQuantity",
+            "stock", "onHand", "inventoryQuantity"
+        };
+        for (String fieldName : quantityFieldNames) {
+            boolean hasQtyField = false;
+            Class<?> q = Sku.class;
+            while (q != null && q != Object.class) {
+                try { q.getDeclaredField(fieldName); hasQtyField = true; break; }
+                catch (NoSuchFieldException e) { q = q.getSuperclass(); }
+            }
+            assertThat(hasQtyField)
+                .as("Sku must NOT carry a '" + fieldName + "' field — quantity axis is deferred to inventory-reservation vertical (CAT-INVENTORY-GATE-001 scope)")
+                .isFalse();
+        }
     }
 
     // ── CATALOG_NO_MATCHING_SKU: CatalogProductService.resolveSku must use

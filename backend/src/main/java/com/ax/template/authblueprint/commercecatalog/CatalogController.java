@@ -47,7 +47,9 @@ public class CatalogController {
         Long salePrice,
         @Size(max = 3) String currency,
         Instant activeStartDate,
-        Instant activeEndDate
+        Instant activeEndDate,
+        /** CAT-INVENTORY-GATE-001: null defaults to ALWAYS_AVAILABLE. */
+        InventoryType inventoryType
     ) {}
 
     public record AddVariantSkuReq(
@@ -58,7 +60,9 @@ public class CatalogController {
         Instant activeEndDate,
         @Size(max = 200) String externalId,
         @Size(max = 50) String upc,
-        java.util.List<UUID> skuGeneratingOptionValueIds
+        java.util.List<UUID> skuGeneratingOptionValueIds,
+        /** CAT-INVENTORY-GATE-001: null defaults to ALWAYS_AVAILABLE. */
+        InventoryType inventoryType
     ) {}
 
     public record ResolveSkuReq(
@@ -158,7 +162,7 @@ public class CatalogController {
             req.name(), req.description(), req.canSellWithoutOptions(),
             req.activeStartDate(), req.activeEndDate(),
             dsr.retailPrice(), dsr.salePrice(), dsr.currency(),
-            dsr.activeStartDate(), dsr.activeEndDate());
+            dsr.activeStartDate(), dsr.activeEndDate(), dsr.inventoryType());
         return ResponseEntity.status(HttpStatus.CREATED).body(ProductDto.of(product));
     }
 
@@ -197,7 +201,8 @@ public class CatalogController {
             req.retailPrice(), req.salePrice(), req.currency(),
             req.activeStartDate(), req.activeEndDate(),
             req.externalId(), req.upc(),
-            req.skuGeneratingOptionValueIds() != null ? req.skuGeneratingOptionValueIds() : java.util.List.of());
+            req.skuGeneratingOptionValueIds() != null ? req.skuGeneratingOptionValueIds() : java.util.List.of(),
+            req.inventoryType());
         return ResponseEntity.status(HttpStatus.CREATED).body(SkuDto.of(sku));
     }
 

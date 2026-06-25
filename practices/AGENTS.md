@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "0543871dc9b9daf3ad51c8fe9f3d0f48b5e123c1fdb6862f8a89ca4fad9a4e7f"
-  rule_count: 220
+  source_concat_sha256: "9fccf8efed21e22b1e27ece6be2090630910e0a586b4501d7acfa373eeab61cf"
+  rule_count: 221
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -2592,6 +2592,8 @@ verification:
 upstream:
   - "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/order/service/workflow/service/OrderItemRequestValidationServiceImpl.java"
   - "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/common/src/main/java/org/broadleafcommerce/common/util/DateUtil.java"
+  - "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/inventory/service/type/InventoryType.java"
+  - "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/inventory/service/InventoryServiceImpl.java"
   - "https://schema.org/Offer"
 evidence:
   - source_type: external
@@ -2609,6 +2611,16 @@ evidence:
     url: "https://schema.org/Offer"
     quote: "The availability of this item—for example In stock, Out of stock, Pre-order, etc."
     quoted_at: "2026-06-24"
+  - source_type: external
+    citation: "Broadleaf Commerce (develop-7.0.x) InventoryType — the tri-state inventory POLICY enum absorbed (CAT-INVENTORY-GATE-001): a SKU's availability mode is one of CHECK_QUANTITY / ALWAYS_AVAILABLE / UNAVAILABLE, gating purchasability before any quantity arithmetic"
+    url: "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/inventory/service/type/InventoryType.java"
+    quote: "public static final InventoryType CHECK_QUANTITY = new InventoryType(\"CHECK_QUANTITY\", \"Check Quantity\");"
+    quoted_at: "2026-06-25"
+  - source_type: external
+    citation: "Broadleaf Commerce (develop-7.0.x) InventoryServiceImpl.checkBasicAvailablility — the UNAVAILABLE hard-block gate absorbed: an UNAVAILABLE SKU is not available regardless of stock, evaluated before any quantity check"
+    url: "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/inventory/service/InventoryServiceImpl.java"
+    quote: "if (sku.isActive() && !InventoryType.UNAVAILABLE.equals(sku.getInventoryType())) {"
+    quoted_at: "2026-06-25"
 ---
 
 ## Rule
@@ -2620,6 +2632,7 @@ A **variant-product catalog** (apparel size/color, electronics configuration, gr
 3. **Purchasability gated on window + archival, at the cart path.** `assertPurchasable(sku)` succeeds only when `now ∈ [active_start, active_end)` (via an **injected `Clock`**) AND the product is active AND not archived. The gate is invoked on the *purchase* path, not only at display — a sunset/not-yet-launched/archived SKU returns 409 even though the row exists.
 4. **Price-presence at the catalog boundary.** An active sellable SKU must resolve a non-null price (own `retail_price` or the inherited default's), else 422 — caught where the data lives, not deferred to checkout. (`sale_price <= retail_price`, DB `@Check`.) Discount/tax/dynamic pricing belong to the pricing vertical.
 5. **Acyclic category graph; immutable identity.** Category edges that would close a cycle are rejected (409). `Sku.product_id`/`is_default` and the option-value xref columns are `@Column(updatable=false)`; `@Version` guards concurrent variant edits.
+6. **Tri-state inventory-type policy gate (CAT-INVENTORY-GATE-001).** Each SKU carries an `inventory_type` POLICY flag ∈ {`UNAVAILABLE`, `ALWAYS_AVAILABLE`, `CHECK_QUANTITY`} consulted by `assertPurchasable` *before* any quantity arithmetic: `UNAVAILABLE` → never purchasable regardless of any stock; `ALWAYS_AVAILABLE` (or null) → purchasable without consulting quantity (a service/digital/made-to-order SKU); `CHECK_QUANTITY` → the quantity check is **deferred** to the inventory-reservation vertical (`two-axis-inventory-reservation-l0` owns `available ≥ q`). The catalog carries ONLY the policy flag — **no quantity/stock field** (that axis stays the inventory vertical's; the inventory decrement/increment there is a re-find of `INVRES-COMMIT/RELEASE`, not re-absorbed). This lifts the former blanket inventory deferral to a per-SKU policy gate while preserving the quantity deferral.
 
 **Correct — exact-signature resolution + window/price gates (strengthens the absorbed Broadleaf pattern):**
 
@@ -2639,10 +2652,14 @@ void assertPurchasable(Sku sku) {
     CatalogProduct p = products.findById(sku.getProductId()).orElseThrow(CatalogException::notFound);
     boolean inWindow = (sku.getActiveStartDate() == null || !now.isBefore(sku.getActiveStartDate()))
         && (sku.getActiveEndDate() == null || now.isBefore(sku.getActiveEndDate()));   // now ∈ [start, end)
-    if (!inWindow || p.isArchived() || !p.isActive()) {           // inventory availability deferred to inventory vertical
+    if (sku.getInventoryType() == InventoryType.UNAVAILABLE) {     // tri-state policy gate, BEFORE any quantity
+        throw CatalogException.skuNotPurchasable();                // UNAVAILABLE → never buyable, regardless of stock
+    }
+    if (!inWindow || p.isArchived() || !p.isActive()) {
         throw CatalogException.skuNotPurchasable();                // 409 — row exists but not buyable
     }
     if (resolvePrice(sku, p) == null) throw CatalogException.priceRequired();   // 422 — no listed-but-priceless
+    // ALWAYS_AVAILABLE/null → purchasable here; CHECK_QUANTITY → quantity check deferred to inventory-reservation
 }
 // Sku: UNIQUE(product_id, option_signature); @Column(updatable=false) product_id, is_default; @Version version
 ```
@@ -4594,6 +4611,91 @@ Reference: [US 14 CFR §91.409 — Inspections](https://www.law.cornell.edu/cfr/
 Reference: [Closing the loop on test results to reduce communication failures (PMC7510293)](https://pmc.ncbi.nlm.nih.gov/articles/PMC7510293/)
 
 Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
+
+
+<!-- @source rules/default-member-singleton-exactly-one-default-clear-then-set.md -->
+
+---
+title: A parent-scoped child collection that elects one preferred member MUST keep AT MOST ONE default — setting a member default atomically clears every other member's default in the same transaction (clear-all-then-set-one), the empty→first-member transition auto-defaults the sole member, and a partial unique index backstops the invariant so a torn or concurrent write can never leave two defaults
+impact: MEDIUM
+impactDescription: "A customer address book, a wallet of payment methods, a set of phone numbers — any collection that elects ONE preferred member — silently corrupts when two rows both carry the default flag: a checkout that reads 'the default shipping address' gets a nondeterministic one of the two, an automated charge hits an arbitrary 'default' card, and the bug is invisible until a customer is shipped to or charged on the wrong instrument. The naive implementation (set this row default) without clearing the others leaves N defaults after N set-default clicks; the concurrent implementation (clear-then-set without a parent lock or a backstop index) lets two simultaneous set-default requests both clear-then-set and end with two defaults. Clearing all other defaults in the same transaction as the set, under the parent's lock, plus a partial unique index UNIQUE(parent_id) WHERE is_default, make 'two defaults' unrepresentable; auto-defaulting the first member makes 'a non-empty collection with no default' unrepresentable."
+tags:
+  - data-integrity
+  - collection
+  - concurrency
+  - default-flag
+spec_ref: "specs/default-member-singleton-l0.yaml#DEFAULT-SINGLETON-001"
+verification:
+  type: review
+  source: "specs/default-member-singleton-l0.yaml#DEFAULT-SINGLETON-001 + specs/default-member-singleton-l0.yaml#DEFAULT-SINGLETON-002"
+  pattern: "A parent-scoped child collection that carries a default/primary flag enforces AT MOST ONE default per parent: setting member M default runs, in ONE transaction under the parent's @Version row lock, a clear-all (UPDATE children SET is_default=false WHERE parent_id=:p AND is_default=true) THEN sets M default (clear-all-then-set-one) — never a bare set that leaves the prior default standing; a PARTIAL UNIQUE INDEX UNIQUE(parent_id) WHERE is_default backstops it so a torn/concurrent write that would persist two defaults fails loud (409), never silently. The first child added to an empty parent is auto-defaulted, so a non-empty collection always has exactly one default. Distinct from ordered-collection's total-order position permutation and from a mandatory single child."
+upstream:
+  - "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-profile/src/main/java/org/broadleafcommerce/profile/core/service/CustomerAddressServiceImpl.java"
+  - "https://www.postgresql.org/docs/current/indexes-partial.html"
+evidence:
+  - source_type: external
+    citation: "Broadleaf Commerce (develop-7.0.x) CustomerAddressServiceImpl.saveCustomerAddress — the empty→first-member auto-default absorbed: when the customer has no active addresses, the new address is forced default"
+    url: "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-profile/src/main/java/org/broadleafcommerce/profile/core/service/CustomerAddressServiceImpl.java"
+    quote: "customerAddress.getAddress().setDefault(true);"
+    quoted_at: "2026-06-25"
+  - source_type: external
+    citation: "Broadleaf Commerce (develop-7.0.x) CustomerAddressServiceImpl.saveCustomerAddress — the set-one-unsets-others trigger absorbed: when the saved address is default, makeCustomerAddressDefault clears all other defaults for the customer then sets this one"
+    url: "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-profile/src/main/java/org/broadleafcommerce/profile/core/service/CustomerAddressServiceImpl.java"
+    quote: "customerAddressDao.makeCustomerAddressDefault(customerAddress.getId(), customer.getId());"
+    quoted_at: "2026-06-25"
+  - source_type: external
+    citation: "Broadleaf Commerce (develop-7.0.x) CustomerAddress ORM — the clear-all-other-defaults bulk UPDATE absorbed (BC_CLEAR_DEFAULT_ADDRESS_BY_IDS): the clear-then-set discipline's clear step"
+    url: "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-profile/src/main/resources/config/bc/jpa/domain/CustomerAddress.orm.xml"
+    quote: "SET a.isDefault = false"
+    quoted_at: "2026-06-25"
+  - source_type: external
+    citation: "PostgreSQL documentation — Partial Indexes (Example 11.3, Setting up a Partial Unique Index): the canonical 'at most one row satisfying the predicate' backstop for the default-singleton invariant"
+    url: "https://www.postgresql.org/docs/current/indexes-partial.html"
+    quote: "This enforces uniqueness among the rows that satisfy the index predicate, without constraining those that do not."
+    quoted_at: "2026-06-25"
+---
+
+## Rule
+
+Many collections elect ONE **preferred** member — a customer's **default shipping address**, a wallet's **primary card**, an account's **primary phone**. The correctness obligation is a *singleton flag scoped to the parent*: at most one child per parent carries the `default` flag, and a non-empty collection has exactly one. Two facets, both from Broadleaf's customer address book:
+
+1. **Clear-all-then-set-one (DEFAULT-SINGLETON-001).** Setting member `M` default MUST, in **one transaction** under the parent's `@Version` row lock, first **clear** the default flag on every other active child of that parent (`UPDATE children SET is_default=false WHERE parent_id=:p AND is_default=true`) and **then** set `M` default. A bare "set this row default" that does not clear the others leaves N defaults after N clicks. A clear-then-set without the parent lock lets two concurrent set-default requests interleave and both win. A **partial unique index** `UNIQUE(parent_id) WHERE is_default` is the structural backstop — per PostgreSQL, *this enforces uniqueness among the rows that satisfy the index predicate, without constraining those that do not* — so a torn or concurrent write that would persist two defaults fails loud (409), never silently.
+2. **Empty→first auto-default (DEFAULT-SINGLETON-002).** The first child added to a parent with zero active children is auto-defaulted, so a non-empty collection never has *zero* default. (At-most-one from facet 1 + at-least-one-when-non-empty from facet 2 = exactly one.)
+
+This is a **singleton-flag-within-a-collection** shape — distinct from `ordered-collection`'s total-order permutation (a unique `position` across ALL siblings) and from a parent's mandatory single child (a required 1:1, not a mutable winner-takes-all flag over a variable set).
+
+**Correct — clear-all-then-set-one under the parent lock, partial-unique backstop, empty→auto-default:**
+
+```java
+// set member M default: clear every other default for this parent, THEN set M — one transaction, parent @Version lock
+@Transactional
+public void makeDefault(UUID parentId, UUID memberId) {
+    parents.findByIdForUpdate(parentId);                                   // @Version row lock serializes concurrent set-default
+    children.clearDefaults(parentId);   // UPDATE children SET is_default=false WHERE parent_id=:p AND is_default=true
+    children.setDefault(memberId);      // then set the one
+}
+// add: the first member of an empty collection auto-defaults
+Child c = new Child(parentId, ...);
+if (children.countActiveByParent(parentId) == 0) c.setDefault(true);       // empty→first auto-default
+```
+```sql
+-- structural backstop: at most one default per parent (partial unique index)
+CREATE UNIQUE INDEX ux_children_one_default ON children (parent_id) WHERE is_default;
+```
+
+**Incorrect — bare set leaves the prior default; no lock, no backstop:**
+
+```java
+public void makeDefault(UUID parentId, UUID memberId) {
+    children.setDefault(memberId);   // WRONG: prior default still set → TWO defaults; concurrent calls → two winners
+}
+```
+
+A bare set accumulates defaults; without the parent lock and the partial unique index, two concurrent set-default requests both persist. Clearing all other defaults in the same transaction under the parent lock, backstopped by the partial unique index, makes "two defaults" unrepresentable; auto-defaulting the first member makes "a non-empty collection with no default" unrepresentable.
+
+Reference: [Broadleaf CustomerAddressServiceImpl (clear-all-then-set-one + empty→auto-default)](https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-profile/src/main/java/org/broadleafcommerce/profile/core/service/CustomerAddressServiceImpl.java)
+
+Reference: [PostgreSQL — Partial Indexes (partial unique index enforces uniqueness on a subset)](https://www.postgresql.org/docs/current/indexes-partial.html)
 
 
 <!-- @source rules/denormalized-counter-reconcilable.md -->

@@ -16,6 +16,8 @@ verification:
 upstream:
   - "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/order/service/workflow/service/OrderItemRequestValidationServiceImpl.java"
   - "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/common/src/main/java/org/broadleafcommerce/common/util/DateUtil.java"
+  - "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/inventory/service/type/InventoryType.java"
+  - "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/inventory/service/InventoryServiceImpl.java"
   - "https://schema.org/Offer"
 evidence:
   - source_type: external
@@ -33,6 +35,16 @@ evidence:
     url: "https://schema.org/Offer"
     quote: "The availability of this item—for example In stock, Out of stock, Pre-order, etc."
     quoted_at: "2026-06-24"
+  - source_type: external
+    citation: "Broadleaf Commerce (develop-7.0.x) InventoryType — the tri-state inventory POLICY enum absorbed (CAT-INVENTORY-GATE-001): a SKU's availability mode is one of CHECK_QUANTITY / ALWAYS_AVAILABLE / UNAVAILABLE, gating purchasability before any quantity arithmetic"
+    url: "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/inventory/service/type/InventoryType.java"
+    quote: "public static final InventoryType CHECK_QUANTITY = new InventoryType(\"CHECK_QUANTITY\", \"Check Quantity\");"
+    quoted_at: "2026-06-25"
+  - source_type: external
+    citation: "Broadleaf Commerce (develop-7.0.x) InventoryServiceImpl.checkBasicAvailablility — the UNAVAILABLE hard-block gate absorbed: an UNAVAILABLE SKU is not available regardless of stock, evaluated before any quantity check"
+    url: "https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/inventory/service/InventoryServiceImpl.java"
+    quote: "if (sku.isActive() && !InventoryType.UNAVAILABLE.equals(sku.getInventoryType())) {"
+    quoted_at: "2026-06-25"
 ---
 
 ## Rule
@@ -44,6 +56,7 @@ A **variant-product catalog** (apparel size/color, electronics configuration, gr
 3. **Purchasability gated on window + archival, at the cart path.** `assertPurchasable(sku)` succeeds only when `now ∈ [active_start, active_end)` (via an **injected `Clock`**) AND the product is active AND not archived. The gate is invoked on the *purchase* path, not only at display — a sunset/not-yet-launched/archived SKU returns 409 even though the row exists.
 4. **Price-presence at the catalog boundary.** An active sellable SKU must resolve a non-null price (own `retail_price` or the inherited default's), else 422 — caught where the data lives, not deferred to checkout. (`sale_price <= retail_price`, DB `@Check`.) Discount/tax/dynamic pricing belong to the pricing vertical.
 5. **Acyclic category graph; immutable identity.** Category edges that would close a cycle are rejected (409). `Sku.product_id`/`is_default` and the option-value xref columns are `@Column(updatable=false)`; `@Version` guards concurrent variant edits.
+6. **Tri-state inventory-type policy gate (CAT-INVENTORY-GATE-001).** Each SKU carries an `inventory_type` POLICY flag ∈ {`UNAVAILABLE`, `ALWAYS_AVAILABLE`, `CHECK_QUANTITY`} consulted by `assertPurchasable` *before* any quantity arithmetic: `UNAVAILABLE` → never purchasable regardless of any stock; `ALWAYS_AVAILABLE` (or null) → purchasable without consulting quantity (a service/digital/made-to-order SKU); `CHECK_QUANTITY` → the quantity check is **deferred** to the inventory-reservation vertical (`two-axis-inventory-reservation-l0` owns `available ≥ q`). The catalog carries ONLY the policy flag — **no quantity/stock field** (that axis stays the inventory vertical's; the inventory decrement/increment there is a re-find of `INVRES-COMMIT/RELEASE`, not re-absorbed). This lifts the former blanket inventory deferral to a per-SKU policy gate while preserving the quantity deferral.
 
 **Correct — exact-signature resolution + window/price gates (strengthens the absorbed Broadleaf pattern):**
 
@@ -63,10 +76,14 @@ void assertPurchasable(Sku sku) {
     CatalogProduct p = products.findById(sku.getProductId()).orElseThrow(CatalogException::notFound);
     boolean inWindow = (sku.getActiveStartDate() == null || !now.isBefore(sku.getActiveStartDate()))
         && (sku.getActiveEndDate() == null || now.isBefore(sku.getActiveEndDate()));   // now ∈ [start, end)
-    if (!inWindow || p.isArchived() || !p.isActive()) {           // inventory availability deferred to inventory vertical
+    if (sku.getInventoryType() == InventoryType.UNAVAILABLE) {     // tri-state policy gate, BEFORE any quantity
+        throw CatalogException.skuNotPurchasable();                // UNAVAILABLE → never buyable, regardless of stock
+    }
+    if (!inWindow || p.isArchived() || !p.isActive()) {
         throw CatalogException.skuNotPurchasable();                // 409 — row exists but not buyable
     }
     if (resolvePrice(sku, p) == null) throw CatalogException.priceRequired();   // 422 — no listed-but-priceless
+    // ALWAYS_AVAILABLE/null → purchasable here; CHECK_QUANTITY → quantity check deferred to inventory-reservation
 }
 // Sku: UNIQUE(product_id, option_signature); @Column(updatable=false) product_id, is_default; @Version version
 ```

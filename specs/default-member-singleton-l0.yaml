@@ -1,0 +1,50 @@
+version: "0.1.0"
+scope: "default-member-singleton-l0 — the EXACTLY-ONE-DEFAULT invariant for a parent-scoped child collection: within the set of a parent's active child rows (a customer's addresses, a user's payment methods, an account's phone numbers, any 'primary' anything), AT MOST ONE row carries the `default`/`primary` flag, setting a member default atomically UNSETS every other member's default in the same transaction (clear-all-then-set-one), and the empty→first-member transition auto-defaults the sole member. Absorbed from Broadleaf Commerce's customer address book (CustomerAddressService — set-default clears all other defaults; first address auto-defaults). A 'singleton-flag-within-a-collection' shape: distinct from ordered-collection-l0 (a TOTAL ORDER via a unique position column across ALL siblings — a permutation), from a parent's mandatory single child (product default SKU — one required child, not a mutable winner-takes-all flag over a variable set), and from a scalar default config value. Cross-cutting, jurisdiction- and framework-agnostic; recurs anywhere a collection elects one preferred member."
+stack: "Spring Boot 3.2.x + JPA (@Version on the parent for the clear-then-set atomicity) + a PARTIAL UNIQUE INDEX `UNIQUE(parent_id) WHERE is_default` as the structural backstop (PostgreSQL partial index / equivalent filtered index) + RFC 9457 Problem Details"
+domain_mode: backend_only
+introduced_at: "Broadleaf-absorption customer vertical (2026-06-25) — grounded in Broadleaf Commerce develop-7.0.x CustomerAddressService (clear-all-then-set-one default discipline). Generic cross-cutting: the genuinely-new shape the catalog lacked (no existing spec covers 'one row in a child collection is the chosen default'). The anon→registered customer transition was evaluated and REJECTED as a re-find (it is a one-row boolean flag flip, NOT a record-linkage merge); identity/email uniqueness is owned by auth. This vertical reduces to the one genuine residue. Review-tier (no single natural domain — applies to addresses / payment methods / phones / any primary-bearing collection)."
+
+# OPT-IN. Any parent-scoped child collection that elects ONE preferred member.
+# Composes optimistic-locking (the parent @Version serializes concurrent
+# set-default) + a partial unique index (the structural 'at most one default'
+# backstop, so a torn write fails loud rather than leaving two defaults).
+
+# ── Priority order ──
+#   1. DEFAULT-SINGLETON-001  — at most one default; set-one unsets-all-others atomically (keystone)
+#   2. DEFAULT-SINGLETON-002  — empty→first-member auto-default
+
+items:
+  - id: "DEFAULT-SINGLETON-001"
+    chapter: "At most one default per parent; setting one unsets the rest atomically"
+    verification:
+      mechanism: rule
+      ref: default-member-singleton-exactly-one-default-clear-then-set
+    requirement: "Within a parent's set of active child rows, AT MOST ONE row may carry the `default` (primary) flag. Setting member M default MUST, in ONE transaction under the parent's row lock (@Version), first CLEAR the default flag on every other active child of that parent (`UPDATE children SET is_default=false WHERE parent_id=:p AND is_default=true`) and THEN set M default — the clear-all-then-set-one discipline. A PARTIAL UNIQUE INDEX `UNIQUE(parent_id) WHERE is_default` MUST backstop it so a torn or concurrent write that would leave two defaults fails loud (a constraint violation surfaced as 409), never silently persists two defaults. This is a singleton-flag-within-a-collection invariant — distinct from ordered-collection-l0's total-order permutation (a unique position across ALL siblings) and from a parent's mandatory single child."
+    test_method: "RestAssured (set A default → A is default; set B default → GET shows exactly B default and A cleared; concurrent set-default of A and B → exactly one wins, never two defaults — the partial-unique-index proof)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Broadleaf-absorption customer vertical (2026-06-25). Grounded in Broadleaf
+      CustomerAddressService.saveCustomerAddress: when the saved address isDefault,
+      makeCustomerAddressDefault runs clearDefaultAddressForCustomer (a bulk
+      "UPDATE AddressImpl a SET a.isDefault = false WHERE a.id in :addressIds")
+      then sets the one address default. The partial-unique-index backstop is the
+      canonical PostgreSQL "at most one row satisfying the predicate" idiom
+      (CREATE UNIQUE INDEX … WHERE is_default). Review-tier: no single natural
+      domain (the shape recurs across addresses / payment methods / phones).
+  - id: "DEFAULT-SINGLETON-002"
+    chapter: "The first member of an empty collection auto-defaults"
+    verification:
+      mechanism: rule
+      ref: default-member-singleton-exactly-one-default-clear-then-set
+    requirement: "When a child is added to a parent that currently has ZERO active children, that first child MUST be auto-defaulted (set `is_default=true`) even without an explicit default request — so a non-empty collection always has exactly one default, never zero. Adding subsequent children does NOT change the existing default unless the add explicitly requests default (which then triggers DEFAULT-SINGLETON-001's clear-then-set)."
+    test_method: "RestAssured (add first child to an empty parent → it is default with no explicit flag; add a second non-default child → the first remains the sole default)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Grounded in Broadleaf CustomerAddressService.saveCustomerAddress: "if
+      (CollectionUtils.isEmpty(activeCustomerAddresses)) { customerAddress.
+      getAddress().setDefault(true); }" — the empty→first auto-default. Pairs
+      with DEFAULT-SINGLETON-001 so the collection invariant is "exactly one
+      default when non-empty" (at-most-one from 001 + at-least-one-when-non-empty
+      from 002).

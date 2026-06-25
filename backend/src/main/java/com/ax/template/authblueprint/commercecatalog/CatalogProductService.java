@@ -63,6 +63,9 @@ public class CatalogProductService {
      * Create a new product with its mandatory default SKU in one transaction (INV-3).
      * Rejects 422 CATALOG_DEFAULT_SKU_REQUIRED if defaultRetailPrice and defaultSalePrice and
      * currency are all absent — service boundary enforcement so non-controller callers are gated too.
+     *
+     * @param defaultSkuInventoryType CAT-INVENTORY-GATE-001 policy flag for the default SKU;
+     *                                null defaults to ALWAYS_AVAILABLE.
      */
     @Transactional
     public CatalogProduct createProduct(String name, String description,
@@ -71,7 +74,8 @@ public class CatalogProductService {
                                         // default SKU fields — null signals "no default SKU" → 422
                                         Long defaultRetailPrice, Long defaultSalePrice,
                                         String currency,
-                                        Instant skuActiveStart, Instant skuActiveEnd) {
+                                        Instant skuActiveStart, Instant skuActiveEnd,
+                                        InventoryType defaultSkuInventoryType) {
         // INV-3: service-boundary enforcement (controller also checks, but this is the authoritative gate)
         if (defaultRetailPrice == null && defaultSalePrice == null && currency == null) {
             throw CatalogException.defaultSkuRequired();
@@ -84,11 +88,28 @@ public class CatalogProductService {
         Sku defaultSku = members.persist(new Sku(
             UUID.randomUUID(), product.getId(), true,
             defaultRetailPrice, defaultSalePrice, currency,
-            skuActiveStart, skuActiveEnd, null, null, null));
+            skuActiveStart, skuActiveEnd, null, null, null,
+            defaultSkuInventoryType != null ? defaultSkuInventoryType : InventoryType.ALWAYS_AVAILABLE));
 
         product.assignDefaultSku(defaultSku.getId());
         metrics.recordOp("create_product", "ok");
         return product;
+    }
+
+    /**
+     * Overload without inventoryType for backward compatibility — defaults to ALWAYS_AVAILABLE.
+     */
+    @Transactional
+    public CatalogProduct createProduct(String name, String description,
+                                        boolean canSellWithoutOptions,
+                                        Instant activeStartDate, Instant activeEndDate,
+                                        Long defaultRetailPrice, Long defaultSalePrice,
+                                        String currency,
+                                        Instant skuActiveStart, Instant skuActiveEnd) {
+        return createProduct(name, description, canSellWithoutOptions,
+            activeStartDate, activeEndDate,
+            defaultRetailPrice, defaultSalePrice, currency,
+            skuActiveStart, skuActiveEnd, InventoryType.ALWAYS_AVAILABLE);
     }
 
     /**
@@ -131,13 +152,16 @@ public class CatalogProductService {
      * <p>INV-3: rejects 409 if isDefault=true and the product already has a default SKU.
      *
      * <p>INV-5: if both retailPrice and the inherited default retail price are null, rejects 422.
+     *
+     * @param inventoryType CAT-INVENTORY-GATE-001 policy flag; null defaults to ALWAYS_AVAILABLE.
      */
     @Transactional
     public Sku addVariantSku(UUID productId,
                              Long retailPrice, Long salePrice, String currency,
                              Instant activeStartDate, Instant activeEndDate,
                              String externalId, String upc,
-                             List<UUID> skuGeneratingOptionValueIds) {
+                             List<UUID> skuGeneratingOptionValueIds,
+                             InventoryType inventoryType) {
         CatalogProduct product = products.findByIdForUpdate(productId)
             .orElseThrow(() -> CatalogException.notFound("Product"));
 
@@ -188,11 +212,13 @@ public class CatalogProductService {
             throw CatalogException.skuOptionAmbiguous();
         }
 
+        InventoryType resolvedInvType = inventoryType != null ? inventoryType : InventoryType.ALWAYS_AVAILABLE;
         try {
             Sku sku = members.persistAndFlush(new Sku(
                 UUID.randomUUID(), productId, false,
                 retailPrice, salePrice, currency,
-                activeStartDate, activeEndDate, externalId, upc, optionSignature));
+                activeStartDate, activeEndDate, externalId, upc, optionSignature,
+                resolvedInvType));
 
             // Persist SkuOptionValueXref rows (one per option-value id)
             for (UUID vid : valueIds) {
@@ -205,6 +231,20 @@ public class CatalogProductService {
             metrics.recordOp("add_variant", "rejected");
             throw CatalogException.skuOptionAmbiguous();
         }
+    }
+
+    /**
+     * Overload without inventoryType for backward compatibility — defaults to ALWAYS_AVAILABLE.
+     */
+    @Transactional
+    public Sku addVariantSku(UUID productId,
+                             Long retailPrice, Long salePrice, String currency,
+                             Instant activeStartDate, Instant activeEndDate,
+                             String externalId, String upc,
+                             List<UUID> skuGeneratingOptionValueIds) {
+        return addVariantSku(productId, retailPrice, salePrice, currency,
+            activeStartDate, activeEndDate, externalId, upc,
+            skuGeneratingOptionValueIds, InventoryType.ALWAYS_AVAILABLE);
     }
 
     /**
@@ -265,7 +305,18 @@ public class CatalogProductService {
     }
 
     /**
-     * INV-2: assert that a SKU is currently purchasable.
+     * INV-2 + CAT-INVENTORY-GATE-001: assert that a SKU is currently purchasable.
+     *
+     * <p>Step 1 — CAT-INVENTORY-GATE-001 tri-state policy gate (consulted FIRST, before any
+     * quantity arithmetic or window checks):
+     * <ul>
+     *   <li>UNAVAILABLE → reject immediately (409 CATALOG_SKU_NOT_PURCHASABLE), regardless of stock.
+     *   <li>ALWAYS_AVAILABLE or null → skip quantity check entirely.
+     *   <li>CHECK_QUANTITY → catalog does NOT block; quantity check is deferred to the
+     *       inventory-reservation vertical.
+     * </ul>
+     *
+     * <p>Step 2 — INV-2 window/archival gate:
      * Purchasable = now ∈ [active_start, active_end) AND product not archived AND SKU dates valid.
      * Uses the injected Clock (controllable in tests via {@link #setClock}).
      */
@@ -273,6 +324,15 @@ public class CatalogProductService {
     public void assertPurchasable(UUID skuId) {
         Sku sku = members.find(Sku.class, skuId)
             .orElseThrow(() -> CatalogException.notFound("SKU"));
+
+        // CAT-INVENTORY-GATE-001: tri-state policy gate — checked BEFORE window/archival
+        InventoryType invType = sku.getInventoryType();
+        if (invType == InventoryType.UNAVAILABLE) {
+            metrics.recordSkuResolve("not_purchasable");
+            throw CatalogException.skuNotPurchasable();
+        }
+        // ALWAYS_AVAILABLE and CHECK_QUANTITY both pass the catalog gate; quantity check for
+        // CHECK_QUANTITY is deferred to the inventory-reservation vertical.
 
         CatalogProduct product = products.findById(sku.getProductId())
             .orElseThrow(() -> CatalogException.notFound("Product"));
