@@ -17,6 +17,7 @@ in our implementation tree) is enforced by `practices/evals/broadleaf_no_port_gu
 | G004 | checkout | [checkout.md](checkout.md) | saga: register-compensation-before-irreversible-side-effect (SAGA-COMPENSATE-002) |
 | G005 | payment | [payment.md](payment.md) | split-tender coverage (Σ tenders ≥ order total) |
 | G006 | inventory-customer | [inventory-customer.md](inventory-customer.md) | inventory tri-state gate · exactly-one-default singleton |
+| G007 | rating | [rating.md](rating.md) | derived-aggregate consistency (denormalized MEAN recompute-from-rows + eligibility + empty sentinel); search/CMS re-find |
 
 > Note on verification-goal parity: for the backfilled G001–G006 records the parity rows
 > are the invariant's required verification scenarios, cross-checked against Broadleaf's

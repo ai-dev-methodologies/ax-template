@@ -1,0 +1,44 @@
+version: "0.1.0"
+scope: "derived-aggregate-consistency-l0 — the DERIVED-AGGREGATE consistency contract: a denormalized aggregate column (an average / count / sum cached on a parent, e.g. a product's averageRating + reviewCount derived from its review rows) MUST stay consistent with its CURRENT source rows — recomputed from the rows on every insert/update/delete of a source row (never hand-edited, never allowed to drift), computed over a DECLARED ELIGIBILITY predicate, with a DEFINED empty-set sentinel (never a divide-by-zero / NaN / null leak). Absorbed from Broadleaf Commerce's rating subsystem (RatingSummary.averageRating = Σ ratings / count, recomputed on every save). A denormalized MEAN (a QUOTIENT) is the key case: it is DISTINCT from the catalog's SUM-conservation family — balanced-posting (signed legs net to zero), collection-conservation (set-wide Σ == 0), transformation-conservation / valuation-run-projection (Σ outputs == total) all assert a SUM IDENTITY; a stored mean has no conservation law, only DERIVATIONAL consistency (stored == recompute-from-current-rows). DISTINCT also from denormalized-counter-reconcilable (specs/per-tenant-resource-quota-l0.yaml#QUOTA-RECONCILE-001): that rule INCREMENTS a counter on the write path and repairs drift ASYNCHRONOUSLY via a scheduled sweep (truth != stored integer equality, eventually-consistent); THIS rule never increments — it RECOMPUTES from the rows SYNCHRONOUSLY in the same transaction (so it can never drift) and adds the eligibility predicate + the quotient/divide-by-zero sentinel that an integer-counter reconcile has no concept of. Cross-cutting, jurisdiction- and framework-agnostic; recurs in rating averages, like/helpful counts, follower/comment counts, leaderboard scores — any denormalized AVG/COUNT/SUM cache."
+stack: "Spring Boot 3.2.x + JPA (the parent carries the denormalized column; @Version guards concurrent recompute) + a sole-recompute service that re-derives the aggregate from the current source rows inside the same transaction as any source-row mutation + RFC 9457 Problem Details. The displayed average is exact decimal (BigDecimal at a fixed scale, round-once) per spring-practices-l0 averaging discipline — composed, not duplicated."
+domain_mode: backend_only
+introduced_at: "Broadleaf-absorption rating vertical (2026-06-25) — grounded in Broadleaf Commerce develop-7.0.x RatingSummary (averageRating recomputed from rating rows on every save; 0.0 empty-set sentinel). The genuinely-new residue of the rating module: the catalog's aggregate vocabulary was built from financial/industrial dogfoods whose invariant is always conservation of a SUM; a denormalized MEAN (quotient) kept consistent with its source rows never appeared. search + CMS were fully re-find (search-l0 + query-field-allowlist; content-versioning-l0 + approval-workflow-l0). Generic cross-cutting."
+
+# OPT-IN. Any parent carrying a denormalized aggregate (avg/count/sum) derived
+# from child rows. Composes optimistic-locking (the parent @Version serializes
+# concurrent recompute) + spring-practices averaging discipline (BigDecimal,
+# round-once) for the representation half.
+
+# ── Priority order ──
+#   1. DERIVED-AGG-CONSISTENCY-001  — recompute-from-current-rows on every change (keystone)
+#   2. DERIVED-AGG-ELIGIBILITY-001  — computed over a declared eligibility predicate (ax STRENGTHENING)
+#   3. DERIVED-AGG-EMPTY-001        — defined empty-set sentinel (no divide-by-zero)
+
+items:
+  - id: "DERIVED-AGG-CONSISTENCY-001"
+    chapter: "A denormalized aggregate is recomputed from its current source rows on every change"
+    verification:
+      mechanism: rule
+      ref: derived-aggregate-consistency-recompute-eligibility-empty
+    requirement: "A denormalized aggregate column (avg/count/sum) cached on a parent MUST be RECOMPUTED from the parent's CURRENT source rows inside the SAME transaction as any insert / update / delete of a source row — it MUST NEVER be hand-edited (no setter that writes the aggregate to a caller-supplied value) and MUST NEVER be allowed to drift from its rows. The stored aggregate MUST equal an INDEPENDENT re-derivation of it from the current rows (a repo AVG/COUNT/SUM query, a different code path than the in-memory fold — derive it a second way and cross-check, the netting/valuation lesson). BROADLEAF PARITY: Broadleaf's RatingSummary recomputes averageRating = Σ ratings / count via resetAverageRating(), invoked on every saveRatingSummary before persist."
+    test_method: "RestAssured (add/remove a source row → the stored aggregate equals the independent AVG/COUNT re-derivation; a hand-edit attempt is structurally impossible — no public aggregate setter)"
+    verification_type: "negative"
+    applicable: true
+  - id: "DERIVED-AGG-ELIGIBILITY-001"
+    chapter: "The aggregate is computed over a declared eligibility predicate (ax STRENGTHENING)"
+    verification:
+      mechanism: rule
+      ref: derived-aggregate-consistency-recompute-eligibility-empty
+    requirement: "The aggregate MUST be computed over a DECLARED ELIGIBILITY predicate over the source rows (e.g. status = APPROVED) — a row outside the predicate (PENDING / REJECTED / soft-deleted) MUST NOT contribute, and a row transitioning INTO the predicate MUST trigger a recompute that now includes it. NOTE — this is an ax STRENGTHENING, NOT Broadleaf parity: Broadleaf's resetAverageRating averages ALL RatingDetail rows with NO status predicate (only the review TEXT is moderated via ReviewStatusType PENDING/APPROVED/REJECTED, not the star rating). ax generalizes the invariant: a denormalized aggregate that feeds a user-facing or decision-feeding number SHOULD be computed over a declared eligibility set so an unapproved/spam/soft-deleted row cannot silently move it. The predicate is explicit + applied consistently on every recompute."
+    test_method: "RestAssured (add a PENDING source row → aggregate unchanged; transition it to APPROVED → aggregate recomputed to include it)"
+    verification_type: "negative"
+    applicable: true
+  - id: "DERIVED-AGG-EMPTY-001"
+    chapter: "A defined empty-set sentinel — never divide-by-zero"
+    verification:
+      mechanism: rule
+      ref: derived-aggregate-consistency-recompute-eligibility-empty
+    requirement: "The empty-source-set case MUST be defined and deterministic: when the eligible source set is empty (count 0), the aggregate MUST be a documented sentinel value (e.g. average 0, or an explicit 'no data' marker) — NEVER a Σ/0 divide-by-zero, NaN, Infinity, or a null leaked to the API. BROADLEAF PARITY: Broadleaf's resetAverageRating returns averageRating = 0.0 when the rating set is null or empty. The chosen sentinel is documented so a consumer can distinguish 'no ratings' from 'average is genuinely 0'."
+    test_method: "RestAssured (a parent with zero eligible source rows → aggregate is the documented sentinel, no Σ/0; transition from non-empty back to empty → sentinel restored)"
+    verification_type: "negative"
+    applicable: true

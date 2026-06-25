@@ -656,6 +656,15 @@ tasks.register<Test>("testApiVersioning") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testRatingSummary") {
+    useJUnitPlatform {
+        includeTags("RATING_SUMMARY")
+    }
+    description = "Run rating-summary domain compliance tests (derived-aggregate-consistency-l0: 3 items — CONSISTENCY, ELIGIBILITY, EMPTY)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

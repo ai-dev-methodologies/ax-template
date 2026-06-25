@@ -359,6 +359,9 @@ public class SecurityConfig {
                 // COMMERCEORDER (commerceorder-l0): cart + order lifecycle (IN_PROCESS→SUBMITTED→CANCELLED).
                 // All endpoints require a valid JWT. Caller = Authentication.getName() for IDOR-safe scoping.
                 .requestMatchers("/api/orders/**").authenticated()
+                // RATINGSUMMARY (derived-aggregate-consistency-l0): any authenticated user submits
+                // and approves/rejects reviews; summary GET is also authenticated.
+                .requestMatchers("/api/rating/**").authenticated()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers
