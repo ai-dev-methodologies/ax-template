@@ -1098,6 +1098,22 @@ run_guard "backlog_convergence_integrity/fixture_fail" 1 \
 run_guard "backlog_convergence_integrity/fixture_pass" 0 \
     bash "$SCRIPT_DIR/backlog_convergence_integrity_guard.sh" --root "$SCRIPT_DIR/fixtures/backlog-convergence/pass_consistent"
 
+echo "[78] broadleaf_no_port_guard.sh (Broadleaf-absorption LICENSE safety — Broadleaf is under the Fair Use License v1.0, NOT OSI/permissive; its source must never be PORTED into our implementation tree. Asserts backend/src + frontend/src contain zero Broadleaf bytes: no 'import org.broadleafcommerce', no 'package org.broadleafcommerce', no Fair Use License header. Short single-line citations in practices/rules evidence blocks are intentional fair-use grounding and are NOT scanned. Live exits 0; fixtures prove non-vacuity.)"
+run_guard "broadleaf_no_port/live" 0 \
+    bash "$SCRIPT_DIR/broadleaf_no_port_guard.sh"
+run_guard "broadleaf_no_port/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/broadleaf_no_port_guard.sh" --root "$SCRIPT_DIR/fixtures/broadleaf-no-port/fail_ported"
+run_guard "broadleaf_no_port/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/broadleaf_no_port_guard.sh" --root "$SCRIPT_DIR/fixtures/broadleaf-no-port/pass_clean"
+
+echo "[79] broadleaf_absorption_parity_guard.sh (Broadleaf-absorption METHODOLOGY completeness + VERIFICATION-GOAL parity — every absorbed vertical MUST carry a complete docs/broadleaf-parity/<vertical>.md record: vertical/broadleaf_source/spec_items/rule/behavioral_test/adversarial_review fields + >=1 verification-goal parity row mapping a Broadleaf test INTENT to our behavioral assertion. Referenced spec items / rule / test artifacts are validated to EXIST — a record cannot lie. Makes the absorption methodology mechanically enforced with NO exception. Live exits 0; fixtures prove non-vacuity.)"
+run_guard "broadleaf_absorption_parity/live" 0 \
+    bash "$SCRIPT_DIR/broadleaf_absorption_parity_guard.sh"
+run_guard "broadleaf_absorption_parity/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/broadleaf_absorption_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/broadleaf-parity/fail_incomplete"
+run_guard "broadleaf_absorption_parity/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/broadleaf_absorption_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/broadleaf-parity/pass_complete"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

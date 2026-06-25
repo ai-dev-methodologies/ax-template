@@ -66,6 +66,41 @@ ultracode(Workflow 멀티에이전트 오케스트레이션)로 요청받은 작
 
 ---
 
+## 🧬 Broadleaf-absorption 방법론 — 기계적 강제 (STANDING, 예외 없음)
+
+외부 e-commerce 레퍼런스(현재 Broadleaf Commerce)의 **기능·불변식(invariant)을 흡수**해
+카탈로그를 키울 때는 **빠르게가 아니라 정확하게·명확하게** 간다. 단 하나의 예외 없이
+**기계적으로 강제 검증**된다. 방법론은 두 문서에 정의: `METHODOLOGY.md`(5-step core:
+spec→rule→TDD→test→verify) + `docs/BROADLEAF-ABSORPTION.md`(흡수 pipeline).
+
+**파이프라인 (매 vertical, 예외 없이):**
+mine(opus) → **anti-re-find census**(기존 spec/rule grep — 이미 있으면 흡수 안 함) →
+spec(`*-l0.yaml`) → **evidence-anchored rule**(외부 file:line **한 줄 인용** + 외부표준,
+`evidence_guard`가 날조 BLOCK) → **독립 구현**(우리 클래스/구조, 이식 0) →
+**behavioral 테스트 + verification-goal parity**(Broadleaf 테스트의 *의도*를 대조,
+코드 아님) → **mandatory 적대적 review**(opus refute-by-default, commit 전) → R25 → commit.
+
+**흡수는 "동일 동작"이 아니라 "불변식 성립"을 보장한다.** Broadleaf와 byte/behavior
+동치가 아니라, 흡수한 correctness 불변식이 우리 코드에서 binary로 성립함 + 외부 사실
+anchoring을 보장한다 (종종 Broadleaf 결함을 고쳐 더 엄격하게 흡수).
+
+**기계적 강제 표면 (R25 안에서 binary):**
+- **`broadleaf_no_port_guard.sh` [78]** — 라이선스 안전. Broadleaf는 **Fair Use License v1.0**
+  (OSI/permissive 아님) → 우리 구현 트리(`backend/src`·`frontend/src`)에 Broadleaf 소스 이식
+  **0** 강제 (import/package/FUL-header 0). 클론은 repo 밖, 절대 커밋 금지. 룰 evidence의
+  **한 줄 인용**만 허용(fair-use 근거).
+- **`broadleaf_absorption_parity_guard.sh` [79]** — 방법론 완전성 + verification-goal parity.
+  흡수한 모든 vertical은 `docs/broadleaf-parity/<vertical>.md` 완전 기록 필수
+  (broadleaf_source·spec_items·rule·behavioral_test·adversarial_review + Broadleaf 테스트
+  의도→우리 단언 매핑 ≥1행). 참조 산출물(spec/rule/test) 실재까지 검증 — 기록이 거짓말 불가.
+- **per-domain `./gradlew test{Domain}` + ViolationProofTest + adversarial review + R25** — 기존 게이트.
+
+**원칙:** 정확성·명확성 > 속도. 새 vertical은 위 파이프라인 + 두 가드 + parity 기록 없이는
+"완료" 선언 불가 (R25가 강제). 적대적 review가 green-but-hollow를 잡는다 — green 테스트 +
+자기보고 ≠ correct.
+
+---
+
 ## ⭐ Project Vision (READ FIRST — 절대 잊지 말 것)
 
 **ax-template은 React (front) + Spring Boot (backend) full-stack 개발의
@@ -76,7 +111,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 221 Java rules + 99 React rules + 14 ESLint rules + 80 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 221 Java rules + 99 React rules + 14 ESLint rules + 82 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -326,7 +361,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 221룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 80 hard guards
+│   ├── evals/                 # 4 hard gates + 82 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md

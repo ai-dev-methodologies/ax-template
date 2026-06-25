@@ -21,18 +21,44 @@ get legal review of the Broadleaf Fair Use License.)*
 
 ## Per-vertical methodology (the absorption pipeline)
 
-Each vertical ships INDIVIDUALLY, fully verified + committed:
+Each vertical ships INDIVIDUALLY, fully verified + committed. **No exception — accuracy over
+speed.** The pipeline is MECHANICALLY ENFORCED (see "Mechanical enforcement" below):
 1. **mine** — deep-read the Broadleaf subsystem → feature set + correctness invariants (file:line).
-2. **spec** — `<vertical>-l0.yaml` compliance spec (families + items).
-3. **rule** — evidence-anchored catalog rule (evidence = Broadleaf GitHub file:line + a genuine
-   external standard, verbatim-verified).
-4. **domain** — reference implementation under ax gates (@AggregateRoot/@AggregateMember markers,
-   sole-mutator service, @Version, @Check, ProblemDetail, immutable identity, injected Clock).
-5. **tests** — RestAssured ComplianceTest (BEHAVIORAL — round-trip, not `!=null`) +
-   ViolationProofTest + per-domain gradle task.
-6. **adversarial review** — opus refute-by-default BEFORE commit (the first catalog pass was
-   green-but-hollow; the review caught it — this gate is mandatory).
-7. **verify** — test{Vertical} + run-all-guards + R25, then commit.
+2. **anti-re-find census** — grep existing specs/rules; if the invariant is already absorbed, do
+   NOT re-find it (record an explicit RE-FIND pointer instead). Most verticals are mostly re-find.
+3. **spec** — `<vertical>-l0.yaml` compliance spec (families + items), or extend an existing spec.
+4. **rule** — evidence-anchored catalog rule (evidence = Broadleaf GitHub file:line **single-line
+   quote** + a genuine external standard, verbatim-verified). NEVER port Broadleaf source.
+5. **domain** — independent reference implementation under ax gates (@AggregateRoot/@AggregateMember,
+   sole-mutator service, @Version, @Check, ProblemDetail, immutable identity, injected Clock). Our
+   classes/structure — zero Broadleaf bytes (`broadleaf_no_port_guard`).
+6. **tests + verification-goal parity** — RestAssured ComplianceTest (BEHAVIORAL — round-trip, not
+   `!=null`) + ViolationProofTest + per-domain gradle task. AND map Broadleaf's test **intent**
+   (the scenarios its own tests verify — read Broadleaf's test files where they exist) to our
+   behavioral assertions in `docs/broadleaf-parity/<vertical>.md`. We capture the same VERIFICATION
+   GOAL as Broadleaf, never its test code (FUL-licensed). Review-tier verticals (no domain) record
+   the goal mapping against the rule.
+7. **adversarial review** — opus refute-by-default BEFORE commit (the first catalog pass was
+   green-but-hollow; the review caught it — this gate is mandatory). Record the verdict in the parity record.
+8. **verify** — test{Vertical} + run-all-guards (incl. `broadleaf_no_port` + `broadleaf_absorption_parity`)
+   + R25, then commit + push + parity record.
+
+## Mechanical enforcement (no exception)
+
+The methodology is not advisory — it is enforced inside R25 by two guards (and the existing gate stack):
+- **`broadleaf_no_port_guard.sh` [78]** — LICENSE safety. Broadleaf is under the **Fair Use License
+  v1.0** (not OSI/permissive); its source must never be ported. Asserts our implementation tree
+  (`backend/src` + `frontend/src`) has zero Broadleaf bytes (no `import`/`package org.broadleafcommerce`,
+  no FUL header). The clone lives OUTSIDE git and is never committed. Only short single-line citations
+  in `practices/rules/*.md` evidence blocks are allowed (fair-use grounding, not scanned).
+- **`broadleaf_absorption_parity_guard.sh` [79]** — METHODOLOGY completeness + VERIFICATION-GOAL
+  parity. Every absorbed vertical MUST have a complete `docs/broadleaf-parity/<vertical>.md` record
+  (vertical/broadleaf_source/spec_items/rule/behavioral_test/adversarial_review + ≥1 verification-goal
+  parity row). Referenced spec items / rule / test artifacts are validated to EXIST — a record cannot lie.
+- Plus the existing gates: `evidence_guard` (no fabricated evidence), per-domain `test{Domain}` +
+  `ViolationProofTest` (the invariant holds + violations are structurally impossible), R25.
+
+The parity registry is `docs/broadleaf-parity/REGISTRY.md`.
 
 ## Absorption backlog (dependency-ordered)
 
