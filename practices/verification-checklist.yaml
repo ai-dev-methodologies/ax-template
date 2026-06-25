@@ -233,6 +233,9 @@ checklist:
       - command: "./gradlew testRatingSummary"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testIdentityClaim"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testUomConversion"
         working_directory: "backend"
         expected_exit: 0

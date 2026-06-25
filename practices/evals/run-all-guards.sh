@@ -1114,6 +1114,14 @@ run_guard "broadleaf_absorption_parity/fixture_fail" 1 \
 run_guard "broadleaf_absorption_parity/fixture_pass" 0 \
     bash "$SCRIPT_DIR/broadleaf_absorption_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/broadleaf-parity/pass_complete"
 
+echo "[80] broadleaf_module_exhaustion_guard.sh (Broadleaf module-set EXHAUSTION — the absorption program is a BOUNDED sweep over a FINITE codebase; docs/BROADLEAF-COMPLETENESS.md MUST classify EVERY Broadleaf core subsystem with zero silent gaps. Asserts every row has a valid classification {ABSORBED,RE-FIND,SKIP,RESIDUE} + non-empty evidence, the data-row count == declared module_count, the RESIDUE rows == declared residue_count, and (live) every RESIDUE has a parity record with no unledgered residue (#parity records − 7 ultragoal verticals == residue_count). Live exits 0; fixtures prove non-vacuity.)"
+run_guard "broadleaf_module_exhaustion/live" 0 \
+    bash "$SCRIPT_DIR/broadleaf_module_exhaustion_guard.sh"
+run_guard "broadleaf_module_exhaustion/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/broadleaf_module_exhaustion_guard.sh" --root "$SCRIPT_DIR/fixtures/broadleaf-exhaustion/fail_unclassified"
+run_guard "broadleaf_module_exhaustion/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/broadleaf_module_exhaustion_guard.sh" --root "$SCRIPT_DIR/fixtures/broadleaf-exhaustion/pass_complete"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

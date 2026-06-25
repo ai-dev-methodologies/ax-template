@@ -362,6 +362,10 @@ public class SecurityConfig {
                 // RATINGSUMMARY (derived-aggregate-consistency-l0): any authenticated user submits
                 // and approves/rejects reviews; summary GET is also authenticated.
                 .requestMatchers("/api/rating/**").authenticated()
+                // IDENTITYCLAIM (identity-claim-on-auth-l0): every endpoint requires JWT.
+                // The claim endpoint uses Authentication.getName() as the userId — no userId
+                // in path or body (IDCLAIM-GUARD-001 structural enforcement via CAS query).
+                .requestMatchers("/api/identity-claim/**").authenticated()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers

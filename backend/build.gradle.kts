@@ -665,6 +665,15 @@ tasks.register<Test>("testRatingSummary") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testIdentityClaim") {
+    useJUnitPlatform {
+        includeTags("IDENTITY_CLAIM")
+    }
+    description = "Run identity-claim domain compliance tests (identity-claim-on-auth-l0: 3 items — CLAIM, IDEMPOTENT, GUARD)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

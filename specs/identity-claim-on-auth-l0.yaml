@@ -1,0 +1,42 @@
+version: "0.1.0"
+scope: "identity-claim-on-auth-l0 — when a previously ANONYMOUS principal (guest session) authenticates for the FIRST time (login or registration), the records it accreted while anonymous (a cart/order keyed by session-id or guest email, a draft, a wishlist) MUST be CLAIMED by the now-authenticated identity: transferred exactly ONCE, ATOMICALLY across the N records, IDEMPOTENTLY (a concurrent first-login from a second device, or a replayed claim, is a no-op — never a duplicate or a lost record), and the claim MUST REFUSE any record already owned by a DIFFERENT registered principal (you may only claim your own anonymous work). Absorbed from Broadleaf Commerce's MergeOrdersByEmailPostRegistrationObserver (claims anonymous orders by email on registration). DISTINCT from: ownership-transfer-l0 (the INVERSE direction — a principal LEAVING, an admin reassigning to a named successor; this is a principal ARRIVING and claiming its own prior anonymous records on first auth), record-linkage-l0 (probabilistic entity dedup with human-review banding + survivorship; this is a DETERMINISTIC claim by an unambiguous session/email key — no scoring, no clerical review), and order-l0 (which scopes anonymous→registered reassignment OUT). Cross-cutting; recurs in every guest-checkout-then-register flow, every wishlist/draft-before-signup product. ax STRENGTHENS Broadleaf, whose claim is non-transactional check-then-act (a CWE-367 TOCTOU): ax makes the claim atomic + idempotent + the already-owned guard structurally enforced."
+stack: "Spring Boot 3.2.x + JPA (anonymous records carry a nullable owner_user_id + an anonymous claim key — session id or guest email; @Version on the claimed record) + a sole-claim service that, in ONE transaction, transfers all matching unclaimed records to the authenticated user under a uniqueness/guard that makes a double-claim or a cross-principal claim unrepresentable + RFC 9457 Problem Details. Composes idempotency-l0 (the claim is keyed + replay-safe) and order-l0 (the claimed record is the cart/order user_id)."
+domain_mode: backend_only
+introduced_at: "Broadleaf-absorption completeness-sweep residue (2026-06-25) — the single genuine RESIDUE the Phase-2 module exhaustion found (registration/MergeOrdersByEmailPostRegistrationObserver). Every other remaining Broadleaf core subsystem (config/event/geolocation/media/promotionMessage/rule/social/store/util + admin) was RE-FIND or SKIP. Generic cross-cutting; the anonymous→registered identity claim. ax strengthens Broadleaf's racy non-transactional check-then-act into an atomic, idempotent, guarded claim (the promotion-l0 'absorb + harden the racy guard' precedent)."
+
+# OPT-IN. Any product where an anonymous guest accretes records (cart/order/
+# wishlist/draft) before authenticating, then claims them on first login/register.
+
+# ── Priority order ──
+#   1. IDCLAIM-CLAIM-001      — atomic claim of all anonymous records on first auth (keystone)
+#   2. IDCLAIM-IDEMPOTENT-001 — idempotent: concurrent/replayed claim is exactly-once
+#   3. IDCLAIM-GUARD-001      — refuse a record already owned by a different registered principal
+
+items:
+  - id: "IDCLAIM-CLAIM-001"
+    chapter: "On first authentication, the anonymous principal's records are claimed atomically"
+    verification:
+      mechanism: rule
+      ref: identity-claim-on-auth-atomic-idempotent-guarded
+    requirement: "When an anonymous principal authenticates for the first time, the service MUST transfer every record it accreted while anonymous (matched by its anonymous claim key — session id or guest email) to the authenticated user id, in ONE transaction, so a partial claim cannot strand half the cart. The claim sets owner_user_id from null (unclaimed) to the authenticated user; the transferred records are thereafter owned + user-scoped (order-l0 ORDER-AUTHZ-001). BROADLEAF PARITY: MergeOrdersByEmailPostRegistrationObserver reassigns anonymous orders found by email to the registering customer."
+    test_method: "RestAssured (create 2 anonymous carts keyed to a guest email → authenticate → both are owned by the user in one claim; no partial)"
+    verification_type: "positive"
+    applicable: true
+  - id: "IDCLAIM-IDEMPOTENT-001"
+    chapter: "The claim is idempotent — concurrent/replayed first-auth is exactly-once"
+    verification:
+      mechanism: rule
+      ref: identity-claim-on-auth-atomic-idempotent-guarded
+    requirement: "The claim MUST be IDEMPOTENT: a second invocation (a replayed claim, or a concurrent first-login from a second device) MUST be a no-op — never a duplicate transfer, never a second copy, never a lost record. Re-claiming an already-claimed-by-me record returns the same outcome; the claim keys on (anonymous claim key → user id) so at-least-once delivery produces exactly one effect. Composes idempotency-l0."
+    test_method: "RestAssured (claim twice for the same guest key + user → identical result, single ownership transfer, no duplicate)"
+    verification_type: "negative"
+    applicable: true
+  - id: "IDCLAIM-GUARD-001"
+    chapter: "A record already owned by a different registered principal is never claimed"
+    verification:
+      mechanism: rule
+      ref: identity-claim-on-auth-atomic-idempotent-guarded
+    requirement: "The claim MUST REFUSE any record that is ALREADY OWNED by a registered principal — only unclaimed (owner_user_id IS NULL) anonymous records are claimable. A record already owned by user A MUST NOT be transferred to user B by a guest-email collision. Broadleaf guards this with a check-then-act `if (!o.getCustomer().isRegistered())`, which is a CWE-367 TOCTOU race (the ownership can change between the check and the set); ax STRENGTHENS it by making the guard structural — the claim updates ONLY rows WHERE owner_user_id IS NULL in a single atomic conditional UPDATE (compare-and-set), so an already-owned record is unclaimable by construction, not by a racy pre-check."
+    test_method: "RestAssured (a cart already owned by user A → user B's claim with the same guest key does NOT transfer it; A retains ownership)"
+    verification_type: "negative"
+    applicable: true
