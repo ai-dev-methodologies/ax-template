@@ -353,6 +353,9 @@ public class SecurityConfig {
                 // Caller identity (customerId) is always Authentication.getName(); no userId
                 // in path or body. The max-uses atomic backstop is UNIQUE(offer_id, order_ref).
                 .requestMatchers("/api/promotion/**").authenticated()
+                // COMMERCEPRICING (commerce-pricing-l0): stateless quote endpoint, JWT required.
+                // Pure computation — no JPA entity, no migration. Caller = Authentication.getName().
+                .requestMatchers("/api/pricing/**").authenticated()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers

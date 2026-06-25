@@ -1,0 +1,36 @@
+version: "0.1.0"
+scope: "pricing-l0 — the pricing PIPELINE ORDER + order-total CLOSURE of an e-commerce platform. Two correctness invariants that a discount engine alone does not establish: (1) pricing runs phases in a FIXED, deterministic order — discount BEFORE tax — so each item's TAXABLE base is its amount minus its prorated order discount, i.e. tax is charged on the NET (post-discount) amount, never on the gross line price; (2) the order TOTAL is a conserving closure across phases — total = subTotal − orderAdjustments + shipping + tax + fees — accumulated at a single point with no penny invented or lost, and the per-fulfillment-group total reconciles to the same components. Absorbed from Broadleaf Commerce's pricing workflow (org.broadleafcommerce.core.pricing). DELIBERATELY THIN: conserving discount proration, clamp, deterministic offer order, and atomic max-uses are already absorbed by promotion-l0; SKU price-presence + sale<=retail by catalog-commerce-l0; tiered/quantity-break pricing by banded-pricing-l0; the tax RATE table is jurisdiction-specific and out of scope (the rate is injected). This vertical owns only the cross-phase ORDERING and CLOSURE. Realized by the commercepricing reference workload as a STATELESS pipeline (no persistent entity — pricing is a computation, like BandedPricer). Recurs in every cart/invoice/billing/settlement system; jurisdiction- and framework-agnostic."
+stack: "Spring Boot 3.2.x stateless pricing pipeline (no JPA entity — a pure computation over supplied line items + injected tax rate, mirroring common/BandedPricer) + integer minor-unit money with Math.multiplyExact + round-once (penny-conserving) + RFC 9457 Problem Details + Micrometer. The method-body phase order is the determinism source (mirrors Broadleaf's setOrder() activity constants)."
+domain_mode: backend_only
+introduced_at: "Broadleaf-absorption vertical (pricing) 2026-06-24 — grounded in Broadleaf Commerce develop-7.0.x pricing workflow. THIN by design (anti-re-find: ~70% of Broadleaf pricing already absorbed by promotion/catalog/banded); absorbs only the 2 distinct invariants — discount-before-tax phase order and the conserving order-total closure. Generic; zero jurisdiction-specific law (tax rate injected, not tabled)."
+
+# OPT-IN pricing pipeline. The cross-phase ordering + closure layer above the
+# (already-absorbed) discount engine. Thin by design — composes promotion's
+# discount output, adds a tax phase on the NET base, and closes the order total.
+
+# ── Priority order ──
+#   1. PRICING-ORDER-001  (discount BEFORE tax — tax on the net base; fixed phase order)
+#   2. PRICING-TOTAL-001  (order total is the conserving sum of its disclosed components)
+
+items:
+  - id: "PRICING-ORDER-001"
+    chapter: "Pricing runs discount before tax; tax is on the net (post-discount) base"
+    verification: { mechanism: rule, ref: pricing-pipeline-orders-discount-before-tax-and-total-conserves }
+    requirement: "The pricing pipeline executes phases in a FIXED, deterministic order — discount → finalize taxable base → tax → total. Each item's taxable base is itemAmount MINUS its prorated order discount, so tax is charged on the NET amount, never the gross line price. The phase order is code-pinned (method-body order), identical across runs and nodes. Charging tax on the gross (pre-discount) price over-taxes the customer."
+    test_method: "RestAssured (a discounted order's tax == rate × (item − discount); a gross-tax computation yields a STRICTLY HIGHER total — asserted observable and not produced)"
+    verification_type: "positive"
+    applicable: true
+  - id: "PRICING-ORDER-002"
+    chapter: "Tax-on-gross is strictly higher and is never produced"
+    verification: { mechanism: rule, ref: pricing-pipeline-orders-discount-before-tax-and-total-conserves }
+    requirement: "For any order with a non-zero discount and non-zero tax rate, tax computed on the gross line price is STRICTLY GREATER than tax on the net base; the pipeline MUST produce the net-based tax (swapping the phase order is observable and wrong). This is the behavioral keystone proving the ordering invariant, not merely its structure."
+    test_method: "RestAssured (engineered fixture: assert pipeline tax < gross-base tax, and the produced total uses the net tax)"
+    verification_type: "negative"
+    applicable: true
+  - id: "PRICING-TOTAL-001"
+    chapter: "The order total is a conserving closure of its disclosed components"
+    verification: { mechanism: rule, ref: pricing-pipeline-orders-discount-before-tax-and-total-conserves }
+    requirement: "order total == subTotal − orderDiscount + totalShipping + totalTax (+ fees), accumulated at a single point with no penny invented or dropped; the displayed total MUST equal the sum of its disclosed parts exactly (an auditable receipt). Distinct from per-offer proration conservation (promotion-l0): this conserves ACROSS the order-level phases. A penny lost between phases, or a component double-counted, produces an unauditable total."
+    test_method: "RestAssured (fixture engineered to lose a penny under naive rounding → total == subTotal − discount + shipping + tax EXACTLY)"
+    verification_type: "positive"
+    applicable: true
