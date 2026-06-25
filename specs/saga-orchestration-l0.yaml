@@ -16,8 +16,8 @@ introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_
 # emission uses the transactional outbox pattern (microservices.io): the
 # orchestrator emits step commands / events via an outbox row written in the
 # same local tx that advances saga state, so a crash never loses or double-sends
-# a command — SAGA-STATE-001. (No transactional-outbox-l0 sibling spec exists
-# yet; SAGA-STATE-001 carries the outbox requirement inline.)
+# a command — SAGA-STATE-001. (See the transactional-outbox-l0 sibling spec for
+# the standalone outbox contract; SAGA-STATE-001 also carries it inline.)
 # Cross-references resilience-l0 (per-step external call uses circuit breaker /
 # timeout / retry) + payment-l0 (payment leg as one saga step).
 
@@ -26,6 +26,7 @@ introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_
 # keystone — without them saga atomicity is undefined.
 #   1. SAGA-STEP-001          — ordered local-transaction sequence (foundation)
 #   2. SAGA-COMPENSATE-001    — reverse-order compensating actions
+#   2b. SAGA-COMPENSATE-002   — register compensation BEFORE its own side effect (within-step)
 #   3. SAGA-ORCHESTRATION-001 — single declared coordination style
 #   4. SAGA-IDEMPOTENT-001    — idempotent + retry-safe steps (composes idempotency-l0)
 #   5. SAGA-STATE-001         — recoverable persisted state machine + transactional outbox emission
@@ -94,6 +95,36 @@ items:
       (compensating transaction Ci semantically undoes Ti; print/PDF source,
       no verbatim quote reproduced).
 
+  - id: "SAGA-COMPENSATE-002"
+    chapter: "Register the compensation BEFORE the irreversible side effect"
+    verification:
+      mechanism: rule
+      ref: saga-compensating-transactions
+    requirement: "A compensatable step MUST durably register its compensating action BEFORE (or atomically within the same local transaction as) performing its irreversible side effect — never after. This is a WITHIN-STEP temporal ordering, orthogonal to the BETWEEN-STEP pivot placement SAGA-COMPENSATE-001 already requires: even when the steps are ordered correctly (compensatables before the pivot), a single step that mutates external state (decrement inventory, capture a payment) and only THEN records how to undo it has a crash window that orphans the side effect — no compensation is registered, so SAGA-COMPENSATE-001's reverse-order rollback silently skips that leg and the saga can never walk it back. SAGA-COMPENSATE-001 states the reverse-order FIRING and the pivot placement, but assumes — never states — that every completed side effect already has a durably-registered compensation at the instant it takes effect. This item states the register-before-act ordering that assumption depends on: the saga analog, at the per-step grain, of the transactional-outbox 'write the outbox row in the same tx as the state change' discipline (SAGA-STATE-001), applied to compensation registration rather than event emission. The two branches apply to different topologies: 'atomically within the same local transaction' is reachable only when the compensation record co-resides with the side effect's database (the coordinator-local / single-db-multi-aggregate case); for a cross-service leg there is by definition no shared transaction (the saga premise), so the durable register-BEFORE branch is mandatory. Register-before-act is sound precisely because of SAGA-IDEMPOTENT-001: a crash AFTER registration but BEFORE the effect leaves a compensation registered for an effect that never landed, and the reverse-order rollback will fire it — which is safe only because a compensate-of-no-op is a no-op, not an error. The compensation MUST therefore be keyed on the stable saga key (not on the step's not-yet-known result), so it can locate-and-undo or no-op idempotently."
+    test_method: "review (per-step register-before-act ordering) + RestAssured (failure injected between the side effect and its compensation registration → the saga still compensates that leg, no orphaned effect persists)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Grounded in Broadleaf Commerce's checkout workflow (develop-7.0.x):
+      DecrementInventoryActivity registers its rollback state via
+      ActivityStateManagerImpl.registerState(...) BEFORE calling
+      inventoryService.decrementInventory(...), with the inline rationale
+      "Register the map with the rollback state object early on; this allows
+      the extension handlers to incrementally add state while decrementing but
+      still throw an exception." (Broadleaf also orders its non-compensatable
+      CompleteOrderActivity last — but that BETWEEN-step pivot placement is
+      already SAGA-COMPENSATE-001; this item adds only the orthogonal
+      WITHIN-step register-before-act ordering.) Extends SAGA-COMPENSATE-001
+      with the register-before-act ordering it assumes — the single distinct
+      correctness obligation Broadleaf's checkout module adds over the generic
+      saga primitive (Broadleaf-absorption checkout vertical, 2026-06-25:
+      every other checkout concern — availability, payment-confirm, tax/total,
+      inventory decrement, order completion, reverse-order rollback, idempotent
+      placement — is already absorbed by two-axis-inventory-reservation-l0 /
+      payment / in-doubt-outbound-call-l0 / pricing-l0 / order-l0 /
+      SAGA-COMPENSATE-001 / idempotency-l0, so the vertical reduces to this
+      one item; anti-re-find).
+
   - id: "SAGA-ORCHESTRATION-001"
     chapter: "Single declared coordination style"
     verification:
@@ -148,9 +179,9 @@ items:
     notes: >
       Apply the transactional outbox pattern: write saga state + outbox row in
       one local tx; a relay publishes the outbox row, giving
-      exactly-effectively-once command emission across crashes. (No
-      transactional-outbox-l0 sibling spec exists yet — the outbox requirement
-      is carried inline here.)
+      exactly-effectively-once command emission across crashes. (See the
+      transactional-outbox-l0 sibling spec for the standalone outbox contract;
+      SAGA-STATE-001 also carries the outbox requirement inline here.)
       Anchored to microservices.io Transactional Outbox pattern
       (https://microservices.io/patterns/data/transactional-outbox.html).
       Quote anchor (microservices.io Transactional Outbox pattern): "The
