@@ -14,8 +14,9 @@ for name, schema in schemas.items():
         print(f'{name}.{p}')
 " 2>/dev/null | sort)
 
-# Check key types exist in TypeScript client
-CLIENT_FILE="frontend/src/lib/api/authClient.ts"
+# Check key types exist in TypeScript client (moved into the @ax/core package
+# when the frontend became an npm-workspaces monorepo).
+CLIENT_FILE="frontend/packages/core/src/api/authClient.ts"
 if [ ! -f "$CLIENT_FILE" ]; then
   echo "  ✗ authClient.ts not found"
   exit 1

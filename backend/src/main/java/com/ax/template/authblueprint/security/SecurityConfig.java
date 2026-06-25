@@ -349,6 +349,10 @@ public class SecurityConfig {
                 // the resolver's 400/404/410), not a Spring Security 401.
                 .requestMatchers(HttpMethod.GET, "/api/versions").permitAll()
                 .requestMatchers("/api/api-versioning-demo/**").permitAll()
+                // COMMERCEPROMOTION (commerce-promotion-l0): every endpoint requires a valid JWT.
+                // Caller identity (customerId) is always Authentication.getName(); no userId
+                // in path or body. The max-uses atomic backstop is UNIQUE(offer_id, order_ref).
+                .requestMatchers("/api/promotion/**").authenticated()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers

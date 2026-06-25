@@ -1,0 +1,74 @@
+version: "0.1.0"
+scope: "promotion-l0 — the discount/offer APPLICATION engine of an e-commerce platform: given a set of order line items + applicable offers, compute discount adjustments that (1) CONSERVE — an order-level discount prorated to items sums back to the order discount EXACTLY (floor-then-distribute-remainder); (2) respect TWO orthogonal gates, stackable (multiples allowed) and combinable (tolerates other offers); (3) apply in a DETERMINISTIC total order (priority then potential-savings, stable tie-break); (4) winner-take-all between the order path and the item path (keep the larger, discard the loser); (5) CLAMP each discount to the line price (never negative); (6) enforce max-uses ATOMICALLY; (7) re-apply idempotently (reconcile by offer id, never double). Absorbed from Broadleaf Commerce's offer engine (org.broadleafcommerce.core.offer) and STRENGTHENED at max-uses: Broadleaf's OfferAudit carries only non-unique indexes so concurrent redemptions race past the cap (CWE-362 TOCTOU) — this spec makes the over-redemption UNREPRESENTABLE via UNIQUE(offer_id, order_ref) + a pessimistic offer-row lock. Realized by the commercepromotion reference workload. Vertical of the Broadleaf-absorption program (after catalog). Money is integer minor units; the engine takes line items as INPUT (independent of the order vertical). Recurs in every discount/loyalty/coupon system — jurisdiction- and framework-agnostic."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (Offer @AggregateRoot; @AggregateMember OfferCode/OfferRedemption; append-only redemption with UNIQUE(offer_id, order_ref) atomic-cap backstop; @Version + PESSIMISTIC_WRITE offer-row lock; @Check non-negative money/priority) + integer minor-unit money with Math.multiplyExact (overflow fail-closed) + largest-remainder conserving proration + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+domain_mode: backend_only
+introduced_at: "Broadleaf-absorption vertical (promotion) 2026-06-24 — grounded in Broadleaf Commerce develop-7.0.x offer engine; STRENGTHENS the max-uses TOCTOU. Generic across all discount/coupon/loyalty engines; zero jurisdiction-specific law."
+
+# OPT-IN promotion/offer application engine. The discount correctness cluster the
+# catalog's toy ecommerce entirely lacked. Generic; the Broadleaf offer engine is
+# the pattern source, not a lock-in.
+
+# ── Priority order ──
+#   1. PROMO-CONSERVE-001  (prorated discount conserves to the cent — the money keystone)
+#   2. PROMO-MAXUSES-001   (max-uses atomic — unrepresentable over-redemption; strengthens Broadleaf TOCTOU)
+#   3. PROMO-ORDER-001     (deterministic total-order application — reproducible totals)
+#   4. PROMO-CLAMP-001     (discount clamped to line price — store never pays the customer)
+#   5. PROMO-IDEMPOTENT-001 (re-apply reconciles by offer id — no doubling on refresh)
+
+items:
+  - id: "PROMO-CONSERVE-001"
+    chapter: "An order-level discount prorated to items conserves exactly"
+    verification: { mechanism: rule, ref: promotion-offer-engine-conserves-determinism-atomic-cap }
+    requirement: "An ORDER-scope discount prorated across N items computes each share as floor(orderDiscount * itemAmount / totalAmount), then distributes the leftover minor units one-by-one until Σ(item shares) == orderDiscount EXACTLY. The taxable/derived base is re-derived from the post-distribution shares. A penny lost in proration propagates into every dependent total."
+    test_method: "RestAssured (10% on items [333,333,334] total 1000 → 3 item adjustments sum to exactly 100)"
+    verification_type: "positive"
+    applicable: true
+  - id: "PROMO-STACK-001"
+    chapter: "Stackable and combinable are two orthogonal gates"
+    verification: { mechanism: rule, ref: promotion-offer-engine-conserves-determinism-atomic-cap }
+    requirement: "stackable (multiples of one offer allowed) and combinable (tolerates OTHER offers) are independent; a non-combinable offer, once applied, blocks further offers. Conflating them into one boolean compound-discounts a merchant never authorized."
+    test_method: "RestAssured (two non-combinable offers → exactly one applies)"
+    verification_type: "positive"
+    applicable: true
+  - id: "PROMO-ORDER-001"
+    chapter: "Offers apply in a deterministic total order"
+    verification: { mechanism: rule, ref: promotion-offer-engine-conserves-determinism-atomic-cap }
+    requirement: "Candidate offers sort by (priority ASC, then potential-savings DESC) with a stable tie-break — a total order computed into scalars, never collection/map iteration order. The same offer set + line items yields byte-identical adjustments across runs/nodes."
+    test_method: "RestAssured (apply twice → identical; equal-priority offers resolve by savings deterministically)"
+    verification_type: "positive"
+    applicable: true
+  - id: "PROMO-MAXSELECT-001"
+    chapter: "Winner-take-all between order-path and item-path"
+    verification: { mechanism: rule, ref: promotion-offer-engine-conserves-determinism-atomic-cap }
+    requirement: "A totalitarian offer forces a choice between the order-level discount total and the item-level discount total — keep ONLY the larger, removing the loser's adjustments entirely. Applying both double-discounts; keeping the worse shorts the customer."
+    test_method: "RestAssured (order-path 200 vs item-path 150 → final == 200 path, item adjustments removed)"
+    verification_type: "positive"
+    applicable: true
+  - id: "PROMO-CLAMP-001"
+    chapter: "A discount is clamped to the line price"
+    verification: { mechanism: rule, ref: promotion-offer-engine-conserves-determinism-atomic-cap }
+    requirement: "A computed discount is clamped to the current line price (discount > price → discount = price) and never negative, so a line never goes below zero and the order total cannot invert sign."
+    test_method: "RestAssured (150 discount on a 100 line → adjustment == 100)"
+    verification_type: "positive"
+    applicable: true
+  - id: "PROMO-MAXUSES-001"
+    chapter: "Max-uses is enforced atomically (strengthens Broadleaf TOCTOU)"
+    verification: { mechanism: rule, ref: promotion-offer-engine-conserves-determinism-atomic-cap }
+    requirement: "Redemption is bounded by UNIQUE(offer_id, order_ref) (one redemption per offer per order — idempotent) AND a max-uses cap checked under the offer row's PESSIMISTIC_WRITE lock — never check-then-insert. Broadleaf's OfferAudit carries only non-unique indexes, so concurrent redemptions race past the cap (CWE-362); this makes the over-redemption UNREPRESENTABLE."
+    test_method: "RestAssured/concurrent (max_uses=1: second over-cap redemption → 409 PROMO_MAX_USES_EXCEEDED; duplicate (offer,order_ref) → rejected by the unique constraint)"
+    verification_type: "negative"
+    applicable: true
+  - id: "PROMO-IDEMPOTENT-001"
+    chapter: "Re-applying offers reconciles by stable key — no doubling"
+    verification: { mechanism: rule, ref: promotion-offer-engine-conserves-determinism-atomic-cap }
+    requirement: "applyOffers is a STATELESS pure recompute over the supplied line items + offers (no persisted adjustment state), so re-applying the same inputs returns the IDENTICAL adjustment set BY CONSTRUCTION — there is nothing to double. (If a future order vertical persists adjustments, idempotency must then be maintained by reconcile-by-offer-id; for this engine the stateless form is the contract.)"
+    test_method: "RestAssured (applyOffers twice with same inputs → byte-identical adjustments)"
+    verification_type: "positive"
+    applicable: true
+  - id: "PROMO-REDEMPTION-IMMUTABLE-001"
+    chapter: "A redemption record is append-only"
+    verification: { mechanism: rule, ref: promotion-offer-engine-conserves-determinism-atomic-cap }
+    requirement: "OfferRedemption columns are @Column(updatable=false) with no public setter; a redemption is never edited, only appended — the audit basis for the cap."
+    test_method: "structural (OfferRedemption columns updatable=false, no setters; UNIQUE(offer_id, order_ref) in entity + V071)"
+    verification_type: "positive"
+    applicable: true
