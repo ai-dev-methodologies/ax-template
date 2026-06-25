@@ -37,8 +37,7 @@ public class IdentityClaimController {
      * Returns 201.
      */
     @PostMapping("/records")
-    public ResponseEntity<RecordResponse> addRecord(@Valid @RequestBody AddRecordRequest body,
-                                                    Authentication auth) {
+    public ResponseEntity<RecordResponse> addRecord(@Valid @RequestBody AddRecordRequest body) {
         ClaimableRecord record = service.addAnonymousRecord(body.claimKey(), body.label());
         RecordResponse resp = RecordResponse.from(record);
         return ResponseEntity.status(HttpStatus.CREATED)
