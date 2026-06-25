@@ -134,6 +134,35 @@ public class PaymentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(RefundResponse.from(refund));
     }
 
+    /**
+     * PAYMENT-SPLIT-001: POST /api/payments/coverage/confirm
+     *
+     * <p>Returns 200 with a coverage result when the sum of active authorized tenders
+     * (AUTHORIZED + CAPTURED) for the given orderId and currency covers the orderTotal.
+     * Returns 422 PAYMENT_TENDERS_UNDERFUNDED with the residual shortfall otherwise.
+     *
+     * <p>Coverage is intentionally NOT user-scoped: split tenders for an order may
+     * originate from multiple payment instruments / payers (e.g. gift card + card).
+     * Authentication is still required via the /api/payments/** security rule.
+     */
+    @PostMapping("/coverage/confirm")
+    public ResponseEntity<Map<String, Object>> confirmCoverage(
+        @RequestBody CoverageConfirmRequest request) {
+
+        PaymentService.CoverageResult result =
+            paymentService.confirmCoverage(request.orderId(), request.currency(), request.orderTotal());
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("orderId", request.orderId());
+        body.put("currency", request.currency());
+        body.put("orderTotal", result.orderTotal());
+        body.put("covered", result.covered());
+        return ResponseEntity.ok(body);
+    }
+
+    /** Request DTO for {@code POST /api/payments/coverage/confirm}. */
+    record CoverageConfirmRequest(String orderId, String currency, java.math.BigDecimal orderTotal) {}
+
     private static Map<String, Object> paymentBody(Payment p) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("id", p.getId() == null ? null : p.getId().toString());

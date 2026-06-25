@@ -40,7 +40,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-25 L4 domains + 11 active recipes · 219 Java rules · 99 React rules · 14 ESLint rules · 80 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+25 L4 domains + 11 active recipes · 220 Java rules · 99 React rules · 14 ESLint rules · 80 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -71,7 +71,7 @@ loop.
 |-------|-------|-----------|
 | Backend reference workload | `backend/` — Spring Boot 3 + Java 21, 14 auth endpoints (signup/login/OAuth Google·Naver·Kakao/password reset/RBAC ADMIN·MANAGER·MEMBER), 5 CRUD endpoints, 1 rate-limit endpoint | TDD-built; per-domain `./gradlew test{Domain}` is binary pass/fail (status matrix in CLAUDE.md Build & Test) |
 | Frontend reference workload | `frontend/` — React 19 + Next.js 15, OAuth UI, login pages, e2e Playwright tests | self-tests the ESLint plugin |
-| Java/Spring rule catalog | `practices/` — 219 rules / 22+ categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
+| Java/Spring rule catalog | `practices/` — 220 rules / 22+ categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
 | React/Next.js rule catalog | `practices-react/` — 99 rules / 9 families, citing canonical React 19 / Next.js 16 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
 | ESLint plugin (React enforcement) | `practices-react/eslint-plugin-ax/` — 14 custom rules (incl. 3 frontend-decomposition: cross-feature / layer-direction / published-API-barrel) | RuleTester suites; install in any downstream project |
 | Spec Trio (per domain) | `specs/<domain>.yaml` + `contracts/<domain>-openapi.yaml` + `blueprints/<domain>-manifest.yaml` | enforced by `spec_ref_guard.sh` — every rule must point to a spec item |
@@ -110,7 +110,7 @@ bash practices/evals/run-all-guards.sh       # 80 hard guards (all PASS expected
 cd backend
 ./gradlew testAsvs              # GREEN — 26 ASVS items
 ./gradlew testCrud              # GREEN — 7 CRUD security tests
-./gradlew testPractices         # GREEN — 219 rules
+./gradlew testPractices         # GREEN — 220 rules
 ./gradlew testPayment           # GREEN — 29 PAYMENT items
 ./gradlew testRateLimit         # GREEN
 ./gradlew testNotification      # GREEN
@@ -180,7 +180,7 @@ reference workload ships `mock` provider only; the redirect-style hook
 
 ## Rules currently enforced
 
-### Spring/Java (testPractices — 219 rules / 22+ categories)
+### Spring/Java (testPractices — 220 rules / 22+ categories)
 
 `lang-`, `core-`, `config-`, `web-`, `http-`, `persistence-`, `transaction-`,
 `migration-`, `security-`, `validation-`, `error-`, `api-`, `async-`,

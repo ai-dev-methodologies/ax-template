@@ -68,6 +68,19 @@ public class PaymentExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
     }
 
+    @ExceptionHandler(TendersUnderfundedException.class)
+    public ResponseEntity<ProblemDetail> handleUnderfunded(TendersUnderfundedException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
+        pd.setType(URI.create("urn:ax:payment:tenders-underfunded"));
+        pd.setTitle("Tenders underfunded");
+        pd.setDetail("Active tenders do not cover the order total; shortfall=" + ex.getShortfall());
+        pd.setProperty("orderId", ex.getOrderId());
+        pd.setProperty("orderTotal", ex.getOrderTotal());
+        pd.setProperty("covered", ex.getCovered());
+        pd.setProperty("shortfall", ex.getShortfall());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(pd);
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ProblemDetail> handleNotReadable(HttpMessageNotReadableException ex) {
         // P5 security-review (US-014 MEDIUM): sanitize Jackson exception detail to

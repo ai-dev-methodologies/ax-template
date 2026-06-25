@@ -550,3 +550,46 @@ items:
       #INDOUBT-RECONCILE-001 / #INDOUBT-IDEMPOTENT-RETRY-001 /
       #INDOUBT-NO-DOUBLE-EFFECT-001.
     policy_ref: "blueprints/payment-manifest.yaml#provider"
+
+  # ─── SPLIT family (split tender — Broadleaf-absorption payment vertical) ────
+  - id: "PAYMENT-SPLIT-001"
+    chapter: "SPLIT"
+    verification:
+      mechanism: rule
+      ref: payment-split-tender-coverage-sums-to-total-and-capture-bounded-by-auth
+    requirement: "An order MAY be paid by multiple payment rows sharing one order_id (split tender — two cards, gift card + card). The coverage gate verifies that the sum of the active, successfully-authorized tender amounts for that order_id covers the order's frozen total, AS SUPPLIED BY THE TRUSTED ORCHESTRATOR (the order-confirm / checkout caller that owns ORDER-TOTAL-SNAPSHOT-001 in its workflow context — mirroring Broadleaf's ValidateAndConfirmPaymentActivity, which reads order.getTotal() from the checkout context). The payment domain is deliberately ISOLATED from the order aggregate (payment.order_id is a free-form reference, no FK to CommerceOrder), so it does NOT resolve the total itself — wiring the server-side snapshot lookup is the orchestrator's responsibility. An under-covered confirm is rejected 422 PAYMENT_TENDERS_UNDERFUNDED with the residual shortfall disclosed. Σ is computed in exact decimal (BigDecimal at the currency's scale, no floating point) over a SINGLE currency. This is a sum-UP-to-target coverage conservation across N sibling rows — distinct from the refund cap (PAYMENT-REFUND-002, a ≤ ceiling on ONE row), from balanced-posting net-zero, and from a single-bucket accumulator draw."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Broadleaf-absorption payment vertical (2026-06-25). Grounded in Broadleaf
+      OrderPayment.getAmount ("The summation of all of the OrderPayments for a
+      particular Order should equal Order#getTotal()") + ValidateAndConfirmPaymentActivity
+      ("if (paymentSum.lessThan(order.getTotal())) { throw … }"). The catalog
+      lacked a sum-UP-to-target coverage shape (grep split-tender across specs = 0;
+      neighbors balanced-posting / accumulator / reserve-settle self-exclude it).
+      Keystone test: order total 10000 → add tender A=6000 (AUTHORIZED) → confirm
+      coverage → 422 shortfall 4000; add tender B=4000 (AUTHORIZED) → confirm
+      coverage → 200, Σ tenders == 10000. Realized in the existing payment domain
+      (multiple Payment rows already share orderId; the coverage-confirm operation +
+      sumActiveAuthorizedByOrderId query are the new content).
+    policy_ref: "blueprints/payment-manifest.yaml#split"
+
+  - id: "PAYMENT-SPLIT-002"
+    chapter: "SPLIT"
+    requirement: "Captures MUST be bounded by their authorization: the cumulative captured amount for an authorization MUST never exceed the authorized amount (Σcaptured ≤ authorized — the auth-side dual of the refund cap PAYMENT-REFUND-002 Σrefunds ≤ captured); a payment is FULLY_CAPTURED when Σ partial captures == authorized; an over-capture is rejected 422 PAYMENT_CAPTURE_EXCEEDS_AUTH."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: false
+    notes: >
+      IMPL-DEFERRED (spec-only, applicable:false). Broadleaf-absorption payment
+      vertical (2026-06-25). The auth-side capture-bound dual is grounded in
+      Broadleaf OrderPaymentStatus.FULLY_CAPTURED ("all the partial CAPTURE
+      transaction amounts equal the original order payment transaction"). The
+      current ax payment model is single full-amount capture (PaymentStateMachine
+      AUTHORIZED→CAPTURED; PaymentService.capture sets capturedAmount = amount), so
+      multiple/partial capture needs a capture ledger the model does not yet carry —
+      deferred (like the callback family was before it landed). Specced
+      applicable:false so the invariant is ABSORBED and visible without a hollow
+      always-passing test. Documented by the same rule as PAYMENT-SPLIT-001
+      (payment-split-tender-coverage-sums-to-total-and-capture-bounded-by-auth).

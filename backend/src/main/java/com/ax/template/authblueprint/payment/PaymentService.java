@@ -307,6 +307,33 @@ public class PaymentService {
     public record PaymentOutcome(Payment payment, boolean replay) {}
 
     /**
+     * PAYMENT-SPLIT-001: confirms that active authorized tenders (AUTHORIZED + CAPTURED)
+     * for the given orderId and currency sum to at least {@code orderTotal} in integer
+     * minor units. Same-currency filter ensures Σ is computed over homogeneous amounts.
+     *
+     * <p>Throws {@link TendersUnderfundedException} with the residual shortfall when the
+     * covered amount is less than {@code orderTotal}. Returns a {@link CoverageResult}
+     * when fully covered.
+     *
+     * @param orderId    the order identifier shared by all split tenders
+     * @param currency   ISO 4217 currency code; only tenders in this currency are counted
+     * @param orderTotal the required order total in minor units (must be positive)
+     * @return coverage result with covered and total fields
+     * @throws TendersUnderfundedException when covered &lt; orderTotal
+     */
+    @Transactional(readOnly = true)
+    public CoverageResult confirmCoverage(String orderId, String currency, BigDecimal orderTotal) {
+        BigDecimal covered = paymentRepository.sumActiveAuthorizedByOrderId(orderId, currency);
+        if (covered.compareTo(orderTotal) < 0) {
+            throw new TendersUnderfundedException(orderId, orderTotal, covered);
+        }
+        return new CoverageResult(covered, orderTotal);
+    }
+
+    /** Result of a successful {@link #confirmCoverage} check. */
+    public record CoverageResult(BigDecimal covered, BigDecimal orderTotal) {}
+
+    /**
      * Service hook for redirect-style PG callbacks. Called by
      * {@code PaymentCallbackController} after {@link PaymentCallbackVerifier}
      * has verified the signature.
