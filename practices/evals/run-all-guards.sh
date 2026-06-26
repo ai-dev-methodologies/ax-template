@@ -1122,6 +1122,14 @@ run_guard "broadleaf_module_exhaustion/fixture_fail" 1 \
 run_guard "broadleaf_module_exhaustion/fixture_pass" 0 \
     bash "$SCRIPT_DIR/broadleaf_module_exhaustion_guard.sh" --root "$SCRIPT_DIR/fixtures/broadleaf-exhaustion/pass_complete"
 
+echo "[81] quick_verify_no_audit_guard.sh (the ITERATION-ONLY verify/quick-verify.sh dev-loop helper must NOT be mistakable for the R25 completion gate: it must not write the .ax-verify/runs.jsonl audit log and must not invoke verify-completion.sh — so the pre-push recency guard blocks any push behind quick-verify BY CONSTRUCTION — and must print the ITERATION-ONLY banner. Live exits 0; fixtures prove non-vacuity.)"
+run_guard "quick_verify_no_audit/live" 0 \
+    bash "$SCRIPT_DIR/quick_verify_no_audit_guard.sh"
+run_guard "quick_verify_no_audit/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/quick_verify_no_audit_guard.sh" --root "$SCRIPT_DIR/fixtures/quick-verify-no-audit/fail_writes_audit"
+run_guard "quick_verify_no_audit/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/quick_verify_no_audit_guard.sh" --root "$SCRIPT_DIR/fixtures/quick-verify-no-audit/pass_clean"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

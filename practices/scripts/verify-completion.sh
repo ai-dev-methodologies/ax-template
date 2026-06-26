@@ -121,11 +121,14 @@ default_wd = defaults.get("working_directory", ".")
 default_timeout = int(defaults.get("timeout_seconds", 900))
 
 lines = []
+fail_fast_sids = []
 playbook_out = pathlib.Path(playbook_dir)
 for step in doc.get("checklist") or []:
     sid = step.get("id", "")
     if step_filter and sid != step_filter:
         continue
+    if step.get("fail_fast", False):
+        fail_fast_sids.append(sid)
     title = step.get("title", sid)
     step_timeout = int(step.get("timeout_seconds", default_timeout))
     (playbook_out / f"{sid}.txt").write_text(step.get("fix_playbook", ""))
@@ -141,6 +144,9 @@ for step in doc.get("checklist") or []:
         lines.append(f"{sid}\t{title}\t{cmd}\t{wd}\t{expected_exit}\t{advisory}\t{cmd_timeout}")
 
 pathlib.Path(plan_path).write_text("\n".join(lines) + ("\n" if lines else ""))
+# Sidecar: step ids marked `fail_fast: true` — a HARD_FAIL in one of these short-circuits
+# the remaining steps (so a structural pre-gate FAIL does not still pay the ~18-min per-domain suite).
+pathlib.Path(plan_path + ".failfast").write_text("\n".join(fail_fast_sids) + ("\n" if fail_fast_sids else ""))
 PYEOF
 
 PLAN_EXIT=$?
@@ -157,6 +163,10 @@ if [ ! -s "$PLAN_FILE" ]; then
     echo "verify-completion: checklist contained no commands" >&2
     exit 2
 fi
+
+# Steps marked `fail_fast: true` short-circuit the run on a HARD_FAIL (e.g. backend-build,
+# structural-pregate) — so a compile/structural break does not still pay the ~18-min per-domain suite.
+FAIL_FAST_SIDS=$(cat "$PLAN_FILE.failfast" 2>/dev/null || true)
 
 # ── 1b. Resume preload (atomic): map step_id → PASS|FAIL only when HEAD matches.
 declare_resume_pass() {
@@ -472,6 +482,14 @@ for sid in $STEP_ORDER; do
     fi
 
     rm -f "$COLLAPSED_PLAN"
+
+    # fail-fast: a HARD_FAIL in a `fail_fast: true` step short-circuits the remaining steps.
+    if [ "$HARD_FAIL" -gt "$STEP_HARD_FAIL_BEFORE" ] && printf '%s\n' "$FAIL_FAST_SIDS" | grep -qxF "$sid"; then
+        echo ""
+        echo "  ⛔ fail-fast: step [$sid] FAILED — short-circuiting the remaining steps"
+        echo "     (a fail_fast pre-gate failed; the heavy downstream steps are skipped — fix + re-run)."
+        break
+    fi
 done
 
 # ── 7. Summary ──────────────────────────────────────────────────────────────

@@ -45,7 +45,7 @@ speed.** The pipeline is MECHANICALLY ENFORCED (see "Mechanical enforcement" bel
 
 ## Mechanical enforcement (no exception)
 
-The methodology is not advisory — it is enforced inside R25 by two guards (and the existing gate stack):
+The methodology is not advisory — it is enforced inside R25 by these guards (and the existing gate stack):
 - **`broadleaf_no_port_guard.sh` [78]** — LICENSE safety. Broadleaf is under the **Fair Use License
   v1.0** (not OSI/permissive); its source must never be ported. Asserts our implementation tree
   (`backend/src` + `frontend/src`) has zero Broadleaf bytes (no `import`/`package org.broadleafcommerce`,
@@ -55,10 +55,41 @@ The methodology is not advisory — it is enforced inside R25 by two guards (and
   parity. Every absorbed vertical MUST have a complete `docs/broadleaf-parity/<vertical>.md` record
   (vertical/broadleaf_source/spec_items/rule/behavioral_test/adversarial_review + ≥1 verification-goal
   parity row). Referenced spec items / rule / test artifacts are validated to EXIST — a record cannot lie.
+- **`broadleaf_module_exhaustion_guard.sh` [80]** — the FINITE module-set sweep: `docs/BROADLEAF-COMPLETENESS.md`
+  classifies EVERY Broadleaf core subsystem (ABSORBED/RE-FIND/SKIP/RESIDUE) with non-empty evidence; row count ==
+  `module_count`, RESIDUE rows == `residue_count`, no unledgered residue parity record.
+- **`quick_verify_no_audit_guard.sh` [81]** — keeps the ITERATION-ONLY `verify/quick-verify.sh` dev helper from
+  being mistakable for the gate (no audit-log write, no `verify-completion.sh` invocation, banner present).
 - Plus the existing gates: `evidence_guard` (no fabricated evidence), per-domain `test{Domain}` +
   `ViolationProofTest` (the invariant holds + violations are structurally impossible), R25.
 
 The parity registry is `docs/broadleaf-parity/REGISTRY.md`.
+
+## Reviewer + checkpoint operational notes (session-retrospective captures)
+
+**codex `--critic` reviewer — get the verdict with a SHORT focused call.** `codex exec --critic` (the
+`oh-my-claudecode:ralplan`/`ralph` codex reviewer) reliably runs a long preamble (serena symbol lookups,
+runs guards itself) and frequently TIMES OUT before emitting the literal `VERDICT:` token on a deep review.
+Do NOT burn three timed-out runs. Instead, after the analysis is established (or for the final verdict), make
+a SHORT call: pipe the prompt via **stdin** (`codex exec -s read-only < prompt.txt` — inline single-quotes
+inside a single-quoted bash arg break the quoting and make codex wait on stdin), state the established facts,
+and ask for "EXACTLY ONE line starting with `VERDICT:`". Or rely on the substantive findings (0 blockers +
+all guards PASS) when the token never renders.
+
+**ultragoal final quality-gate — the EXACT JSON shape (one-shot, no trial-and-error).** For the LAST story,
+`omc ultragoal checkpoint --goal-id <id> --status complete` requires (each field enforced in this order):
+```jsonc
+// --quality-gate-json
+{
+  "aiSlopCleaner": { "status": "passed", "evidence": "…" },
+  "verification":  { "status": "passed", "commands": ["…","…"], "evidence": "…" },
+  "codeReview":    { "status": "passed", "recommendation": "APPROVE", "architectStatus": "CLEAR", "evidence": "…" }
+}
+// --claude-goal-json  → "goal": { "objective": "<the exact aggregate objective>", "status": "complete" }
+```
+Notes: `status` must be the string `"passed"` (not `clean`); the key is `evidence` (not `detail`);
+`verification.commands` must be a non-empty array; `codeReview.recommendation` must be `"APPROVE"` and
+`architectStatus` `"CLEAR"`; the claude-goal `status` must be `"complete"` for the final story.
 
 ## Absorption backlog (dependency-ordered)
 

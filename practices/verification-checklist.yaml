@@ -39,6 +39,7 @@ checklist:
   - id: backend-build
     title: "Backend Spring Boot compile (fast-fail before tests)"
     parallel: false
+    fail_fast: true  # a compile break short-circuits — do not run the ~84 per-domain tasks on broken code
     commands:
       - command: "./gradlew build -x test"
         working_directory: "backend"
@@ -53,6 +54,35 @@ checklist:
          • new entity field without matching column on existing migration
       3. Fix the offending file. Do NOT delete tests to silence compile errors.
       4. Re-run only this step:  cd backend && ./gradlew build -x test
+
+  # ── 1b. Structural pre-gate (fail-fast — runs ALONE, BEFORE the ~84 per-domain tasks) ──
+  # testPractices is its OWN single-command step: _collapse_plan.py does NOT collapse a step
+  # with <2 non-advisory commands, so it runs alone, and on a HARD_FAIL the fail_fast flag
+  # SHORT-CIRCUITS the remaining steps (verified non-vacuously) — surfacing a god-service /
+  # controller→repository / @Tag / ProblemDetail regression in ~1 min instead of ~18.
+  # testPractices was MOVED out of per-domain-tests (below); the set of tasks R25 runs on success is unchanged.
+  - id: structural-pregate
+    title: "Structural pre-gate — testPractices (DDD/layering/problemdetail, fail-fast)"
+    parallel: false
+    fail_fast: true  # a structural/DDD/layering break short-circuits the ~84 per-domain tasks (18min→1min)
+    timeout_seconds: 900
+    commands:
+      - command: "./gradlew testPractices"
+        working_directory: "backend"
+        expected_exit: 0
+    fix_playbook: |
+      A structural / architecture rule failed (DDD aggregate bijection, controller→repository
+      layering, @Tag binding, or ProblemDetail). This step runs BEFORE the ~84 per-domain tasks
+      so the regression shows in ~1 min, not ~18.
+      1. Read the failing test:
+         • DddAllowlistBijectionTest — a @Transactional method writes >1 aggregate root (god-service),
+           or a cross-aggregate object pointer (DDD-006). Move the second-aggregate write into a
+           private helper, or split the method; reference other aggregates by id, not object pointer.
+         • ArchitectureLayerBoundaryTest / controller_repository_shell — a @RestController injects a
+           @Repository. Route through a @Service instead.
+         • @Tag / ProblemDetail checks — uppercase @Tag bound to the per-domain task; @ExceptionHandler
+           returns ProblemDetail, never a Map.
+      2. Re-run only this step:  cd backend && ./gradlew testPractices
 
   # ── 2. Per-domain test tasks (the catalog's binary pass/fail surface) ───────
   - id: per-domain-tests
@@ -74,9 +104,7 @@ checklist:
       - command: "./gradlew testCrud"
         working_directory: "backend"
         expected_exit: 0
-      - command: "./gradlew testPractices"
-        working_directory: "backend"
-        expected_exit: 0
+      # testPractices MOVED to the structural-pregate step above (runs alone, fail-fast).
       - command: "./gradlew testRateLimit"
         working_directory: "backend"
         expected_exit: 0

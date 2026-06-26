@@ -143,13 +143,28 @@ Under `backend/src/test/java/com/ax/template/authblueprint/<domain>/`:
 | `DddDecompositionTierOneTest` | member-repo, cross-aggregate object pointer, leaked member |
 | `DddDecompositionHeuristicsTest` | god-service `@Transactional`, state setter bypassing the state machine |
 
+### 4b. Delegation pre-warnings (put these in every executor brief — they preempt the §4 guards)
+When you delegate a new domain's implementation, the brief MUST state, up front:
+- **A `@RestController` routes through a `@Service` ONLY — never inject a `@Repository`** (`ArchitectureLayerBoundaryTest` / `controller_repository_shell_guard`). Need a read for the controller? add a service method.
+- **One `@Transactional` method writes ONE aggregate root.** A method that directly `.save()`s two aggregate-root repos is a *god-service* (`DddDecompositionHeuristicsTest` / `DddAllowlistBijectionTest`). Keep the second-aggregate write in a *private* helper, or split the method — or allowlist it deliberately. (This session: rating `addReview` wrote 2 roots → fixed to write only its own; a derived projection's recompute is a private helper.)
+- **No public setter for a derived / owner / aggregate column.** Mutate via the sole-mutator service (rating average, identity-claim owner) — `ViolationProofTest` asserts the setter's absence.
+- Reference other aggregates **by id, not object pointer** (DDD-006).
+
 ## 5. Verify (binary pass/fail)
 ```bash
+# Fast dev loop (~1-2 min, ITERATION-ONLY — NOT the gate; does not write the audit log):
+bash verify/quick-verify.sh test<Domain>      # compile + structural-pregate (testPractices) + your domain test + guards
+
+# Completion gate (the Iron Law — full regression + audit; required before declaring done / pushing):
 cd backend && ./gradlew test<Domain>          # your domain, green
 bash practices/evals/run-all-guards.sh        # all catalog guards green
-bash practices/scripts/verify-completion.sh   # R25 Iron Law — full regression + audit
+bash practices/scripts/verify-completion.sh   # R25 — full regression + audit (fails fast at structural-pregate)
 ```
-Exit 0 ⇒ done. The Iron Law (`CLAUDE.md` R25) requires `verify-completion.sh` before declaring done.
+Exit 0 ⇒ done. **`verify/quick-verify.sh` is an iteration convenience only** — it does NOT satisfy the
+pre-push recency guard; the Iron Law (`CLAUDE.md` R25) still requires `verify-completion.sh` PASS at HEAD
+before declaring done. R25 now runs `testPractices` as a **fail-fast `structural-pregate` step BEFORE** the
+~84 per-domain tasks, so a god-service / controller→repo / `@Tag` / ProblemDetail break surfaces in ~1 min,
+not ~18 (it short-circuits the rest).
 
 ## 6. REGULATED domains (PHI / personal data) — extra checklist
 
