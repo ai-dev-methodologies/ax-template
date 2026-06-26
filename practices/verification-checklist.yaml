@@ -86,7 +86,7 @@ checklist:
 
   # ── 2. Per-domain test tasks (the catalog's binary pass/fail surface) ───────
   - id: per-domain-tests
-    title: "Per-domain ./gradlew test{Domain} suite (30 tasks)"
+    title: "Per-domain ./gradlew test{Domain} suite (84 tasks)"
     parallel: false  # gradle daemon serializes anyway; keep stderr deterministic
     # The growing domain matrix + the R22 BEFORE_CLASS DirtiesContext on hot
     # @SpringBootTest classes pushes cumulative wall-clock past the global
@@ -367,7 +367,7 @@ checklist:
 
   # ── 3. Hard guards (36 mechanical guards under run-all-guards.sh) ───────────
   - id: hard-guards
-    title: "36+ mechanical hard guards (run-all-guards.sh --include-fixtures)"
+    title: "85 mechanical hard guards (run-all-guards.sh --include-fixtures)"
     parallel: false
     commands:
       - command: "bash practices/evals/run-all-guards.sh --include-fixtures"

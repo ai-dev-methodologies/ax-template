@@ -10,14 +10,14 @@ checklist:
   - id: pregate
     title: "structural pre-gate (forced FAIL)"
     fail_fast: true
-    timeout_seconds: 60
+    timeout_seconds: 5
     commands:
       - command: "false"
         working_directory: "."
         expected_exit: 0
   - id: downstream
     title: "heavy downstream (MUST be skipped by fail-fast)"
-    timeout_seconds: 60
+    timeout_seconds: 5
     commands:
       - command: "true"
         working_directory: "."
