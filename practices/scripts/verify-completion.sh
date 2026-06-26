@@ -89,7 +89,10 @@ RESULTS_FILE=$(mktemp)
 PLAYBOOK_DIR=$(mktemp -d)
 RESUME_TMP=$(mktemp)
 cleanup() {
-    rm -f "$PLAN_FILE" "$RESULTS_FILE" "$RESUME_TMP"
+    # RESUME_NEW is defined later (line ~226); guard with :- so an early-exit
+    # trap before it is set does not trip `set -u`. The .failfast sidecar is
+    # written next to PLAN_FILE by the python emitter — remove it here too.
+    rm -f "$PLAN_FILE" "$PLAN_FILE.failfast" "$RESULTS_FILE" "$RESUME_TMP" "${RESUME_NEW:-}"
     rm -rf "$PLAYBOOK_DIR"
 }
 trap cleanup EXIT

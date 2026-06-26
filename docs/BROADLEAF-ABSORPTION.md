@@ -60,6 +60,10 @@ The methodology is not advisory — it is enforced inside R25 by these guards (a
   `module_count`, RESIDUE rows == `residue_count`, no unledgered residue parity record.
 - **`quick_verify_no_audit_guard.sh` [81]** — keeps the ITERATION-ONLY `verify/quick-verify.sh` dev helper from
   being mistakable for the gate (no audit-log write, no `verify-completion.sh` invocation, banner present).
+- **`fail_fast_blocking_audit_guard.sh` [82]** — pins the R25 fail-fast no-bypass invariant: a failing
+  `fail_fast: true` step must short-circuit AND still write a BLOCKING audit line (exit=1) so the recency
+  guard rejects the push; on a clean run it stays inert. Drives the REAL `verify-completion.sh` in an
+  isolated harness (the real `runs.jsonl` is never touched); a `discriminates` invocation proves non-vacuity.
 - Plus the existing gates: `evidence_guard` (no fabricated evidence), per-domain `test{Domain}` +
   `ViolationProofTest` (the invariant holds + violations are structurally impossible), R25.
 

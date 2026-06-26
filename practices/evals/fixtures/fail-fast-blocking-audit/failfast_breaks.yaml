@@ -1,0 +1,24 @@
+# FALSIFICATION FIXTURE — drives the REAL verify-completion.sh in an isolated
+# harness to prove the load-bearing fail-fast invariant:
+#   when a `fail_fast: true` step FAILS, the run MUST
+#     (a) short-circuit ("⛔ fail-fast" printed, the downstream step SKIPPED), and
+#     (b) STILL write a BLOCKING audit line (exit=1, hard_fail>0) to runs.jsonl
+#         — so the pre-push recency guard rejects the push.
+# `pregate` runs `false` (exit 1, expected 0 → HARD_FAIL); `downstream` runs
+# `true` and MUST NOT execute. See fail_fast_blocking_audit_guard.sh.
+checklist:
+  - id: pregate
+    title: "structural pre-gate (forced FAIL)"
+    fail_fast: true
+    timeout_seconds: 60
+    commands:
+      - command: "false"
+        working_directory: "."
+        expected_exit: 0
+  - id: downstream
+    title: "heavy downstream (MUST be skipped by fail-fast)"
+    timeout_seconds: 60
+    commands:
+      - command: "true"
+        working_directory: "."
+        expected_exit: 0

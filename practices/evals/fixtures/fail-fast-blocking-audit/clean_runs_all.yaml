@@ -1,0 +1,23 @@
+# VACUITY COUNTER-FIXTURE — proves fail-fast does NOT fire on a clean run.
+# `pregate` is `fail_fast: true` but PASSES (`true`), so the run MUST
+#   (a) NOT print "⛔ fail-fast",
+#   (b) RUN the downstream step, and
+#   (c) write a CLEAN audit line (exit=0, hard_fail=0).
+# Together with failfast_breaks.yaml this pins the mechanism to fire EXACTLY
+# when a fail_fast step fails — never on a clean run. See the guard.
+checklist:
+  - id: pregate
+    title: "structural pre-gate (passes)"
+    fail_fast: true
+    timeout_seconds: 60
+    commands:
+      - command: "true"
+        working_directory: "."
+        expected_exit: 0
+  - id: downstream
+    title: "downstream (MUST run on a clean pre-gate)"
+    timeout_seconds: 60
+    commands:
+      - command: "true"
+        working_directory: "."
+        expected_exit: 0

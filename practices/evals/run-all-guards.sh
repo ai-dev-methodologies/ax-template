@@ -1130,6 +1130,14 @@ run_guard "quick_verify_no_audit/fixture_fail" 1 \
 run_guard "quick_verify_no_audit/fixture_pass" 0 \
     bash "$SCRIPT_DIR/quick_verify_no_audit_guard.sh" --root "$SCRIPT_DIR/fixtures/quick-verify-no-audit/pass_clean"
 
+echo "[82] fail_fast_blocking_audit_guard.sh (the R25 gate's step-level fail-fast must NOT weaken the no-bypass contract: when a fail_fast step FAILS it must short-circuit AND still write a BLOCKING audit line (exit=1, hard_fail>0, pass=0) so the pre-push recency guard rejects the push; on a clean run it must stay inert and the downstream step runs. Drives the REAL verify-completion.sh in an isolated harness against two committed fixtures. The 'discriminates' invocation proves non-vacuity — the guard catches a regression where fail-fast stops firing.)"
+run_guard "fail_fast_blocking_audit/breaks" 0 \
+    bash "$SCRIPT_DIR/fail_fast_blocking_audit_guard.sh" --checklist "$SCRIPT_DIR/fixtures/fail-fast-blocking-audit/failfast_breaks.yaml" --expect breaks
+run_guard "fail_fast_blocking_audit/clean" 0 \
+    bash "$SCRIPT_DIR/fail_fast_blocking_audit_guard.sh" --checklist "$SCRIPT_DIR/fixtures/fail-fast-blocking-audit/clean_runs_all.yaml" --expect clean
+run_guard "fail_fast_blocking_audit/discriminates" 1 \
+    bash "$SCRIPT_DIR/fail_fast_blocking_audit_guard.sh" --checklist "$SCRIPT_DIR/fixtures/fail-fast-blocking-audit/failfast_breaks.yaml" --expect clean
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
