@@ -5,6 +5,7 @@
 - spec_items: PAYMENT-SPLIT-001
 - rule: REVIEW-TIER (no new rule path required for this fixture)
 - behavioral_test: REVIEW-TIER (fixture does not reference a live test path)
+- violation_proof: REVIEW-TIER (fixture does not reference a live ViolationProofTest path)
 - adversarial_review: REVISE→fixed (CRITICAL spec-impl drift reconciled; +currency +2 tests)
 
 ## Verification-goal parity (Broadleaf test intent → our coverage)

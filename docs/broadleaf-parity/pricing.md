@@ -5,6 +5,7 @@
 - spec_items: PRICING-ORDER-001
 - rule: practices/rules/pricing-pipeline-orders-discount-before-tax-and-total-conserves.md
 - behavioral_test: backend/src/test/java/com/ax/template/authblueprint/commercepricing/CommercePricingComplianceTest.java
+- violation_proof: backend/src/test/java/com/ax/template/authblueprint/commercepricing/CommercePricingViolationProofTest.java
 - adversarial_review: REVISE→fixed (IDEMPOTENT item reframed to stateless pure recompute; thin-by-design banner added — ~70% of Broadleaf pricing already absorbed by promotion/catalog/banded)
 
 ## Verification-goal parity (Broadleaf test intent → our coverage)

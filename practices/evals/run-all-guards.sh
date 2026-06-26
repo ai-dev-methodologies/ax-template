@@ -1106,7 +1106,7 @@ run_guard "broadleaf_no_port/fixture_fail" 1 \
 run_guard "broadleaf_no_port/fixture_pass" 0 \
     bash "$SCRIPT_DIR/broadleaf_no_port_guard.sh" --root "$SCRIPT_DIR/fixtures/broadleaf-no-port/pass_clean"
 
-echo "[79] broadleaf_absorption_parity_guard.sh (Broadleaf-absorption METHODOLOGY completeness + VERIFICATION-GOAL parity — every absorbed vertical MUST carry a complete docs/broadleaf-parity/<vertical>.md record: vertical/broadleaf_source/spec_items/rule/behavioral_test/adversarial_review fields + >=1 verification-goal parity row mapping a Broadleaf test INTENT to our behavioral assertion. Referenced spec items / rule / test artifacts are validated to EXIST — a record cannot lie. Makes the absorption methodology mechanically enforced with NO exception. Live exits 0; fixtures prove non-vacuity.)"
+echo "[79] broadleaf_absorption_parity_guard.sh (Broadleaf-absorption METHODOLOGY completeness + VERIFICATION-GOAL parity — every absorbed vertical MUST carry a complete docs/broadleaf-parity/<vertical>.md record: vertical/broadleaf_source/spec_items/rule/behavioral_test/violation_proof/adversarial_review fields + >=1 verification-goal parity row mapping a Broadleaf test INTENT to our behavioral assertion. Referenced spec items / rule / behavioral_test / ViolationProofTest artifacts are validated to EXIST — a record cannot lie, and (since the 2026-06-26 completeness audit) cannot ship without the methodology-mandated ViolationProofTest. Makes the absorption methodology mechanically enforced with NO exception. Live exits 0; fixtures prove non-vacuity.)"
 run_guard "broadleaf_absorption_parity/live" 0 \
     bash "$SCRIPT_DIR/broadleaf_absorption_parity_guard.sh"
 run_guard "broadleaf_absorption_parity/fixture_fail" 1 \
@@ -1114,7 +1114,7 @@ run_guard "broadleaf_absorption_parity/fixture_fail" 1 \
 run_guard "broadleaf_absorption_parity/fixture_pass" 0 \
     bash "$SCRIPT_DIR/broadleaf_absorption_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/broadleaf-parity/pass_complete"
 
-echo "[80] broadleaf_module_exhaustion_guard.sh (Broadleaf module-set EXHAUSTION — the absorption program is a BOUNDED sweep over a FINITE codebase; docs/BROADLEAF-COMPLETENESS.md MUST classify EVERY Broadleaf core subsystem with zero silent gaps. Asserts every row has a valid classification {ABSORBED,RE-FIND,SKIP,RESIDUE} + non-empty evidence, the data-row count == declared module_count, the RESIDUE rows == declared residue_count, and (live) every RESIDUE has a parity record with no unledgered residue (#parity records − 7 ultragoal verticals == residue_count). Live exits 0; fixtures prove non-vacuity.)"
+echo "[80] broadleaf_module_exhaustion_guard.sh (Broadleaf module-set EXHAUSTION — a BOUNDED two-level sweep; docs/BROADLEAF-COMPLETENESS.md MUST classify EVERY Broadleaf Maven module AND core sub-package with zero silent gaps. Asserts every row (both tables) has a valid classification {ABSORBED,RE-FIND,SKIP,RESIDUE} + non-empty evidence, Maven-table rows == maven_module_count, core-table rows == module_count, RESIDUE rows == residue_count, (live) every RESIDUE has a parity record with no unledgered residue, and (live, DISK-TRUTH when the clone is present) every on-disk Maven source module + core sub-package has a row — so the counts are disk-truthful, not self-asserted. Live exits 0; fixtures prove non-vacuity.)"
 run_guard "broadleaf_module_exhaustion/live" 0 \
     bash "$SCRIPT_DIR/broadleaf_module_exhaustion_guard.sh"
 run_guard "broadleaf_module_exhaustion/fixture_fail" 1 \

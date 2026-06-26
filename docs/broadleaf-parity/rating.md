@@ -5,6 +5,7 @@
 - spec_items: DERIVED-AGG-CONSISTENCY-001, DERIVED-AGG-ELIGIBILITY-001, DERIVED-AGG-EMPTY-001
 - rule: practices/rules/derived-aggregate-consistency-recompute-eligibility-empty.md
 - behavioral_test: backend/src/test/java/com/ax/template/authblueprint/ratingsummary/RatingSummaryComplianceTest.java
+- violation_proof: backend/src/test/java/com/ax/template/authblueprint/ratingsummary/RatingSummaryViolationProofTest.java
 - adversarial_review: ACCEPT-WITH-RESERVATIONS → M1 fixed. All correctness vectors REFUTED (cross-derivation genuinely independent JPQL AVG vs in-memory fold; no recompute race — lock-before-read + idempotent; lazy-create safe; empty sentinel no Σ/0; no public aggregate setter proven; 4 evidence quotes byte-verified; eligibility honestly labeled ax-strengthening). M1 (HIGH honesty gap): novelty omitted the closest neighbor denormalized-counter-reconcilable → fixed (added the synchronous-recompute vs async-increment+reconcile distinction to spec scope + rule).
 
 ## Verification-goal parity (Broadleaf test intent → our coverage)

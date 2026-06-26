@@ -5,6 +5,7 @@
 - spec_items: PAYMENT-SPLIT-001
 - rule: practices/rules/payment-split-tender-coverage-sums-to-total-and-capture-bounded-by-auth.md
 - behavioral_test: backend/src/test/java/com/ax/template/authblueprint/payment/PaymentSplitTenderTest.java
+- violation_proof: backend/src/test/java/com/ax/template/authblueprint/payment/PaymentSplitTenderViolationProofTest.java
 - adversarial_review: REVISE→fixed (CRITICAL spec-impl drift: spec claimed coverage vs server-frozen ORDER-TOTAL-SNAPSHOT-001 but impl trusted client-supplied total → reconciled to orchestrator-supplied, payment isolated from order; + currency filter, BigDecimal wording, dropped dead jwt, +2 tests)
 
 ## Verification-goal parity (Broadleaf test intent → our coverage)

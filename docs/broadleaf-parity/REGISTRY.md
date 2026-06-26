@@ -6,7 +6,7 @@ ran in full AND captured the same **verification goal** as Broadleaf's own tests
 test INTENT (scenarios), never the test code (FUL-licensed). Enforced mechanically by
 `practices/evals/broadleaf_absorption_parity_guard.sh` (run inside R25): each record's
 required fields, ≥1 verification-goal parity row, and referenced artifacts (spec items,
-rule, behavioral test) are validated to exist. License safety (no ported Broadleaf source
+rule, behavioral test, ViolationProofTest) are validated to exist. License safety (no ported Broadleaf source
 in our implementation tree) is enforced by `practices/evals/broadleaf_no_port_guard.sh`.
 
 | # | vertical | parity record | absorbed invariant |

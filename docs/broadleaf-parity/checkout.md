@@ -5,6 +5,7 @@
 - spec_items: SAGA-COMPENSATE-002
 - rule: practices/rules/saga-compensating-transactions.md
 - behavioral_test: REVIEW-TIER (saga-orchestration-l0 is a review-tier spec — no backend domain; the invariant is enforced by the rule + the register-before-act ordering, like the rest of the saga spec)
+- violation_proof: REVIEW-TIER (saga-orchestration-l0 has no backend domain; the register-before-act invariant is structurally enforced by the rule example + ordering, not a runtime entity)
 - adversarial_review: REVISE→fixed (MAJOR: the Correct code example demonstrated register-AFTER-act — the exact anti-pattern; rewrote to register-before-act keyed on sagaKey; + 2 MINOR pivot-last re-find wording + atomic-tx topology + compensate-of-no-op cross-ref; + corrected stale "no transactional-outbox spec exists" claim)
 
 ## Verification-goal parity (Broadleaf test intent → our coverage)

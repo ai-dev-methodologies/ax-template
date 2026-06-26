@@ -3,20 +3,57 @@
 The Broadleaf-absorption program is a BOUNDED sweep over a FINITE codebase: Broadleaf's modules
 are countable, so this sweep TERMINATES. It is NOT a new-industry dogfood and does NOT reopen the
 frozen IDW18+ loop or the retired "100% completeness" north-star — it is the honest closure of the
-"absorb ALL Broadleaf features" directive, classifying EVERY Broadleaf core subsystem so the program
+"absorb ALL Broadleaf features" directive, classifying EVERY Broadleaf subsystem so the program
 closes with ZERO silent gaps.
 
-Every core subsystem is classified ABSORBED / RE-FIND / SKIP / RESIDUE with a one-line evidence pointer.
-Enforced mechanically by `practices/evals/broadleaf_module_exhaustion_guard.sh` [80]: every row has a
-valid classification + non-empty evidence; the row count matches `module_count`; `residue_count` matches
-the RESIDUE rows; every RESIDUE references an existing spec + parity record (no unledgered residue).
+The clone is a **9-Maven-module** platform, so the sweep is **two-level**:
+1. **Maven module-set** (`maven_module_count: 9`) — every top-level Maven module classified
+   ABSORBED / RE-FIND / SKIP. An ABSORBED module's correctness lives in the package table below
+   (for `core/broadleaf-framework`) or in the named cross-cutting ax specs (for `profile` / `common`).
+2. **Core commerce-package set** (`module_count: 23`) — every sub-package of
+   `core/broadleaf-framework/src/main/java/org/broadleafcommerce/core` (the commerce engine),
+   classified at finer grain. This is where the bulk of the portable correctness invariants live.
 
-Reproducible disk-truth enumeration (with the Broadleaf clone present, outside git):
-`find ../broadleaf-modernized/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core -maxdepth 1 -type d`
-→ 22 core subsystems (catalog .. workflow) + the admin module group.
+"Absorb" means the correctness INVARIANT holds in ax + external anchoring — NOT Broadleaf
+feature/behavior parity. A SKIP is legitimate ONLY where the module/package carries no portable
+correctness invariant (web/admin/plumbing/SEO/multi-currency-exchange features). A RE-FIND is
+legitimate ONLY where a named ax spec genuinely covers the Broadleaf invariant.
 
+Enforced mechanically by `practices/evals/broadleaf_module_exhaustion_guard.sh` [80]: every row
+(both tables) has a valid classification + non-empty evidence; the row counts match the declared
+`maven_module_count` / `module_count`; `residue_count` matches the RESIDUE rows; every RESIDUE
+references an existing spec + parity record (no unledgered residue). **Disk-truth (live) check:**
+when the Broadleaf clone is present at `../broadleaf-modernized`, the guard ALSO enumerates the
+real Maven modules (`find -name pom.xml`) and the real `core` sub-packages, and FAILS if any
+on-disk module/package is missing a classification row — so the counts are disk-truthful, not
+self-asserted.
+
+Reproducible disk-truth enumeration (clone present, outside git):
+- Maven modules: `find ../broadleaf-modernized -maxdepth 3 -name pom.xml -exec dirname {} \;`
+  → 8 module dirs + the reactor root = `core/broadleaf-framework{,-web}`, `core/broadleaf-profile{,-web}`,
+  `common`, `admin/broadleaf-{admin-module,open-admin-platform,contentmanagement-module}`, `integration`.
+- Core commerce packages: `find ../broadleaf-modernized/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core -maxdepth 1 -type d`
+  → 21 sub-packages (catalog .. workflow).
+
+maven_module_count: 9
 module_count: 23
 residue_count: 1
+
+## Maven module-set (top level)
+
+| maven_module | classification | evidence |
+|---|---|---|
+| core/broadleaf-framework | ABSORBED | the commerce engine — its org.broadleafcommerce.core package = the 23-row core-package table below |
+| core/broadleaf-framework-web | SKIP | Spring MVC controllers/web plumbing; portable correctness invariants live in the framework domains (controllers are thin per problem-details-l0) |
+| core/broadleaf-profile | ABSORBED | Customer/Address/CustomerPayment default singleton = default-member-singleton-l0 (G006); CustomerForgotPasswordSecurityToken single-use+expiry = auth-asvs-l1 (password reset) + identity-claim-on-auth-l0 (possession token); customer identity = user/auth domain |
+| core/broadleaf-profile-web | SKIP | profile Spring MVC controllers/web plumbing — no portable correctness invariant |
+| common | ABSORBED | invariant-bearing packages cross-referenced: money = payment-l0 MONEY family (+ backend common/Money.java); audit = audit-log-l0 + JpaAuditConfig; i18n = i18n-policy-l0; sandbox = approval-workflow-l0 + content-versioning-l0; notification/email/sms = notification-l0 + email-outbox-l0; time = business-day-deadline-arithmetic-l0; security = auth-asvs-l1. Plumbing pkgs (persistence/vendor/extensibility/weave/dao/classloader/dialect/jmx) carry no portable invariant; encryption is a self-declared no-op SPI (real crypto = secrets-management-l0); sitemap = SEO XML feature; currency = multi-currency exchange feature (money invariant covered) |
+| admin/broadleaf-admin-module | SKIP | admin-UI scaffolding — out of scope per anti-pattern (no portable correctness invariant) |
+| admin/broadleaf-open-admin-platform | SKIP | dynamic-entity admin framework — out of scope per anti-pattern |
+| admin/broadleaf-contentmanagement-module | RE-FIND | CMS structured-content/page/asset = content-versioning-l0 + approval-workflow-l0 + temporal-validity-l0; media blob lifecycle = file-storage-l0 |
+| integration | SKIP | integration test harness — no shipped correctness invariant |
+
+## Core commerce-package set (org.broadleafcommerce.core)
 
 | module | classification | evidence |
 |---|---|---|

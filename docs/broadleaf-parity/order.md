@@ -5,6 +5,7 @@
 - spec_items: ORDER-SNAPSHOT-001
 - rule: practices/rules/order-cart-spine-price-snapshot-immutable-after-submit-merge-and-fulfillment-conserves.md
 - behavioral_test: backend/src/test/java/com/ax/template/authblueprint/commerceorder/CommerceOrderComplianceTest.java
+- violation_proof: backend/src/test/java/com/ax/template/authblueprint/commerceorder/CommerceOrderViolationProofTest.java
 - adversarial_review: REVISE→fixed (3 HIGH fulfillment bugs: no post-submit status guard, non-idempotent append, phantom orderItemId accepted → status guard + clear-before-add + unknown-id rejection + multiplyExact); separately DDD-006 cross-aggregate object pointer → FGItem converted to UUID id-ref (caught by R25 testPractices)
 
 ## Verification-goal parity (Broadleaf test intent → our coverage)

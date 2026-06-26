@@ -5,6 +5,7 @@
 - spec_items: CAT-INVENTORY-GATE-001, DEFAULT-SINGLETON-001
 - rule: practices/rules/catalog-variant-resolves-unique-active-sku-and-purchasability-gated.md
 - behavioral_test: backend/src/test/java/com/ax/template/authblueprint/commercecatalog/CatalogInventoryGateTest.java
+- violation_proof: backend/src/test/java/com/ax/template/authblueprint/commercecatalog/CommerceCatalogViolationProofTest.java
 - adversarial_review: ACCEPT (0 CRITICAL/MAJOR — first vertical with no real defects; all 8 evidence quotes byte-accurate; default-singleton distinct from ordered-collection confirmed; anon→registered SKIP confirmed correct; 2 non-blocking MINOR)
 
 ## Verification-goal parity (Broadleaf test intent → our coverage)

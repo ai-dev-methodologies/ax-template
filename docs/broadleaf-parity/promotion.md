@@ -5,6 +5,7 @@
 - spec_items: PROMO-CONSERVE-001
 - rule: practices/rules/promotion-offer-engine-conserves-determinism-atomic-cap.md
 - behavioral_test: backend/src/test/java/com/ax/template/authblueprint/commercepromotion/CommercePromotionComplianceTest.java
+- violation_proof: backend/src/test/java/com/ax/template/authblueprint/commercepromotion/CommercePromotionViolationProofTest.java
 - adversarial_review: REVISE→fixed (2 MAJOR: ORDER-path clamp did not track cumulative remaining[] → line could go negative/money-loss; stackable gate unimplemented with false Javadoc → threaded remaining[] + resolveOffers dedup + behavioral tests)
 
 ## Verification-goal parity (Broadleaf test intent → our coverage)

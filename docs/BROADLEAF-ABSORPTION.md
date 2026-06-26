@@ -53,11 +53,18 @@ The methodology is not advisory — it is enforced inside R25 by these guards (a
   in `practices/rules/*.md` evidence blocks are allowed (fair-use grounding, not scanned).
 - **`broadleaf_absorption_parity_guard.sh` [79]** — METHODOLOGY completeness + VERIFICATION-GOAL
   parity. Every absorbed vertical MUST have a complete `docs/broadleaf-parity/<vertical>.md` record
-  (vertical/broadleaf_source/spec_items/rule/behavioral_test/adversarial_review + ≥1 verification-goal
-  parity row). Referenced spec items / rule / test artifacts are validated to EXIST — a record cannot lie.
-- **`broadleaf_module_exhaustion_guard.sh` [80]** — the FINITE module-set sweep: `docs/BROADLEAF-COMPLETENESS.md`
-  classifies EVERY Broadleaf core subsystem (ABSORBED/RE-FIND/SKIP/RESIDUE) with non-empty evidence; row count ==
-  `module_count`, RESIDUE rows == `residue_count`, no unledgered residue parity record.
+  (vertical/broadleaf_source/spec_items/rule/behavioral_test/**violation_proof**/adversarial_review + ≥1
+  verification-goal parity row). Referenced spec items / rule / behavioral_test / ViolationProofTest artifacts
+  are validated to EXIST — a record cannot lie, and (since the 2026-06-26 completeness audit) cannot ship
+  without the methodology-mandated ViolationProofTest path or a REVIEW-TIER marker.
+- **`broadleaf_module_exhaustion_guard.sh` [80]** — the FINITE **two-level** module-set sweep:
+  `docs/BROADLEAF-COMPLETENESS.md` classifies EVERY top-level Maven module (`maven_module_count: 9`) AND
+  every `core` commerce sub-package (`module_count: 23`) — ABSORBED/RE-FIND/SKIP/RESIDUE with non-empty
+  evidence; per-table row counts match the declared headers, RESIDUE rows == `residue_count`, no unledgered
+  residue parity record. **Disk-truth (live):** when the clone is present, the guard enumerates the real
+  on-disk Maven source modules + `core` sub-packages and FAILS on any without a row — so the counts are
+  disk-truthful, not self-asserted (closing the 2026-06-26 audit finding that the prior ledger swept only
+  1 of 9 Maven modules and the guard never looked at the clone).
 - **`quick_verify_no_audit_guard.sh` [81]** — keeps the ITERATION-ONLY `verify/quick-verify.sh` dev helper from
   being mistakable for the gate (no audit-log write, no `verify-completion.sh` invocation, banner present).
 - **`fail_fast_blocking_audit_guard.sh` [82]** — pins the R25 fail-fast no-bypass invariant: a failing

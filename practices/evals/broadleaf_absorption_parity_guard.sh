@@ -11,6 +11,10 @@
 #   - spec_items          (our spec item id(s) — each MUST resolve in specs/*.yaml)
 #   - rule                (our evidence-anchored rule path, or a REVIEW-TIER/COMPOSED marker)
 #   - behavioral_test     (our test file path, or a DEFERRED/REVIEW-TIER marker)
+#   - violation_proof     (our ViolationProofTest path proving the invariant is by-construction
+#                          impossible to violate, or a REVIEW-TIER marker when the vertical has no
+#                          backend domain — added after the 2026-06-26 completeness audit found the
+#                          payment vertical shipped without one and this guard could not catch it)
 #   - adversarial_review  (the opus refute-by-default verdict — mandatory, non-empty)
 # AND a "Verification-goal parity" table mapping >=1 Broadleaf test-INTENT scenario to our
 # behavioral assertion (so we prove the same verification goal, not the same test code).
@@ -45,7 +49,7 @@ else
     [ -d "$PARITY_DIR" ] || { echo "broadleaf_absorption_parity_guard: docs/broadleaf-parity not found (no absorbed verticals registered yet)" >&2; exit 0; }
 fi
 
-REQUIRED_FIELDS="vertical broadleaf_source spec_items rule behavioral_test adversarial_review"
+REQUIRED_FIELDS="vertical broadleaf_source spec_items rule behavioral_test violation_proof adversarial_review"
 FAIL=0
 
 field_value() {  # $1=file $2=key  -> prints value after "- <key>:"
@@ -96,6 +100,15 @@ for f in "$PARITY_DIR"/*.md; do
         test_path="$(echo "$test_val" | grep -oE '(backend|frontend)/[^ ]+\.(java|ts|tsx)' | head -1)"
         if [ -n "$test_path" ] && [ ! -f "$REPO_ROOT/$test_path" ]; then
             echo "broadleaf_absorption_parity_guard: FAIL [$base] — behavioral_test path does not exist: $test_path" >&2
+            FAIL=1
+        fi
+    fi
+
+    vproof_val="$(field_value "$f" violation_proof)"
+    if [ -n "$vproof_val" ] && ! is_marker "$vproof_val"; then
+        vproof_path="$(echo "$vproof_val" | grep -oE '(backend|frontend)/[^ ]+\.(java|ts|tsx)' | head -1)"
+        if [ -n "$vproof_path" ] && [ ! -f "$REPO_ROOT/$vproof_path" ]; then
+            echo "broadleaf_absorption_parity_guard: FAIL [$base] — violation_proof path does not exist: $vproof_path" >&2
             FAIL=1
         fi
     fi
