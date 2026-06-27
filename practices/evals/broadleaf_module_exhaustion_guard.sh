@@ -3,18 +3,19 @@
 #
 # THE INVARIANT (binary): the Broadleaf-absorption program is a BOUNDED sweep over a FINITE codebase.
 # docs/BROADLEAF-COMPLETENESS.md MUST classify EVERY Broadleaf subsystem with ZERO silent gaps — at BOTH
-# levels: the 9 top-level Maven modules AND the 21 core commerce sub-packages. The guard enforces:
+# levels: the 10 top-level Maven modules AND the 21 core commerce sub-packages. The guard enforces:
 #   1. every table row (both tables) has a classification in {ABSORBED, RE-FIND, SKIP, RESIDUE};
 #   2. every row has a NON-EMPTY evidence column;
 #   3. Maven-table row count == `maven_module_count: N`; core-table row count == `module_count: M`;
 #   4. the number of RESIDUE rows == the declared `residue_count: R`;
 #   5. (live) every RESIDUE references an EXISTING spec + parity record, AND no UNLEDGERED residue:
 #      (#parity records − the 7 ultragoal verticals) == residue_count.
-#   6. (live, DISK-TRUTH) when the Broadleaf clone is present at ../broadleaf-modernized, EVERY real
-#      on-disk Maven source module (*/src/main/java/org/broadleafcommerce) has a Maven-table row, AND
-#      every real core sub-package has a core-table row. This makes the counts DISK-TRUTHFUL — the guard
-#      can no longer pass on a ledger that silently dropped a module/package (the prior version compared
-#      the ledger's row count only to its OWN declared header, never to the clone).
+#   6. (live, DISK-TRUTH) when the Broadleaf clone is present at ../broadleaf-modernized, EVERY built
+#      (non-aggregator) on-disk Maven module (a pom.xml whose packaging != 'pom', INCLUDING code-free
+#      module shells) has a Maven-table row, AND every real core sub-package has a core-table row. This
+#      makes the counts DISK-TRUTHFUL — the guard can no longer pass on a ledger that silently dropped a
+#      module/package (the prior version compared the row count only to its OWN header, never to the clone;
+#      an earlier disk-truth pass scanned only src/main modules, silently dropping the empty functional-tests shell).
 #
 # Usage:
 #   bash practices/evals/broadleaf_module_exhaustion_guard.sh
@@ -115,16 +116,20 @@ fi
 
 # 6. (live, DISK-TRUTH) every real on-disk Maven source module + core sub-package has a ledger row.
 if [ "$LIVE" -eq 1 ] && [ -d "$CLONE" ]; then
-    # 6a. Maven source modules = dirs containing src/main/java/org/broadleafcommerce (excludes reactor poms
-    #     and the src/test-only functional-tests module — neither ships a correctness invariant).
-    while IFS= read -r srcdir; do
-        [ -z "$srcdir" ] && continue
-        mod="${srcdir#"$CLONE"/}"; mod="${mod%/src/main/java/org/broadleafcommerce}"
+    # 6a. EVERY built (non-aggregator) Maven module = a pom.xml whose packaging is NOT 'pom'
+    #     (aggregator/reactor poms build no artifact). This is stricter than an src/main-only scan:
+    #     it ALSO catches code-free module shells (e.g. admin-functional-tests, 0 java files) that a
+    #     source-dir scan silently drops — so a real leaf module can never be missing a classification row.
+    while IFS= read -r pom; do
+        [ -z "$pom" ] && continue
+        grep -qE '<packaging>[[:space:]]*pom[[:space:]]*</packaging>' "$pom" && continue
+        mod="$(dirname "$pom")"; mod="${mod#"$CLONE"/}"
+        case "$mod" in "$CLONE"|""|.) continue ;; esac
         if ! printf '%s\n' "$MAVEN_MODULES" | grep -qxF "$mod"; then
             echo "broadleaf_module_exhaustion_guard: FAIL — on-disk Maven module '$mod' has NO classification row (silent gap)" >&2
             FAIL=1
         fi
-    done < <(find "$CLONE" -type d -path '*/src/main/java/org/broadleafcommerce' 2>/dev/null)
+    done < <(find "$CLONE" -name pom.xml -not -path '*/target/*' 2>/dev/null)
     # 6b. core commerce sub-packages
     CORE_PKG_DIR="$CLONE/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core"
     if [ -d "$CORE_PKG_DIR" ]; then

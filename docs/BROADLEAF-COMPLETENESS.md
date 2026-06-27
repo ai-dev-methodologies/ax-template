@@ -6,8 +6,9 @@ frozen IDW18+ loop or the retired "100% completeness" north-star — it is the h
 "absorb ALL Broadleaf features" directive, classifying EVERY Broadleaf subsystem so the program
 closes with ZERO silent gaps.
 
-The clone is a **9-Maven-module** platform, so the sweep is **two-level**:
-1. **Maven module-set** (`maven_module_count: 9`) — every top-level Maven module classified
+The clone is a **10-Maven-module** platform (10 built `jar` leaf modules under 3 `pom` aggregators),
+so the sweep is **two-level**:
+1. **Maven module-set** (`maven_module_count: 10`) — every top-level Maven module classified
    ABSORBED / RE-FIND / SKIP. An ABSORBED module's correctness lives in the package table below
    (for `core/broadleaf-framework`) or in the named cross-cutting ax specs (for `profile` / `common`).
 2. **Core commerce-package set** (`module_count: 23`) — every sub-package of
@@ -29,13 +30,15 @@ on-disk module/package is missing a classification row — so the counts are dis
 self-asserted.
 
 Reproducible disk-truth enumeration (clone present, outside git):
-- Maven modules: `find ../broadleaf-modernized -maxdepth 3 -name pom.xml -exec dirname {} \;`
-  → 8 module dirs + the reactor root = `core/broadleaf-framework{,-web}`, `core/broadleaf-profile{,-web}`,
-  `common`, `admin/broadleaf-{admin-module,open-admin-platform,contentmanagement-module}`, `integration`.
+- Maven modules: `find ../broadleaf-modernized -name pom.xml -not -path '*/target/*'`
+  → 13 poms = 3 aggregator poms (packaging `pom`, build no artifact: the reactor root, `core`, `admin`)
+  + 10 built leaf modules (packaging `jar`) = `core/broadleaf-framework{,-web}`, `core/broadleaf-profile{,-web}`,
+  `common`, `admin/broadleaf-{admin-module,open-admin-platform,contentmanagement-module,admin-functional-tests}`,
+  `integration`. The 10 leaf modules are exactly the 10 classification rows below.
 - Core commerce packages: `find ../broadleaf-modernized/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core -maxdepth 1 -type d`
   → 21 sub-packages (catalog .. workflow).
 
-maven_module_count: 9
+maven_module_count: 10
 module_count: 23
 residue_count: 1
 
@@ -51,6 +54,7 @@ residue_count: 1
 | admin/broadleaf-admin-module | SKIP | admin-UI scaffolding — out of scope per anti-pattern (no portable correctness invariant) |
 | admin/broadleaf-open-admin-platform | SKIP | dynamic-entity admin framework — out of scope per anti-pattern |
 | admin/broadleaf-contentmanagement-module | RE-FIND | CMS structured-content/page/asset = content-versioning-l0 + approval-workflow-l0 + temporal-validity-l0; media blob lifecycle = file-storage-l0 |
+| admin/broadleaf-admin-functional-tests | SKIP | Selenium/functional admin-UI test harness — 0 main + 0 test Java files on disk (empty module shell, build artifact only); no shipped correctness invariant (same rationale as `integration`) |
 | integration | SKIP | integration test harness — no shipped correctness invariant |
 
 ## Core commerce-package set (org.broadleafcommerce.core)
