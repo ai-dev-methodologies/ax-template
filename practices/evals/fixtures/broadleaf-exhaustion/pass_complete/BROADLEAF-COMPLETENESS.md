@@ -1,7 +1,9 @@
-# Broadleaf module-set exhaustion ledger (FIXTURE: valid two-table, no residue)
+# Broadleaf module-set exhaustion ledger (FIXTURE: valid four-table, no residue)
 
 maven_module_count: 2
 module_count: 3
+common_subpackage_count: 1
+profile_subpackage_count: 1
 residue_count: 0
 
 ## Maven module-set
@@ -18,3 +20,15 @@ residue_count: 0
 | catalog | ABSORBED | commercecatalog + catalog-commerce-l0 |
 | config | SKIP | Spring wiring — not a correctness invariant |
 | media | RE-FIND | blob lifecycle = file-storage-l0 |
+
+## Common sub-package set
+
+| common_package | classification | evidence |
+|---|---|---|
+| money | ABSORBED | payment-l0 MONEY family |
+
+## Profile-core sub-package set
+
+| profile_package | classification | evidence |
+|---|---|---|
+| domain | ABSORBED | default-member-singleton-l0 |

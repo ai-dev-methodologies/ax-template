@@ -25,10 +25,12 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 54 | 54 | **100%** |
-| P2 (verification escapes) | 12 | 12 | **100%** |
+| P1 (generic signature backlog) | 60 | 55 | **92%** |
+| P2 (verification escapes) | 13 | 13 | **100%** |
 | P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **123** | **92** | **~75%** |
+| **P0–P3 합계 (수렴 분모)** | **130** | **94** | **~72%** |
+
+> 2026-06-27 Broadleaf 전면 재감사가 P1 +6(bundle closed + 5 open)·P2 +1(guard-granularity closed) 등재 — 수렴률은 정직하게 75%→72%로 하향(새 gap 발견). ≥70% 유지 → IDW18+ 동결 해제 상태 불변.
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -156,8 +158,17 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [x] P1-51~52 — **closed 2026-06-16 (parallel wave7) (IDW12/11 residual 복원→2 도메인)**: (51) calendardeadline 법정기한 calendar vs business-day 산술(주말+versioned 공휴일 제외, roll convention 기록, overdue 재계산; V065) / (52) orderquantization 비보존 round-UP-to-order-multiple(MOQ/lot-size, orderQty=max(MOQ,ceil(req/mult)*mult), overage 명시 기록 — rounded-split의 비보존 대척; V066). testCalendarDeadline/testOrderQuantization GREEN. 앵커 ISDA business-day convention / APICS lot-sizing.
 - [x] P1-53~54 — **closed 2026-06-16 (parallel wave8 FINAL, IDW11 residual 복원→2 도메인)**: (53) uomconversion cross-dimension UoM 변환 — same-dim 순수비율 vs cross-dim은 recorded material density bridge 필수(불가시 422 INCOMPATIBLE_DIMENSIONS), basis+versioned, 멱등 byte-identical; V067 / (54) divisibility per-material INTEGER_ONLY(분수 422 거부 — 반올림 아님, orderquantization 대척) vs FRACTIONAL(max-scale 422); V068. testUomConversion/testDivisibility GREEN. 앵커 NIST SP 811 §7 / APICS UoM. **→ P1 54/54 (100%) 도달.**
 
+> **Broadleaf 흡수여부 전면 재감사 (2026-06-27, ultracode 43-agent) 신규 등재** — 29 per-item 중 28 HONEST/refuted, critic 2 → 총 8 confirmed. #1 bundle(아래 P1-55 closed)·#2 hi-lo(covered_elsewhere로 ledger 해소)·#7 guard-granularity(P2-13 closed) 는 본 세션 처리. 나머지 5건 ↓.
+- [x] P1-55 — **closed 2026-06-27 (Broadleaf re-audit, 본 세션)**: bundle/kit composite-item CONSERVING price roll-up — `bundle-pricing-l0` 신설. ITEM_SUM 모드 bundle price == Σ(child.unitPrice × qty) + Σ fees, BUNDLE 모드 고정가, taxability/availability child 파생. 독립 구현(CompositeItem/CompositeComponent/BundlePricingService sole-mutator) + RestAssured Σ-of-parts 보존 테스트 + ViolationProofTest + V076. 앵커 BundleOrderItemImpl.getRetailPrice + ASC 606/IFRS 15 transaction-price allocation. composition 방향(banded-pricing-l0 decomposition의 대척).
+- [ ] P1-56 — offer qualifier→target/segment eligibility *(Broadleaf re-audit 2026-06-27, MEDIUM)*: BOGO qualifier→target min-qty 매칭(OfferItemCriteria/QuantityBasedRule) + customer-xref/segment eligibility 게이트(CustomerOffer). promotion-l0는 'applicable offers를 INPUT으로' 받음(math만) — WHO/WHICH 적격성 미커버. done-when: promotion-l0 확장 or offer-eligibility-l0 (qualifier 미달→target 미할인 + 비적격 고객 무offer 테스트).
+- [ ] P1-57 — tax-exempt skip + idempotent tax recompute *(Broadleaf re-audit 2026-06-27, MEDIUM)*: (1) tax-exempt customer/item SKIP(SimpleTaxProvider) (2) 재pricing 시 단일 COMBINED TaxDetail UPDATE-or-CREATE-or-REMOVE(중복/stranding 없음). pricing-l0는 rate injected(정당히 out-of-scope) — exempt-skip + idempotent recompute 미커버. done-when: pricing-l0 확장 (재pricing×2→정확히 1 tax row; exempt→0 tax).
+- [ ] P1-58 — cross-currency arithmetic fail-closed guard *(Broadleaf re-audit 2026-06-27, LOW)*: 서로 다른 통화 Money 혼합은 등록된 conversion 없이 fail-closed여야(Broadleaf Money.add throw). ax Money=bare long minor-units + currency String이라 silent cross-currency add 구조적 가능. done-when: Money currency-tag(mismatch throw) 또는 ArchUnit 룰 + ViolationProof. (exchange-RATE 변환은 feature/SKIP.)
+- [ ] P1-59 — password-reset token-FAMILY invalidation *(Broadleaf re-audit 2026-06-27, LOW)*: reset 성공 시 그 유저 outstanding unused reset 토큰 전부 원자 무효화(Broadleaf CustomerServiceImpl.invalidateAllTokensForCustomer). ax ASVS-V2.7.3는 소비된 1개만 single-use. done-when: auth-asvs-l1 확장 (토큰 2개→token1 reset→token2 거부). beyond-ASVS-baseline.
+- [ ] P1-60 — checkout saga rule-only + parity doc 교정 *(Broadleaf re-audit 2026-06-27, LOW doc)*: SAGA-COMPENSATE-002는 흡수·anchoring됐으나 RULE-only(runtime backend test 없음, parity[79] REVIEW-TIER 허용). checkout.md가 saga-orchestration-l0(domain_mode: full_trio)을 'review-tier spec'으로 오기술. done-when: checkout.md 교정(full_trio + verification.mechanism=rule) + 선택적 runtime saga IT.
+
 ## P2 — verification escapes (검증 체계 자체의 갭)
 
+- [x] P2-13 broadleaf module-exhaustion guard[80] grain-conditional disk-truth — **closed 2026-06-27 (Broadleaf re-audit, 본 세션)**: guard[80]의 disk-truth가 Maven 모듈 + core 21 패키지까지만 enumerate → ABSORBED `common`(56 sub-pkg)·`core/broadleaf-profile`(8) 한 단계 아래는 미검사 → 진짜 불변식(예: common/id hi-lo)이 silent 가능 → "ZERO silent gaps"는 grain-conditional이었음. Fix: guard를 **4-level**로 확장(common/* + profile/core/* disk-enumerate), BROADLEAF-COMPLETENESS.md에 두 테이블(56+8 분류) 추가 + headline을 grain-scope로 교정 + phantom 'core'/'admin' core-row 제거(module_count 23→21). Falsification 증명(common row 제거→BLOCK). common/id = covered_elsewhere(ax DB-native ID, #2 해소).
 - [x] P2-1 evidence_guard quote-truth 미검증 — **closed 2026-06-10**: evidence_guard 헤더에
       "STRUCTURE, not TRUTH" 명시 + `evidence_quote_spotcheck_guard.sh` 신설(77th guard,
       run-all-guards [74]). 랜덤 샘플 대신 **결정적 전수** quote-vs-snapshot 대조(R25 멱등성) —

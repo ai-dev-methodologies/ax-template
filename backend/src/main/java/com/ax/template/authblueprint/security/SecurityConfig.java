@@ -366,6 +366,12 @@ public class SecurityConfig {
                 // The claim endpoint uses Authentication.getName() as the userId — no userId
                 // in path or body (IDCLAIM-GUARD-001 structural enforcement via CAS query).
                 .requestMatchers("/api/identity-claim/**").authenticated()
+                // BUNDLEPRICING (bundle-pricing-l0): composite-item (bundle/kit) pricing.
+                // BUNDLE-AUTHZ-001 — defining a composite is an ADMIN catalog mutation;
+                // pricing reads require a valid JWT. The controller @PreAuthorize is the
+                // method-level backstop.
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bundle-pricing/**").hasAuthority("ROLE_ADMIN")
+                .requestMatchers("/api/bundle-pricing/**").authenticated()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers

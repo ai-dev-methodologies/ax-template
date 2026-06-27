@@ -264,6 +264,9 @@ checklist:
       - command: "./gradlew testIdentityClaim"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testBundlePricing"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testUomConversion"
         working_directory: "backend"
         expected_exit: 0

@@ -674,6 +674,15 @@ tasks.register<Test>("testIdentityClaim") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testBundlePricing") {
+    useJUnitPlatform {
+        includeTags("BUNDLEPRICING")
+    }
+    description = "Run bundle-pricing domain compliance tests (bundle-pricing-l0: 4 items — ITEMSUM, FIXED, DERIVED, AUTHZ; absorbed Broadleaf BundleOrderItemImpl conserving roll-up)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

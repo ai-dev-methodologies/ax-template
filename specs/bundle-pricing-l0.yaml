@@ -1,0 +1,74 @@
+version: "0.1.0"
+scope: "bundle-pricing-l0 — composite-item (bundle/kit) pricing as a CONSERVING roll-up of its children, the COMPOSITION (roll-up) direction. A composite item priced in ITEM_SUM mode has a price equal to Σ over children of (child.unitPrice × child.quantity) + Σ(bundle fees); retail, sale, and taxable prices each roll up this way, and the sale roll-up falls back to a child's retail price when that child has no sale price. A composite item priced in BUNDLE mode has a FIXED base price that is NOT summed from its children. In BOTH modes the bundle's taxability is DERIVED from its children (a bundle is taxable iff at least one child or taxable fee is taxable) — never independently set. The conserving total is NEVER stored as an independently-settable column: it is a pure derivation of the immutable children + fees (ITEM_SUM) or the immutable fixed base (BUNDLE), so a non-conserving total is unrepresentable. This is the absorbed Broadleaf BundleOrderItemImpl roll-up. It is the OPPOSITE direction from banded-pricing-l0 (segments ONE quantity across bands — decomposition) and promotion-l0 (prorates a discount DOWN to lines — decomposition); catalog-commerce-l0 explicitly DEFERS price computation. Recurs in: retail kits/bundles, BOM/assembly pricing, meal/combo pricing, subscription add-on bundles, telco device+plan kits — 5+ industries."
+stack: "Java 21 + Spring Boot + JPA (Hibernate) + exact integer minor units (long, common/Money discipline; round-once at the PG edge). CompositeItem aggregate root + CompositeComponent member + @ElementCollection bundle fees; the roll-up is a pure derivation method (no stored total)."
+standard: "FASB ASC 606-10-32 / IFRS 15 ¶73-86 — allocation of a contract's transaction price across its distinct performance obligations such that the SUM of the amounts allocated to the components equals the total transaction price (conservation of the transaction price across a bundle's distinct components) + Martin Fowler, Patterns of Enterprise Application Architecture, Money pattern (integer minor units; round once — independently-rounded parts lose pennies)"
+domain_mode: backend_only
+
+# Absorbed from Broadleaf Commerce BundleOrderItemImpl (Fair Use License v1.0 — NOT ported;
+# independent implementation; only single-line evidence quotes in the rule, fair use).
+#   getRetailPrice() / getSalePrice() / getTaxablePrice() roll up Σ child×qty + Σ fees when
+#   shouldSumItems() (ProductBundlePricingModelType.ITEM_SUM); else the fixed base price.
+
+# ── Priority order for fork-receivers ──
+#   1. BUNDLE-ITEMSUM-001   (ITEM_SUM: price == Σ child.unitPrice×qty + Σ fees; conserving; sale→retail fallback)
+#   2. BUNDLE-FIXED-001     (BUNDLE: fixed base price, NOT summed from children)
+#   3. BUNDLE-DERIVED-001   (taxability DERIVED from children — never independently set; no stored total)
+#   4. BUNDLE-AUTHZ-001     (composite-item creation is an ADMIN mutation)
+
+# ── Composition note ──
+# OPPOSITE direction from banded-pricing-l0 (one quantity → many bands; decomposition) and
+# promotion-l0 (one discount → many lines; decomposition). This is many children → one
+# conserving composite total (composition). Money discipline composes the Money pattern
+# (integer minor units; round once). Conservation of the transaction price across a bundle's
+# distinct components is the ASC 606 / IFRS 15 allocation identity.
+
+items:
+  - id: "BUNDLE-ITEMSUM-001"
+    chapter: "ITEM_SUM mode: composite price is the conserving roll-up Σ child.unitPrice×qty + Σ fees, for retail / sale / taxable; sale falls back to a child's retail when the child has no sale price"
+    verification:
+      mechanism: rule
+      ref: composite-bundle-price-is-conserving-rollup-of-children
+    requirement: "A composite item in ITEM_SUM mode MUST price as the conserving roll-up of its children: retailPrice == Σ over children of (child.unitRetailPrice × child.quantity) + Σ over bundle fees of fee.amount; salePrice == Σ over children of ((child.unitSalePrice when present, else child.unitRetailPrice) × child.quantity) + Σ fees; taxablePrice == Σ over the TAXABLE children of (child.unitRetailPrice × child.quantity) + Σ over the TAXABLE fees of fee.amount. Every child unit is counted exactly once at its own unit price × quantity (no child dropped, no child double-counted) — Σ of the disclosed per-child subtotals plus fees reconstructs the composite total exactly (conservation). Arithmetic is exact integer minor units (long); the authoritative total is never a sum of independently-rounded parts. The total is NOT stored as an independently-settable column — it is a pure derivation of the immutable children + fees, recomputed on every read, so it cannot drift from the rows it summarizes."
+    test_method: "RestAssured (create ITEM_SUM composite with children [(unit 1000, qty 2, taxable),(unit 500, qty 3, non-taxable)] + taxable fee 200; GET price → retail 3700 == independently reconstructed Σ subtotals+fees; child1 sale 900 → sale 3500 with child2 retail fallback; taxablePrice 2200 excludes the non-taxable child)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Conserving composition (roll-up). The sale roll-up falls back to retail per child
+      when the child has no sale price (Broadleaf BundleOrderItemImpl.getSalePrice).
+      Quote anchor (ASC 606-10-32-31 / IFRS 15 ¶74): the transaction price is allocated to
+      each distinct performance obligation; the allocated amounts sum to the total
+      transaction price (conservation across the bundle's components).
+  - id: "BUNDLE-FIXED-001"
+    chapter: "BUNDLE mode: the composite price is a FIXED base price, NOT summed from children"
+    verification:
+      mechanism: rule
+      ref: composite-bundle-price-is-conserving-rollup-of-children
+    requirement: "A composite item in BUNDLE mode MUST price at its FIXED base price (baseRetailPrice, and baseSalePrice when present, else baseRetailPrice) — it MUST NOT be summed from the children even when the children's Σ would differ. The base price is set once at creation and is immutable (no public setter; @Column updatable=false). The mode is representationally exclusive: a BUNDLE composite MUST carry a non-null base price and an ITEM_SUM composite MUST carry a null base price (a @Check makes the wrong shape unrepresentable), so the engine can never accidentally sum a fixed-price bundle or fix-price a summed bundle."
+    test_method: "RestAssured (create BUNDLE composite baseRetailPrice 5000 with the same children whose Σ would be 3700; GET price → retail 5000, NOT 3700; baseSalePrice fallback to baseRetailPrice when null; creating ITEM_SUM with a base price OR BUNDLE without one → 400)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Fixed-base mode (Broadleaf ProductBundlePricingModelType.BUNDLE → super price,
+      not shouldSumItems). The two modes are mutually exclusive on the base-price column.
+  - id: "BUNDLE-DERIVED-001"
+    chapter: "Bundle taxability is DERIVED from the children (taxable iff any child / taxable fee is taxable) — never independently set; there is no stored total to set"
+    verification:
+      mechanism: rule
+      ref: composite-bundle-price-is-conserving-rollup-of-children
+    requirement: "A composite item's taxability MUST be DERIVED from its children: the bundle is taxable iff at least one child OR at least one fee is taxable. The taxability flag MUST NOT be an independently-settable column on the composite (no setter, no stored boolean to hand-edit) — it is computed from the current children on every read. Likewise the conserving total (BUNDLE-ITEMSUM-001) MUST NOT be stored as an independently-settable aggregate column: the composite stores ONLY the immutable children + fees (ITEM_SUM) or the immutable fixed base (BUNDLE), never a rolled-up total, so a hand-set total or a hand-set taxability that contradicts the children is structurally unrepresentable."
+    test_method: "RestAssured (composite with all-non-taxable children → taxable=false; add one taxable child/fee → taxable=true; reflection ViolationProof: no public setter for any price/total/taxable; no stored total/rolledUp column) "
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Derived-from-children taxability (Broadleaf BundleOrderItemImpl.isTaxable /
+      getTaxablePrice sum over children). The absence of a stored total column is what
+      makes a non-conserving composite unrepresentable.
+  - id: "BUNDLE-AUTHZ-001"
+    chapter: "Composite-item creation is an ADMIN mutation; pricing reads require authentication"
+    requirement: "Creating a composite item (defining its mode, children, fees, base price) MUST require ROLE_ADMIN (a catalog-definition mutation), enforced by @PreAuthorize on the controller method AND the SecurityConfig request matcher. A non-admin authenticated caller attempting to create a composite MUST receive 403; an unauthenticated caller MUST receive 401/403. Pricing a composite (GET price) requires a valid JWT (authenticated)."
+    test_method: "RestAssured (MEMBER token POST create → 403; ADMIN token POST create → 201; unauthenticated GET price → 401/403; authenticated GET price → 200)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Catalog-definition authorization. ADMIN is a real UserRole authority
+      (role_literal_guard-allowed); business "merchandiser" is not a JWT authority.

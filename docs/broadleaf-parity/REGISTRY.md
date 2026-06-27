@@ -18,6 +18,7 @@ in our implementation tree) is enforced by `practices/evals/broadleaf_no_port_gu
 | G005 | payment | [payment.md](payment.md) | split-tender coverage (Σ tenders ≥ order total) |
 | G006 | inventory-customer | [inventory-customer.md](inventory-customer.md) | inventory tri-state gate · exactly-one-default singleton |
 | G007 | rating | [rating.md](rating.md) | derived-aggregate consistency (denormalized MEAN recompute-from-rows + eligibility + empty sentinel); search/CMS re-find |
+| G008 | bundle-pricing | [bundle-pricing.md](bundle-pricing.md) | composite (bundle/kit) price = CONSERVING roll-up of children (ITEM_SUM Σ child×qty + Σ fees · BUNDLE fixed base · taxability derived; the composition direction) |
 | — | identity-claim | [identity-claim.md](identity-claim.md) | completeness-sweep RESIDUE: anonymous→registered atomic idempotent guarded claim (CWE-367-hardened); see [BROADLEAF-COMPLETENESS.md](../BROADLEAF-COMPLETENESS.md) |
 
 > Note on verification-goal parity: for the backfilled G001–G006 records the parity rows
