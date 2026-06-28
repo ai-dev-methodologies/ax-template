@@ -1,0 +1,10 @@
+version: "0.1.0"
+scope: "fixture-escape-l0 — non-vacuity PASS fixture: same unenforced full_trio spec as the FAIL case, but honestly listed in ruletier_full_trio_allowlist.yaml with a rationale. The guard MUST PASS."
+domain_mode: full_trio
+items:
+  - id: "FIXTURE-ESCAPE-001"
+    chapter: "Unenforced invariant"
+    requirement: "This item is bound at rule tier only; the spec is exempted via the allowlist with a one-line rationale, so the guard accepts it as an honest rule-tier escape."
+    verification:
+      mechanism: rule
+      ref: some-catalog-rule

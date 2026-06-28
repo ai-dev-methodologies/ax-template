@@ -1,0 +1,10 @@
+version: "0.1.0"
+scope: "fixture-escape-l0 — non-vacuity FAIL fixture: a full_trio spec with NO templates/L4 dir, NO per-domain backend test task, and NO allowlist entry. The guard MUST BLOCK this."
+domain_mode: full_trio
+items:
+  - id: "FIXTURE-ESCAPE-001"
+    chapter: "Unenforced invariant"
+    requirement: "This item is bound at rule tier only; no backend test task runs it and there is no L4 dir — exactly the rule-tier escape the guard catches."
+    verification:
+      mechanism: rule
+      ref: some-catalog-rule

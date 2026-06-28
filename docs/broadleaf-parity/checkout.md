@@ -4,8 +4,8 @@
 - broadleaf_source: core/.../checkout/service/workflow/DecrementInventoryActivity.java:71; workflow/SequenceProcessor.java:117; workflow/state/ActivityStateManagerImpl.java:121
 - spec_items: SAGA-COMPENSATE-002
 - rule: practices/rules/saga-compensating-transactions.md
-- behavioral_test: REVIEW-TIER (saga-orchestration-l0 is a review-tier spec — no backend domain; the invariant is enforced by the rule + the register-before-act ordering, like the rest of the saga spec)
-- violation_proof: REVIEW-TIER (saga-orchestration-l0 has no backend domain; the register-before-act invariant is structurally enforced by the rule example + ordering, not a runtime entity)
+- behavioral_test: REVIEW-TIER (honesty correction 2026-06-28: `specs/saga-orchestration-l0.yaml` DECLARES `domain_mode: full_trio`, but this register-before-act invariant is verified at RULE/REVIEW tier ONLY — this repo ships no dedicated backend saga domain and no `testSaga` per-domain task, so the invariant is enforced by the rule + register-before-act ordering, NOT a runtime behavioral test. This is honestly WEAKER than the binary-test absorptions (promotion/order/payment/pricing/rating carry runtime `./gradlew test{Domain}` gates). Upgrade to a runtime saga IT if a fork-receiver wires a backend saga domain.)
+- violation_proof: REVIEW-TIER (no backend saga domain exists; the register-before-act invariant is structurally enforced by the rule example + ordering, not a runtime entity/ViolationProofTest — same honesty caveat as behavioral_test above)
 - adversarial_review: REVISE→fixed (MAJOR: the Correct code example demonstrated register-AFTER-act — the exact anti-pattern; rewrote to register-before-act keyed on sagaKey; + 2 MINOR pivot-last re-find wording + atomic-tx topology + compensate-of-no-op cross-ref; + corrected stale "no transactional-outbox spec exists" claim)
 
 ## Verification-goal parity (Broadleaf test intent → our coverage)

@@ -1,0 +1,7 @@
+schema_version: 1
+# Non-vacuity PASS fixture allowlist: exempts the otherwise-unenforced full_trio
+# fixture spec with a one-line rationale, proving the exemption path turns a BLOCK
+# (fail_no_enforcement_no_exempt) into a PASS.
+exemptions:
+  - spec: fixture-escape-l0.yaml
+    rationale: "rule-tier — fixture invariant enforced by some-catalog-rule; no backend fixture domain (test-only)"

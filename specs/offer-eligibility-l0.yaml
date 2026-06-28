@@ -1,0 +1,70 @@
+version: "0.1.0"
+scope: "offer-eligibility-l0 — the WHO/WHICH-ITEMS applicability gate of an offer/discount, evaluated DETERMINISTICALLY and FAIL-CLOSED from declared criteria. An offer applies to an order ONLY when its eligibility predicate holds, gated by TWO independent checks: (1) a qualifier→target minimum-quantity rule (BOGO-style) — the target line is discounted ONLY when the qualifying lines meet a declared minimum quantity; below the threshold the target is simply NOT discounted (not an error, just not applied); and (2) customer/segment eligibility — the offer is gated to an explicit customer allow-list (customer-xref) OR a matched customer segment, and a non-eligible customer receives the offer as NOT-APPLIED. The applied/not-applied decision and its reason are recorded. The correctness property: eligibility is computed from the declared criteria alone, and an ineligible offer can NEVER reach the discount-application path — fail-closed, so unknown or missing criteria deny by default. This is APPLICABILITY only; it is distinct from discount MATH (promotion-l0 already owns proration/clamp/stacking — it takes the set of already-applicable offers as INPUT). Generic across every conditional-promotion / coupon / loyalty system; jurisdiction- and framework-agnostic."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (EligibilityOffer @AggregateRoot; @ElementCollection customer-xref allow-list; @Version + @Check(min_qualifier_qty >= 1 AND discount_basis_points >= 0); immutable @Column(updatable=false) criteria; no public setter) + OfferEligibilityService as the SOLE evaluator (pure deterministic decide(): no I/O, no wall-clock read; the first failing gate's reason is recorded) + RFC 9457 Problem Details + bounded-cardinality Micrometer (outcome,reason labels only)."
+domain_mode: backend_only
+
+# OPT-IN offer-eligibility (applicability) gate. The WHO/WHICH-ITEMS half of a conditional
+# promotion that promotion-l0 (the math) explicitly does NOT cover — promotion-l0 receives the
+# already-applicable offers as INPUT. Generic across all conditional-promotion engines; zero
+# jurisdiction-specific law. Closes BACKLOG P1-56.
+
+# ── Priority order for fork-receivers ──
+#   1. OFFER-FAIL-CLOSED-001       (deny by default — unknown/missing criteria ⇒ NOT applied; the keystone)
+#   2. OFFER-QUALIFIER-MINQTY-001  (BOGO: target discounted ONLY when qualifying qty >= min; below ⇒ not applied)
+#   3. OFFER-SEGMENT-ELIGIBILITY-001 (customer-xref allow-list OR matched segment; else not applied)
+#   4. OFFER-AUTHZ-001             (offer DEFINITION is an ADMIN catalog mutation)
+
+# ── Composition note ──
+# DISTINCT from promotion-l0 (discount MATH: proration/clamp/stacking/max-uses) — that domain
+# takes the set of applicable offers as INPUT and never decides applicability. This domain is the
+# applicability predicate ONLY; it produces an applied/not-applied decision + reason and never an
+# amount. The two compose: offer-eligibility decides WHICH offers apply, promotion-l0 computes
+# how much. Fail-closed (deny by default) is the security posture for the eligibility gate.
+
+items:
+  - id: "OFFER-FAIL-CLOSED-001"
+    chapter: "Eligibility is evaluated fail-closed from declared criteria — unknown/missing criteria deny by default, and an ineligible offer can never reach the discount-application path"
+    verification:
+      mechanism: rule
+      ref: offer-eligibility-predicate-evaluated-fail-closed-from-declared-criteria
+    requirement: "An offer's applicability MUST be decided by a single deterministic, side-effect-free evaluator that DENIES BY DEFAULT: if the offer declares no qualifier criteria (neither SKU nor tag), no target criteria, or no eligibility criteria (empty customer-xref allow-list AND no segment), OR the evaluation context carries no resolvable customer, the result MUST be NOT-APPLIED with the corresponding fail-closed reason — never applied. There is no path by which a mis-declared or partially-declared offer yields an applied decision. The decision and its reason MUST be recorded. The evaluator is pure: the same offer + context always yields the same decision + reason (no wall-clock, no mutation, no iteration-order dependence)."
+    test_method: "RestAssured (create an offer with a missing target criterion; evaluate against a fully-qualifying eligible context → applied=false, reason MISSING_TARGET_CRITERIA; ViolationProof: the evaluator's only applied outcome is reason ELIGIBLE)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Fail-closed / deny-by-default is the keystone. Anchored to CWE-636 (Not Failing Securely /
+      'Failing Open') and CWE-840 (Business Logic Errors): a conditional-promotion predicate that
+      fails open silently applies a discount no one authorized.
+  - id: "OFFER-QUALIFIER-MINQTY-001"
+    chapter: "BOGO-style qualifier→target minimum-quantity: the target line is discounted ONLY when the qualifying lines meet the declared minimum quantity; below the threshold the target is NOT discounted (not an error)"
+    verification:
+      mechanism: rule
+      ref: offer-eligibility-predicate-evaluated-fail-closed-from-declared-criteria
+    requirement: "An offer declaring (qualifierSku|qualifierTag, minQualifierQty, targetSku|targetTag) MUST be applicable to an order ONLY when the SUM of the quantities of lines matching the qualifier criteria is >= minQualifierQty AND at least one line matches the target criteria. When the qualifying quantity is below minQualifierQty the result MUST be NOT-APPLIED (reason QUALIFIER_MIN_QTY_NOT_MET) — the target line is simply not discounted; this is NOT an error and does NOT fail the request. The qualifying quantity is the total over matching lines (a line matches when it carries the declared SKU or the declared tag); non-positive quantities do not count."
+    test_method: "RestAssured (offer minQualifierQty=2; evaluate with qualifier qty=1 → applied=false, reason QUALIFIER_MIN_QTY_NOT_MET, HTTP 200; evaluate with qualifier qty=2 and an eligible customer + target line → applied=true, reason ELIGIBLE)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The below-threshold outcome is a not-applied decision, NOT a 4xx — applicability is a
+      business decision, not a validation failure. Distinct from the discount MATH (promotion-l0).
+  - id: "OFFER-SEGMENT-ELIGIBILITY-001"
+    chapter: "Customer/segment eligibility: the offer is gated to an explicit customer allow-list (customer-xref) OR a matched customer segment; a non-eligible customer receives the offer as NOT-APPLIED"
+    verification:
+      mechanism: rule
+      ref: offer-eligibility-predicate-evaluated-fail-closed-from-declared-criteria
+    requirement: "An offer's customer gate MUST be satisfied iff the evaluation context's customer id is contained in the offer's customer-xref allow-list OR the offer's declared segment is present in the context's customer segments. A customer satisfying NEITHER MUST receive a NOT-APPLIED decision (reason CUSTOMER_NOT_ELIGIBLE) — never an applied decision, never a leak of the offer's discount. The allow-list and segment are independent eligibility paths (either suffices); the gate is evaluated against the declared criteria only, never a client-asserted eligibility flag."
+    test_method: "RestAssured (offer eligible to customerA via allow-list and to segment 'gold'; evaluate eligible customerA → applied=true; evaluate a customer in segment 'gold' → applied=true; evaluate an unrelated customer with no matching segment → applied=false, reason CUSTOMER_NOT_ELIGIBLE)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Authorization-style gate (CWE-285 Improper Authorization): the offer's discount is a resource
+      the customer must be authorized for; an un-allow-listed, un-segmented customer is denied.
+  - id: "OFFER-AUTHZ-001"
+    chapter: "Defining an offer (its criteria, allow-list, segment) is an ADMIN catalog mutation; reading and evaluating eligibility require a valid JWT"
+    requirement: "Creating an offer MUST require ROLE_ADMIN — enforced by @PreAuthorize on the controller method AND the SecurityConfig request matcher (/api/admin/offers). A non-admin authenticated caller attempting to create an offer MUST receive 403; an unauthenticated caller MUST receive 401/403. Reading an offer (GET /api/offers/{id}) and evaluating eligibility (POST /api/offers/{id}/evaluate) require a valid JWT (authenticated). An unknown offer id MUST yield a 404 problem+json (IDOR-safe; never 403-leak existence)."
+    test_method: "RestAssured (MEMBER token POST /api/admin/offers → 403; ADMIN token → 201; unauthenticated evaluate → 401/403; authenticated evaluate of an unknown id → 404 OFFER_NOT_FOUND)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Catalog-definition authorization. ADMIN is a real UserRole authority (role_literal_guard-allowed);
+      a business "merchandiser" role is not a JWT authority.

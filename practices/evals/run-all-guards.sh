@@ -1138,6 +1138,14 @@ run_guard "fail_fast_blocking_audit/clean" 0 \
 run_guard "fail_fast_blocking_audit/discriminates" 1 \
     bash "$SCRIPT_DIR/fail_fast_blocking_audit_guard.sh" --checklist "$SCRIPT_DIR/fixtures/fail-fast-blocking-audit/failfast_breaks.yaml" --expect clean
 
+echo "[83] full_trio_spec_backend_or_exempt_guard.sh (G003 enforcement-coverage — the REVERSE of domain_spec_trio_guard: domain_spec_trio only checks 'every EXISTING domain (L4 dir ∪ backend test task) carries its Trio', never that a full_trio SPEC has a backing backend domain. So a spec can declare domain_mode: full_trio while its invariant is verified at RULE/REVIEW tier only (rule_verification_binding, no runtime backend gate) — weaker than the binary-test domains, and the full_trio claim is dishonest. This guard asserts EVERY full_trio spec is backend-enforced (templates/L4/<base>/ dir OR a per-domain test task whose includeTags cover the spec's item @Tags, mapped ACCURATELY via item-id→test-class→@Tag, not naive base-name) OR honestly listed in ruletier_full_trio_allowlist.yaml with a rationale; a STALE exemption naming a now-enforced spec also BLOCKS. Live exits 0; fixtures prove non-vacuity.)"
+run_guard "full_trio_spec_backend_or_exempt/live" 0 \
+    bash "$SCRIPT_DIR/full_trio_spec_backend_or_exempt_guard.sh"
+run_guard "full_trio_spec_backend_or_exempt/fixture_fail" 1 \
+    bash "$SCRIPT_DIR/full_trio_spec_backend_or_exempt_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/full-trio-backend-or-exempt/fail_no_enforcement_no_exempt"
+run_guard "full_trio_spec_backend_or_exempt/fixture_pass" 0 \
+    bash "$SCRIPT_DIR/full_trio_spec_backend_or_exempt_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/full-trio-backend-or-exempt/pass_exempted"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

@@ -1,0 +1,77 @@
+version: "0.1.0"
+scope: "currency-arithmetic-l0 — a currency-TAGGED monetary value object whose arithmetic is FAIL-CLOSED across currencies. The single portable correctness invariant: adding or subtracting two amounts whose ISO-4217 currency codes DIFFER, WITHOUT an explicit recorded conversion, MUST THROW — never silently coerce, never assume a shared currency, never use one operand's currency for the other. Same-currency arithmetic works normally (the sum/difference is a new amount in that same currency). A cross-currency combination is permitted ONLY after an explicit, RECORDED conversion brings one operand into the other's currency; the exchange-RATE math itself is OUT of scope (the caller supplies the already-determined converted amount as the recorded conversion — this domain neither looks up nor computes rates). Currency codes are ISO-4217 alpha-3 (validated via Currency.getInstance). Money is integer minor units. This is purely the 'no silent cross-currency arithmetic' invariant — distinct from money-precision (currency-amount-precision-explicit) and from the bare long-minor-units Money utility, which carries no currency tag and so cannot enforce it."
+stack: "Spring Boot 3.2.x + Jakarta Persistence. The invariant lives in a pure, framework-free value object (CurrencyMoney = long minorUnits + ISO-4217 currency, an immutable record whose plus/minus throw CurrencyArithmeticException on a currency mismatch absent an explicit conversion; convertedVia(CurrencyConversion) is the ONLY cross-currency seam). A small persisted surface (CurrencyLedger @AggregateRoot — immutable @Column(updatable=false) currency tag, @Version, balance mutated only through the sole-mutator CurrencyArithmeticService; ConversionRecord @Embeddable audit trail via @ElementCollection) lets a black-box RestAssured test exercise it over HTTP: a same-currency add returns 200 with the correct sum, a cross-currency add/subtract returns 422 CURRENCY_MISMATCH (fail-closed, no mutation), and an explicit recorded conversion makes the cross-currency add succeed. RFC 9457 Problem Details; bounded-cardinality Micrometer (outcome label only)."
+domain_mode: backend_only
+
+# OPT-IN cross-currency fail-closed arithmetic invariant. The exchange RATE is OUT of scope (the
+# caller supplies the already-converted amount as a recorded conversion). Generic across any
+# multi-currency monetary surface; zero jurisdiction-specific law. Money in integer minor units.
+# Closes BACKLOG P1-58.
+
+# ── Priority order for fork-receivers ──
+#   1. CCY-FAILCLOSED-ADD       (cross-currency add absent a recorded conversion ⇒ THROW — the keystone)
+#   2. CCY-FAILCLOSED-SUBTRACT  (cross-currency subtract absent a recorded conversion ⇒ THROW)
+#   3. CCY-SAMECCY-OK           (same-currency add/subtract ⇒ correct result in that currency)
+#   4. CCY-EXPLICIT-CONVERT     (an explicit RECORDED conversion is the only cross-currency seam)
+
+# ── Composition note ──
+# This domain owns the CURRENCY-TAG fail-closed discipline for monetary arithmetic — NOT the
+# exchange-rate math (which it deliberately does not perform) and NOT the minor-unit scale check
+# (currency-amount-precision-explicit owns that). It complements common/Money (a precision utility
+# over bare long minor units that carries NO currency and so cannot reject a cross-currency add):
+# CurrencyMoney is the currency-tagged value type whose arithmetic is structurally fail-closed.
+
+items:
+  - id: "CCY-FAILCLOSED-ADD"
+    chapter: "Adding two amounts whose ISO-4217 currency codes DIFFER, absent an explicit recorded conversion, MUST THROW — never silently coerce, never assume a shared currency"
+    verification:
+      mechanism: rule
+      ref: monetary-arithmetic-fails-closed-across-currencies-absent-explicit-recorded-conversion
+    requirement: "CurrencyMoney.plus(addend) MUST require that the addend's currency equals the receiver's currency; if they differ it MUST throw CurrencyArithmeticException (CURRENCY_MISMATCH → 422) BEFORE producing any value and BEFORE any persisted mutation. There MUST be no code path that silently coerces a differing-currency addend (no implicit re-tag, no 'use the left operand's currency', no zero-rate assumption). Over HTTP, posting an addend of a different currency to a ledger MUST return 422 CURRENCY_MISMATCH and leave the ledger balance unchanged (fail-closed, no partial mutation). The persisted balance is read back into a CurrencyMoney through the ledger's immutable currency tag — the amount is never combined with a foreign-currency value out of band."
+    test_method: "RestAssured (create a USD ledger, POST a KRW addend to /add → 422 CURRENCY_MISMATCH, balance unchanged; same-currency USD addend → 200 with the correct sum) + ViolationProof (direct CurrencyMoney.plus across currencies throws; no silent-coercion path exists)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Fail-closed cross-currency arithmetic, anchored to Martin Fowler's Money pattern ("avoid
+      adding your dollars to your yen without taking the currency differences into account") and
+      CWE-682 (Incorrect Calculation). A silent cross-currency add conjures or destroys money on
+      every order — the classic incorrect-calculation defect.
+  - id: "CCY-FAILCLOSED-SUBTRACT"
+    chapter: "Subtracting two amounts whose ISO-4217 currency codes DIFFER, absent an explicit recorded conversion, MUST THROW — symmetric with addition"
+    verification:
+      mechanism: rule
+      ref: monetary-arithmetic-fails-closed-across-currencies-absent-explicit-recorded-conversion
+    requirement: "CurrencyMoney.minus(subtrahend) MUST require that the subtrahend's currency equals the receiver's currency; if they differ it MUST throw CurrencyArithmeticException (CURRENCY_MISMATCH → 422) BEFORE producing any value and BEFORE any persisted mutation, exactly as plus does. Over HTTP, posting a differing-currency subtrahend to a ledger's /subtract MUST return 422 CURRENCY_MISMATCH and leave the balance unchanged. Subtraction MUST NOT be a back-door that bypasses the currency-tag check that addition enforces."
+    test_method: "RestAssured (USD ledger, POST a KRW subtrahend to /subtract → 422 CURRENCY_MISMATCH, balance unchanged; same-currency subtrahend → 200 with the correct difference) + ViolationProof (direct CurrencyMoney.minus across currencies throws)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Symmetric fail-closed enforcement: a guard applied only to addition would let subtraction
+      silently coerce. CWE-682 — both operations are calculations that must not produce an
+      unintended cross-currency result.
+  - id: "CCY-SAMECCY-OK"
+    chapter: "Same-currency add/subtract works normally — the result is a new amount in that SAME currency, exact in integer minor units"
+    verification:
+      mechanism: rule
+      ref: monetary-arithmetic-fails-closed-across-currencies-absent-explicit-recorded-conversion
+    requirement: "When both operands carry the SAME ISO-4217 currency, plus and minus MUST return a new CurrencyMoney whose minorUnits is the exact integer sum/difference and whose currency is that same currency — no rounding, no floating point, no currency change. Over HTTP, a same-currency add MUST return 200 and the read-back ledger balance MUST equal the exact sum. The fail-closed guard MUST NOT impede legitimate same-currency arithmetic."
+    test_method: "RestAssured (USD ledger opening 1099, add USD 250 → balance 1349; subtract USD 49 → 1300) + ViolationProof (CurrencyMoney.plus/minus of same-currency operands yields the exact integer result in the same currency)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The positive half of the invariant: the currency tag must reject only genuine cross-currency
+      mixing, never block correct same-currency arithmetic. Integer minor units keep the sum exact
+      (Fowler Money — never binary float).
+  - id: "CCY-EXPLICIT-CONVERT"
+    chapter: "A cross-currency combination is permitted ONLY through an explicit, RECORDED conversion that brings one operand into the other's currency; the exchange RATE itself is out of scope (the converted amount is supplied)"
+    verification:
+      mechanism: rule
+      ref: monetary-arithmetic-fails-closed-across-currencies-absent-explicit-recorded-conversion
+    requirement: "The ONLY way to combine amounts of different currencies MUST be an explicit CurrencyConversion (a value carrying fromCurrency, toCurrency, and the already-determined convertedMinorUnits) applied via CurrencyMoney.convertedVia(conversion): it MUST reject a conversion whose fromCurrency does not match the receiver's currency, and otherwise yields a new CurrencyMoney in the conversion's toCurrency — after which an ordinary same-currency plus succeeds. The conversion MUST be RECORDED (persisted to the ledger's conversion trail) so the cross-currency step is auditable and never implicit. This domain MUST NOT look up or compute an exchange rate — supplying the converted amount is the caller's responsibility (rate derivation is out of scope). A conversion whose toCurrency does not match the target ledger's currency MUST still fail-closed (the subsequent plus throws)."
+    test_method: "RestAssured (USD ledger; POST a KRW amount + a recorded conversion {from KRW, to USD, convertedMinorUnits} to /add-converted → 200, balance increases by the converted amount, and the conversion is recorded) + ViolationProof (convertedVia rejects a from-currency mismatch; a converted same-currency value then adds normally)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The escape hatch is explicit and recorded, never silent — this is what distinguishes a
+      legitimate, auditable cross-currency combination from the CWE-682 silent-coercion defect.
+      Rate math is deliberately excluded so the invariant stays portable across any FX policy.

@@ -1,0 +1,91 @@
+template_id: "currency-arithmetic-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "Any monetary surface that mixes more than one currency and must NEVER add/subtract across currencies silently"
+  - "A currency-tagged value type whose arithmetic is structurally fail-closed (plus/minus throw on a currency mismatch)"
+  - "An auditable, explicit conversion seam — the only sanctioned way to combine amounts of different currencies"
+
+not_for:
+  - "Exchange-RATE derivation or lookup (an FX rate table / provider) — explicitly out of scope; the converted amount is supplied as a recorded conversion"
+  - "Minor-unit SCALE validation (a KRW amount with two decimals) — currency-amount-precision-explicit owns that"
+  - "Replacing common/Money — that is a precision utility over bare long minor units with NO currency tag; CurrencyMoney is the currency-tagged value type that adds the cross-currency guard (additive, no rewrite of Money)"
+
+must_not:
+  - "Add or subtract two CurrencyMoney of different currencies without an explicit recorded conversion — plus/minus MUST throw CURRENCY_MISMATCH"
+  - "Silently coerce a foreign-currency operand — no implicit re-tag, no 'use the left operand's currency', no zero-rate assumption"
+  - "Let subtraction bypass the currency-tag check that addition enforces — the guard is symmetric"
+  - "Compute or look up an exchange rate inside this domain — the converted amount is supplied by the caller (rate math is out of scope)"
+  - "Combine across currencies without RECORDING the conversion — the cross-currency step must be auditable, never implicit"
+  - "Mutate the ledger's currency tag after creation — currency_code is @Column(updatable=false) with no public setter, so a cross-currency add can never be retroactively legitimized"
+  - "Use floating-point currency — money is integer minor units (Fowler Money: never binary float)"
+
+reject_if:
+  - "plus/minus across differing currencies absent a conversion -> throw CURRENCY_MISMATCH (422)"
+  - "convertedVia with a fromCurrency that does not match the receiver's currency -> 422 CURRENCY_CONVERSION_MISMATCH"
+  - "any currency code that is not ISO-4217 alpha-3 (Currency.getInstance throws) -> 422 CURRENCY_INVALID"
+  - "add / subtract / convert against an unknown ledger id -> 404 CURRENCY_LEDGER_NOT_FOUND (IDOR-safe; never 403-leak existence)"
+
+source_precedence:
+  - "ISO 4217 — the authoritative alpha-3 currency-code standard the tag is validated against (Currency.getInstance)"
+  - "Martin Fowler, Patterns of Enterprise Application Architecture — the Money pattern: a currency-aware monetary value type that refuses to add dollars to yen without accounting for the currency difference"
+  - "CWE-682 Incorrect Calculation — a silent cross-currency add/subtract is an incorrect calculation that conjures or destroys money"
+  - "RFC 9457 — problem+json error shape for 404/422"
+  - "ax-template catalog primitives — persistence immutable-identity, optimistic-locking @Version, domain-metrics-bounded-cardinality"
+
+official_doc_refs:
+  - "https://www.iso.org/iso-4217-currency-codes.html"
+  - "https://martinfowler.com/eaaCatalog/money.html"
+  - "https://cwe.mitre.org/data/definitions/682.html"
+  - "https://www.rfc-editor.org/rfc/rfc9457"
+
+# ─── invariant ───────────────────────────────────────────────────────────────────
+invariant:
+  fail_closed_cross_currency:               # CCY-FAILCLOSED-ADD / CCY-FAILCLOSED-SUBTRACT
+    rule: "plus/minus require both operands' ISO-4217 currency codes to be EQUAL; a mismatch THROWS CURRENCY_MISMATCH before any value or mutation"
+    no_silent_coercion: "no implicit re-tag, no left-operand-wins, no zero-rate path"
+    symmetric: "addition and subtraction enforce identically"
+  same_currency_ok:                         # CCY-SAMECCY-OK
+    result: "new CurrencyMoney with exact integer minorUnits sum/difference in the SAME currency"
+  explicit_recorded_conversion:             # CCY-EXPLICIT-CONVERT
+    only_seam: "CurrencyMoney.convertedVia(CurrencyConversion) — the sole cross-currency path"
+    recorded: "the conversion is persisted to the ledger's conversion trail (auditable, never implicit)"
+    rate_out_of_scope: "the converted amount is supplied; this domain neither looks up nor computes a rate"
+
+# ─── value type ──────────────────────────────────────────────────────────────────
+value_type:
+  CurrencyMoney: "immutable record { long minorUnits; String currency (ISO-4217 alpha-3) }; pure, framework-free; plus/minus/convertedVia"
+  CurrencyConversion: "immutable record { String fromCurrency; String toCurrency; long convertedMinorUnits } — the explicit recorded conversion to apply"
+  money: "integer minor units (no floating-point currency)"
+
+# ─── authz ───────────────────────────────────────────────────────────────────────
+authz:
+  all_operations: authenticated          # create / add / subtract / convert / read — a valid JWT
+  not_found_status: 404                   # IDOR-safe; never 403-leak existence
+
+# ─── persistence ───────────────────────────────────────────────────────────────────
+persistence:
+  aggregate_roots: [CurrencyLedger]
+  immutable_identity: true               # @Column(updatable=false) on id/currency_code/created_at; no public setter
+  version_guarded: true                  # @Version Long on CurrencyLedger
+  currency_tag_immutable: "currency_code is @Column(updatable=false) — the ledger's currency can never change"
+  conversion_trail: "ConversionRecord @Embeddable via @ElementCollection on the root (recorded cross-currency steps)"
+
+# ─── observability ─────────────────────────────────────────────────────────────────
+observability:
+  counter: "currency_arithmetic_operation_total"
+  labels: [outcome]                        # outcome in {added, subtracted, converted}
+  excluded_labels: [ledger_id, currency, amount]   # no unbounded cardinality, no amount
+
+testing_baseline:
+  task: "./gradlew testCurrencyArithmetic"
+  tag: "CURRENCY_ARITHMETIC"
+  style: "RestAssured black-box integration (RANDOM_PORT) + reflection/unit-level ViolationProof"
+
+verification_checkpoints:
+  - "CCY-FAILCLOSED-ADD: USD ledger + KRW addend -> 422 CURRENCY_MISMATCH, balance unchanged; USD addend -> 200 correct sum"
+  - "CCY-FAILCLOSED-SUBTRACT: USD ledger + KRW subtrahend -> 422 CURRENCY_MISMATCH, balance unchanged"
+  - "CCY-SAMECCY-OK: same-currency add/subtract -> exact integer result in the same currency"
+  - "CCY-EXPLICIT-CONVERT: KRW amount + recorded conversion {KRW->USD} -> 200, balance increases by converted amount, conversion recorded"
+
+last_reviewed_at: "2026-06-28"

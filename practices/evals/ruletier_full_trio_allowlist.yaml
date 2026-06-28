@@ -1,0 +1,56 @@
+schema_version: 1
+# practices/evals/ruletier_full_trio_allowlist.yaml
+#
+# Rule-tier full_trio exemptions. Each spec below DECLARES `domain_mode: full_trio`
+# but is enforced at RULE tier only: every applicable item binds via
+# `verification: { mechanism: rule }` (rule_verification_binding) to an
+# evidence-anchored catalog rule, and there is NO dedicated backend per-domain
+# `./gradlew test<X>` task and NO templates/L4/<base>/ dir running its items. This
+# is weaker than the binary-test domains (no runtime backend gate) — these entries
+# are the HONEST acknowledgement of that, surfaced (e.g.) in
+# docs/broadleaf-parity/checkout.md for saga-orchestration.
+#
+# full_trio_spec_backend_or_exempt_guard.sh BLOCKS a NEW full_trio spec that is
+# neither backend-enforced nor listed here, AND BLOCKS a STALE entry that names a
+# spec which has since gained a backend task / L4 dir (exempt rule-tier escapes
+# only — do NOT exempt specs that actually have a backend test).
+#
+# To DISCHARGE an exemption: scaffold a backend domain (per docs/NEW-DOMAIN-CHECKLIST.md)
+# so the spec's items run under a per-domain task — then DELETE its entry here.
+#
+# Each entry: `- spec: <filename>` + a one-line `rationale:` (non-empty, true).
+exemptions:
+  - spec: saga-orchestration-l0.yaml
+    rationale: "rule-tier — cross-cutting compensation-ordering invariant enforced by saga-compensating-transactions rule; no dedicated backend saga domain"
+  - spec: transactional-outbox-l0.yaml
+    rationale: "rule-tier — no-dual-write outbox+relay invariant enforced by transactional-outbox-no-dual-write rule; cross-cutting reliability pattern, no standalone outbox domain"
+  - spec: value-provenance-l0.yaml
+    rationale: "rule-tier — machine-computed value must track override provenance, enforced by machine-computed-value-tracks-override-provenance rule; cross-cutting field-level discipline, no own domain"
+  - spec: signed-artifact-l0.yaml
+    rationale: "rule-tier — externally-verifiable artifacts use asymmetric signatures, enforced by externally-verifiable-artifact-uses-asymmetric-signature rule; cross-cutting crypto posture, no own domain"
+  - spec: resilience-l0.yaml
+    rationale: "rule-tier — circuit-breaker/retry/timeout/bulkhead policy enforced by resilience-circuit-breaker-retry-bulkhead rule; cross-cutting outbound-call hardening, no own domain"
+  - spec: cors-l0.yaml
+    rationale: "rule-tier — origin allowlist + preflight discipline enforced by cors-allowlist-and-preflight rule; cross-cutting HTTP config, no own domain"
+  - spec: content-negotiation-l0.yaml
+    rationale: "rule-tier — RFC 9110 Accept/Content-Type negotiation enforced by http-content-negotiation-rfc9110 rule; cross-cutting HTTP convention, no own domain"
+  - spec: health-check-l0.yaml
+    rationale: "rule-tier — liveness/readiness/startup probe contract enforced by health-probes-liveness-readiness-startup rule; cross-cutting ops convention, no own domain"
+  - spec: distributed-tracing-l0.yaml
+    rationale: "rule-tier — W3C trace-context propagation enforced by distributed-tracing-w3c-context-propagation rule; cross-cutting observability convention, no own domain"
+  - spec: observability-convention-l0.yaml
+    rationale: "rule-tier — SLO/error-budget/cardinality conventions enforced by observability-slo-error-budget-convention rule; cross-cutting meta-observability policy, no own domain"
+  - spec: config-validation-l0.yaml
+    rationale: "rule-tier — fail-fast typed config validation enforced by config-validation-fail-fast-typed rule; cross-cutting startup discipline, no own domain"
+  - spec: job-queue-l0.yaml
+    rationale: "rule-tier — at-least-once async job queue + DLQ invariant enforced by async-job-queue-at-least-once-dlq rule; generic infra pattern, no own backend domain (scheduled-task covers cron, not arbitrary queues)"
+  - spec: multipart-upload-l0.yaml
+    rationale: "rule-tier — resumable tus-style chunked upload offset invariant enforced by resumable-upload-tus-offset rule; generic infra pattern, no own backend domain (file-storage covers single-shot upload)"
+  - spec: chat-messaging-l0.yaml
+    rationale: "rule-tier — message delivery-receipts/presence invariant enforced by chat-message-delivery-receipts-presence rule; reference vertical kept rule-tier, no backend chat domain in scope"
+  - spec: referral-program-l0.yaml
+    rationale: "rule-tier — referral disclosure + fraud controls enforced by referral-disclosure-and-fraud-controls rule; reference vertical kept rule-tier, no backend referral domain in scope"
+  - spec: customs-e-trade-l0.yaml
+    rationale: "rule-tier — Korean customs HS/EDI/AEO invariant enforced by customs-e-trade-hs-edi-aeo rule; jurisdiction reference vertical kept rule-tier, no backend customs domain in scope"
+  - spec: e-government-approval-l0.yaml
+    rationale: "rule-tier — Korean e-gov GPKI approval-line invariant enforced by e-government-approval-gpki-approval-line rule; jurisdiction reference vertical kept rule-tier, no backend e-gov domain in scope"

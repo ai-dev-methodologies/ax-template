@@ -271,10 +271,15 @@ public class AuthServiceImpl {
             throw new InvalidTokenException("Invalid token type");
         }
 
-        vt.setUsed(true);
-        verificationTokenRepository.save(vt);
+        UUID userId = vt.getUserId();
 
-        accounts.resetPassword(vt.getUserId(), newPassword);
+        // AUTH-RESET-FAMILY-001 / CWE-640: a successful reset invalidates the user's ENTIRE
+        // family of outstanding unused reset tokens — not only the consumed one — in the same
+        // transaction, so an earlier-issued reset token cannot be replayed after the password
+        // has already been changed.
+        verificationTokenRepository.markAllUnusedAsUsed(userId, "RESET");
+
+        accounts.resetPassword(userId, newPassword);
 
         return new PasswordResetResponse("Password reset successful.");
     }

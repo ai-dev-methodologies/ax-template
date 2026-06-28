@@ -74,6 +74,13 @@ items:
     verification_type: "code_review"
     applicable: true
     notes: "Code review: No default passwords hardcoded"
+  - id: "AUTH-RESET-FAMILY-001"
+    chapter: "V2 - Authentication"
+    requirement: "Verify that a successful password reset atomically invalidates the user's entire family of outstanding unused reset tokens, not only the consumed token (CWE-640; ASVS V2.7.3 single-use credential-recovery tokens)."
+    test_method: "passwordReset_successInvalidatesEntireTokenFamily"
+    verification_type: "api_test"
+    applicable: true
+    notes: "API test: issue 2 reset tokens for one user → use token1 to reset → token2 is rejected as already-used/invalid. Anchored to OWASP ASVS v4.0.3 V2.7.3 + CWE-640."
   - id: "ASVS-V2.7.2"
     chapter: "V2 - Authentication"
     requirement: "Verify that verification tokens have a short validity period."

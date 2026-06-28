@@ -1,0 +1,56 @@
+version: "0.1.0"
+scope: "tax-application-l0 — order-level tax APPLICATION with two portable, jurisdiction-agnostic correctness invariants, with the jurisdiction RATE injected by the caller (rate-table lookup is explicitly OUT of scope; the provider supplies the rate). (1) EXEMPT-SKIP: a tax-exempt customer OR a tax-exempt line ⇒ ZERO tax for that scope — exempt lines contribute 0 and a fully-exempt order has total tax 0; exemption is DECLARED, never inferred. (2) IDEMPOTENT-RECOMPUTE: re-pricing an order MUST converge to exactly ONE combined tax record per order (find-existing → update-or-create-or-remove) — re-running the tax computation any number of times leaves exactly one tax row whose amount == the current correct tax, never duplicated, never stranded (a now-exempt order's prior tax row is removed, not left behind). Tax = round(taxableBase × injectedRate) on the non-exempt taxable base; taxableBase is supplied as input (integer minor units). Framework-agnostic: no jurisdiction rate table, no external tax provider. Generic across every order-level tax engine."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (TaxableOrder @AggregateRoot with @ElementCollection lines + re-declarable customer-exempt flag; TaxAssessment @AggregateRoot — the single combined tax record — referencing the order by identity, UNIQUE(order_id) so a second row is unrepresentable, @Version + @Check(tax_amount_minor >= 0 AND taxable_base_minor >= 0 AND rate_basis_points >= 0), immutable @Column(updatable=false) identity, no public setter) + TaxApplicationService as the SOLE mutator (pure deterministic computeTax/taxableBase: no I/O, no wall-clock read; injected Clock for the computed-at stamp) + RFC 9457 Problem Details + bounded-cardinality Micrometer (outcome label only)."
+domain_mode: backend_only
+
+# OPT-IN order-level tax-application invariants. The RATE is injected (rate-table lookup is OUT of
+# scope — the caller/provider supplies it). Generic across all tax engines; zero jurisdiction-
+# specific law. Money in integer minor units. Closes BACKLOG P1-57.
+
+# ── Priority order for fork-receivers ──
+#   1. TAX-IDEMPOTENT-RECOMPUTE-001 (re-price converges to exactly ONE tax row — the keystone)
+#   2. TAX-EXEMPT-SKIP-001          (exempt customer / exempt line ⇒ ZERO tax for that scope)
+#   3. TAX-AUTHZ-001                (defining/declaring/recomputing is an ADMIN catalog mutation)
+
+# ── Composition note ──
+# This domain owns tax APPLICATION (does the order have tax, and how much, given an injected rate)
+# — NOT rate DERIVATION (a jurisdiction rate table) and NOT an external tax provider; those are
+# deliberately out of scope so the invariants stay portable. The two invariants compose: EXEMPT-SKIP
+# determines the non-exempt taxable base, IDEMPOTENT-RECOMPUTE converges that base's tax to one
+# record. The tax row is a DERIVED projection of the order — never a client-asserted amount.
+
+items:
+  - id: "TAX-IDEMPOTENT-RECOMPUTE-001"
+    chapter: "Re-pricing an order converges to exactly ONE combined tax record (find-existing → update-or-create-or-remove); re-running the tax computation any number of times leaves exactly one tax row == the current correct tax — never duplicated, never stranded"
+    verification:
+      mechanism: rule
+      ref: order-tax-application-skips-exempt-scope-and-recompute-converges-to-one-record
+    requirement: "Re-pricing an order MUST be idempotent: repeated application of the tax computation has the same effect on persisted state as a single application. The combined tax for an order is a single DERIVED record reconciled by find-existing → update-or-create-or-remove: if the order is now taxable, exactly one tax row exists carrying amount == round(non-exempt taxableBase × injectedRate); if the order is now NOT taxable (fully exempt / zero taxable base), no tax row exists. A second tax row for the same order MUST be unrepresentable (UNIQUE constraint on order_id). A now-exempt order's prior tax row MUST be removed (not left stranded). The amount MUST NOT be a client-asserted value — it is recomputed from the declared input each time."
+    test_method: "RestAssured (recompute a taxable order twice → exactly ONE tax row, SAME assessment id, amount == correct tax; declare the order exempt then recompute → the prior tax row is removed, the combined tax reads 0/absent; ViolationProof: UNIQUE(order_id) makes a second row unrepresentable and the recompute updates the row in place, preserving its identity)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Idempotency is the keystone, anchored to RFC 9110 §9.2.2 (Idempotent Methods): the effect of
+      N>0 identical requests equals the effect of one. The single-record convergence + removal of a
+      stranded row is a business-logic-correctness property (CWE-840) — a duplicated or stranded tax
+      row silently corrupts the order total.
+  - id: "TAX-EXEMPT-SKIP-001"
+    chapter: "A tax-exempt customer OR a tax-exempt line contributes ZERO tax for that scope — exempt lines contribute 0, a fully-exempt order has total tax 0; exemption is DECLARED, never inferred"
+    verification:
+      mechanism: rule
+      ref: order-tax-application-skips-exempt-scope-and-recompute-converges-to-one-record
+    requirement: "The non-exempt taxable base MUST exclude every declared-exempt scope: if the order's customer is tax-exempt the taxable base is 0 (total tax 0); each tax-exempt line contributes 0 to the taxable base; only non-exempt, positive line bases are summed. Tax = round(non-exempt taxableBase × injectedRate). A fully-exempt order MUST yield ZERO tax (no tax row). Exemption MUST be a declared property of the customer/line — never inferred from amounts or a client-asserted tax figure."
+    test_method: "RestAssured (an exempt-customer order recomputes to 0 tax / no tax row; an order with one exempt and one non-exempt line recomputes to tax on the non-exempt base only; ViolationProof: taxableBase(exempt customer)==0 and an exempt line contributes 0, so the exempt path cannot yield a non-zero tax)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      EXEMPT-SKIP determines the taxable base the rate is applied to. Treating a missing/forged
+      exemption as taxable, or summing an exempt line, is a business-logic error (CWE-840).
+  - id: "TAX-AUTHZ-001"
+    requirement: "Defining a taxable order, declaring its exemption, and re-pricing (recompute) MUST require ROLE_ADMIN — enforced by @PreAuthorize on the controller methods AND the SecurityConfig request matcher (/api/admin/tax-orders/**). A non-admin authenticated caller attempting any of these MUST receive 403; an unauthenticated caller MUST receive 401/403. Reading the combined tax (GET /api/tax-orders/{id}/tax) requires a valid JWT (authenticated). An unknown order id MUST yield a 404 problem+json (IDOR-safe; never 403-leak existence)."
+    test_method: "RestAssured (MEMBER token POST /api/admin/tax-orders → 403; ADMIN token → 201; unauthenticated read → 401/403; authenticated read of an unknown id → 404 TAX_ORDER_NOT_FOUND)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Catalog-definition authorization. ADMIN is a real UserRole authority (role_literal_guard-allowed);
+      the recompute MUTATES the derived tax row, so it is an ADMIN operation under /api/admin/**.

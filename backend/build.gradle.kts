@@ -683,6 +683,33 @@ tasks.register<Test>("testBundlePricing") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testOfferEligibility") {
+    useJUnitPlatform {
+        includeTags("OFFER_ELIGIBILITY")
+    }
+    description = "Run offer-eligibility domain compliance tests (offer-eligibility-l0: 4 families — QUALIFIER-MINQTY, SEGMENT-ELIGIBILITY, FAIL-CLOSED, AUTHZ; deterministic fail-closed applicability gate, distinct from discount math)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testTaxApplication") {
+    useJUnitPlatform {
+        includeTags("TAX_APPLICATION")
+    }
+    description = "Run tax-application domain compliance tests (tax-application-l0: 3 families — EXEMPT-SKIP, IDEMPOTENT-RECOMPUTE, AUTHZ; exempt-skip + idempotent single-record tax convergence with an injected rate)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testCurrencyArithmetic") {
+    useJUnitPlatform {
+        includeTags("CURRENCY_ARITHMETIC")
+    }
+    description = "Run currency-arithmetic domain compliance tests (currency-arithmetic-l0: 4 families — FAILCLOSED-ADD, FAILCLOSED-SUBTRACT, SAMECCY-OK, EXPLICIT-CONVERT; a currency-tagged value object whose arithmetic is fail-closed across currencies absent an explicit recorded conversion)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

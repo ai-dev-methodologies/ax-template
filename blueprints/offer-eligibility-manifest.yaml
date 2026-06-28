@@ -1,0 +1,97 @@
+template_id: "offer-eligibility-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "A conditional promotion / coupon / loyalty offer that applies ONLY when a declared eligibility predicate holds"
+  - "BOGO-style rules: a target item is discounted only when qualifying items meet a minimum quantity"
+  - "Customer- or segment-gated offers: the discount is restricted to an allow-list or a matched segment"
+  - "Applicability (WHO/WHICH-ITEMS) decisions that must be deterministic, recorded, and fail-closed"
+
+not_for:
+  - "Computing the discount AMOUNT — proration, clamping, stacking, max-uses are promotion-l0's job; it takes the already-applicable offers as INPUT"
+  - "Time-windowed visibility of a notice — that is the announcement domain (lifecycle + injected clock)"
+  - "Per-redemption accounting / idempotent caps — promotion-l0 owns redemption + max-uses"
+
+must_not:
+  - "Decide applicability anywhere but the single OfferEligibilityService evaluator (no controller-side or ad-hoc eligibility checks)"
+  - "Fail OPEN — a missing/unknown criterion MUST deny by default (NOT-APPLIED), never apply"
+  - "Trust a client-asserted eligibility flag — eligibility is derived from the declared criteria + the evaluation context only"
+  - "Return a 4xx when an offer is merely not applicable — below-threshold / non-eligible is a recorded NOT-APPLIED decision, HTTP 200"
+  - "Store an is_eligible / is_applied boolean on the offer — the decision is DERIVED per evaluation, never a stored flag"
+  - "Mutate any offer criterion after creation — criteria are @Column(updatable=false) with no public setter"
+
+reject_if:
+  - "create with min_qualifier_qty < 1 -> 422 OFFER_INVALID"
+  - "create with discount_basis_points < 0 -> 422 OFFER_INVALID"
+  - "read / evaluate an unknown offer id -> 404 OFFER_NOT_FOUND (IDOR-safe; never 403-leak existence)"
+  - "create / define an offer by a non-ROLE_ADMIN principal -> 403"
+
+source_precedence:
+  - "CWE-636 Not Failing Securely ('Failing Open') — authoritative for the fail-closed / deny-by-default posture"
+  - "CWE-840 Business Logic Errors — the conditional-promotion predicate must be enforced, not assumed"
+  - "CWE-285 Improper Authorization — the customer/segment gate is an authorization check on the offer's discount"
+  - "RFC 9457 — problem+json error shape for 404/422"
+  - "ax-template catalog primitives — domain-metrics-bounded-cardinality, caller-authentication, persistence immutable-identity"
+
+official_doc_refs:
+  - "https://cwe.mitre.org/data/definitions/636.html"
+  - "https://cwe.mitre.org/data/definitions/840.html"
+  - "https://cwe.mitre.org/data/definitions/285.html"
+  - "https://www.rfc-editor.org/rfc/rfc9457"
+
+# ─── evaluator ─────────────────────────────────────────────────────────────────
+evaluator:
+  sole_evaluator: true                  # OFFER-FAIL-CLOSED-001 — one pure decide() method
+  purity: "no I/O, no wall-clock read, no mutation; deterministic for a given offer + context"
+  gate_order: [fail_closed_completeness, segment_eligibility, qualifier_min_qty, target_line_present]
+  first_failing_gate_wins: true         # the first failing gate's reason is the recorded reason
+  default: NOT_APPLIED                   # deny by default
+
+# ─── gates ─────────────────────────────────────────────────────────────────────
+gates:
+  fail_closed_completeness:             # OFFER-FAIL-CLOSED-001
+    requires: ["qualifier criteria (sku|tag)", "target criteria (sku|tag)", "eligibility criteria (allow-list|segment)", "resolvable customer in context"]
+    on_missing: "NOT_APPLIED with MISSING_QUALIFIER_CRITERIA | MISSING_TARGET_CRITERIA | MISSING_ELIGIBILITY_CRITERIA | UNKNOWN_CUSTOMER"
+  segment_eligibility:                  # OFFER-SEGMENT-ELIGIBILITY-001
+    satisfied_iff: "customerId in customer-xref allow-list OR offer.segment in context.segments"
+    on_fail: "NOT_APPLIED with CUSTOMER_NOT_ELIGIBLE"
+  qualifier_min_qty:                    # OFFER-QUALIFIER-MINQTY-001 (BOGO)
+    satisfied_iff: "Σ(quantity of lines matching qualifier) >= minQualifierQty"
+    on_fail: "NOT_APPLIED with QUALIFIER_MIN_QTY_NOT_MET (HTTP 200 — not an error)"
+  target_line_present:
+    satisfied_iff: "at least one line matches the target criteria"
+    on_fail: "NOT_APPLIED with NO_TARGET_LINE"
+
+# ─── authz ─────────────────────────────────────────────────────────────────────
+authz:
+  define_roles: [ROLE_ADMIN]            # OFFER-AUTHZ-001 — create/define an offer
+  read_eval_roles: authenticated        # GET /api/offers/{id}, POST /api/offers/{id}/evaluate
+  not_found_status: 404                  # IDOR-safe; never 403-leak existence
+
+# ─── persistence ───────────────────────────────────────────────────────────────
+persistence:
+  aggregate_root: EligibilityOffer
+  immutable_criteria: true               # @Column(updatable=false); no public setter
+  version_guarded: true                  # @Version Long
+  customer_xref: "@ElementCollection allow-list (eligibility_offer_customers)"
+  stored_decision_flag: forbidden        # the applied/not-applied decision is DERIVED per evaluation
+  check_constraint: "min_qualifier_qty >= 1 AND discount_basis_points >= 0"
+
+# ─── observability ─────────────────────────────────────────────────────────────
+observability:
+  counter: "offer_eligibility_evaluation_total"   # the recorded decision
+  labels: [outcome, reason]              # outcome in {applied,not_applied}; reason in {EligibilityReason names}
+  excluded_labels: [offer_id, customer_id]  # no PII, no unbounded cardinality
+
+testing_baseline:
+  task: "./gradlew testOfferEligibility"
+  tag: "OFFER_ELIGIBILITY"
+  style: "RestAssured black-box integration (RANDOM_PORT) + reflection ViolationProof"
+
+verification_checkpoints:
+  - "OFFER-FAIL-CLOSED-001: missing criterion / unknown customer -> NOT_APPLIED (deny by default); applied only when reason==ELIGIBLE"
+  - "OFFER-QUALIFIER-MINQTY-001: qualifying qty < min -> NOT_APPLIED QUALIFIER_MIN_QTY_NOT_MET (HTTP 200); >= min + eligible + target -> applied"
+  - "OFFER-SEGMENT-ELIGIBILITY-001: allow-list OR matched segment -> applied; neither -> NOT_APPLIED CUSTOMER_NOT_ELIGIBLE"
+  - "OFFER-AUTHZ-001: non-admin define -> 403; unknown id -> 404 OFFER_NOT_FOUND"
+
+last_reviewed_at: "2026-06-28"

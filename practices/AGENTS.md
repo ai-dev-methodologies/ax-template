@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "64dd659732f59380aac0bf6bb28acb24844bdb6e572641d39527fa601f3c1502"
-  rule_count: 224
+  source_concat_sha256: "30fce8a1fd4a995f5751768669e8fb725236750a22cc8e37ef433080b69131b1"
+  rule_count: 228
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -9580,6 +9580,103 @@ Verification: `./gradlew testPractices --tests "*VersionedNaming*"` lists `db/mi
 Reference: [Flyway — Migration naming](https://documentation.red-gate.com/fd/migrations-271583622.html) · [Spring Boot — Flyway integration](https://docs.spring.io/spring-boot/reference/data/sql.html)
 
 
+<!-- @source rules/monetary-arithmetic-fails-closed-across-currencies-absent-explicit-recorded-conversion.md -->
+
+---
+title: Monetary arithmetic must be currency-TAGGED and FAIL-CLOSED across currencies — adding or subtracting two amounts whose ISO-4217 currency codes differ, absent an explicit recorded conversion, MUST THROW (never silently coerce, never assume a shared currency, never use one operand's currency for the other); same-currency arithmetic returns a new exact-integer amount in that same currency, and the ONLY sanctioned cross-currency path is an explicit, RECORDED conversion that brings one operand into the other's currency (the exchange RATE itself is out of scope — the converted amount is supplied)
+impact: HIGH
+impactDescription: "A monetary value carried as a bare amount with no currency tag (or an arithmetic that ignores the tag it has) makes a cross-currency add structurally possible and SILENT: 1000원 + $10 evaluates to 1010 of nothing, conjuring or destroying money on every order — the textbook incorrect-calculation defect (CWE-682). The bug is invisible from the inside because the integer arithmetic is exact; only a currency-aware value type that refuses to add dollars to yen catches it. Guarding only addition lets subtraction become a back-door. Performing an implicit conversion (a hidden rate, a zero-rate assumption, 'use the left operand's currency') silently misstates value and hides the FX decision from audit. The fix is a currency-tagged value object whose plus/minus throw on a currency mismatch and whose only cross-currency seam is an explicit, recorded conversion."
+tags:
+  - money
+  - currency
+  - iso-4217
+  - fail-closed
+  - business-logic
+spec_ref: "specs/currency-arithmetic-l0.yaml#CCY-FAILCLOSED-ADD"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/currencyarithmetic/CurrencyMoney.java + backend/src/main/java/com/ax/template/authblueprint/currencyarithmetic/CurrencyArithmeticService.java"
+  pattern: "CurrencyMoney is an immutable record { long minorUnits; String currency } whose currency is validated as ISO-4217 alpha-3 (Currency.getInstance) in the compact constructor; plus(addend) and minus(subtrahend) both call a private requireSameCurrency that throws CurrencyArithmeticException (CURRENCY_MISMATCH → 422) when the currencies differ, BEFORE producing any value — there is no branch that coerces a differing-currency operand, so a cross-currency combination is unrepresentable without first going through convertedVia(CurrencyConversion), the sole cross-currency seam, which rejects a from-currency mismatch and otherwise yields a new CurrencyMoney in the conversion's toCurrency (the converted amount is supplied; no rate is computed or looked up). Same-currency plus/minus return a new CurrencyMoney with the exact integer sum/difference in the same currency (Math.addExact/subtractExact, no floating point). CurrencyArithmeticService is the sole mutator of the CurrencyLedger balance: it reads the persisted balance back into a CurrencyMoney through the ledger's immutable (@Column(updatable=false)) currency tag, performs the throwing plus/minus, and only on success applies the new balance and (for a conversion) records the ConversionRecord — so a 422 leaves the balance unmutated (fail-closed, no partial write)"
+upstream:
+  - "https://www.iso.org/iso-4217-currency-codes.html"
+  - "https://martinfowler.com/eaaCatalog/money.html"
+  - "https://cwe.mitre.org/data/definitions/682.html"
+evidence:
+  - upstream_id: iso-4217
+    section: "Alpha-3 code structure"
+    quote: "Each currency is identified by a three-letter alpha-3 code."
+  - source_type: external
+    citation: "Martin Fowler, Patterns of Enterprise Application Architecture — Money pattern (martinfowler.com/eaaCatalog)"
+    url: "https://martinfowler.com/eaaCatalog/money.html"
+    quote: "once you involve multiple currencies you want to avoid adding your dollars to your yen without taking the currency differences into account"
+    quoted_at: "2026-06-28"
+  - source_type: external
+    citation: "CWE-682: Incorrect Calculation — MITRE Common Weakness Enumeration"
+    url: "https://cwe.mitre.org/data/definitions/682.html"
+    quote: "The product performs a calculation that generates incorrect or unintended results that are later used in security-critical decisions or resource management."
+    quoted_at: "2026-06-28"
+---
+
+## Rule
+
+A monetary value is **not** just a number — it is an amount **paired with a currency**. ISO 4217 fixes a three-letter alpha-3 code per currency (USD, KRW, JPY, EUR, …). An arithmetic that drops or ignores that tag makes a cross-currency add structurally possible and **silent**: `1000` (KRW) `+ 1099` (USD) `= 2099` of nothing. Integer minor-units arithmetic is exact, so nothing inside the calculation flags the error — exactly the **incorrect-calculation** weakness below.
+
+The discipline is Martin Fowler's **Money** pattern: a **currency-tagged** value type whose arithmetic is **fail-closed across currencies**.
+
+1. **FAIL-CLOSED.** `plus` and `minus` require both operands to carry the **same** ISO-4217 currency; a mismatch **throws** (`CURRENCY_MISMATCH` → 422) before producing any value. There is **no** silent-coercion path — no implicit re-tag, no "use the left operand's currency", no zero-rate assumption — and the guard is **symmetric** (subtraction is never a back-door around addition's check).
+2. **SAME-CURRENCY OK.** When both operands share a currency, the result is a new amount with the **exact integer** sum/difference in **that same currency** — `Math.addExact`/`subtractExact`, never binary float.
+3. **EXPLICIT RECORDED CONVERSION.** The **only** sanctioned cross-currency path is `convertedVia(CurrencyConversion)` — an explicit conversion carrying `{fromCurrency, toCurrency, convertedMinorUnits}` that re-tags one operand into the other's currency, after which an ordinary same-currency `plus` succeeds. The exchange **RATE is out of scope**: the converted amount is **supplied**, never computed or looked up here. The conversion is **recorded** (persisted to an audit trail) so the FX step is auditable, never implicit.
+
+Money is integer **minor units**. The persisted ledger's currency tag is immutable (`@Column(updatable=false)`), so a cross-currency add can never be retroactively legitimized by mutating the tag.
+
+**Correct — currency-tagged value object, fail-closed plus/minus, explicit conversion as the only seam:**
+
+```java
+// backend/.../currencyarithmetic/CurrencyMoney.java
+public record CurrencyMoney(long minorUnits, String currency) {
+    public CurrencyMoney { currency = requireIso4217(currency); }     // ISO-4217 alpha-3
+
+    public CurrencyMoney plus(CurrencyMoney addend) {
+        requireSameCurrency(addend);                                  // THROWS on mismatch — fail-closed
+        return new CurrencyMoney(Math.addExact(minorUnits, addend.minorUnits), currency);
+    }
+    public CurrencyMoney minus(CurrencyMoney subtrahend) {
+        requireSameCurrency(subtrahend);                              // symmetric — no back-door
+        return new CurrencyMoney(Math.subtractExact(minorUnits, subtrahend.minorUnits), currency);
+    }
+    public CurrencyMoney convertedVia(CurrencyConversion c) {         // the ONLY cross-currency seam
+        if (!c.fromCurrency().equals(currency)) throw CurrencyArithmeticException.conversionMismatch(currency, c.fromCurrency());
+        return new CurrencyMoney(c.convertedMinorUnits(), c.toCurrency());   // converted amount supplied; no rate math
+    }
+    private void requireSameCurrency(CurrencyMoney other) {
+        if (!currency.equals(other.currency)) throw CurrencyArithmeticException.currencyMismatch(currency, other.currency);
+    }
+}
+```
+
+**Incorrect — bare amount with no currency tag (or an arithmetic that ignores it): a silent cross-currency add:**
+
+```java
+// WRONG: money is a bare long — addition cannot know the currencies differ
+long balance = 1000;            // KRW (but the type doesn't say so)
+long addend  = 1099;            // USD (but the type doesn't say so)
+long total   = balance + addend; // 2099 of NOTHING — conjures money, no error raised
+
+// WRONG: a value object that "helpfully" coerces instead of throwing
+CurrencyMoney plus(CurrencyMoney other) {
+    return new CurrencyMoney(this.minorUnits + other.minorUnits, this.currency); // silently re-tags other to this.currency
+}
+```
+
+The incorrect version silently mixes currencies — the dollars-to-yen mistake Fowler's Money pattern exists to prevent, and a CWE-682 incorrect calculation that misstates money on every operation. The correct version makes a cross-currency combination **unrepresentable** without an explicit, recorded conversion.
+
+Reference: [ISO 4217 — Codes for the representation of currencies](https://www.iso.org/iso-4217-currency-codes.html)
+
+Reference: [Martin Fowler — Money pattern (P of EAA)](https://martinfowler.com/eaaCatalog/money.html)
+
+Reference: [CWE-682: Incorrect Calculation](https://cwe.mitre.org/data/definitions/682.html)
+
+
 <!-- @source rules/monotonic-ingest-reject-stale-event.md -->
 
 ---
@@ -11111,6 +11208,112 @@ Verification: `./gradlew testPractices --tests "*StructuredLogging*"` attaches a
 Reference: [SLF4J Fluent API](https://www.slf4j.org/manual.html#fluent) · [Logback Layouts](https://logback.qos.ch/manual/layouts.html)
 
 
+<!-- @source rules/offer-eligibility-predicate-evaluated-fail-closed-from-declared-criteria.md -->
+
+---
+title: An offer/discount's applicability must be decided by a single deterministic, fail-closed evaluator that reads only the offer's DECLARED criteria — a BOGO qualifier→target minimum-quantity gate AND a customer-xref/segment eligibility gate — so that unknown or missing criteria DENY BY DEFAULT (not-applied) and an ineligible offer can never reach the discount-application path; applicability (WHO/WHICH-ITEMS) is decided here, never the discount amount
+impact: HIGH
+impactDescription: "An eligibility predicate that fails OPEN silently applies a discount no merchant authorized (margin loss / fraud): a missing target criterion, an empty allow-list read as 'everyone', or a below-threshold qualifier treated as 'close enough' each leak the offer to an order it should never touch. Deciding applicability ad-hoc in the controller (or trusting a client-asserted eligibility flag) means the same cart resolves differently per call and an attacker forges eligibility by editing the request. Conflating applicability with the discount MATH (proration/clamp/stacking) couples two concerns that must compose, not merge — the math engine must receive only the offers that are genuinely applicable."
+tags:
+  - e-commerce
+  - promotion
+  - authorization
+  - business-logic
+  - fail-closed
+spec_ref: "specs/offer-eligibility-l0.yaml#OFFER-FAIL-CLOSED-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/offereligibility/OfferEligibilityService.java + backend/src/main/java/com/ax/template/authblueprint/offereligibility/EligibilityOffer.java"
+  pattern: "A single OfferEligibilityService.decide(offer, context) is the sole evaluator: pure (no I/O, no wall-clock, no mutation), it denies by default — a missing qualifier/target/eligibility criterion or an unresolvable customer returns a fail-closed NOT-APPLIED reason BEFORE any positive check; the customer gate is satisfied only by the customer-xref allow-list OR a matched segment; the qualifier gate sums the quantities of qualifier-matching lines and requires >= minQualifierQty plus a target line; the only applied outcome carries reason ELIGIBLE; criteria are @Column(updatable=false) on the EligibilityOffer @AggregateRoot with no public setter and an @Check(min_qualifier_qty >= 1 AND discount_basis_points >= 0); the decision computes no amount (math is promotion-l0's)"
+upstream:
+  - "https://cwe.mitre.org/data/definitions/636.html"
+  - "https://cwe.mitre.org/data/definitions/840.html"
+  - "https://cwe.mitre.org/data/definitions/285.html"
+evidence:
+  - source_type: external
+    citation: "CWE-636: Not Failing Securely ('Failing Open') — MITRE Common Weakness Enumeration"
+    url: "https://cwe.mitre.org/data/definitions/636.html"
+    quote: "When the product encounters an error condition or failure, its design requires it to fall back to a state that is less secure than other options that are available, such as selecting the weakest encryption algorithm or using the most permissive access control restrictions."
+    quoted_at: "2026-06-28"
+  - source_type: external
+    citation: "CWE-840: Business Logic Errors — MITRE Common Weakness Enumeration"
+    url: "https://cwe.mitre.org/data/definitions/840.html"
+    quote: "Weaknesses in this category identify some of the underlying problems that commonly allow attackers to manipulate the business logic of an application. Errors in business logic can be devastating to an entire application."
+    quoted_at: "2026-06-28"
+  - source_type: external
+    citation: "CWE-285: Improper Authorization — MITRE Common Weakness Enumeration"
+    url: "https://cwe.mitre.org/data/definitions/285.html"
+    quote: "The product does not perform or incorrectly performs an authorization check when an actor attempts to access a resource or perform an action."
+    quoted_at: "2026-06-28"
+---
+
+## Rule
+
+A conditional promotion (coupon / loyalty / BOGO / cart-rule) has two separable concerns:
+
+1. **Applicability — WHO and WHICH ITEMS the offer applies to.** This rule.
+2. **Discount math — HOW MUCH.** Proration, clamping, stacking, max-uses. Owned by `promotion-l0`, which takes the *already-applicable* offers as INPUT.
+
+Applicability must be decided by a **single deterministic, fail-closed evaluator** that reads only the offer's **declared criteria** and the order/customer context. Two independent gates:
+
+1. **Qualifier→target minimum-quantity (BOGO).** A target line is applicable only when the sum of the quantities of lines matching the qualifier criteria is `>= minQualifierQty` *and* a target line is present. Below the threshold the target is simply **NOT applied** — this is a recorded business decision (HTTP 200), not a validation error.
+2. **Customer/segment eligibility.** The offer is gated to an explicit customer-xref **allow-list** OR a matched customer **segment**. A customer in neither receives the offer as **NOT-APPLIED**.
+
+The keystone is **fail-closed (deny by default)**: if any criterion is missing/unknown — no qualifier, no target, an empty allow-list with no segment, or an unresolvable customer — the result is NOT-APPLIED with the corresponding reason, *before* any positive check. There is no path by which a mis-declared offer reaches the discount-application path. The evaluator is pure (no I/O, no wall-clock, no mutation), so the same offer + context always yields the same recorded decision + reason. The decision computes **no amount**.
+
+**Correct — one pure, fail-closed evaluator that denies by default and decides only applicability:**
+
+```java
+// backend/.../offereligibility/OfferEligibilityService.java
+EligibilityDecision decide(EligibilityOffer offer, EvaluationContext ctx) {
+    // FAIL-CLOSED: every criterion must be DECLARED, else deny by default (CWE-636).
+    if (!isPresent(offer.getQualifierSku()) && !isPresent(offer.getQualifierTag()))
+        return EligibilityDecision.notApplied(offer.getId(), MISSING_QUALIFIER_CRITERIA);
+    if (!isPresent(offer.getTargetSku()) && !isPresent(offer.getTargetTag()))
+        return EligibilityDecision.notApplied(offer.getId(), MISSING_TARGET_CRITERIA);
+    if (offer.getEligibleCustomerIds().isEmpty() && !isPresent(offer.getEligibleSegment()))
+        return EligibilityDecision.notApplied(offer.getId(), MISSING_ELIGIBILITY_CRITERIA);
+    if (ctx == null || ctx.customerId() == null)
+        return EligibilityDecision.notApplied(offer.getId(), UNKNOWN_CUSTOMER);
+
+    // Customer/segment gate (CWE-285): allow-list OR matched segment — never a client flag.
+    boolean eligible = offer.getEligibleCustomerIds().contains(ctx.customerId())
+        || (isPresent(offer.getEligibleSegment()) && ctx.customerSegments().contains(offer.getEligibleSegment()));
+    if (!eligible) return EligibilityDecision.notApplied(offer.getId(), CUSTOMER_NOT_ELIGIBLE);
+
+    // BOGO qualifier→target minimum-quantity.
+    long qty = ctx.lines().stream().filter(l -> matches(l, offer.getQualifierSku(), offer.getQualifierTag()))
+        .mapToInt(Line::quantity).filter(q -> q > 0).sum();
+    if (qty < offer.getMinQualifierQty()) return EligibilityDecision.notApplied(offer.getId(), QUALIFIER_MIN_QTY_NOT_MET);
+    if (ctx.lines().stream().noneMatch(l -> matches(l, offer.getTargetSku(), offer.getTargetTag())))
+        return EligibilityDecision.notApplied(offer.getId(), NO_TARGET_LINE);
+
+    return EligibilityDecision.applied(offer.getId());   // only applied outcome: reason ELIGIBLE
+}
+```
+
+**Incorrect — fails open and decides eligibility ad-hoc in the controller from a client flag:**
+
+```java
+// WRONG: missing criteria silently treated as "applies to everyone / every item" (CWE-636 failing open)
+boolean apply = true;
+if (offer.getEligibleCustomerIds() != null && !offer.getEligibleCustomerIds().isEmpty())
+    apply = offer.getEligibleCustomerIds().contains(req.customerId());   // empty allow-list ⇒ apply stays true
+// WRONG: trusts a client-asserted eligibility flag (CWE-285 — forge eligibility by editing the request)
+if (req.customerSaysEligible()) apply = true;
+// WRONG: no qualifier-quantity check at all — the target is discounted regardless of the cart
+if (apply) applyDiscount(offer, order);   // an ineligible offer reached the discount path
+```
+
+The incorrect version applies the offer to an order the merchant never authorized: an empty allow-list reads as "everyone", a client flag forges eligibility, and the BOGO threshold is never enforced — exactly the failing-open and improper-authorization weaknesses below. The correct version denies by default and never reaches `applyDiscount` for an ineligible offer.
+
+Reference: [CWE-636: Not Failing Securely ('Failing Open')](https://cwe.mitre.org/data/definitions/636.html)
+
+Reference: [CWE-840: Business Logic Errors](https://cwe.mitre.org/data/definitions/840.html)
+
+Reference: [CWE-285: Improper Authorization](https://cwe.mitre.org/data/definitions/285.html)
+
+
 <!-- @source rules/optimistic-update-snapshot-rollback.md -->
 
 ---
@@ -11422,6 +11625,98 @@ Reference: [FAR 52.207-4 — Economic Purchase Quantity—Supplies](https://www.
 Reference: [FAR 7.204 — Economic order quantities](https://www.acquisition.gov/far/7.204)
 
 Reference: [CWE-682: Incorrect Calculation](https://cwe.mitre.org/data/definitions/682.html)
+
+
+<!-- @source rules/order-tax-application-skips-exempt-scope-and-recompute-converges-to-one-record.md -->
+
+---
+title: Order-level tax application must (1) SKIP every declared-exempt scope — a tax-exempt customer or a tax-exempt line contributes ZERO to the non-exempt taxable base, so a fully-exempt order has total tax 0 — and (2) recompute IDEMPOTENTLY by find-existing → update-or-create-or-remove so that re-pricing converges to exactly ONE combined tax record per order whose amount == round(taxableBase × injectedRate), never duplicated and never stranded; the tax is DERIVED each time from the declared input and the injected rate, never a client-asserted amount
+impact: HIGH
+impactDescription: "A tax engine that re-prices without reconciling to a single record duplicates the tax row on every recompute (the order total double-counts tax) or strands a now-exempt order's old tax row (the customer is charged tax they are exempt from) — a silent business-logic correctness defect. Summing a declared-exempt line, or taxing an exempt customer, over-charges tax no jurisdiction authorized. Trusting a client-asserted tax amount lets an attacker forge the tax by editing the request. Floating-point currency or independent rounding of base and rate conjures or destroys money on every order. These are exactly the repeated-application and business-logic weaknesses anchored below — and they are portable: they hold for any order-level tax engine, independent of the (out-of-scope) jurisdiction rate table."
+tags:
+  - e-commerce
+  - tax
+  - idempotency
+  - business-logic
+  - money
+spec_ref: "specs/tax-application-l0.yaml#TAX-IDEMPOTENT-RECOMPUTE-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/taxapplication/TaxApplicationService.java + backend/src/main/java/com/ax/template/authblueprint/taxapplication/TaxAssessment.java"
+  pattern: "A single TaxApplicationService.recompute(orderId, rateBasisPoints) is the sole mutator of the derived tax record: it computes the non-exempt taxableBase via a pure taxableBase(order) that returns 0 for an exempt customer and skips every exempt line (EXEMPT-SKIP), computes tax = round(taxableBase × rate / 10000) half-up in integer minor units via a pure computeTax(base, rate) that yields 0 for a zero base, then reconciles to exactly one row by find-existing → update-or-create-or-remove: a zero base removes any existing row (never strands it), a non-zero base updates the existing row in place (identity preserved) or creates the first one; the TaxAssessment @AggregateRoot carries UNIQUE(order_id) so a second tax row per order is unrepresentable, @Version, @Check(tax_amount_minor >= 0 AND taxable_base_minor >= 0 AND rate_basis_points >= 0), immutable @Column(updatable=false) id/order_id and no public setter; the amount is never read from the request"
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2"
+  - "https://cwe.mitre.org/data/definitions/840.html"
+evidence:
+  - source_type: external
+    citation: "RFC 9110: HTTP Semantics, §9.2.2 Idempotent Methods — IETF"
+    url: "https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2"
+    quote: "A request method is considered \"idempotent\" if the intended effect on the server of multiple identical requests with that method is the same as the effect for a single such request."
+    quoted_at: "2026-06-28"
+  - source_type: external
+    citation: "CWE-840: Business Logic Errors — MITRE Common Weakness Enumeration"
+    url: "https://cwe.mitre.org/data/definitions/840.html"
+    quote: "Weaknesses in this category identify some of the underlying problems that commonly allow attackers to manipulate the business logic of an application. Errors in business logic can be devastating to an entire application."
+    quoted_at: "2026-06-28"
+---
+
+## Rule
+
+Order-level tax **application** (does the order owe tax, and how much, given an injected rate) has two separable, portable correctness invariants. The jurisdiction **rate** is supplied as input — a rate table / nexus rules and any external tax provider are deliberately **out of scope**, so the invariants hold for any tax engine.
+
+1. **EXEMPT-SKIP.** The non-exempt taxable base excludes every **declared-exempt** scope: a tax-exempt customer makes the order's taxable base `0`; each tax-exempt line contributes `0`; only non-exempt, positive line bases are summed. A fully-exempt order has total tax `0`. Exemption is a **declared** property of the customer/line — never inferred from amounts, never a client-asserted tax figure.
+2. **IDEMPOTENT-RECOMPUTE.** Re-pricing reconciles the order's tax to a **single derived record** by `find-existing → update-or-create-or-remove`: if the order is taxable, exactly one row exists carrying `amount == round(non-exempt taxableBase × injectedRate)`; if it is not taxable, no row exists. A second row per order is **unrepresentable** (`UNIQUE(order_id)`), and a now-exempt order's prior row is **removed, not stranded**. Repeated application has the same effect on persisted state as one application.
+
+Money is integer **minor units**; `tax = round(base × rate / 10000)` half-up. The amount is **derived** from the declared input + injected rate each time — never read from the request.
+
+**Correct — one pure exempt-skip base, one half-up tax, one find-existing→update-or-create-or-remove convergence:**
+
+```java
+// backend/.../taxapplication/TaxApplicationService.java
+static long taxableBase(TaxableOrder order) {          // EXEMPT-SKIP
+    if (order.isCustomerExempt()) return 0L;           // exempt customer ⇒ 0
+    return order.getLines().stream()
+        .filter(l -> !l.isExempt())                    // exempt line contributes 0
+        .mapToLong(TaxLine::getTaxableBaseMinor).filter(b -> b > 0).sum();
+}
+static long computeTax(long base, long rateBasisPoints) {
+    if (base <= 0 || rateBasisPoints <= 0) return 0L;  // exempt/zero path ⇒ 0
+    return Math.floorDiv(Math.multiplyExact(base, rateBasisPoints) + 5000L, 10000L); // round half-up, minor units
+}
+
+@Transactional
+public TaxResult recompute(UUID orderId, long rateBasisPoints) {           // IDEMPOTENT-RECOMPUTE
+    TaxableOrder order = orders.findById(orderId).orElseThrow(/* 404 */);
+    long base = taxableBase(order);
+    long tax = computeTax(base, rateBasisPoints);
+    Optional<TaxAssessment> existing = assessments.findByOrderIdForUpdate(orderId);
+    if (base == 0) {                                   // now exempt / nothing taxable
+        existing.ifPresent(assessments::delete);       // remove the prior row — never strand it
+        return TaxResult.none(orderId);
+    }
+    TaxAssessment row = existing
+        .map(a -> { a.recompute(tax, base, rateBasisPoints, now()); return a; }) // UPDATE in place (id preserved)
+        .orElseGet(() -> TaxAssessment.create(UUID.randomUUID(), orderId, tax, base, rateBasisPoints, now())); // CREATE
+    return TaxResult.of(assessments.save(row));        // exactly one row; UNIQUE(order_id) forbids a second
+}
+```
+
+**Incorrect — appends a new row each recompute, taxes exempt scope, trusts a client amount:**
+
+```java
+// WRONG: every recompute INSERTs another row — the order total double-counts tax on re-price
+TaxAssessment row = new TaxAssessment(UUID.randomUUID(), orderId, req.clientTaxAmount()); // trusts request (forgeable)
+assessments.save(row);                                  // no find-existing; duplicates; never removes a stranded row
+// WRONG: taxes the whole base, ignoring declared exemptions
+long base = order.getLines().stream().mapToLong(TaxLine::getTaxableBaseMinor).sum(); // exempt customer/line still taxed
+double tax = base * (rate / 10000.0);                   // floating-point currency — conjures/destroys money
+```
+
+The incorrect version charges tax the jurisdiction never authorized: it duplicates the tax row on every re-price (non-idempotent — the persisted effect of N recomputes differs from one), leaves a now-exempt order's old row stranded, sums exempt lines, and lets the client forge the amount — exactly the repeated-application and business-logic weaknesses below. The correct version converges to one derived row and skips every exempt scope.
+
+Reference: [RFC 9110 §9.2.2 — Idempotent Methods](https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2)
+
+Reference: [CWE-840: Business Logic Errors](https://cwe.mitre.org/data/definitions/840.html)
 
 
 <!-- @source rules/ordered-siblings-reorder-atomic.md -->
@@ -11752,6 +12047,104 @@ Verification: review-tier. Transfer safety is an authz + atomicity + audit prope
 Reference: [PostgreSQL — Transactions](https://www.postgresql.org/docs/current/tutorial-transactions.html)
 
 Reference: [OWASP ASVS V4 — Access Control](https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x12-V4-Access-Control.md)
+
+
+<!-- @source rules/password-reset-success-invalidates-token-family.md -->
+
+---
+title: A successful password reset MUST invalidate the user's ENTIRE family of outstanding unused reset tokens — not just the consumed one
+impact: HIGH
+impactDescription: "If a reset only marks the single consumed token used, every other reset token already issued to that account (a second 'forgot password' click, a token phished or shoulder-surfed earlier, a stale link in an old email) stays live after the password has changed — a CWE-640 weak-recovery replay window where an attacker holding any earlier token can reset the password again and hijack the account"
+tags:
+  - authn
+  - credential-recovery
+  - password-reset
+  - token-invalidation
+  - replay-resistance
+  - cwe-640
+spec_ref: "specs/auth-asvs-l1.yaml#AUTH-RESET-FAMILY-001"
+verification:
+  type: review
+  source: "specs/auth-asvs-l1.yaml"
+  pattern: "on a successful reset using ANY valid reset token, the reset transaction atomically marks ALL of that user's outstanding unused reset tokens used (a single bulk UPDATE/DELETE keyed on user_id + token_type), so a previously issued, never-consumed reset token is rejected after the reset; tokens are referenced by userId (DDD reference-by-id), and the invalidation runs in the SAME @Transactional path as the password write"
+upstream:
+  - "https://cwe.mitre.org/data/definitions/640.html"
+  - "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x11-V2-Authentication.md"
+evidence:
+  - source_type: external
+    citation: "CWE-640: Weak Password Recovery Mechanism for Forgotten Password — Description"
+    url: "https://cwe.mitre.org/data/definitions/640.html"
+    quote: "The product contains a mechanism for users to recover or change their passwords without knowing the original password, but the mechanism is weak."
+    quoted_at: "2026-06-28"
+  - source_type: external
+    citation: "OWASP ASVS v4.0.3 — V2.7.3 Out of Band Verifier (single-use recovery tokens)"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x11-V2-Authentication.md"
+    quote: "Verify that the out of band verifier authentication requests, codes, or tokens are only usable once, and only for the original authentication request."
+    quoted_at: "2026-06-28"
+  - source_type: external
+    citation: "OWASP ASVS v4.0.3 — V2.7.2 Out of Band Verifier (recovery token expiry)"
+    url: "https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x11-V2-Authentication.md"
+    quote: "Verify that the out of band verifier expires out of band authentication requests, codes, or tokens after 10 minutes."
+    quoted_at: "2026-06-28"
+---
+
+## A successful password reset MUST invalidate the user's ENTIRE family of outstanding unused reset tokens — not just the consumed one
+
+**Impact: HIGH — a reset that only burns the token it consumed leaves every other live reset token for the account valid, which is exactly the CWE-640 weak-recovery replay window**
+
+A password-reset flow issues a short-lived bearer token, mails it, and lets the holder set a new password. The obvious-but-wrong invariant is "the token I just used is single-use" — so the handler marks that one row `used = true` and stops. The real invariant is stronger: **the act of completing a recovery retires the whole recovery attempt, which means every token in that user's outstanding-unused reset family must die at once.**
+
+Why the single-token view is a hole. Reset tokens accumulate per account in normal use: a user clicks "forgot password" twice (two valid tokens), a token leaks from an old email or an over-the-shoulder glance, a help-desk re-issues one. ASVS V2.7.3 says recovery tokens are "only usable once, and only for the original authentication request" — but the *original authentication request* is the recovery, not the individual token. If consuming token A resets the password but leaves token B live, an attacker who captured B earlier can walk in afterward and reset the password again, locking out the legitimate owner. The original password change did nothing to close the door B opens. CWE-640 names this class precisely: a recovery mechanism that is "weak" because it does not fully retire the recovery surface.
+
+The fix is one atomic family-invalidation in the same transaction as the password write:
+
+1. **Validate the presented token** (exists, unused, unexpired, correct type) — unchanged.
+2. **Bulk-invalidate the whole family** — a single `UPDATE ... SET used = true WHERE user_id = ? AND token_type = 'RESET' AND used = false`. This marks the consumed token AND every sibling unused reset token in one statement, keyed on `user_id` (reference-by-id — never hold a Java pointer to the User aggregate).
+3. **Write the new password** in the same `@Transactional` method, so the password change and the family-invalidation commit or roll back together.
+
+After the fix the behavioral proof is: issue two reset tokens for one user → reset with token1 → token2 is rejected as already-used/invalid (HTTP 400), even though token2 was never consumed.
+
+**Incorrect — only the consumed token is retired; the sibling token survives the reset and can replay it:**
+
+```java
+@Transactional
+public PasswordResetResponse resetPassword(String token, String newPassword) {
+    VerificationToken vt = repo.findByTokenAndUsedFalse(token)
+        .orElseThrow(() -> new InvalidTokenException("Invalid or expired token"));
+    if (vt.getExpiresAt().isBefore(Instant.now())) throw new InvalidTokenException("Token expired");
+    vt.setUsed(true);            // ❌ burns ONLY this row
+    repo.save(vt);               // ❌ a second reset token issued earlier is still used=false → live
+    accounts.resetPassword(vt.getUserId(), newPassword);
+    return new PasswordResetResponse("Password reset successful.");
+}
+```
+
+**Correct — a successful reset atomically retires the user's entire unused reset-token family:**
+
+```java
+// repository — one indexed bulk update, keyed on the user id (reference-by-id)
+@Modifying(clearAutomatically = true, flushAutomatically = true)
+@Query("update VerificationToken v set v.used = true "
+    + "where v.userId = :userId and v.tokenType = :tokenType and v.used = false")
+int markAllUnusedAsUsed(@Param("userId") UUID userId, @Param("tokenType") String tokenType);
+
+@Transactional
+public PasswordResetResponse resetPassword(String token, String newPassword) {
+    VerificationToken vt = repo.findByTokenAndUsedFalse(token)
+        .orElseThrow(() -> new InvalidTokenException("Invalid or expired token"));
+    if (vt.getExpiresAt().isBefore(Instant.now())) throw new InvalidTokenException("Token expired");
+    UUID userId = vt.getUserId();
+    repo.markAllUnusedAsUsed(userId, "RESET");   // ✅ consumed token AND every sibling die together
+    accounts.resetPassword(userId, newPassword); // ✅ same transaction as the password write
+    return new PasswordResetResponse("Password reset successful.");
+}
+```
+
+The negative test that proves it: request a reset twice for the same account so two unused `RESET` tokens exist; `POST /password-reset` with token1 → **200**; `POST /password-reset` with token2 (never used) → **400** already-used/invalid. Both tokens are now `used = true`. Verification is review-tier here, backed by the auth domain's `@Tag("ASVS")` behavioral test (`passwordReset_successInvalidatesEntireTokenFamily`) which exercises exactly this two-token replay path under `./gradlew testAsvs`.
+
+Reference: [CWE-640: Weak Password Recovery Mechanism for Forgotten Password](https://cwe.mitre.org/data/definitions/640.html)
+
+Reference: [OWASP ASVS v4.0.3 — V2 Authentication (V2.7 Out of Band Verifier)](https://raw.githubusercontent.com/OWASP/ASVS/v4.0.3/4.0/en/0x11-V2-Authentication.md)
 
 
 <!-- @source rules/payment-iso-4217-currency.md -->

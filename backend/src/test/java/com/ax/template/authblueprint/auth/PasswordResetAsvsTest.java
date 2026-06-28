@@ -167,6 +167,41 @@ class PasswordResetAsvsTest {
     }
 
     @Test
+    @Tag("ASVS")
+    @Tag("AUTH-RESET-FAMILY-001")
+    void passwordReset_successInvalidatesEntireTokenFamily() throws Exception {
+        // Issue TWO password-reset tokens for the same user (e.g. the user clicked
+        // "forgot password" twice). Both are unused and currently valid.
+        mockMvc.perform(post("/api/auth/email/password-reset-request")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"reset@example.com\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/auth/email/password-reset-request")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"reset@example.com\"}"))
+                .andExpect(status().isOk());
+
+        UserEntity user = userRepository.findByEmail("reset@example.com").orElseThrow();
+        List<VerificationToken> tokens = tokenRepository.findByUserIdAndTokenType(user.getId(), "RESET");
+        assertThat(tokens).hasSize(2);
+        String token1 = tokens.get(0).getToken();
+        String token2 = tokens.get(1).getToken();
+
+        // Consuming token1 resets the password AND must invalidate the whole family.
+        mockMvc.perform(post("/api/auth/email/password-reset")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"" + token1 + "\",\"newPassword\":\"brandnewpass12\"}"))
+                .andExpect(status().isOk());
+
+        // token2 — never used, but issued before the reset — must now be rejected as
+        // already-used/invalid (token-FAMILY invalidation, not just single-token).
+        mockMvc.perform(post("/api/auth/email/password-reset")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"" + token2 + "\",\"newPassword\":\"anotherpasswd12\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void passwordResetRequest_sameResponseForExistingAndNonexistentEmail() throws Exception {
         var r1 = mockMvc.perform(post("/api/auth/email/password-reset-request")
                 .contentType(MediaType.APPLICATION_JSON)

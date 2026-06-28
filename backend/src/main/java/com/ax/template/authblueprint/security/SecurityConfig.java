@@ -372,6 +372,27 @@ public class SecurityConfig {
                 // method-level backstop.
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bundle-pricing/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/api/bundle-pricing/**").authenticated()
+                // OFFER-ELIGIBILITY (offer-eligibility-l0): the WHO/WHICH-ITEMS applicability gate.
+                // OFFER-AUTHZ-001 — defining an offer is an ADMIN catalog mutation (/api/admin/offers,
+                // gated by the upstream "/api/admin/**" ROLE_ADMIN rule + the controller @PreAuthorize
+                // backstop). Reading + evaluating eligibility require a valid JWT. Eligibility is
+                // evaluated deterministically and FAIL-CLOSED by OfferEligibilityService — an
+                // ineligible offer never reaches the discount-application path.
+                .requestMatchers("/api/offers/**").authenticated()
+                // TAX-APPLICATION (tax-application-l0): order-level tax application — EXEMPT-SKIP +
+                // IDEMPOTENT single-record recompute. TAX-AUTHZ-001 — defining the taxable order,
+                // declaring exemption, and re-pricing (recompute) are mutating ADMIN catalog
+                // operations (/api/admin/tax-orders/**, gated by the upstream "/api/admin/**"
+                // ROLE_ADMIN rule + the controller @PreAuthorize backstop). Reading the combined
+                // tax (/api/tax-orders/{id}/tax) requires a valid JWT.
+                .requestMatchers("/api/tax-orders/**").authenticated()
+                // CURRENCY-ARITHMETIC (currency-arithmetic-l0): a currency-tagged monetary value
+                // object whose arithmetic is FAIL-CLOSED across currencies — adding/subtracting two
+                // amounts of different ISO-4217 currencies absent an explicit recorded conversion
+                // throws (422 CURRENCY_MISMATCH). All ledger operations (create / add / subtract /
+                // add-converted / read) require a valid JWT; the fail-closed guard lives in the
+                // CurrencyMoney value type. Closes BACKLOG P1-58.
+                .requestMatchers("/api/currency-ledgers/**").authenticated()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers

@@ -1,0 +1,90 @@
+template_id: "tax-application-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "Order-level tax application where the jurisdiction rate is INJECTED by the caller / provider"
+  - "Tax-exempt customers or tax-exempt lines that must contribute ZERO tax (declared exemption)"
+  - "A combined tax record that must be recomputed idempotently — exactly one row per order, never duplicated, never stranded"
+
+not_for:
+  - "Deriving the jurisdiction tax RATE (a rate table / nexus rules) — explicitly out of scope; the rate is supplied as input"
+  - "Calling an external tax provider (Avalara / TaxJar / etc.) — this domain is framework- and provider-agnostic"
+  - "Discount / promotion MATH — proration, clamping, stacking are a separate concern; tax applies to the taxable base it is given"
+
+must_not:
+  - "Recompute the tax anywhere but the single TaxApplicationService.recompute (no controller-side or ad-hoc tax math)"
+  - "Leave a stranded tax row — a now-exempt / now-zero order MUST have its prior tax row removed"
+  - "Permit a second tax row per order — UNIQUE(order_id) makes it unrepresentable"
+  - "Trust a client-asserted tax amount — the tax is DERIVED from the declared input + injected rate each time"
+  - "Sum an exempt line or tax an exempt customer — declared-exempt scope contributes ZERO to the taxable base"
+  - "Use floating-point currency — money is integer minor units; tax = round(taxableBase × rate) half-up"
+  - "Mutate the order/assessment identity after creation — id/order_id are @Column(updatable=false) with no public setter"
+
+reject_if:
+  - "recompute with rate_basis_points < 0 -> 422 TAX_RATE_INVALID"
+  - "create with a line taxable_base_minor < 0 -> 422 TAX_LINE_INVALID"
+  - "read / recompute / declare-exempt an unknown order id -> 404 TAX_ORDER_NOT_FOUND (IDOR-safe; never 403-leak existence)"
+  - "define / declare-exempt / recompute by a non-ROLE_ADMIN principal -> 403"
+
+source_precedence:
+  - "RFC 9110 §9.2.2 Idempotent Methods — authoritative for the idempotent-recompute convergence (repeated application == one)"
+  - "CWE-840 Business Logic Errors — a duplicated/stranded tax row or a taxed exempt scope is a business-logic correctness defect"
+  - "RFC 9457 — problem+json error shape for 404/422"
+  - "ax-template catalog primitives — domain-metrics-bounded-cardinality, caller-authentication, persistence immutable-identity, optimistic-locking @Version"
+
+official_doc_refs:
+  - "https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2"
+  - "https://cwe.mitre.org/data/definitions/840.html"
+  - "https://www.rfc-editor.org/rfc/rfc9457"
+
+# ─── invariants ────────────────────────────────────────────────────────────────
+invariants:
+  exempt_skip:                          # TAX-EXEMPT-SKIP-001
+    rule: "non-exempt taxable base = Σ(line.taxableBaseMinor where !customerExempt AND !line.exempt AND base > 0)"
+    fully_exempt_order: "taxable base 0 ⇒ tax 0 ⇒ no tax row"
+    declared: true                      # exemption is a declared property, never inferred
+  idempotent_recompute:                 # TAX-IDEMPOTENT-RECOMPUTE-001
+    reconcile: "find-existing → update-or-create-or-remove"
+    converges_to: "exactly ONE tax row per order (UNIQUE(order_id)) whose amount == round(base × rate)"
+    now_exempt: "prior tax row removed, never stranded"
+    repeated_application: "same effect on persisted state as one (RFC 9110 §9.2.2)"
+
+# ─── computation ───────────────────────────────────────────────────────────────
+computation:
+  money: "integer minor units (no floating-point currency)"
+  rate: "INJECTED by the caller, basis points (1 bp = 0.01%); no rate table"
+  formula: "tax = round(non-exempt taxableBase × rateBasisPoints / 10000), half-up"
+  purity: "computeTax / taxableBase are pure: no I/O, no wall-clock read; deterministic for a given order + rate"
+
+# ─── authz ─────────────────────────────────────────────────────────────────────
+authz:
+  define_declare_recompute_roles: [ROLE_ADMIN]   # TAX-AUTHZ-001 — mutating catalog operations
+  read_roles: authenticated                       # GET /api/tax-orders/{id}/tax
+  not_found_status: 404                            # IDOR-safe; never 403-leak existence
+
+# ─── persistence ───────────────────────────────────────────────────────────────
+persistence:
+  aggregate_roots: [TaxableOrder, TaxAssessment]
+  immutable_identity: true               # @Column(updatable=false) on id/order_id; no public setter
+  version_guarded: true                  # @Version Long on both roots
+  single_record_per_order: "UNIQUE(order_id) on tax_assessments — a second row is unrepresentable"
+  cross_aggregate_ref: "TaxAssessment references TaxableOrder by UUID order_id (identity, not pointer)"
+  check_constraint: "tax_amount_minor >= 0 AND taxable_base_minor >= 0 AND rate_basis_points >= 0"
+
+# ─── observability ─────────────────────────────────────────────────────────────
+observability:
+  counter: "tax_application_recompute_total"      # the recompute outcome
+  labels: [outcome]                                # outcome in {created, updated, removed, exempt_zero}
+  excluded_labels: [order_id, tax_amount_minor]    # no unbounded cardinality, no amount
+
+testing_baseline:
+  task: "./gradlew testTaxApplication"
+  tag: "TAX_APPLICATION"
+  style: "RestAssured black-box integration (RANDOM_PORT) + reflection ViolationProof"
+
+verification_checkpoints:
+  - "TAX-IDEMPOTENT-RECOMPUTE-001: recompute twice -> ONE tax row, same id, amount == correct tax; declare exempt + recompute -> prior row removed"
+  - "TAX-EXEMPT-SKIP-001: exempt customer -> 0 tax / no row; exempt line contributes 0; non-exempt base only is taxed"
+  - "TAX-AUTHZ-001: non-admin define/recompute -> 403; unknown id -> 404 TAX_ORDER_NOT_FOUND"
+
+last_reviewed_at: "2026-06-28"
