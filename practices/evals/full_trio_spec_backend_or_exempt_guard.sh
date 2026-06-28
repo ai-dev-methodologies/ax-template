@@ -135,8 +135,12 @@ def enforced(fn, txt):
     ids = item_ids(txt)
     covering_tags = set()
     if ids:
+        # whole-token match (NOT substring): an item id must appear delimited by non-id chars,
+        # so a short id can't be falsely "enforced" by being a substring of a longer id-like token
+        # in an unrelated backend test (false-negative that would let a real escape skip the allowlist).
+        id_res = [re.compile(r'(?<![A-Za-z0-9_-])' + re.escape(iid) + r'(?![A-Za-z0-9_-])') for iid in ids]
         for f, ftxt in file_text.items():
-            if any(iid in ftxt for iid in ids):
+            if any(r.search(ftxt) for r in id_res):
                 covering_tags |= file_tags[f]
     hit = covering_tags & per_domain_tag_union
     if hit:
