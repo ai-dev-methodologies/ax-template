@@ -27,7 +27,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * test (spec_item_verification_binding guard). Spec: specs/soft-delete-l0.yaml.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+// BEFORE_CLASS (was AFTER_CLASS): in the batched R25 per-domain run (146 @SpringBootTest contexts vs
+// the default 32-entry ContextCache) this class's own context could be LRU-evicted mid-run, leaving
+// @LocalServerPort pointing at a dead Tomcat → spurious failures. BEFORE_CLASS forces a fresh live
+// context at class start, guaranteeing a live server for the whole class.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 class SoftDeleteComplianceTest {
 
     @LocalServerPort
