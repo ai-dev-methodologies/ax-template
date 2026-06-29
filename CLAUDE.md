@@ -303,6 +303,10 @@ task 전 GREEN + aggregate `./gradlew test` 는 advisory PortabilityCyclic
 | `./gradlew testTrueUp`         | GREEN    | 13/13 PASS (P1-14~17,19 — wave-8 remeasurement-trueup: 추정→실측 supersession(append-only, 강등 422) + 버전드 run(basis 기록, 멱등 재계산) + CLOSED 기간 NET delta forward 포스팅(보존 run_of_record+Σpostings==latest) + grid 결측 422 + OPEN→CLOSED→SEALED fail-closed) |
 | `./gradlew testObligation`     | GREEN    | 10/10 PASS (P1-10~13 deadline-obligation: grounded 도출식 기한 + multi-axis min(candidates) + ladder exactly-once + closed-loop ack-only terminal, EXPIRED 없음) |
 | `./gradlew testDecisionGov`    | GREEN    | 12/12 PASS (P1-1~4 decision-governance: basis 불변 스냅숏 + 재산정 reason 필수 append + override 4-eyes(@Check approved_by<>decided_by) + 8-thread 동시성 keystone) |
+| `./gradlew testBundlePricing`  | GREEN    | 15/15 PASS (Broadleaf 재감사 #1 — bundle/kit 합성가격 보존 roll-up: ITEM_SUM Σ(child unit×qty)+fees, BUNDLE 고정가, taxability child 파생; stored-total 없음 derive-on-read로 위반 불가; adversarial opus ACCEPT. 앵커 IFRS 15/ASC 606) |
+| `./gradlew testOfferEligibility` | GREEN | 14/14 PASS (Broadleaf 재감사 #3 — offer 적격성: fail-closed deny-by-default qualifier→target min-qty + customer/segment gate; 부적격은 discount 경로 도달 불가. 앵커 CWE-636/840/285) |
+| `./gradlew testTaxApplication` | GREEN    | 14/14 PASS (Broadleaf 재감사 #4 — tax-exempt skip→0세 + idempotent recompute: UNIQUE(order_id) 엔티티-레벨로 정확히 1 tax row, now-exempt 시 prior 삭제; rate injected. 앵커 RFC 9110 §9.2.2 + CWE-840) |
+| `./gradlew testCurrencyArithmetic` | GREEN | 14/14 PASS (Broadleaf 재감사 #5 — cross-currency fail-closed: CurrencyMoney plus/minus 통화 불일치 시 422 throw before any value/persist, convertedVia만 cross-ccy seam; common/Money.java 무수정. 앵커 ISO 4217 + Fowler + CWE-682) |
 | `./gradlew testPortability`    | advisory | 외부 fixture (spring-realworld-example-app) 에 cycle 있음. fork-receiver의 코드가 아니라 외부 reference 코드의 결함 |
 
 전체 `./gradlew test` aggregate 도 **PortabilityCyclic advisory 1건을 제외하면
