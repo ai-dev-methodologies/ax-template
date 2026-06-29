@@ -2,7 +2,7 @@
 
 - vertical: pricing
 - broadleaf_source: core/.../pricing/service/workflow/FulfillmentItemPricingActivity.java:~; pricing/service/workflow/TotalActivity.java:~
-- spec_items: PRICING-ORDER-001
+- spec_items: PRICING-ORDER-001, PRICING-ORDER-002, PRICING-TOTAL-001
 - rule: practices/rules/pricing-pipeline-orders-discount-before-tax-and-total-conserves.md
 - behavioral_test: backend/src/test/java/com/ax/template/authblueprint/commercepricing/CommercePricingComplianceTest.java
 - violation_proof: backend/src/test/java/com/ax/template/authblueprint/commercepricing/CommercePricingViolationProofTest.java

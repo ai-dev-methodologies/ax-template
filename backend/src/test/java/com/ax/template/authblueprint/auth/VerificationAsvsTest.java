@@ -97,6 +97,31 @@ class VerificationAsvsTest {
     }
 
     @Test
+    @Tag("ASVS")
+    @Tag("ASVS-V2.7.3")
+    void verifyEmail_rejectsResetToken_typeConfusion() throws Exception {
+        UserEntity user = createUnverifiedUser("crosstype@example.com");
+
+        VerificationToken resetToken = new VerificationToken();
+        resetToken.setToken(UUID.randomUUID().toString());
+        resetToken.setUserId(user.getId());
+        resetToken.setExpiresAt(Instant.now().plus(1, ChronoUnit.HOURS));
+        resetToken.setUsed(false);
+        resetToken.setTokenType("RESET");
+        tokenRepository.save(resetToken);
+
+        // A RESET token presented to the email-verify endpoint MUST be rejected (CWE-843).
+        mockMvc.perform(post("/api/auth/email/verify-email")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"" + resetToken.getToken() + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        // The email stays unverified — the wrong-type token did not take effect.
+        UserEntity unchanged = userRepository.findByEmail("crosstype@example.com").orElseThrow();
+        assertThat(unchanged.isEmailVerified()).isFalse();
+    }
+
+    @Test
     void resendVerification_invalidatesOldToken() throws Exception {
         UserEntity user = createUnverifiedUser("resend@example.com");
         VerificationToken oldToken = createToken(user, Instant.now().plus(24, ChronoUnit.HOURS));

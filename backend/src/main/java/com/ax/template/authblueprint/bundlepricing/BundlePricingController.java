@@ -73,6 +73,16 @@ public class BundlePricingController {
         return problem(HttpStatus.BAD_REQUEST, "INVALID_COMPOSITE_ITEM", ex.getMessage());
     }
 
+    /**
+     * A composite roll-up whose totals exceed the representable long range (Math.*Exact overflow)
+     * is an unprocessable input, not a server fault — map it to 422 rather than a raw 500.
+     */
+    @ExceptionHandler(ArithmeticException.class)
+    public ResponseEntity<ProblemDetail> handleOverflow(ArithmeticException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "BUNDLE_PRICE_OVERFLOW",
+            "composite price roll-up overflowed the representable range");
+    }
+
     private static ResponseEntity<ProblemDetail> problem(HttpStatus status, String code, String detail) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, detail);
         pd.setProperty("code", code);

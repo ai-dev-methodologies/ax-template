@@ -25,7 +25,7 @@ import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * CompositeItem — a bundle / kit whose price is a CONSERVING roll-up of its children
- * (absorbed from the external reference {@code BundleOrderItemImpl}).
+ * (a composite/bundle order-item's conserving roll-up).
  *
  * <p><b>The invariant, made unrepresentable-to-violate.</b> A composite has NO stored
  * rolled-up total column. Its price is a PURE derivation ({@link #priceRollUp()}) recomputed
@@ -164,17 +164,17 @@ public class CompositeItem {
         long sale = 0L;
         long taxablePrice = 0L;
         for (CompositeComponent c : components) {
-            retail += c.retailSubtotal();
-            sale += c.saleSubtotal();
+            retail = Math.addExact(retail, c.retailSubtotal());
+            sale = Math.addExact(sale, c.saleSubtotal());
             if (c.isTaxable()) {
-                taxablePrice += c.retailSubtotal();
+                taxablePrice = Math.addExact(taxablePrice, c.retailSubtotal());
             }
         }
         for (BundleFee f : fees) {
-            retail += f.getAmount();
-            sale += f.getAmount();
+            retail = Math.addExact(retail, f.getAmount());
+            sale = Math.addExact(sale, f.getAmount());
             if (f.isTaxable()) {
-                taxablePrice += f.getAmount();
+                taxablePrice = Math.addExact(taxablePrice, f.getAmount());
             }
         }
         return new Pricing(retail, sale, taxablePrice, taxable);

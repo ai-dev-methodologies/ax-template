@@ -74,6 +74,12 @@ public class OfferEligibilityService {
 
     // ─── Core: evaluate eligibility (the sole evaluator) ────────────────────────────
 
+    /**
+     * Evaluate {@code offerId} against the SUPPLIED {@code ctx}. Trust boundary: the customer
+     * identity and segments in {@code ctx} are taken as given — this evaluator does NOT bind them to
+     * an authenticated principal and assumes a trusted upstream resolved/authorized the context. It
+     * decides applicability only; it is not the authorization seam (see the controller Javadoc).
+     */
     @Transactional(readOnly = true)
     public EligibilityDecision evaluate(UUID offerId, EvaluationContext ctx) {
         EligibilityOffer offer = offers.findById(offerId)

@@ -93,6 +93,17 @@ public class OfferEligibilityController {
 
     // ── Evaluate eligibility (authenticated) ─────────────────────────────────────
 
+    /**
+     * Evaluate an offer against a SUPPLIED order/customer context. This is a pure
+     * <em>evaluate-supplied-context</em> primitive: it computes the deterministic, fail-closed
+     * applicability decision for the {@code customerId} and {@code customerSegments} passed in the
+     * request body. It does NOT bind the evaluated identity to the authenticated principal and does
+     * NOT itself enforce that the caller owns the supplied customer context — it assumes a TRUSTED
+     * UPSTREAM has already resolved and authorized that context. The CWE-285 (Improper Authorization)
+     * concern this domain anchors to is the gating of the discount as a protected resource downstream,
+     * not an ownership check at this evaluation seam; a deployment that exposes this endpoint to an
+     * untrusted caller MUST resolve the customer context from the authenticated principal upstream.
+     */
     @PostMapping("/api/offers/{id}/evaluate")
     public DecisionDto evaluate(@PathVariable UUID id, @Valid @RequestBody EvaluateReq req) {
         List<OfferEligibilityService.Line> lines = req.lines() == null ? List.of()

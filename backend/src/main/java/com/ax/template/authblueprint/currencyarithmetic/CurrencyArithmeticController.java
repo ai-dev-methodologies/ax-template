@@ -106,4 +106,17 @@ public class CurrencyArithmeticController {
         pd.setProperty("code", ex.code());
         return ResponseEntity.status(ex.status()).body(pd);
     }
+
+    /**
+     * A Math.*Exact overflow during same-currency arithmetic is an unprocessable monetary input,
+     * not a server fault — map it to 422 rather than a raw 500.
+     */
+    @ExceptionHandler(ArithmeticException.class)
+    public ResponseEntity<ProblemDetail> handleOverflow(ArithmeticException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY,
+            "monetary arithmetic overflowed the representable range");
+        pd.setType(URI.create("urn:problem:arithmetic-overflow"));
+        pd.setProperty("code", "ARITHMETIC_OVERFLOW");
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(pd);
+    }
 }

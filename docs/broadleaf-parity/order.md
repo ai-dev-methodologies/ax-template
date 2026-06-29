@@ -2,7 +2,7 @@
 
 - vertical: order
 - broadleaf_source: core/.../order/domain/OrderItem.java; order/service/type/OrderStatus.java; order/domain/Order.java
-- spec_items: ORDER-SNAPSHOT-001
+- spec_items: ORDER-SNAPSHOT-001, ORDER-IMMUTABLE-001, ORDER-MERGE-001, ORDER-FULFILL-001, ORDER-TOTAL-SNAPSHOT-001
 - rule: practices/rules/order-cart-spine-price-snapshot-immutable-after-submit-merge-and-fulfillment-conserves.md
 - behavioral_test: backend/src/test/java/com/ax/template/authblueprint/commerceorder/CommerceOrderComplianceTest.java
 - violation_proof: backend/src/test/java/com/ax/template/authblueprint/commerceorder/CommerceOrderViolationProofTest.java

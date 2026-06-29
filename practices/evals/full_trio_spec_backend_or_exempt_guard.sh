@@ -154,7 +154,7 @@ def enforced(fn, txt):
 full_trio = []
 for s in sorted(glob.glob(os.path.join(repo, 'specs/*.yaml'))):
     txt = open(s, encoding='utf-8', errors='ignore').read()
-    if re.search(r'^\s*domain_mode:\s*"?full_trio', txt, re.M):
+    if re.search(r'^\s*domain_mode:\s*"?full_trio"?\s*(#.*)?$', txt, re.M):
         full_trio.append((os.path.basename(s), txt))
 
 violations = []

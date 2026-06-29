@@ -96,11 +96,11 @@ public class CompositeComponent {
     public CompositeItem getCompositeItem() { return compositeItem; }
 
     /** This child's retail subtotal in the conserving roll-up: unitRetailPrice × quantity. */
-    long retailSubtotal() { return unitRetailPrice * quantity; }
+    long retailSubtotal() { return Math.multiplyExact(unitRetailPrice, quantity); }
 
     /** This child's sale subtotal: (unitSalePrice ?? unitRetailPrice) × quantity. */
     long saleSubtotal() {
         long unitSale = (unitSalePrice != null) ? unitSalePrice : unitRetailPrice;
-        return unitSale * quantity;
+        return Math.multiplyExact(unitSale, quantity);
     }
 }

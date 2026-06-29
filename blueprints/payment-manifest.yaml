@@ -205,10 +205,10 @@ callback:
   audit_required: true   # every callback (success OR signature-fail) MUST emit an audit ledger row
 
 split:
-  # Split tender (Broadleaf-absorption payment vertical, 2026-06-25): one order paid by N tenders.
+  # Split tender (split-tender payment vertical, 2026-06-25): one order paid by N tenders.
   applicability: "any order that may be paid by more than one payment row sharing one order_id (multi-card, gift-card + card)."
   coverage_invariant: "Σ(active, successfully-authorized tender amount for order_id, single currency) ≥ order frozen total"   # PAYMENT-SPLIT-001
-  coverage_basis: "ORDER-TOTAL-SNAPSHOT-001 frozen total, SUPPLIED BY THE TRUSTED ORCHESTRATOR (payment is isolated from the order aggregate; it does not resolve the total itself — mirrors Broadleaf ValidateAndConfirmPaymentActivity reading order.getTotal() from checkout context). Exact BigDecimal at currency scale, no float."
+  coverage_basis: "ORDER-TOTAL-SNAPSHOT-001 frozen total, SUPPLIED BY THE TRUSTED ORCHESTRATOR (payment is isolated from the order aggregate; it does not resolve the total itself — the orchestrator supplies the frozen total from checkout context (payment never resolves it itself)). Exact BigDecimal at currency scale, no float."
   under_covered_response: 422   # PAYMENT_TENDERS_UNDERFUNDED, residual shortfall disclosed in the problem body
   authorized_states_counted: [AUTHORIZED, CAPTURED]   # active tenders that count toward coverage; CREATED/VOIDED/FAILED/UNKNOWN excluded. A fully-REFUNDED tender drops out; a PARTIAL_REFUNDED tender is excluded entirely (fail-safe under-count, never over-counts coverage)
   capture_bound_invariant: "Σ captured ≤ authorized (auth-side dual of refund cap; PAYMENT-SPLIT-002, impl-deferred)"

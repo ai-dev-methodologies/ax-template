@@ -36,29 +36,36 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Forbidden = ANY Broadleaf mention (case-insensitive) in the implementation tree. This subsumes the
-# ported-source markers (import/package org.broadleafcommerce, Fair Use License header) AND now also
-# forbids bare NAME references even in comments/Javadoc/SQL — the shipped implementation code must read
-# as standalone; the absorption provenance lives only in docs/rules/parity (fair-use, not scanned).
-PATTERNS='[Bb]roadleaf'
+# Forbidden = ANY Broadleaf reference (TRULY case-insensitive, via grep -i — strengthened 2026-06-29
+# from [Bb]roadleaf which missed BROADLEAF) in the shipped tree. Subsumes ported-source markers
+# (import/package org.broadleafcommerce, Fair Use License header), bare NAME mentions in
+# comments/Javadoc/SQL, AND provider-unique class names a fork-receiver could trace back. The shipped
+# implementation + build/policy artifacts must read as standalone; provenance lives only in
+# docs/rules/parity (fair-use, not scanned).
+PATTERNS='broadleaf|BundleOrderItemImpl|ValidateAndConfirmPaymentActivity|DecrementInventoryActivity|OfferAuditImpl'
 
 if [ -n "$ROOT_OVERRIDE" ]; then
     # Fixture mode: scan the whole override root.
     [ -d "$ROOT_OVERRIDE" ] || { echo "broadleaf_no_port_guard: root not found: $ROOT_OVERRIDE" >&2; exit 2; }
     SCAN_DIRS="$ROOT_OVERRIDE"
 else
-    # Live mode: scan ONLY our implementation source trees (not rules/specs/docs).
+    # Live mode: scan the SHIPPED implementation + build/policy artifacts a fork-receiver gets — NOT
+    # rules/specs/docs (the intentional fair-use citation zone). Widened 2026-06-29 to include
+    # backend/build.gradle.kts + blueprints/ (both ship and must read standalone); build output
+    # (backend/bin, build/) is gitignored and regenerated, so it is not scanned.
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
     cd "$REPO_ROOT" || { echo "broadleaf_no_port_guard: cannot cd repo root" >&2; exit 2; }
     SCAN_DIRS=""
     [ -d backend/src ] && SCAN_DIRS="$SCAN_DIRS backend/src"
     [ -d frontend/src ] && SCAN_DIRS="$SCAN_DIRS frontend/src"
+    [ -f backend/build.gradle.kts ] && SCAN_DIRS="$SCAN_DIRS backend/build.gradle.kts"
+    [ -d blueprints ] && SCAN_DIRS="$SCAN_DIRS blueprints"
     [ -n "$SCAN_DIRS" ] || { echo "broadleaf_no_port_guard: no implementation source trees found" >&2; exit 2; }
 fi
 
-# grep -rlE: list files containing any forbidden pattern. Restrict to source/text files.
-HITS="$(grep -rlE "$PATTERNS" $SCAN_DIRS 2>/dev/null || true)"
+# grep -rliE: case-insensitive, list files containing any forbidden pattern.
+HITS="$(grep -rliE "$PATTERNS" $SCAN_DIRS 2>/dev/null || true)"
 
 if [ -n "$HITS" ]; then
     echo "broadleaf_no_port_guard: FAIL — Broadleaf mention detected in the implementation tree:" >&2

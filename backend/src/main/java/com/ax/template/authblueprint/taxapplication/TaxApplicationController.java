@@ -3,6 +3,7 @@ package com.ax.template.authblueprint.taxapplication;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -103,5 +104,32 @@ public class TaxApplicationController {
         pd.setType(URI.create(ex.type()));
         pd.setProperty("code", ex.code());
         return ResponseEntity.status(ex.status()).body(pd);
+    }
+
+    /**
+     * A Math.multiplyExact overflow while computing tax is an unprocessable input, not a server
+     * fault — map it to 422 rather than a raw 500.
+     */
+    @ExceptionHandler(ArithmeticException.class)
+    public ResponseEntity<ProblemDetail> handleOverflow(ArithmeticException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY,
+            "tax computation overflowed the representable range");
+        pd.setType(URI.create("urn:problem:arithmetic-overflow"));
+        pd.setProperty("code", "ARITHMETIC_OVERFLOW");
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(pd);
+    }
+
+    /**
+     * Two concurrent FIRST recomputes of the same order both find no existing assessment row to
+     * lock and race to INSERT; the UNIQUE(order_id) constraint rejects the loser. That is a
+     * retryable conflict (409), not a 500 — the single-row convergence invariant still holds.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleConflict(DataIntegrityViolationException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+            "concurrent tax recompute conflicted; retry");
+        pd.setType(URI.create("urn:problem:tax-recompute-conflict"));
+        pd.setProperty("code", "TAX_RECOMPUTE_CONFLICT");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
     }
 }

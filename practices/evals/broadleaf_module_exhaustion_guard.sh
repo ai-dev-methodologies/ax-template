@@ -53,7 +53,8 @@ MODULE_COUNT="$(grep -m1 -E '^module_count:' "$LEDGER" | sed -E 's/^module_count
 COMMON_COUNT="$(grep -m1 -E '^common_subpackage_count:' "$LEDGER" | sed -E 's/^common_subpackage_count:[[:space:]]*//' | tr -d ' ')"
 PROFILE_COUNT="$(grep -m1 -E '^profile_subpackage_count:' "$LEDGER" | sed -E 's/^profile_subpackage_count:[[:space:]]*//' | tr -d ' ')"
 RESIDUE_COUNT="$(grep -m1 -E '^residue_count:' "$LEDGER" | sed -E 's/^residue_count:[[:space:]]*//' | tr -d ' ')"
-for pair in "maven_module_count:$MAVEN_COUNT" "module_count:$MODULE_COUNT" "common_subpackage_count:$COMMON_COUNT" "profile_subpackage_count:$PROFILE_COUNT" "residue_count:$RESIDUE_COUNT"; do
+ABSORBED_COUNT="$(grep -m1 -E '^absorbed_vertical_count:' "$LEDGER" | sed -E 's/^absorbed_vertical_count:[[:space:]]*//' | tr -d ' ')"
+for pair in "maven_module_count:$MAVEN_COUNT" "module_count:$MODULE_COUNT" "common_subpackage_count:$COMMON_COUNT" "profile_subpackage_count:$PROFILE_COUNT" "residue_count:$RESIDUE_COUNT" "absorbed_vertical_count:$ABSORBED_COUNT"; do
     name="${pair%%:*}"; val="${pair#*:}"
     if ! echo "$val" | grep -qE '^[0-9]+$'; then echo "broadleaf_module_exhaustion_guard: FAIL — missing/invalid '$name:' header" >&2; exit 1; fi
 done
@@ -92,6 +93,7 @@ while IFS= read -r line; do
     [ -z "$evidence" ] && { echo "broadleaf_module_exhaustion_guard: FAIL — '$module' has empty evidence" >&2; FAIL=1; }
     if [ "$SECTION" = "maven" ]; then
         MAVEN_ROWS=$((MAVEN_ROWS+1)); MAVEN_MODULES="$MAVEN_MODULES$module"$'\n'
+        [ "$classif" = "RESIDUE" ] && RESIDUE_ROWS=$((RESIDUE_ROWS+1))
     elif [ "$SECTION" = "core" ]; then
         CORE_ROWS=$((CORE_ROWS+1)); CORE_MODULES="$CORE_MODULES$module"$'\n'
         [ "$classif" = "RESIDUE" ] && RESIDUE_ROWS=$((RESIDUE_ROWS+1))
@@ -112,7 +114,9 @@ done < "$LEDGER"
 # 4. RESIDUE rows == residue_count
 [ "$RESIDUE_ROWS" -ne "$RESIDUE_COUNT" ] && { echo "broadleaf_module_exhaustion_guard: FAIL — $RESIDUE_ROWS RESIDUE rows but residue_count declares $RESIDUE_COUNT" >&2; FAIL=1; }
 
-# 5. (live) no unledgered residue: (#parity records − 8 absorbed verticals) == residue_count
+# 5. (live) no unledgered residue: (#parity records − absorbed_vertical_count) == residue_count.
+#    absorbed_vertical_count is read from the ledger header (was a hardcoded '8' — a maintenance trap
+#    that would spuriously block the next absorption; now bumping it is co-located with the ledger).
 if [ "$LIVE" -eq 1 ]; then
     PARITY_DIR="$REPO_ROOT/docs/broadleaf-parity"
     if [ -d "$PARITY_DIR" ]; then
@@ -122,9 +126,9 @@ if [ "$LIVE" -eq 1 ]; then
             case "$(basename "$f")" in REGISTRY.md|README.md) continue ;; esac
             TOTAL_PARITY=$((TOTAL_PARITY+1))
         done
-        RESIDUE_PARITY=$((TOTAL_PARITY-8))
+        RESIDUE_PARITY=$((TOTAL_PARITY-ABSORBED_COUNT))
         if [ "$RESIDUE_PARITY" -ne "$RESIDUE_COUNT" ]; then
-            echo "broadleaf_module_exhaustion_guard: FAIL — $TOTAL_PARITY parity records − 8 absorbed = $RESIDUE_PARITY residue parity record(s), but residue_count declares $RESIDUE_COUNT" >&2
+            echo "broadleaf_module_exhaustion_guard: FAIL — $TOTAL_PARITY parity records − $ABSORBED_COUNT absorbed = $RESIDUE_PARITY residue parity record(s), but residue_count declares $RESIDUE_COUNT" >&2
             FAIL=1
         fi
     fi

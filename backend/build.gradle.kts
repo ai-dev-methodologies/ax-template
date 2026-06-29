@@ -678,7 +678,7 @@ tasks.register<Test>("testBundlePricing") {
     useJUnitPlatform {
         includeTags("BUNDLEPRICING")
     }
-    description = "Run bundle-pricing domain compliance tests (bundle-pricing-l0: 4 items — ITEMSUM, FIXED, DERIVED, AUTHZ; absorbed Broadleaf BundleOrderItemImpl conserving roll-up)"
+    description = "Run bundle-pricing domain compliance tests (bundle-pricing-l0: 4 items — ITEMSUM, FIXED, DERIVED, AUTHZ; conserving bundle/composite roll-up)"
     group = "verification"
     shouldRunAfter("test")
 }

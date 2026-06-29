@@ -211,6 +211,12 @@ public class AuthServiceImpl {
         if (vt.getExpiresAt().isBefore(Instant.now())) {
             throw new InvalidTokenException("Token expired");
         }
+        // Symmetric with resetPassword's tokenType guard (CWE-843 type confusion): an email-verify
+        // token MUST be a VERIFY token — a RESET token cannot be replayed against this endpoint to
+        // verify an email it was never issued for.
+        if (!"VERIFY".equals(vt.getTokenType())) {
+            throw new InvalidTokenException("Invalid token type");
+        }
 
         vt.setUsed(true);
         verificationTokenRepository.save(vt);

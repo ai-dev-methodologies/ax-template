@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Behavioral compliance tests for bundle-pricing-l0.yaml (4 items / 4 families) — black-box
- * HTTP via RestAssured. Absorbed the external reference {@code BundleOrderItemImpl} conserving roll-up.
+ * HTTP via RestAssured. A composite/bundle order-item's conserving roll-up.
  *
  * <p>BUNDLE-ITEMSUM-001 (conserving roll-up), BUNDLE-FIXED-001 (fixed base, not summed),
  * BUNDLE-DERIVED-001 (taxability derived from children), BUNDLE-AUTHZ-001 (ADMIN create).
@@ -67,15 +67,22 @@ class BundlePricingComplianceTest {
             .body("taxablePrice", Matchers.equalTo(2200))
             .body("taxable", Matchers.equalTo(true));
 
-        // Conservation cross-check (INDEPENDENT re-derivation): Σ disclosed per-child
-        // retailSubtotal + Σ disclosed fee amounts MUST reconstruct the authoritative total.
-        List<Integer> subtotals = price.jsonPath().getList("components.retailSubtotal");
+        // Conservation cross-check (INDEPENDENT re-derivation): recompute the total from the RAW
+        // disclosed unitRetailPrice × quantity per child + Σ fee amounts — NOT by re-summing the
+        // server's own retailSubtotal (which would re-derive the server's number and wrap identically
+        // under overflow). This independent product must reconstruct the authoritative retailPrice.
+        List<Integer> unitRetailPrices = price.jsonPath().getList("components.unitRetailPrice");
+        List<Integer> quantities = price.jsonPath().getList("components.quantity");
         List<Integer> feeAmounts = price.jsonPath().getList("fees.amount");
-        long reconstructed = subtotals.stream().mapToLong(Integer::longValue).sum()
-                           + feeAmounts.stream().mapToLong(Integer::longValue).sum();
+        long reconstructed = feeAmounts.stream().mapToLong(Integer::longValue).sum();
+        for (int i = 0; i < unitRetailPrices.size(); i++) {
+            reconstructed += (long) unitRetailPrices.get(i) * quantities.get(i);
+        }
         assertThat(reconstructed).isEqualTo(3700L);
+        assertThat(price.jsonPath().getLong("retailPrice")).isEqualTo(reconstructed);
 
         // Each child counted exactly once at unitRetailPrice × quantity.
+        List<Integer> subtotals = price.jsonPath().getList("components.retailSubtotal");
         assertThat(subtotals).containsExactly(2000, 1500);
     }
 

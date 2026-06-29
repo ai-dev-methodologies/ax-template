@@ -5,6 +5,7 @@ module_count: 3
 common_subpackage_count: 1
 profile_subpackage_count: 1
 residue_count: 0
+absorbed_vertical_count: 0
 
 ## Maven module-set
 

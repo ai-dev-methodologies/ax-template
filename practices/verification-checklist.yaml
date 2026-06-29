@@ -39,7 +39,7 @@ checklist:
   - id: backend-build
     title: "Backend Spring Boot compile (fast-fail before tests)"
     parallel: false
-    fail_fast: true  # a compile break short-circuits — do not run the ~84 per-domain tasks on broken code
+    fail_fast: true  # a compile break short-circuits — do not run the ~89 per-domain tasks on broken code
     commands:
       - command: "./gradlew build -x test"
         working_directory: "backend"
@@ -55,7 +55,7 @@ checklist:
       3. Fix the offending file. Do NOT delete tests to silence compile errors.
       4. Re-run only this step:  cd backend && ./gradlew build -x test
 
-  # ── 1b. Structural pre-gate (fail-fast — runs ALONE, BEFORE the ~84 per-domain tasks) ──
+  # ── 1b. Structural pre-gate (fail-fast — runs ALONE, BEFORE the ~89 per-domain tasks) ──
   # testPractices is its OWN single-command step: _collapse_plan.py does NOT collapse a step
   # with <2 non-advisory commands, so it runs alone, and on a HARD_FAIL the fail_fast flag
   # SHORT-CIRCUITS the remaining steps (verified non-vacuously) — surfacing a god-service /
@@ -64,7 +64,7 @@ checklist:
   - id: structural-pregate
     title: "Structural pre-gate — testPractices (DDD/layering/problemdetail, fail-fast)"
     parallel: false
-    fail_fast: true  # a structural/DDD/layering break short-circuits the ~84 per-domain tasks (18min→1min)
+    fail_fast: true  # a structural/DDD/layering break short-circuits the ~89 per-domain tasks (18min→1min)
     timeout_seconds: 900
     commands:
       - command: "./gradlew testPractices"
@@ -72,7 +72,7 @@ checklist:
         expected_exit: 0
     fix_playbook: |
       A structural / architecture rule failed (DDD aggregate bijection, controller→repository
-      layering, @Tag binding, or ProblemDetail). This step runs BEFORE the ~84 per-domain tasks
+      layering, @Tag binding, or ProblemDetail). This step runs BEFORE the ~89 per-domain tasks
       so the regression shows in ~1 min, not ~18.
       1. Read the failing test:
          • DddAllowlistBijectionTest — a @Transactional method writes >1 aggregate root (god-service),
@@ -86,7 +86,7 @@ checklist:
 
   # ── 2. Per-domain test tasks (the catalog's binary pass/fail surface) ───────
   - id: per-domain-tests
-    title: "Per-domain ./gradlew test{Domain} suite (84 tasks)"
+    title: "Per-domain ./gradlew test{Domain} suite (89 tasks)"
     parallel: false  # gradle daemon serializes anyway; keep stderr deterministic
     # The growing domain matrix + the R22 BEFORE_CLASS DirtiesContext on hot
     # @SpringBootTest classes pushes cumulative wall-clock past the global

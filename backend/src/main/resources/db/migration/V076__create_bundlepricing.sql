@@ -1,5 +1,5 @@
 -- bundlepricing reference workload — realizes bundle-pricing-l0.yaml
--- Absorbed from reference BundleOrderItemImpl (independent implementation; not ported).
+-- Independent implementation of a composite/bundle conserving roll-up (not ported).
 -- Invariants enforced at DB + service + derivation layers:
 --   BUNDLE-ITEMSUM-001 — ITEM_SUM price = Σ child.unitPrice×qty + Σ fees (derived, never stored)
 --   BUNDLE-FIXED-001   — BUNDLE price = fixed base price, NOT summed; mode/base-price exclusive (@Check)

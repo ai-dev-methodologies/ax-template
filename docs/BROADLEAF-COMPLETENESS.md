@@ -53,6 +53,7 @@ module_count: 21
 common_subpackage_count: 56
 profile_subpackage_count: 8
 residue_count: 1
+absorbed_vertical_count: 8
 
 ## Maven module-set (top level)
 

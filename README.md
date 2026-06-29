@@ -10,7 +10,7 @@ project. Every layer of the stack ships with rule-enforcement wired in:
 - **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (14 ESLint rules) + 99-rule
   evidence-anchored catalog (`practices-react/rules/`).
 - **Spring Boot side** — `@Tag`-based JUnit + RestAssured tests
-  (`./gradlew test{Domain}`) + 192-rule Java/Spring catalog
+  (`./gradlew test{Domain}`) + 228-rule Java/Spring catalog
   (`practices/rules/`).
 - **Spec-first contract** — every domain has a Spec Trio
   (`specs/X.yaml` + `contracts/X-openapi.yaml` + `blueprints/X-manifest.yaml`).
@@ -233,7 +233,7 @@ ax-template/
 │   └── ratelimit-manifest.yaml
 │
 ├── practices/                      # Java/Spring catalog
-│   ├── rules/                      # 217 rule.md files
+│   ├── rules/                      # 228 rule.md files
 │   ├── upstream/                   # External doc snapshots
 │   ├── evals/                      # 4 hard gates + 86 hard guards
 │   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)

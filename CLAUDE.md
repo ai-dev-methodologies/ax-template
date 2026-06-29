@@ -203,7 +203,7 @@ AI agent (Claude Code 등)가 코드를 작성할 때 가장 큰 risk:
 
 - `./gradlew testAsvs` — auth 도메인 (26 ASVS items)
 - `./gradlew testCrud` — CRUD 도메인 (Spec Trio 시연)
-- `./gradlew testPractices` — 219 practices rules
+- `./gradlew testPractices` — 228 practices rules
 - `./gradlew testPortability` — advisory; 외부 fixture에 룰 적용
 
 ### 외부 참조 정규화
@@ -267,6 +267,8 @@ catalog claim **"`./gradlew test{Domain}` — 단일 명령 binary pass/fail"** 
 **per-domain task** 에 적용된다. **R22 baseline (2026-05-21)**: per-domain
 task 전 GREEN + aggregate `./gradlew test` 는 advisory PortabilityCyclic
 한 건을 제외하면 GREEN. 도메인별 상태:
+
+> 아래 표는 **대표 스냅숏(R22 baseline)** 이며 전수 목록이 아니다. 전체 per-domain task의 canonical 출처는 backend/build.gradle.kts(89 register<Test>) — `cd backend && ./gradlew tasks`로 조회. 신규 도메인은 verification-checklist.yaml + build.gradle.kts에 자동 등재된다.
 
 | Per-domain task                | 상태       | 비고 |
 |--------------------------------|----------|---|
@@ -434,7 +436,7 @@ fork-receiver의 활성화는 opt-in이다.
 | `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 모든 push 시 — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `run-all-guards.sh` (86 guards, 150 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
-| `per-domain ./gradlew test{Domain}` | `backend/build.gradle` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
+| `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
 
 ### 핵심 설명
 
