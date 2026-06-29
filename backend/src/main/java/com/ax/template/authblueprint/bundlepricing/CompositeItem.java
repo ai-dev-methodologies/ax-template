@@ -25,7 +25,7 @@ import com.ax.template.authblueprint.common.AggregateRoot;
 
 /**
  * CompositeItem — a bundle / kit whose price is a CONSERVING roll-up of its children
- * (absorbed from Broadleaf {@code BundleOrderItemImpl}).
+ * (absorbed from the external reference {@code BundleOrderItemImpl}).
  *
  * <p><b>The invariant, made unrepresentable-to-violate.</b> A composite has NO stored
  * rolled-up total column. Its price is a PURE derivation ({@link #priceRollUp()}) recomputed

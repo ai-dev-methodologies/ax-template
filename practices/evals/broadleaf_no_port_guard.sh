@@ -6,14 +6,16 @@
 # is licensed under the Broadleaf Fair Use License Agreement v1.0 (NOT an OSI/permissive
 # license) — its source cannot be relicensed or redistributed inside this fork-base
 # template. So our OWN implementation source (backend/src, frontend/src) MUST contain
-# ZERO Broadleaf bytes:
+# ZERO Broadleaf mention (case-insensitive) — strengthened 2026-06-29 from "no ported source" to
+# "no name reference at all":
 #   (a) no `import org.broadleafcommerce...`        (ported dependency)
 #   (b) no `package org.broadleafcommerce...`       (a verbatim ported file)
 #   (c) no Broadleaf Fair Use License header string (every Broadleaf source file carries it)
+#   (d) no bare "Broadleaf" name even in a comment / Javadoc / SQL header (provenance hint)
 #
-# Short single-line Broadleaf quotes in practices/rules/*.md `evidence:` blocks and in
-# specs/*.yaml notes are INTENTIONAL citations (fair-use grounding) and are NOT scanned —
-# this guard targets the IMPLEMENTATION tree, where the rule is zero-tolerance.
+# Short single-line Broadleaf quotes in practices/rules/*.md `evidence:` blocks and in specs/*.yaml
+# notes are INTENTIONAL citations (fair-use grounding) and are NOT scanned — this guard targets ONLY
+# the IMPLEMENTATION tree, which must read as standalone code with no trace of the absorption source.
 #
 # Motivation (2026-06-25): the Broadleaf-absorption program reads the Broadleaf clone
 # (kept OUTSIDE git) for understanding. This guard mechanically enforces the license
@@ -34,8 +36,11 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Forbidden patterns = unambiguous markers of PORTED Broadleaf source.
-PATTERNS='import org\.broadleafcommerce|^package org\.broadleafcommerce|Broadleaf Fair Use License'
+# Forbidden = ANY Broadleaf mention (case-insensitive) in the implementation tree. This subsumes the
+# ported-source markers (import/package org.broadleafcommerce, Fair Use License header) AND now also
+# forbids bare NAME references even in comments/Javadoc/SQL — the shipped implementation code must read
+# as standalone; the absorption provenance lives only in docs/rules/parity (fair-use, not scanned).
+PATTERNS='[Bb]roadleaf'
 
 if [ -n "$ROOT_OVERRIDE" ]; then
     # Fixture mode: scan the whole override root.
@@ -56,14 +61,15 @@ fi
 HITS="$(grep -rlE "$PATTERNS" $SCAN_DIRS 2>/dev/null || true)"
 
 if [ -n "$HITS" ]; then
-    echo "broadleaf_no_port_guard: FAIL — PORTED Broadleaf source detected in the implementation tree:" >&2
-    echo "$HITS" | sed 's/^/  /' >&2
+    echo "broadleaf_no_port_guard: FAIL — Broadleaf mention detected in the implementation tree:" >&2
+    grep -rinE "$PATTERNS" $SCAN_DIRS 2>/dev/null | sed 's/^/  /' >&2
     echo "" >&2
-    echo "  Broadleaf is under the Fair Use License v1.0 (not OSI/permissive); its source MUST NOT be" >&2
-    echo "  ported into this fork-base template. Absorb the INVARIANT into independent code instead;" >&2
-    echo "  keep only short single-line citations in practices/rules/ evidence blocks." >&2
+    echo "  The implementation tree (backend/src, frontend/src) must contain ZERO Broadleaf reference —" >&2
+    echo "  not just no ported source (Broadleaf is under the Fair Use License v1.0, not OSI/permissive)," >&2
+    echo "  but no name mention even in comments/Javadoc/SQL. Absorb the INVARIANT into standalone code and" >&2
+    echo "  describe it generically; the absorption provenance lives only in docs/rules/parity (fair-use)." >&2
     exit 1
 fi
 
-echo "broadleaf_no_port_guard: PASS — no ported Broadleaf source in the implementation tree (scanned:$SCAN_DIRS)"
+echo "broadleaf_no_port_guard: PASS — no Broadleaf reference in the implementation tree (scanned:$SCAN_DIRS)"
 exit 0

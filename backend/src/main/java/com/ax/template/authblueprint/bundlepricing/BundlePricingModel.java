@@ -2,7 +2,7 @@ package com.ax.template.authblueprint.bundlepricing;
 
 /**
  * The two pricing modes a composite item (bundle / kit) can be priced in — absorbed from
- * Broadleaf {@code ProductBundlePricingModelType} (ITEM_SUM / BUNDLE).
+ * the external reference {@code ProductBundlePricingModelType} (ITEM_SUM / BUNDLE).
  *
  * <ul>
  *   <li>{@link #ITEM_SUM} — the composite price is the CONSERVING roll-up of its children:

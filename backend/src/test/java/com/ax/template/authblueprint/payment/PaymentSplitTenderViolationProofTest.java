@@ -9,7 +9,7 @@ import java.lang.reflect.Field;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Violation proof tests for PAYMENT-SPLIT-001 (split-tender coverage) — Broadleaf-absorption G005.
+ * Violation proof tests for PAYMENT-SPLIT-001 (split-tender coverage) — external-reference absorption G005.
  *
  * <p>Plain reflection — no Spring context required. Where {@code PaymentSplitTenderTest} proves the
  * coverage gate BEHAVIORALLY (under-funded → 422, fully-covered → 200), this proves the same
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>This is the methodology-mandated ViolationProofTest for the absorbed payment vertical; its
  * absence (caught by the 2026-06-26 completeness audit) is what motivates the
- * {@code violation_proof} field now required by broadleaf_absorption_parity_guard.sh.
+ * {@code violation_proof} field now required by the absorption parity guard.
  */
 @Tag("PAYMENT")
 class PaymentSplitTenderViolationProofTest {

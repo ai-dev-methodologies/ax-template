@@ -22,7 +22,7 @@ import java.util.UUID;
  * {@code stackable} gates whether MULTIPLE instances of this same offer may apply.
  * These are independent axes (PROMO-STACK-001).
  * max_uses = 0 means unlimited. Enforced atomically via PESSIMISTIC_WRITE + UNIQUE(offer_id, order_ref)
- * on OfferRedemption (PROMO-MAXUSES-001 — the Broadleaf TOCTOU strengthening).
+ * on OfferRedemption (PROMO-MAXUSES-001 — the reference TOCTOU strengthening).
  */
 @AggregateRoot
 @Entity(name = "PromoOffer")

@@ -1,4 +1,4 @@
--- V072: commerceorder domain — Broadleaf cart/order spine
+-- V072: commerceorder domain — reference e-commerce cart/order spine
 -- Tables: commerce_orders, commerce_order_items, commerce_fulfillment_groups,
 --         commerce_fulfillment_group_items
 -- Prefix 'commerce_' avoids collision with the toy 'orders'/'order_items' tables.

@@ -5,7 +5,7 @@ import jakarta.persistence.Embeddable;
 
 /**
  * A bundle-level fee — an immutable value object added to the ITEM_SUM roll-up
- * (absorbed from Broadleaf {@code BundleOrderItemFeePrice}).
+ * (absorbed from the external reference {@code BundleOrderItemFeePrice}).
  *
  * <p>An {@code @Embeddable} value (NOT an aggregate-tagged {@code @Entity}): a fee has no
  * identity of its own and is owned wholly by its {@link CompositeItem} via an

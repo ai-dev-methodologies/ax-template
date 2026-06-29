@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Commerce order (cart + order unified by status — Broadleaf pattern).
+ * Commerce order (cart + order unified by status — external e-commerce reference pattern).
  *
  * <p>Lifecycle invariants (ORDER-LIFECYCLE-001):
  * <ul>

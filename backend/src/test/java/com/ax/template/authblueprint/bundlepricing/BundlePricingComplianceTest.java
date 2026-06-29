@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Behavioral compliance tests for bundle-pricing-l0.yaml (4 items / 4 families) — black-box
- * HTTP via RestAssured. Absorbed Broadleaf {@code BundleOrderItemImpl} conserving roll-up.
+ * HTTP via RestAssured. Absorbed the external reference {@code BundleOrderItemImpl} conserving roll-up.
  *
  * <p>BUNDLE-ITEMSUM-001 (conserving roll-up), BUNDLE-FIXED-001 (fixed base, not summed),
  * BUNDLE-DERIVED-001 (taxability derived from children), BUNDLE-AUTHZ-001 (ADMIN create).

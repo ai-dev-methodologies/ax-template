@@ -52,7 +52,7 @@ public class IdentityClaimController {
      *
      * <p>The {@code claimKey} is an UNGUESSABLE claim token the guest session holds (a high-entropy
      * opaque key, not a guessable email) — possession of it is the binding that the records are the
-     * caller's own anonymous work (strengthening Broadleaf's guessable-email claim). The auth boundary
+     * caller's own anonymous work (strengthening the reference engine's guessable-email claim). The auth boundary
      * hands the token to the authenticated session; the reference uses high-entropy keys.
      * IDCLAIM-IDEMPOTENT-001: replays return claimedCount=0.
      * IDCLAIM-GUARD-001: records already owned by another user are never transferred (atomic CAS owner IS NULL).

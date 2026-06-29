@@ -1,5 +1,5 @@
 -- commerce-promotion domain (PROMO-CONSERVE/STACK/ORDER/MAXSELECT/CLAMP/MAXUSES/IDEMPOTENT-001)
--- PROMO-MAXUSES-001 (Broadleaf TOCTOU strengthening): UNIQUE(offer_id, order_ref) on promo_redemptions
+-- PROMO-MAXUSES-001 (reference TOCTOU strengthening): UNIQUE(offer_id, order_ref) on promo_redemptions
 -- is the atomic backstop — the service's PESSIMISTIC_WRITE lock is the advisory gate,
 -- this constraint is the hard guarantee even under concurrent writes.
 

@@ -1,4 +1,4 @@
--- commercecatalog reference workload — realizes Broadleaf-inspired catalog feature set
+-- commercecatalog reference workload — realizes reference-inspired catalog feature set
 -- with stricter invariants (INV-1~6) enforced at DB + service layers.
 
 -- ── CatalogProduct aggregate root ────────────────────────────────────────────────────

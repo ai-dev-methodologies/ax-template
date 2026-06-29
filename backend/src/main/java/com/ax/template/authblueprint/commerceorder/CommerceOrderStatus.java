@@ -1,7 +1,7 @@
 package com.ax.template.authblueprint.commerceorder;
 
 /**
- * Order lifecycle status (Broadleaf cart/order unification pattern).
+ * Order lifecycle status (reference e-commerce cart/order unification pattern).
  *
  * <p>ORDER-LIFECYCLE-001: only IN_PROCESS has outgoing edges; CANCELLED is terminal.
  * <ul>

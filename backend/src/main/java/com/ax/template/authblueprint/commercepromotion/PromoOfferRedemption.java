@@ -15,7 +15,7 @@ import java.util.UUID;
  * APPEND-ONLY redemption record — every column {@code updatable=false}, no public setter.
  * The UNIQUE(offer_id, order_ref) constraint is the ATOMIC MAX-USES BACKSTOP
  * (PROMO-MAXUSES-001): even under concurrent writes, only one redemption per offer per order
- * can exist. This directly strengthens Broadleaf's offer engine, which has a TOCTOU
+ * can exist. This directly strengthens the reference engine's offer engine, which has a TOCTOU
  * vulnerability because it only checks max_uses count without a unique constraint.
  * The duplicate-redemption path surfaces as a {@link org.springframework.dao.DataIntegrityViolationException}
  * which {@link PromotionService} translates to a 409 PROMO_IDEMPOTENT_REDEMPTION.

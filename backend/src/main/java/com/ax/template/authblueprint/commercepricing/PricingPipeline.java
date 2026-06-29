@@ -9,10 +9,10 @@ import java.util.List;
 /**
  * Stateless pricing pipeline — pure computation, no @Transactional, no @Entity.
  *
- * <p>Implements two Broadleaf-origin pricing invariants:
+ * <p>Implements two reference-origin pricing invariants:
  *
  * <h3>PRICING-ORDER-001 — phase order determines tax basis</h3>
- * The method-body order IS the determinism source (mirrors Broadleaf setOrder() constants):
+ * The method-body order IS the determinism source (mirrors external e-commerce reference setOrder() constants):
  * <ol>
  *   <li>subTotal = Σ line.amount</li>
  *   <li>PRORATE orderDiscount conservingly (floor-remainder, Σ prorated == orderDiscount EXACTLY)</li>

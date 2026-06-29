@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Commerce promotion engine compliance test — behavioral assertions per invariant.
  * Every test asserts COMPUTED AMOUNTS, STATUS CODES, or EXACT EQUALITY — never != null.
- * Spec: specs/promotion-l0.yaml (Broadleaf offer engine, STRICTER).
+ * Spec: specs/promotion-l0.yaml (external e-commerce reference offer engine, STRICTER).
  *
  * Test inventory:
  *   PROMO-CONSERVE-001: floor-remainder proration sums to EXACT orderDiscount (not 99 or 101)
