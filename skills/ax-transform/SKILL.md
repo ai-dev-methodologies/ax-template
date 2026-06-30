@@ -17,7 +17,7 @@ A starter / transformation skill for projects that want AI agents (Claude Code e
 | Asset | Purpose for AI agent |
 |---|---|
 | **Spec Trio** (`specs/` + `contracts/` + `blueprints/`) | Spec is read before code. AI hallucination's 1st line of defense. |
-| **practices/ catalog** (228 rules, 22+ categories) | Evidence-anchored Java/Spring rules. AI cannot invent rules at random — every rule has an external URL / quote / RFC / JEP citation. |
+| **practices/ catalog** (229 rules, 22+ categories) | Evidence-anchored Java/Spring rules. AI cannot invent rules at random — every rule has an external URL / quote / RFC / JEP citation. |
 | **`./gradlew test{Domain}`** | Single binary command per domain (testAsvs, testCrud, testPractices, testPortability). AI self-verifies in one shot. |
 | **`AGENTS.md`** (auto-regenerated, sha256-sentinel) | AI agent's primary context file. Stays sync'd to `practices/rules/*.md` automatically. |
 | **4 hard gates** (spec_ref / substance / time_decay / evidence) | Binary checks that block AI output if it diverges from external facts. |
@@ -61,7 +61,7 @@ bash practices/scripts/install-hooks.sh
 |---|---|
 | `CLAUDE.md` | Top-level project identity + methodology summary. **Read this first.** |
 | `METHODOLOGY.md` | 5-step blueprint playbook for adding a new domain |
-| `practices/AGENTS.md` | The 228 rules in AI-consumable form, with sha256 sentinel |
+| `practices/AGENTS.md` | The 229 rules in AI-consumable form, with sha256 sentinel |
 | `practices/SKILL.md` | The practices subsystem entry point |
 | `practices/MAINTAINER.md` | Maintainer guide for evolving the catalog |
 | `practices/DECISIONS.md` | Rule provenance trail — every accepted / rejected rule with reasoning |
@@ -83,7 +83,7 @@ Copy this checklist and check off as you progress:
 - [ ] Step 4: Create Spec Trio for the new domain (backend spec + contract + blueprint; frontend if applicable)
 - [ ] Step 5: Write TDD anchor test (RED) before any implementation
 - [ ] Step 6: Implement to GREEN — `./gradlew test{Domain}` exits 0
-- [ ] Step 7: Run the guard suite (86 hard guards — 6 core evidence gates + domain/meta guards) — `bash practices/evals/run-all-guards.sh` exits 0
+- [ ] Step 7: Run the guard suite (88 hard guards — 6 core evidence gates + domain/meta guards) — `bash practices/evals/run-all-guards.sh` exits 0
 - [ ] Step 8: Invoke `/ax-verify` — Tier-1 recursive check exits 0
 - [ ] **Step 9 (MANDATORY — R25)**: `bash practices/scripts/verify-completion.sh` exits 0
 
@@ -105,7 +105,7 @@ The anchor test must exist and fail (RED) before any implementation file is touc
 in the current SP. See `METHODOLOGY.md` §5 for the pattern.
 
 ### Step 7: Guard suite
-Script: `practices/evals/run-all-guards.sh` — chains all 86 hard guards. The 6
+Script: `practices/evals/run-all-guards.sh` — chains all 88 hard guards. The 6
 evidence-anchoring core gates are:
 `spec_ref_guard.sh`, `substance_guard.sh`, `time_decay_guard.sh`,
 `evidence_guard.sh`, `trio_integrity_guard.sh`, `cross_trio_guard.sh`.

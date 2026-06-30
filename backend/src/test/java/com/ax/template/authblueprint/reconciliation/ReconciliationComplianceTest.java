@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Spec: specs/external-reconciliation-l0.yaml (PCAOB AS 2305 + 17 CFR 210.5-02 allowance + CWE-362).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Tag("RECONCILIATION")
 class ReconciliationComplianceTest {
 

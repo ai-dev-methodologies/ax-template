@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FIXTURE: a TIGHT gate. The fail-closed return of com.example.Foo#bar was mutated to
+     `return true` and a test caught it → status=KILLED. vacuity_class_proof_guard.sh MUST
+     exit 0 on this report. The unrelated lambda$bar$0 NO_COVERAGE row mirrors the real STO
+     report and MUST NOT cause a failure (the guard filters by exact gate method). -->
+<mutations partial="true">
+<mutation detected='true' status='KILLED' numberOfTestsRun='1'><sourceFile>Foo.java</sourceFile><mutatedClass>com.example.Foo</mutatedClass><mutatedMethod>bar</mutatedMethod><methodDescription>(Ljava/lang/String;)Z</methodDescription><lineNumber>21</lineNumber><mutator>org.pitest.mutationtest.engine.gregor.mutators.returns.BooleanTrueReturnValsMutator</mutator><indexes><index>21</index></indexes><blocks><block>5</block></blocks><killingTest>com.example.FooViolationProofTest.[engine:junit-jupiter]/[class:com.example.FooViolationProofTest]/[method:violation_barIsFailClosed()]</killingTest><description>replaced boolean return with true for com/example/Foo::bar</description></mutation>
+<mutation detected='false' status='NO_COVERAGE' numberOfTestsRun='0'><sourceFile>Foo.java</sourceFile><mutatedClass>com.example.Foo</mutatedClass><mutatedMethod>lambda$bar$0</mutatedMethod><methodDescription>(Ljava/lang/String;)Ljava/lang/Boolean;</methodDescription><lineNumber>22</lineNumber><mutator>org.pitest.mutationtest.engine.gregor.mutators.returns.BooleanTrueReturnValsMutator</mutator><indexes><index>8</index></indexes><blocks><block>3</block></blocks><killingTest/><description>replaced Boolean return with True for com/example/Foo::lambda$bar$0</description></mutation>
+</mutations>

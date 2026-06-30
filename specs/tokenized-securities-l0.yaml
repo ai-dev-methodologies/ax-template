@@ -1,0 +1,198 @@
+version: "0.1.0"
+# Phase 0 caller-identity limitation: the transfer endpoint binds any authenticated MEMBER to any fromHolderId
+# (no on-chain identity verification in Phase 0). Phase 1 binds fromHolderId to the JWT principal / ERC-3643 ONCHAINID.
+scope: "tokenized-securities-l0 — chain-agnostic STO compliance-gated transfer: a security-token transfer that fails eligibility / lock-up / holding-limit / balance is atomically rejected (fail-closed); only a fully-gated transfer mutates the append-only register, conserving total units. ERC-3643's on-chain compliance validator, modelled in the backend."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (Hibernate @Check) + Flyway + RFC 9457 Problem Details + RestAssured"
+standard: "전자증권법(주식·사채 등의 전자등록에 관한 법률) 개정 — 분산원장 계좌부 권리추정력·제3자대항력 + 자본시장법 적격투자자 + ERC-3643/EIP-3643 transfer compliance validator + RFC 9110 §15.5.21 (422) + CWE-362 (concurrency)"
+domain_mode: backend_only
+introduced_at: "2026-06-27 tokenized-securities TRANSFER pilot (Phase 0 / Approach 1 — invariant modelling, no chain)"
+
+items:
+  - id: "TS-TRANSFER-001"
+    chapter: "Recipient eligibility is a hard transfer gate — an ungranted recipient is rejected, register unchanged"
+    verification:
+      mechanism: rule
+      ref: security-token-transfer-compliance-gate
+    requirement: >
+      Every unit transfer MUST verify the RECIPIENT's eligibility via the InvestorEligibility SPI before
+      any ledger mutation. A recipient without an eligibility grant MUST be rejected with HTTP 422 and the
+      register (all holdings + entry log) MUST be byte-for-byte unchanged.
+    test_method: "RestAssured — transfer to an ungranted holder → 422; GET token shows holdings + Σ unchanged"
+    verification_type: "positive"
+    applicable: true
+    notes: "The defining STO invariant — a security token is a permissioned token; transfer ⇒ compliance check."
+
+  - id: "TS-TRANSFER-002"
+    chapter: "Lock-up — a transfer before the register's lockupUntil is rejected, register unchanged"
+    requirement: >
+      A transfer requested at an instant before the register's lockupUntil MUST be rejected with HTTP 422
+      and leave the register unchanged. A transfer at/after lockupUntil proceeds to the remaining gates.
+    test_method: "RestAssured — token A lockupUntil in the future → transfer 422; token B lockupUntil in the past → gate passes"
+    verification_type: "positive"
+    applicable: true
+    notes: "전자증권법/자본시장법 전매제한(lock-up). Time compared to injected Clock."
+
+  - id: "TS-TRANSFER-003"
+    chapter: "Holding limit — a transfer making the recipient exceed holdingLimitPerInvestor is rejected"
+    requirement: >
+      If the recipient's post-transfer balance would exceed the register's holdingLimitPerInvestor, the
+      transfer MUST be rejected with HTTP 422, register unchanged. The issuer holder (issuerHolderId) is
+      exempt from the limit (treasury). The limit is enforced on the recipient side only.
+    test_method: "RestAssured — limit=100; transfer 60 then 60 to the same investor → second is 422; investor balance stays 60"
+    verification_type: "positive"
+    applicable: true
+    notes: "Per-investor concentration cap; issuer/treasury exempt (ERC-3643 agent exemption analogue)."
+
+  - id: "TS-TRANSFER-004"
+    chapter: "Balance — a transfer exceeding the sender's units is rejected; no negative balance is representable"
+    requirement: >
+      A transfer of more units than the sender holds MUST be rejected with HTTP 422, register unchanged.
+      A negative holding balance MUST be structurally impossible (entity + DB @Check units >= 0).
+    test_method: "RestAssured — sender holds 10, transfer 11 → 422, balances unchanged; ViolationProofTest asserts @Check"
+    verification_type: "positive"
+    applicable: true
+    notes: "Conservation precondition — you cannot move units you do not have."
+
+  - id: "TS-TRANSFER-005"
+    chapter: "Atomic settlement — a fully-gated transfer debits + credits in one tx and appends exactly one immutable entry; Σ holdings == totalUnits"
+    requirement: >
+      When all gates pass, the transfer MUST in a single transaction (a) debit the sender, (b) credit the
+      recipient (creating the holding if absent), and (c) append exactly one immutable TransferEntry. After
+      the transfer the sum of all holding units MUST equal the register's totalUnits (conservation).
+    test_method: "RestAssured — transfer 40 issuer→A; assert fromUnitsAfter, toUnitsAfter, and Σ holdings == totalUnits"
+    verification_type: "positive"
+    applicable: true
+    notes: "분산원장 계좌부 = append-only legal book; the transfer is the only mutation."
+
+  - id: "TS-TRANSFER-006"
+    chapter: "Idempotency — replaying the same transferId does not re-mutate the register"
+    requirement: >
+      A transfer carries a caller-supplied transferId, unique within the register. Replaying a transfer
+      with an already-applied transferId MUST return HTTP 200 with the original outcome and MUST NOT change
+      any balance or append a second entry.
+    test_method: "RestAssured — POST transfer twice with same transferId; balances after #2 == after #1"
+    verification_type: "positive"
+    applicable: true
+    notes: "At-least-once callers (a chain re-org / retry) must not double-apply. Unique(register_id, transfer_id) backstops races."
+
+  - id: "TS-TRANSFER-007"
+    chapter: "Fail-closed — eligibility is deny-by-default; only an explicit admin grant enables a recipient"
+    requirement: >
+      The InvestorEligibility SPI default MUST be deny: with no eligibility grant, a recipient is ineligible
+      (TS-TRANSFER-001 path). An ADMIN grant for (register, holder) MUST flip the recipient to eligible so a
+      subsequent transfer to it succeeds. A non-admin grant attempt MUST be rejected (403).
+    test_method: "RestAssured — pre-grant transfer → 422; non-admin grant → 403; admin grant → 201; post-grant transfer → 200"
+    verification_type: "positive"
+    applicable: true
+    notes: "The SPI seam a fork replaces with on-chain ONCHAINID / KYC. Default-deny is the safe posture."
+    # PIT non-vacuity contract (METHODOLOGY "Non-Vacuity / Hollow-Test Enforcement"): the
+    # deny-by-default eligibility SPI is kill-proofed. Mutating AllowlistInvestorEligibility#isEligible
+    # to return true must break violation_eligibilityDefaultIsFailClosed; vacuity_class_proof_guard.sh
+    # runs scoped PIT and asserts the mutant is KILLED (SURVIVED/NO_COVERAGE ⇒ hollow ⇒ BLOCK).
+    vacuity_class: fail_closed_default
+    gate_method: "com.ax.template.authblueprint.tokenizedsecurities.AllowlistInvestorEligibility#isEligible"
+    kill_mutator: TRUE_RETURNS
+
+  - id: "REG-ISSUE-001"
+    chapter: "Underlying-asset single-securitization — one underlying asset backs at most one active security token (asset-level double-registration is rejected)"
+    requirement: >
+      Every security token MUST declare the underlying asset it securitizes (underlyingAssetId, fixed at
+      issuance). Issuing a SECOND security token against an already-securitized underlying asset MUST be
+      rejected with HTTP 409 (no second register is created). This is the asset-side dual of the holder-side
+      conservation: a 채권/대출채권 pool may be tokenized once, never double-counted (전자증권법 이중기재 방지).
+    test_method: "RestAssured — create token for assetId=A → 201; create a second token for assetId=A → 409, no new register; a different assetId=B → 201"
+    verification_type: "positive"
+    applicable: true
+    notes: "Distinct STO invariant not covered by any existing domain. Backed by a unique constraint on underlying_asset_id + a service pre-check; the DataIntegrityViolation race is remapped to 409."
+
+  - id: "REG-ISSUE-002"
+    chapter: "Issued supply is final — totalUnits is fixed at issuance, immutable, and conserved across the whole lifecycle"
+    requirement: >
+      A register's totalUnits is set once at issuance and MUST be immutable thereafter (no mint, no burn).
+      The sum of all holding units MUST equal totalUnits at every observable point — at creation (issuer
+      holds the full supply) and after any sequence of transfers. There is no operation that changes the
+      total supply of an issued security.
+    test_method: "RestAssured — create token (issuer holds totalUnits, heldSum==totalUnits); after N transfers heldSum still == totalUnits; ViolationProofTest asserts totalUnits @Column(updatable=false)"
+    verification_type: "positive"
+    applicable: true
+    notes: "Right-attestation finality (권리 추정력): the issued register is a closed conservation system; the asset-side dual of TS-TRANSFER-005."
+
+  - id: "HOLDER-AUTHZ-001"
+    chapter: "Caller-to-holder authorization — a transfer whose fromHolderId is not controlled by the caller is rejected (no impersonated debit)"
+    requirement: >
+      A transfer MUST verify, via the HolderAuthorization SPI, that the caller (Authentication principal)
+      controls the debited holder (fromHolderId) BEFORE any ledger mutation. A transfer from a holder the
+      caller does not control MUST be rejected with HTTP 403 and leave the register unchanged. This is the
+      first gate (before lock-up / balance / eligibility).
+    test_method: "RestAssured — caller A claims holder H, transfers from H → 200; caller B (no claim on H) transfers from H → 403, register unchanged"
+    verification_type: "positive"
+    applicable: true
+    notes: "Closes the pilot's caller-identity gap. The SPI seam a fork replaces with on-chain identity (ONCHAINID). Generic, chain-agnostic."
+
+  - id: "HOLDER-AUTHZ-002"
+    chapter: "Holder ownership is deny-by-default and first-claim-wins — an unclaimed holder is uncontrolled; a claim binds it to exactly one principal"
+    requirement: >
+      The HolderAuthorization default MUST be deny: with no ownership claim, no principal controls a holder.
+      A self-claim binds (holderId → callerPrincipal); a second DIFFERENT principal claiming an
+      already-owned holder MUST be rejected 409. Re-claim by the same principal is idempotent. ADMIN may
+      assign ownership on behalf of a principal.
+    test_method: "RestAssured — claim H as A → 201; claim H as B → 409; re-claim H as A → idempotent; transfer-from-H succeeds only for A"
+    verification_type: "positive"
+    applicable: true
+    notes: "Ownership registry backs the SPI; unique(holder_id) enforces single-controller. Supports custodial/omnibus (one principal → many holders)."
+    # PIT non-vacuity contract (METHODOLOGY "Non-Vacuity / Hollow-Test Enforcement"): the
+    # deny-by-default ownership SPI is kill-proofed. Mutating OwnershipHolderAuthorization#controls
+    # to return true (orElse(false)→true) must break violation_holderAuthorizationDefaultIsFailClosed;
+    # vacuity_class_proof_guard.sh runs scoped PIT and asserts the mutant is KILLED.
+    vacuity_class: fail_closed_default
+    gate_method: "com.ax.template.authblueprint.tokenizedsecurities.OwnershipHolderAuthorization#controls"
+    kill_mutator: TRUE_RETURNS
+
+  - id: "ANCHOR-001"
+    chapter: "Every applied transfer is anchored — no securities transfer commits without recording an on-chain anchor reference"
+    requirement: >
+      When a fully-gated transfer is applied, the service MUST call the OnChainAnchor SPI and store the
+      returned, non-null anchor reference on the immutable TransferEntry, in the same transaction. A
+      TransferEntry without an anchor reference is unrepresentable: no transfer reaches the committed
+      register without an anchor. This is the off-chain model of "the distributed ledger is the legal
+      book" — every right-transfer has a ledger anchor.
+    test_method: "RestAssured — apply a transfer; assert the result/entry carries a non-null anchorRef; ViolationProofTest asserts anchorRef @Column(updatable=false) and that the service stores it"
+    verification_type: "positive"
+    applicable: true
+    notes: "OnChainAnchor SPI default = InMemoryAnchor (test-double); a fork swaps in the real chain client. The anchor call is the seam where the chain plugs in."
+
+  - id: "ANCHOR-002"
+    chapter: "On-chain/off-chain consistency — register↔anchor divergence is detected as a break, never silently accepted (fail-closed)"
+    requirement: >
+      A reconcile operation MUST compare the register's applied transfers against the anchor's recorded
+      view and report ANY divergence (an entry without a matching anchor record, or an anchor record
+      without a matching entry) as a break. A divergent state MUST NOT be reported as converged. With the
+      write-through default both sides agree (converged); a divergent anchor (a dropped/mutated record)
+      MUST flip reconcile to NOT converged with the offending transferId(s) named.
+    test_method: "RestAssured happy-path (after real transfers, reconcile → converged). Unit/component test feeds a register with entries + an anchor view missing one record → reconcile reports the break (converged=false, transferId named). Falsifiable: identical inputs converge, mismatched inputs break."
+    verification_type: "positive"
+    applicable: true
+    notes: "Composes the reconciliation pattern (classify break, never silent). The fork promotes the chain to authoritative; the invariant (agree-or-break) is identical."
+
+  - id: "ISSUE-001"
+    chapter: "Issuance lifecycle — a DRAFT token cannot be transferred; only an ISSUED token trades"
+    requirement: >
+      A security token is created in DRAFT and MUST NOT be transferable: a transfer against a DRAFT token
+      is rejected with HTTP 409 BEFORE any other gate. Only after issue() promotes it to ISSUED does a
+      transfer proceed to the compliance gates (caller-authz / lock-up / balance / eligibility / limit).
+    test_method: "RestAssured — createToken → DRAFT; transfer on the DRAFT token → 409, register unchanged; after issue() the same transfer proceeds to its normal gates"
+    verification_type: "positive"
+    applicable: true
+    notes: "A real security is ISSUED through a lifecycle before it trades. Status gate is FIRST (before caller-authz). State machine is the sole status mutator."
+
+  - id: "ISSUE-002"
+    chapter: "Issuance is ADMIN-only, one-way, and seeds the issuer holding exactly once"
+    requirement: >
+      issue(tokenCode) MUST be ADMIN-only and one-way (DRAFT → ISSUED via the state machine; re-issue of an
+      already-ISSUED token, or any un-issue, MUST be rejected 409). issue() MUST seed the issuer holding =
+      totalUnits exactly once, establishing Σ holdings == totalUnits at issuance (conservation begins at issue).
+      A non-admin issue attempt MUST be rejected 403.
+    test_method: "RestAssured — non-admin issue → 403; admin issue → 200 ISSUED + issuer holds totalUnits (heldSum==totalUnits); second issue → 409; ViolationProofTest asserts the state machine has only the issue edge (no un-issue) and is the sole status mutator"
+    verification_type: "positive"
+    applicable: true
+    notes: "Mirrors ThresholdRegisterStateMachine (one-way). createToken seeds NO holdings; issue() does. REG-ISSUE-002 conservation now holds post-issue."

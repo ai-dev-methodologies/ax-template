@@ -31,6 +31,38 @@ bash practices/scripts/verify-and-fix-loop.sh --non-interactive   # CI/headless
 
 ---
 
+## 🔒 PUBLIC / PRIVATE 경계 — fork-receiver 특화·민감 정보 격리 (R26 — NON-NEGOTIABLE)
+
+ax-template은 **public fork-base catalog**다. fork-receiver(회사·팀)의 특화·민감 정보가 이
+public 트리에 유입되면 안 된다. 경계는 **SPI seam**으로 강제한다 — generic interface는 public,
+실제 구현은 private fork.
+
+**Public (이 repo에 들어가도 되는 것):**
+- chain-agnostic / vendor-agnostic generic 불변식 — 외부 **공개** 표준·법률·RFC·EIP·논문에 anchor
+- SPI **interface** + test-double (예: `InvestorEligibility` / `HolderAuthorization` / `OnChainAnchor`)
+- 검증 자산 (spec / contract / blueprint / test / guard / R25 / PIT)
+
+**Private (fork-receiver 측 — 이 repo에 commit 절대 금지):**
+- 회사 식별자: 회사명·브랜드·사업자정보·내부 URL·**입사/채용/사업 전략 맥락**
+- 실제 시크릿·자격증명·엔드포인트·벤더명
+- SPI **실제 구현**: 실제 체인 adapter, KYC/커스터디/정산 provider, 회사 고유 비즈니스 규칙
+- 고객·계약·운영 데이터
+
+**규율 (새 도메인 흡수 시, 예외 없음):**
+1. **분류 먼저** — "이 불변식이 generic인가, fork-receiver 특화인가"를 코드 작성 **전에** 판정한다.
+2. generic → public catalog + SPI **interface**. 특화 → SPI 뒤 **private fork**. 불확실 → generic
+   interface로 두고 구현은 fork로 미룬다 (= "공통으로 만든 뒤 입사/도입 후 보강"; vision의 핵심 패턴).
+3. **기능뿐 아니라** 주석·문서·커밋 메시지·파일명까지 fork-receiver 식별자 **0**을 유지한다.
+   "왜/누구를 위해 만들었나"의 맥락이 특정 회사를 가리키면 그건 private이다.
+
+**위반 회고 (이 규칙의 출처):** tokenized-securities 도메인의 *기능* 코드는 generic(SPI seam으로 분리)
+이었으나, *맥락 문서·커밋 메시지*에 fork-receiver 회사명·도입 전략이 박힌 채 public push됨 → scrub +
+history rewrite로 제거. 교훈을 R26으로 codify해 다음 흡수부터 기계적으로 차단한다. (강제 표면: 코드리뷰 +
+흡수 파이프라인의 "분류 먼저" 게이트 + 본 규칙. fork별 식별자 패턴 스캔은 fork-receiver가
+`.ax-private-markers`로 opt-in 등록하는 guard로 확장 가능 — 후속 후보.)
+
+---
+
 ## 📒 ALWAYS LOG to the ax-ledger (capture → 복기 → improve → feedback)
 
 ax-template's enforcement must be **observable and self-improving**. Every interaction with the gates
@@ -111,7 +143,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 228 Java rules + 99 React rules + 14 ESLint rules + 86 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 229 Java rules + 99 React rules + 14 ESLint rules + 88 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -309,6 +341,7 @@ task 전 GREEN + aggregate `./gradlew test` 는 advisory PortabilityCyclic
 | `./gradlew testOfferEligibility` | GREEN | 14/14 PASS (Broadleaf 재감사 #3 — offer 적격성: fail-closed deny-by-default qualifier→target min-qty + customer/segment gate; 부적격은 discount 경로 도달 불가. 앵커 CWE-636/840/285) |
 | `./gradlew testTaxApplication` | GREEN    | 14/14 PASS (Broadleaf 재감사 #4 — tax-exempt skip→0세 + idempotent recompute: UNIQUE(order_id) 엔티티-레벨로 정확히 1 tax row, now-exempt 시 prior 삭제; rate injected. 앵커 RFC 9110 §9.2.2 + CWE-840) |
 | `./gradlew testCurrencyArithmetic` | GREEN | 14/14 PASS (Broadleaf 재감사 #5 — cross-currency fail-closed: CurrencyMoney plus/minus 통화 불일치 시 422 throw before any value/persist, convertedVia만 cross-ccy seam; common/Money.java 무수정. 앵커 ISO 4217 + Fowler + CWE-682) |
+| `./gradlew testTokenizedSecurities` | GREEN | 29 PASS (compliance + ViolationProof + dogfood E2E) — STO 5-seam (chain-agnostic): **TRANSFER** — 증권토큰 이전이 적격성/lock-up/보유한도/잔고 게이트를 mutation 전 fail-closed로 통과해야만 append-only 계좌부 변경(보존 Σholdings==totalUnits) + 멱등(transferId) + issuer treasury 면제 + deny-by-default 적격성 SPI(InvestorEligibility, fork가 ERC-3643 ONCHAINID로 교체); **REGISTER** — 기초자산 단일증권화(자산레벨 이중기재0, 409) + 발행총량 finality; **HOLDER-AUTHZ** — OwnershipHolderAuthorization SPI(소유 기반 통제); **ANCHOR** — OnChainAnchor SPI + 재조정(off-chain↔on-chain); **ISSUE** — 발행 라이프사이클 state machine. PIT 변이테스트가 fail-closed SPI들을 kill-proof (guard[84][85]). 전자증권법 분산원장 계좌부 + EIP-3643 흡수. backend_only. Phase 1: fromHolderId↔JWT/on-chain identity 바인딩 |
 | `./gradlew testPortability`    | advisory | 외부 fixture (spring-realworld-example-app) 에 cycle 있음. fork-receiver의 코드가 아니라 외부 reference 코드의 결함 |
 
 전체 `./gradlew test` aggregate 도 **PortabilityCyclic advisory 1건을 제외하면
@@ -367,7 +400,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 228룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 86 hard guards
+│   ├── evals/                 # 4 hard gates + 88 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
@@ -435,7 +468,7 @@ fork-receiver의 활성화는 opt-in이다.
 | PreToolUse hook (Claude Code) | `.claude/settings.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
 | `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 모든 push 시 — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
-| `run-all-guards.sh` (86 guards, 150 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
+| `run-all-guards.sh` (88 guards, 154 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
 
 ### 핵심 설명

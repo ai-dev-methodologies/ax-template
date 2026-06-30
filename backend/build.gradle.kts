@@ -2,6 +2,10 @@ plugins {
     java
     id("org.springframework.boot") version "3.2.12"
     id("io.spring.dependency-management") version "1.1.6"
+    // PIT mutation testing — backs the non-vacuity / hollow-test enforcement spine
+    // (METHODOLOGY.md "Non-Vacuity / Hollow-Test Enforcement"). Scoped, parameterized
+    // runs are driven by practices/evals/vacuity_class_proof_guard.sh.
+    id("info.solidsoft.pitest") version "1.15.0"
 }
 
 group = "com.ax.template"
@@ -55,6 +59,12 @@ dependencies {
     testImplementation("org.testcontainers:postgresql")
     testImplementation("io.rest-assured:rest-assured")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
+
+    // PIT JUnit 5 support. Must be on the test classpath (not only PIT's tool classpath) so
+    // the mutation minion can DISCOVER + RUN the Jupiter tests when measuring coverage —
+    // without it pitest reports "Ran 0 tests" / NO_COVERAGE. The solidsoft plugin auto-detects
+    // it here and forwards it to PIT. Pinned to 1.2.1 (compatible with PIT 1.15.0 + JUnit Platform 1.10.x).
+    testImplementation("org.pitest:pitest-junit5-plugin:1.2.1")
 }
 
 tasks.withType<Test> {
@@ -65,6 +75,67 @@ tasks.withType<Test> {
     // non-deterministically (favoriteRepository/Persistence* "Java heap space"). Pin a 2g fork
     // heap so the suite is deterministic.
     maxHeapSize = "2g"
+}
+
+// PIT mutation testing — the mechanical backstop for non-vacuity. A scoped run mutates a
+// single gate method with a single mutator and re-runs only the fast unit/mock + ViolationProof
+// slice; if the catalog test does not KILL the mutant the gate is hollow (vacuously passing).
+//
+// All scoping is parameterized via -P properties so vacuity_class_proof_guard.sh can pin one
+// method × one mutator × one test class per spec item:
+//   ./gradlew pitest -Ppit.targetClasses=<FQCN> -Ppit.targetTests=<glob> -Ppit.mutators=TRUE_RETURNS
+//
+// pitest-junit5-plugin (declared as a testImplementation dependency above) is what lets the
+// mutation minion DISCOVER + RUN the Jupiter tests. @SpringBootTest IT/E2E/Compliance classes
+// are excluded so a scoped run never boots a Spring context — the slice stays fast + deterministic.
+pitest {
+    // pitest-junit5-plugin is provided via the testImplementation dependency above; the
+    // solidsoft plugin auto-detects it on the test classpath and forwards it to PIT.
+    pitestVersion.set("1.15.2")
+
+    // CRITICAL: PIT forks its coverage/mutation minion with the JVM that runs Gradle, which
+    // may be older than the project's Java toolchain. This project compiles to Java 21
+    // (class file 65.0); a Java 17 minion silently fails with "has been compiled by a more
+    // recent version of the Java Runtime" → "Found 0 tests" → every mutation NO_COVERAGE.
+    // Pin the minion to the SAME Java 21 toolchain launcher Gradle resolves for compilation
+    // (no hardcoded path — fork-portable).
+    jvmPath.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        }.get().executablePath
+    )
+
+    targetClasses.set(
+        setOf(
+            (project.findProperty("pit.targetClasses") as String?)
+                ?: "com.ax.template.authblueprint.tokenizedsecurities.*"
+        )
+    )
+    targetTests.set(
+        setOf(
+            (project.findProperty("pit.targetTests") as String?)
+                ?: "com.ax.template.authblueprint.tokenizedsecurities.*ViolationProofTest"
+        )
+    )
+    (project.findProperty("pit.mutators") as String?)?.let { m ->
+        mutators.set(m.split(",").map { it.trim() }.filter { it.isNotEmpty() })
+    }
+
+    // Exclude every @SpringBootTest-bearing slice — pitest must run only the fast unit/mock
+    // tests + *ViolationProofTest (no application context, no Testcontainers).
+    excludedTestClasses.set(
+        setOf("*IT", "*FlowIT", "*E2ETest", "*DogfoodE2ETest", "*ComplianceTest")
+    )
+
+    // Incremental analysis (the gradle-pitest-plugin spelling of pitest's withHistory):
+    // reuse prior results so repeated scoped runs in the R25 loop stay fast. Disable with
+    // -Ppit.noIncremental for a clean diagnostic run.
+    enableDefaultIncrementalAnalysis.set(!project.hasProperty("pit.noIncremental"))
+    failWhenNoMutations.set(false)
+    timestampedReports.set(false)
+    outputFormats.set(setOf("XML", "HTML"))
+    threads.set(1)
+    verbose.set(project.hasProperty("pit.verbose"))
 }
 
 tasks.register<Test>("testCrud") {
@@ -364,6 +435,12 @@ tasks.register<Test>("testQuorum") {
 tasks.register<Test>("testThresholdTerminal") {
     useJUnitPlatform {
         includeTags("THRESHOLD_TERMINAL")
+    }
+}
+
+tasks.register<Test>("testTokenizedSecurities") {
+    useJUnitPlatform {
+        includeTags("TOKENIZED_SECURITIES")
     }
 }
 

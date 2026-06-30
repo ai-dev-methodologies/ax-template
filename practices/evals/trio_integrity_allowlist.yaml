@@ -57,5 +57,6 @@ domains:
   offer-eligibility: backend_only # P1-56: offer qualifier→target min-qty (BOGO) + customer-xref/segment eligibility — deterministic fail-closed applicability gate (WHO/WHICH-ITEMS), distinct from promotion-l0 discount math; no UI in scope
   tax-application: backend_only # P1-57: order-level tax application — exempt-skip (exempt customer/line ⇒ 0 tax) + idempotent single-record recompute (find-existing → update-or-create-or-remove, UNIQUE(order_id)); injected rate, no rate table; no UI in scope
   currency-arithmetic: backend_only # P1-58: currency-tagged monetary value object whose arithmetic is fail-closed across currencies — cross-currency add/subtract absent an explicit recorded conversion THROWS (CURRENCY_MISMATCH); exchange-rate math out of scope; no UI in scope
+  tokenized-securities: backend_only # Phase 0 STO TRANSFER pilot — chain-agnostic compliance-gated transfer (eligibility/lock-up/holding-limit/balance fail-closed + atomic conservation + idempotency); fork adds ERC-3643 adapter; no UI in scope
   # security: backend_only  # no specs/security-*.yaml yet — add when backend domain is scaffolded
   # user: backend_only      # no specs/user-*.yaml yet — add when backend domain is scaffolded

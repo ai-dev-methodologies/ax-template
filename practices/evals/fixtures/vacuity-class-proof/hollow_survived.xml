@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FIXTURE: a HOLLOW gate. The fail-closed return of com.example.Foo#bar was mutated to
+     `return true`, yet NO test failed → status=SURVIVED. vacuity_class_proof_guard.sh MUST
+     exit 1 on this report. (Mirrors the real PIT mutations.xml shape.) -->
+<mutations partial="true">
+<mutation detected='false' status='SURVIVED' numberOfTestsRun='1'><sourceFile>Foo.java</sourceFile><mutatedClass>com.example.Foo</mutatedClass><mutatedMethod>bar</mutatedMethod><methodDescription>(Ljava/lang/String;)Z</methodDescription><lineNumber>21</lineNumber><mutator>org.pitest.mutationtest.engine.gregor.mutators.returns.BooleanTrueReturnValsMutator</mutator><indexes><index>21</index></indexes><blocks><block>5</block></blocks><killingTest/><description>replaced boolean return with true for com/example/Foo::bar</description></mutation>
+</mutations>

@@ -393,6 +393,10 @@ public class SecurityConfig {
                 // add-converted / read) require a valid JWT; the fail-closed guard lives in the
                 // CurrencyMoney value type. Closes BACKLOG P1-58.
                 .requestMatchers("/api/currency-ledgers/**").authenticated()
+                // TOKENIZED_SECURITIES (tokenized-securities-l0): any authenticated user creates a token,
+                // transfers units (compliance-gated), and reads it; eligibility grant is ADMIN-only
+                // (enforced by @PreAuthorize on EligibleInvestorController).
+                .requestMatchers("/api/security-tokens/**").authenticated()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers

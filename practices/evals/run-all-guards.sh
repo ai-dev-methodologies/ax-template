@@ -1146,6 +1146,18 @@ run_guard "full_trio_spec_backend_or_exempt/fixture_fail" 1 \
 run_guard "full_trio_spec_backend_or_exempt/fixture_pass" 0 \
     bash "$SCRIPT_DIR/full_trio_spec_backend_or_exempt_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/full-trio-backend-or-exempt/pass_exempted"
 
+echo "[84] vacuity_class_proof_guard.sh (the MECHANICAL non-vacuity gate — this session's adversarial reviews kept catching green-but-hollow tests by hand: a gate that, if deleted/flipped, fails NO test. This makes the catch mechanical via PIT mutation testing. Every spec item that declares a non-vacuity contract {vacuity_class + gate_method + kill_mutator} is kill-proofed: (a) gate_method resolves to a real class+method, (b) the kill_mutator is consistent with the vacuity_class (fail_closed_default ⇒ TRUE_RETURNS|FALSE_RETURNS per METHODOLOGY), and (c) a SCOPED ./gradlew pitest run mutates that one method with that mutator and the catalog *ViolationProofTest MUST KILL it — SURVIVED/NO_COVERAGE ⇒ hollow ⇒ BLOCK. Live runs real PIT against the tokenized-securities fail-closed SPIs {OwnershipHolderAuthorization#controls, AllowlistInvestorEligibility#isEligible} and asserts KILLED; the offline pass/fail fixtures {hollow SURVIVED → 1, tight KILLED → 0} prove the assertion is non-vacuous.)"
+run_guard "vacuity_class_proof/live" 0 \
+    bash "$SCRIPT_DIR/vacuity_class_proof_guard.sh"
+run_guard "vacuity_class_proof/fixture_hollow" 1 \
+    bash "$SCRIPT_DIR/vacuity_class_proof_guard.sh" --report "$SCRIPT_DIR/fixtures/vacuity-class-proof/hollow_survived.xml" --gate-method com.example.Foo#bar --kill-mutator TRUE_RETURNS --vacuity-class fail_closed_default
+run_guard "vacuity_class_proof/fixture_tight" 0 \
+    bash "$SCRIPT_DIR/vacuity_class_proof_guard.sh" --report "$SCRIPT_DIR/fixtures/vacuity-class-proof/tight_killed.xml" --gate-method com.example.Foo#bar --kill-mutator TRUE_RETURNS --vacuity-class fail_closed_default
+
+echo "[85] vacuity_guard_selfproof_guard.sh (anti-meta-trap — a guard that catches hollow tests can itself rot into a hollow guard {the same trap}. This self-proof keeps vacuity_class_proof_guard.sh honest, offline, on committed fixtures: it asserts the vacuity guard STILL FAILS on the bundled hollow {SURVIVED} fixture, STILL PASSES on the tight {KILLED} fixture {so the failure is discriminating, not a constant blocker}, and that its source still carries the SURVIVED/non-KILLED → exit 1 blocking branch. Live exits 0.)"
+run_guard "vacuity_guard_selfproof/live" 0 \
+    bash "$SCRIPT_DIR/vacuity_guard_selfproof_guard.sh"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

@@ -28,6 +28,33 @@
 
 ---
 
+## Step 0: Public / Private 분류 (R26 — 코드 작성 전 필수)
+
+새 도메인을 흡수하기 **전에** 불변식을 generic / fork-receiver-특화로 분류한다. ax-template은
+public fork-base이므로 fork-receiver(회사·팀)의 특화·민감 정보는 트리에 들어가면 안 된다 (CLAUDE.md R26).
+
+**SPI seam 패턴으로 경계를 강제한다:**
+
+| 구분 | public (이 repo) | private (fork-receiver) |
+|------|-----------------|----------------|
+| 불변식 | generic, 외부 공개 표준·법률·RFC·EIP anchor | — |
+| 외부 의존 | SPI **interface** + 결정론적 test-double | SPI **실제 구현** (벤더·체인·KYC·정산) |
+| 식별자 | 회사·맥락 **0** | 회사명·전략·시크릿·고객데이터 |
+
+**작성법:**
+1. 외부 의존(체인·KYC·정산·벤더 API 등)은 도메인 안에 **interface**로 선언하고, repo에는
+   결정론적 **test-double**(in-memory / allowlist)만 둔다.
+2. fork-receiver는 그 interface를 자기 실체로 구현해 주입한다 (Spring `@Primary` / `@ConditionalOnMissingBean`).
+3. 불변식 테스트는 test-double 위에서 binary로 성립 — 실체 없이도 correctness가 증명된다.
+
+예 (tokenized-securities): `InvestorEligibility`(deny-by-default allowlist) / `HolderAuthorization`
+(ownership) / `OnChainAnchor`(in-memory) interface는 public, 실제 ERC-3643·KYC·체인 adapter는 fork.
+
+분류가 끝나야 Step 1로 간다. 불확실하면 generic interface로 두고 구현을 fork로 미룬다
+(= "공통으로 만든 뒤 도입 후 보강").
+
+---
+
 ## Step 1: Define Compliance Spec
 
 **위치**: `specs/{domain}-{standard}.yaml`
@@ -1377,6 +1404,149 @@ otherwise have been a shipped, green, *catalog-endorsed* bug — the worst kind,
 catalog's whole promise is "inside the rules = safe". Apply it to any sub-agent-produced
 substantive change before merge; skip it only for trivial mechanical edits a human can
 fully read in one pass.
+
+## Non-Vacuity / Hollow-Test Enforcement
+
+### Thesis
+
+Green ≠ correct. A test MUST fail if the correctness gate it nominally covers is
+removed or flipped. A test that passes even when the gate is deleted is
+*vacuously passing* (green-but-hollow): it encodes a scenario but proves nothing
+about the gate's presence. The goal is to make catching this mechanical, not
+dependent on a human remembering to dispatch a reviewer.
+
+The adversarial re-verification section above addresses the *process* side: a
+second agent reads the diff with a refute-by-default stance. This section
+addresses the *structural* side: defining which seam classes recur, which are
+mechanically detectable, and what operating rules close each class before commit.
+
+---
+
+### The three seam classes
+
+**Type A — two-sided invariant.** A conservation or balance test that asserts only
+ONE side of a two-sided effect. Example: a fund lock-up rejection test that checks
+the recipient's balance but not the sender's. A mutant that silently debits the
+sender still passes because no assertion covers the sender's post-state. Rule:
+every conservation invariant must assert BOTH sides.
+
+**Type B — exemption carve-out.** An exemption branch in a rule or check that has
+zero tests — implemented but unproven. Example: an issuer holding-limit that
+exempts a specific entity class. If the exemption clause is deleted, no test
+breaks. Rule: every declared exemption path needs ≥ 1 test that exercises it and
+confirms the exempted entity is NOT blocked.
+
+**Type C — fail-closed default.** The deny-by-default branch in a fail-closed SPI
+or conditional is untested. Example: a restriction gate that returns `orElse(false)`
+when no row exists — tested only on the "row exists" path. Flipping to
+`orElse(true)` (failing open) breaks no existing test. Rule: every fail-closed
+default needs ≥ 1 test driving the empty / missing-row branch to confirm denial.
+
+---
+
+### Mechanizable vs judgment (honest split)
+
+Mutation testing (PIT) mechanically catches all three seam classes **for code that
+already exists**: a SURVIVED mutant is the binary signal that "delete or flip this
+gate, nothing fails." PIT reports the surviving mutant and the covering test set;
+the missing assertion is locatable.
+
+However, a **missing feature** — a carve-out or fail-closed clause that was never
+coded — has no bytecode to mutate. PIT cannot surface what is absent. Only a
+spec-reading adversarial review (ralph Step-7, described below) catches the
+missing-feature residue: for each spec clause declaring a carve-out or fail-closed
+behaviour, check whether it is implemented AND whether it is tested.
+
+These two methods are complementary, not redundant. Neither subsumes the other.
+
+---
+
+### Operating rules
+
+1. Assert BOTH sides of every conservation invariant (credit AND debit, accept AND
+   reject, producer AND consumer). A test encoding only one side of a two-sided
+   effect is a Type A gap by definition.
+2. Provide ≥ 1 test per declared exemption path — testing that an exempted entity
+   is NOT blocked by the rule that blocks non-exempt entities.
+3. Provide ≥ 1 test driving the empty / missing-row branch of every fail-closed
+   default — testing that absence of a permitting record produces denial, not
+   permission.
+
+---
+
+### `vacuity_class → kill_mutator` consistency table
+
+| `vacuity_class`        | `kill_mutator` (PIT operator)                   |
+|------------------------|-------------------------------------------------|
+| `fail_closed_default`  | `TRUE_RETURNS` / `FALSE_RETURNS`                |
+| `two_sided_invariant`  | `VOID_METHOD_CALLS` / `NEGATE_CONDITIONALS`     |
+| `exemption_carveout`   | `REMOVE_CONDITIONALS`                           |
+
+A SURVIVED mutant of the listed operator class in a gate that is declared with the
+corresponding `vacuity_class` is a confirmed hollow test — it must be fixed before
+merge.
+
+---
+
+### Pipeline
+
+```
+ralplan Critic
+  → declares vacuity_class for every new carve-out / fail-closed SPI in the plan
+      ↓
+R25 vacuity-nonvacuity step
+  → proves the declared kill_mutator is KILLED (binary: not survived = PASS)
+      ↓
+ralph Step-7 adversarial-non-vacuity reviewer
+  → covers the missing-feature residue: reads the spec, names any clause with
+    zero corresponding test (PIT cannot reach what is absent)
+      ↓
+advisory mutation sweep (periodic, outside R25 hot path)
+  → discovers undeclared gates that survived mutation without a prior vacuity_class
+    annotation — surfaces Type A/B/C gaps author did not self-declare
+```
+
+---
+
+### ralph Step-7 adversarial-non-vacuity reviewer role
+
+> Refute-by-default. For each correctness gate under test: mentally delete or flip
+> it (sender side-effect, exemption carve-out, fail-closed empty/missing-row branch,
+> `orElse(false)→true`); if no assertion fails on the mutant, REJECT with the mutant
+> and the missing assertion. THEN read the SPEC: for every carve-out and fail-closed
+> clause, confirm it is both implemented AND tested; name any spec clause with zero
+> corresponding test. APPROVE only when every gate has a test that would fail if the
+> gate were removed AND every spec clause has a non-vacuous test.
+
+This role fires inside the ralph Step-7 slot and is additive to, not a replacement
+for, the broader adversarial review described in the preceding section.
+
+---
+
+### Honest limits
+
+- **Mutation only tests code that exists.** PIT cannot surface a missing exemption
+  clause or a missing fail-closed branch. The spec-reading adversarial pass is the
+  only backstop for the missing-feature residue.
+- **`vacuity_class` is author-declared.** Under-declaration leaves gaps. The
+  advisory mutation sweep discovers undeclared gaps, but runs outside the R25 hot
+  path and only covers code that already exists.
+- **The vacuity guard itself must ship a self-proof fixture.** A guard that only
+  asserts "the keyword `vacuity_class` appears somewhere" is itself a vacuous check
+  — the same trap it purports to catch. The fixture must demonstrate that a
+  concrete SURVIVED mutant is BLOCKED, not merely that a label is present.
+- **PIT "killed" ≠ "right assertion".** A mutant can be killed by a test that
+  asserts the wrong thing at the right time. Kill coverage is a floor, not a
+  ceiling.
+- **Flakiness produces false kills.** Run mutation on the fast unit/mock slice only
+  — never on `@SpringBootTest` integration tests. Flaky IT timings corrupt kill
+  scores, masking real survivals with noise-driven apparent kills.
+- **The ralph socket fires only for ralph-driven work.** Inline or ad-hoc agent
+  sub-tasks that do not route through the ralph loop do not receive the Step-7 pass
+  automatically.
+- **DROP any "review-was-logged" ledger guard.** A record-exists check that claims
+  to prove non-vacuity is itself the vacuity it purports to catch: it verifies that
+  a log entry was written, not that any gate was meaningfully tested.
 
 ## Catalog currency — keeping implementation, templates, and rules up to date
 
