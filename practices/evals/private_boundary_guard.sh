@@ -23,12 +23,14 @@
 #   두 단계로 suppress 여부를 판정한다 — 경로·주석 부수 등장이나 다중 토큰의
 #   첫 번째만 검사하는 오류로 real secret이 묻히는 것을 방지한다:
 #
-#   1) pragma 에스케이프 (문서 경로 한정):
+#   1) pragma 에스케이프 (docs/ 또는 practices/rules/ 하위 한정):
 #      같은 라인에 "pragma: allow-secret"이 있으면 suppress하되,
-#      docs/ 또는 practices/rules/ 경로이거나 *.md 파일일 때만 유효.
-#      backend/src·frontend/src·specs·contracts 등 코드/스펙 트리에서는
-#      pragma가 있어도 무시한다 — real credential은 코드에서 pragma로 숨길 수 없다.
-#      예: docs/crypto-guide.md 내 `-----BEGIN RSA PRIVATE KEY-----  # pragma: allow-secret`
+#      파일 경로가 docs/ 하위 또는 practices/rules/ 하위일 때만 유효.
+#      bare *.md 접미사(예: backend/src/x.md)는 충분하지 않음 — 코드 트리의 .md도 무시.
+#      backend/src·frontend/src·specs·contracts 등 코드/스펙 트리에서는 경로 패턴과
+#      무관하게 pragma가 무시된다 — real credential은 코드에서 pragma로 숨길 수 없다.
+#      예(유효):  docs/crypto-guide.md 내 `-----BEGIN RSA PRIVATE KEY-----  # pragma: allow-secret`
+#      예(무효):  backend/src/Notes.md 내 같은 pragma — 코드 트리이므로 무시
 #
 #   2) 모든 매칭 토큰 값 순회 (N1 fix — head -1 제거):
 #      같은 라인에 여러 토큰이 있으면 ALL 토큰을 순회해서, 하나라도
@@ -63,11 +65,13 @@
 #   - fork-receiver 차단은 .ax-private-markers opt-in 활성화로 작동.
 #
 # PRAGMA ESCAPE (문서 경로 한정)
-#   docs/ 또는 practices/rules/ 하위 파일, 또는 *.md 파일의 라인에
+#   docs/ 또는 practices/rules/ 하위 파일의 라인에
 #   `pragma: allow-secret` 주석을 추가하면 해당 라인의 시크릿 탐지를 suppress한다.
-#   backend/src·frontend/src·specs·contracts 등 코드 트리에서는 pragma가 무시된다.
+#   bare *.md 접미사만으로는 pragma가 활성화되지 않음 — 경로가 docs/ 또는 practices/rules/
+#   하위여야 한다. backend/src/*.md, frontend/src/*.md 등 코드 트리의 .md도 무시.
 #   예(유효):   `-----BEGIN RSA PRIVATE KEY-----  # pragma: allow-secret`  in docs/
 #   예(무효):   `String K="AKIA..."; // pragma: allow-secret`              in backend/src/
+#   예(무효):   `-----BEGIN RSA PRIVATE KEY-----  # pragma: allow-secret`  in backend/src/Notes.md
 #
 # USAGE
 #   bash practices/evals/private_boundary_guard.sh
@@ -141,14 +145,17 @@ strip_prefix() {
 }
 
 # is_doc_path: Return 0 if the grep hit's filepath is a documentation path where
-# pragma: allow-secret is valid. Code/spec paths (backend/src, frontend/src, etc.)
-# return 1 — pragma is ignored there so real credentials cannot be hidden with a comment.
+# pragma: allow-secret is valid. Only docs/ subtree and practices/rules/ subtree are
+# considered documentation paths. A bare *.md suffix anywhere else (e.g. backend/src/x.md)
+# is NOT sufficient — pragma is ignored there too (code trees may contain .md files).
+# This prevents pragma from being used to hide real credentials in backend/src/*.md,
+# frontend/src/*.md, or any other code-tree markdown file.
 is_doc_path() {
     local hit="$1"
     local filepath
     filepath="$(echo "$hit" | sed 's/:[0-9]*:.*//')"
     case "$filepath" in
-        docs/* | practices/rules/* | *.md)
+        docs/* | practices/rules/*)
             return 0 ;;
     esac
     return 1
@@ -216,8 +223,8 @@ if [ -n "$SCAN_DIRS" ]; then
             [ -z "$hit" ] && continue
             # Strip path:linenum: prefix — content only for all further checks
             content="$(echo "$hit" | strip_prefix)"
-            # 1. Pragma escape: only valid in documentation paths (docs/, practices/rules/, *.md).
-            #    In code/spec trees, pragma is ignored — real credentials cannot be hidden.
+            # 1. Pragma escape: only valid in docs/ or practices/rules/ subtree.
+            #    *.md extension alone is NOT sufficient — code-tree .md files are ignored too.
             if is_doc_path "$hit" && echo "$content" | grep -qiE "$PRAGMA_PATTERN"; then
                 continue
             fi
@@ -249,7 +256,7 @@ if [ "$violations" -gt 0 ]; then
     echo "private_boundary_guard: FAIL — ${violations} private/secret boundary violation(s) detected." >&2
     echo "  Layer 1: add identifier to .ax-private-markers only in a PRIVATE fork (not here)." >&2
     echo "  Layer 2: remove or redact real secrets; use EXAMPLE/placeholder/REDACTED in public code." >&2
-    echo "  Pragma escape is valid only in docs/ or practices/rules/ or *.md files." >&2
+    echo "  Pragma escape is valid only in docs/ or practices/rules/ subtree (*.md in code trees is also blocked)." >&2
     exit 1
 fi
 

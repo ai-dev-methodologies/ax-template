@@ -2,8 +2,13 @@
 # Layer 1 markers: none active (comments only)
 # This fixture tests Layer 2 (secret heuristics) multi-token scanning.
 #
-# N1 proof: two AKIA tokens on the same line.
-# The first token (AKIAEXAMPLEXXXXXXXXX) is a placeholder and gets suppressed.
-# The second token (AKIA0123456789ABCDEF) is a real key.
-# Old head -1 logic would only see the first token → suppress → exit 0 (BUG).
-# Correct token-loop logic sees both → second is real → exit 1 (CORRECT).
+# N1 proof: two AKIA tokens on the same line in MultiTokenConfig.java.
+# The first token (AKIAEXAMPLEXXXXXXXXX) is a placeholder that matches the allowlist.
+# The second token is a real key that does NOT match the allowlist.
+# The real key does NOT appear in any comment line — only on the TEST_KEYS code line.
+#
+# Differential:
+#   Old head -1 logic: only the FIRST token per line is checked.
+#     Line {"AKIAEXAMPLEXXXXXXXXX", "<real>"}: head -1 → AKIAEXAMPLEXXXXXXXXX → allowlist → suppress → exit 0 (BUG).
+#   Correct token-loop logic: ALL tokens are checked.
+#     Same line: first=AKIAEXAMPLEXXXXXXXXX suppressed; second=real → violation → exit 1 (CORRECT).
