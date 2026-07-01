@@ -10,8 +10,8 @@ public class ExampleConfig {
     // EXAMPLE: replace your-api-key-placeholder with the real key in your private fork
     private static final String API_KEY_EXAMPLE = "your-api-key-placeholder-xxxx-REDACTED";
 
-    // EXAMPLE JWT structure (not a real token — this is a placeholder for documentation)
-    // eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJleGFtcGxlIn0.REDACTED-signature-placeholder-xxxx
+    // EXAMPLE JWT structure (not a real token — documentation example only)
+    // eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJleGFtcGxlIn0.REDACTED-signature-placeholder-xxxx  // pragma: allow-secret
 
     public String getExampleApiKey() {
         return API_KEY_EXAMPLE;

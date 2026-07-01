@@ -1,0 +1,5 @@
+# .ax-private-markers — Layer 1 opt-in registry (no active patterns in this fixture)
+# This fixture tests M2 pragma escape:
+#   - docs/crypto-explanation.md contains PEM header and JWT examples
+#   - Each secret line has "# pragma: allow-secret" annotation
+#   Guard must exit 0 (pragma suppresses the documentation examples).

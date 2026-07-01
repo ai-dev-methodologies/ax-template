@@ -1,0 +1,6 @@
+# .ax-private-markers — Layer 1 opt-in registry (no active patterns in this fixture)
+# This fixture tests Layer 2 allowlist correctness (C1 fix):
+#   - AKIA key at path backend/src/com/example/Config.java (standard Java package)
+#   - Same line ends with "// your-env override" comment
+#   Both path "example" and comment "your-env" are incidental — must NOT suppress.
+#   Guard must exit 1 (real secret detected).
