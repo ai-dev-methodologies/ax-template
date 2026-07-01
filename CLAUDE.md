@@ -57,9 +57,15 @@ public 트리에 유입되면 안 된다. 경계는 **SPI seam**으로 강제한
 
 **위반 회고 (이 규칙의 출처):** tokenized-securities 도메인의 *기능* 코드는 generic(SPI seam으로 분리)
 이었으나, *맥락 문서·커밋 메시지*에 fork-receiver 회사명·도입 전략이 박힌 채 public push됨 → scrub +
-history rewrite로 제거. 교훈을 R26으로 codify해 다음 흡수부터 기계적으로 차단한다. (강제 표면: 코드리뷰 +
-흡수 파이프라인의 "분류 먼저" 게이트 + 본 규칙. fork별 식별자 패턴 스캔은 fork-receiver가
-`.ax-private-markers`로 opt-in 등록하는 guard로 확장 가능 — 후속 후보.)
+history rewrite로 제거. 교훈을 R26으로 codify해 다음 흡수부터 기계적으로 차단한다.
+
+**강제됨: `private_boundary_guard.sh` [86]** — 두 층으로 공개 트리를 기계적으로 검사한다:
+- **층1 opt-in marker**: `.ax-private-markers`의 활성 ERE 패턴(회사명·브랜드·코드네임)으로
+  `backend/src`·`frontend/src`·`specs`·`contracts`·`blueprints`·`practices/rules`·`docs`를 스캔.
+  public base는 이 파일을 주석만으로 유지 → 층1 매칭 0. fork-receiver가 자기 식별자를 등록하면 즉시 활성화.
+- **층2 generic 시크릿 휴리스틱**: PEM private key header / AWS AKIA key / API-key assignment /
+  JWT 3-segment 패턴을 항상 스캔. false-positive allowlist(`EXAMPLE`·`placeholder`·`REDACTED`·`your-`·`xxxx` 및 `src/test/` 경로)로 테스트 데이터 오탐 방지.
+- **비공허성 fixture 동봉**: `fail_marker`(AcmeCorp→exit 1) · `fail_secret`(RSA PEM→exit 1) · `pass_clean`(allowlist 통과→exit 0) — 세 fixture가 guard의 실제 차단을 증명한다.
 
 ---
 
@@ -143,7 +149,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 229 Java rules + 99 React rules + 14 ESLint rules + 88 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 229 Java rules + 99 React rules + 14 ESLint rules + 89 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -400,7 +406,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 228룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 88 hard guards
+│   ├── evals/                 # 4 hard gates + 89 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
@@ -468,7 +474,7 @@ fork-receiver의 활성화는 opt-in이다.
 | PreToolUse hook (Claude Code) | `.claude/settings.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
 | `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 모든 push 시 — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
-| `run-all-guards.sh` (88 guards, 154 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
+| `run-all-guards.sh` (89 guards, 158 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
 
 ### 핵심 설명

@@ -1,0 +1,3 @@
+# private_boundary_guard [R26] fixture — pass_clean
+# Purpose: demonstrates clean scan — no active markers, no unallowlisted secrets.
+# No active marker patterns below (all lines are comments).

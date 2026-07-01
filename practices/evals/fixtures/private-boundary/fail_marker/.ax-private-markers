@@ -1,0 +1,5 @@
+# private_boundary_guard [R26] fixture — fail_marker
+# Purpose: demonstrates Layer 1 marker activation triggering a violation.
+# This is a TEST fixture only. Do NOT copy this file to a real fork without
+# replacing AcmeCorp with your actual company identifier.
+AcmeCorp

@@ -1158,6 +1158,16 @@ echo "[85] vacuity_guard_selfproof_guard.sh (anti-meta-trap — a guard that cat
 run_guard "vacuity_guard_selfproof/live" 0 \
     bash "$SCRIPT_DIR/vacuity_guard_selfproof_guard.sh"
 
+echo "[86] private_boundary_guard.sh (R26 강제 — ax-template public base에 fork-receiver 특화·민감 정보 유입을 기계적으로 차단. 두 층: 층1 opt-in marker {.ax-private-markers의 활성 ERE 패턴으로 회사명·브랜드·코드네임 스캔, public base는 비워 0-match 보장} + 층2 generic 시크릿 휴리스틱 {PEM private key / AWS AKIA / API-key assignment / JWT 3-segment, false-positive allowlist EXAMPLE·placeholder·REDACTED·your-·xxxx + src/test/ 경로 제외}. 비공허성 fixture 3종 동봉: fail_marker {AcmeCorp marker→exit 1} / fail_secret {RSA PEM header→exit 1} / pass_clean {allowlist 통과→exit 0}. Live exits 0.)"
+run_guard "private_boundary/live" 0 \
+    bash "$SCRIPT_DIR/private_boundary_guard.sh"
+run_guard "private_boundary/fixture_marker" 1 \
+    bash "$SCRIPT_DIR/private_boundary_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/private-boundary/fail_marker"
+run_guard "private_boundary/fixture_secret" 1 \
+    bash "$SCRIPT_DIR/private_boundary_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/private-boundary/fail_secret"
+run_guard "private_boundary/fixture_clean" 0 \
+    bash "$SCRIPT_DIR/private_boundary_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/private-boundary/pass_clean"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

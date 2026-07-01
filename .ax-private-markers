@@ -1,0 +1,20 @@
+# .ax-private-markers — R26 opt-in private boundary marker registry
+#
+# PURPOSE
+#   private_boundary_guard.sh [86]이 이 파일을 읽어 공개 트리를 스캔한다.
+#   각 활성 줄(#·빈 줄 제외)은 ERE 패턴으로 처리되어 스캔 대상
+#   (backend/src, frontend/src, specs, contracts, blueprints, practices/rules, docs)
+#   에서 검색된다. 매칭이 발견되면 R25 BLOCK.
+#
+# USAGE
+#   한 줄 = 회사명·브랜드·내부 도메인·코드네임·벤더명 regex.
+#   fork-receiver가 private fork에서 자기 식별자를 등록하면 즉시 활성화된다.
+#   예: AcmeCorp
+#       acme\.internal
+#       (CredosPartners|크레도스)
+#
+# ax-template PUBLIC BASE는 아래를 비워둔다.
+#   이 public base에는 차단할 회사 식별자가 0이므로 Layer 1 매칭이 0이어야 한다.
+#   fork가 자기 식별자를 등록한 순간부터 커밋 전 guard가 해당 패턴을 잡는다.
+#
+# (아래 활성 패턴 없음 — public base 유지)

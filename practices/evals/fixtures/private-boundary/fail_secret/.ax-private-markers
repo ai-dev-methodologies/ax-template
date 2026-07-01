@@ -1,0 +1,3 @@
+# private_boundary_guard [R26] fixture — fail_secret
+# Purpose: demonstrates Layer 2 secret heuristic triggering a violation.
+# No active marker patterns below — only Layer 2 (generic secret) fires.
