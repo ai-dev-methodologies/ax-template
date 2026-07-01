@@ -1158,7 +1158,7 @@ echo "[85] vacuity_guard_selfproof_guard.sh (anti-meta-trap — a guard that cat
 run_guard "vacuity_guard_selfproof/live" 0 \
     bash "$SCRIPT_DIR/vacuity_guard_selfproof_guard.sh"
 
-echo "[86] private_boundary_guard.sh (R26 강제 — ax-template public base에 fork-receiver 특화·민감 정보 유입을 기계적으로 차단. 두 층: 층1 opt-in marker {.ax-private-markers 활성 ERE 패턴, case-insensitive, public base 0-match} + 층2 generic 시크릿 {PEM key / AWS AKIA / API-key / JWT, value-only allowlist + src/test/ 제외 + pragma: allow-secret 라인 이스케이프}. 스캔: backend/src frontend/src specs contracts blueprints practices/rules docs README.md CLAUDE.md .github. 한계(honest): git 히스토리·커밋 메시지·바이너리·인코딩 시크릿은 스캔 범위 밖. 비공허성 fixture 5종: fail_marker→exit 1 / fail_secret→exit 1 / fail_secret_incidental→exit 1 (C1: 경로 example·주석 your-env 오-suppress 수정) / pass_clean→exit 0 / pass_pragma_doc→exit 0 (M2: pragma escape). Live exits 0.)"
+echo "[86] private_boundary_guard.sh (R26 강제 — ax-template public base에 fork-receiver 특화·민감 정보 유입을 기계적으로 차단. 두 층: 층1 opt-in marker {.ax-private-markers 활성 ERE 패턴, case-insensitive, public base 0-match} + 층2 generic 시크릿 {PEM key / AWS AKIA / API-key / JWT, 모든 토큰 순회 allowlist + src/test/ 제외 + pragma: allow-secret은 docs/practices/rules/*.md 경로만 유효}. 스캔: backend/src frontend/src specs contracts blueprints practices/rules docs README.md CLAUDE.md .github. 한계(honest): git 히스토리·커밋 메시지·바이너리·인코딩 시크릿은 스캔 범위 밖. 비공허성 fixture 7종: fail_marker→exit 1 / fail_secret→exit 1 / fail_secret_incidental→exit 1 (C1: value-only allowlist) / pass_clean→exit 0 / pass_pragma_doc→exit 0 (pragma in docs/) / fail_secret_multitoken→exit 1 (N1: 동일 라인 placeholder+real 토큰 순회) / fail_pragma_in_code→exit 1 (n1: pragma가 backend/src에서 무시됨). Live exits 0.)"
 run_guard "private_boundary/live" 0 \
     bash "$SCRIPT_DIR/private_boundary_guard.sh"
 run_guard "private_boundary/fixture_marker" 1 \
@@ -1171,6 +1171,10 @@ run_guard "private_boundary/fixture_incidental" 1 \
     bash "$SCRIPT_DIR/private_boundary_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/private-boundary/fail_secret_incidental"
 run_guard "private_boundary/fixture_pragma_doc" 0 \
     bash "$SCRIPT_DIR/private_boundary_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/private-boundary/pass_pragma_doc"
+run_guard "private_boundary/fixture_multitoken" 1 \
+    bash "$SCRIPT_DIR/private_boundary_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/private-boundary/fail_secret_multitoken"
+run_guard "private_boundary/fixture_pragma_in_code" 1 \
+    bash "$SCRIPT_DIR/private_boundary_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/private-boundary/fail_pragma_in_code"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""

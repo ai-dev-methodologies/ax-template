@@ -11,7 +11,7 @@ public class ExampleConfig {
     private static final String API_KEY_EXAMPLE = "your-api-key-placeholder-xxxx-REDACTED";
 
     // EXAMPLE JWT structure (not a real token — documentation example only)
-    // eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJleGFtcGxlIn0.REDACTED-signature-placeholder-xxxx  // pragma: allow-secret
+    // eyJEXAMPLEfakeXXXXXXXX.eyJEXAMPLEfakeXXXXXXXXXX.REDACTED-signature
 
     public String getExampleApiKey() {
         return API_KEY_EXAMPLE;

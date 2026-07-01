@@ -1,0 +1,9 @@
+# .ax-private-markers — fixture: fail_secret_multitoken
+# Layer 1 markers: none active (comments only)
+# This fixture tests Layer 2 (secret heuristics) multi-token scanning.
+#
+# N1 proof: two AKIA tokens on the same line.
+# The first token (AKIAEXAMPLEXXXXXXXXX) is a placeholder and gets suppressed.
+# The second token (AKIA0123456789ABCDEF) is a real key.
+# Old head -1 logic would only see the first token → suppress → exit 0 (BUG).
+# Correct token-loop logic sees both → second is real → exit 1 (CORRECT).

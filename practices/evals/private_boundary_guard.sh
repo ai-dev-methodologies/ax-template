@@ -20,22 +20,30 @@
 #     d) JWT token:              eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.
 #
 # FALSE POSITIVE SUPPRESSION
-#   두 단계로 suppress 여부를 판정한다 — 경로나 주석의 부수어 등장으로 real secret이
-#   묻히는 C1 오버-suppression 버그를 방지한다:
+#   두 단계로 suppress 여부를 판정한다 — 경로·주석 부수 등장이나 다중 토큰의
+#   첫 번째만 검사하는 오류로 real secret이 묻히는 것을 방지한다:
 #
-#   1) pragma 에스케이프 (라인 전체 판정):
-#      같은 라인에 "pragma: allow-secret" (또는 pragma allow-secret)이 주석으로
-#      붙어 있으면 suppress. docs/practices/rules의 설명용 fenced-block 예시에 사용.
-#      예: `-----BEGIN RSA PRIVATE KEY-----  # pragma: allow-secret`
+#   1) pragma 에스케이프 (문서 경로 한정):
+#      같은 라인에 "pragma: allow-secret"이 있으면 suppress하되,
+#      docs/ 또는 practices/rules/ 경로이거나 *.md 파일일 때만 유효.
+#      backend/src·frontend/src·specs·contracts 등 코드/스펙 트리에서는
+#      pragma가 있어도 무시한다 — real credential은 코드에서 pragma로 숨길 수 없다.
+#      예: docs/crypto-guide.md 내 `-----BEGIN RSA PRIVATE KEY-----  # pragma: allow-secret`
 #
-#   2) 매칭된 시크릿 토큰 값 자체가 placeholder일 때만 suppress (값-only 판정):
-#      ALLOWLIST_PATTERN이 파일 경로·줄번호·라인의 다른 텍스트(주석 등)가 아닌
+#   2) 모든 매칭 토큰 값 순회 (N1 fix — head -1 제거):
+#      같은 라인에 여러 토큰이 있으면 ALL 토큰을 순회해서, 하나라도
+#      non-placeholder(ALLOWLIST_PATTERN 불일치)이면 violation으로 보고한다.
+#      placeholder decoy 토큰이 첫 번째로 오더라도 뒤따르는 real 시크릿을 놓치지 않음.
+#      예: `"AKIAEXAMPLEXXXXXXXXX", "AKIA0123456789ABCDEF"` → 두 번째 real AKIA → exit 1
+#      예: `api_key = "EXAMPLE_KEY"` → 단일 토큰이 placeholder → suppress
+#
+#   3) value-only 판정 (경로·주석 오염 방지):
+#      ALLOWLIST_PATTERN은 파일 경로·줄번호·라인의 다른 텍스트(주석 etc.)가 아닌
 #      실제 매칭된 토큰 값에 포함될 때만 suppress한다.
-#      예: api_key = "EXAMPLE_KEY"          → suppress (값이 EXAMPLE)
-#          AKIA0123456789ABCDEF  // your-env → NOT suppressed (토큰 값은 real)
-#          backend/src/com/example/Real.java → 경로 example로 suppress 안 함
+#      예: `AKIA0123456789ABCDEF  // your-env` → real token, comment `your-env`은 무시
+#          `backend/src/com/example/Real.java` → 경로 example로 suppress 안 함
 #
-#   3) src/test/ 경로 제외 (층2만):
+#   4) src/test/ 경로 제외 (층2만):
 #      보안 테스트 코드는 crafted JWT·더미 키를 합법적으로 포함. 층1(marker)은
 #      test 포함 — 회사 식별자는 테스트에도 금지.
 #
@@ -46,18 +54,20 @@
 #
 # LIMITS (honest scope)
 #   - 정적 트리 스캔 전용. git 히스토리·커밋 메시지·바이너리·인코딩 시크릿은 스캔 안 함.
-#   - docs/practices/rules의 markdown fenced-block 내부는 자동 제외되지 않음 →
-#     문서화용 PEM/JWT 예시는 `# pragma: allow-secret`으로 라인 단위 이스케이프 필요.
+#   - docs/practices/rules 이외 markdown fenced-block 내부는 자동 제외 안 됨 →
+#     문서화용 PEM/JWT 예시는 docs/ 또는 practices/rules/ 경로의 파일에 넣거나
+#     pragma: allow-secret 주석으로 라인 단위 이스케이프 필요.
 #   - 스캔은 위 SCAN TARGETS 경로로 한정. 루트 레벨 .env·.envrc·기타 dotfile은
 #     현재 커버리지 밖 (silent gap이 아닌 honest gap).
 #   - ax-template HEAD 자체: markers 비어 있어 층1 0-match, 실 시크릿 없어 층2 0-match.
 #   - fork-receiver 차단은 .ax-private-markers opt-in 활성화로 작동.
 #
-# PRAGMA ESCAPE
-#   라인에 `pragma: allow-secret` (또는 `pragma allow-secret`) 주석을 추가하면
-#   해당 라인의 시크릿 탐지를 suppress한다. 문서화 목적 예시 코드에 사용.
-#   예: `-----BEGIN RSA PRIVATE KEY-----  # pragma: allow-secret`
-#       `"eyJhbGciOiJSUzI1NiJ9..."  # pragma: allow-secret`
+# PRAGMA ESCAPE (문서 경로 한정)
+#   docs/ 또는 practices/rules/ 하위 파일, 또는 *.md 파일의 라인에
+#   `pragma: allow-secret` 주석을 추가하면 해당 라인의 시크릿 탐지를 suppress한다.
+#   backend/src·frontend/src·specs·contracts 등 코드 트리에서는 pragma가 무시된다.
+#   예(유효):   `-----BEGIN RSA PRIVATE KEY-----  # pragma: allow-secret`  in docs/
+#   예(무효):   `String K="AKIA..."; // pragma: allow-secret`              in backend/src/
 #
 # USAGE
 #   bash practices/evals/private_boundary_guard.sh
@@ -104,13 +114,13 @@ done
 SCAN_DIRS="$(echo "$SCAN_DIRS" | xargs)"
 
 # ── Allowlist: placeholder keywords for the MATCHED TOKEN VALUE ───────────────
-# Applied only to the extracted matched value (not path, not the rest of the line).
-# Prevents path-contamination (com/example package) and comment-contamination
-# (// your-env) from silently suppressing real secrets.
+# Applied only to extracted matched token values (not path, not surrounding text).
+# Every token on a line is checked; a single real token triggers violation even if
+# placeholder tokens also appear on the same line.
 ALLOWLIST_PATTERN='EXAMPLE|example|placeholder|your-|xxxx|REDACTED'
 
 # Pragma pattern — checked against full content line (path stripped).
-# Suppresses documentation examples annotated as safe.
+# Only valid in documentation paths; ignored in code/spec trees.
 PRAGMA_PATTERN='pragma[[:space:]]*:?[[:space:]]*allow[-_]?secret'
 
 violations=0
@@ -130,8 +140,24 @@ strip_prefix() {
     sed 's/^[^:]*:[0-9]*://'
 }
 
+# is_doc_path: Return 0 if the grep hit's filepath is a documentation path where
+# pragma: allow-secret is valid. Code/spec paths (backend/src, frontend/src, etc.)
+# return 1 — pragma is ignored there so real credentials cannot be hidden with a comment.
+is_doc_path() {
+    local hit="$1"
+    local filepath
+    filepath="$(echo "$hit" | sed 's/:[0-9]*:.*//')"
+    case "$filepath" in
+        docs/* | practices/rules/* | *.md)
+            return 0 ;;
+    esac
+    return 1
+}
+
 # ── LAYER 1: opt-in marker scan ───────────────────────────────────────────────
 # Uses -i (case-insensitive) so "AcmeCorp" marker catches com.acmecorp package refs.
+# Checks ALL matched tokens per line (N1 fix) — placeholder decoy first does not hide
+# a real match later on the same line.
 MARKERS_FILE=".ax-private-markers"
 if [ -f "$MARKERS_FILE" ]; then
     while IFS= read -r pattern; do
@@ -147,15 +173,24 @@ if [ -f "$MARKERS_FILE" ]; then
                 [ -z "$hit" ] && continue
                 # Strip path:linenum: — get content only
                 content="$(echo "$hit" | strip_prefix)"
-                # Check pragma escape (full content line)
-                if echo "$content" | grep -qiE "$PRAGMA_PATTERN"; then
+                # Pragma escape: only valid in documentation paths
+                if is_doc_path "$hit" && echo "$content" | grep -qiE "$PRAGMA_PATTERN"; then
                     continue
                 fi
-                # Extract the matched value only; suppress if the VALUE ITSELF is placeholder
-                matched_value="$(echo "$content" | grep -oiE -e "$pattern" | head -1)"
-                if [ -n "$matched_value" ] && echo "$matched_value" | grep -qE "$ALLOWLIST_PATTERN"; then
-                    continue
-                fi
+                # Loop over ALL matched tokens (N1 fix: head -1 removed).
+                # Suppress only when every token on this line is a placeholder.
+                all_placeholder=1
+                found_any=0
+                while IFS= read -r tok; do
+                    [ -z "$tok" ] && continue
+                    found_any=1
+                    if ! echo "$tok" | grep -qiE "$ALLOWLIST_PATTERN"; then
+                        all_placeholder=0
+                        break
+                    fi
+                done < <(echo "$content" | grep -oiE -e "$pattern")
+                # If all tokens are placeholders (and at least one was found), suppress
+                [ "$found_any" -eq 1 ] && [ "$all_placeholder" -eq 1 ] && continue
                 report_violation "1:marker" "$pattern" "$hit"
             done < <(grep -rnEi -e "$pattern" $SCAN_DIRS 2>/dev/null || true)
         fi
@@ -181,17 +216,26 @@ if [ -n "$SCAN_DIRS" ]; then
             [ -z "$hit" ] && continue
             # Strip path:linenum: prefix — content only for all further checks
             content="$(echo "$hit" | strip_prefix)"
-            # 1. Pragma escape: suppress if line has allow-secret annotation
-            if echo "$content" | grep -qiE "$PRAGMA_PATTERN"; then
+            # 1. Pragma escape: only valid in documentation paths (docs/, practices/rules/, *.md).
+            #    In code/spec trees, pragma is ignored — real credentials cannot be hidden.
+            if is_doc_path "$hit" && echo "$content" | grep -qiE "$PRAGMA_PATTERN"; then
                 continue
             fi
-            # 2. Value-only allowlist: extract the matched token; suppress if VALUE is placeholder
-            #    This prevents path (com/example) and comment (// your-env) from suppressing
-            #    real secrets.
-            matched_value="$(echo "$content" | grep -oE -e "$secret_pattern" | head -1)"
-            if [ -n "$matched_value" ] && echo "$matched_value" | grep -qE "$ALLOWLIST_PATTERN"; then
-                continue
-            fi
+            # 2. Loop over ALL matched tokens (N1 fix: head -1 removed).
+            #    Value-only allowlist: suppress if EVERY token on the line is a placeholder.
+            #    A single non-placeholder token triggers violation even if others are dummies.
+            all_placeholder=1
+            found_any=0
+            while IFS= read -r tok; do
+                [ -z "$tok" ] && continue
+                found_any=1
+                if ! echo "$tok" | grep -qE "$ALLOWLIST_PATTERN"; then
+                    all_placeholder=0
+                    break
+                fi
+            done < <(echo "$content" | grep -oE -e "$secret_pattern")
+            # If all tokens are placeholders (and at least one was found), suppress
+            [ "$found_any" -eq 1 ] && [ "$all_placeholder" -eq 1 ] && continue
             report_violation "2:secret" "$secret_pattern" "$hit"
         done < <(grep -rnE -e "$secret_pattern" $SCAN_DIRS 2>/dev/null \
                  | grep -v '/src/test/' \
@@ -205,7 +249,7 @@ if [ "$violations" -gt 0 ]; then
     echo "private_boundary_guard: FAIL — ${violations} private/secret boundary violation(s) detected." >&2
     echo "  Layer 1: add identifier to .ax-private-markers only in a PRIVATE fork (not here)." >&2
     echo "  Layer 2: remove or redact real secrets; use EXAMPLE/placeholder/REDACTED in public code." >&2
-    echo "  Inline escape: append '# pragma: allow-secret' to documentation-only examples." >&2
+    echo "  Pragma escape is valid only in docs/ or practices/rules/ or *.md files." >&2
     exit 1
 fi
 

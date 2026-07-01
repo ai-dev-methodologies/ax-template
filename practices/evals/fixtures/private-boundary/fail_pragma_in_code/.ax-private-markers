@@ -1,0 +1,9 @@
+# .ax-private-markers — fixture: fail_pragma_in_code
+# Layer 1 markers: none active (comments only)
+# This fixture tests Layer 2 (secret heuristics) pragma path restriction.
+#
+# n1 proof: real AKIA key in backend/src/ with pragma: allow-secret comment.
+# pragma is valid only in docs/ or practices/rules/ or *.md files.
+# In backend/src/ code files, pragma is ignored — real secret MUST be blocked.
+# Old unrestricted pragma logic → suppress → exit 0 (BUG).
+# Correct path-restricted pragma logic → backend/src not doc path → exit 1 (CORRECT).
