@@ -25,12 +25,14 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 60 | 60 | **100%** |
-| P2 (verification escapes) | 13 | 13 | **100%** |
-| P3 (industry-niche deferrals) | 31 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **130** | **99** | **~76%** |
+| P1 (generic signature backlog) | 62 | 60 | **~97%** |
+| P2 (verification escapes) | 15 | 13 | **~87%** |
+| P3 (industry-niche deferrals) | 42 | 0 | 0% |
+| **P0–P3 합계 (수렴 분모)** | **145** | **99** | **~68%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
+> 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
+> 2026-07-07 P3 인라인화 — P3-1~21 확정 요지·P3-22~40 IDW13-17 세션기록 대조(EMR G9 cross-list record-linkage→P1-33~34 closed 제외, 불확실 6건 "(closure 여부 미검증)" 표기, disk-truth 재집계) + P3-32→P3-41·P3-33→P3-42 재번호 → P3 0/42, 수렴 **~68%**.
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -166,6 +168,10 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [x] P1-59 — password-reset token-FAMILY invalidation *(Broadleaf re-audit 2026-06-27, LOW)*: reset 성공 시 그 유저 outstanding unused reset 토큰 전부 원자 무효화(Broadleaf CustomerServiceImpl.invalidateAllTokensForCustomer). ax ASVS-V2.7.3는 소비된 1개만 single-use. done-when: auth-asvs-l1 확장 (토큰 2개→token1 reset→token2 거부). beyond-ASVS-baseline. **[closed 2026-06-28, feat/commerce-invariant-closure]**
 - [x] P1-60 — checkout saga rule-only + parity doc 교정 *(Broadleaf re-audit 2026-06-27, LOW doc)*: SAGA-COMPENSATE-002는 흡수·anchoring됐으나 RULE-only(runtime backend test 없음, parity[79] REVIEW-TIER 허용). checkout.md가 saga-orchestration-l0(domain_mode: full_trio)을 'review-tier spec'으로 오기술. done-when: checkout.md 교정(full_trio + verification.mechanism=rule) + 선택적 runtime saga IT. **[closed 2026-06-28, feat/commerce-invariant-closure]**
 
+**tokenized-securities 잔여 (STO-arc 파생, 2026-07-07)**
+- [ ] **P1-61** tokenized-securities `issue()` auto-claim 동시성 race 테스트 — 두 admin이 동시에 issue/claim 경로를 진입할 때 단일 발행 보장이 단언되지 않음(uq_holder_ownership_holder DB 제약이 rollback-safe하게 하나만 성공시키므로 위험 낮음; 그러나 기계적 테스트 없이 구조적 보장이라 단언 불가). done-when: `testTokenizedSecurities` 에 동시 issue 쓰레드 ×2 keystone 추가 + 1승 1-409 또는 idempotent 단언. 출처: 2026-07-07 dogfood-closure review "What's Missing".
+- [ ] **P1-62** tokenized-securities Phase 1 — `fromHolderId`↔인증주체(JWT sub / on-chain identity) 바인딩 — `transfer()` 의 `fromHolderId` 파라미터가 호출 주체와 바인딩되는 generic 불변식. 현재 `HolderAuthorization` SPI가 seam으로 존재하나 "Phase 1" 표기로 미승격 상태 — spec item `STO-HOLDER-AUTHZ-001` 등재 + `HolderAuthorization` SPI의 디폴트 fail-closed 테스트 추가로 완료. done-when: spec item + 구현체 없는 SPI 호출 시 403 fail-closed 단언. 출처: CLAUDE.md 도메인 매트릭스 "Phase 1" 표기.
+
 ## P2 — verification escapes (검증 체계 자체의 갭)
 
 - [x] P2-13 broadleaf module-exhaustion guard[80] grain-conditional disk-truth — **closed 2026-06-27 (Broadleaf re-audit, 본 세션)**: guard[80]의 disk-truth가 Maven 모듈 + core 21 패키지까지만 enumerate → ABSORBED `common`(56 sub-pkg)·`core/broadleaf-profile`(8) 한 단계 아래는 미검사 → 진짜 불변식(예: common/id hi-lo)이 silent 가능 → "ZERO silent gaps"는 grain-conditional이었음. Fix: guard를 **4-level**로 확장(common/* + profile/core/* disk-enumerate), BROADLEAF-COMPLETENESS.md에 두 테이블(56+8 분류) 추가 + headline을 grain-scope로 교정 + phantom 'core'/'admin' core-row 제거(module_count 23→21). Falsification 증명(common row 제거→BLOCK). common/id = covered_elsewhere(ax DB-native ID, #2 해소).
@@ -240,14 +246,57 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       controller-local DIVE 핸들러 우선순위 유지). E2E proof: thresholdterminal 합산 overflow →
       422 + rollback 검증. KEY: H2는 NUMERIC overflow를 22001로 보고(22003 아님); RestAssured
       JsonPath는 15+자리 수를 Double로 파싱(정밀도 손실) → BIG_DECIMAL NumberReturnType 필요.
+- [ ] P2-14 fixture kill-proof meta-gate [87] neuter surgicality 기계 강제 — `fixture_kill_manifest.yaml` 작성자가 short-circuit(`exit 0`로 바로 반환)과 같은 비외과적 neuter를 넣어도 guard[87]이 `anchor → exit 0` flip을 PASS로 판정하는 구조적 허점. 현재는 "manifest 저자 책임"으로 정직 문서화만 되어 있음. done-when: PIT-style 고정 neuter-operator 어휘 집합을 guard[87]이 강제(그 외 neuter 패턴 BLOCK) 또는 neuter 시 anchor 제거만 허용하는 외과적 제약으로 단언. 출처: 2026-07-07 adversarial review open question.
+- [ ] P2-15 private_boundary_guard [86] 커밋 메시지 스캔 — guard[86] 현 스캔 범위는 working tree 파일만(documented limit). R26 원사건이 커밋 메시지에 포함된 fork-receiver 식별자였으므로 HEAD 및 staged 커밋 메시지에도 layer-1 marker 스캔을 적용해야 완전한 강제가 된다. done-when: `git log -1 --format=%B` (HEAD) 및 staging-area 커밋 메시지에 대한 marker 스캔 + 비공허성 fixture. 출처: 2026-07-01 adversarial review m1.
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
-- [ ] P3-1 ~ P3-8 IDW6 logistics-niche ×8
-- [ ] P3-9 ~ P3-11 IDW7 fintech-ledger-niche ×3
-- [ ] P3-12 ~ P3-15 IDW8 HR/payroll-niche ×4
-- [ ] P3-16 ~ P3-21 IDW10 insurance-niche ×6 (G9, G11-G15)
-- [ ] P3-22 ~ P3-31 IDW13/14/15/16/17 niche 잔여 ×10 (각 세션 기록 참조)
+> 2026-07-07 인라인화 시 세션기록 대조로 재집계. P3-1~21 확정 요지 인라인. P3-22~40은 IDW13-17
+> 후보 20건 대조: EMR G9 cross-list record-linkage(P1-33~34 recordlinkage로 닫힘 확인)만 제외,
+> 불확실 6건 "(closure 여부 미검증)" 표기 포함. 기존 P3-32→P3-41, P3-33→P3-42 재번호.
+
+- [ ] P3-1 logistics: geo-query-l0 — PostGIS/GiST 공간 인덱스 특화 질의
+- [ ] P3-2 logistics: two-sided statement-reconciliation — counterparty-billed vs own 대사
+- [ ] P3-3 logistics: 익명-IP rate-limit key (RATELIMIT-5 XFF spoofing 표면)
+- [ ] P3-4 logistics: chain-contiguity — leg N dest == leg N+1 origin
+- [ ] P3-5 logistics: geofence debounce/hysteresis (min-dwell + confirm)
+- [ ] P3-6 logistics: two-party-acceptance handoff (bilateral offer/accept)
+- [ ] P3-7 logistics: dual/triple-timestamp — occurred/captured/recorded 구분
+- [ ] P3-8 logistics: orthogonal-exception-dimension (DSR gate shape 재사용)
+- [ ] P3-9 fintech-ledger: filter/sort field-allowlist의 query-side mass-assignment 확장
+- [ ] P3-10 fintech-ledger: faceted facet-count 집계
+- [ ] P3-11 fintech-ledger: 파생 키 기반 멱등 statement 생성
+- [ ] P3-12 HR/payroll: clamped/saturating running-balance
+- [ ] P3-13 HR/payroll: deterministic recomputable-run
+- [ ] P3-14 HR/payroll: read-disclosure-audit (열람 공시)
+- [ ] P3-15 HR/payroll: attribute-resolved approval routing
+- [ ] P3-16 insurance: G9 asserted-event-date coverage 입력
+- [ ] P3-17 insurance: G11 appeal-decider-independence
+- [ ] P3-18 insurance: G12 amount-tiered decision authority (전결)
+- [ ] P3-19 insurance: G13 duplicate-claim/same-loss key
+- [ ] P3-20 insurance: G14 statutory-deadline substantive consequence (지연이자)
+- [ ] P3-21 insurance: G15 threshold-triggered regulatory filing (STR류)
+- [ ] P3-22 telecom: G4 E.164 number-range governance — 번호 블록의 range 소유권 정책
+- [ ] P3-23 telecom: G8 late/out-of-order additive-fact ingestion — 지연/비순서 팩트의 역산 적재
+- [ ] P3-24 energy: G12 rate-asymmetric conservation — import/export 비대칭 요율 하에서도 보존 성립 (closure 여부 미검증: P1-18 netmetering 부분 커버 가능성)
+- [ ] P3-25 energy: G13 period-boundary carried-net — 기간 경계에서 누적 net을 다음 기간으로 이월
+- [ ] P3-26 energy: G14 reproducible computed-aggregate binding — 집계 계산이 입력에 결정론적으로 바인딩 (closure 여부 미검증: P1-7~9 reproducibility 부분 커버 가능성)
+- [ ] P3-27 energy: G15 piecewise deadband obligation-vs-actual — 구간별 데드밴드 내 의무 vs 실측 비교
+- [ ] P3-28 energy: G16 per-subject recurring count-budget reset — 주체별 기간 카운트 예산의 주기적 리셋 (closure 여부 미검증: P1-50 recurringinterval 부분 커버 가능성)
+- [ ] P3-29 energy: G17 count-threshold eligibility-degradation FSM — 카운트 임계 도달 시 자격 강등 FSM (closure 여부 미검증: P0-25 thresholdterminal 부분 커버 가능성)
+- [ ] P3-30 capital-markets: G8 withholding-tax split — 지급금에서 원천세 split-posting
+- [ ] P3-31 capital-markets: G10 cash-in-lieu — 주식 대신 현금 지급(단수주 처리)
+- [ ] P3-32 EMR: G8 natural-key-uniqueness-on-create — 자연키 중복 생성 거부(idempotent create)
+- [ ] P3-33 EMR: G10 set-membership MECE conservation — 집합 멤버십이 MECE(상호배타·전체포함) 성립
+- [ ] P3-34 EMR: G14 provisional-now/attested-later — 현재는 provisional, 이후 attestation 으로 확정
+- [ ] P3-35 EMR: G16 corrected-record re-fires-ack — 정정 레코드가 ack 워크플로우 재트리거
+- [ ] P3-36 EMR: G17 as-of ordered-coverage-fallback — as-of 기준 커버리지 폴백 순서 (closure 여부 미검증: P1-28~30 valuationrun as-of 부분 커버 가능성)
+- [ ] P3-37 EMR: G18 two-identifier concordance — 두 식별자 체계 간 일치성 보장
+- [ ] P3-38 aviation: G10 two-sided temporal exclusivity — 양방향 시간 독점성(중복 스케줄 불가)
+- [ ] P3-39 aviation: G11 sign-to-content binding (attestation hash) — 서명이 내용에 바인딩 (closure 여부 미검증: P1-5 authzparity SHA-256 부분 커버 가능성)
+- [ ] P3-40 aviation: G13 time/cycle-bounded conditional waiver — 시간/주기 한정 조건부 면제
+- [ ] P3-41 private_boundary_guard [86] 잔여 documented gaps — (a) `/src/test/` 경로는 layer-2 제외라 테스트 fixture에 시크릿 은닉 가능; (b) 레포 root의 dotfiles(`.env`, `.env.local` 등) 및 구성 파일이 스캔 경로 밖. fork-receiver 결정 항목: prod 배포 보안 정책에 따라 test 경로 포함 여부를 자율 결정. done-when: fork-receiver가 (a)·(b) 활성화 또는 documented gap 수용 명시. 출처: 2026-07-01 adversarial review m2.
+- [ ] P3-42 tokenized-securities F1/F2 read-surface authz 비대칭 심의 — `GET /tokens/{id}/holders`(owner-read = 인증된 모든 사용자)와 `GET /tokens/eligible-investors/{userId}`(ROLE_ADMIN 전용)의 authz 비대칭. `spec READ-HOLDER-001`에 설계 의도로 명시돼 있으나, privacy-민감 배포 환경에서는 holdings 노출 범위를 제한할 필요가 있을 수 있음. fork-receiver 결정 항목: 설계 변경 시 spec item 갱신 + `testTokenizedSecurities` READ-HOLDER 단언 수정. 출처: 2026-07-07 dogfood-closure review minor 3.
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
 
