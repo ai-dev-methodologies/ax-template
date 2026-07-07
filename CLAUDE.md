@@ -149,7 +149,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 229 Java rules + 99 React rules + 14 ESLint rules + 89 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 229 Java rules + 99 React rules + 14 ESLint rules + 90 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -406,7 +406,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 228룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 89 hard guards
+│   ├── evals/                 # 4 hard gates + 90 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
@@ -474,7 +474,7 @@ fork-receiver의 활성화는 opt-in이다.
 | PreToolUse hook (Claude Code) | `.claude/settings.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
 | `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 모든 push 시 — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
-| `run-all-guards.sh` (89 guards, 162 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
+| `run-all-guards.sh` (90 guards, 165 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
 
 ### 핵심 설명
@@ -497,7 +497,7 @@ enforcement을 막기 위한 falsification 증명. (적대적 감사 thesis: gat
 | PreToolUse hook | **by-construction 예외** — Claude Code 세션 hook이라 shell에서 호출 불가. 단, 이 hook이 트리거하는 게이트(pre-commit의 4 guard)는 아래에서 falsification-proven. |
 | pre-commit (4 gate) | 주력 게이트 evidence_guard에 falsification 증명 `practices/scripts/ax-prove-evidence-gate-blocks-agent.sh` (agent가 placeholder/빈 url evidence 작성→BLOCK→실제 출처 anchor→PASS, actor=agent 기록). `agent_block_proof_guard.sh`[76]가 존재·toggle·non-vacuity backstop. |
 | pre-push (recency) | `completion_checklist_recency_guard.sh --fixtures` (pass_*/fail_* — HEAD 최신 audit면 통과, stale/없으면 차단). |
-| run-all-guards | falsification 증명 `practices/scripts/ax-prove-gate-blocks-agent.sh` (agent가 Map-반환 @ExceptionHandler→BLOCK→ProblemDetail→PASS). [76]가 backstop. 추가로 모든 guard가 `--include-fixtures`로 pass/fail fixture 쌍 실행. |
+| run-all-guards | falsification 증명 `practices/scripts/ax-prove-gate-blocks-agent.sh` (agent가 Map-반환 @ExceptionHandler→BLOCK→ProblemDetail→PASS). [76]가 backstop. 추가로 모든 guard가 `--include-fixtures`로 pass/fail fixture 쌍 실행. shell guard fail fixture의 non-vacuity는 [87](`fixture_kill_proof_guard`)이 기계 검증 — guard의 특정 탐지 로직을 anchor neuter로 무력화했을 때 fixture exit이 1→0으로 flip됨을 mutation으로 확인. |
 | per-domain test{Domain} | 각 task 자체가 binary pass/fail. 모든 도메인이 ViolationProofTest를 동봉 — 위반이 구조적으로 불가능함을 단언(by-construction falsification). |
 
 → shell-testable 차단 표면(pre-commit · pre-push · run-all-guards · per-domain)은 전부 binary/falsification

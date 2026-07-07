@@ -1,0 +1,79 @@
+# fixture_kill_manifest.yaml — private_boundary_guard [86] fail fixture kill-proof registry
+#
+# Each item proves that a specific fail fixture is NON-VACUOUS by mutation:
+#   original guard on fixture → exit 1  (fixture reproduces the failure)
+#   neutered guard on fixture → exit 0  (fixture depends on the targeted logic)
+#
+# anchor rules:
+#   - MUST appear exactly once in the guard source (0 or 2+ → manifest stale → BLOCK)
+#   - identifies the specific detection logic being tested
+#
+# neuter rules:
+#   - a minimal source change that disables only the targeted detection
+#   - must cause the exit to flip from 1 to 0 on the paired fixture
+
+items:
+
+  # ── fail_marker: Layer 1 opt-in marker detection ─────────────────────────────
+  # fixture: .ax-private-markers has 'AcmeCorp', backend/src/AcmeOrderService.java contains it.
+  # anchor:  the single call that reports a Layer 1 marker violation.
+  # neuter:  silence that call → Layer 1 fires but never increments violations → exit 0.
+  - id: private_boundary/fail_marker
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'true  # neutered: layer 1 marker reporting disabled'
+
+  # ── fail_secret: Layer 2 PEM private key pattern (SECRET_A) ──────────────────
+  # fixture: backend/src/InfraConfig.java contains a raw PEM private key header.
+  # anchor:  the SECRET_A pattern definition.
+  # neuter:  replace PEM pattern with a non-matching string → SECRET_A never fires → exit 0.
+  - id: private_boundary/fail_secret
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_secret
+    fixture_arg: '--repo-root'
+    anchor: "SECRET_A='-----BEGIN [A-Z ]*PRIVATE KEY-----'"
+    neuter: "SECRET_A='NEUTER_NOMATCH_XXXXXXXX'"
+
+  # ── fail_secret_incidental: value-only token check (C1 fix) ──────────────────
+  # fixture: AKIA key in backend/src/com/example/Config.java with "// your-env override" comment.
+  #          The path contains "example" and the comment contains "your-" (both in ALLOWLIST).
+  #          The AKIA TOKEN VALUE itself is not a placeholder — so the guard must exit 1.
+  # anchor:  Layer 2 token-level allowlist check (not Layer 1 which uses -qiE).
+  # neuter:  check full $content line instead of individual $tok value → "your-" in comment
+  #          triggers allowlist → all_placeholder=1 → suppress → exit 0.
+  - id: private_boundary/fail_secret_incidental
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_secret_incidental
+    fixture_arg: '--repo-root'
+    anchor: 'echo "$tok" | grep -qE "$ALLOWLIST_PATTERN"'
+    neuter: 'echo "$content" | grep -qE "$ALLOWLIST_PATTERN"'
+
+  # ── fail_secret_multitoken: all-token scanning loop (N1 fix — head -1 removed) ──
+  # fixture: MultiTokenConfig.java has two AKIA tokens on one line:
+  #          first  = AKIAEXAMPLEXXXXXXXXX (placeholder, in allowlist)
+  #          second = AKIA0123456789ABCDEF (real key, NOT in allowlist)
+  # anchor:  Layer 2 grep-oE extraction (distinct from Layer 1 which uses -oiE + $pattern).
+  # neuter:  add "| head -1" to the extraction → only the first (placeholder) token is checked
+  #          → all_placeholder=1 → suppress → exit 0.
+  - id: private_boundary/fail_secret_multitoken
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_secret_multitoken
+    fixture_arg: '--repo-root'
+    anchor: 'done < <(echo "$content" | grep -oE -e "$secret_pattern")'
+    neuter: 'done < <(echo "$content" | grep -oE -e "$secret_pattern" | head -1)'
+
+  # ── fail_pragma_in_code: pragma path restriction (docs/ and practices/rules/ only) ──
+  # fixture: PragmaBypass.java in backend/src/ has AKIA key with "# pragma: allow-secret".
+  #          SecurityNotes.md also in backend/src/ has the same.
+  #          Both are in code paths — pragma must be ignored → exit 1.
+  # anchor:  the is_doc_path case pattern that restricts valid doc paths.
+  # neuter:  replace with bare "*)" → every path becomes a doc path → pragma accepted
+  #          everywhere → code-tree secrets suppressed → exit 0.
+  - id: private_boundary/fail_pragma_in_code
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_pragma_in_code
+    fixture_arg: '--repo-root'
+    anchor: 'docs/* | practices/rules/*)'
+    neuter: '*)'

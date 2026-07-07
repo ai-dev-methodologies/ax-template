@@ -83,7 +83,7 @@ Copy this checklist and check off as you progress:
 - [ ] Step 4: Create Spec Trio for the new domain (backend spec + contract + blueprint; frontend if applicable)
 - [ ] Step 5: Write TDD anchor test (RED) before any implementation
 - [ ] Step 6: Implement to GREEN — `./gradlew test{Domain}` exits 0
-- [ ] Step 7: Run the guard suite (89 hard guards — 6 core evidence gates + domain/meta guards) — `bash practices/evals/run-all-guards.sh` exits 0
+- [ ] Step 7: Run the guard suite (90 hard guards — 6 core evidence gates + domain/meta guards) — `bash practices/evals/run-all-guards.sh` exits 0
 - [ ] Step 8: Invoke `/ax-verify` — Tier-1 recursive check exits 0
 - [ ] **Step 9 (MANDATORY — R25)**: `bash practices/scripts/verify-completion.sh` exits 0
 
@@ -105,7 +105,7 @@ The anchor test must exist and fail (RED) before any implementation file is touc
 in the current SP. See `METHODOLOGY.md` §5 for the pattern.
 
 ### Step 7: Guard suite
-Script: `practices/evals/run-all-guards.sh` — chains all 89 hard guards. The 6
+Script: `practices/evals/run-all-guards.sh` — chains all 90 hard guards. The 6
 evidence-anchoring core gates are:
 `spec_ref_guard.sh`, `substance_guard.sh`, `time_decay_guard.sh`,
 `evidence_guard.sh`, `trio_integrity_guard.sh`, `cross_trio_guard.sh`.

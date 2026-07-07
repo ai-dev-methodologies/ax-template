@@ -1,0 +1,21 @@
+# nonvacuous_manifest.yaml — self-proof fixture for fixture_kill_proof_guard.sh [87]
+#
+# PURPOSE: prove that the meta-gate PASSES when a manifest item is non-vacuous.
+#
+# NON-VACUOUS ITEM: fail_marker fixture + correct marker reporting neuter.
+#   - fail_marker is caught by Layer 1 marker scanning (AcmeCorp identifier).
+#   - The neuter disables the Layer 1 violation reporting call — the exact logic under test.
+#   - Original guard on fail_marker → exit 1  (Layer 1 fires and reports violation)
+#   - Neutered guard on fail_marker → exit 0  (Layer 1 fires but reporting suppressed → no violation)
+#   → The fixture is NON-VACUOUS: its exit 1 directly depends on the neutered logic.
+#   → fixture_kill_proof_guard.sh must exit 0 (PASS) when given this manifest.
+#
+# This is the "pass" side of the meta-gate's own self-proof pair.
+
+items:
+  - id: self_proof/nonvacuous_fail_marker_with_correct_neuter
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'true  # neutered: layer 1 marker reporting disabled'

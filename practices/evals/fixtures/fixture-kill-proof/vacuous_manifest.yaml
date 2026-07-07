@@ -1,0 +1,21 @@
+# vacuous_manifest.yaml — self-proof fixture for fixture_kill_proof_guard.sh [87]
+#
+# PURPOSE: prove that the meta-gate BLOCKS when a manifest item is vacuous.
+#
+# VACUOUS ITEM: fail_marker fixture + PEM neuter (wrong layer).
+#   - fail_marker is caught by Layer 1 marker scanning (AcmeCorp identifier).
+#   - The neuter disables Layer 2 SECRET_A (PEM pattern) — a DIFFERENT layer.
+#   - Original guard on fail_marker → exit 1  (Layer 1 fires)
+#   - Neutered guard on fail_marker → exit 1  (Layer 1 STILL fires; PEM neuter has no effect)
+#   → The fixture is VACUOUS: its exit 1 does not depend on the neutered logic.
+#   → fixture_kill_proof_guard.sh must exit 1 (BLOCK) when given this manifest.
+#
+# This is the "fail" side of the meta-gate's own self-proof pair.
+
+items:
+  - id: self_proof/vacuous_fail_marker_with_pem_neuter
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: "SECRET_A='-----BEGIN [A-Z ]*PRIVATE KEY-----'"
+    neuter: "SECRET_A='NEUTER_NOMATCH_XXXXXXXX'"
