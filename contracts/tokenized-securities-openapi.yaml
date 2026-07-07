@@ -1,0 +1,520 @@
+openapi: 3.0.3
+info:
+  title: ax-template Tokenized Securities API
+  description: |
+    Tokenized securities domain REST contract — backend_only domain.
+    Chain-agnostic security token register: 5-seam architecture
+    (REGISTER / ISSUE / HOLDER-AUTHZ / TRANSFER / ANCHOR).
+
+    ## Authentication
+    All endpoints require a valid JWT Bearer token. ADMIN-only endpoints
+    additionally require ROLE_ADMIN in the JWT `role` claim.
+
+    ## Gate order (F5 — intentional design)
+    The transfer endpoint applies gates in this order:
+      1. ISSUE-001: issuance-state check (ISSUED vs DRAFT) — fires BEFORE caller-authz
+      2. HOLDER-AUTHZ-001: caller must control fromHolderId
+      3. Eligibility, holding-limit, lock-up, balance
+
+    Consequence: a caller who has NOT claimed fromHolderId still receives
+    409 TS_NOT_ISSUED when the token is in DRAFT, confirming the token exists
+    and its issuance state. In most STO products token existence is semi-public,
+    so this is intentional.
+
+    **Fork guidance for private placements / confidential issuance:**
+    If token existence must be confidential before issuance, swap the gate order
+    in SecurityTokenRegisterService.transfer() so HOLDER-AUTHZ fires first.
+    The gate is a compile-time seam, not an implicit policy.
+
+  version: 0.1.0
+servers:
+  - url: /api
+
+paths:
+  /security-tokens:
+    post:
+      operationId: createSecurityToken
+      summary: Register a new security token in DRAFT state
+      tags: [register]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTokenRequest'
+      responses:
+        '201':
+          description: Token registered in DRAFT state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenDto'
+        '409':
+          description: Duplicate tokenCode or underlyingAssetId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /security-tokens/{tokenCode}:
+    get:
+      operationId: getSecurityToken
+      summary: Read token state, holdings, and heldSum
+      tags: [register]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCode'
+      responses:
+        '200':
+          description: Token state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /security-tokens/{tokenCode}/issue:
+    post:
+      operationId: issueSecurityToken
+      summary: >
+        Promote a DRAFT token to ISSUED (ADMIN-only, one-way). Seeds the issuer
+        holding with totalUnits. Auto-claims issuerHolderId for the calling admin
+        principal if unclaimed (ISSUE-003, fail-safe — pre-claim by another
+        principal takes precedence).
+      tags: [issue]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCode'
+      responses:
+        '200':
+          description: Token promoted to ISSUED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenDto'
+        '403':
+          description: Caller is not ADMIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: Token already issued (TS_ALREADY_ISSUED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /security-tokens/{tokenCode}/transfers:
+    post:
+      operationId: transferSecurityToken
+      summary: >
+        Compliance-gated transfer. Gate order: ISSUE-001 → HOLDER-AUTHZ →
+        lock-up → balance → eligibility → holding-limit → atomic apply (F5).
+      tags: [transfer]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+      responses:
+        '200':
+          description: Transfer applied atomically
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResultDto'
+        '403':
+          description: Caller does not control fromHolderId (TS_NOT_HOLDER_CONTROLLER)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: Token not yet issued (TS_NOT_ISSUED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: >
+            Gate failure — one of: TS_LOCKUP_ACTIVE, TS_INSUFFICIENT_UNITS,
+            TS_INELIGIBLE_RECIPIENT, TS_HOLDING_LIMIT_EXCEEDED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /security-tokens/{tokenCode}/reconcile:
+    get:
+      operationId: reconcileSecurityToken
+      summary: Compare register entries against the on-chain anchor view
+      tags: [anchor]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCode'
+      responses:
+        '200':
+          description: Reconciliation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconcileResult'
+
+  /security-tokens/{tokenCode}/eligible-investors:
+    get:
+      operationId: listEligibleInvestors
+      summary: >
+        READ-ELIGIBLE-001: paginated list of eligible investors for a token
+        (ADMIN-only). Returns 404 for a nonexistent tokenCode.
+        Unbounded list is forbidden — use page/size parameters.
+      tags: [eligibility]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCode'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: Paginated eligible investor list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantPage'
+        '403':
+          description: Caller is not ADMIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: grantEligibility
+      summary: Grant eligibility to a holder for this token (ADMIN-only, idempotent)
+      tags: [eligibility]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TokenCode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantRequest'
+      responses:
+        '201':
+          description: Eligibility granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantDto'
+        '403':
+          description: Caller is not ADMIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /security-tokens/holders/{holderId}/owner:
+    get:
+      operationId: getHolderOwner
+      summary: >
+        READ-HOLDER-001: return the current owner of a holder (200) or 404 if
+        unclaimed. Any authenticated caller may read ownership state.
+      tags: [holder-authz]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: holderId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 200
+      responses:
+        '200':
+          description: Holder is claimed; returns owner principal and claim timestamp
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnershipDto'
+        '404':
+          description: Holder has not been claimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /security-tokens/holders/{holderId}/ownership:
+    post:
+      operationId: claimHolderOwnership
+      summary: >
+        Self-claim: bind holderId to the authenticated caller's principal
+        (first-claim-wins). Returns 201 on first claim, 200 on idempotent
+        re-claim by the same principal (HOLDER-AUTHZ-002 / F4 closure).
+        Returns 409 if a different principal already owns the holder.
+      tags: [holder-authz]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: holderId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 200
+      responses:
+        '201':
+          description: Holder ownership claimed for the first time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnershipDto'
+        '200':
+          description: Idempotent re-claim by the same principal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnershipDto'
+        '409':
+          description: Holder already owned by a different principal (TS_HOLDER_ALREADY_OWNED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TokenCode:
+      name: tokenCode
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 100
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+  schemas:
+    CreateTokenRequest:
+      type: object
+      required: [tokenCode, underlyingAssetId, securityType, totalUnits, issuerHolderId, lockupUntil, holdingLimitPerInvestor]
+      properties:
+        tokenCode:
+          type: string
+          maxLength: 100
+        underlyingAssetId:
+          type: string
+          maxLength: 200
+        securityType:
+          type: string
+          enum: [TRUST_BENEFICIARY, EQUITY, BOND]
+        totalUnits:
+          type: integer
+          format: int64
+          minimum: 1
+        issuerHolderId:
+          type: string
+          maxLength: 200
+        lockupUntil:
+          type: string
+          format: date-time
+        holdingLimitPerInvestor:
+          type: integer
+          format: int64
+          minimum: 1
+
+    TokenDto:
+      type: object
+      properties:
+        tokenCode:
+          type: string
+        securityType:
+          type: string
+        totalUnits:
+          type: integer
+          format: int64
+        issuerHolderId:
+          type: string
+        lockupUntil:
+          type: string
+          format: date-time
+        holdingLimitPerInvestor:
+          type: integer
+          format: int64
+        heldSum:
+          type: integer
+          format: int64
+        holdings:
+          type: array
+          items:
+            $ref: '#/components/schemas/HoldingDto'
+        version:
+          type: integer
+          format: int64
+        issuanceStatus:
+          type: string
+          enum: [DRAFT, ISSUED]
+
+    HoldingDto:
+      type: object
+      properties:
+        holderId:
+          type: string
+        units:
+          type: integer
+          format: int64
+
+    TransferRequest:
+      type: object
+      required: [fromHolderId, toHolderId, units, transferId]
+      properties:
+        fromHolderId:
+          type: string
+          maxLength: 200
+        toHolderId:
+          type: string
+          maxLength: 200
+        units:
+          type: integer
+          format: int64
+          minimum: 1
+        transferId:
+          type: string
+          maxLength: 200
+          description: Client-generated idempotency key
+
+    TransferResultDto:
+      type: object
+      properties:
+        tokenCode:
+          type: string
+        transferId:
+          type: string
+        fromHolderId:
+          type: string
+        toHolderId:
+          type: string
+        units:
+          type: integer
+          format: int64
+        anchorRef:
+          type: string
+          description: Non-null on-chain anchor reference (ANCHOR-001)
+
+    ReconcileResult:
+      type: object
+      properties:
+        converged:
+          type: boolean
+        breaks:
+          type: array
+          items:
+            type: object
+
+    OwnershipDto:
+      type: object
+      properties:
+        holderId:
+          type: string
+        ownerPrincipal:
+          type: string
+        claimedAt:
+          type: string
+          format: date-time
+
+    GrantRequest:
+      type: object
+      required: [holderId]
+      properties:
+        holderId:
+          type: string
+          maxLength: 200
+
+    GrantDto:
+      type: object
+      properties:
+        tokenCode:
+          type: string
+        holderId:
+          type: string
+
+    GrantPage:
+      type: object
+      description: "PageEnvelope<GrantDto> — canonical PAGE-OFFSET-001 shape"
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        hasMore:
+          type: boolean
+
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string

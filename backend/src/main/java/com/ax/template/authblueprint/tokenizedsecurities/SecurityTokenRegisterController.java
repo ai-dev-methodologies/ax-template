@@ -95,11 +95,17 @@ public class SecurityTokenRegisterController {
         return TokenDto.of(service.getToken(tokenCode));
     }
 
-    /** ISSUE-002 — promote a DRAFT token to ISSUED; seeds issuer holding (ADMIN-only, one-way). */
+    /**
+     * ISSUE-002 — promote a DRAFT token to ISSUED; seeds issuer holding (ADMIN-only, one-way).
+     * ISSUE-003 — auto-claims issuerHolderId for the calling admin principal (fail-safe).
+     * Gate order: ISSUE-001 (issuance-state) fires before HOLDER-AUTHZ on transfers —
+     * intentional semi-public disclosure; see F5 in dogfood-ledger/sto-generic-seams-iter1.md
+     * for fork guidance on private-placement tokens.
+     */
     @PostMapping("/api/security-tokens/{tokenCode}/issue")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public TokenDto issue(@PathVariable String tokenCode) {
-        return TokenDto.of(service.issue(tokenCode));
+    public TokenDto issue(@PathVariable String tokenCode, Authentication authentication) {
+        return TokenDto.of(service.issue(tokenCode, authentication.getName()));
     }
 
     /** ANCHOR-002 — compare register entries against the anchor view; report any divergence as breaks. */

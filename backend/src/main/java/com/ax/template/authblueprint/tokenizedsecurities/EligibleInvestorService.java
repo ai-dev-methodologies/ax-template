@@ -4,11 +4,16 @@ import java.time.Clock;
 import java.time.Instant;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class EligibleInvestorService {
+
+    static final int MAX_PAGE_SIZE = 200;
 
     private final EligibleInvestorRepository grants;
     private final SecurityTokenRegisterRepository registers;
@@ -19,6 +24,20 @@ public class EligibleInvestorService {
         this.grants = grants;
         this.registers = registers;
         this.clock = clock;
+    }
+
+    /**
+     * READ-ELIGIBLE-001: paginated list of eligible investors for a token.
+     * Returns 404 if tokenCode doesn't exist. ADMIN-only enforced at controller.
+     */
+    @Transactional(readOnly = true)
+    public Page<EligibleInvestor> listByTokenCode(String tokenCode, int page, int size) {
+        SecurityTokenRegister register = registers.findByTokenCode(tokenCode)
+                .orElseThrow(TokenizedSecuritiesException::notFound);
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        PageRequest pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Order.asc("id")));
+        return grants.findByRegisterId(register.getId(), pageable);
     }
 
     /** Reads the register (one aggregate) to resolve its id, then writes ONE EligibleInvestor. */

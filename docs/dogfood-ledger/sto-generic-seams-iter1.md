@@ -29,7 +29,10 @@ A fork-receiver building an admin dashboard ("who controls this holder?") or inv
 ("is this wallet bound to a verified identity?") has no read surface — must query the DB directly.
 **Suggested fix:** Add `GET /api/security-tokens/holders/{holderId}/owner` returning `OwnershipDto`
 (200 if claimed, 404 if unclaimed). No new entity needed — `HolderOwnershipRepository.findByHolderId`.
-**Status:** open (scope follow-up)
+**Status:** CLOSED — feat/sto-dogfood-closure
+**Closure:** Added `GET /api/security-tokens/holders/{holderId}/owner` to `HolderOwnershipController`
+(200+`OwnershipDto` if claimed, 404 if unclaimed). `HolderOwnershipService.findOwner()` added.
+New spec item `READ-HOLDER-001`. Test `getOwner_claimed_returns200_unclaimed_returns404` GREEN.
 **References:** `HolderOwnershipController.java`, `HolderOwnershipRepository.java`
 
 ---
@@ -43,7 +46,12 @@ this token" without a direct DB query.
 **Suggested fix:** Add `GET /api/security-tokens/{tokenCode}/eligible-investors` returning `List<GrantDto>`.
 `EligibleInvestorRepository.findByTokenId` already exists; the controller just needs the read endpoint
 wired with `@PreAuthorize("hasAuthority('ROLE_ADMIN')")`.
-**Status:** open (scope follow-up)
+**Status:** CLOSED — feat/sto-dogfood-closure
+**Closure:** Added `GET /api/security-tokens/{tokenCode}/eligible-investors` (ADMIN-only, paginated)
+to `EligibleInvestorController`. `EligibleInvestorRepository.findByRegisterId(UUID, Pageable)` added
+(findBy* prefix, ArchUnit-safe). `EligibleInvestorService.listByTokenCode()` added.
+Returns `PageEnvelope<GrantDto>` (PAGE-OFFSET-001). New spec item `READ-ELIGIBLE-001`.
+Test `listEligibleInvestors_paged_404ForUnknownToken` GREEN.
 **References:** `EligibleInvestorController.java`, `EligibleInvestorRepository.java`
 
 ---
@@ -64,7 +72,13 @@ response body with an `ownershipClaimRequired: true` field hint.
 **Suggested fix (option B):** Allow `issue` to accept an optional `issuerPrincipal` body param and
 auto-create the `HolderOwnership` record in the same transaction (requires policy decision by
 fork-receiver on whether the admin or the creator should own it).
-**Status:** open (scope follow-up)
+**Status:** CLOSED — feat/sto-dogfood-closure
+**Closure:** `SecurityTokenRegisterService.issue()` now accepts `callerPrincipal` and auto-claims
+`issuerHolderId → callerPrincipal` in the same transaction (fail-safe: skips if `existsByHolderId`).
+`SecurityTokenRegisterController.issue()` passes `authentication.getName()`. New spec item `ISSUE-003`.
+Tests: `issue_autoClaimsIssuerHolder_forCallingPrincipal` + `issue_doesNotOverwrite_ifIssuerHolderAlreadyClaimed` GREEN.
+Existing tests updated: ISSUE-001 moves `claimOwnership(issuer)` before `issue(code)`;
+E2E test step 3 (pre-claim issuerHolder) moved before step 4 (issue).
 **References:** `SecurityTokenRegisterService.java:issue()`, `HolderOwnershipService.java`
 
 ---
@@ -77,7 +91,10 @@ and the test passes with 201. HTTP convention: 201 Created should indicate a new
 A fork-receiver checking the status code to detect "first-time claim vs replay" cannot distinguish them.
 **Suggested fix:** Return 200 OK with the existing `OwnershipDto` when the same principal re-claims
 an already-owned holder (already owned by caller → 200; first claim → 201; claimed by different principal → 409).
-**Status:** open (scope follow-up)
+**Status:** CLOSED — feat/sto-dogfood-closure
+**Closure:** `HolderOwnershipService.claim()` now returns `ClaimResult(ownership, created)`.
+`HolderOwnershipController.claim()` returns 201 when `created=true`, 200 when `created=false`.
+HOLDER-AUTHZ-002 test re-claim assertion updated from `.statusCode(201)` to `.statusCode(200)`.
 **References:** `HolderOwnershipService.java`, `HolderOwnershipController.java`
 
 ---
@@ -93,7 +110,10 @@ the controller's Javadoc; a fork-receiver tightening access (private placement, 
 would not know to account for this information-disclosure path.
 **Suggested fix:** Add a comment in `SecurityTokenRegisterController` and the relevant OpenAPI spec
 documenting the deliberate gate order: ISSUED → HOLDER-AUTHZ → eligibility → holding-limit.
-**Status:** open (scope follow-up)
+**Status:** CLOSED — feat/sto-dogfood-closure
+**Closure:** Gate order documented in `SecurityTokenRegisterController.issue()` Javadoc, in
+`contracts/tokenized-securities-openapi.yaml` (info.description + transfer operation description),
+and in spec `ISSUE-001` notes. Code change 0 — documentation only.
 **References:** `SecurityTokenRegisterService.java:transfer()` lines 92-98
 
 ---

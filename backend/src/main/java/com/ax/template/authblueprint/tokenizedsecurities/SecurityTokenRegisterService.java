@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SecurityTokenRegisterService {
 
     private final SecurityTokenRegisterRepository registers;
+    private final HolderOwnershipRepository ownerships;
     private final InvestorEligibility eligibility;
     private final HolderAuthorization holderAuthorization;
     private final OnChainAnchor onChainAnchor;
@@ -18,12 +19,14 @@ public class SecurityTokenRegisterService {
     private final SecurityTokenIssuanceStateMachine issuanceStateMachine;
 
     public SecurityTokenRegisterService(SecurityTokenRegisterRepository registers,
+                                        HolderOwnershipRepository ownerships,
                                         InvestorEligibility eligibility,
                                         HolderAuthorization holderAuthorization,
                                         OnChainAnchor onChainAnchor,
                                         Clock clock,
                                         SecurityTokenIssuanceStateMachine issuanceStateMachine) {
         this.registers = registers;
+        this.ownerships = ownerships;
         this.eligibility = eligibility;
         this.holderAuthorization = holderAuthorization;
         this.onChainAnchor = onChainAnchor;
@@ -64,9 +67,14 @@ public class SecurityTokenRegisterService {
     /**
      * ISSUE-LIFECYCLE: promote a DRAFT token to ISSUED (ADMIN-only, enforced at controller).
      * Seeds the issuer holding = totalUnits exactly once. One-way via the state machine.
+     *
+     * <p>ISSUE-003 (F3 closure): if issuerHolderId has no prior HolderOwnership, auto-claim it
+     * for callerPrincipal in the same transaction (fail-safe: no overwrite if already claimed
+     * by a different principal). A fork-receiver who claims the issuer holder BEFORE calling
+     * issue() keeps full control — the auto-claim is a convenience, not a takeover.
      */
     @Transactional
-    public SecurityTokenRegister issue(String tokenCode) {
+    public SecurityTokenRegister issue(String tokenCode, String callerPrincipal) {
         SecurityTokenRegister register = registers.findByTokenCodeForUpdate(tokenCode)
                 .orElseThrow(TokenizedSecuritiesException::notFound);
         if (register.getIssuanceStatus() == IssuanceStatus.ISSUED) {
@@ -74,6 +82,11 @@ public class SecurityTokenRegisterService {
         }
         issuanceStateMachine.issue(register);   // DRAFT → ISSUED (sole status mutator)
         register.seedIssuerHolding();           // conservation begins: Σ holdings == totalUnits
+        // ISSUE-003: auto-claim issuerHolderId → callerPrincipal (fail-safe, no overwrite)
+        if (!ownerships.existsByHolderId(register.getIssuerHolderId())) {
+            ownerships.save(new HolderOwnership(
+                    register.getIssuerHolderId(), callerPrincipal, Instant.now(clock)));
+        }
         return registers.saveAndFlush(register);
     }
 

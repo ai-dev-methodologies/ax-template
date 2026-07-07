@@ -134,12 +134,13 @@ items:
     requirement: >
       The HolderAuthorization default MUST be deny: with no ownership claim, no principal controls a holder.
       A self-claim binds (holderId → callerPrincipal); a second DIFFERENT principal claiming an
-      already-owned holder MUST be rejected 409. Re-claim by the same principal is idempotent. ADMIN may
-      assign ownership on behalf of a principal.
-    test_method: "RestAssured — claim H as A → 201; claim H as B → 409; re-claim H as A → idempotent; transfer-from-H succeeds only for A"
+      already-owned holder MUST be rejected 409. Re-claim by the same principal MUST be idempotent and
+      return 200 OK with the existing representation (NOT 201, which would imply a new resource). First
+      claim returns 201 Created. ADMIN may assign ownership on behalf of a principal.
+    test_method: "RestAssured — claim H as A → 201; claim H as B → 409; re-claim H as A → 200 (idempotent, existing representation); transfer-from-H succeeds only for A"
     verification_type: "positive"
     applicable: true
-    notes: "Ownership registry backs the SPI; unique(holder_id) enforces single-controller. Supports custodial/omnibus (one principal → many holders)."
+    notes: "Ownership registry backs the SPI; unique(holder_id) enforces single-controller. Supports custodial/omnibus (one principal → many holders). F4 closure (sto-generic-seams-iter1): re-claim by same principal returns 200 OK so callers can distinguish first-time claim (201) from idempotent replay (200)."
     # PIT non-vacuity contract (METHODOLOGY "Non-Vacuity / Hollow-Test Enforcement"): the
     # deny-by-default ownership SPI is kill-proofed. Mutating OwnershipHolderAuthorization#controls
     # to return true (orElse(false)→true) must break violation_holderAuthorizationDefaultIsFailClosed;
@@ -183,7 +184,15 @@ items:
     test_method: "RestAssured — createToken → DRAFT; transfer on the DRAFT token → 409, register unchanged; after issue() the same transfer proceeds to its normal gates"
     verification_type: "positive"
     applicable: true
-    notes: "A real security is ISSUED through a lifecycle before it trades. Status gate is FIRST (before caller-authz). State machine is the sole status mutator."
+    notes: >
+      A real security is ISSUED through a lifecycle before it trades. Status gate is FIRST (before
+      caller-authz). State machine is the sole status mutator. Gate order (F5 closure,
+      sto-generic-seams-iter1): ISSUE-001 (ISSUED check) fires as the OUTERMOST gate, BEFORE
+      HOLDER-AUTHZ. A caller who has NOT claimed fromHolderId still receives 409 TS_NOT_ISSUED when
+      the token is in DRAFT. This is intentional semi-public disclosure: token existence and issuance
+      state are semi-public in this STO design. Fork-receivers building confidential/private placements
+      MUST add an ownership check BEFORE the ISSUED check (reorder the gate in the transfer() method)
+      to avoid disclosing existence to non-owners.
 
   - id: "ISSUE-002"
     chapter: "Issuance is ADMIN-only, one-way, and seeds the issuer holding exactly once"
@@ -196,3 +205,49 @@ items:
     verification_type: "positive"
     applicable: true
     notes: "Mirrors ThresholdRegisterStateMachine (one-way). createToken seeds NO holdings; issue() does. REG-ISSUE-002 conservation now holds post-issue."
+
+  - id: "ISSUE-003"
+    chapter: "issue() auto-claims issuerHolderId for the calling admin — fail-safe (pre-claimed holders are not overwritten)"
+    requirement: >
+      issue() MUST, in the same transaction as seedIssuerHolding(), attempt to create a HolderOwnership
+      record binding issuerHolderId to the calling admin's principal. If issuerHolderId already has a
+      HolderOwnership claim by ANY principal, the existing claim MUST be left unchanged (no overwrite,
+      fail-safe pre-claim-wins). After a successful issue with no pre-existing claim, the issuing admin
+      MUST be able to immediately transfer from issuerHolderId without a separate claimOwnership call.
+      If issuerHolderId was pre-claimed by a different principal (e.g. a member) before issue, that
+      principal retains control and the admin's auto-claim is a no-op.
+    test_method: >
+      RestAssured — Scenario A (auto-claim path): no pre-existing claim; admin issues token;
+      admin immediately POSTs a transfer from issuerHolderId → 200 (no claimOwnership needed).
+      Scenario B (pre-claimed path): member claims issuerHolderId BEFORE admin issues;
+      admin issues (auto-claim is no-op); member still controls issuerHolderId (member transfer 200,
+      admin transfer from issuerHolderId → 403 TS_NOT_HOLDER_CONTROLLER).
+    verification_type: "positive"
+    applicable: true
+    notes: "Closes F3 (sto-generic-seams-iter1): eliminates the mandatory two-step post-issue claimOwnership sequence. Pre-claim-wins ensures the auto-claim is purely additive. A fork who wants the member (not admin) to control the issuer holding should pre-claim before calling issue()."
+
+  - id: "READ-HOLDER-001"
+    chapter: "Holder ownership read surface — GET /api/security-tokens/holders/{holderId}/owner returns current owner (200) or 404 if unclaimed"
+    requirement: >
+      GET /api/security-tokens/holders/{holderId}/owner MUST return 200 with an OwnershipDto
+      (holderId, ownerPrincipal, claimedAt) when the holder has a HolderOwnership record. If the
+      holder is unclaimed, it MUST return 404. Any authenticated caller may read ownership state
+      (no role restriction).
+    test_method: "RestAssured — claim holderId → GET returns 200 with ownerPrincipal; unclaimed holderId → GET returns 404"
+    verification_type: "positive"
+    applicable: true
+    notes: "Closes F1 (sto-generic-seams-iter1): read surface for admin dashboard ('who controls this holder?') and investor KYC portal ('is this wallet verified?'). No sensitive data leaked — principal names are caller-visible by design."
+
+  - id: "READ-ELIGIBLE-001"
+    chapter: "Eligible investor list — GET /api/security-tokens/{tokenCode}/eligible-investors returns paginated grants (ADMIN-only)"
+    requirement: >
+      GET /api/security-tokens/{tokenCode}/eligible-investors MUST return 200 with a
+      PageEnvelope<GrantDto> containing all eligibility grants for the register. The response
+      MUST be paginated (page + size query params; PageEnvelope shape). A non-existent tokenCode
+      MUST return 404. Only ADMIN may call this endpoint (403 for non-admin, 401 for unauthenticated).
+    test_method: >
+      RestAssured — grant 2 investors; GET list as admin → 200 with data containing 2 items,
+      pagination.totalElements == 2; GET as member → 403; non-existent tokenCode → 404.
+    verification_type: "positive"
+    applicable: true
+    notes: "Closes F2 (sto-generic-seams-iter1): list surface for STO admin investor-management dashboard. Response uses PageEnvelope (pagination-l0 PAGE-LIMIT-001 compliance; unbounded list forbidden)."

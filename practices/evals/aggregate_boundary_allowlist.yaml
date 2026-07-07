@@ -77,6 +77,7 @@ governed_god_service:
   # aggregate through the published UserAccountService port — no longer god-service-tx.
   - com.ax.template.authblueprint.billing.BillingService#applyTransition   # Subscription + BillingEvent (BillingEvent is a genuine root: written by providerEventId with no Subscription loaded)
   - com.ax.template.authblueprint.payment.RefundService#refund             # Payment + Refund (refund mutates payment + creates refund)
+  - com.ax.template.authblueprint.tokenizedsecurities.SecurityTokenRegisterService#issue  # SecurityTokenRegister + HolderOwnership (ISSUE-003 F3: issuer ownership auto-claim is convenience bootstrap — eliminates mandatory two-step post-issue claimOwnership; pre-claim-wins ensures no-overwrite; same-tx is the only coherent option once the behavior is chosen)
   # NOTE (2026-06-08 ralplan re-verification): TransformationService#record and
   # EmailTemplateService#upsertTemplate were REMOVED here — reclassifying TransformationLeg /
   # EmailTemplateHistory as @AggregateMember means those methods now mutate ONE root + its

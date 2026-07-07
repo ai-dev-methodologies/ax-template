@@ -34,8 +34,9 @@ import org.springframework.test.annotation.DirtiesContext;
  * <ol>
  *   <li>createToken → status DRAFT (ISSUE-LIFECYCLE)</li>
  *   <li>transfer on DRAFT → 409 TS_NOT_ISSUED (issue-gate is first, before caller-authz)</li>
+ *   <li>claim issuerHolder BEFORE issue (F3 closure: pre-claim wins, auto-claim skipped)</li>
  *   <li>issue (ADMIN) → ISSUED, issuer holds totalUnits (REG/ISSUE)</li>
- *   <li>claim holder ownership (issuer member + investor member) (HOLDER-AUTHZ)</li>
+ *   <li>claim investorHolder (HOLDER-AUTHZ)</li>
  *   <li>grant eligibility (ADMIN) for investorHolder (TRANSFER eligibility)</li>
  *   <li>transfer issuer→investor → 200, balances move, Σ conserved, anchorRef present (TRANSFER+ANCHOR)</li>
  *   <li>reconcile → converged=true (ANCHOR-002)</li>
@@ -112,7 +113,15 @@ class TokenizedSecuritiesDogfoodE2ETest {
                 .then().statusCode(409)
                 .body("code", equalTo("TS_NOT_ISSUED"));
 
-        // ── step 3: issue (ADMIN) → ISSUED; issuer holds totalUnits (REG/ISSUE) ──
+        // ── step 3: claim issuerHolder BEFORE issue (HOLDER-AUTHZ seam, F3 closure) ──────
+        // F3 closure: issue() now auto-claims issuerHolder for the calling admin principal.
+        // issuerMember claims first so they (not admin) control the issuer holder post-issue.
+        // issue() sees it already claimed → skips auto-claim (fail-safe, no overwrite).
+        given().header("Authorization", "Bearer " + issuerMember)
+                .when().post("/api/security-tokens/holders/" + issuerHolder + "/ownership")
+                .then().statusCode(201);
+
+        // ── step 4: issue (ADMIN) → ISSUED; issuer holds totalUnits (REG/ISSUE) ──
         given().header("Authorization", "Bearer " + admin)
                 .when().post("/api/security-tokens/" + tokenCode + "/issue")
                 .then().statusCode(200)
@@ -123,25 +132,19 @@ class TokenizedSecuritiesDogfoodE2ETest {
                 .then().statusCode(200).extract().jsonPath().getLong("heldSum");
         assertThat(heldAfterIssue).isEqualTo(totalUnits);
 
-        // ── step 4: claim holder ownership (HOLDER-AUTHZ seam) ───────────────
-        // Dogfood note (F3): `issue()` seeds the issuer holding but does NOT auto-bind the
-        // issuerMember to issuerHolder. The caller must still do an explicit claimOwnership
-        // before any transfer attempt. This is a two-step setup sequence not enforced by the API.
-        given().header("Authorization", "Bearer " + issuerMember)
-                .when().post("/api/security-tokens/holders/" + issuerHolder + "/ownership")
-                .then().statusCode(201);
+        // ── step 5: claim investorHolder (HOLDER-AUTHZ seam) ─────────────────
         given().header("Authorization", "Bearer " + investorMember)
                 .when().post("/api/security-tokens/holders/" + investorHolder + "/ownership")
                 .then().statusCode(201);
 
-        // ── step 5: grant eligibility (ADMIN) for investorHolder ─────────────
+        // ── step 6: grant eligibility (ADMIN) for investorHolder ─────────────
         given().header("Authorization", "Bearer " + admin)
                 .header("Content-Type", "application/json")
                 .body("{\"holderId\":\"" + investorHolder + "\"}")
                 .when().post("/api/security-tokens/" + tokenCode + "/eligible-investors")
                 .then().statusCode(201);
 
-        // ── step 6: transfer issuer→investor → 200, balances move, Σ conserved,
+        // ── step 7: transfer issuer→investor → 200, balances move, Σ conserved,
         //            anchorRef present (TRANSFER+ANCHOR seams composed) ─────────
         given().header("Authorization", "Bearer " + issuerMember)
                 .header("Content-Type", "application/json")
@@ -169,7 +172,7 @@ class TokenizedSecuritiesDogfoodE2ETest {
         assertThat(investorBal).isEqualTo(transferAmt);
         assertThat(heldSum).isEqualTo(totalUnits); // Σ always conserved
 
-        // ── step 7: reconcile → converged=true (ANCHOR-002) ──────────────────
+        // ── step 8: reconcile → converged=true (ANCHOR-002) ──────────────────
         given().header("Authorization", "Bearer " + issuerMember)
                 .when().get("/api/security-tokens/" + tokenCode + "/reconcile")
                 .then().statusCode(200)

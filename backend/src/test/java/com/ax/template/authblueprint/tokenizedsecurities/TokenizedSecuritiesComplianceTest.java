@@ -309,9 +309,12 @@ class TokenizedSecuritiesComplianceTest {
         transfer(code, issuer, alice, 10, "issue001-t1")
                 .then().statusCode(409).body("code", equalTo("TS_NOT_ISSUED"));
         org.assertj.core.api.Assertions.assertThat(heldSum(code)).isZero();
-        // issue → ISSUED; full setup → same transfer path now reaches normal gates
-        issue(code);
+        // issue → ISSUED; full setup → same transfer path now reaches normal gates.
+        // claimOwnership(issuer) must run BEFORE issue() so the member controls issuerHolder
+        // (after F3, issue() auto-claims issuerHolderId for the calling admin; a prior claim
+        // by member takes precedence — fail-safe, no overwrite).
         claimOwnership(issuer);
+        issue(code);
         grant(code, alice);
         transfer(code, issuer, alice, 10, "issue001-t2").then().statusCode(200);
         org.assertj.core.api.Assertions.assertThat(unitsOf(code, alice)).isEqualTo(10);
@@ -337,6 +340,88 @@ class TokenizedSecuritiesComplianceTest {
                 .then().statusCode(409).body("code", equalTo("TS_ALREADY_ISSUED"));
         // second (rejected) issue must NOT double-seed the issuer holding
         org.assertj.core.api.Assertions.assertThat(heldSum(code)).isEqualTo(1000);
+    }
+
+    // ---- READ-HOLDER-001 — GET owner returns 200 if claimed, 404 if not ----
+    @Test @Tag("READ-HOLDER-001")
+    void getOwner_claimed_returns200_unclaimed_returns404() {
+        String holder = hp + "OWN-READ";
+        // unclaimed → 404
+        given().header("Authorization", "Bearer " + member)
+                .when().get("/api/security-tokens/holders/" + holder + "/owner")
+                .then().statusCode(404);
+        // claim → 201
+        claimOwnership(holder);
+        // claimed → 200 with ownerPrincipal populated
+        given().header("Authorization", "Bearer " + member)
+                .when().get("/api/security-tokens/holders/" + holder + "/owner")
+                .then().statusCode(200)
+                .body("holderId", equalTo(holder))
+                .body("ownerPrincipal", org.hamcrest.Matchers.notNullValue());
+    }
+
+    // ---- READ-ELIGIBLE-001 — GET eligible-investors returns page, 404 for bad tokenCode ---
+    @Test @Tag("READ-ELIGIBLE-001")
+    void listEligibleInvestors_paged_404ForUnknownToken() {
+        // nonexistent tokenCode → 404 (ADMIN-only, so use admin token)
+        given().header("Authorization", "Bearer " + admin)
+                .when().get("/api/security-tokens/NONEXISTENT-TOKEN/eligible-investors")
+                .then().statusCode(404);
+        // create a token, grant two investors, list them
+        String issuer = hp + "ELG-ISS";
+        String a1 = hp + "ELG-A1";
+        String a2 = hp + "ELG-A2";
+        String code = createToken(issuer, 1000, past, 1000);
+        grant(code, a1);
+        grant(code, a2);
+        given().header("Authorization", "Bearer " + admin)
+                .when().get("/api/security-tokens/" + code + "/eligible-investors?page=0&size=20")
+                .then().statusCode(200)
+                .body("data.size()", equalTo(2))
+                .body("pagination.totalElements", equalTo(2));
+        // non-admin → 403
+        given().header("Authorization", "Bearer " + member)
+                .when().get("/api/security-tokens/" + code + "/eligible-investors")
+                .then().statusCode(403);
+    }
+
+    // ---- ISSUE-003 — issue() auto-claims issuerHolderId → calling principal ----
+    @Test @Tag("ISSUE-003")
+    void issue_autoClaimsIssuerHolder_forCallingPrincipal() {
+        String issuer = hp + "AC-ISS";
+        String code = createToken(issuer, 500, past, 500);
+        // no prior claim on issuerHolder
+        given().header("Authorization", "Bearer " + member)
+                .when().get("/api/security-tokens/holders/" + issuer + "/owner")
+                .then().statusCode(404);
+        // admin issues → issuerHolder auto-claimed for admin principal
+        issue(code);
+        given().header("Authorization", "Bearer " + member)
+                .when().get("/api/security-tokens/holders/" + issuer + "/owner")
+                .then().statusCode(200).body("holderId", equalTo(issuer));
+        // Scenario A: admin (auto-claimant) can transfer immediately — no separate claimOwnership call needed
+        String recipient = hp + "AC-REC";
+        grant(code, recipient);
+        given().header("Authorization", "Bearer " + admin)
+                .header("Content-Type", "application/json")
+                .body("{\"fromHolderId\":\"" + issuer + "\",\"toHolderId\":\"" + recipient
+                        + "\",\"units\":10,\"transferId\":\"ac-iss-t1\"}")
+                .when().post("/api/security-tokens/" + code + "/transfers")
+                .then().statusCode(200);
+    }
+
+    // ---- ISSUE-003 — pre-claimed by different principal → auto-claim skipped ----
+    @Test @Tag("ISSUE-003")
+    void issue_doesNotOverwrite_ifIssuerHolderAlreadyClaimed() {
+        String issuer = hp + "AC-PRE";
+        String code = createToken(issuer, 500, past, 500);
+        // member pre-claims issuerHolder BEFORE issue
+        claimOwnership(issuer);
+        // admin issues → auto-claim is skipped; member still controls issuerHolder
+        issue(code);
+        // member (who pre-claimed) can transfer; issuerHolder owner unchanged
+        grant(code, hp + "REC");
+        transfer(code, issuer, hp + "REC", 10, "ac-pre-t1").then().statusCode(200);
     }
 
     // ---- helper: issue a token as admin --------------------------------
@@ -377,10 +462,10 @@ class TokenizedSecuritiesComplianceTest {
         given().header("Authorization", "Bearer " + memberB)
                 .when().post("/api/security-tokens/holders/" + h2 + "/ownership")
                 .then().statusCode(409).body("code", equalTo("TS_HOLDER_ALREADY_OWNED"));
-        // re-claim h2 as A → idempotent (200 or 201, no error)
+        // re-claim h2 as A → idempotent 200 OK (HOLDER-AUTHZ-002 / F4 closure)
         given().header("Authorization", "Bearer " + member)
                 .when().post("/api/security-tokens/holders/" + h2 + "/ownership")
-                .then().statusCode(201);
+                .then().statusCode(200);
         // transfer from h2 succeeds for A, rejected for B
         String code = createToken(h2, 1000, past, 1000);
         String alice = "ALICE2-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);

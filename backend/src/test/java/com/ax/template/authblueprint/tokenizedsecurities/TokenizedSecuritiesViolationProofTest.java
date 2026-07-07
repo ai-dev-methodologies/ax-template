@@ -183,8 +183,10 @@ class TokenizedSecuritiesViolationProofTest {
         org.mockito.Mockito.when(blankAnchor.anchor(org.mockito.ArgumentMatchers.any()))
                 .thenReturn("");   // contract violation: blank ref
 
+        HolderOwnershipRepository ownershipsRepo =
+                org.mockito.Mockito.mock(HolderOwnershipRepository.class);
         SecurityTokenRegisterService svc =
-                new SecurityTokenRegisterService(repo, eligibility, holderAuth, blankAnchor, fixed,
+                new SecurityTokenRegisterService(repo, ownershipsRepo, eligibility, holderAuth, blankAnchor, fixed,
                         new SecurityTokenIssuanceStateMachine());
 
         // ISSUE-001: register must be ISSUED (not DRAFT) before transfer gate runs;
