@@ -26,9 +26,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 62 | 60 | **~97%** |
-| P2 (verification escapes) | 15 | 13 | **~87%** |
+| P2 (verification escapes) | 16 | 13 | **~81%** |
 | P3 (industry-niche deferrals) | 42 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **145** | **99** | **~68%** |
+| **P0–P3 합계 (수렴 분모)** | **146** | **99** | **~68%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
 > 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
@@ -248,6 +248,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
       JsonPath는 15+자리 수를 Double로 파싱(정밀도 손실) → BIG_DECIMAL NumberReturnType 필요.
 - [ ] P2-14 fixture kill-proof meta-gate [87] neuter surgicality 기계 강제 — `fixture_kill_manifest.yaml` 작성자가 short-circuit(`exit 0`로 바로 반환)과 같은 비외과적 neuter를 넣어도 guard[87]이 `anchor → exit 0` flip을 PASS로 판정하는 구조적 허점. 현재는 "manifest 저자 책임"으로 정직 문서화만 되어 있음. done-when: PIT-style 고정 neuter-operator 어휘 집합을 guard[87]이 강제(그 외 neuter 패턴 BLOCK) 또는 neuter 시 anchor 제거만 허용하는 외과적 제약으로 단언. 출처: 2026-07-07 adversarial review open question.
 - [ ] P2-15 private_boundary_guard [86] 커밋 메시지 스캔 — guard[86] 현 스캔 범위는 working tree 파일만(documented limit). R26 원사건이 커밋 메시지에 포함된 fork-receiver 식별자였으므로 HEAD 및 staged 커밋 메시지에도 layer-1 marker 스캔을 적용해야 완전한 강제가 된다. done-when: `git log -1 --format=%B` (HEAD) 및 staging-area 커밋 메시지에 대한 marker 스캔 + 비공허성 fixture. 출처: 2026-07-01 adversarial review m1.
+- [ ] P2-16 환경 재현성 — frontend lockfile 부재 + 미문서화 toolchain 의존성. (a) `frontend/`에 lockfile이 커밋된 적 없고(`git log --all -- frontend/package-lock.json` 빈 결과) `.gitignore`에도 없어 의도적 제외가 아닌 누락. CI(`.github/workflows/practices-sentinel.yml:80`)도 `npm ci`가 아닌 `npm install`을 사용 → 게이트가 통과한 의존성 트리와 fork-receiver가 실제 설치하는 트리가 불일치 가능. public fork-base catalog로서 fork마다 다른 트랜지티브 버전이 설치되며, 48개 하드 가드가 도는 토대 자체가 비결정적. (b) R25 실행에 `yq`·PyYAML(python `import yaml`)·JDK21이 필요하나 어디에도 명세 없음 — 신규 환경에서 PyYAML 부재 시 모든 `fail_*` fixture가 ModuleNotFoundError로 exit 1을 내어 **의도한 이유가 아닌 이유로 통과**(fixture 공허화); `pass_*` fixture 덕에 전체 FAIL로 잡혔으나 fail-fixture 단독으로는 무력. done-when: `frontend/package-lock.json` 커밋 + CI/문서 설치 명령을 `npm ci`로 전환 + `engines.node` 명시 + toolchain 의존성(`yq`/PyYAML/JDK21) 문서화 및 verify-completion.sh 선행 체크(부재 시 SKIP 아닌 명시적 BLOCK). 출처: 2026-07-08 신규 서버 부트스트랩 — `npm ci` 실패 및 R25 1차 FAIL(ModuleNotFoundError: yaml)로 발견.
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
