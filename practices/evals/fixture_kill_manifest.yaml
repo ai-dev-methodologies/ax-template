@@ -1,4 +1,5 @@
-# fixture_kill_manifest.yaml — private_boundary_guard [86] fail fixture kill-proof registry
+# fixture_kill_manifest.yaml — shell-guard fail fixture kill-proof registry
+# (covers private_boundary_guard [86] + completion_checklist_recency_guard [49th])
 #
 # Each item proves that a specific fail fixture is NON-VACUOUS by mutation:
 #   original guard on fixture → exit 1  (fixture reproduces the failure)
@@ -77,3 +78,15 @@ items:
     fixture_arg: '--repo-root'
     anchor: 'docs/* | practices/rules/*)'
     neuter: '*)'
+
+  # ── completion_checklist_recency/fail_audit_log_partial_run: full_run gate ───
+  # fixture: runs.jsonl latest line matches expected_head with exit=0/hard_fail=0
+  #          but full_run=false (written by a --step partial run) → exit 1.
+  # anchor:  the full_run check condition (check #5 in the guard).
+  # neuter:  replace the condition with False → partial runs accepted → exit 0.
+  - id: completion_checklist_recency/fail_audit_log_partial_run
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_audit_log_partial_run
+    fixture_arg: '--root'
+    anchor: 'latest.get("full_run") is not True'
+    neuter: 'False'

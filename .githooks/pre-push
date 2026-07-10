@@ -3,9 +3,12 @@
 #
 # ax-template is a fork-base for AI transformation projects. The git workflow itself
 # (branch protection, PR policy, merge strategy) is NOT enforced by this template —
-# fork-받은 팀이 결정. This hook only protects catalog quality: it runs the binary
-# verification suite (testPractices + testAsvs + testCrud) before any push that
-# touches backend/, practices/, or the seed spec, so failed regressions cannot ship.
+# fork-받은 팀이 결정. This hook only protects catalog quality, in two stages:
+#   1. R25 completion-checklist recency guard — runs on EVERY push, regardless of
+#      which paths the push touches (a docs/frontend-only push still ships work,
+#      so it still requires a fresh verify-completion.sh PASS at HEAD).
+#   2. Binary regression suite (testPractices + testAsvs + testCrud) — runs only
+#      when the push touches backend/, practices/, or the seed spec.
 #
 # Activated by practices/scripts/install-hooks.sh together with pre-commit. The hook
 # is opt-in per clone; not installing it skips the regression locally but sentinel CI
@@ -36,7 +39,21 @@ read_range() {
 
 RANGE="$(read_range)"
 
-# Skip when the push touches nothing under the regression scope.
+# R25 — 49th hard guard: audit that verify-completion.sh ran for current HEAD.
+# This stage runs on EVERY push, BEFORE the regression path filter below —
+# otherwise a push touching only frontend/, docs/, mem/ etc. would silently
+# skip the completion contract (confirmed dogfood P1, 2026-07-10).
+echo "[practices] R25 — completion checklist recency check (every push)"
+if ! bash practices/evals/completion_checklist_recency_guard.sh; then
+    echo "[practices] ✗ completion_checklist_recency_guard FAILED — push BLOCKED"
+    echo "[practices] Run the completion contract on HEAD:"
+    echo "[practices]   bash practices/scripts/verify-completion.sh"
+    echo "[practices] then re-attempt the push."
+    exit 1
+fi
+echo "[practices] ✓ completion checklist recency PASS"
+
+# Skip the regression suite when the push touches nothing under the regression scope.
 if [[ -n "$RANGE" ]]; then
     if ! git diff --name-only "$RANGE" 2>/dev/null | grep -qE '^(backend/|practices/|specs/spring-practices-l0\.yaml)'; then
         exit 0
@@ -50,18 +67,5 @@ if ! (cd backend && ./gradlew -q testPractices testAsvs testCrud); then
     echo "[practices]   cd backend && ./gradlew testPractices testAsvs testCrud"
     exit 1
 fi
-echo "[practices] ✓ full regression PASS"
-
-# R25 — 49th hard guard: audit that verify-completion.sh ran for current HEAD.
-# Without this stage a clone could push commits without ever running the
-# catalog's binary completion contract.
-echo "[practices] R25 — completion checklist recency check"
-if ! bash practices/evals/completion_checklist_recency_guard.sh; then
-    echo "[practices] ✗ completion_checklist_recency_guard FAILED — push BLOCKED"
-    echo "[practices] Run the completion contract on HEAD:"
-    echo "[practices]   bash practices/scripts/verify-completion.sh"
-    echo "[practices] then re-attempt the push."
-    exit 1
-fi
-echo "[practices] ✓ completion checklist recency PASS — push proceeds"
+echo "[practices] ✓ full regression PASS — push proceeds"
 exit 0

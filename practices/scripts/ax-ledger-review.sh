@@ -6,9 +6,13 @@
 # feedback loop: it does NOT change the catalog; it tells you WHERE to.
 #
 # Usage:
-#   bash practices/scripts/ax-ledger-review.sh [--since YYYY-MM-DD] [--user EMAIL] [--unreviewed]
+#   bash practices/scripts/ax-ledger-review.sh [--since YYYY-MM-DD|today|yesterday] [--user EMAIL] [--unreviewed]
 #
-#   --since       only events on/after this UTC date (use for "this session" by passing today)
+#   --since       only events on/after this UTC date; the literals "today" and
+#                 "yesterday" are normalized to UTC dates. Anything else that is
+#                 not YYYY-MM-DD is a usage error (exit 2) — silently comparing a
+#                 word against ISO timestamps used to hide ALL events (dogfood P2,
+#                 2026-07-10)
 #   --user        only events from this user
 #   --unreviewed  only events not yet marked reviewed=true
 #
@@ -31,6 +35,23 @@ while [ $# -gt 0 ]; do
         *) echo "ax-ledger-review: unknown arg: $1" >&2; exit 2 ;;
     esac
 done
+
+# Normalize --since: event `ts` fields are ISO-8601 UTC ("2026-07-10T…"), and the
+# filter is a lexicographic string compare — sound ONLY when SINCE is itself a
+# YYYY-MM-DD prefix. "today"/"yesterday" are resolved here; anything else
+# non-ISO fails fast instead of silently filtering out every event.
+if [ -n "$SINCE" ]; then
+    case "$SINCE" in
+        today) SINCE="$(date -u +%Y-%m-%d)" ;;
+        yesterday) SINCE="$(date -u -v-1d +%Y-%m-%d 2>/dev/null || date -u -d 'yesterday' +%Y-%m-%d)" ;;
+        *)
+            if ! printf '%s' "$SINCE" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+                echo "ax-ledger-review: --since expects YYYY-MM-DD, 'today' or 'yesterday' (got: $SINCE)" >&2
+                exit 2
+            fi
+            ;;
+    esac
+fi
 
 EVENTS="$LEDGER_DIR/events.jsonl"
 if [ ! -f "$EVENTS" ]; then

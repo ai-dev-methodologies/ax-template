@@ -28,7 +28,9 @@
 #
 # Usage:
 #   bash practices/scripts/verify-completion.sh
-#   bash practices/scripts/verify-completion.sh --step <id>   # run one step only
+#   bash practices/scripts/verify-completion.sh --step <id>   # run one step only (partial:
+#                                                # audit line gets full_run=false and does
+#                                                # NOT satisfy the R25 recency guard)
 #   bash practices/scripts/verify-completion.sh --dry-run     # parse + plan, no exec
 #   bash practices/scripts/verify-completion.sh --json        # emit machine-readable summary
 #   bash practices/scripts/verify-completion.sh --resume      # skip prior PASS steps (same HEAD)
@@ -513,11 +515,20 @@ TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 EXIT_CODE=0
 [ "$HARD_FAIL" -gt 0 ] && EXIT_CODE=1
 
+# full_run distinguishes a whole-checklist run from a --step partial run. The
+# recency guard accepts ONLY full_run=true — otherwise a single trivial step
+# (e.g. --step backend-build) would write an exit=0/hard_fail=0 line that is
+# byte-indistinguishable from a full PASS (confirmed dogfood P2, 2026-07-10).
+# --resume stays full_run=true: it re-verifies the remaining steps of the SAME
+# HEAD whose earlier steps already passed, so the full contract holds at HEAD.
+FULL_RUN=true
+[ -n "$STEP_FILTER" ] && FULL_RUN=false
+
 # Atomic append: write to tmp + sed concat is overkill — line-buffered >> is
 # atomic for writes under PIPE_BUF (4096 on linux/macOS) and our line is < 200
 # bytes. Append is safe.
-printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_fail":%d,"skip":%d}\n' \
-    "$TS" "$CURRENT_HEAD" "$EXIT_CODE" "$PASS_COUNT" "$ADVISORY_FAIL" "$HARD_FAIL" "$SKIP_COUNT" \
+printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_fail":%d,"skip":%d,"full_run":%s}\n' \
+    "$TS" "$CURRENT_HEAD" "$EXIT_CODE" "$PASS_COUNT" "$ADVISORY_FAIL" "$HARD_FAIL" "$SKIP_COUNT" "$FULL_RUN" \
     >> "$AUDIT_LOG"
 
 # ── ax-ledger capture — every verify run leaves a per-project usage trace (progress / violation),

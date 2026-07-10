@@ -41,7 +41,7 @@
 #
 # USAGE
 #   bash practices/evals/fixture_kill_proof_guard.sh
-#       LIVE: fixture_kill_manifest.yaml을 읽어 5개 private_boundary 항목 전부 kill 확인.
+#       LIVE: fixture_kill_manifest.yaml에 등재된 모든 항목 kill 확인.
 #
 #   bash practices/evals/fixture_kill_proof_guard.sh --manifest PATH
 #       OVERRIDE: 지정된 manifest 사용 (자기 비공허성 fixture 테스트용).
