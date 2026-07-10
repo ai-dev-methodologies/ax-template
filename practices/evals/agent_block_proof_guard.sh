@@ -120,7 +120,16 @@ check_proof() {
     if [ "$proof_rc" -ne 0 ]; then
         fail "falsification test did NOT toggle ($tag): exited $proof_rc (expected 0 = block-then-pass held)"
     else
-        agent_events="$( [ -f "$tmp_ledger/events.jsonl" ] && grep -c '"actor": "agent"' "$tmp_ledger/events.jsonl" || echo 0 )"
+        # `grep -c` prints "0" AND exits 1 on zero matches — a bare `|| echo 0`
+        # emits "0\n0", and `[ "0\n0" -lt 2 ]` is an arithmetic ERROR that this
+        # if-branch would silently treat as "condition false" → false-green
+        # proof. Capture the count and fall back only on a truly empty capture.
+        if [ -f "$tmp_ledger/events.jsonl" ]; then
+            agent_events="$(grep -c '"actor": "agent"' "$tmp_ledger/events.jsonl" 2>/dev/null || true)"
+        else
+            agent_events=""
+        fi
+        agent_events="${agent_events:-0}"
         if [ "$agent_events" -lt 2 ]; then
             fail "proof exited 0 but did not record the block→pass pair ($tag): actor=agent events: $agent_events, expected >= 2"
         fi

@@ -30,7 +30,14 @@ GUARD="$REPO_ROOT/practices/evals/controller_problemdetail_guard.sh"
 LOG="$REPO_ROOT/practices/scripts/ax-ledger-log.sh"
 
 LEDGER="${AX_LEDGER_DIR:-$REPO_ROOT/.ax-ledger}/events.jsonl"
-agent_events() { [ -f "$LEDGER" ] && grep -c '"actor": "agent"' "$LEDGER" || echo 0; }
+# NOTE: `grep -c` PRINTS "0" and exits 1 on zero matches — a bare `grep -c ... || echo 0`
+# would emit "0\n0" and break downstream arithmetic (BACKLOG P3-46 sibling site).
+agent_events() {
+    local n
+    [ -f "$LEDGER" ] || { echo 0; return; }
+    n="$(grep -c '"actor": "agent"' "$LEDGER" 2>/dev/null || true)"
+    echo "${n:-0}"
+}
 BEFORE="$(agent_events)"
 
 TMP="$(mktemp -d)"

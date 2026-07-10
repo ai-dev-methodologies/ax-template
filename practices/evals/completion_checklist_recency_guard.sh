@@ -22,7 +22,11 @@
 # Exit codes: 0 PASS · 1 violation · 2 usage error.
 #
 # Usage:
-#   bash practices/evals/completion_checklist_recency_guard.sh           # live repo
+#   bash practices/evals/completion_checklist_recency_guard.sh           # live repo (HEAD)
+#   bash practices/evals/completion_checklist_recency_guard.sh --expect-sha SHA
+#       audit must match SHA instead of the checkout's HEAD — used by the
+#       pre-push hook to verify the EXACT sha being pushed (a non-checked-out
+#       branch push must not ride on the current branch's audit)
 #   bash practices/evals/completion_checklist_recency_guard.sh --fixtures
 #   bash practices/evals/completion_checklist_recency_guard.sh --root DIR
 
@@ -33,12 +37,15 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 FIXTURES_MODE=0
 ROOT_OVERRIDE=""
+EXPECT_SHA=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --fixtures) FIXTURES_MODE=1; shift ;;
         --root) ROOT_OVERRIDE="$2"; shift 2 ;;
         --root=*) ROOT_OVERRIDE="${1#--root=}"; shift ;;
+        --expect-sha) EXPECT_SHA="$2"; shift 2 ;;
+        --expect-sha=*) EXPECT_SHA="${1#--expect-sha=}"; shift ;;
         *) echo "completion_checklist_recency_guard: unknown arg: $1" >&2; exit 2 ;;
     esac
 done
@@ -89,7 +96,7 @@ if [ ! -d "$SCAN_ROOT" ]; then
     exit 2
 fi
 
-python3 - "$SCAN_ROOT" <<'PYEOF'
+python3 - "$SCAN_ROOT" "$EXPECT_SHA" <<'PYEOF'
 import sys
 import pathlib
 import json
@@ -100,6 +107,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 root = pathlib.Path(sys.argv[1])
+expect_sha_arg = sys.argv[2] if len(sys.argv) > 2 else ""
 audit_log = root / ".ax-verify" / "runs.jsonl"
 expected_head_file = root / ".ax-verify" / "expected_head.txt"
 
@@ -145,11 +153,14 @@ missing = [k for k in required if k not in latest]
 if missing:
     emit_fail("AUDIT_LINE_INCOMPLETE", f"latest line missing keys: {missing}")
 
-# 3. head_sha must match current HEAD (audit ran AFTER the last commit).
-#    Fixture mode: if expected_head.txt is present, use it; else read .git HEAD.
+# 3. head_sha must match the sha under audit (audit ran AFTER the last commit).
+#    Priority: fixture expected_head.txt > --expect-sha (pre-push per-ref
+#    verification of the EXACT pushed sha) > this root's git HEAD.
 expected_head = None
 if expected_head_file.is_file():
     expected_head = expected_head_file.read_text().strip()
+elif expect_sha_arg:
+    expected_head = expect_sha_arg
 else:
     # Try git in this root.
     try:

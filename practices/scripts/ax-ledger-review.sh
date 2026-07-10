@@ -49,6 +49,13 @@ if [ -n "$SINCE" ]; then
                 echo "ax-ledger-review: --since expects YYYY-MM-DD, 'today' or 'yesterday' (got: $SINCE)" >&2
                 exit 2
             fi
+            # Shape alone is not enough — "2026-02-31" matches the regex but is
+            # not a calendar date and would silently hide events via the string
+            # compare. Round-trip through a real date parser (fail-fast exit 2).
+            if ! python3 -c 'import sys, datetime; datetime.datetime.strptime(sys.argv[1], "%Y-%m-%d")' "$SINCE" 2>/dev/null; then
+                echo "ax-ledger-review: --since is not a real calendar date (got: $SINCE)" >&2
+                exit 2
+            fi
             ;;
     esac
 fi

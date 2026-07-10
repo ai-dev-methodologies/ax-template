@@ -3,14 +3,19 @@
 #
 # ax-template is a fork-base for AI transformation projects. The git workflow itself
 # (branch protection, PR policy, merge strategy) is NOT enforced by this template —
-# fork-받은 팀이 결정. This hook only protects catalog quality, in two stages:
-#   1. R25 completion-checklist recency guard — runs on EVERY push that ships
+# fork-받은 팀이 결정. This hook only protects catalog quality, in two stages,
+# evaluated PER PUSHED REF against the exact sha being shipped (local_sha), NOT
+# the checkout's HEAD — pushing a non-checked-out branch must not ride on the
+# current branch's audit (confirmed cross-review P1, 2026-07-10):
+#   1. R25 completion-checklist recency guard — runs for EVERY ref that ships
 #      commits, regardless of which paths the push touches (a docs/frontend-only
 #      push still ships work, so it still requires a fresh verify-completion.sh
-#      PASS at HEAD). A DELETE-ONLY push (every ref is a deletion) ships no
-#      work and skips both stages.
-#   2. Binary regression suite (testPractices + testAsvs + testCrud) — runs only
-#      when the push touches backend/, practices/, or the seed spec.
+#      PASS at the pushed sha). A DELETE-ONLY push (every ref is a deletion)
+#      ships no work and skips both stages.
+#   2. Binary regression suite (testPractices + testAsvs + testCrud) — runs when
+#      ANY pushed ref's diff touches backend/, practices/, or the seed spec.
+#      Fail-closed: if a ref's diff base cannot be resolved or `git diff` itself
+#      fails, the suite runs / the push blocks rather than silently skipping.
 #
 # Activated by practices/scripts/install-hooks.sh together with pre-commit. The hook
 # is opt-in per clone; not installing it skips the regression locally but sentinel CI
@@ -21,74 +26,81 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
 ZERO_SHA="0000000000000000000000000000000000000000"
+REGRESSION_SCOPE='^(backend/|practices/|specs/spring-practices-l0\.yaml)'
 
 # Git feeds (local_ref local_sha remote_ref remote_sha) on stdin per `man
-# githooks`. Capture it once — both the delete-only detection and the range
-# computation below consume it.
+# githooks`. Capture it once — every stage below consumes it.
 PUSH_SPECS="$(cat)"
 
-# Delete-only push: every pushed ref is a deletion (local_sha == zero sha).
-# Deleting a remote branch ships no work, so neither R25 nor the regression
-# suite applies. If even ONE ref ships commits, the gates run in full.
-# (ax-ledger dogfood_finding 2026-07-10: the unconditional R25 stage was
-# over-blocking post-merge branch-deletion pushes.)
-if [[ -n "$PUSH_SPECS" ]]; then
-    DELETE_ONLY=1
-    while read -r _local_ref local_sha _remote_ref _remote_sha; do
-        [[ -z "$local_sha" ]] && continue
-        if [[ "$local_sha" != "$ZERO_SHA" ]]; then
-            DELETE_ONLY=0
-            break
-        fi
-    done <<< "$PUSH_SPECS"
-    if [[ "$DELETE_ONLY" -eq 1 ]]; then
-        echo "[practices] delete-only push — no commits shipped; R25 + regression skipped"
-        exit 0
-    fi
-fi
-
-# Determine the range of commits being pushed. If we cannot resolve a remote,
-# default to comparing HEAD against the upstream tracking branch (when set);
-# otherwise empty (skip).
-read_range() {
-    local _local_ref _local_sha _remote_ref remote_sha
-    while read -r _local_ref _local_sha _remote_ref remote_sha; do
-        if [[ -n "$remote_sha" && "$remote_sha" != "$ZERO_SHA" ]]; then
-            echo "$remote_sha..HEAD"
-            return
-        fi
-    done <<< "$PUSH_SPECS"
-    if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
-        echo "$(git rev-parse '@{u}')..HEAD"
+# Fallback for a manual invocation with no stdin: behave as a single-ref push
+# of HEAD against the upstream tracking branch (or an unknown base).
+if [[ -z "$PUSH_SPECS" ]]; then
+    _head_sha="$(git rev-parse HEAD)"
+    if _up_sha="$(git rev-parse '@{u}' 2>/dev/null)"; then
+        PUSH_SPECS="HEAD $_head_sha HEAD $_up_sha"
     else
-        echo ""
-    fi
-}
-
-RANGE="$(read_range)"
-
-# R25 — 49th hard guard: audit that verify-completion.sh ran for current HEAD.
-# This stage runs on EVERY commit-shipping push, BEFORE the regression path
-# filter below — otherwise a push touching only frontend/, docs/, mem/ etc.
-# would silently skip the completion contract (confirmed dogfood P1, 2026-07-10).
-echo "[practices] R25 — completion checklist recency check (every push)"
-if ! bash practices/evals/completion_checklist_recency_guard.sh; then
-    echo "[practices] ✗ completion_checklist_recency_guard FAILED — push BLOCKED"
-    echo "[practices] Run the completion contract on HEAD:"
-    echo "[practices]   bash practices/scripts/verify-completion.sh"
-    echo "[practices] then re-attempt the push."
-    exit 1
-fi
-echo "[practices] ✓ completion checklist recency PASS"
-
-# Skip the regression suite when the push touches nothing under the regression scope.
-if [[ -n "$RANGE" ]]; then
-    if ! git diff --name-only "$RANGE" 2>/dev/null | grep -qE '^(backend/|practices/|specs/spring-practices-l0\.yaml)'; then
-        exit 0
+        PUSH_SPECS="HEAD $_head_sha HEAD $ZERO_SHA"
     fi
 fi
 
-echo "[practices] push detected — running full regression (testPractices + testAsvs + testCrud)"
+SHIPPING=0
+REGRESSION_NEEDED=0
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [[ -z "$local_sha" ]] && continue
+    # Deletion ships no work — skip this ref. (ax-ledger dogfood_finding
+    # 2026-07-10: the unconditional R25 stage was over-blocking post-merge
+    # branch-deletion pushes.)
+    [[ "$local_sha" == "$ZERO_SHA" ]] && continue
+    SHIPPING=1
+
+    # R25 — 49th hard guard, per pushed ref: the audit must be fresh for the
+    # EXACT sha being shipped. Verifying the checkout's HEAD instead would let
+    # `git push origin feature` (while on main) ride on main's audit.
+    echo "[practices] R25 — completion checklist recency check for ${local_sha:0:12}"
+    if ! bash practices/evals/completion_checklist_recency_guard.sh --expect-sha "$local_sha"; then
+        echo "[practices] ✗ completion_checklist_recency_guard FAILED for ${local_sha:0:12} — push BLOCKED"
+        echo "[practices] Run the completion contract at the pushed commit:"
+        echo "[practices]   git checkout ${local_sha:0:12} && bash practices/scripts/verify-completion.sh"
+        echo "[practices] then re-attempt the push."
+        exit 1
+    fi
+    echo "[practices] ✓ completion checklist recency PASS for ${local_sha:0:12}"
+
+    # Regression scope for THIS ref: remote tip when it exists, else the
+    # merge-base with the default branch (new remote branch). Unresolvable
+    # base → fail-closed: run the suite rather than assume out-of-scope.
+    base="$remote_sha"
+    if [[ "$base" == "$ZERO_SHA" ]]; then
+        base="$(git merge-base "$local_sha" origin/HEAD 2>/dev/null \
+             || git merge-base "$local_sha" origin/main 2>/dev/null || true)"
+    fi
+    if [[ -z "$base" ]]; then
+        REGRESSION_NEEDED=1
+        continue
+    fi
+    # `git diff` failure (bad range, missing objects) is fail-closed: BLOCK,
+    # never convert an error into a silent regression skip.
+    if ! diff_files="$(git diff --name-only "$base" "$local_sha" 2>&1)"; then
+        echo "[practices] ✗ git diff failed for ${base:0:12}..${local_sha:0:12} — push BLOCKED (fail-closed)"
+        echo "$diff_files"
+        exit 1
+    fi
+    if grep -qE "$REGRESSION_SCOPE" <<< "$diff_files"; then
+        REGRESSION_NEEDED=1
+    fi
+done <<< "$PUSH_SPECS"
+
+if [[ "$SHIPPING" -eq 0 ]]; then
+    echo "[practices] delete-only push — no commits shipped; R25 + regression skipped"
+    exit 0
+fi
+
+if [[ "$REGRESSION_NEEDED" -eq 0 ]]; then
+    exit 0
+fi
+
+echo "[practices] push touches regression scope — running full regression (testPractices + testAsvs + testCrud)"
 if ! (cd backend && ./gradlew -q testPractices testAsvs testCrud); then
     echo "[practices] ✗ full regression FAILED — push BLOCKED"
     echo "[practices] Inspect the failing tests above. Re-run locally:"

@@ -1176,7 +1176,7 @@ run_guard "private_boundary/fixture_multitoken" 1 \
 run_guard "private_boundary/fixture_pragma_in_code" 1 \
     bash "$SCRIPT_DIR/private_boundary_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/private-boundary/fail_pragma_in_code"
 
-echo "[87] fixture_kill_proof_guard.sh (shell-guard판 PIT — fail fixture non-vacuity를 mutation으로 기계 증명. 사람이 적발한 vacuous fixture {private_boundary fail_secret_multitoken의 N1-proof가 pre-fix guard로도 exit 1이어서 실제로 N1 로직을 증명하지 못함}를 기계화. fixture_kill_manifest.yaml의 5개 private_boundary fail fixture 전부: original guard → exit 1, anchor neuter → exit 0. anchor는 guard 소스에 정확히 1회 존재해야 함 {0/2+회 → stale → BLOCK}. 자기 비공허성 fixture 쌍: vacuous_manifest {fail_marker + 오·neuter → exit1 유지 → meta-gate exit 1} + nonvacuous_manifest {fail_marker + 올바른 neuter → exit0로 flip → meta-gate exit 0}. Live exits 0.)"
+echo "[87] fixture_kill_proof_guard.sh (shell-guard판 PIT — fail fixture non-vacuity를 mutation으로 기계 증명. 사람이 적발한 vacuous fixture {private_boundary fail_secret_multitoken의 N1-proof가 pre-fix guard로도 exit 1이어서 실제로 N1 로직을 증명하지 못함}를 기계화. fixture_kill_manifest.yaml에 등재된 모든 fail fixture{private_boundary 5 + completion_checklist_recency 1}: original guard → exit 1, anchor neuter → exit 0. anchor는 guard 소스에 정확히 1회 존재해야 함 {0/2+회 → stale → BLOCK}. 자기 비공허성 fixture 쌍: vacuous_manifest {fail_marker + 오·neuter → exit1 유지 → meta-gate exit 1} + nonvacuous_manifest {fail_marker + 올바른 neuter → exit0로 flip → meta-gate exit 0}. Live exits 0.)"
 run_guard "fixture_kill_proof/live" 0 \
     bash "$SCRIPT_DIR/fixture_kill_proof_guard.sh"
 run_guard "fixture_kill_proof/fixture_fail" 1 \

@@ -257,9 +257,9 @@ Admits **4 SPs covering 3 Business Pattern Recipes + 1 subcommand (`/ax-scaffold
 **l3_pages_used:** `list-page`, `detail-page`, `create-page`, `dashboard-page`.
 
 **business_invariants (each with binding):**
-- `id: CRM-INV-001` — "deal.amount must be currency-precision compliant" — `rule_ref: practices/rules/idempotency-key-on-mutations.md` + `spec_ref: specs/crud-l0.yaml` (CRUD field validation)
+- `id: CRM-INV-001` — "deal.amount must be currency-precision compliant" — `rule_ref: practices/rules/idempotency-key-on-mutations.md` + `spec_ref: specs/crud-security.yaml` (CRUD field validation; R5가 crud-l0를 흡수한 canonical spec)
 - `id: CRM-INV-002` — "lead → contact conversion preserves source_attribution" — `spec_ref: specs/audit-log-l0.yaml` (provenance trail)
-- `id: CRM-INV-003` — "activity.timestamp ≥ activity.created_at" — `spec_ref: specs/crud-l0.yaml` (CRUD-VALIDATION timestamp ordering)
+- `id: CRM-INV-003` — "activity.timestamp ≥ activity.created_at" — `spec_ref: specs/crud-security.yaml` (CRUD-VALIDATION timestamp ordering; R5가 crud-l0를 흡수한 canonical spec)
 - `id: CRM-INV-004` — "deal.stage transitions follow declared state machine; transitions logged" — `spec_ref: specs/audit-log-l0.yaml`
 
 **business_observability_advisory (not enforced this cycle):**
