@@ -27,12 +27,13 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 62 | 60 | **~97%** |
 | P2 (verification escapes) | 16 | 13 | **~81%** |
-| P3 (industry-niche deferrals) | 42 | 0 | 0% |
-| **P0–P3 합계 (수렴 분모)** | **146** | **99** | **~68%** |
+| P3 (industry-niche deferrals) | 46 | 0 | 0% |
+| **P0–P3 합계 (수렴 분모)** | **150** | **99** | **~66%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
 > 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
 > 2026-07-07 P3 인라인화 — P3-1~21 확정 요지·P3-22~40 IDW13-17 세션기록 대조(EMR G9 cross-list record-linkage→P1-33~34 closed 제외, 불확실 6건 "(closure 여부 미검증)" 표기, disk-truth 재집계) + P3-32→P3-41·P3-33→P3-42 재번호 → P3 0/42, 수렴 **~68%**.
+> 2026-07-10 ultracode dogfood 감사 — P1/P2 3건은 PR #74로 즉시 봉합(backlog 미경유), 잔여 doc-drift·잠재버그 P3-43~46 등재 → P3 0/46, 수렴 **~66%**.
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -298,6 +299,10 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [ ] P3-40 aviation: G13 time/cycle-bounded conditional waiver — 시간/주기 한정 조건부 면제
 - [ ] P3-41 private_boundary_guard [86] 잔여 documented gaps — (a) `/src/test/` 경로는 layer-2 제외라 테스트 fixture에 시크릿 은닉 가능; (b) 레포 root의 dotfiles(`.env`, `.env.local` 등) 및 구성 파일이 스캔 경로 밖. fork-receiver 결정 항목: prod 배포 보안 정책에 따라 test 경로 포함 여부를 자율 결정. done-when: fork-receiver가 (a)·(b) 활성화 또는 documented gap 수용 명시. 출처: 2026-07-01 adversarial review m2.
 - [ ] P3-42 tokenized-securities F1/F2 read-surface authz 비대칭 심의 — `GET /tokens/{id}/holders`(owner-read = 인증된 모든 사용자)와 `GET /tokens/eligible-investors/{userId}`(ROLE_ADMIN 전용)의 authz 비대칭. `spec READ-HOLDER-001`에 설계 의도로 명시돼 있으나, privacy-민감 배포 환경에서는 holdings 노출 범위를 제한할 필요가 있을 수 있음. fork-receiver 결정 항목: 설계 변경 시 spec item 갱신 + `testTokenizedSecurities` READ-HOLDER 단언 수정. 출처: 2026-07-07 dogfood-closure review minor 3.
+- [ ] P3-43 doc-drift: `specs/crud-l0.yaml` 죽은 참조 4곳 — SKILL.md:70·CLAUDE.md:399·CLAUDE.md:437·README.md:221이 존재하지 않는 `specs/crud-l0.yaml`을 AI entry-point 표에 노출. R5가 CRUD 내용을 `specs/crud-security.yaml`로 흡수했으나 사용자-facing 표에는 미반영 (R9 Codex Critic soft #2에서 기지적됐으나 PRD 문서에만 기록됨). done-when: 4곳 전부 `crud-security.yaml`로 치환. 출처: 2026-07-10 ultracode dogfood 감사 (adversarial-confirmed).
+- [ ] P3-44 doc-drift: CLAUDE.md guard 카운트 "90 guards" vs 실측 87 distinct guard scripts — run-all-guards.sh의 165 invocations 수치는 정확하나 distinct 스크립트 수가 표기와 불일치. done-when: CLAUDE.md 카운트를 실측으로 정정하거나 카운트 산출을 기계화(guard census 스크립트)해 드리프트 재발 차단. 출처: 2026-07-10 ultracode dogfood 감사 (adversarial-confirmed).
+- [ ] P3-45 doc-drift: CLAUDE.md enforcement-surface 표의 PreToolUse hook 파일명 `.claude/settings.json` — 레포에 해당 파일 부재; 실제 git-tracked 설정은 `.claude/settings.local.json`. done-when: 표 파일명 정정. 출처: 2026-07-10 ultracode dogfood 감사 (adversarial-confirmed).
+- [ ] P3-46 ax-prove-evidence-gate-blocks-agent.sh:113 잠재 버그 — `agent_events()`의 `grep -c ... || echo 0`가 zero-match 시 grep이 "0" 출력 후 exit 1 → `0\n0` 이중 출력으로 `[ -lt ]` arithmetic error (ledger에 actor=agent 항목 0건인 클론에서 결정론 재현; 스크립트는 PROVEN 출력·exit 0 유지라 thesis는 불훼손). done-when: count 산출을 `grep -c || true` + 후처리 또는 awk로 교체 + zero-entry 클론 재현 테스트. 출처: 2026-07-10 ultracode dogfood 감사 (refuter가 root cause 격리).
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
 
