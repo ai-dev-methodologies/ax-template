@@ -10,6 +10,9 @@
 #   2. references the current HEAD sha (i.e. verify-completion ran AFTER the
 #      last commit, not before)
 #   3. has exit == 0 (last verify-completion run was PASS, no outstanding RED)
+#   4. has full_run == true (a --step partial run writes full_run=false and
+#      must NOT satisfy the completion contract — closes the dogfood-confirmed
+#      P2 where a single trivial step was indistinguishable from a full PASS)
 #
 # Rule of construction (R25 brief): "verify-completion.sh 실행 안 한 채로 commit
 # 하면 trip" — so this guard is what backstops pre-commit / pre-push hook
@@ -178,6 +181,18 @@ if latest["exit"] != 0 or latest["hard_fail"] > 0:
         f'latest verify-completion.sh run was FAIL (exit={latest["exit"]}, '
         f'hard_fail={latest["hard_fail"]}). Iron Law (R25): task not done until '
         f'verify-completion exits 0.'
+    )
+
+# 5. Latest entry must be a FULL checklist run. A `--step <id>` partial run
+#    writes full_run=false; legacy lines without the field are also rejected
+#    (fail-closed) — any run at the current HEAD re-runs the new script anyway.
+if latest.get("full_run") is not True:
+    emit_fail(
+        "AUDIT_PARTIAL_RUN",
+        f'latest audit line is not a full checklist run (full_run='
+        f'{latest.get("full_run")!r}). A --step partial run does not satisfy '
+        f'the completion contract. Re-run `bash practices/scripts/'
+        f'verify-completion.sh` with no --step filter.'
     )
 
 # All conditions satisfied.

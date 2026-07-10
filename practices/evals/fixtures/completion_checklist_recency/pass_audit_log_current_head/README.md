@@ -6,5 +6,6 @@ PASS shape:
 - `.ax-verify/runs.jsonl` exists with a valid JSON line.
 - Latest line's `head_sha` matches `.ax-verify/expected_head.txt`.
 - Latest line's `exit` is 0 and `hard_fail` is 0.
+- Latest line's `full_run` is `true` (whole-checklist run, not `--step` partial).
 
 Expected guard exit: 0.
