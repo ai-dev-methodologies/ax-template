@@ -67,7 +67,7 @@ bash practices/scripts/install-hooks.sh
 | `practices/DECISIONS.md` | Rule provenance trail — every accepted / rejected rule with reasoning |
 | `specs/auth-asvs-l1.yaml` | OWASP ASVS L1 spec (26 items) |
 | `specs/spring-practices-l0.yaml` | Java/Spring rules spec (64 items) |
-| `specs/crud-l0.yaml` | CRUD reference domain spec |
+| `specs/crud-security.yaml` | CRUD reference domain spec |
 | `practices-react/AGENTS.md` | 99 React rules in AI-consumable form |
 | `practices-react/SKILL.md` | React practices subsystem entry point |
 | `templates/AGENTS.md` | Layer library AI-consumable index (sha256 sentinel) |

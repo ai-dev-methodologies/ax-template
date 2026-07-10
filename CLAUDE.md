@@ -396,7 +396,7 @@ ax-template/
 ├── METHODOLOGY.md             # 5-step blueprint playbook
 ├── specs/                     # 검증 스펙 (핵심 — spec-first)
 │   ├── auth-asvs-l1.yaml
-│   ├── crud-l0.yaml
+│   ├── crud-security.yaml
 │   ├── spring-practices-l0.yaml
 │   └── portable-test-template/
 ├── contracts/                 # OpenAPI 계약 (핵심)
@@ -434,7 +434,7 @@ ax-template/
 | 도메인 | Spec | 엔드포인트 | 항목 |
 |---|---|---|---|
 | Auth | `specs/auth-asvs-l1.yaml` | 14 (signup, login, OAuth Google/Naver/Kakao 등) | 26 ASVS items |
-| CRUD | `specs/crud-l0.yaml` | 5 (CRUD-001~005) | 7 security tests |
+| CRUD | `specs/crud-security.yaml` | 5 (CRUD-001~005) | 7 security tests |
 | Practices | `specs/spring-practices-l0.yaml` | — | 228 rules / 22 categories |
 
 각 도메인은 동일한 패턴: spec YAML → `@Tag` test → `./gradlew test{Domain}` binary verification.
@@ -471,15 +471,15 @@ fork-receiver의 활성화는 opt-in이다.
 
 | Surface | 파일 | 트리거 조건 | 차단 계층 | 활성화 |
 |---------|------|------------|----------|--------|
-| PreToolUse hook (Claude Code) | `.claude/settings.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
+| PreToolUse hook (Claude Code) | `.claude/settings.local.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
 | `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
-| `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 모든 push 시 — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
-| `run-all-guards.sh` (90 guards, 165 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
+| `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 커밋을 ship하는 모든 push 시 (delete-only push는 제외) — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
+| `run-all-guards.sh` (89 guards, 165 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
 
 ### 핵심 설명
 
-- **전체 80개 guard는 `run-all-guards.sh` 경유 수동 실행 전용이다.** 커밋마다 자동 실행되지 않는다.
+- **89개 guard는 `run-all-guards.sh` 경유 수동 실행 전용이다** (practices/evals 87 + practices-react/evals 2; 여기에 pre-push 전용 recency guard 1을 더해 총 90 hard guards). 커밋마다 자동 실행되지 않는다.
   R25 완료 선언 전에 `verify-completion.sh`를 실행하면 이 guard들이 모두 돌아간다.
 - **pre-commit / pre-push hook은 opt-in이다.** `install-hooks.sh`를 실행한 클론에서만 활성화된다.
   ax-template 자체 HEAD에서는 활성화되어 있다; fork-receiver가 활성화 여부를 결정한다.

@@ -104,7 +104,7 @@ cat recipes/_MANIFEST.yaml | head -40
 cat recipes/saas-subscription/RECIPE.md     # example
 
 # 4. Run the full catalog verification (proves the bundle is intact)
-bash practices/evals/run-all-guards.sh       # 90 hard guards (all PASS expected)
+bash practices/evals/run-all-guards.sh       # 89 hard guards (all PASS expected; 90th = pre-push recency guard)
 
 # Per-domain catalog tasks — the "binary pass/fail" surface (R64+ baseline)
 cd backend
@@ -218,7 +218,7 @@ ax-template/
 │
 ├── specs/                          # Compliance specs per domain
 │   ├── auth-asvs-l1.yaml
-│   ├── crud-l0.yaml
+│   ├── crud-security.yaml
 │   ├── ratelimit-l0.yaml
 │   ├── spring-practices-l0.yaml
 │   ├── react-practices-l0.yaml
