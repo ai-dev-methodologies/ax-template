@@ -31,7 +31,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-hydration-suppress-warning"
-    quote: "Wrap the dynamic text in an element with suppressHydrationWarning to prevent noisy warnings."
+    quote: "In SSR frameworks (e.g., Next.js), some values are intentionally different on server vs client (random IDs, dates, locale/timezone formatting)."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

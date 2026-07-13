@@ -39,7 +39,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-activity"
-    quote: "Use React's <Activity> to preserve state/DOM for expensive components that frequently toggle visibility."
+    quote: "Avoids expensive re-renders and state loss."
   - source_type: external
     citation: "React 19.2 — Activity supports 'visible' and 'hidden' modes; hidden hides children, unmounts effects, and defers all updates until React has nothing left to work on"
     url: "https://react.dev/reference/react/Activity"

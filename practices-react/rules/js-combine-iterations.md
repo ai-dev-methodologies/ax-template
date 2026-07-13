@@ -25,7 +25,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-combine-iterations"
-    quote: "Multiple .filter() or .map() calls iterate the array multiple times. Combine into one loop."
+    quote: "Multiple `.filter()` or `.map()` calls iterate the array multiple times."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [js-flatmap-filter]
 ---

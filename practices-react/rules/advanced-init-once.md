@@ -48,7 +48,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "advanced-init-once"
-    quote: "Do not put app-wide initialization that must run once per app load inside useEffect([]) of a component."
+    quote: "Do not put app-wide initialization that must run once per app load inside `useEffect([])` of a component."
   - source_type: external
     citation: "React docs — Initializing the application (canonical didInit pattern + module-init alternative)"
     url: "https://react.dev/learn/you-might-not-need-an-effect#initializing-the-application"

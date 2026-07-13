@@ -41,7 +41,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "server-after-nonblocking"
-    quote: "Use Next.js's after() to schedule work that should execute after a response is sent."
+    quote: "Use Next.js's `after()` to schedule work that should execute after a response is sent."
   - source_type: external
     citation: "Next.js docs — after() runs even if the response fails or redirects; works in Server Components, Server Actions, and Route Handlers"
     url: "https://nextjs.org/docs/app/api-reference/functions/after"

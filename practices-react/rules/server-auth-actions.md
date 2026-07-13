@@ -40,7 +40,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "server-auth-actions"
-    quote: "Server Actions are exposed as public endpoints, just like API routes. Always verify authentication and authorization inside each Server Action."
+    quote: "Treat Server Actions with the same security considerations as public-facing API endpoints, and verify if the user is allowed to perform a mutation."
   - source_type: external
     citation: "Next.js Authentication guide — treat Server Actions with same security considerations as public-facing API endpoints"
     url: "https://nextjs.org/docs/app/guides/authentication"

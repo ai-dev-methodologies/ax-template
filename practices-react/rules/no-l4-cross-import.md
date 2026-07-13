@@ -22,7 +22,7 @@ verification:
 evidence:
   - upstream_id: nextjs-app-router-16
     section: "App Router — route segments as independent modules"
-    quote: "route segments"
+    quote: "Next.js uses file-system routing."
   - source_type: external
     citation: "Next.js documentation — Domain-driven architecture: each feature domain should be self-contained with no cross-domain imports at the route layer"
     url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"

@@ -25,7 +25,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rerender-memo-with-default-value"
-    quote: "When memoized component has a default value for some non-primitive optional parameter [...] calling the component without that parameter results in broken memoization."
+    quote: "When memoized component has a default value for some non-primitive optional parameter, such as an array, function, or object, calling the component without that parameter results in broken memoization."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [rerender-memo]
 ---

@@ -24,7 +24,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-min-max-loop"
-    quote: "Finding the smallest or largest element only requires a single pass through the array. Sorting is wasteful and slower."
+    quote: "Single pass through the array, no copying, no sorting."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: []
 ---

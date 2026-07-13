@@ -58,10 +58,10 @@ evidence:
     quote: "However, results are never stored on the server, they're cached only in the browser's memory and do not persist across page reloads."
   - upstream_id: nextjs-use-cache-private
     section: "When to use"
-    quote: "Reach for 'use cache: private' when: You want to cache a function that already accesses runtime data, and refactoring to move the runtime access outside and pass values as arguments is not practical."
+    quote: "You want to cache a function that already accesses runtime data, and refactoring to move the runtime access outside and pass values as arguments is not practical."
   - upstream_id: nextjs-use-cache-private
     section: "Constraints"
-    quote: "It is not possible to configure custom cache handlers for 'use cache: private'."
+    quote: "It is **not** possible to configure custom cache handlers for 'use cache: private'."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

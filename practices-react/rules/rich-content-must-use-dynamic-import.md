@@ -41,7 +41,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: tiptap-2026-05
     section: "RSC Compatibility"
-    quote: "Add 'use client' to the component; the Editor is a browser-only construct."
+    quote: "Add `'use client'` to the component; the Editor is a browser-only construct."
   - source_type: external
     citation: "Next.js 15 Docs — Lazy Loading: ssr:false is not allowed with next/dynamic in Server Components. Move it into a Client Component."
     url: "https://nextjs.org/docs/app/guides/lazy-loading"
@@ -49,7 +49,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: nextjs-lazy-loading
     section: "ssr:false restriction"
-    quote: "ssr:false is not allowed with next/dynamic in Server Components. Please move it into a Client Component."
+    quote: "in Server Components. Please move it into a Client Component."
 decided_at: "2026-05-18"
 next_review_by: "2026-11-18"
 ---

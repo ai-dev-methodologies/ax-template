@@ -30,7 +30,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-animate-svg-wrapper"
-    quote: "Wrap SVG in a <div> and animate the wrapper instead."
+    quote: "Many browsers don't have hardware acceleration for CSS3 animations on SVG elements."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

@@ -31,7 +31,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-conditional-render"
-    quote: "Use explicit ternary operators (? :) instead of && for conditional rendering when the condition can be 0, NaN, or other falsy values that render."
+    quote: "Use explicit ternary operators (`? :`) instead of `&&` for conditional rendering when the condition can be `0`, `NaN`, or other falsy values that render."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

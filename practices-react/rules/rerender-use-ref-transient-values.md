@@ -20,7 +20,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rerender-use-ref-transient-values"
-    quote: "When a value changes frequently and you don't want a re-render on every update [...] store it in useRef instead of useState."
+    quote: "When a value changes frequently and you don't want a re-render on every update (e.g., mouse trackers, intervals, transient flags), store it in `useRef` instead of `useState`."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_AS_IS }
 sibling_rules: [rerender-transitions]
 ---

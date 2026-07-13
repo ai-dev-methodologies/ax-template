@@ -59,7 +59,7 @@ evidence:
     quote: "Prefer creating Promises in Server Components and passing them to Client Components over creating Promises in Client Components. Promises created in Client Components are recreated on every render."
   - upstream_id: nextjs-fetching-data
     section: "Client Components — use() API"
-    quote: "Start by fetching data in your Server component, and pass the promise to your Client Component as prop. [...] use the use API to read the promise."
+    quote: "Start by fetching data in your Server component, and pass the promise to your Client Component as prop."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

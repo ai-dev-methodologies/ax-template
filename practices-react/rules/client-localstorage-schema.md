@@ -49,7 +49,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "client-localstorage-schema"
-    quote: "Always wrap in try-catch: getItem() and setItem() throw in incognito/private browsing (Safari, Firefox), when quota exceeded, or when disabled."
+    quote: "Add version prefix to keys and store only needed fields."
   - source_type: external
     citation: "MDN — Window.localStorage (may throw a SecurityError when storage is disabled or quota is exceeded; not available during SSR — no `window` object)"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage"

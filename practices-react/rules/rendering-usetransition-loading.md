@@ -30,7 +30,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-usetransition-loading"
-    quote: "Use useTransition instead of manual useState for loading states."
+    quote: "Use `useTransition` instead of manual `useState` for loading states."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

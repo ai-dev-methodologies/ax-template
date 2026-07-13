@@ -55,7 +55,7 @@ evidence:
     quote: "SWR enables request deduplication, caching, and revalidation across component instances."
   - upstream_id: nextjs-fetching-data
     section: "Client Components"
-    quote: "You can use a community library like SWR or React Query to fetch data in Client Components."
+    quote: "You can use React's `use` API to stream data from the server to client."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

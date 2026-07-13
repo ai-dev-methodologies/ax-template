@@ -72,7 +72,7 @@ evidence:
     quote: "React.cache operates in an isolated scope inside use cache boundaries. Values stored via React.cache outside a use cache function are not visible inside it."
   - upstream_id: vercel-react-best-practices
     section: "server-cache-react"
-    quote: "Use React.cache() for server-side request deduplication. Authentication and database queries benefit most."
+    quote: "Use `React.cache()` for server-side request deduplication."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=high"
   reviewed_at: "2026-05-16"

@@ -37,7 +37,7 @@ audit:
 evidence:
   - upstream_id: tanstack-query-v5
     section: "Overview — separation of fetching and UI"
-    quote: "React Query makes fetching, caching, synchronizing and updating server state in your React applications a breeze."
+    quote: "TanStack Query makes fetching, caching, synchronizing and updating async state trivial."
 sibling_rules:
   - l2-prefer-onsubmit-prop
   - async-api-routes

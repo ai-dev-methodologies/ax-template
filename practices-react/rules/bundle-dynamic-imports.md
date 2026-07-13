@@ -57,7 +57,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "bundle-dynamic-imports"
-    quote: "Use next/dynamic to lazy-load large components not needed on initial render."
+    quote: "Use `next/dynamic` to lazy-load large components not needed on initial render."
   - source_type: external
     citation: "Next.js 16 docs — next/dynamic is a composite of React.lazy() and Suspense"
     url: "https://nextjs.org/docs/app/guides/lazy-loading"

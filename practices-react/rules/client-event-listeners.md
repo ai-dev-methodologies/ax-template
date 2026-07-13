@@ -46,7 +46,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "client-event-listeners"
-    quote: "Use useSWRSubscription() to share global event listeners across component instances."
+    quote: "Use `useSWRSubscription()` to share global event listeners across component instances."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

@@ -30,7 +30,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-content-visibility"
-    quote: "Apply content-visibility: auto to defer off-screen rendering."
+    quote: "Apply `content-visibility: auto` to defer off-screen rendering."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

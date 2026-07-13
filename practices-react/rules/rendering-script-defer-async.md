@@ -37,7 +37,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-script-defer-async"
-    quote: "Script tags without defer or async block HTML parsing while the script downloads and executes."
+    quote: "Script tags without `defer` or `async` block HTML parsing while the script downloads and executes."
   - source_type: external
     citation: "MDN — script element: For module scripts, the defer attribute has no effect since they are deferred by default"
     url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script#defer"

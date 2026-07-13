@@ -68,13 +68,13 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "async-parallel"
-    quote: "When async operations have no interdependencies, execute them concurrently using Promise.all()."
+    quote: "When async operations have no interdependencies, execute them concurrently using `Promise.all()`."
   - upstream_id: nextjs-fetching-data
     section: "Parallel data fetching"
-    quote: "Start multiple requests by calling fetch, then await them with Promise.all. Requests begin as soon as fetch is called."
+    quote: "Start multiple requests by calling `fetch`, then await them with `Promise.all`. Requests begin as soon as `fetch` is called."
   - upstream_id: nextjs-fetching-data
     section: "Parallel data fetching — Good to know"
-    quote: "If one request fails when using Promise.all, the entire operation will fail. To handle this, you can use the Promise.allSettled method instead."
+    quote: "If one request fails when using `Promise.all`, the entire operation will fail. To handle this, you can use the `Promise.allSettled` method instead."
   - upstream_id: react-19-use
     section: "Server Component data fetching"
     quote: "Prefer creating Promises in Server Components and passing them to Client Components over creating Promises in Client Components."

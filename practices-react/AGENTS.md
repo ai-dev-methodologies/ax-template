@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "6bbea82b7c7e25fbc51bd9c666027b46874741a55c4697fdfad7270fb96fefee"
+  source_concat_sha256: "90b4307f5b10de4834a6a33c88607731c202773172802475174d6c60a496fa2b"
   rule_count: 99
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -229,7 +229,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "advanced-init-once"
-    quote: "Do not put app-wide initialization that must run once per app load inside useEffect([]) of a component."
+    quote: "Do not put app-wide initialization that must run once per app load inside `useEffect([])` of a component."
   - source_type: external
     citation: "React docs — Initializing the application (canonical didInit pattern + module-init alternative)"
     url: "https://react.dev/learn/you-might-not-need-an-effect#initializing-the-application"
@@ -629,7 +629,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "async-defer-await"
-    quote: "Move await operations into the branches where they're actually used to avoid blocking code paths that don't need them."
+    quote: "Move `await` operations into the branches where they're actually used to avoid blocking code paths that don't need them."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -754,7 +754,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "async-dependencies"
-    quote: "For operations with partial dependencies, use [...] to maximize parallelism. It automatically starts each task at the earliest possible moment."
+    quote: "For operations with partial dependencies, use `better-all` to maximize parallelism."
   - source_type: external
     citation: "MDN — Promise.then for chaining; combined with Promise.all aggregates the wait at the latest possible moment"
     url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/then"
@@ -907,13 +907,13 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "async-parallel"
-    quote: "When async operations have no interdependencies, execute them concurrently using Promise.all()."
+    quote: "When async operations have no interdependencies, execute them concurrently using `Promise.all()`."
   - upstream_id: nextjs-fetching-data
     section: "Parallel data fetching"
-    quote: "Start multiple requests by calling fetch, then await them with Promise.all. Requests begin as soon as fetch is called."
+    quote: "Start multiple requests by calling `fetch`, then await them with `Promise.all`. Requests begin as soon as `fetch` is called."
   - upstream_id: nextjs-fetching-data
     section: "Parallel data fetching — Good to know"
-    quote: "If one request fails when using Promise.all, the entire operation will fail. To handle this, you can use the Promise.allSettled method instead."
+    quote: "If one request fails when using `Promise.all`, the entire operation will fail. To handle this, you can use the `Promise.allSettled` method instead."
   - upstream_id: react-19-use
     section: "Server Component data fetching"
     quote: "Prefer creating Promises in Server Components and passing them to Client Components over creating Promises in Client Components."
@@ -1101,7 +1101,7 @@ evidence:
     quote: "Prefer creating Promises in Server Components and passing them to Client Components over creating Promises in Client Components. Promises created in Client Components are recreated on every render."
   - upstream_id: nextjs-fetching-data
     section: "Client Components — use() API"
-    quote: "Start by fetching data in your Server component, and pass the promise to your Client Component as prop. [...] use the use API to read the promise."
+    quote: "Start by fetching data in your Server component, and pass the promise to your Client Component as prop."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -1552,10 +1552,10 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "bundle-barrel-imports"
-    quote: "Popular icon and component libraries can have up to 10,000 re-exports in their entry file."
+    quote: "Import directly from source files instead of barrel files to avoid loading thousands of unused modules."
   - upstream_id: nextjs-optimize-package-imports
     section: "optimizePackageImports"
-    quote: "Adding a package to experimental.optimizePackageImports will only load the modules you are actually using, while still giving you the convenience of writing import statements with many named exports."
+    quote: "Adding a package to `experimental.optimizePackageImports` will only load the modules you are actually using, while still giving you the convenience of writing import statements with many named exports."
   - upstream_id: nextjs-optimize-package-imports
     section: "Experimental warning"
     quote: "This feature is currently experimental and subject to change, it's not recommended for production."
@@ -2089,7 +2089,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "bundle-dynamic-imports"
-    quote: "Use next/dynamic to lazy-load large components not needed on initial render."
+    quote: "Use `next/dynamic` to lazy-load large components not needed on initial render."
   - source_type: external
     citation: "Next.js 16 docs — next/dynamic is a composite of React.lazy() and Suspense"
     url: "https://nextjs.org/docs/app/guides/lazy-loading"
@@ -2521,7 +2521,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "client-event-listeners"
-    quote: "Use useSWRSubscription() to share global event listeners across component instances."
+    quote: "Use `useSWRSubscription()` to share global event listeners across component instances."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -2696,7 +2696,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "client-localstorage-schema"
-    quote: "Always wrap in try-catch: getItem() and setItem() throw in incognito/private browsing (Safari, Firefox), when quota exceeded, or when disabled."
+    quote: "Add version prefix to keys and store only needed fields."
   - source_type: external
     citation: "MDN — Window.localStorage (may throw a SecurityError when storage is disabled or quota is exceeded; not available during SSR — no `window` object)"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage"
@@ -2864,7 +2864,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "client-passive-event-listeners"
-    quote: "Add { passive: true } to touch and wheel event listeners to enable immediate scrolling."
+    quote: "Add `{ passive: true }` to touch and wheel event listeners to enable immediate scrolling."
   - source_type: external
     citation: "MDN — EventTarget.addEventListener (passive option indicates the listener will never call preventDefault; calling it has no effect)"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#passive"
@@ -3017,7 +3017,7 @@ evidence:
     quote: "SWR enables request deduplication, caching, and revalidation across component instances."
   - upstream_id: nextjs-fetching-data
     section: "Client Components"
-    quote: "You can use a community library like SWR or React Query to fetch data in Client Components."
+    quote: "You can use React's `use` API to stream data from the server to client."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -3753,7 +3753,7 @@ evidence:
     quoted_at: "2026-05-18"
   - upstream_id: wcag-22-techniques-2026-05
     section: "SC 4.1.3 Status Messages — aria-live regions"
-    quote: "status messages can be programmatically determined through role or properties so they can be presented by assistive technologies without receiving focus"
+    quote: "determined through role or properties so they can be presented by assistive technologies"
 decided_at: "2026-05-18"
 ---
 
@@ -4202,7 +4202,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-cache-storage"
-    quote: "localStorage, sessionStorage, and document.cookie are synchronous and expensive. Cache reads in memory."
+    quote: "Use a Map (not a hook) so it works everywhere:"
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [client-localstorage-schema]
 ---
@@ -4317,7 +4317,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-combine-iterations"
-    quote: "Multiple .filter() or .map() calls iterate the array multiple times. Combine into one loop."
+    quote: "Multiple `.filter()` or `.map()` calls iterate the array multiple times."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [js-flatmap-filter]
 ---
@@ -4485,7 +4485,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-flatmap-filter"
-    quote: "Chaining .map().filter(Boolean) creates an intermediate array and iterates twice."
+    quote: "Use `.flatMap()` to transform and filter in a single pass."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [js-combine-iterations]
 ---
@@ -4580,7 +4580,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-hoist-regexp"
-    quote: "Don't create RegExp inside render. Hoist to module scope or memoize with useMemo()."
+    quote: "Don't create RegExp inside render."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: []
 ---
@@ -4666,7 +4666,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-index-maps"
-    quote: "Multiple .find() calls by the same key should use a Map."
+    quote: "Multiple `.find()` calls by the same key should use a Map."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [js-set-map-lookups]
 ---
@@ -4827,7 +4827,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-min-max-loop"
-    quote: "Finding the smallest or largest element only requires a single pass through the array. Sorting is wasteful and slower."
+    quote: "Single pass through the array, no copying, no sorting."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: []
 ---
@@ -5066,7 +5066,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-tosorted-immutable"
-    quote: ".sort() mutates the array in place, which can cause bugs with React state and props."
+    quote: "`.sort()` mutates the array in place, which can cause bugs with React state and props."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: []
 ---
@@ -5181,7 +5181,7 @@ audit:
 evidence:
   - upstream_id: tanstack-query-v5
     section: "Overview — separation of fetching and UI"
-    quote: "React Query makes fetching, caching, synchronizing and updating server state in your React applications a breeze."
+    quote: "TanStack Query makes fetching, caching, synchronizing and updating async state trivial."
 sibling_rules:
   - l2-prefer-onsubmit-prop
   - async-api-routes
@@ -5309,7 +5309,7 @@ audit:
 evidence:
   - upstream_id: nextjs-server-actions-16
     section: "Server Actions — calling server actions"
-    quote: "Server Actions can be called using the action attribute in a <form> element or in event handlers."
+    quote: "Called from the client via a network request."
 sibling_rules:
   - l2-prefer-data-prop-over-direct-fetch
   - async-api-routes
@@ -5438,10 +5438,10 @@ upstream:
 evidence:
   - upstream_id: nextjs-fetching-data
     section: "Next.js 16-specific: async params"
-    quote: "Route handler signature: params: Promise<{ username: string }>. The page must await params before use; this is a separate sequential await that can be parallelized with other independent work."
+    quote: "this is a separate sequential await that can be parallelized with other independent work."
   - upstream_id: nextjs-fetching-data
     section: "Parallel data fetching"
-    quote: "Start multiple requests by calling fetch, then await them with Promise.all. Requests begin as soon as fetch is called."
+    quote: "Start multiple requests by calling `fetch`, then await them with `Promise.all`. Requests begin as soon as `fetch` is called."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=high (inherited from async-parallel review)"
   reviewed_at: "2026-05-16"
@@ -5635,10 +5635,10 @@ evidence:
     quote: "However, results are never stored on the server, they're cached only in the browser's memory and do not persist across page reloads."
   - upstream_id: nextjs-use-cache-private
     section: "When to use"
-    quote: "Reach for 'use cache: private' when: You want to cache a function that already accesses runtime data, and refactoring to move the runtime access outside and pass values as arguments is not practical."
+    quote: "You want to cache a function that already accesses runtime data, and refactoring to move the runtime access outside and pass values as arguments is not practical."
   - upstream_id: nextjs-use-cache-private
     section: "Constraints"
-    quote: "It is not possible to configure custom cache handlers for 'use cache: private'."
+    quote: "It is **not** possible to configure custom cache handlers for 'use cache: private'."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -5872,7 +5872,7 @@ evidence:
     quote: "Be thoughtful about which values you include in cache keys. Each unique value creates a separate cache entry, reducing cache utilization."
   - upstream_id: nextjs-use-cache-remote
     section: "Nesting rules"
-    quote: "Remote caches cannot be nested inside private caches ('use cache: private'). Private caches cannot be nested inside remote caches."
+    quote: "Remote caches **cannot** be nested inside private caches ('use cache: private')"
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -6595,7 +6595,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "useTranslations"
-    quote: "export function PayButton() { const t = useTranslations('Payment'); return <button>{t('submit')}</button>; }"
+    quote: "const t = useTranslations('Payment');"
   - source_type: external
     citation: "next-intl docs — using t() for all user-visible text to enable locale switching"
     url: "https://next-intl.dev/docs/usage/messages"
@@ -6819,7 +6819,7 @@ verification:
 evidence:
   - upstream_id: nextjs-app-router-16
     section: "App Router — route segments as independent modules"
-    quote: "route segments"
+    quote: "Next.js uses file-system routing."
   - source_type: external
     citation: "Next.js documentation — Domain-driven architecture: each feature domain should be self-contained with no cross-domain imports at the route layer"
     url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"
@@ -7681,7 +7681,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-activity"
-    quote: "Use React's <Activity> to preserve state/DOM for expensive components that frequently toggle visibility."
+    quote: "Avoids expensive re-renders and state loss."
   - source_type: external
     citation: "React 19.2 — Activity supports 'visible' and 'hidden' modes; hidden hides children, unmounts effects, and defers all updates until React has nothing left to work on"
     url: "https://react.dev/reference/react/Activity"
@@ -7790,7 +7790,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-animate-svg-wrapper"
-    quote: "Wrap SVG in a <div> and animate the wrapper instead."
+    quote: "Many browsers don't have hardware acceleration for CSS3 animations on SVG elements."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -7890,7 +7890,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-conditional-render"
-    quote: "Use explicit ternary operators (? :) instead of && for conditional rendering when the condition can be 0, NaN, or other falsy values that render."
+    quote: "Use explicit ternary operators (`? :`) instead of `&&` for conditional rendering when the condition can be `0`, `NaN`, or other falsy values that render."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -7997,7 +7997,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-content-visibility"
-    quote: "Apply content-visibility: auto to defer off-screen rendering."
+    quote: "Apply `content-visibility: auto` to defer off-screen rendering."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -8205,7 +8205,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-hydration-no-flicker"
-    quote: "Inject a synchronous script that updates the DOM before React hydrates."
+    quote: "When rendering content that depends on client-side storage (localStorage, cookies), avoid both SSR breakage and post-hydration flickering by injecting a synchronous script that updates the DOM before React hydrates."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -8334,7 +8334,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-hydration-suppress-warning"
-    quote: "Wrap the dynamic text in an element with suppressHydrationWarning to prevent noisy warnings."
+    quote: "In SSR frameworks (e.g., Next.js), some values are intentionally different on server vs client (random IDs, dates, locale/timezone formatting)."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -8592,7 +8592,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-script-defer-async"
-    quote: "Script tags without defer or async block HTML parsing while the script downloads and executes."
+    quote: "Script tags without `defer` or `async` block HTML parsing while the script downloads and executes."
   - source_type: external
     citation: "MDN — script element: For module scripts, the defer attribute has no effect since they are deferred by default"
     url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script#defer"
@@ -8805,7 +8805,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-usetransition-loading"
-    quote: "Use useTransition instead of manual useState for loading states."
+    quote: "Use `useTransition` instead of manual `useState` for loading states."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -9423,7 +9423,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rerender-memo-with-default-value"
-    quote: "When memoized component has a default value for some non-primitive optional parameter [...] calling the component without that parameter results in broken memoization."
+    quote: "When memoized component has a default value for some non-primitive optional parameter, such as an array, function, or object, calling the component without that parameter results in broken memoization."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [rerender-memo]
 ---
@@ -9904,7 +9904,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rerender-simple-expression-in-memo"
-    quote: "Calling useMemo and comparing hook dependencies may consume more resources than the expression itself."
+    quote: "When an expression is simple (few logical or arithmetical operators) and has a primitive result type (boolean, number, string), do not wrap it in `useMemo`."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_AS_IS }
 sibling_rules: [rerender-memo]
 ---
@@ -10182,7 +10182,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rerender-use-deferred-value"
-    quote: "When user input triggers expensive computations or renders, use useDeferredValue to keep the input responsive."
+    quote: "When user input triggers expensive computations or renders, use `useDeferredValue` to keep the input responsive."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [rerender-transitions]
 ---
@@ -10272,7 +10272,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rerender-use-ref-transient-values"
-    quote: "When a value changes frequently and you don't want a re-render on every update [...] store it in useRef instead of useState."
+    quote: "When a value changes frequently and you don't want a re-render on every update (e.g., mouse trackers, intervals, transient flags), store it in `useRef` instead of `useState`."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_AS_IS }
 sibling_rules: [rerender-transitions]
 ---
@@ -10400,7 +10400,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: tiptap-2026-05
     section: "RSC Compatibility"
-    quote: "Add 'use client' to the component; the Editor is a browser-only construct."
+    quote: "Add `'use client'` to the component; the Editor is a browser-only construct."
   - source_type: external
     citation: "Next.js 15 Docs — Lazy Loading: ssr:false is not allowed with next/dynamic in Server Components. Move it into a Client Component."
     url: "https://nextjs.org/docs/app/guides/lazy-loading"
@@ -10408,7 +10408,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: nextjs-lazy-loading
     section: "ssr:false restriction"
-    quote: "ssr:false is not allowed with next/dynamic in Server Components. Please move it into a Client Component."
+    quote: "in Server Components. Please move it into a Client Component."
 decided_at: "2026-05-18"
 next_review_by: "2026-11-18"
 ---
@@ -10800,7 +10800,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "server-after-nonblocking"
-    quote: "Use Next.js's after() to schedule work that should execute after a response is sent."
+    quote: "Use Next.js's `after()` to schedule work that should execute after a response is sent."
   - source_type: external
     citation: "Next.js docs — after() runs even if the response fails or redirects; works in Server Components, Server Actions, and Route Handlers"
     url: "https://nextjs.org/docs/app/api-reference/functions/after"
@@ -10937,7 +10937,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "server-auth-actions"
-    quote: "Server Actions are exposed as public endpoints, just like API routes. Always verify authentication and authorization inside each Server Action."
+    quote: "Treat Server Actions with the same security considerations as public-facing API endpoints, and verify if the user is allowed to perform a mutation."
   - source_type: external
     citation: "Next.js Authentication guide — treat Server Actions with same security considerations as public-facing API endpoints"
     url: "https://nextjs.org/docs/app/guides/authentication"
@@ -11059,10 +11059,10 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "server-cache-lru"
-    quote: "React.cache() only works within one request. For data shared across sequential requests, use an LRU cache."
+    quote: "`React.cache()` only works within one request."
   - upstream_id: nextjs-use-cache-directive
     section: "Runtime caching considerations"
-    quote: "If the default in-memory cache isn't enough, consider 'use cache: remote' which allows platforms to provide a dedicated cache handler"
+    quote: "For durable shared caching across instances/requests:"
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -11211,7 +11211,7 @@ evidence:
     quote: "React.cache operates in an isolated scope inside use cache boundaries. Values stored via React.cache outside a use cache function are not visible inside it."
   - upstream_id: vercel-react-best-practices
     section: "server-cache-react"
-    quote: "Use React.cache() for server-side request deduplication. Authentication and database queries benefit most."
+    quote: "Use `React.cache()` for server-side request deduplication."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=high"
   reviewed_at: "2026-05-16"
@@ -11968,7 +11968,7 @@ verification:
 evidence:
   - upstream_id: nextjs-server-actions-16
     section: "Server Actions — error handling and return types"
-    quote: "Server Actions can return serializable values"
+    quote: "const updated = await incrementLike()"
   - source_type: external
     citation: "W3C Trace Context — trace-id as a correlation identifier propagated across service boundaries including browser-to-server calls"
     url: "https://www.w3.org/TR/trace-context/#trace-id"

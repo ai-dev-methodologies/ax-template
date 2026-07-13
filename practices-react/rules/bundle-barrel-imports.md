@@ -66,10 +66,10 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "bundle-barrel-imports"
-    quote: "Popular icon and component libraries can have up to 10,000 re-exports in their entry file."
+    quote: "Import directly from source files instead of barrel files to avoid loading thousands of unused modules."
   - upstream_id: nextjs-optimize-package-imports
     section: "optimizePackageImports"
-    quote: "Adding a package to experimental.optimizePackageImports will only load the modules you are actually using, while still giving you the convenience of writing import statements with many named exports."
+    quote: "Adding a package to `experimental.optimizePackageImports` will only load the modules you are actually using, while still giving you the convenience of writing import statements with many named exports."
   - upstream_id: nextjs-optimize-package-imports
     section: "Experimental warning"
     quote: "This feature is currently experimental and subject to change, it's not recommended for production."

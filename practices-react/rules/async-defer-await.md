@@ -44,7 +44,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "async-defer-await"
-    quote: "Move await operations into the branches where they're actually used to avoid blocking code paths that don't need them."
+    quote: "Move `await` operations into the branches where they're actually used to avoid blocking code paths that don't need them."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

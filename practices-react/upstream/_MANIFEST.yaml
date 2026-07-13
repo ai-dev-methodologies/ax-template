@@ -180,9 +180,10 @@ snapshots:
     tier: 3
     source: "https://github.com/vercel-labs/agent-skills/tree/main/skills/react-best-practices"
     via: "claude-plugin"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 2217
-    sha: "844d30a22e664ec0b8c7e3b9a1c6f872497104fd00d59162f65917056e8d1883"
+    fetched_at: "2026-07-13T00:00:00Z"
+    bytes: 103373
+    sha: "4319c17aa656702016be82437c1fa7c4c75cbdeb880c0ae02743761b91976cc6"
+    version_observed: "vercel plugin 0.44.0"
     role: seed-catalog
 
   - id: "nextjs-app-router-16"

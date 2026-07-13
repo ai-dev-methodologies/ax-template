@@ -20,18 +20,32 @@
 #                catalog on day one. Burn the backlog down, then promote via --strict.
 #   --strict     exit 1 on any mismatch (the promotion path; also how fixtures prove
 #                non-vacuity in run-all-guards).
+#   --allow-missing-snapshot
+#                In --strict mode only: QUOTE_NOT_IN_SNAPSHOT stays fatal (exit 1), but
+#                SNAPSHOT_FILE_MISSING findings are DOWNGRADED to an advisory WARN list
+#                (printed, non-fatal). This flag exists for an honest reason: the practices/
+#                (Java-side) upstream/ manifest records sha/bytes only — the {id}.snapshot.md
+#                BODIES were never committed, so those quotes cannot be verified offline and
+#                restoring the bodies requires a network fetch (registered as a backlog
+#                residual). The flag lets the QUOTE half of the sweep promote to strict while
+#                the network-bound MISSING half is tracked but not blocking. Without --strict
+#                the flag is inert (everything is advisory anyway).
 #   --root DIR   scan DIR instead of the repo root (fixtures).
 #
 # Usage:
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh
+#   bash practices/evals/evidence_quote_spotcheck_guard.sh --strict
+#   bash practices/evals/evidence_quote_spotcheck_guard.sh --strict --allow-missing-snapshot
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh --strict --root evals/fixtures/...
 set -uo pipefail
 
 STRICT=0
+ALLOW_MISSING=0
 ROOT_OVERRIDE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --strict) STRICT=1; shift ;;
+        --allow-missing-snapshot) ALLOW_MISSING=1; shift ;;
         --root) ROOT_OVERRIDE="$2"; shift 2 ;;
         --root=*) ROOT_OVERRIDE="${1#--root=}"; shift ;;
         *) echo "evidence_quote_spotcheck_guard: unknown arg: $1" >&2; exit 2 ;;
@@ -41,11 +55,12 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 
-STRICT="$STRICT" python3 - "$REPO_ROOT" << 'PY'
+STRICT="$STRICT" ALLOW_MISSING="$ALLOW_MISSING" python3 - "$REPO_ROOT" << 'PY'
 import glob, html, os, re, sys
 
 root = sys.argv[1]
 strict = os.environ.get("STRICT") == "1"
+allow_missing = os.environ.get("ALLOW_MISSING") == "1"
 
 def normalize(s):
     s = html.unescape(s)
@@ -111,7 +126,25 @@ if scanned_rules > 0 and quotes == 0:
 for rel, uid, kind, detail in misses:
     print(f"WARN [{rel}] upstream_id={uid}: {kind}" + (f" — quote starts: {detail!r}" if detail else ""))
 
+quote_misses = [m for m in misses if m[2] == "QUOTE_NOT_IN_SNAPSHOT"]
+missing_misses = [m for m in misses if m[2] == "SNAPSHOT_FILE_MISSING"]
 verdict = f"{len(misses)} of {quotes} upstream quote(s) do not match their snapshot body"
+
+# --allow-missing-snapshot (strict only): QUOTE mismatches stay fatal; SNAPSHOT_FILE_MISSING
+# is downgraded to a non-fatal advisory list. See the header for why (Java-side snapshot
+# bodies are uncommitted / network-bound — a tracked backlog residual).
+if strict and allow_missing:
+    if missing_misses:
+        print(f"evidence_quote_spotcheck_guard: ADVISORY — {len(missing_misses)} SNAPSHOT_FILE_MISSING "
+              f"finding(s) downgraded (--allow-missing-snapshot; network-bound backlog residual)")
+    if quote_misses:
+        print(f"evidence_quote_spotcheck_guard: {len(quote_misses)} of {quotes} upstream quote(s) do not "
+              f"match their snapshot body — BLOCKED (--strict)", file=sys.stderr)
+        sys.exit(1)
+    print(f"evidence_quote_spotcheck_guard: all resolvable upstream quote(s) verified "
+          f"({len(missing_misses)} missing-snapshot finding(s) advisory)")
+    sys.exit(0)
+
 if misses and strict:
     print(f"evidence_quote_spotcheck_guard: {verdict} — BLOCKED (--strict)", file=sys.stderr)
     sys.exit(1)

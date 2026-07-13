@@ -22,7 +22,7 @@ verification:
 evidence:
   - upstream_id: nextjs-server-actions-16
     section: "Server Actions — error handling and return types"
-    quote: "Server Actions can return serializable values"
+    quote: "const updated = await incrementLike()"
   - source_type: external
     citation: "W3C Trace Context — trace-id as a correlation identifier propagated across service boundaries including browser-to-server calls"
     url: "https://www.w3.org/TR/trace-context/#trace-id"

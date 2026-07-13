@@ -31,7 +31,7 @@ evidence:
     quoted_at: "2026-05-18"
   - upstream_id: wcag-22-techniques-2026-05
     section: "SC 4.1.3 Status Messages — aria-live regions"
-    quote: "status messages can be programmatically determined through role or properties so they can be presented by assistive technologies without receiving focus"
+    quote: "determined through role or properties so they can be presented by assistive technologies"
 decided_at: "2026-05-18"
 ---
 

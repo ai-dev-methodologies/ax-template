@@ -33,7 +33,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-tosorted-immutable"
-    quote: ".sort() mutates the array in place, which can cause bugs with React state and props."
+    quote: "`.sort()` mutates the array in place, which can cause bugs with React state and props."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: []
 ---

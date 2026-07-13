@@ -1065,13 +1065,17 @@ echo "[73] feature_boundary_allowlist_guard.sh (frontend decomposition spec 2026
 run_guard "feature_boundary_allowlist/live" 0 \
     bash "$SCRIPT_DIR/../../practices-react/evals/feature_boundary_allowlist_guard.sh"
 
-echo "[74] evidence_quote_spotcheck_guard.sh (BACKLOG P2-1 — evidence_guard checks STRUCTURE not TRUTH, so a fabricated quote passes every blocking gate; this deterministic quote-vs-snapshot sweep closes the offline half. ADVISORY live (pre-existing quote<->snapshot misalignment backlog); fixtures prove the checker via --strict.)"
+echo "[74] evidence_quote_spotcheck_guard.sh (BACKLOG P2-1 — evidence_guard checks STRUCTURE not TRUTH, so a fabricated quote passes every blocking gate; this deterministic quote-vs-snapshot sweep closes the offline half. P2-1a 2026-07-13: QUOTE 미매칭 83건 전량 소진{vercel-64 스냅숏 regen + 19 재앵커} → live를 --strict --allow-missing-snapshot로 승격 — QUOTE_NOT_IN_SNAPSHOT는 이제 HARD-FAIL, SNAPSHOT_FILE_MISSING 87건{Java-side 스냅숏 본문 미커밋, network-bound}만 advisory WARN으로 잔존{P2-18 residual}. B3 fixture 쌍이 flag 시맨틱을 non-vacuously 증명.)"
 run_guard "evidence_quote_spotcheck/live" 0 \
-    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh"
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --allow-missing-snapshot
 run_guard "evidence_quote_spotcheck/fixture_fail" 1 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_quote_absent"
 run_guard "evidence_quote_spotcheck/fixture_pass" 0 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/pass_quote_present"
+run_guard "evidence_quote_spotcheck/fixture_fail_allow_missing" 1 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --allow-missing-snapshot --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_quote_mismatch_snapshot_missing"
+run_guard "evidence_quote_spotcheck/fixture_pass_allow_missing" 0 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --allow-missing-snapshot --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/pass_only_missing_snapshot"
 
 echo ""
 echo "[75] catalog_example_symbol_guard.sh (catalog-example/impl-drift — a rule java fence that names a class with no backing .java teaches an agent a broken shape; iterations 2-3 fixed two such drifts by hand with no mechanical backstop. Scans ONLY java fences: a seed-deny fabricated store call (idempotencyStore.computeIfAbsent) and any *StateMachine/*Store symbol must resolve to a real backend/src/main/java symbol OR be named in a catalog-example-ok annotation. Live exits 0; fixtures prove non-vacuity.)"

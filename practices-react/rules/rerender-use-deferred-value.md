@@ -25,7 +25,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rerender-use-deferred-value"
-    quote: "When user input triggers expensive computations or renders, use useDeferredValue to keep the input responsive."
+    quote: "When user input triggers expensive computations or renders, use `useDeferredValue` to keep the input responsive."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [rerender-transitions]
 ---

@@ -60,7 +60,7 @@ evidence:
     quote: "Be thoughtful about which values you include in cache keys. Each unique value creates a separate cache entry, reducing cache utilization."
   - upstream_id: nextjs-use-cache-remote
     section: "Nesting rules"
-    quote: "Remote caches cannot be nested inside private caches ('use cache: private'). Private caches cannot be nested inside remote caches."
+    quote: "Remote caches **cannot** be nested inside private caches ('use cache: private')"
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

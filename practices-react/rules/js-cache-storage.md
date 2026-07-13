@@ -28,7 +28,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-cache-storage"
-    quote: "localStorage, sessionStorage, and document.cookie are synchronous and expensive. Cache reads in memory."
+    quote: "Use a Map (not a hook) so it works everywhere:"
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [client-localstorage-schema]
 ---

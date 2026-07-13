@@ -25,7 +25,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-flatmap-filter"
-    quote: "Chaining .map().filter(Boolean) creates an intermediate array and iterates twice."
+    quote: "Use `.flatMap()` to transform and filter in a single pass."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [js-combine-iterations]
 ---

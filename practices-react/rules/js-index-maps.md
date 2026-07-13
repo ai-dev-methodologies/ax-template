@@ -20,7 +20,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "js-index-maps"
-    quote: "Multiple .find() calls by the same key should use a Map."
+    quote: "Multiple `.find()` calls by the same key should use a Map."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_WITH_AMEND }
 sibling_rules: [js-set-map-lookups]
 ---

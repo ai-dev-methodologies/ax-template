@@ -46,10 +46,10 @@ upstream:
 evidence:
   - upstream_id: nextjs-fetching-data
     section: "Next.js 16-specific: async params"
-    quote: "Route handler signature: params: Promise<{ username: string }>. The page must await params before use; this is a separate sequential await that can be parallelized with other independent work."
+    quote: "this is a separate sequential await that can be parallelized with other independent work."
   - upstream_id: nextjs-fetching-data
     section: "Parallel data fetching"
-    quote: "Start multiple requests by calling fetch, then await them with Promise.all. Requests begin as soon as fetch is called."
+    quote: "Start multiple requests by calling `fetch`, then await them with `Promise.all`. Requests begin as soon as `fetch` is called."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=high (inherited from async-parallel review)"
   reviewed_at: "2026-05-16"

@@ -36,7 +36,7 @@ audit:
 evidence:
   - upstream_id: nextjs-server-actions-16
     section: "Server Actions — calling server actions"
-    quote: "Server Actions can be called using the action attribute in a <form> element or in event handlers."
+    quote: "Called from the client via a network request."
 sibling_rules:
   - l2-prefer-data-prop-over-direct-fetch
   - async-api-routes

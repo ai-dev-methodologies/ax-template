@@ -52,7 +52,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "client-passive-event-listeners"
-    quote: "Add { passive: true } to touch and wheel event listeners to enable immediate scrolling."
+    quote: "Add `{ passive: true }` to touch and wheel event listeners to enable immediate scrolling."
   - source_type: external
     citation: "MDN — EventTarget.addEventListener (passive option indicates the listener will never call preventDefault; calling it has no effect)"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#passive"

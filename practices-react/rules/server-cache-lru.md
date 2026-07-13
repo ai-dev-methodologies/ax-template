@@ -45,10 +45,10 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "server-cache-lru"
-    quote: "React.cache() only works within one request. For data shared across sequential requests, use an LRU cache."
+    quote: "`React.cache()` only works within one request."
   - upstream_id: nextjs-use-cache-directive
     section: "Runtime caching considerations"
-    quote: "If the default in-memory cache isn't enough, consider 'use cache: remote' which allows platforms to provide a dedicated cache handler"
+    quote: "For durable shared caching across instances/requests:"
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

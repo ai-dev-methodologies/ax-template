@@ -48,7 +48,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "async-dependencies"
-    quote: "For operations with partial dependencies, use [...] to maximize parallelism. It automatically starts each task at the earliest possible moment."
+    quote: "For operations with partial dependencies, use `better-all` to maximize parallelism."
   - source_type: external
     citation: "MDN — Promise.then for chaining; combined with Promise.all aggregates the wait at the latest possible moment"
     url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/then"

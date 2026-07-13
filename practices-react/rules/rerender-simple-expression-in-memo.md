@@ -24,7 +24,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rerender-simple-expression-in-memo"
-    quote: "Calling useMemo and comparing hook dependencies may consume more resources than the expression itself."
+    quote: "When an expression is simple (few logical or arithmetical operators) and has a primitive result type (boolean, number, string), do not wrap it in `useMemo`."
 codex_consensus: { reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium", reviewed_at: "2026-05-16", verdict: SHIP_AS_IS }
 sibling_rules: [rerender-memo]
 ---

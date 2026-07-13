@@ -32,7 +32,7 @@ upstream:
 evidence:
   - upstream_id: vercel-react-best-practices
     section: "rendering-hydration-no-flicker"
-    quote: "Inject a synchronous script that updates the DOM before React hydrates."
+    quote: "When rendering content that depends on client-side storage (localStorage, cookies), avoid both SSR breakage and post-hydration flickering by injecting a synchronous script that updates the DOM before React hydrates."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

@@ -39,7 +39,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "useTranslations"
-    quote: "export function PayButton() { const t = useTranslations('Payment'); return <button>{t('submit')}</button>; }"
+    quote: "const t = useTranslations('Payment');"
   - source_type: external
     citation: "next-intl docs — using t() for all user-visible text to enable locale switching"
     url: "https://next-intl.dev/docs/usage/messages"
