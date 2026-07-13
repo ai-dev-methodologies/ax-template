@@ -1,6 +1,10 @@
 version: "0.1.0"
-# Phase 0 caller-identity limitation: the transfer endpoint binds any authenticated MEMBER to any fromHolderId
-# (no on-chain identity verification in Phase 0). Phase 1 binds fromHolderId to the JWT principal / ERC-3643 ONCHAINID.
+# Caller↔holder binding is realized today via the HolderAuthorization SPI (deny-by-default):
+# SecurityTokenRegisterService.transfer() calls holderAuthorization.controls(callerPrincipal, fromHolderId)
+# before any mutation, rejecting an uncontrolled holder with 403 TS_NOT_HOLDER_CONTROLLER
+# (behaviorally tested: TokenizedSecuritiesComplianceTest#transferFromUncontrolledHolder_isRejected_403_registerUnchanged
+# @Tag HOLDER-AUTHZ-001, and TokenizedSecuritiesViolationProofTest's default-SPI-deny-on-empty-ownership-repo assertion).
+# Remaining Phase 1 scope is specifically ERC-3643 ON-CHAIN identity binding (ONCHAINID) — a fork-receiver concern, not a base gap.
 scope: "tokenized-securities-l0 — chain-agnostic STO compliance-gated transfer: a security-token transfer that fails eligibility / lock-up / holding-limit / balance is atomically rejected (fail-closed); only a fully-gated transfer mutates the append-only register, conserving total units. ERC-3643's on-chain compliance validator, modelled in the backend."
 stack: "Spring Boot 3.2.x + Jakarta Persistence (Hibernate @Check) + Flyway + RFC 9457 Problem Details + RestAssured"
 standard: "전자증권법(주식·사채 등의 전자등록에 관한 법률) 개정 — 분산원장 계좌부 권리추정력·제3자대항력 + 자본시장법 적격투자자 + ERC-3643/EIP-3643 transfer compliance validator + RFC 9110 §15.5.21 (422) + CWE-362 (concurrency)"
