@@ -26,15 +26,16 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 62 | 60 | **~97%** |
-| P2 (verification escapes) | 16 | 13 | **~81%** |
-| P3 (industry-niche deferrals) | 46 | 4 | ~9% |
-| **P0–P3 합계 (수렴 분모)** | **150** | **103** | **~69%** |
+| P2 (verification escapes) | 17 | 13 | **~76%** |
+| P3 (industry-niche deferrals) | 47 | 6 | ~13% |
+| **P0–P3 합계 (수렴 분모)** | **152** | **105** | **~69%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
 > 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
 > 2026-07-07 P3 인라인화 — P3-1~21 확정 요지·P3-22~40 IDW13-17 세션기록 대조(EMR G9 cross-list record-linkage→P1-33~34 closed 제외, 불확실 6건 "(closure 여부 미검증)" 표기, disk-truth 재집계) + P3-32→P3-41·P3-33→P3-42 재번호 → P3 0/42, 수렴 **~68%**.
 > 2026-07-10 ultracode dogfood 감사 — P1/P2 3건은 PR #74로 즉시 봉합(backlog 미경유), 잔여 doc-drift·잠재버그 P3-43~46 등재 → P3 0/46, 수렴 **~66%**.
 > 2026-07-10 P3-43~46 당일 봉합 — crud-security 참조 정정·guard 카운트 disk-truth 방법론 명시(89 run-all + 1 recency = 90)·settings.local.json 정정·ax-prove 이중 echo fix → P3 4/46, 수렴 **~69%**.
+> 2026-07-13 backlog-convergence-wave (1/2) — P3-41/42 base-repo maintainer DECISION으로 결정-닫기(reversible) + 미등재 잔여 2건 정식 등재(P2-17 pre-push fixture 승격, P3-47 guard[76] zero-agent-events fixture) → 분모 152, 수렴 105/152 **~69%**. 후속 봉합(P1-61~62·P2-14~16·P2-1a)은 본 wave (2/2)에서.
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
@@ -251,6 +252,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [ ] P2-14 fixture kill-proof meta-gate [87] neuter surgicality 기계 강제 — `fixture_kill_manifest.yaml` 작성자가 short-circuit(`exit 0`로 바로 반환)과 같은 비외과적 neuter를 넣어도 guard[87]이 `anchor → exit 0` flip을 PASS로 판정하는 구조적 허점. 현재는 "manifest 저자 책임"으로 정직 문서화만 되어 있음. done-when: PIT-style 고정 neuter-operator 어휘 집합을 guard[87]이 강제(그 외 neuter 패턴 BLOCK) 또는 neuter 시 anchor 제거만 허용하는 외과적 제약으로 단언. 출처: 2026-07-07 adversarial review open question.
 - [ ] P2-15 private_boundary_guard [86] 커밋 메시지 스캔 — guard[86] 현 스캔 범위는 working tree 파일만(documented limit). R26 원사건이 커밋 메시지에 포함된 fork-receiver 식별자였으므로 HEAD 및 staged 커밋 메시지에도 layer-1 marker 스캔을 적용해야 완전한 강제가 된다. done-when: `git log -1 --format=%B` (HEAD) 및 staging-area 커밋 메시지에 대한 marker 스캔 + 비공허성 fixture. 출처: 2026-07-01 adversarial review m1.
 - [ ] P2-16 환경 재현성 — frontend lockfile 부재 + 미문서화 toolchain 의존성. (a) `frontend/`에 lockfile이 커밋된 적 없고(`git log --all -- frontend/package-lock.json` 빈 결과) `.gitignore`에도 없어 의도적 제외가 아닌 누락. CI(`.github/workflows/practices-sentinel.yml:80`)도 `npm ci`가 아닌 `npm install`을 사용 → 게이트가 통과한 의존성 트리와 fork-receiver가 실제 설치하는 트리가 불일치 가능. public fork-base catalog로서 fork마다 다른 트랜지티브 버전이 설치되며, 48개 하드 가드가 도는 토대 자체가 비결정적. (b) R25 실행에 `yq`·PyYAML(python `import yaml`)·JDK21이 필요하나 어디에도 명세 없음 — 신규 환경에서 PyYAML 부재 시 모든 `fail_*` fixture가 ModuleNotFoundError로 exit 1을 내어 **의도한 이유가 아닌 이유로 통과**(fixture 공허화); `pass_*` fixture 덕에 전체 FAIL로 잡혔으나 fail-fixture 단독으로는 무력. done-when: `frontend/package-lock.json` 커밋 + CI/문서 설치 명령을 `npm ci`로 전환 + `engines.node` 명시 + toolchain 의존성(`yq`/PyYAML/JDK21) 문서화 및 verify-completion.sh 선행 체크(부재 시 SKIP 아닌 명시적 BLOCK). 출처: 2026-07-08 신규 서버 부트스트랩 — `npm ci` 실패 및 R25 1차 FAIL(ModuleNotFoundError: yaml)로 발견.
+- [ ] P2-17 pre-push 10종 행위테스트의 커밋된 fixture 승격 — 2026-07-10 pre-push 재설계(per-ref `--expect-sha` 검증) 시 검증한 10종 행위 시나리오가 세션 내 시뮬레이션으로만 존재하고 커밋된 fixture가 없어, 후속 pre-push 변경이 해당 행위를 회귀시켜도 기계적으로 잡히지 않음. done-when: 10종 시나리오를 커밋된 pass/fail fixture 세트로 승격 + run-all-guards 또는 전용 테스트 하네스에서 실행. 출처: 2026-07-10 세션 잔여(project memory) → 2026-07-13 backlog-convergence-wave에서 등재.
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
@@ -298,12 +300,13 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [ ] P3-38 aviation: G10 two-sided temporal exclusivity — 양방향 시간 독점성(중복 스케줄 불가)
 - [ ] P3-39 aviation: G11 sign-to-content binding (attestation hash) — 서명이 내용에 바인딩 (closure 여부 미검증: P1-5 authzparity SHA-256 부분 커버 가능성)
 - [ ] P3-40 aviation: G13 time/cycle-bounded conditional waiver — 시간/주기 한정 조건부 면제
-- [ ] P3-41 private_boundary_guard [86] 잔여 documented gaps — (a) `/src/test/` 경로는 layer-2 제외라 테스트 fixture에 시크릿 은닉 가능; (b) 레포 root의 dotfiles(`.env`, `.env.local` 등) 및 구성 파일이 스캔 경로 밖. fork-receiver 결정 항목: prod 배포 보안 정책에 따라 test 경로 포함 여부를 자율 결정. done-when: fork-receiver가 (a)·(b) 활성화 또는 documented gap 수용 명시. 출처: 2026-07-01 adversarial review m2.
-- [ ] P3-42 tokenized-securities F1/F2 read-surface authz 비대칭 심의 — `GET /tokens/{id}/holders`(owner-read = 인증된 모든 사용자)와 `GET /tokens/eligible-investors/{userId}`(ROLE_ADMIN 전용)의 authz 비대칭. `spec READ-HOLDER-001`에 설계 의도로 명시돼 있으나, privacy-민감 배포 환경에서는 holdings 노출 범위를 제한할 필요가 있을 수 있음. fork-receiver 결정 항목: 설계 변경 시 spec item 갱신 + `testTokenizedSecurities` READ-HOLDER 단언 수정. 출처: 2026-07-07 dogfood-closure review minor 3.
+- [x] P3-41 — **closed 2026-07-13 (DECISION, base-repo maintainer, reversible)**: private_boundary_guard [86] 잔여 documented gaps — (a) `/src/test/` 경로 layer-2 제외, (b) 레포 root dotfiles(`.env` 등) 스캔 경로 밖. **DECISION**: 두 gap 모두 **public base의 documented scope로 수용(ACCEPT)** — public base는 실제 시크릿을 싣지 않으며 honest-gap 주석이 `private_boundary_guard.sh:57-65`에 이미 명시됨. 더 엄격한 prod 보안 정책을 가진 fork-receiver는 자기 fork에서 (a)·(b)를 활성화해 재개봉한다. 결정은 maintainer-reversible(영구 보증 아님). 출처: 2026-07-01 adversarial review m2 → 2026-07-13 backlog-convergence-wave에서 결정 기록.
+- [x] P3-42 — **closed 2026-07-13 (DECISION, base-repo maintainer, reversible)**: tokenized-securities F1/F2 read-surface authz 비대칭 심의 — `GET /tokens/{id}/holders`(인증 사용자) vs `GET /tokens/eligible-investors/{userId}`(ROLE_ADMIN). **DECISION**: 비대칭을 **base의 spec'd design intent로 유지(RETAIN)** — `READ-HOLDER-001`에 설계 의도로 명시돼 있고 holder 표시는 의도된 owner-read 표면. privacy-민감 배포 fork는 spec item 갱신 + `testTokenizedSecurities` READ-HOLDER 단언 수정으로 좁힌다. 결정은 maintainer-reversible. 출처: 2026-07-07 dogfood-closure review minor 3 → 2026-07-13 backlog-convergence-wave에서 결정 기록.
 - [x] P3-43 — **closed 2026-07-10**: doc-drift `specs/crud-l0.yaml` 죽은 참조 4곳 — SKILL.md:70·CLAUDE.md:399·CLAUDE.md:437·README.md:221이 존재하지 않는 `specs/crud-l0.yaml`을 AI entry-point 표에 노출. R5가 CRUD 내용을 `specs/crud-security.yaml`로 흡수했으나 사용자-facing 표에는 미반영 (R9 Codex Critic soft #2에서 기지적됐으나 PRD 문서에만 기록됨). done-when: 4곳 전부 `crud-security.yaml`로 치환. 출처: 2026-07-10 ultracode dogfood 감사 (adversarial-confirmed). closure: 4곳 전부 `crud-security.yaml` 치환.
 - [x] P3-44 — **closed 2026-07-10**: doc-drift CLAUDE.md guard 카운트 "90 guards" vs 실측 87 distinct guard scripts — run-all-guards.sh의 165 invocations 수치는 정확하나 distinct 스크립트 수가 표기와 불일치. done-when: CLAUDE.md 카운트를 실측으로 정정하거나 카운트 산출을 기계화(guard census 스크립트)해 드리프트 재발 차단. 출처: 2026-07-10 ultracode dogfood 감사 (adversarial-confirmed). closure: disk-truth 재집계로 방법론 명시 — run-all-guards=89 scripts(practices/evals 87 + practices-react/evals 2)·165 invocations, +pre-push recency 1 = 총 90 hard guards; run-all 특정 서술 89로 정정, stale "80개" 제거. hero "90 hard guards"는 총계로 정확해 유지.
 - [x] P3-45 — **closed 2026-07-10**: doc-drift CLAUDE.md enforcement-surface 표의 PreToolUse hook 파일명 `.claude/settings.json` — 레포에 해당 파일 부재; 실제 git-tracked 설정은 `.claude/settings.local.json`. done-when: 표 파일명 정정. 출처: 2026-07-10 ultracode dogfood 감사 (adversarial-confirmed). closure: `.claude/settings.local.json`으로 정정 + pre-push 행 트리거를 "커밋 ship push"로 정밀화(PR #76 반영).
 - [x] P3-46 — **closed 2026-07-10**: ax-prove-evidence-gate-blocks-agent.sh 잠재 버그 — `agent_events()`의 `grep -c ... || echo 0`가 zero-match 시 grep이 "0" 출력 후 exit 1 → `0\n0` 이중 출력으로 `[ -lt ]` arithmetic error (ledger에 actor=agent 항목 0건인 클론에서 결정론 재현; 스크립트는 PROVEN 출력·exit 0 유지라 thesis는 불훼손). done-when: count 산출을 `grep -c || true` + 후처리 또는 awk로 교체 + zero-entry 클론 재현 테스트. 출처: 2026-07-10 ultracode dogfood 감사 (refuter가 root cause 격리). closure: agent_events()를 grep -c 캡처 + `${n:-0}` fallback으로 교체; zero-agent-entry ledger end-to-end 재현 테스트 — arithmetic error 0, 카운트 0→2 정상, exit 0.
+- [ ] P3-47 guard[76] agent_block_proof_guard zero-agent-events 전용 fixture — ledger에 `actor=agent` 이벤트가 0건인 fresh clone 상태에서 guard[76]의 non-vacuity 판정 경로를 커버하는 전용 fixture 부재(P3-46 봉합 시 zero-entry 재현 테스트는 세션 내 수행, fixture 미커밋). done-when: zero-agent-events ledger fixture 커밋 + guard[76] 경로에서 pass/fail 판정 검증. 출처: 2026-07-10 세션 잔여(project memory) → 2026-07-13 backlog-convergence-wave에서 등재.
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
 
