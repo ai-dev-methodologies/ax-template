@@ -36,6 +36,7 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 > 2026-07-10 ultracode dogfood 감사 — P1/P2 3건은 PR #74로 즉시 봉합(backlog 미경유), 잔여 doc-drift·잠재버그 P3-43~46 등재 → P3 0/46, 수렴 **~66%**.
 > 2026-07-10 P3-43~46 당일 봉합 — crud-security 참조 정정·guard 카운트 disk-truth 방법론 명시(89 run-all + 1 recency = 90)·settings.local.json 정정·ax-prove 이중 echo fix → P3 4/46, 수렴 **~69%**.
 > 2026-07-13 backlog-convergence-wave (1/2) — P3-41/42 base-repo maintainer DECISION으로 결정-닫기(reversible) + 미등재 잔여 2건 정식 등재(P2-17 pre-push fixture 승격, P3-47 guard[76] zero-agent-events fixture) → 분모 152, 수렴 105/152 **~69%**. 후속 봉합(P1-61~62·P2-14~16·P2-1a)은 본 wave (2/2)에서.
+> 2026-07-13 backlog-convergence-wave (2/2) — 7건 봉합 완료: P1-61(33b85a1 동시 issue keystone)·P1-62(1b5a92d evidence-backed doc closure — **P1 62/62 100% 도달**)·P2-14(34a1742 guard[87] neuter 어휘)·P2-15(0dde4c8 commit-msg 훅)·P2-16(180da35 lockfile+preflight)·P2-1a(a401a30 B3, 분모 불변)·P3-41/42(bc3e51c DECISION). P2-1a census가 Java-side 스냅숏 본문 87건 미커밋을 판명 → P2-18 정직 등재(분모 +1). 최종 수렴 **110/153 ≈ 72%** — 북극성(2) 동결 해제선(70%) 상회. ralplan 컨센서스(Planner+Architect+Codex Critic APPROVE) → ralph 실행, 전 봉합 R25/게이트 검증.
 | P4 (trigger-bound deferrals — 분모 제외) | 166 | — | by-design |
 
 ---
