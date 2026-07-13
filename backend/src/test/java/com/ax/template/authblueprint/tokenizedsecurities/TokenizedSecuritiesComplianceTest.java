@@ -6,6 +6,11 @@ import static org.hamcrest.Matchers.equalTo;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -340,6 +345,41 @@ class TokenizedSecuritiesComplianceTest {
                 .then().statusCode(409).body("code", equalTo("TS_ALREADY_ISSUED"));
         // second (rejected) issue must NOT double-seed the issuer holding
         org.assertj.core.api.Assertions.assertThat(heldSum(code)).isEqualTo(1000);
+    }
+
+    // ---- ISSUE-002 concurrent keystone — issue() is single-winner under a race --
+    @Test @Tag("TOKENIZED_SECURITIES") @Tag("ISSUE-002")
+    void concurrentIssue_exactlyOneWins_registerConserved() throws Exception {
+        String issuer = hp + "CONC-ISS";
+        long total = 1000;
+        String code = createToken(issuer, total, past, total);
+
+        int n = 2;
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch start = new CountDownLatch(1);
+        ConcurrentLinkedQueue<io.restassured.response.Response> results = new ConcurrentLinkedQueue<>();
+        for (int i = 0; i < n; i++) {
+            pool.submit(() -> {
+                start.await();
+                results.add(given().header("Authorization", "Bearer " + admin)
+                        .when().post("/api/security-tokens/" + code + "/issue"));
+                return null;
+            });
+        }
+        start.countDown();
+        pool.shutdown();
+        org.assertj.core.api.Assertions.assertThat(pool.awaitTermination(60, TimeUnit.SECONDS)).isTrue();
+
+        long succeeded = results.stream().filter(r -> r.statusCode() == 200).count();
+        long conflicted = results.stream().filter(r -> r.statusCode() == 409).count();
+        org.assertj.core.api.Assertions.assertThat(succeeded)
+            .as("ISSUE-002 keystone — exactly one concurrent issue() wins the race").isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(conflicted).isEqualTo(1);
+        results.stream().filter(r -> r.statusCode() == 409).forEach(r ->
+            org.assertj.core.api.Assertions.assertThat(r.jsonPath().getString("code")).isEqualTo("TS_ALREADY_ISSUED"));
+
+        // register invariant survives the race: no double-seed, Σ holdings == totalUnits
+        org.assertj.core.api.Assertions.assertThat(heldSum(code)).isEqualTo(total);
     }
 
     // ---- READ-HOLDER-001 — GET owner returns 200 if claimed, 404 if not ----

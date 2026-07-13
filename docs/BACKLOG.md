@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
-| P1 (generic signature backlog) | 62 | 60 | **~97%** |
+| P1 (generic signature backlog) | 62 | 61 | **~98%** |
 | P2 (verification escapes) | 17 | 13 | **~76%** |
 | P3 (industry-niche deferrals) | 47 | 6 | ~13% |
-| **P0–P3 합계 (수렴 분모)** | **152** | **105** | **~69%** |
+| **P0–P3 합계 (수렴 분모)** | **152** | **106** | **~70%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
 > 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
@@ -172,7 +172,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [x] P1-60 — checkout saga rule-only + parity doc 교정 *(Broadleaf re-audit 2026-06-27, LOW doc)*: SAGA-COMPENSATE-002는 흡수·anchoring됐으나 RULE-only(runtime backend test 없음, parity[79] REVIEW-TIER 허용). checkout.md가 saga-orchestration-l0(domain_mode: full_trio)을 'review-tier spec'으로 오기술. done-when: checkout.md 교정(full_trio + verification.mechanism=rule) + 선택적 runtime saga IT. **[closed 2026-06-28, feat/commerce-invariant-closure]**
 
 **tokenized-securities 잔여 (STO-arc 파생, 2026-07-07)**
-- [ ] **P1-61** tokenized-securities `issue()` auto-claim 동시성 race 테스트 — 두 admin이 동시에 issue/claim 경로를 진입할 때 단일 발행 보장이 단언되지 않음(uq_holder_ownership_holder DB 제약이 rollback-safe하게 하나만 성공시키므로 위험 낮음; 그러나 기계적 테스트 없이 구조적 보장이라 단언 불가). done-when: `testTokenizedSecurities` 에 동시 issue 쓰레드 ×2 keystone 추가 + 1승 1-409 또는 idempotent 단언. 출처: 2026-07-07 dogfood-closure review "What's Missing".
+- [x] **P1-61** — **closed 2026-07-13 (backlog-convergence-wave)**: tokenized-securities `issue()` 동시성 keystone — `concurrentIssue_exactlyOneWins_registerConserved()` (`TokenizedSecuritiesComplianceTest`, @Tag ISSUE-002) 추가: 동일 DRAFT 토큰에 ×2 동시 issue → 정확히 1×200 + 1×409 `TS_ALREADY_ISSUED`(순서 무관) + 사후 Σholdings==totalUnits(이중 seed 없음). 기존 `CountDownLatch`+`ExecutorService` keystone idiom(ThresholdTerminal/DecisionGov) 미러. 기존 `findByTokenCodeForUpdate` pessimistic lock이 이미 구조 보장 — 첫 실행 GREEN, 프로덕션 무수정(기계적 단언 추가가 done-when 그 자체). testTokenizedSecurities 34 tests 0 failures.
 - [ ] **P1-62** tokenized-securities Phase 1 — `fromHolderId`↔인증주체(JWT sub / on-chain identity) 바인딩 — `transfer()` 의 `fromHolderId` 파라미터가 호출 주체와 바인딩되는 generic 불변식. 현재 `HolderAuthorization` SPI가 seam으로 존재하나 "Phase 1" 표기로 미승격 상태 — spec item `STO-HOLDER-AUTHZ-001` 등재 + `HolderAuthorization` SPI의 디폴트 fail-closed 테스트 추가로 완료. done-when: spec item + 구현체 없는 SPI 호출 시 403 fail-closed 단언. 출처: CLAUDE.md 도메인 매트릭스 "Phase 1" 표기.
 
 ## P2 — verification escapes (검증 체계 자체의 갭)
