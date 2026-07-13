@@ -216,3 +216,20 @@ not ~18 (it short-circuits the rest).
 | `ConsentGate` (`consent-management-l0`) | purpose-scoped opt-in checked before data-sharing |
 | `ParticipantScope` (built on `common/CallerScope`) | multi-actor relationship check (404, not 403) |
 | `BreakGlass` | emergency PHI access is audited, never silent |
+
+---
+
+## R25 toolchain prerequisites (before `verify-completion.sh`)
+
+The completion gate runs a fail-closed toolchain preflight (exit 2) if a required
+toolchain for the *resolved* step set is missing (it respects `--step` filtering):
+- **JDK 21** — gradle toolchain `JavaLanguageVersion.of(21)`; set `JAVA_HOME` (the macOS
+  `/usr/bin/java` stub fails). Required when a backend/gradle step is scheduled.
+- **PyYAML or yq** — checklist parse (always required).
+- **node + npm** — required *only* when the `frontend-lint` step is scheduled; a
+  backend-only `--step` run is NOT blocked by missing node.
+- **bash + git** — baseline.
+
+`frontend/package-lock.json` is committed for reproducible installs; no standing gate
+runs a clean `npm ci` on it (the `frontend-lint` step runs `npm run lint` against the
+existing `node_modules` — there is no frontend CI step).

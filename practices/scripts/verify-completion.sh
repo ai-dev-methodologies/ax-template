@@ -4,7 +4,28 @@
 # Reads practices/verification-checklist.yaml and runs every step sequentially.
 # Exit 0  → ALL steps PASS (task may declare done).
 # Exit 1  → at least one non-advisory step FAILED; fix_playbook printed.
-# Exit 2  → setup error (yaml missing, python3 missing, etc.).
+# Exit 2  → setup error (yaml missing, python3 missing, toolchain absent, etc.).
+#
+# Toolchain preflight (P2-16 — BLOCK, not silent SKIP): before executing the plan
+# the script fail-closes with exit 2 + a one-line reason when a REQUIRED toolchain
+# for the RESOLVED step set is missing:
+#   (i)   no yaml parser  — neither PyYAML (python3 -c 'import yaml') nor yq. Always
+#         required (the checklist is yaml). Blocks unconditionally.
+#   (ii)  no JDK 21       — only when a backend/gradle step is scheduled. Resolves
+#         java via JAVA_HOME then PATH; requires major == 21 (build.gradle.kts
+#         toolchain = JavaLanguageVersion.of(21)). The macOS /usr/bin/java stub
+#         (no runtime) fails `-version` → unresolved → BLOCK.
+#   (iii) no node/npm     — only when the frontend-lint step is scheduled. A
+#         fork-receiver running backend-only steps (e.g. --step backend-build) is
+#         NOT blocked by missing node — the preflight respects --step filtering by
+#         inspecting the already-filtered command plan.
+# Full prerequisite list: JDK 21, PyYAML or yq, node+npm (frontend steps only),
+# bash, git. See CLAUDE.md "R25 toolchain prerequisites".
+#
+# Test seam (honest, documented): AX_PREFLIGHT_FAKE_MISSING is a pipe/comma list of
+# yaml|jdk|node that forces a tool to appear missing, so the block matrix is
+# testable without uninstalling toolchains. It ONLY forces-missing; it never
+# forces-present. Unset in normal operation.
 #
 # R28 surface upgrades (additive, no schema change):
 #   • per-domain-tests step COLLAPSES its 15 mandatory ./gradlew testXxx tasks
@@ -76,6 +97,23 @@ fi
 
 if ! command -v python3 >/dev/null 2>&1; then
     echo "verify-completion: python3 not in PATH (required for yaml parsing)" >&2
+    exit 2
+fi
+
+# ── Toolchain preflight seam ─────────────────────────────────────────────────
+# AX_PREFLIGHT_FAKE_MISSING forces a tool (yaml|jdk|node) to appear missing so the
+# BLOCK matrix is testable without uninstalling toolchains (see header).
+AX_PREFLIGHT_FAKE_MISSING="${AX_PREFLIGHT_FAKE_MISSING:-}"
+preflight_faked() {
+    case "|${AX_PREFLIGHT_FAKE_MISSING//,/|}|" in
+        *"|$1|"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# ── Preflight (i): yaml parser — required unconditionally (checklist is yaml) ──
+if preflight_faked yaml || { ! python3 -c 'import yaml' >/dev/null 2>&1 && ! command -v yq >/dev/null 2>&1; }; then
+    echo "verify-completion: R25 BLOCK: cannot parse yaml without PyYAML (python3 -c 'import yaml') or yq" >&2
     exit 2
 fi
 
@@ -167,6 +205,50 @@ if [ ! -s "$PLAN_FILE" ]; then
     fi
     echo "verify-completion: checklist contained no commands" >&2
     exit 2
+fi
+
+# ── Preflight (ii)/(iii): heavy toolchains, gated on the RESOLVED step set ────
+# PLAN_FILE is already filtered by --step, so a backend-only run never trips the
+# node check and vice-versa. Columns: 1=step_id 3=command 4=working_directory.
+NEEDS_JDK=0
+NEEDS_NODE=0
+if awk -F'\t' '$3 ~ /gradlew/ || $4 == "backend" { found=1 } END { exit !found }' "$PLAN_FILE"; then
+    NEEDS_JDK=1
+fi
+if awk -F'\t' '$1 == "frontend-lint" || $4 == "frontend" || $3 ~ /npm[ ]/ { found=1 } END { exit !found }' "$PLAN_FILE"; then
+    NEEDS_NODE=1
+fi
+
+if [ "$NEEDS_JDK" -eq 1 ]; then
+    JAVA_BIN=""
+    if preflight_faked jdk; then
+        JAVA_BIN=""
+    elif [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+        JAVA_BIN="$JAVA_HOME/bin/java"
+    elif command -v java >/dev/null 2>&1; then
+        JAVA_BIN="java"
+    fi
+    JMAJOR=""
+    if [ -n "$JAVA_BIN" ]; then
+        # `java -version` → stderr line like: openjdk version "21.0.11" 2026-04-21
+        # Legacy "1.8.0" form → major 8; modern "21.0.x" → major 21.
+        JMAJOR="$("$JAVA_BIN" -version 2>&1 | awk -F'"' '/version/ { print $2; exit }' \
+            | awk -F. '{ print ($1 == "1") ? $2 : $1 }')"
+    fi
+    if [ "$JMAJOR" != "21" ]; then
+        echo "verify-completion: R25 BLOCK: JDK 21 required for backend/gradle steps" \
+             "(build.gradle.kts toolchain = JavaLanguageVersion.of(21)); resolved java=${JAVA_BIN:-none}" \
+             "major=${JMAJOR:-unresolved}. Set JAVA_HOME to a JDK 21 install." >&2
+        exit 2
+    fi
+fi
+
+if [ "$NEEDS_NODE" -eq 1 ]; then
+    if preflight_faked node || ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+        echo "verify-completion: R25 BLOCK: node + npm required for the frontend-lint step" \
+             "(resolved step set includes it). Install Node.js, or run backend-only steps with --step." >&2
+        exit 2
+    fi
 fi
 
 # Steps marked `fail_fast: true` short-circuit the run on a HARD_FAIL (e.g. backend-build,

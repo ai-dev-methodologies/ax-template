@@ -77,7 +77,7 @@ jobs:
       - name: "[practices-react] eslint-plugin-ax tests"
         run: |
           cd practices-react/eslint-plugin-ax
-          npm install --no-audit --no-fund --silent
+          npm ci --no-audit --no-fund --silent
           npm test
 
       - name: Adversarial — missing_spec_ref must BLOCK

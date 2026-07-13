@@ -29,6 +29,24 @@ bash practices/scripts/verify-and-fix-loop.sh         # interactive, 3 attempts
 bash practices/scripts/verify-and-fix-loop.sh --non-interactive   # CI/headless
 ```
 
+**R25 toolchain prerequisites** — `verify-completion.sh` runs a fail-closed toolchain
+preflight (exit 2, BLOCK — not a silent skip) before executing the plan, gated on the
+*resolved* step set (respects `--step` filtering):
+- **JDK 21** — required whenever a backend/gradle step is scheduled. build.gradle.kts
+  toolchain = `JavaLanguageVersion.of(21)`. Resolve via `JAVA_HOME` or PATH; the macOS
+  `/usr/bin/java` stub (no runtime) fails the check. On this maintainer machine:
+  `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
+- **PyYAML or yq** — the checklist is yaml; one parser is required (always).
+- **node + npm** — required ONLY when the `frontend-lint` step is scheduled. A
+  backend-only run (`--step backend-build`, etc.) is NOT blocked by missing node.
+- **bash + git** — baseline.
+
+Reproducibility posture: `frontend/package-lock.json` is committed for reproducible
+installs, but NO standing gate performs a clean `npm ci` on it — the R25 `frontend-lint`
+step runs `npm run lint` against the existing `frontend/node_modules`; no frontend CI
+step exists. The `practices-react/eslint-plugin-ax` sentinel CI job DOES run `npm ci`
+against its committed lockfile.
+
 ---
 
 ## 🔒 PUBLIC / PRIVATE 경계 — fork-receiver 특화·민감 정보 격리 (R26 — NON-NEGOTIABLE)
@@ -347,7 +365,7 @@ task 전 GREEN + aggregate `./gradlew test` 는 advisory PortabilityCyclic
 | `./gradlew testOfferEligibility` | GREEN | 14/14 PASS (Broadleaf 재감사 #3 — offer 적격성: fail-closed deny-by-default qualifier→target min-qty + customer/segment gate; 부적격은 discount 경로 도달 불가. 앵커 CWE-636/840/285) |
 | `./gradlew testTaxApplication` | GREEN    | 14/14 PASS (Broadleaf 재감사 #4 — tax-exempt skip→0세 + idempotent recompute: UNIQUE(order_id) 엔티티-레벨로 정확히 1 tax row, now-exempt 시 prior 삭제; rate injected. 앵커 RFC 9110 §9.2.2 + CWE-840) |
 | `./gradlew testCurrencyArithmetic` | GREEN | 14/14 PASS (Broadleaf 재감사 #5 — cross-currency fail-closed: CurrencyMoney plus/minus 통화 불일치 시 422 throw before any value/persist, convertedVia만 cross-ccy seam; common/Money.java 무수정. 앵커 ISO 4217 + Fowler + CWE-682) |
-| `./gradlew testTokenizedSecurities` | GREEN | 29 PASS (compliance + ViolationProof + dogfood E2E) — STO 5-seam (chain-agnostic): **TRANSFER** — 증권토큰 이전이 적격성/lock-up/보유한도/잔고 게이트를 mutation 전 fail-closed로 통과해야만 append-only 계좌부 변경(보존 Σholdings==totalUnits) + 멱등(transferId) + issuer treasury 면제 + deny-by-default 적격성 SPI(InvestorEligibility, fork가 ERC-3643 ONCHAINID로 교체); **REGISTER** — 기초자산 단일증권화(자산레벨 이중기재0, 409) + 발행총량 finality; **HOLDER-AUTHZ** — OwnershipHolderAuthorization SPI(소유 기반 통제); **ANCHOR** — OnChainAnchor SPI + 재조정(off-chain↔on-chain); **ISSUE** — 발행 라이프사이클 state machine. PIT 변이테스트가 fail-closed SPI들을 kill-proof (guard[84][85]). 전자증권법 분산원장 계좌부 + EIP-3643 흡수. backend_only. Phase 1: fromHolderId↔JWT/on-chain identity 바인딩 |
+| `./gradlew testTokenizedSecurities` | GREEN | 29 PASS (compliance + ViolationProof + dogfood E2E) — STO 5-seam (chain-agnostic): **TRANSFER** — 증권토큰 이전이 적격성/lock-up/보유한도/잔고 게이트를 mutation 전 fail-closed로 통과해야만 append-only 계좌부 변경(보존 Σholdings==totalUnits) + 멱등(transferId) + issuer treasury 면제 + deny-by-default 적격성 SPI(InvestorEligibility, fork가 ERC-3643 ONCHAINID로 교체); **REGISTER** — 기초자산 단일증권화(자산레벨 이중기재0, 409) + 발행총량 finality; **HOLDER-AUTHZ** — OwnershipHolderAuthorization SPI(소유 기반 통제); **ANCHOR** — OnChainAnchor SPI + 재조정(off-chain↔on-chain); **ISSUE** — 발행 라이프사이클 state machine. PIT 변이테스트가 fail-closed SPI들을 kill-proof (guard[84][85]). 전자증권법 분산원장 계좌부 + EIP-3643 흡수. backend_only. caller↔holder 바인딩은 HolderAuthorization SPI(OwnershipHolderAuthorization, deny-by-default)로 이미 구현·검증됨(SecurityTokenRegisterService.transfer() 라인 110, TokenizedSecuritiesComplianceTest#transferFromUncontrolledHolder_isRejected_403_registerUnchanged @Tag HOLDER-AUTHZ-001, TokenizedSecuritiesViolationProofTest 라인 135); Phase 1 잔여 = ERC-3643 ON-CHAIN identity(ONCHAINID) 바인딩 — fork-receiver 관심사 |
 | `./gradlew testPortability`    | advisory | 외부 fixture (spring-realworld-example-app) 에 cycle 있음. fork-receiver의 코드가 아니라 외부 reference 코드의 결함 |
 
 전체 `./gradlew test` aggregate 도 **PortabilityCyclic advisory 1건을 제외하면
