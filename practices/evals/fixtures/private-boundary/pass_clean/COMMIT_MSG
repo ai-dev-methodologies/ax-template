@@ -1,0 +1,5 @@
+fix(billing): align invoice rounding with vendor spec
+
+Clean commit message fixture for the --commit-msg-file scan — no
+fork-receiver identifiers, used as the pass-side of the
+fail_commit_msg / pass_clean non-vacuity pair.

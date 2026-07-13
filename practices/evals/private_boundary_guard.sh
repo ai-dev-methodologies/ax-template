@@ -55,7 +55,7 @@
 #   (guard 자신과 practices/evals는 self-match 방지를 위해 제외)
 #
 # LIMITS (honest scope)
-#   - 정적 트리 스캔 전용. git 히스토리·커밋 메시지·바이너리·인코딩 시크릿은 스캔 안 함.
+#   - 정적 트리 스캔 + commit-msg 스캔(아래). 바이너리·인코딩 시크릿은 스캔 안 함.
 #   - docs/practices/rules 이외 markdown fenced-block 내부는 자동 제외 안 됨 →
 #     문서화용 PEM/JWT 예시는 docs/ 또는 practices/rules/ 경로의 파일에 넣거나
 #     pragma: allow-secret 주석으로 라인 단위 이스케이프 필요.
@@ -63,6 +63,16 @@
 #     현재 커버리지 밖 (silent gap이 아닌 honest gap).
 #   - ax-template HEAD 자체: markers 비어 있어 층1 0-match, 실 시크릿 없어 층2 0-match.
 #   - fork-receiver 차단은 .ax-private-markers opt-in 활성화로 작동.
+#   - COMMIT MESSAGES (P2-15, 신설): 층1(marker)만 두 경로로 스캔된다 —
+#     (a) .githooks/commit-msg 훅이 매 커밋마다 `--commit-msg-file`로 저자가 입력한
+#         메시지 파일을 직접 스캔한다 (커밋 확정 전, blocking).
+#     (b) 인자 없는 기본 실행(R25 등)에서 REPO_ROOT가 git repo이면 `git log -1`로
+#         현재 HEAD 커밋 메시지를 advisory backstop으로 재스캔한다 (marker 매칭 시 exit 1).
+#     정직한 잔여 갭: (a)는 훅이 설치된 클론에서만 작동한다(opt-in, install-hooks.sh) —
+#     미설치 클론은 (b)의 R25-time 백스톱에만 의존한다. (b)는 HEAD 1개 커밋만 스캔하며
+#     그 이전 과거 커밋 메시지는 스캔하지 않는다. 층2(시크릿 휴리스틱)는 커밋 메시지에
+#     적용하지 않는다 — 커밋 메시지는 free text이고, 실제 시크릿 유출 방지는 층2 트리
+#     스캔이 담당한다.
 #
 # PRAGMA ESCAPE (문서 경로 한정)
 #   docs/ 또는 practices/rules/ 하위 파일의 라인에
@@ -76,6 +86,9 @@
 # USAGE
 #   bash practices/evals/private_boundary_guard.sh
 #   bash practices/evals/private_boundary_guard.sh --repo-root DIR   # fixture 테스트용
+#   bash practices/evals/private_boundary_guard.sh --commit-msg-file PATH [--repo-root DIR]
+#       커밋 메시지 파일(PATH) 텍스트만 층1 marker로 스캔한다. .githooks/commit-msg가 호출.
+#       --repo-root와 조합 가능 (fixture가 plain dir로도 동작하도록).
 #
 # EXIT CODES
 #   0 = clean (층1·층2 위반 없음)
@@ -85,16 +98,30 @@
 set -uo pipefail
 
 REPO_ROOT_OVERRIDE=""
+COMMIT_MSG_FILE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --repo-root)
             REPO_ROOT_OVERRIDE="$2"; shift 2 ;;
         --repo-root=*)
             REPO_ROOT_OVERRIDE="${1#--repo-root=}"; shift ;;
+        --commit-msg-file)
+            COMMIT_MSG_FILE="$2"; shift 2 ;;
+        --commit-msg-file=*)
+            COMMIT_MSG_FILE="${1#--commit-msg-file=}"; shift ;;
         *)
             echo "private_boundary_guard: unknown arg: $1" >&2; exit 2 ;;
     esac
 done
+
+# Resolve commit-msg-file to an absolute path BEFORE cd'ing into REPO_ROOT below —
+# git passes the commit-msg hook's $1 relative to the caller's cwd (repo root at
+# hook time), not relative to wherever this guard's REPO_ROOT resolves to.
+if [ -n "$COMMIT_MSG_FILE" ]; then
+    [ -f "$COMMIT_MSG_FILE" ] || {
+        echo "private_boundary_guard: commit-msg-file not found: $COMMIT_MSG_FILE" >&2; exit 2; }
+    COMMIT_MSG_FILE="$(cd "$(dirname "$COMMIT_MSG_FILE")" && pwd)/$(basename "$COMMIT_MSG_FILE")"
+fi
 
 # Resolve repo root
 if [ -n "$REPO_ROOT_OVERRIDE" ]; then
@@ -161,11 +188,62 @@ is_doc_path() {
     return 1
 }
 
+MARKERS_FILE=".ax-private-markers"
+
+# ── COMMIT-MSG MODE (P2-15) ───────────────────────────────────────────────────
+# When --commit-msg-file is given, scan ONLY that file's text for Layer 1 marker
+# matches and exit — this powers .githooks/commit-msg (a real commit message is
+# outside every other SCAN TARGET, see LIMITS above). Layer 2 secret heuristics
+# do not run here (commit messages are free text, not a credential-bearing
+# source tree). Composes with --repo-root: MARKERS_FILE is read relative to
+# REPO_ROOT (already cd'd into above), so fixture dirs work without a real .git.
+if [ -n "$COMMIT_MSG_FILE" ]; then
+    commit_msg_violations=0
+    if [ -f "$MARKERS_FILE" ]; then
+        while IFS= read -r pattern; do
+            [ -z "$pattern" ] && continue
+            case "$pattern" in
+                '#'*) continue ;;
+            esac
+
+            line_no=0
+            while IFS= read -r msg_line; do
+                line_no=$((line_no + 1))
+                echo "$msg_line" | grep -qiE -e "$pattern" || continue
+
+                all_placeholder=1
+                found_any=0
+                while IFS= read -r tok; do
+                    [ -z "$tok" ] && continue
+                    found_any=1
+                    if ! echo "$tok" | grep -qiE "$ALLOWLIST_PATTERN"; then
+                        all_placeholder=0
+                        break
+                    fi
+                done < <(echo "$msg_line" | grep -oiE -e "$pattern")
+                [ "$found_any" -eq 1 ] && [ "$all_placeholder" -eq 1 ] && continue
+
+                report_violation "1:commit-msg" "$pattern" "commit-msg:${line_no}:${msg_line}"
+                commit_msg_violations=$((commit_msg_violations + 1))
+            done < "$COMMIT_MSG_FILE"
+        done < "$MARKERS_FILE"
+    fi
+
+    if [ "$commit_msg_violations" -gt 0 ]; then
+        echo "" >&2
+        echo "private_boundary_guard: FAIL — ${commit_msg_violations} private boundary violation(s) in commit message." >&2
+        echo "  Layer 1 (commit-msg): fork-receiver identifiers must not appear in commit messages." >&2
+        exit 1
+    fi
+
+    echo "private_boundary_guard: PASS — commit message clean (scanned: $COMMIT_MSG_FILE)"
+    exit 0
+fi
+
 # ── LAYER 1: opt-in marker scan ───────────────────────────────────────────────
 # Uses -i (case-insensitive) so "AcmeCorp" marker catches com.acmecorp package refs.
 # Checks ALL matched tokens per line (N1 fix) — placeholder decoy first does not hide
 # a real match later on the same line.
-MARKERS_FILE=".ax-private-markers"
 if [ -f "$MARKERS_FILE" ]; then
     while IFS= read -r pattern; do
         # Skip comments and blank lines
@@ -248,6 +326,46 @@ if [ -n "$SCAN_DIRS" ]; then
                  | grep -v '/src/test/' \
                  || true)
     done
+fi
+
+# ── LAYER 1 BACKSTOP: current HEAD commit message (P2-15) ─────────────────────
+# Default (no --commit-msg-file) mode advisory-but-enforced re-scan: only when
+# REPO_ROOT is an actual git repository — skip silently otherwise, since every
+# marker/secret fixture above is a plain directory (not a git repo) and must
+# not error here. Covers clones that never ran install-hooks.sh (no commit-msg
+# hook) — R25's own guard sweep still catches a marker that slipped into HEAD's
+# commit message. Layer 2 does not apply (see COMMIT MESSAGES note in LIMITS).
+if [ -z "$COMMIT_MSG_FILE" ] && [ -f "$MARKERS_FILE" ] \
+   && git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    HEAD_MSG="$(git -C "$REPO_ROOT" log -1 --format=%B 2>/dev/null || true)"
+    if [ -n "$HEAD_MSG" ]; then
+        while IFS= read -r pattern; do
+            [ -z "$pattern" ] && continue
+            case "$pattern" in
+                '#'*) continue ;;
+            esac
+
+            line_no=0
+            while IFS= read -r msg_line; do
+                line_no=$((line_no + 1))
+                echo "$msg_line" | grep -qiE -e "$pattern" || continue
+
+                all_placeholder=1
+                found_any=0
+                while IFS= read -r tok; do
+                    [ -z "$tok" ] && continue
+                    found_any=1
+                    if ! echo "$tok" | grep -qiE "$ALLOWLIST_PATTERN"; then
+                        all_placeholder=0
+                        break
+                    fi
+                done < <(echo "$msg_line" | grep -oiE -e "$pattern")
+                [ "$found_any" -eq 1 ] && [ "$all_placeholder" -eq 1 ] && continue
+
+                report_violation "1:head-commit-msg" "$pattern" "HEAD:${line_no}:${msg_line}"
+            done <<< "$HEAD_MSG"
+        done < "$MARKERS_FILE"
+    fi
 fi
 
 # ── Result ────────────────────────────────────────────────────────────────────

@@ -1,0 +1,5 @@
+fix(billing): align invoice rounding with vendor spec
+
+Clean commit message under the SAME active marker set as COMMIT_MSG
+in this fixture — proves the scan does not false-positive on
+unrelated text, only on the registered identifier.

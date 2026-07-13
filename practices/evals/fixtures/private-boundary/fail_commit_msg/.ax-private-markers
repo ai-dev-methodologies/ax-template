@@ -1,0 +1,6 @@
+# private_boundary_guard [R26/P2-15] fixture — fail_commit_msg
+# Purpose: demonstrates the --commit-msg-file scan catching a fork-receiver
+# identifier that appears ONLY in a commit message (not in any tracked file).
+# This is a TEST fixture only. Do NOT copy this file to a real fork without
+# replacing AcmeCorp with your actual company identifier.
+AcmeCorp

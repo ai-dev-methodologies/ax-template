@@ -1,0 +1,5 @@
+fix(billing): align AcmeCorp invoice rounding with vendor spec
+
+This commit message intentionally leaks a fork-receiver identifier
+(AcmeCorp) that does not appear in any tracked file — only the
+commit-msg-file scan (Layer 1) can catch it.

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# .githooks/commit-msg — R26/P2-15 local enforcement of the private-boundary
+# commit-message scan.
+#
+# Activate once per clone:
+#   bash practices/scripts/install-hooks.sh
+#
+# Git invokes commit-msg with $1 = path to a temp file holding the commit
+# message the author just typed (before the commit is finalized). This hook
+# runs private_boundary_guard.sh's Layer 1 (opt-in marker) scan over that
+# text and aborts the commit if a registered fork-receiver identifier
+# (.ax-private-markers) appears in the message — a channel the tree-scan
+# guards (pre-commit) never see, since a commit message is not a tracked file.
+#
+# There is NO opt-out flag inside this script by design, matching pre-commit.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+MSG_FILE="$1"
+
+if ! bash practices/evals/private_boundary_guard.sh --commit-msg-file "$MSG_FILE"; then
+    echo ""
+    echo "[private-boundary] commit message contains a fork-receiver identifier — commit BLOCKED."
+    echo "[private-boundary] Remove the identifier from the commit message and try again."
+    exit 1
+fi
+
+exit 0

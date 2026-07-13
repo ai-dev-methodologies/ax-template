@@ -21,12 +21,17 @@ fi
 git config core.hooksPath .githooks
 chmod +x .githooks/pre-commit
 [[ -f .githooks/pre-push ]] && chmod +x .githooks/pre-push
+[[ -f .githooks/commit-msg ]] && chmod +x .githooks/commit-msg
 
 echo "[install-hooks] git core.hooksPath = .githooks"
 echo "[install-hooks] pre-commit is executable"
 [[ -f .githooks/pre-push ]] && echo "[install-hooks] pre-push is executable"
+[[ -f .githooks/commit-msg ]] && echo "[install-hooks] commit-msg is executable"
 echo ""
 echo "Stage gates wired:"
+echo "  commit-msg:"
+echo "    0. private_boundary_guard.sh --commit-msg-file (R26/P2-15) — blocks a"
+echo "       fork-receiver identifier (.ax-private-markers) in the commit message"
 echo "  pre-commit:"
 echo "    1. 4 binary guards (spec_ref / substance / time_decay / evidence)"
 echo "    2. when backend/.../practices/ changes — ./gradlew testPractices"

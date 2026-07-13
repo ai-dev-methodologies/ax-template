@@ -79,6 +79,26 @@ items:
     anchor: 'docs/* | practices/rules/*)'
     neuter: '*)'
 
+  # ── fail_commit_msg: --commit-msg-file scan (P2-15, .githooks/commit-msg) ───
+  # fixture: fail_commit_msg/.ax-private-markers has 'AcmeCorp'; COMMIT_MSG contains
+  #          it in free text (no tracked file has it — only the commit-msg-file
+  #          scan can catch this). Two-input guard: --repo-root (loads the
+  #          fixture's own .ax-private-markers) + --commit-msg-file (the message
+  #          text) — needs fixture_arg2/fixture2 since one fixture_arg is not enough.
+  # anchor:  the counter increment that turns a detected commit-msg marker match
+  #          into a reported violation (the print alone doesn't flip the exit —
+  #          the surrounding `if [ "$commit_msg_violations" -gt 0 ]` gate does).
+  # neuter:  no-op the increment → matches are still printed to stderr but never
+  #          counted → the mode's exit-0 branch fires regardless of match → exit 0.
+  - id: private_boundary/fail_commit_msg
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_commit_msg
+    fixture_arg: '--repo-root'
+    fixture_arg2: '--commit-msg-file'
+    fixture2: practices/evals/fixtures/private-boundary/fail_commit_msg/COMMIT_MSG
+    anchor: 'commit_msg_violations=$((commit_msg_violations + 1))'
+    neuter: 'true  # neutered: commit-msg violation counter disabled'
+
   # ── completion_checklist_recency/fail_audit_log_partial_run: full_run gate ───
   # fixture: runs.jsonl latest line matches expected_head with exit=0/hard_fail=0
   #          but full_run=false (written by a --step partial run) → exit 1.

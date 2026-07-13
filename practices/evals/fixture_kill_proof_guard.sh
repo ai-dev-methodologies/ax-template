@@ -27,6 +27,13 @@
 #       fixture_arg: <CLI flag to pass fixture dir, e.g. --repo-root>
 #       anchor: <exact string appearing ONCE in guard source>
 #       neuter: <replacement string that disables the targeted logic>
+#       fixture_arg2: <OPTIONAL second CLI flag, e.g. --commit-msg-file>
+#       fixture2: <OPTIONAL path (relative to repo root) for fixture_arg2's value>
+#   fixture_arg2/fixture2 are only needed when the guard requires two distinct
+#   inputs to reproduce a failure (e.g. private_boundary_guard's --repo-root
+#   for the fixture's .ax-private-markers plus --commit-msg-file for the
+#   message text). Omit both for single-input guards — unset by default,
+#   zero behavior change for every item that predates this field pair.
 #
 # SELF-PROOF
 #   fixtures/fixture-kill-proof/ に two mini-manifests:
@@ -79,7 +86,12 @@ command -v python3 >/dev/null 2>&1 || {
     echo "fixture_kill_proof_guard: python3 required" >&2; exit 2; }
 
 # ── Parse manifest into tab-separated rows ────────────────────────────────────
-# Columns: id | guard | fixture | fixture_arg | anchor | neuter
+# Columns: id | guard | fixture | fixture_arg | anchor | neuter | fixture_arg2 | fixture2
+# fixture_arg2/fixture2 are OPTIONAL (default '') — a second flag+path pair passed
+# to the guard alongside fixture_arg/fixture, for guards that need two inputs to
+# reproduce a failure (e.g. private_boundary_guard's --repo-root + --commit-msg-file).
+# Existing single-input items simply leave these two fields unset; behavior for
+# them is unchanged (see invocation sites below, gated on fixture_arg2 non-empty).
 ITEMS="$(python3 - "$MANIFEST" <<'PY'
 import sys, yaml
 manifest_path = sys.argv[1]
@@ -96,6 +108,8 @@ for it in items:
         str(it.get('fixture_arg', '')),
         str(it.get('anchor', '')),
         str(it.get('neuter', '')),
+        str(it.get('fixture_arg2', '')),
+        str(it.get('fixture2', '')),
     ]
     print('\t'.join(fields))
 PY
@@ -114,7 +128,7 @@ fi
 FAIL=0
 PROVEN=0
 
-while IFS=$'\t' read -r item_id guard_rel fixture_rel fixture_arg anchor neuter; do
+while IFS=$'\t' read -r item_id guard_rel fixture_rel fixture_arg anchor neuter fixture_arg2 fixture2_rel; do
     [ -n "$item_id" ] || continue
 
     GUARD_PATH="$REPO_ROOT/$guard_rel"
@@ -132,6 +146,18 @@ while IFS=$'\t' read -r item_id guard_rel fixture_rel fixture_arg anchor neuter;
     [ -n "$anchor" ] || {
         echo "fixture_kill_proof_guard: FAIL [$item_id] anchor is empty" >&2
         FAIL=1; continue; }
+
+    # ── optional second fixture input (fixture_arg2/fixture2) ─────────────────
+    FIXTURE2_PATH=""
+    if [ -n "$fixture_arg2" ]; then
+        [ -n "$fixture2_rel" ] || {
+            echo "fixture_kill_proof_guard: FAIL [$item_id] fixture_arg2 set but fixture2 is empty" >&2
+            FAIL=1; continue; }
+        FIXTURE2_PATH="$REPO_ROOT/$fixture2_rel"
+        [ -e "$FIXTURE2_PATH" ] || {
+            echo "fixture_kill_proof_guard: FAIL [$item_id] fixture2 not found: $FIXTURE2_PATH" >&2
+            FAIL=1; continue; }
+    fi
 
     # ── (0) neuter vocabulary validation (P2-14) ──────────────────────────────
     # neuter must match one of 6 allowlisted PIT-style operator shapes, and must
@@ -203,7 +229,11 @@ PY
 
     # ── (2) original guard on fixture → expect exit 1 ────────────────────────
     if [ -n "$fixture_arg" ]; then
-        bash "$GUARD_PATH" "$fixture_arg" "$FIXTURE_PATH" >/dev/null 2>&1
+        if [ -n "$fixture_arg2" ]; then
+            bash "$GUARD_PATH" "$fixture_arg" "$FIXTURE_PATH" "$fixture_arg2" "$FIXTURE2_PATH" >/dev/null 2>&1
+        else
+            bash "$GUARD_PATH" "$fixture_arg" "$FIXTURE_PATH" >/dev/null 2>&1
+        fi
         orig_rc=$?
     else
         bash "$GUARD_PATH" "$FIXTURE_PATH" >/dev/null 2>&1
@@ -245,7 +275,11 @@ PY
 
     # ── (4) neutered guard on fixture → expect exit 0 (flipped) ─────────────
     if [ -n "$fixture_arg" ]; then
-        bash "$TMP_GUARD" "$fixture_arg" "$FIXTURE_PATH" >/dev/null 2>&1
+        if [ -n "$fixture_arg2" ]; then
+            bash "$TMP_GUARD" "$fixture_arg" "$FIXTURE_PATH" "$fixture_arg2" "$FIXTURE2_PATH" >/dev/null 2>&1
+        else
+            bash "$TMP_GUARD" "$fixture_arg" "$FIXTURE_PATH" >/dev/null 2>&1
+        fi
         neuter_rc=$?
     else
         bash "$TMP_GUARD" "$FIXTURE_PATH" >/dev/null 2>&1
