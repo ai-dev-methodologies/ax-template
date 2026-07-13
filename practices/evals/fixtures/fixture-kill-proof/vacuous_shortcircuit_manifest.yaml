@@ -1,0 +1,26 @@
+# vacuous_shortcircuit_manifest.yaml — self-proof fixture for fixture_kill_proof_guard.sh [87]
+#
+# PURPOSE: prove that the meta-gate's neuter-vocabulary check (P2-14) BLOCKS a
+# manifest item whose neuter is a non-surgical control-flow short-circuit
+# (`exit 0`) instead of a targeted, allowlisted operator-shape substitution.
+#
+# Before P2-14, `exit 0` would flip the neutered guard's exit code to 0 on ANY
+# fixture regardless of which logic the anchor identifies — a vacuous "PASS"
+# that proves nothing about the anchor's specific detection logic. The
+# vocabulary check now rejects this at the neuter-validation stage, before the
+# mutation is even attempted.
+#
+# fixture/anchor reused from private_boundary/fail_marker (any valid
+# guard+fixture+anchor triple works here — the point under test is the neuter
+# string, not the mutation outcome).
+#
+# → fixture_kill_proof_guard.sh must exit 1 (BLOCK) when given this manifest,
+#   with a "control-flow escape token" rejection message (not a mutation FAIL).
+
+items:
+  - id: self_proof/vacuous_shortcircuit_exit0
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'exit 0'

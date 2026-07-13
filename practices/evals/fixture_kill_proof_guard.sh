@@ -11,6 +11,8 @@
 #   이를 사람이 적발했다; 이 guard는 그 적발을 기계화한다.
 #
 # ALGORITHM (per manifest item)
+#   0. neuter 값이 allowlisted PIT-style operator shape에 매칭하는지 확인 (P2-14).
+#      shape 밖이거나 control-flow escape 토큰(exit/return/kill)을 포함하면 → BLOCK.
 #   1. anchor가 guard 소스에 정확히 1회 존재하는지 확인 (0회/2+회 → manifest stale → BLOCK)
 #   2. 원본 guard를 fixture에 실행 → exit 1 확인 (fixture가 실패를 재현)
 #   3. guard 소스에서 anchor를 neuter로 치환 → 임시 guard 생성
@@ -32,12 +34,19 @@
 #     nonvacuous_manifest.yaml — 항목 1개, neuter가 올바름  → meta-gate exit 0
 #
 # LIMITS
-#   1. surgicality는 manifest 저자 책임이다 (기계 강제 아님).
-#      저자가 `exit 0` 같은 short-circuit neuter를 등재하면 거짓 non-vacuous PASS가
-#      가능하다. 이는 고정 mutator 어휘(kill/replace/negate)를 사용하는 Java PIT [84]
-#      보다 약한 지점이다.
-#   2. exit 0은 원인 불문 "flip"으로 인정된다.
-#      향후 진화 방향: PIT-style 고정 neuter-operator 어휘(shift→!, remove→stub 등).
+#   1. neuter 어휘는 고정 allowlist로 강제된다 (P2-14, 2026-07-13):
+#      no-op(true/:/comment) · sentinel-string(NEUTER_*) · condition-constant(False/false) ·
+#      truncation(| head -N) · over-broad-glob(*)) · variable-substitution(anchor와 skeleton이
+#      동일하고 $var만 교체) 6개 shape 중 하나에 매칭해야 하며, exit/return/kill 또는
+#      &&/||로 연결된 exit 같은 control-flow escape 토큰이 있으면 shape 매칭과 무관하게
+#      즉시 BLOCK된다. `exit 0` 같은 short-circuit neuter는 이제 등재 시점에 차단된다.
+#   2. 잔여 리스크(honest residual): 이 allowlist는 토큰/구조 매칭이지 완전한 semantic
+#      검증이 아니다. 허용된 shape 안에서도 저자가 논리를 오도하는 neuter를 만들면
+#      (예: 엉뚱한 변수를 골라 variable-substitution shape을 통과) 여전히 사람 리뷰에
+#      의존한다 — **이 6-shape 어휘 밖의 적대적 neuter는 author-responsibility로 남는다.**
+#      고정 mutator operator를 쓰는 Java PIT [84] 대비 약한 지점은 shape 내부 의미론적
+#      정확성 보장의 부재다.
+#   3. exit 0은 원인 불문 "flip"으로 인정된다 (mutation 결과 판정 로직은 변경 없음).
 #
 # USAGE
 #   bash practices/evals/fixture_kill_proof_guard.sh
@@ -123,6 +132,61 @@ while IFS=$'\t' read -r item_id guard_rel fixture_rel fixture_arg anchor neuter;
     [ -n "$anchor" ] || {
         echo "fixture_kill_proof_guard: FAIL [$item_id] anchor is empty" >&2
         FAIL=1; continue; }
+
+    # ── (0) neuter vocabulary validation (P2-14) ──────────────────────────────
+    # neuter must match one of 6 allowlisted PIT-style operator shapes, and must
+    # not contain a control-flow escape token (exit/return/kill) regardless of shape.
+    neuter_verdict="$(python3 - "$anchor" "$neuter" <<'PY'
+import re, sys
+anchor = sys.argv[1]
+neuter = sys.argv[2]
+
+# control-flow escape tokens are rejected unconditionally (any shape).
+reject_patterns = [
+    r'\bexit\b',
+    r'\breturn\b',
+    r'\bkill\b',
+    r'(&&|\|\|)\s*exit\b',
+]
+for pat in reject_patterns:
+    if re.search(pat, neuter):
+        print(f"REJECT: neuter contains control-flow escape token (pattern {pat!r}): {neuter!r}")
+        sys.exit(0)
+
+def skeleton(s):
+    # collapse $var / ${var} references to a single placeholder so a pure
+    # variable-identifier swap can be recognized independent of naming.
+    return re.sub(r'\$\{?[A-Za-z_][A-Za-z0-9_]*\}?', 'VAR', s)
+
+shapes = []
+if re.match(r'^\s*(true|:)\s*(#.*)?$', neuter):
+    shapes.append('no-op')
+if re.search(r'NEUTER_[A-Z0-9_]+', neuter):
+    shapes.append('sentinel-string')
+if neuter.strip() in ('False', 'false'):
+    shapes.append('condition-constant')
+if re.search(r'\|\s*head\s+-?\d+', neuter):
+    shapes.append('truncation')
+if neuter.strip() == '*)':
+    shapes.append('over-broad-glob')
+if neuter != anchor and skeleton(neuter) == skeleton(anchor):
+    shapes.append('variable-substitution')
+
+if shapes:
+    print("PASS: " + ",".join(shapes))
+else:
+    print("UNKNOWN: neuter does not match any allowlisted PIT-style operator shape: " + repr(neuter))
+PY
+)"
+    case "$neuter_verdict" in
+        PASS:*) : ;;
+        REJECT:*|UNKNOWN:*)
+            echo "fixture_kill_proof_guard: FAIL [$item_id] neuter vocabulary rejected — ${neuter_verdict}" >&2
+            FAIL=1; continue ;;
+        *)
+            echo "fixture_kill_proof_guard: FAIL [$item_id] neuter vocabulary check errored: ${neuter_verdict}" >&2
+            FAIL=1; continue ;;
+    esac
 
     # ── (1) anchor uniqueness in guard source ─────────────────────────────────
     anchor_count="$(python3 - "$GUARD_PATH" "$anchor" <<'PY'
