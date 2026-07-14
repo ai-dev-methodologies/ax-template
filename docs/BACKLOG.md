@@ -24,11 +24,11 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
-| P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
+| P0 (expiry-bound / live defects) | 28 | 26 | ~93% |
 | P1 (generic signature backlog) | 62 | 62 | **100%** |
 | P2 (verification escapes) | 20 | 20 | **100%** |
 | P3 (industry-niche deferrals) | 47 | 47 | **100%** |
-| **P0–P3 합계 (수렴 분모)** | **155** | **155** | **100%** |
+| **P0–P3 합계 (수렴 분모)** | **157** | **155** | **~99%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
 > 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
@@ -43,7 +43,7 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 
 ## P0 — expiry-bound 부채 + live catalog defects (최우선)
 
-DDD allowlist 예외는 **ecom-composition 1건만 잔존** (composition은 설계상 의도된 grandfather; expiry 2026-12-31). **P0 전 항목 closed (2026-06-10).**
+DDD allowlist 예외는 **ecom-composition 1건만 잔존** (composition은 설계상 의도된 grandfather; expiry 2026-12-31). 2026-06-10 전 항목 closed 후, 2026-07-14 freshness 감사가 expiry-bound 2건을 신규 등재(open).
 
 - [x] **P0-1 ~ P0-11** AX-DDD-AUTH-USER ×11 — **closed 2026-06-10 (IMW, 3-wave)**:
       (A) RefreshToken/VerificationToken reference-by-id (`@ManyToOne UserEntity` →
@@ -88,6 +88,8 @@ DDD allowlist 예외는 **ecom-composition 1건만 잔존** (composition은 설�
       sole-mutator seam + forceVoid 감사형 admin escape hatch(LEGAL 맵 불변 — /void 엔드포인트
       시맨틱 보존). setter package-private; 14 call-site 이관; governed_state_mutators 2→0
       (bijection 수용 = retire 증명). testPayment GREEN.
+- [ ] **P0-27** Spring Boot 3.2.12 → 4.1 major migration *(2026-07-14 freshness 감사 등재, expiry-bound)* — 3.x 전 라인 OSS 지원 종료(3.2는 2024-11, 마지막 minor 3.5도 2026-06-30 EOL) → 현재 pin은 보안패치 무수신. 4.1(GA 2026-06, EOL 2027-07)로 직행 필요(3.x 내 범프는 무의미). 선행 완료: Gradle wrapper 8.14.5(본 wave). 마이그레이션 표면: Hibernate major bump의 H2 @Check DDL 재검증(다수 도메인이 @Check backstop 사용), Security 6→7, OAuth2 조건 클래스 재배치(SecurityConfig 직접 영향), Jakarta EE 11/Servlet 6.1, Jackson 2→3 여부 점검. done-when: 4.1 pin + 전 per-domain task GREEN + aggregate GREEN + PD7급 검증(보안/인증 표면 — cross-family reviewer 게이트). 참고: 프론트엔드 스택은 lockfile 기준 전부 최신 확인(React 19.2.7/Next 15.5.20/TS 6.0.3 — 조치 불요).
+- [ ] **P0-28** ESLint 10 호환 스파이크 *(2026-07-14 freshness 감사 등재, expiry-bound — 데드라인 2026-08-06)* — ESLint 9.x EOL 2026-08-06(3주). eslint-plugin-ax peerDep는 >=9.0.0으로 10 허용이나 미검증. done-when: ESLint 10에서 14룰 로드 + 6 reference 앱 0-violation 확인(또는 실패 시 9.x pin의 risk-accept를 데드라인 전 명시 결정). 룰 등록 API 변화 재검증 필요(warn→error 승격 2룰 포함).
 
 ## P1 — generic signature backlog (cross-industry, 산업 dogfood가 발견)
 

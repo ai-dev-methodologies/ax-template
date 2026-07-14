@@ -1,9 +1,9 @@
 ---
 sentinel:
-  source_concat_sha256: "9ea0379f07571e6c60be7822a0efe945d128a8f229281e44dc4eeac5ee9fe198"
-  source_file_count: 44
+  source_concat_sha256: "e406de2b949898090fcc12780669994120818bfd86b5ab8d473324fd3f17088d"
+  source_file_count: 48
   generated_by: "templates/generate_agents.sh"
-  generated_at: "2026-05-27T07:25:51Z"
+  generated_at: "2026-07-14T09:32:36Z"
 ---
 
 # templates/ — AGENTS.md (auto-generated)
@@ -42,12 +42,11 @@ All files under `templates/**` are walked by:
 
 See `templates/DECISIONS.md` for the full ADR trail (TD-2026-05-17-001..010).
 
-## Sha256 source files (44 total)
+## Sha256 source files (48 total)
 
 - DECISIONS.md
 - L1/PEER_DEPS.md
 - L2/blocks/bulk-export-bundle-delta.md
-- L3/pages/README.md
 - L3/pages/account-locked/README.md
 - L3/pages/admin-overview-page/README.md
 - L3/pages/audit-log-page/README.md
@@ -63,10 +62,10 @@ See `templates/DECISIONS.md` for the full ADR trail (TD-2026-05-17-001..010).
 - L3/pages/list-page/README.md
 - L3/pages/mfa-setup/README.md
 - L3/pages/pricing-page/README.md
+- L3/pages/README.md
 - L3/pages/reset-password/README.md
 - L3/pages/settings-overview/README.md
 - L3/pages/wizard/README.md
-- L4/README.md
 - L4/activity-feed/README.md
 - L4/api-key/README.md
 - L4/approval-workflow/README.md
@@ -75,14 +74,19 @@ See `templates/DECISIONS.md` for the full ADR trail (TD-2026-05-17-001..010).
 - L4/billing/README.md
 - L4/comment-thread/README.md
 - L4/crud/README.md
+- L4/data-subject-rights/README.md
 - L4/email-outbox/README.md
 - L4/favorites-bookmarks/README.md
 - L4/feature-flags/README.md
 - L4/file-storage/README.md
+- L4/i18n-policy/README.md
 - L4/multi-tenant/README.md
 - L4/notification/README.md
 - L4/payment/README.md
 - L4/practices/README.md
+- L4/ratelimit/README.md
+- L4/README.md
+- L4/realtime-policy/README.md
 - L4/scheduled-task/README.md
 - L4/search/README.md
 - L4/session-management/README.md
