@@ -34,9 +34,10 @@ audit:
   gap_check:
     status: complete
 evidence:
-  - upstream_id: nextjs-server-actions-16
-    section: "Server Actions — calling server actions"
-    quote: "Called from the client via a network request."
+  - source_type: external
+    citation: "React documentation — Responding to Events (Passing event handlers as props): a child component receives event handlers such as onSubmit from its parent as props, keeping the child agnostic to what the handler does. (The server-action/lib import ban itself is an ax-template layer decision — this citation anchors only the generic callback-prop principle it rests on.)"
+    url: "https://react.dev/learn/responding-to-events"
+    quoted_at: "2026-07-14"
 sibling_rules:
   - l2-prefer-data-prop-over-direct-fetch
   - async-api-routes

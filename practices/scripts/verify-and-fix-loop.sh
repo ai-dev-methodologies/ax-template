@@ -54,6 +54,14 @@ while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
         exit 0
     fi
 
+    if [ "$rc" -eq 2 ]; then
+        echo ""
+        echo "verify-and-fix-loop: SETUP BLOCK (exit 2) — toolchain/parse preflight failed."
+        echo "This is an environment problem, not a fixable verification failure; retrying"
+        echo "will not help. Fix the toolchain per the message above and re-run."
+        exit 2
+    fi
+
     if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
         echo ""
         echo "verify-and-fix-loop: FAIL — exhausted $MAX_ATTEMPTS attempts"

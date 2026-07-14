@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "23943ee2519eb7de33e5a18aff0b8fcf249d8c8a5f9af09fa0d1eee6f1f1b456"
+  source_concat_sha256: "af4cb723606220c2b3da1488c7f916c5c2a42f02e36df263843a3a052878efe0"
   rule_count: 99
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -3016,8 +3016,8 @@ evidence:
     section: "client-swr-dedup"
     quote: "SWR enables request deduplication, caching, and revalidation across component instances."
   - upstream_id: nextjs-fetching-data
-    section: "Client Components"
-    quote: "You can use React's `use` API to stream data from the server to client."
+    section: "On Server Component data fetching"
+    quote: "Identical `fetch` requests in a React component tree are memoized by default, so you can fetch data in the component that needs it instead of drilling props."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -5178,10 +5178,12 @@ audit:
       - "Observed during SP7 implementation: DataTable, FilterBar, Pagination, SearchInput all required this discipline"
   gap_check:
     status: complete
+provenance_class: internal_design
 evidence:
-  - upstream_id: tanstack-query-v5
-    section: "Overview — separation of fetching and UI"
-    quote: "TanStack Query makes fetching, caching, synchronizing and updating async state trivial."
+  - source_type: external
+    citation: "React documentation — Passing Props to a Component: a parent passes data to a child through props, and the child renders the props it is given rather than sourcing its own data. (The L2 fetch/useQuery ban itself is an ax-template layer decision — this citation anchors only the generic props-boundary principle it rests on.)"
+    url: "https://react.dev/learn/passing-props-to-a-component"
+    quoted_at: "2026-07-14"
 sibling_rules:
   - l2-prefer-onsubmit-prop
   - async-api-routes
@@ -5307,9 +5309,10 @@ audit:
   gap_check:
     status: complete
 evidence:
-  - upstream_id: nextjs-server-actions-16
-    section: "Server Actions — calling server actions"
-    quote: "Called from the client via a network request."
+  - source_type: external
+    citation: "React documentation — Responding to Events (Passing event handlers as props): a child component receives event handlers such as onSubmit from its parent as props, keeping the child agnostic to what the handler does. (The server-action/lib import ban itself is an ax-template layer decision — this citation anchors only the generic callback-prop principle it rests on.)"
+    url: "https://react.dev/learn/responding-to-events"
+    quoted_at: "2026-07-14"
 sibling_rules:
   - l2-prefer-data-prop-over-direct-fetch
   - async-api-routes
@@ -6817,9 +6820,6 @@ verification:
   status: manual
   notes: "No file under templates/L4/<domain-A>/ may import from templates/L4/<domain-B>/. Shared cross-cutting concerns (auth state, user context) must be sourced from shared hooks (hooks/), context providers (providers/), or L1/L2 components — never from another L4 domain."
 evidence:
-  - upstream_id: nextjs-app-router-16
-    section: "App Router — route segments as independent modules"
-    quote: "Next.js uses file-system routing."
   - source_type: external
     citation: "Next.js documentation — Domain-driven architecture: each feature domain should be self-contained with no cross-domain imports at the route layer"
     url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"
@@ -11966,9 +11966,6 @@ verification:
   status: manual
   notes: "All Server Action return types must include a traceId field. The error branch must populate it from headers().get('x-trace-id') or crypto.randomUUID(). The success branch may omit traceId or include it for full observability."
 evidence:
-  - upstream_id: nextjs-server-actions-16
-    section: "Invocation Patterns — Event Handlers (Client Components only)"
-    quote: "const updated = await incrementLike()"
   - source_type: external
     citation: "W3C Trace Context — trace-id as a correlation identifier propagated across service boundaries including browser-to-server calls"
     url: "https://www.w3.org/TR/trace-context/#trace-id"

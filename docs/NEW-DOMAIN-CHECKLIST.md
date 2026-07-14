@@ -225,7 +225,8 @@ The completion gate runs a fail-closed toolchain preflight (exit 2) if a require
 toolchain for the *resolved* step set is missing (it respects `--step` filtering):
 - **JDK 21** — gradle toolchain `JavaLanguageVersion.of(21)`; set `JAVA_HOME` (the macOS
   `/usr/bin/java` stub fails). Required when a backend/gradle step is scheduled.
-- **PyYAML or yq** — checklist parse (always required).
+- **python3** — always required (checklist parsing, guard helpers).
+- **PyYAML or yq** — checklist parse (always required, in addition to python3).
 - **node + npm** — required *only* when the `frontend-lint` step is scheduled; a
   backend-only `--step` run is NOT blocked by missing node.
 - **bash + git** — baseline.

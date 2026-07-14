@@ -36,7 +36,8 @@ preflight (exit 2, BLOCK — not a silent skip) before executing the plan, gated
   toolchain = `JavaLanguageVersion.of(21)`. Resolve via `JAVA_HOME` or PATH; the macOS
   `/usr/bin/java` stub (no runtime) fails the check. On this maintainer machine:
   `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
-- **PyYAML or yq** — the checklist is yaml; one parser is required (always).
+- **python3** — required unconditionally (checklist parsing, guard helpers, collapse planner).
+- **PyYAML or yq** — the checklist is yaml; one parser is additionally required (always).
 - **node + npm** — required ONLY when the `frontend-lint` step is scheduled. A
   backend-only run (`--step backend-build`, etc.) is NOT blocked by missing node.
 - **bash + git** — baseline.

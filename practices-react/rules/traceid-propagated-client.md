@@ -20,9 +20,6 @@ verification:
   status: manual
   notes: "All Server Action return types must include a traceId field. The error branch must populate it from headers().get('x-trace-id') or crypto.randomUUID(). The success branch may omit traceId or include it for full observability."
 evidence:
-  - upstream_id: nextjs-server-actions-16
-    section: "Invocation Patterns — Event Handlers (Client Components only)"
-    quote: "const updated = await incrementLike()"
   - source_type: external
     citation: "W3C Trace Context — trace-id as a correlation identifier propagated across service boundaries including browser-to-server calls"
     url: "https://www.w3.org/TR/trace-context/#trace-id"

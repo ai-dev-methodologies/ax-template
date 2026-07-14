@@ -20,9 +20,6 @@ verification:
   status: manual
   notes: "No file under templates/L4/<domain-A>/ may import from templates/L4/<domain-B>/. Shared cross-cutting concerns (auth state, user context) must be sourced from shared hooks (hooks/), context providers (providers/), or L1/L2 components — never from another L4 domain."
 evidence:
-  - upstream_id: nextjs-app-router-16
-    section: "App Router — route segments as independent modules"
-    quote: "Next.js uses file-system routing."
   - source_type: external
     citation: "Next.js documentation — Domain-driven architecture: each feature domain should be self-contained with no cross-domain imports at the route layer"
     url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"

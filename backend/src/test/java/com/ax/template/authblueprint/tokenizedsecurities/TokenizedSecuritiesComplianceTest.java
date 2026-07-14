@@ -356,19 +356,28 @@ class TokenizedSecuritiesComplianceTest {
 
         int n = 2;
         ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch ready = new CountDownLatch(n);
         CountDownLatch start = new CountDownLatch(1);
         ConcurrentLinkedQueue<io.restassured.response.Response> results = new ConcurrentLinkedQueue<>();
+        java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
         for (int i = 0; i < n; i++) {
-            pool.submit(() -> {
+            futures.add(pool.submit(() -> {
+                ready.countDown();
                 start.await();
                 results.add(given().header("Authorization", "Bearer " + admin)
                         .when().post("/api/security-tokens/" + code + "/issue"));
                 return null;
-            });
+            }));
         }
+        // worker-ready barrier: open the gate only once BOTH workers are parked on it,
+        // so the two requests genuinely race instead of running back-to-back.
+        org.assertj.core.api.Assertions.assertThat(ready.await(30, TimeUnit.SECONDS)).isTrue();
         start.countDown();
         pool.shutdown();
         org.assertj.core.api.Assertions.assertThat(pool.awaitTermination(60, TimeUnit.SECONDS)).isTrue();
+        for (java.util.concurrent.Future<?> f : futures) {
+            f.get(); // surface any worker exception instead of a confusing count mismatch
+        }
 
         long succeeded = results.stream().filter(r -> r.statusCode() == 200).count();
         long conflicted = results.stream().filter(r -> r.statusCode() == 409).count();

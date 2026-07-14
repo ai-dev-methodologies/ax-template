@@ -330,13 +330,17 @@ fi
 
 # ── LAYER 1 BACKSTOP: current HEAD commit message (P2-15) ─────────────────────
 # Default (no --commit-msg-file) mode advisory-but-enforced re-scan: only when
-# REPO_ROOT is an actual git repository — skip silently otherwise, since every
-# marker/secret fixture above is a plain directory (not a git repo) and must
-# not error here. Covers clones that never ran install-hooks.sh (no commit-msg
-# hook) — R25's own guard sweep still catches a marker that slipped into HEAD's
-# commit message. Layer 2 does not apply (see COMMIT MESSAGES note in LIMITS).
+# REPO_ROOT is ITSELF a git toplevel — skip silently otherwise. Two reasons
+# (2026-07-14 cross-family 리뷰로 조임): (a) marker/secret fixtures are plain
+# directories and must not error; (b) a NESTED fixture directory inside the
+# real repo must not resolve to the ENCLOSING repo's HEAD message and scan it
+# with the fixture's own markers — that would contaminate fixture verdicts
+# (e.g. kill-proof neutered runs). Covers clones that never ran
+# install-hooks.sh (no commit-msg hook) — R25's own guard sweep still catches
+# a marker that slipped into HEAD's commit message. Layer 2 does not apply
+# (see COMMIT MESSAGES note in LIMITS).
 if [ -z "$COMMIT_MSG_FILE" ] && [ -f "$MARKERS_FILE" ] \
-   && git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+   && [ "$(git -C "$REPO_ROOT" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$REPO_ROOT" && pwd -P)" ]; then
     HEAD_MSG="$(git -C "$REPO_ROOT" log -1 --format=%B 2>/dev/null || true)"
     if [ -n "$HEAD_MSG" ]; then
         while IFS= read -r pattern; do

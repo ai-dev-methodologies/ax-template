@@ -41,18 +41,21 @@
 #     nonvacuous_manifest.yaml — 항목 1개, neuter가 올바름  → meta-gate exit 0
 #
 # LIMITS
-#   1. neuter 어휘는 고정 allowlist로 강제된다 (P2-14, 2026-07-13):
-#      no-op(true/:/comment) · sentinel-string(NEUTER_*) · condition-constant(False/false) ·
-#      truncation(| head -N) · over-broad-glob(*)) · variable-substitution(anchor와 skeleton이
-#      동일하고 $var만 교체) 6개 shape 중 하나에 매칭해야 하며, exit/return/kill 또는
-#      &&/||로 연결된 exit 같은 control-flow escape 토큰이 있으면 shape 매칭과 무관하게
-#      즉시 BLOCK된다. `exit 0` 같은 short-circuit neuter는 이제 등재 시점에 차단된다.
-#   2. 잔여 리스크(honest residual): 이 allowlist는 토큰/구조 매칭이지 완전한 semantic
-#      검증이 아니다. 허용된 shape 안에서도 저자가 논리를 오도하는 neuter를 만들면
-#      (예: 엉뚱한 변수를 골라 variable-substitution shape을 통과) 여전히 사람 리뷰에
-#      의존한다 — **이 6-shape 어휘 밖의 적대적 neuter는 author-responsibility로 남는다.**
-#      고정 mutator operator를 쓰는 Java PIT [84] 대비 약한 지점은 shape 내부 의미론적
-#      정확성 보장의 부재다.
+#   1. neuter 어휘는 고정 allowlist로 강제된다 (P2-14, 2026-07-13; 2026-07-14 cross-family
+#      리뷰로 조임): no-op(true/:/comment 단독) · sentinel-string(anchor와 str_skeleton이
+#      동일 — 따옴표 문자열 리터럴만 NEUTER_* 로 교체, 임의 코드에 NEUTER_ name-drop 불가) ·
+#      condition-constant(False/false 단독) · truncation(neuter에서 `| head -N` 1회 제거 시
+#      anchor와 byte-identical) · over-broad-glob(`*)` 단독) · variable-substitution(anchor와
+#      skeleton 동일, $var만 교체) 6개 shape 중 하나에 매칭해야 하며,
+#      exit/return/kill/exec/eval/source/trap·체인 exit·후행 & 같은 escape 토큰이 있으면
+#      shape 매칭과 무관하게 즉시 BLOCK된다. `exit 0`·`exec true # NEUTER_BYPASS` 류
+#      short-circuit/name-drop neuter는 등재 시점에 차단된다 (self-proof 2건).
+#   2. 잔여 리스크(honest residual): 4개 shape(sentinel/truncation/variable-substitution은
+#      anchor-skeleton 바인딩, 상수형은 단독-토큰 강제)이지만 여전히 토큰/구조 매칭이지
+#      완전한 semantic 검증이 아니다 — 예: variable-substitution에서 엉뚱한 변수를 고르는
+#      오도성 neuter는 통과 가능하며 사람 리뷰에 의존한다. shape 내부 의미론적 정확성
+#      보장의 부재가 Java PIT [84] 대비 약한 지점이다 (allowlist "밖"이 아니라 "안"의
+#      오도성이 잔여 리스크임을 명시 — 2026-07-14 리뷰 지적 반영).
 #   3. exit 0은 원인 불문 "flip"으로 인정된다 (mutation 결과 판정 로직은 변경 없음).
 #
 # USAGE
@@ -167,12 +170,17 @@ import re, sys
 anchor = sys.argv[1]
 neuter = sys.argv[2]
 
-# control-flow escape tokens are rejected unconditionally (any shape).
+# control-flow / process escape tokens are rejected unconditionally (any shape).
 reject_patterns = [
     r'\bexit\b',
     r'\breturn\b',
     r'\bkill\b',
+    r'\bexec\b',
+    r'\beval\b',
+    r'\bsource\b',
+    r'\btrap\b',
     r'(&&|\|\|)\s*exit\b',
+    r'&\s*$',
 ]
 for pat in reject_patterns:
     if re.search(pat, neuter):
@@ -184,14 +192,23 @@ def skeleton(s):
     # variable-identifier swap can be recognized independent of naming.
     return re.sub(r'\$\{?[A-Za-z_][A-Za-z0-9_]*\}?', 'VAR', s)
 
+def str_skeleton(s):
+    # collapse quoted string literals so a pure string-literal swap can be
+    # recognized: everything OUTSIDE the quotes must be byte-identical to the
+    # anchor. Blocks arbitrary code that merely name-drops a NEUTER_ token
+    # (e.g. `exec true # NEUTER_BYPASS`).
+    s2 = re.sub(r"'[^']*'", 'STR', s)
+    return re.sub(r'"[^"]*"', 'STR', s2)
+
 shapes = []
 if re.match(r'^\s*(true|:)\s*(#.*)?$', neuter):
     shapes.append('no-op')
-if re.search(r'NEUTER_[A-Z0-9_]+', neuter):
+if (re.search(r'NEUTER_[A-Z0-9_]+', neuter) and neuter != anchor
+        and str_skeleton(neuter) == str_skeleton(anchor)):
     shapes.append('sentinel-string')
 if neuter.strip() in ('False', 'false'):
     shapes.append('condition-constant')
-if re.search(r'\|\s*head\s+-?\d+', neuter):
+if re.sub(r'\s*\|\s*head\s+-?\d+', '', neuter, count=1) == anchor:
     shapes.append('truncation')
 if neuter.strip() == '*)':
     shapes.append('over-broad-glob')

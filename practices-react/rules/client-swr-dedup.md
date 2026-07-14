@@ -54,8 +54,8 @@ evidence:
     section: "client-swr-dedup"
     quote: "SWR enables request deduplication, caching, and revalidation across component instances."
   - upstream_id: nextjs-fetching-data
-    section: "Client Components"
-    quote: "You can use React's `use` API to stream data from the server to client."
+    section: "On Server Component data fetching"
+    quote: "Identical `fetch` requests in a React component tree are memoized by default, so you can fetch data in the component that needs it instead of drilling props."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

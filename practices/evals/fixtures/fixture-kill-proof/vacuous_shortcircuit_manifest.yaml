@@ -24,3 +24,15 @@ items:
     fixture_arg: '--repo-root'
     anchor: 'report_violation "1:marker" "$pattern" "$hit"'
     neuter: 'exit 0'
+
+  # cross-family review finding (2026-07-14): arbitrary executable code that
+  # merely name-drops a NEUTER_ sentinel must NOT slip through the
+  # sentinel-string shape. The shape now requires the neuter to be the anchor
+  # with ONLY quoted string literals swapped (str_skeleton equality), and
+  # `exec` joined the unconditional escape-token denylist.
+  - id: self_proof/vacuous_exec_sentinel_namedrop
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'exec true # NEUTER_BYPASS'
