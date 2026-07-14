@@ -1,0 +1,27 @@
+# cmdsubst_neuter_manifest.yaml — self-proof fixture for fixture_kill_proof_guard.sh [87]
+#
+# PURPOSE: prove that the meta-gate's neuter-vocabulary check (P2-14) BLOCKS a
+# manifest item whose neuter smuggles executable code inside a QUOTED string
+# literal via command substitution.
+#
+# The neuter mirrors the anchor with only a quoted literal swapped, so it would
+# otherwise satisfy the sentinel-string shape (str_skeleton collapses quoted
+# literals). But bash EXECUTES the embedded $( ... ) at runtime. The vocabulary
+# check rejects it at the escape-token denylist stage because the neuter's count
+# of the command-substitution pattern $( EXCEEDS the anchor's (which is 0),
+# before the sentinel-string shape is ever accepted.
+#
+# fixture/anchor reused from private_boundary/fail_marker (any valid
+# guard+fixture+anchor triple works here — the point under test is the neuter
+# string, not the mutation outcome).
+#
+# → fixture_kill_proof_guard.sh must exit 1 (BLOCK) when given this manifest,
+#   with a "control-flow escape token" rejection message (command substitution).
+
+items:
+  - id: self_proof/vacuous_cmdsubst_in_quoted_literal
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'report_violation "1:marker" "$(true) NEUTER_X" "$hit"'

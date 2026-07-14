@@ -1,0 +1,24 @@
+# exec_true_neuter_manifest.yaml — self-proof fixture for fixture_kill_proof_guard.sh [87]
+#
+# PURPOSE: prove that the meta-gate's neuter-vocabulary check (P2-14) BLOCKS a
+# manifest item whose neuter smuggles executable code via the `exec` builtin.
+#
+# `exec true # NEUTER_X` name-drops a NEUTER_ sentinel token, but `exec` replaces
+# the shell process — arbitrary code, not a surgical operator-shape swap. The
+# vocabulary check rejects it at the escape-token denylist stage (`\bexec\b`,
+# which the anchor does not contain), before the mutation is even attempted.
+#
+# fixture/anchor reused from private_boundary/fail_marker (any valid
+# guard+fixture+anchor triple works here — the point under test is the neuter
+# string, not the mutation outcome).
+#
+# → fixture_kill_proof_guard.sh must exit 1 (BLOCK) when given this manifest,
+#   with a "control-flow escape token" rejection message naming pattern \bexec\b.
+
+items:
+  - id: self_proof/vacuous_exec_true_neuter
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'exec true # NEUTER_X'

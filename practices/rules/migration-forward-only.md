@@ -14,8 +14,8 @@ upstream:
   - "https://docs.spring.io/spring-boot/reference/data/sql.html"
 evidence:
   - upstream_id: spring-boot-sql-migration
-    section: "Spring Boot — Flyway checksum / immutability contract"
-    quote: "Flyway"
+    section: "Spring Boot — Flyway migration execution (Flyway.migrate())"
+    quote: "Spring Boot calls Flyway.migrate() to perform the database migration."
   - source_type: external
     citation: "Flyway documentation — How Flyway works (immutable history + checksums)"
     url: "https://documentation.red-gate.com/fd/how-flyway-works-271583665.html"

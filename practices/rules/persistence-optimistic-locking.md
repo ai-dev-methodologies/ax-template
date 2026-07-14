@@ -13,9 +13,9 @@ verification:
 upstream:
   - "https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html"
 evidence:
-  - upstream_id: spring-jpa-fetching
-    section: "Spring Data JPA — locking"
-    quote: "lock"
+  - upstream_id: spring-jpa-locking
+    section: "Spring Data JPA — @Lock annotation on query methods"
+    quote: "To specify the lock mode to be used, you can use the @Lock annotation on query methods"
   - source_type: external
     citation: "Hibernate User Guide — Optimistic Locking"
     url: "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#locking-optimistic"

@@ -360,6 +360,46 @@ checklist:
       - command: "./gradlew testCurrencyArithmetic"
         working_directory: "backend"
         expected_exit: 0
+      # backlog-100 wave (2026-07-14) — P3 industry-niche closures
+      - command: "./gradlew testThresholdFiling"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testTieredAuthority"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testAppealIndependence"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testPiecewiseDeadband"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testCountBudget"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testTieredEligibility"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testEventIngest"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testExceptionGate"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testAdditiveFacts"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testGeoQuery"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testRouteLegs"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testGeofence"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testBilateralHandoff"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testIntegration"
         working_directory: "backend"
         expected_exit: 0

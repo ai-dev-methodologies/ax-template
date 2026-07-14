@@ -41,10 +41,12 @@ evidence:
     section: "useTranslations"
     quote: "const t = useTranslations('Payment');"
   - source_type: external
+    anchors: generic_principle_only
     citation: "next-intl docs — using t() for all user-visible text to enable locale switching"
     url: "https://next-intl.dev/docs/usage/messages"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Unicode — Hangul syllable block U+AC00 to U+D7A3; Hangul jamo U+3131 to U+3163"
     url: "https://unicode.org/charts/PDF/UAC00.pdf"
     quoted_at: "2026-05-18"

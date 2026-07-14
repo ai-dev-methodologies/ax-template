@@ -14,8 +14,8 @@ upstream:
   - "https://docs.spring.io/spring-boot/reference/data/sql.html"
 evidence:
   - upstream_id: spring-boot-sql-migration
-    section: "Spring Boot — Flyway baseline / repair"
-    quote: "Flyway"
+    section: "Spring Boot — FlywayProperties configuration surface"
+    quote: "FlywayProperties provides most of Flyway's settings and a small set of additional properties that can be used to disable the migrations or switch off the location checking."
   - source_type: external
     citation: "Flyway documentation — Baseline / baseline-on-migrate"
     url: "https://documentation.red-gate.com/fd/baseline-184549760.html"

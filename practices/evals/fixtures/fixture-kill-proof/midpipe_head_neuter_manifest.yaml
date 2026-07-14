@@ -1,0 +1,26 @@
+# midpipe_head_neuter_manifest.yaml — self-proof fixture for fixture_kill_proof_guard.sh [87]
+#
+# PURPOSE: prove that the meta-gate's neuter-vocabulary check (P2-14) BLOCKS a
+# manifest item whose neuter attaches a `| head -N` clause that is NOT the last
+# stage of its pipeline (a trailing `foo` command follows it).
+#
+# The truncation shape is deliberately narrow: removing exactly one `| head -N`
+# clause must yield the anchor verbatim AND that clause must be the pipeline's
+# LAST stage (only whitespace/closers may follow). A mid-pipeline head re-shapes
+# the pipeline — piping into a following command instead of truncating output —
+# so it matches NO allowlisted shape and is rejected as UNKNOWN.
+#
+# fixture/anchor reused from private_boundary/fail_marker (any valid
+# guard+fixture+anchor triple works here — the point under test is the neuter
+# string, not the mutation outcome).
+#
+# → fixture_kill_proof_guard.sh must exit 1 (BLOCK) when given this manifest,
+#   with an "does not match any allowlisted PIT-style operator shape" rejection.
+
+items:
+  - id: self_proof/vacuous_midpipe_head_neuter
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'report_violation "1:marker" "$pattern" "$hit" | head -1 foo'

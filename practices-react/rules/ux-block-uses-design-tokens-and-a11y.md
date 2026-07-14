@@ -30,14 +30,17 @@ verification:
     component, not an inline demo of every variant.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "WCAG 2.2 SC 1.4.1 Use of Color: color is not used as the only visual means of conveying information; pairing each status with an icon plus a text label (not color alone) satisfies it."
     url: "https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html"
     quoted_at: "2026-06-03"
   - source_type: external
+    anchors: generic_principle_only
     citation: "WAI-ARIA 1.2 status role: a type of live region whose content is advisory information for the user that is not important enough to justify an alert; assistive technologies announce its changes."
     url: "https://www.w3.org/TR/wai-aria-1.2/#status"
     quoted_at: "2026-06-03"
   - source_type: external
+    anchors: generic_principle_only
     citation: "MDN CSS custom properties (--*): define design tokens once and reference them with var(); a single token swap re-themes every consumer (light/dark/brand) without touching component code."
     url: "https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties"
     quoted_at: "2026-06-03"

@@ -14,8 +14,8 @@ upstream:
   - "https://docs.spring.io/spring-framework/reference/integration/cache.html"
 evidence:
   - upstream_id: spring-cache-abstraction
-    section: "Spring Framework — Cache Abstraction (@Cacheable sync)"
-    quote: "sync"
+    section: "@Cacheable sync attribute (cacheNames + sync)"
+    quote: '@Cacheable(cacheNames="foos", sync=true)'
   - source_type: external
     citation: "Spring Framework Reference — Cache Abstraction"
     url: "https://docs.spring.io/spring-framework/reference/integration/cache.html#cache-annotations-cacheable-synchronized"

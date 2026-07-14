@@ -21,10 +21,12 @@ verification:
   notes: "No file under templates/L4/<domain-A>/ may import from templates/L4/<domain-B>/. Shared cross-cutting concerns (auth state, user context) must be sourced from shared hooks (hooks/), context providers (providers/), or L1/L2 components — never from another L4 domain."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Acyclic Dependencies Principle (Martin, Agile Software Development: Principles, Patterns, and Practices) — the dependency graph of packages must have no cycles; a package that depends on a sibling it may in turn be depended upon by introduces a cycle that prevents independent build and release. (The L4-to-L4 import ban itself is an ax-template layer decision — this citation anchors only the generic acyclic-package-dependency principle it rests on; shared concerns are re-routed to L1/L2/hooks rather than to a sibling domain.)"
     url: "https://en.wikipedia.org/wiki/Acyclic_dependencies_principle"
     quoted_at: "2026-07-14"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js documentation — Project organization and file colocation: application code can be colocated inside route segments, and private folders keep implementation details out of routing. (Anchors only the generic colocation/module-boundary principle; the cross-domain prohibition is an ax-template layer decision, not a Next.js requirement.)"
     url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"
     quoted_at: "2026-07-14"

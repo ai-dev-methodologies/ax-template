@@ -63,6 +63,13 @@ run_guard "evidence_guard/practices" 0 \
     bash "$SCRIPT_DIR/evidence_guard.sh" --catalog practices
 run_guard "evidence_guard/practices-react" 0 \
     bash "$SCRIPT_DIR/evidence_guard.sh" --catalog practices-react
+# P2-20: internal_design + source_type:external evidence must declare
+# `anchors: generic_principle_only`. Fixture pair proves the new branch
+# non-vacuously (missing → BLOCK, present → PASS).
+run_guard "evidence_guard/fixture_missing_caveat" 1 \
+    bash "$SCRIPT_DIR/evidence_guard.sh" "$SCRIPT_DIR/fixtures/evidence-caveat/fail_missing_caveat"
+run_guard "evidence_guard/fixture_caveat_present" 0 \
+    bash "$SCRIPT_DIR/evidence_guard.sh" "$SCRIPT_DIR/fixtures/evidence-caveat/pass_caveat_present"
 
 # ── 2. spec_ref_guard (practices + practices-react) ──────────────────────────
 echo "[2] spec_ref_guard.sh"
@@ -1065,9 +1072,9 @@ echo "[73] feature_boundary_allowlist_guard.sh (frontend decomposition spec 2026
 run_guard "feature_boundary_allowlist/live" 0 \
     bash "$SCRIPT_DIR/../../practices-react/evals/feature_boundary_allowlist_guard.sh"
 
-echo "[74] evidence_quote_spotcheck_guard.sh (BACKLOG P2-1 — evidence_guard checks STRUCTURE not TRUTH, so a fabricated quote passes every blocking gate; this deterministic quote-vs-snapshot sweep closes the offline half. P2-1a 2026-07-13: QUOTE 미매칭 83건 전량 소진{vercel-64 스냅숏 regen + 19 재앵커} → live를 --strict --allow-missing-snapshot로 승격 — QUOTE_NOT_IN_SNAPSHOT는 이제 HARD-FAIL, SNAPSHOT_FILE_MISSING 87건{Java-side 스냅숏 본문 미커밋, network-bound}만 advisory WARN으로 잔존{P2-18 residual}. B3 fixture 쌍이 flag 시맨틱을 non-vacuously 증명.)"
+echo "[74] evidence_quote_spotcheck_guard.sh (BACKLOG P2-1 — evidence_guard checks STRUCTURE not TRUTH, so a fabricated quote passes every blocking gate; this deterministic quote-vs-snapshot sweep closes the offline half. P2-1a 2026-07-13: QUOTE 미매칭 83건 전량 소진 → --strict --allow-missing-snapshot 승격. P2-18 2026-07-14: Java-side 스냅숏 본문 전량 커밋{47 fetch + 재앵커 21룰 + 조작 quote 4건 정직 재앵커} + react-side 잔여 2본문 커밋 → live를 FULL --strict로 최종 승격 — QUOTE_NOT_IN_SNAPSHOT와 SNAPSHOT_FILE_MISSING 둘 다 HARD-FAIL, allow-missing 잔여 0. B3 fixture 쌍은 --allow-missing-snapshot 플래그 시맨틱 회귀 방지용으로 유지.)"
 run_guard "evidence_quote_spotcheck/live" 0 \
-    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --allow-missing-snapshot
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict
 run_guard "evidence_quote_spotcheck/fixture_fail" 1 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_quote_absent"
 run_guard "evidence_quote_spotcheck/fixture_pass" 0 \
@@ -1093,6 +1100,14 @@ run_guard "agent_block_proof/fixture_fail" 1 \
     bash "$SCRIPT_DIR/agent_block_proof_guard.sh" --root "$SCRIPT_DIR/fixtures/agent-block-proof/fail_vacuous_proof"
 run_guard "agent_block_proof/fixture_pass" 0 \
     bash "$SCRIPT_DIR/agent_block_proof_guard.sh" --root "$SCRIPT_DIR/fixtures/agent-block-proof/pass_proof_toggles"
+# P3-47: fresh-clone invariant — zero real-ledger agent events must PASS by
+# construction (proof writes 2 events to the ISOLATED temp ledger; the real
+# ledger is only checked for non-mutation). And the converse: a proof that exits
+# 0 while logging ZERO agent events to the temp ledger must FAIL (check (b)).
+run_guard "agent_block_proof/fixture_pass_zero_real_ledger" 0 \
+    bash "$SCRIPT_DIR/agent_block_proof_guard.sh" --root "$SCRIPT_DIR/fixtures/agent-block-proof/pass_zero_real_ledger"
+run_guard "agent_block_proof/fixture_fail_no_agent_events" 1 \
+    bash "$SCRIPT_DIR/agent_block_proof_guard.sh" --root "$SCRIPT_DIR/fixtures/agent-block-proof/fail_proof_writes_no_agent_events"
 
 echo "[77] backlog_convergence_integrity_guard.sh (north-star #2 — the BACKLOG convergence rate is the project's redefined end-point, yet nothing read docs/BACKLOG.md, so the 수렴률 table tier counts / 합계 denominator / aggregate % could silently rot or mis-sum. This guard counts '- [x]'/'- [ ]' item IDs per ## P0–P3 section as disk-truth — expanding ranges (P0-1 ~ P0-11), range-plus-extra (P1-14~17 + P1-19), and slash lists; excluding denominator-marked lettered sub-items (P2-1a/b) — and asserts each tier 전체/closed cell, the 합계 == sum of tiers, and aggregate 수렴률 == round(closed/total*100). Live exits 0; fixtures prove non-vacuity.)"
 run_guard "backlog_convergence_integrity/live" 0 \
@@ -1193,6 +1208,19 @@ run_guard "fixture_kill_proof/fixture_pass" 0 \
     bash "$SCRIPT_DIR/fixture_kill_proof_guard.sh" --manifest "$SCRIPT_DIR/fixtures/fixture-kill-proof/nonvacuous_manifest.yaml"
 run_guard "fixture_kill_proof/fixture_shortcircuit_reject" 1 \
     bash "$SCRIPT_DIR/fixture_kill_proof_guard.sh" --manifest "$SCRIPT_DIR/fixtures/fixture-kill-proof/vacuous_shortcircuit_manifest.yaml"
+# P2-19: three additional bypass self-proofs, one per escape class the vocabulary
+# check (P2-14) must reject — exec builtin, command substitution inside a quoted
+# literal, and a non-terminal mid-pipeline `| head`. Each must BLOCK (exit 1).
+run_guard "fixture_kill_proof/fixture_exec_reject" 1 \
+    bash "$SCRIPT_DIR/fixture_kill_proof_guard.sh" --manifest "$SCRIPT_DIR/fixtures/fixture-kill-proof/exec_true_neuter_manifest.yaml"
+run_guard "fixture_kill_proof/fixture_cmdsubst_reject" 1 \
+    bash "$SCRIPT_DIR/fixture_kill_proof_guard.sh" --manifest "$SCRIPT_DIR/fixtures/fixture-kill-proof/cmdsubst_neuter_manifest.yaml"
+run_guard "fixture_kill_proof/fixture_midpipe_head_reject" 1 \
+    bash "$SCRIPT_DIR/fixture_kill_proof_guard.sh" --manifest "$SCRIPT_DIR/fixtures/fixture-kill-proof/midpipe_head_neuter_manifest.yaml"
+
+echo "[88] pre_push_decision_guard.sh (P2-17 — behavior-tests the pre-push hook's 10 decision branches + primary R25 block against throwaway git repos with a STUB recency guard + STUB gradlew; asserts exit code AND which stages fired per scenario, 1:1 with the committed fixtures/pre-push-decision/scenarios.yaml table. Pure decision logic extracted to .githooks/pre-push-lib.sh {sourced by the hook; refactor proven byte-identical vs original across 8 scenario runs}. Non-vacuity is INTERNAL: scenario_selfproof_nonvacuous mutates the lib and requires a scenario regression every sweep — fixture_kill_manifest deliberately NOT used {the [87] model mutates a guard and reruns a fixture dir; here the subject-under-test is the hook/lib, which the manifest schema cannot express}. Live exits 0.)"
+run_guard "pre_push_decision/live" 0 \
+    bash "$SCRIPT_DIR/pre_push_decision_guard.sh"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""

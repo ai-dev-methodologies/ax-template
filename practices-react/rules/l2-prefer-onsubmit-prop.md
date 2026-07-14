@@ -35,6 +35,7 @@ audit:
     status: complete
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "React documentation — Responding to Events (Passing event handlers as props): a child component receives event handlers such as onSubmit from its parent as props, keeping the child agnostic to what the handler does. (The server-action/lib import ban itself is an ax-template layer decision — this citation anchors only the generic callback-prop principle it rests on.)"
     url: "https://react.dev/learn/responding-to-events"
     quoted_at: "2026-07-14"

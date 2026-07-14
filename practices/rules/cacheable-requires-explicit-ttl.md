@@ -21,11 +21,11 @@ upstream:
   - "https://docs.spring.io/spring-framework/reference/integration/cache.html"
 evidence:
   - upstream_id: caffeine-2026-05
-    section: "No Implicit TTL"
-    quote: "Unlike some cache providers, Caffeine has no global default TTL. If neither expireAfterWrite nor expireAfterAccess is configured: entries are only evicted when maximumSize is exceeded"
+    section: "Time-based eviction — expireAfterWrite"
+    quote: "expireAfterWrite(long, TimeUnit): Expire entries after the specified duration has passed since the entry was created, or the most recent replacement of the value."
   - upstream_id: spring-cache-2026-05
-    section: "TTL / Eviction Policy"
-    quote: "How can I Set the TTL/TTI/Eviction policy/XXX feature? The Spring Cache abstraction deliberately does not enforce TTL at the abstraction layer. TTL and eviction are provider-specific"
+    section: "FAQ — TTL/Eviction is provider-specific"
+    quote: "How can I Set the TTL/TTI/Eviction policy/XXX feature? Directly through your cache provider. The cache abstraction is an abstraction, not a cache implementation."
   - source_type: external
     citation: "Caffeine Wiki/Eviction — expireAfterWrite: Expire entries after the specified duration has passed since the entry was created, or the most recent replacement of the value."
     url: "https://github.com/ben-manes/caffeine/wiki/Eviction"

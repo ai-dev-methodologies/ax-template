@@ -110,3 +110,25 @@ items:
     fixture_arg: '--root'
     anchor: 'latest.get("full_run") is not True'
     neuter: 'False'
+
+  # ── evidence_guard/fail_missing_caveat: P2-20 internal_design caveat check ────
+  # fixture: an internal_design rule carrying a source_type:external evidence entry
+  #          that omits `anchors: generic_principle_only` → evidence_guard exit 1.
+  # anchor:  the P2-20 condition expression that flags the missing caveat.
+  # neuter:  replace the condition with False → the caveat check never fires →
+  #          the fixture's only violation disappears → exit 0.
+  # fixture_arg: evidence_guard reads its target catalog as a bare absolute
+  #          positional (the `/*` CATALOG_DIR_OVERRIDE branch, which always wins
+  #          over --catalog). The kill-proof harness always appends the fixture
+  #          path AFTER fixture_arg, so a non-empty fixture_arg is required to
+  #          route through the two-input branch — `--catalog=practices` is an
+  #          inert placeholder (immediately overridden by the positional fixture
+  #          path). It must be non-empty: an empty middle column collapses under
+  #          the harness's `IFS=$'\t' read` (tab is whitespace) and shifts the
+  #          anchor into the wrong field.
+  - id: evidence_guard/fail_missing_caveat
+    guard: practices/evals/evidence_guard.sh
+    fixture: practices/evals/fixtures/evidence-caveat/fail_missing_caveat
+    fixture_arg: '--catalog=practices'
+    anchor: 'prov == "internal_design" and str(item.get("anchors", "")).strip() != "generic_principle_only"'
+    neuter: 'False'

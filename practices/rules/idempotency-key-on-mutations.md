@@ -18,10 +18,12 @@ verification:
   notes: "All @PostMapping handlers in payment, notification, and email-outbox controllers must declare @RequestHeader(value=\"Idempotency-Key\", required=false), reject a null/blank key with 400, and dedup the key via the shared common/IdempotencyKeyStore — the pattern PaymentController uses (PAYMENT-IDEMP-001)."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "IETF draft-ietf-httpapi-idempotency-key-header — The Idempotency-Key HTTP Header Field (deduplicated retry semantics)"
     url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Stripe API Reference — Idempotent requests: all POST requests accept an Idempotency-Key header to guarantee exactly-once delivery"
     url: "https://docs.stripe.com/api/idempotent_requests"
     quoted_at: "2026-05-18"

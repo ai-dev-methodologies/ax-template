@@ -23,10 +23,12 @@ verification:
   notes: "Combobox onChange handler must check composingRef.current or nativeEvent.isComposing before invoking the filter/search. onCompositionStart must set the guard; onCompositionEnd must clear it and fire the deferred filter."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "MDN Web Docs — CompositionEvent: compositionstart / compositionend lifecycle for CJK input method editors"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "W3C UI Events specification §CompositionEvent — IME composition lifecycle (compositionstart, compositionupdate, compositionend)"
     url: "https://www.w3.org/TR/uievents/#events-composition-types"
     quoted_at: "2026-05-18"

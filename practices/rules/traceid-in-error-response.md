@@ -23,10 +23,12 @@ evidence:
     section: "SLF4J Mapped Diagnostic Context (MDC)"
     quote: "Mapped Diagnostic Context"
   - source_type: external
+    anchors: generic_principle_only
     citation: "RFC 7807 §3.2 — Extension Members: problem detail objects may extend the base format with additional properties to aid debugging"
     url: "https://www.rfc-editor.org/rfc/rfc7807#section-3.2"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "OpenTelemetry Trace Context W3C Specification — trace-id propagation for cross-service correlation"
     url: "https://www.w3.org/TR/trace-context/#trace-id"
     quoted_at: "2026-05-18"

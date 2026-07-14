@@ -24,13 +24,14 @@ verification:
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
-    section: "Subscription lifecycle"
-    quote: "trialing — trial period active; active — subscription is current; past_due — latest invoice payment attempt failed; canceled — subscription ended"
+    section: "Subscription lifecycle (status table)"
+    quote: "trialing The subscription is currently in a trial period and you can safely provision your product for your customer. The subscription transitions automatically to active when a customer makes the first payment."
   - source_type: upstream_id
     upstream_id: toss-billing-2026-05
-    section: "정기결제 구독 상태 매핑"
-    quote: "ACTIVE: 정상 사용 가능, INACTIVE: 카드 만료/분실 등으로 비활성화"
+    section: "구독 상태는 가맹점이 직접 관리 (Toss는 상태 enum 미제공)"
+    quote: "구독 서비스는 API를 사용해서 직접 구축해야 합니다."
   - source_type: external
+    anchors: generic_principle_only
     citation: "Domain-Driven Design — Aggregates encapsulate invariants; state transitions are explicit methods on the aggregate, not raw field mutations"
     url: "https://martinfowler.com/bliki/DDD_Aggregate.html"
     quoted_at: "2026-05-18"

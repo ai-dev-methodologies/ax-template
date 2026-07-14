@@ -23,14 +23,17 @@ verification:
     Violation: multi-domain composition without recipe declaration.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Martin Fowler — Patterns of Enterprise Application Architecture: composition patterns prevent ad-hoc coupling by making dependencies explicit through a shared composition contract"
     url: "https://martinfowler.com/eaaCatalog/"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Spring Modulith reference — modules communicate via published events or explicit API types; direct package imports between modules create structural coupling that Spring Modulith enforces at test time"
     url: "https://docs.spring.io/spring-modulith/reference/fundamentals.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "토스 기술 블로그 — 도메인 모듈 설계: 도메인 간 직접 의존 대신 이벤트 또는 명시적 조합 계약을 통해 결합도를 낮춥니다"
     url: "https://toss.tech/article/slash21-backend"
     quoted_at: "2026-05-18"

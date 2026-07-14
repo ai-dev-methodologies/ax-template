@@ -23,12 +23,13 @@ evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
     section: "Idempotency"
-    quote: "Stripe stores results for at least 24 hours. Retrying the same key within the window returns the original response without creating a duplicate resource."
+    quote: "Stripe's idempotency works by saving the resulting status code and body of the first request made for any given idempotency key, regardless of whether it succeeds or fails."
   - source_type: upstream_id
     upstream_id: toss-billing-2026-05
-    section: "멱등성"
-    quote: "Idempotency-Key 헤더를 사용하면 네트워크 오류로 인한 재시도 시 중복 결제를 방지할 수 있습니다."
+    section: "멱등키 헤더"
+    quote: "요청 헤더에 Idempotency-Key를 추가하면 멱등한 요청을 보낼 수 있습니다."
   - source_type: external
+    anchors: generic_principle_only
     citation: "IETF draft — The Idempotency-Key HTTP Header Field (exactly-once semantics)"
     url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
     quoted_at: "2026-05-18"

@@ -15,7 +15,7 @@ upstream:
 evidence:
   - upstream_id: spring-jpa-fetching
     section: EntityGraph definition + fetch plan
-    quote: o support with the @EntityGraph annotation, which lets you reference a @NamedEntityGraph definition. You can use that annotation on an entity to configure the fetch plan of the resulting query. The type ( Fetch or Load ) of the fetching can be configured by us
+    quote: "the @EntityGraph annotation, which lets you reference a @NamedEntityGraph definition. You can use that annotation on an entity to configure the fetch plan of the resulting query."
   - source_type: external
     citation: 'Spring Data JPA Reference — Fetching strategies (JOIN FETCH and @EntityGraph)'
     url: 'https://docs.spring.io/spring-data/jpa/reference/jpa/fetching.html'

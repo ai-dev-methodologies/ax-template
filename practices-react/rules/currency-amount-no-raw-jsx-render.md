@@ -25,13 +25,14 @@ verification:
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
-    section: "Amounts and currencies"
-    quote: "All amounts are stored in the smallest currency unit (e.g., 100 cents to charge $1.00). For zero-decimal currencies such as JPY or KRW, use the amount directly."
+    section: "Zero-decimal currencies"
+    quote: "For the following zero-decimal currencies, the charge and the amount are the same, without requiring multiplication. For example, to charge 500 JPY, provide an amount value of 500."
   - source_type: upstream_id
     upstream_id: toss-billing-2026-05
-    section: "금액 단위"
-    quote: "amount 필드는 항상 정수(원 단위)로 전달합니다. 소수점 금액은 허용하지 않습니다."
+    section: "자동결제 amount 파라미터"
+    quote: "금액이 바뀌었다면 자동결제 승인 API를 호출할 때 amount 파라미터를 변경된 결제 금액으로 설정하면 됩니다."
   - source_type: external
+    anchors: generic_principle_only
     citation: "WCAG 2.2 SC 1.3.3 Sensory Characteristics: Instructions do not rely solely on sensory characteristics. Formatted currency labels (₩10,000) are more accessible than raw numbers (10000) because screen readers announce the currency symbol."
     url: "https://www.w3.org/WAI/WCAG22/Understanding/sensory-characteristics.html"
     quoted_at: "2026-05-18"

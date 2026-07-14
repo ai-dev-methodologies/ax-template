@@ -87,6 +87,7 @@ if not isinstance(ev, list) or len(ev) == 0:
     print(f"VIOLATION [{path}]: `evidence` field missing or empty (need ≥1 entry)")
     sys.exit(1)
 
+prov = fm.get("provenance_class")
 errors = []
 for i, item in enumerate(ev):
     if not isinstance(item, dict):
@@ -106,6 +107,13 @@ for i, item in enumerate(ev):
             errors.append(f"entry {i}: missing `citation`")
         if not str(item.get("url", "")).strip():
             errors.append(f"entry {i}: missing `url`")
+        # P2-20: an internal_design rule's design decision is author-made, so any
+        # external citation it carries can only anchor a GENERIC principle, never
+        # mandate the specific rule. Force that honesty mechanically — the entry
+        # must declare `anchors: generic_principle_only`. If a citation truly
+        # mandated the rule, the rule would not be internal_design.
+        if prov == "internal_design" and str(item.get("anchors", "")).strip() != "generic_principle_only":
+            errors.append(f"entry {i}: provenance_class=internal_design + source_type=external requires `anchors: generic_principle_only`")
     else:
         errors.append(f"entry {i}: must have either `upstream_id` or `source_type: external`")
 

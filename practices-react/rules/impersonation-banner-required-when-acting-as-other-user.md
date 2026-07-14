@@ -22,10 +22,12 @@ verification:
   notes: "The fixture runner checks canonical session.actingAs mutation patterns (direct assignment, immutable update, any helper returning {actingAs}) without a co-located <ImpersonationBanner>. The fail_helper_renamed_runAsUser fixture specifically validates that the rule is NOT bypassable by renaming the helper function."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "OWASP Session Management Cheat Sheet: Admin impersonation sessions must be visually distinct and audited; the impersonated identity must always be visible to the operator."
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A): Information, structure, and relationships conveyed through presentation are also available in text. A banner conveying impersonation context must be programmatically determinable."
     url: "https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html"
     quoted_at: "2026-05-18"

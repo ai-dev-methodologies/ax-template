@@ -37,6 +37,7 @@ audit:
 provenance_class: internal_design
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "React documentation — Passing Props to a Component: a parent passes data to a child through props, and the child renders the props it is given rather than sourcing its own data. (The L2 fetch/useQuery ban itself is an ax-template layer decision — this citation anchors only the generic props-boundary principle it rests on.)"
     url: "https://react.dev/learn/passing-props-to-a-component"
     quoted_at: "2026-07-14"

@@ -47,14 +47,17 @@ verification:
     fail-fast on @TenantId misuse) anchored in manifest interceptor_skeleton.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Hibernate User Guide — Multi-tenancy: @FilterDef('tenantFilter') with row-level discriminator is the documented row-level isolation pattern; the guide is explicit that the filter must be enabled per Session and that 'forgetting to enable the filter is silent — queries simply return rows from all tenants'"
     url: "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#multitenacy"
     quoted_at: "2026-05-20"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Spring Framework reference — TaskDecorator: 'A callback interface for a decorator to be applied to any Runnable about to be executed. Note that such a decorator is not necessarily being applied to the user-supplied Runnable/Callable but rather to the actual execution callback (which may be a wrapper around the user-supplied task).' Establishes that TaskDecorator binds at executor level, not at @Async level — confirming the prerequisite_executor_bean requirement"
     url: "https://docs.spring.io/spring-framework/reference/integration/scheduling.html#scheduling-task-namespace"
     quoted_at: "2026-05-20"
   - source_type: external
+    anchors: generic_principle_only
     citation: "RFC 7807 — Problem Details for HTTP APIs §3.1: each problem type has a stable URI; mixing 404 (existence-leakage prevention for cross-tenant access) and 500 (server-side context-missing bug) under one Problem Type URI conflates client and server faults and breaks the contract that 'a problem type SHOULD describe a single class of problem'"
     url: "https://datatracker.ietf.org/doc/html/rfc7807#section-3.1"
     quoted_at: "2026-05-20"

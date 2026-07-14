@@ -25,7 +25,7 @@ evidence:
     quoted_at: "2026-05-26"
   - upstream_id: wcag-22-techniques-2026-05
     section: "SC 4.1.3 Status Messages (Level AA)"
-    quote: "status messages can be programmatically"
+    quote: "status messages can be programmatically determined through role or properties"
 ---
 
 ## Background-polled pages MUST expose dataUpdatedAt + aria-busy on mutations

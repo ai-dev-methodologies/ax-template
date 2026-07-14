@@ -13,8 +13,8 @@ upstream:
   - "https://docs.spring.io/spring-boot/reference/data/sql.html"
 evidence:
   - upstream_id: spring-boot-sql-migration
-    section: "Spring Boot — Migration Tool (Flyway)"
-    quote: "Flyway"
+    section: "Spring Boot — Flyway versioned migration naming"
+    quote: "Typically, migrations are scripts in the form V __ .sql (with an underscore-separated version, such as '1' or '2_1')."
   - source_type: external
     citation: "Flyway documentation — Migration naming convention"
     url: "https://documentation.red-gate.com/fd/migrations-271583622.html"

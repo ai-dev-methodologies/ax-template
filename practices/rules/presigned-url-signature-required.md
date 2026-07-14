@@ -18,14 +18,17 @@ verification:
   notes: "Every PresignedUrlService.generateDownloadUrl / generateUploadUrl must compute HMAC over (objectKey + expiry) and append sig + exp query parameters."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "AWS S3 Developer Guide — Presigned URLs: if a request is made by using the temporary security credentials of an IAM role, the presigned URL expires when the credentials used to sign the URL expire"
     url: "https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "OWASP Cheat Sheet — Insecure Direct Object References (IDOR): all resource access must verify authorization at the application layer, not just at the storage layer"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "RFC 2104 — HMAC: Keyed-Hashing for Message Authentication: HMAC verifies both the data integrity and the authenticity of a message; a presigned URL signs its parameters + expiry with a server-held HMAC key so any tampering invalidates the signature"
     url: "https://www.rfc-editor.org/rfc/rfc2104"
     quoted_at: "2026-06-02"

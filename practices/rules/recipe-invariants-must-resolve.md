@@ -26,6 +26,7 @@ verification:
     Zero-invariants is a WARN not a FAIL (recipe may be L2-only).
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "OWASP ASVS — every security requirement must reference a testable control; untestable requirements provide false assurance and cannot be verified in a security audit"
     url: "https://owasp.org/www-project-application-security-verification-standard/"
     quoted_at: "2026-05-18"

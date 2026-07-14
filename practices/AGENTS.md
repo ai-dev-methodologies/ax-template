@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "26dadeda5ad12c2bac9603c158e869172ad02695d7eea597c022d65c6d535261"
-  rule_count: 229
+  source_concat_sha256: "9b449a5edd77107a2d519781a69dc0a162366c525306db6b75080cf1f5a094ca"
+  rule_count: 232
   generated_by: "practices/generate_agents.sh"
 ---
 
@@ -1326,7 +1326,7 @@ evidence:
     quoted_at: "2026-05-26"
   - upstream_id: wcag-22-techniques-2026-05
     section: "SC 4.1.3 Status Messages (Level AA)"
-    quote: "status messages can be programmatically"
+    quote: "status messages can be programmatically determined through role or properties"
 ---
 
 ## Background-polled pages MUST expose dataUpdatedAt + aria-busy on mutations
@@ -1654,12 +1654,13 @@ evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
     section: "Idempotency"
-    quote: "Stripe stores results for at least 24 hours. Retrying the same key within the window returns the original response without creating a duplicate resource."
+    quote: "Stripe's idempotency works by saving the resulting status code and body of the first request made for any given idempotency key, regardless of whether it succeeds or fails."
   - source_type: upstream_id
     upstream_id: toss-billing-2026-05
-    section: "멱등성"
-    quote: "Idempotency-Key 헤더를 사용하면 네트워크 오류로 인한 재시도 시 중복 결제를 방지할 수 있습니다."
+    section: "멱등키 헤더"
+    quote: "요청 헤더에 Idempotency-Key를 추가하면 멱등한 요청을 보낼 수 있습니다."
   - source_type: external
+    anchors: generic_principle_only
     citation: "IETF draft — The Idempotency-Key HTTP Header Field (exactly-once semantics)"
     url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
     quoted_at: "2026-05-18"
@@ -2114,10 +2115,12 @@ verification:
     Missing field or wrong value → VIOLATION.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "arc42 — Architecture Decision Records: every architectural decision must be traceable; undeclared composition cannot be verified or evolved without breaking hidden assumptions"
     url: "https://arc42.org/overview/"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Spring Modulith reference — @ApplicationModule annotation makes module membership explicit and machine-verifiable; undeclared module boundaries are enforced to fail loudly"
     url: "https://docs.spring.io/spring-modulith/reference/fundamentals.html"
     quoted_at: "2026-05-18"
@@ -2282,8 +2285,8 @@ upstream:
   - "https://docs.spring.io/spring-framework/reference/integration/cache.html"
 evidence:
   - upstream_id: spring-cache-abstraction
-    section: "Spring Framework — Cache Abstraction (@Cacheable sync)"
-    quote: "sync"
+    section: "@Cacheable sync attribute (cacheNames + sync)"
+    quote: '@Cacheable(cacheNames="foos", sync=true)'
   - source_type: external
     citation: "Spring Framework Reference — Cache Abstraction"
     url: "https://docs.spring.io/spring-framework/reference/integration/cache.html#cache-annotations-cacheable-synchronized"
@@ -2342,8 +2345,8 @@ upstream:
   - "https://docs.spring.io/spring-framework/reference/integration/cache.html"
 evidence:
   - upstream_id: spring-cache-abstraction
-    section: "Spring Framework — Cache Abstraction usage guidance"
-    quote: "Cacheable"
+    section: "The @Cacheable Annotation — method demarcation"
+    quote: "you can use @Cacheable to demarcate methods that are cacheable"
   - source_type: external
     citation: "Spring Framework Reference — Cache Abstraction"
     url: "https://docs.spring.io/spring-framework/reference/integration/cache.html"
@@ -2416,11 +2419,11 @@ upstream:
   - "https://docs.spring.io/spring-framework/reference/integration/cache.html"
 evidence:
   - upstream_id: caffeine-2026-05
-    section: "No Implicit TTL"
-    quote: "Unlike some cache providers, Caffeine has no global default TTL. If neither expireAfterWrite nor expireAfterAccess is configured: entries are only evicted when maximumSize is exceeded"
+    section: "Time-based eviction — expireAfterWrite"
+    quote: "expireAfterWrite(long, TimeUnit): Expire entries after the specified duration has passed since the entry was created, or the most recent replacement of the value."
   - upstream_id: spring-cache-2026-05
-    section: "TTL / Eviction Policy"
-    quote: "How can I Set the TTL/TTI/Eviction policy/XXX feature? The Spring Cache abstraction deliberately does not enforce TTL at the abstraction layer. TTL and eviction are provider-specific"
+    section: "FAQ — TTL/Eviction is provider-specific"
+    quote: "How can I Set the TTL/TTI/Eviction policy/XXX feature? Directly through your cache provider. The cache abstraction is an abstraction, not a cache implementation."
   - source_type: external
     citation: "Caffeine Wiki/Eviction — expireAfterWrite: Expire entries after the specified duration has passed since the entry was created, or the most recent replacement of the value."
     url: "https://github.com/ben-manes/caffeine/wiki/Eviction"
@@ -3959,8 +3962,8 @@ upstream:
   - "https://docs.spring.io/spring-framework/reference/core/aop/proxying.html"
 evidence:
   - upstream_id: spring-aop-proxying
-    section: CGLIB subclass-based proxying restrictions
-    quote: dynamic proxies or CGLIB to create the proxy for a given target object. JDK dynamic proxies are built into the JDK, whereas CGLIB is a common open-source class definition library (repackaged into spring-core ). If the target object to be proxied implements at
+    section: Proxying mechanisms — CGLIB final-class/method restriction
+    quote: "final classes cannot be proxied, because they cannot be extended. final methods cannot be advised, because they cannot be overridden."
   - source_type: external
     citation: 'Spring Framework Reference — §Proxying mechanisms (CGLIB final-class restriction)'
     url: 'https://docs.spring.io/spring-framework/reference/core/aop/proxying.html'
@@ -4369,13 +4372,14 @@ verification:
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
-    section: "Amounts and currencies"
-    quote: "All amounts are stored in the smallest currency unit (e.g., 100 cents to charge $1.00). For zero-decimal currencies such as JPY or KRW, use the amount directly (e.g., 150 to charge ¥150)."
+    section: "Zero-decimal currencies"
+    quote: "For the following zero-decimal currencies, the charge and the amount are the same, without requiring multiplication. For example, to charge 500 JPY, provide an amount value of 500."
   - source_type: upstream_id
     upstream_id: toss-billing-2026-05
-    section: "금액 단위"
-    quote: "amount 필드는 항상 정수(원 단위)로 전달합니다. 소수점 금액은 허용하지 않습니다."
+    section: "자동결제 amount 파라미터"
+    quote: "금액이 바뀌었다면 자동결제 승인 API를 호출할 때 amount 파라미터를 변경된 결제 금액으로 설정하면 됩니다."
   - source_type: external
+    anchors: generic_principle_only
     citation: "Martin Fowler — Money pattern: store amounts as integer minor units to avoid floating-point rounding; pair with a Currency object for formatting."
     url: "https://martinfowler.com/eaaCatalog/money.html"
     quoted_at: "2026-05-18"
@@ -4967,6 +4971,87 @@ Reference: [Broadleaf RatingSummaryImpl.resetAverageRating (recompute mean from 
 Reference: [Broadleaf RatingSummaryDaoImpl (resetAverageRating before every merge)](https://github.com/BroadleafCommerce/BroadleafCommerce/blob/develop-7.0.x/core/broadleaf-framework/src/main/java/org/broadleafcommerce/core/rating/dao/RatingSummaryDaoImpl.java)
 
 Reference: [PostgreSQL — Materialized Views (a derived aggregate is stale until recomputed)](https://www.postgresql.org/docs/current/rules-materializedviews.html)
+
+
+<!-- @source rules/derived-key-idempotent-statement-generation.md -->
+
+---
+title: A generated statement's identity MUST be a deterministic content hash of (subject, period, basis) — never a client-supplied idempotency header — so an identical regeneration returns the SAME row and a changed basis appends a new version, and the statement's columns stay immutable once written
+impact: HIGH
+impactDescription: "A statement-generation endpoint that relies on a client-supplied idempotency key (or nothing at all) to prevent duplicates produces duplicate authoritative artifacts under retry/at-least-once delivery — a client double-charged, double-notified, or shown two conflicting statements for the same period. Updating an existing statement's content in place on regeneration destroys the record of what the subject was actually told at generation time"
+tags:
+  - idempotency
+  - audit
+  - conservation
+spec_ref: "specs/derived-statement-l0.yaml#STMT-DERIVE-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/derivedstatement/DerivedStatementService.java + backend/src/main/java/com/ax/template/authblueprint/derivedstatement/DerivedStatement.java"
+  pattern: "basisHash = SHA-256 of the canonicalized basis line items; a lookup by (subject, period, basisHash) returns the EXISTING row verbatim (no insert) when found; a changed basis appends a NEW version, the prior row's columns untouched; a DB UNIQUE(subject, period, basis_hash) backstop catches a benign concurrent-identical-submit race (DataIntegrityViolationException → re-fetch the winner, never a 500); every statement column is @Column(updatable=false), no public setter exists on the entity"
+upstream:
+  - "https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2"
+evidence:
+  - source_type: external
+    citation: "RFC 9110: HTTP Semantics, §9.2.2 Idempotent Methods — IETF (the general idempotency contract POST is not automatically granted by the HTTP method itself)"
+    url: "https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2"
+    quote: "the intended effect on the server of multiple identical requests with that method is the same as the effect for a single such request"
+    quoted_at: "2026-07-14"
+---
+
+## A generated statement's identity is its content, not a client's idempotency header
+
+**Impact: HIGH — relying on a client-supplied idempotency key (or nothing) to prevent duplicate statement generation produces duplicate authoritative artifacts under retry; mutating a generated statement in place on regeneration destroys the record of what was actually issued.**
+
+RFC 9110 §9.2.2 defines idempotency as a property of certain HTTP methods (PUT, DELETE, safe methods): *"the intended effect on the server of multiple identical requests with that method is the same as the effect for a single such request."* POST — the natural verb for "generate a statement" — is not among them. A generation endpoint that wants retry-safety cannot borrow it from the HTTP method; it has to build it in.
+
+The catalog already established the pattern for a COMPUTATION run's identity: `external-reconciliation-l0`'s `UNIQUE(source_key, feed_snapshot_hash)` and `remeasurement-trueup-l0`'s `TUP-RUNVERSION-001` basis-hash both key a run by the content that produced it, not a client header. This rule generalizes the identical discipline to a GENERATED DOCUMENT: the statement itself is the hash-identified row.
+
+**Incorrect — a client-supplied idempotency key (or nothing) guards against duplicate generation:**
+
+```java
+// <!-- catalog-example-ok: StatementService — illustrative anti-pattern, not a shipped symbol -->
+@PostMapping("/api/statements")
+public Statement generate(@RequestHeader(required = false) String idempotencyKey, @RequestBody GenerateReq req) {
+    if (idempotencyKey != null && seen.contains(idempotencyKey)) {
+        return repo.findByIdempotencyKey(idempotencyKey);   // ❌ trusts a CLIENT-supplied token
+    }
+    // ❌ no idempotency key at all, or a client that forgets to send one → duplicate statement rows
+    return repo.save(new Statement(req.subject(), req.period(), computeTotal(req.basis())));
+}
+```
+
+**Correct — the statement's own content hash is its identity; no client header involved:**
+
+```java
+@Transactional
+public DerivedStatement generate(String subject, String period, List<LineItem> basis) {
+    String basisHash = sha256(canonicalize(basis));
+    var existing = statements.findBySubjectAndPeriodAndBasisHash(subject, period, basisHash);
+    if (existing.isPresent()) {
+        return existing.get();                              // STMT-DERIVE-001 — identical inputs, same row
+    }
+    int nextVersion = statements.findTopBySubjectAndPeriodOrderByVersionDesc(subject, period)
+        .map(s -> s.getVersion() + 1).orElse(1);
+    try {
+        return statements.save(new DerivedStatement(UUID.randomUUID(), subject, period,
+            basisHash, canonicalize(basis), total(basis), nextVersion, Instant.now(clock)));
+    } catch (DataIntegrityViolationException raced) {
+        // STMT-RETRY-002 — a concurrent identical submit won the uq(subject, period, basis_hash) race
+        return statements.findBySubjectAndPeriodAndBasisHash(subject, period, basisHash)
+            .orElseThrow(DerivedStatementException::notFound);
+    }
+}
+```
+
+**1. Derived identity (STMT-DERIVE-001).** The statement's key is a hash of what it was generated FROM, not a value either the client or the server invents separately — identical (subject, period, basis) can only ever resolve to one statement.
+
+**2. Retry safety by construction (STMT-RETRY-002).** No idempotency header is read or required. A double-submit of the identical request is caught by the SAME hash-lookup path a first-time generation uses — there is no separate "dedup" code path to forget to call.
+
+**3. Immutability (STMT-IMMUTABLE-003).** Every column is `updatable=false`; there is no update path. A changed basis produces a NEW version row; the prior version's content is untouched and permanently fetchable.
+
+Verification: review-tier — confirm the lookup-before-insert happens on the (subject, period, basisHash) tuple with no client-supplied token in the path, the DB unique constraint backstops the identity, and the entity carries no update path.
+
+Reference: [RFC 9110 §9.2.2 — Idempotent Methods](https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2)
 
 
 <!-- @source rules/derived-value-pins-its-time-varying-input.md -->
@@ -6939,6 +7024,86 @@ Reference: [RFC 8037 — EdDSA for JOSE](https://www.rfc-editor.org/rfc/rfc8037)
 Reference: [OWASP JSON Web Token Cheat Sheet — None algorithm + explicit algorithm enforcement](https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
 
 
+<!-- @source rules/facet-count-scope-parity-and-allowlist.md -->
+
+---
+title: A facet-count aggregation MUST be computed over the IDENTICAL authorization/filter scope as the list query it accompanies, and the field a caller may facet on MUST be a compile-time allowlist — a non-allowlisted field is rejected by NAME with 422, fail-closed, before any aggregation query runs
+impact: HIGH
+impactDescription: "A facet-count endpoint that aggregates over a wider scope than the caller's own list query leaks the existence/volume of rows the caller cannot list — another tenant's or another user's row counts bleeding into a shared sidebar aggregate is an authorization-boundary leak by another name (CWE-639). Forwarding a client-supplied facet-by field name unchecked into a dynamically-built GROUP BY repeats the exact property-enumeration mistake query-field-allowlist-l0 closed for sort/filter (OWASP API3:2023), just on the aggregate path instead of the row path"
+tags:
+  - security
+  - authorization
+  - input-validation
+  - pagination
+spec_ref: "specs/facet-count-l0.yaml#FACET-COUNT-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/facetcount/FacetCountService.java + backend/src/main/java/com/ax/template/authblueprint/facetcount/FacetFieldAllowlist.java + backend/src/main/java/com/ax/template/authblueprint/facetcount/FacetCountController.java"
+  pattern: "The facet-count query's WHERE clause scopes to the authenticated caller's own rows (ownerId), the IDENTICAL predicate the list endpoint would use — never a wider aggregate; the requested facet field is resolved through a compile-time allowlist BEFORE any repository call (422 FACET_FIELD_NOT_ALLOWED naming the field if absent); the aggregation query is selected from a fixed, pre-written parameterized query per allowlisted field — never a client string concatenated into JPQL; the bucket list returned is top-K by count plus an explicit otherCount remainder, and Σ(bucket counts) + otherCount always equals the caller's total scoped row count"
+upstream:
+  - "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
+  - "https://cwe.mitre.org/data/definitions/639.html"
+evidence:
+  - source_type: external
+    citation: "OWASP API Security Top 10 — API3:2023 Broken Object Property Level Authorization (OWASP) — the cherry-pick discipline the facet-field allowlist applies to the aggregate path"
+    url: "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
+    quote: "When exposing an object using an API endpoint, always make sure that the user should have access to the object's properties you expose."
+    quoted_at: "2026-07-14"
+  - source_type: external
+    citation: "CWE-639: Authorization Bypass Through User-Controlled Key — MITRE (an unscoped aggregate leaks another principal's row volumes, the same class of authorization-boundary leak as a direct record fetch)"
+    url: "https://cwe.mitre.org/data/definitions/639.html"
+    quote: "The system's authorization functionality does not prevent one user from gaining access to another user's data or record by modifying the key value identifying the data."
+    quoted_at: "2026-07-14"
+---
+
+## A facet-count sidebar is an authorization surface too — scope it identically to the list, and allowlist the facet-by field
+
+**Impact: HIGH — a facet-count aggregate that runs over a wider scope than the caller's own list query leaks row volumes the caller cannot otherwise see (CWE-639); a facet-by field forwarded unchecked into a GROUP BY repeats the property-enumeration mistake OWASP API3:2023 warns against.**
+
+`query-field-allowlist-l0` bounded WHICH field a client may sort/filter the ROWS of a list on. It did not address a second, easy-to-miss surface: the small "12 OPEN / 3 CLOSED" bucket-count sidebar many list UIs render next to the rows. That aggregate is computed by a SEPARATE query from the list itself — and if that separate query is written against a wider scope (e.g. it forgets the tenant/owner WHERE clause the list query has), the caller learns the volume of rows they cannot list. That is the same authorization-boundary leak CWE-639 describes, just delivered as a count instead of a record.
+
+The primitive: (1) the facet-count query's scope predicate MUST be built from the SAME authorization/filter logic as the list query — never a bespoke, potentially-wider one; (2) the facet-BY field is resolved through a compile-time allowlist before any aggregation query is built, exactly mirroring `QueryFieldAllowlist`'s sort/filter discipline, but applied to the GROUP BY column instead of the ORDER BY / WHERE column.
+
+**Incorrect — a facet aggregate that forgets the caller's scope, and a facet-by field forwarded raw:**
+
+```java
+// <!-- catalog-example-ok: FacetRepository — illustrative anti-pattern, not a shipped symbol -->
+@GetMapping("/api/items/facets")
+public Map<String, Long> facets(@RequestParam String field) {
+    // ❌ no ownerId scope — this counts EVERY caller's rows, not just this caller's
+    String jpql = "SELECT i." + field + ", COUNT(i) FROM Item i GROUP BY i." + field; // ❌ raw field concatenated
+    return repo.query(jpql);   // ❌ unbounded bucket cardinality too
+}
+```
+
+**Correct — identical scope predicate as the list; the field resolved through an allowlist first:**
+
+```java
+@Transactional(readOnly = true)
+public FacetCountResponse facets(String ownerId, String publicField) {
+    String internal = FacetFieldAllowlist.resolve(publicField);   // 422 FACET_FIELD_NOT_ALLOWED before any query
+    List<Object[]> rows = switch (internal) {
+        case "category" -> items.countsByCategoryForOwner(ownerId);   // SAME ownerId scope the list uses
+        case "status"   -> items.countsByStatusForOwner(ownerId);
+        default -> throw FacetCountException.notAllowed(publicField, FacetFieldAllowlist.allowed()); // unreachable
+    };
+    return FacetBucketing.topKWithRemainder(rows, MAX_BUCKETS);       // bounded cardinality, Σ + other == total
+}
+```
+
+**1. Scope parity (FACET-COUNT-001).** The facet aggregation's WHERE clause is the caller's own scope — the same one the list endpoint applies — never a table-wide rollup misrepresented as "your counts".
+
+**2. Field allowlist (FACET-ALLOWLIST-002).** `FacetFieldAllowlist.resolve` throws BEFORE any repository call for a field the resource did not declare facetable — the 422 names the offending field, and the aggregation query for each allowlisted field is a fixed, pre-written parameterized query, never a dynamically concatenated one.
+
+**3. Bounded cardinality (FACET-BOUND-003).** The response returns at most K buckets by count, plus an explicit `otherCount` remainder — a high-cardinality field can never produce an unbounded response, and the conservation identity `Σ(bucket counts) + otherCount == total` proves no row was silently dropped by the bounding.
+
+Verification: review-tier — confirm the facet query's scope predicate is textually identical to (or derived from the same helper as) the list query's scope predicate, the field resolves through the allowlist before any repository access, and the bucket response is bounded with the conservation identity holding.
+
+Reference: [OWASP API3:2023 Broken Object Property Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/)
+
+Reference: [CWE-639: Authorization Bypass Through User-Controlled Key](https://cwe.mitre.org/data/definitions/639.html)
+
+
 <!-- @source rules/field-level-projection-authz-omits-not-nulls.md -->
 
 ---
@@ -7666,10 +7831,12 @@ verification:
   notes: "All @PostMapping handlers in payment, notification, and email-outbox controllers must declare @RequestHeader(value=\"Idempotency-Key\", required=false), reject a null/blank key with 400, and dedup the key via the shared common/IdempotencyKeyStore — the pattern PaymentController uses (PAYMENT-IDEMP-001)."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "IETF draft-ietf-httpapi-idempotency-key-header — The Idempotency-Key HTTP Header Field (deduplicated retry semantics)"
     url: "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Stripe API Reference — Idempotent requests: all POST requests accept an Idempotency-Key header to guarantee exactly-once delivery"
     url: "https://docs.stripe.com/api/idempotent_requests"
     quoted_at: "2026-05-18"
@@ -8493,8 +8660,8 @@ upstream:
   - "https://ieeexplore.ieee.org/document/8766229"
 evidence:
   - upstream_id: iso-4217
-    section: "Amount representation rules — decimal-string vs minor-units"
-    quote: "JSON number with a decimal point"
+    section: "Minor unit / decimal subdivision"
+    quote: "ISO 4217:2015 also shows the relationship between the minor unit and the currency itself (i.e. whether it divides into 100 or 1000)."
   - source_type: external
     citation: "Effective Java (3rd ed., Joshua Bloch) — Item 60: Avoid float and double if exact answers are required"
     url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"
@@ -9425,8 +9592,8 @@ upstream:
   - "https://docs.spring.io/spring-boot/reference/data/sql.html"
 evidence:
   - upstream_id: spring-boot-sql-migration
-    section: "Spring Boot — Flyway checksum / immutability contract"
-    quote: "Flyway"
+    section: "Spring Boot — Flyway migration execution (Flyway.migrate())"
+    quote: "Spring Boot calls Flyway.migrate() to perform the database migration."
   - source_type: external
     citation: "Flyway documentation — How Flyway works (immutable history + checksums)"
     url: "https://documentation.red-gate.com/fd/how-flyway-works-271583665.html"
@@ -9484,8 +9651,8 @@ upstream:
   - "https://docs.spring.io/spring-boot/reference/data/sql.html"
 evidence:
   - upstream_id: spring-boot-sql-migration
-    section: "Spring Boot — Flyway baseline / repair"
-    quote: "Flyway"
+    section: "Spring Boot — FlywayProperties configuration surface"
+    quote: "FlywayProperties provides most of Flyway's settings and a small set of additional properties that can be used to disable the migrations or switch off the location checking."
   - source_type: external
     citation: "Flyway documentation — Baseline / baseline-on-migrate"
     url: "https://documentation.red-gate.com/fd/baseline-184549760.html"
@@ -9544,8 +9711,8 @@ upstream:
   - "https://docs.spring.io/spring-boot/reference/data/sql.html"
 evidence:
   - upstream_id: spring-boot-sql-migration
-    section: "Spring Boot — Migration Tool (Flyway)"
-    quote: "Flyway"
+    section: "Spring Boot — Flyway versioned migration naming"
+    quote: "Typically, migrations are scripts in the form V __ .sql (with an underscore-separated version, such as '1' or '2_1')."
   - source_type: external
     citation: "Flyway documentation — Migration naming convention"
     url: "https://documentation.red-gate.com/fd/migrations-271583622.html"
@@ -9604,7 +9771,7 @@ upstream:
 evidence:
   - upstream_id: iso-4217
     section: "Alpha-3 code structure"
-    quote: "Each currency is identified by a three-letter alpha-3 code."
+    quote: "The first two letters of the ISO 4217 three-letter code are the same as the code for the country name"
   - source_type: external
     citation: "Martin Fowler, Patterns of Enterprise Application Architecture — Money pattern (martinfowler.com/eaaCatalog)"
     url: "https://martinfowler.com/eaaCatalog/money.html"
@@ -9818,14 +9985,17 @@ verification:
     fail-fast on @TenantId misuse) anchored in manifest interceptor_skeleton.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Hibernate User Guide — Multi-tenancy: @FilterDef('tenantFilter') with row-level discriminator is the documented row-level isolation pattern; the guide is explicit that the filter must be enabled per Session and that 'forgetting to enable the filter is silent — queries simply return rows from all tenants'"
     url: "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#multitenacy"
     quoted_at: "2026-05-20"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Spring Framework reference — TaskDecorator: 'A callback interface for a decorator to be applied to any Runnable about to be executed. Note that such a decorator is not necessarily being applied to the user-supplied Runnable/Callable but rather to the actual execution callback (which may be a wrapper around the user-supplied task).' Establishes that TaskDecorator binds at executor level, not at @Async level — confirming the prerequisite_executor_bean requirement"
     url: "https://docs.spring.io/spring-framework/reference/integration/scheduling.html#scheduling-task-namespace"
     quoted_at: "2026-05-20"
   - source_type: external
+    anchors: generic_principle_only
     citation: "RFC 7807 — Problem Details for HTTP APIs §3.1: each problem type has a stable URI; mixing 404 (existence-leakage prevention for cross-tenant access) and 500 (server-side context-missing bug) under one Problem Type URI conflates client and server faults and breaks the contract that 'a problem type SHOULD describe a single class of problem'"
     url: "https://datatracker.ietf.org/doc/html/rfc7807#section-3.1"
     quoted_at: "2026-05-20"
@@ -10550,14 +10720,17 @@ verification:
     Failing fixture: any billing class with import ax.template.payment.* or vice versa.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Domain-Driven Design (Evans): Each bounded context has an explicit contract at its boundary. Cross-importing internals couples contexts at the class level, violating autonomy and enabling cascading changes."
     url: "https://martinfowler.com/bliki/BoundedContext.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Stripe API Reference 2026-05 — Charges vs. Subscriptions are separate API resources with no direct dependency between them. A subscription's lifecycle uses invoice and billing objects, not charge objects."
     url: "https://stripe.com/docs/api/subscriptions"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Sam Newman — Building Microservices (2nd ed.): Services in separate bounded contexts must communicate via published events or APIs, never via direct class-level imports."
     url: "https://samnewman.io/books/building_microservices_2nd_edition/"
     quoted_at: "2026-05-18"
@@ -11011,9 +11184,9 @@ evidence:
   - upstream_id: owasp-logging-cheatsheet
     section: "OWASP Logging Cheat Sheet — Data to exclude"
     quote: "exclude"
-  - upstream_id: pci-dss-saq-a
-    section: "Requirement 3.4 — PAN rendered unreadable"
-    quote: "PAN is rendered unreadable anywhere it is stored"
+  - source_type: external
+    citation: "PCI DSS v4.0.1 Requirement 3.5.1 — PAN is rendered unreadable anywhere it is stored (via truncation, tokenization, or strong cryptography). (SAQ document library; requirement text is PDF-only, not offline-quotable.)"
+    url: "https://www.pcisecuritystandards.org/document_library/"
   - source_type: external
     citation: "OWASP Logging Cheat Sheet — Data to exclude"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude"
@@ -12717,7 +12890,7 @@ upstream:
 evidence:
   - upstream_id: spring-jpa-fetching
     section: EntityGraph definition + fetch plan
-    quote: o support with the @EntityGraph annotation, which lets you reference a @NamedEntityGraph definition. You can use that annotation on an entity to configure the fetch plan of the resulting query. The type ( Fetch or Load ) of the fetching can be configured by us
+    quote: "the @EntityGraph annotation, which lets you reference a @NamedEntityGraph definition. You can use that annotation on an entity to configure the fetch plan of the resulting query."
   - source_type: external
     citation: 'Spring Data JPA Reference — Fetching strategies (JOIN FETCH and @EntityGraph)'
     url: 'https://docs.spring.io/spring-data/jpa/reference/jpa/fetching.html'
@@ -12770,9 +12943,9 @@ verification:
 upstream:
   - "https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html"
 evidence:
-  - upstream_id: spring-jpa-fetching
-    section: "Spring Data JPA — locking"
-    quote: "lock"
+  - upstream_id: spring-jpa-locking
+    section: "Spring Data JPA — @Lock annotation on query methods"
+    quote: "To specify the lock mode to be used, you can use the @Lock annotation on query methods"
   - source_type: external
     citation: "Hibernate User Guide — Optimistic Locking"
     url: "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#locking-optimistic"
@@ -13147,14 +13320,17 @@ verification:
     Violation: multi-domain composition without recipe declaration.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Martin Fowler — Patterns of Enterprise Application Architecture: composition patterns prevent ad-hoc coupling by making dependencies explicit through a shared composition contract"
     url: "https://martinfowler.com/eaaCatalog/"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Spring Modulith reference — modules communicate via published events or explicit API types; direct package imports between modules create structural coupling that Spring Modulith enforces at test time"
     url: "https://docs.spring.io/spring-modulith/reference/fundamentals.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "토스 기술 블로그 — 도메인 모듈 설계: 도메인 간 직접 의존 대신 이벤트 또는 명시적 조합 계약을 통해 결합도를 낮춥니다"
     url: "https://toss.tech/article/slash21-backend"
     quoted_at: "2026-05-18"
@@ -13277,14 +13453,17 @@ verification:
   notes: "Every PresignedUrlService.generateDownloadUrl / generateUploadUrl must compute HMAC over (objectKey + expiry) and append sig + exp query parameters."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "AWS S3 Developer Guide — Presigned URLs: if a request is made by using the temporary security credentials of an IAM role, the presigned URL expires when the credentials used to sign the URL expire"
     url: "https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "OWASP Cheat Sheet — Insecure Direct Object References (IDOR): all resource access must verify authorization at the application layer, not just at the storage layer"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "RFC 2104 — HMAC: Keyed-Hashing for Message Authentication: HMAC verifies both the data integrity and the authenticity of a message; a presigned URL signs its parameters + expiry with a server-held HMAC key so any tampering invalidates the signature"
     url: "https://www.rfc-editor.org/rfc/rfc2104"
     quoted_at: "2026-06-02"
@@ -14857,6 +15036,7 @@ verification:
     Zero-invariants is a WARN not a FAIL (recipe may be L2-only).
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "OWASP ASVS — every security requirement must reference a testable control; untestable requirements provide false assurance and cannot be verified in a security audit"
     url: "https://owasp.org/www-project-application-security-verification-standard/"
     quoted_at: "2026-05-18"
@@ -16205,6 +16385,76 @@ Verification: review-tier. Saga correctness is a distributed-control-flow proper
 Reference: [Chris Richardson — Saga pattern (sequence of local transactions with compensating transactions)](https://microservices.io/patterns/data/saga.html)
 
 
+<!-- @source rules/saturating-clamped-running-balance.md -->
+
+---
+title: A saturating balance clamps AT its ceiling on accrual and AT zero on debit — it never errors and never stores an out-of-range value — while every operation records BOTH the requested and applied (post-clamp) amount, append-only, and concurrent accrual near the ceiling converges to EXACTLY the cap
+impact: HIGH
+impactDescription: "A clamp-on-write balance that errors instead of clamping breaks the 'accumulate up to a max, spend down to zero' contract callers rely on (a leave-accrual or points system that rejects instead of capping surprises users); one that clamps but does not record the requested-vs-applied split silently discards the excess with no audit trail; and without row-level serialization, concurrent accrual near the ceiling can overshoot the cap or silently drop a caller's request (CWE-362)"
+tags:
+  - conservation
+  - concurrency
+  - audit
+spec_ref: "specs/saturating-balance-l0.yaml#SATBAL-CEILING-001"
+verification:
+  type: review
+  source: "backend/src/main/java/com/ax/template/authblueprint/saturatingbalance/SaturatingBalanceService.java + backend/src/main/java/com/ax/template/authblueprint/saturatingbalance/Balance.java + backend/src/main/java/com/ax/template/authblueprint/saturatingbalance/LedgerEntry.java"
+  pattern: "accrue/debit compute the clamped applied amount (min(requested, cap-current) for accrual; min(requested, current) for debit) under the balance row's PESSIMISTIC_WRITE lock; the stored balance is updated by the applied amount only, never the raw requested amount; a @Check(balance BETWEEN 0 AND cap) DB backstop makes an out-of-range stored value unrepresentable; every operation appends an immutable LedgerEntry recording both requested and applied amounts, no update path; Σ(applied) for a balance always reconciles to its current stored value"
+upstream:
+  - "https://cwe.mitre.org/data/definitions/362.html"
+evidence:
+  - source_type: external
+    citation: "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition') — MITRE (concurrent accrual/debit racing the same balance row near its bound)"
+    url: "https://cwe.mitre.org/data/definitions/362.html"
+    quote: "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+    quoted_at: "2026-07-14"
+---
+
+## Clamp, don't reject — but never clamp silently
+
+**Impact: HIGH — a balance that errors instead of clamping breaks the "accumulate to a cap, spend to zero" contract; clamping without recording the requested-vs-applied split silently discards the excess; unsynchronized concurrent accrual near the cap can overshoot it or drop a caller's request (CWE-362).**
+
+The catalog already has a balance that REJECTS an operation that would breach a bound (`two-axis-inventory-reservation-l0` — insufficient stock is an explicit 409/422 denial) and a counter that only ever accrues with no ceiling (`monotone-register-l0`). Neither models the shape many real balances actually have: a leave/PTO accrual capped at a policy maximum, a loyalty-points balance that never overdraws below zero. Both directions of this balance ABSORB instead of rejecting — and the primitive's whole value is making sure "absorbed" never means "silently lost".
+
+**Incorrect — errors on overflow, or clamps without recording what was actually asked for:**
+
+```java
+// <!-- catalog-example-ok: BalanceService — illustrative anti-pattern, not a shipped symbol -->
+@Transactional
+public void accrue(UUID balanceId, BigDecimal amount) {
+    Balance b = balances.findByIdForUpdate(balanceId).orElseThrow();
+    if (b.getCurrent().add(amount).compareTo(b.getCap()) > 0) {
+        throw new IllegalStateException("would exceed cap");   // ❌ this balance shape should CLAMP, not reject
+    }
+    b.setCurrent(b.getCurrent().add(amount));                  // ❌ no ledger entry — requested vs applied is lost
+}
+```
+
+**Correct — clamp under the row lock; record requested AND applied on an immutable ledger entry:**
+
+```java
+@Transactional
+public LedgerEntry accrue(UUID balanceId, BigDecimal requested) {
+    Balance b = balances.findByIdForUpdate(balanceId).orElseThrow(SaturatingBalanceException::notFound);
+    BigDecimal headroom = b.getCap().subtract(b.getCurrent());
+    BigDecimal applied = requested.min(headroom).max(BigDecimal.ZERO);   // SATBAL-CEILING-001 — clamp, never error
+    b.applyAccrual(applied);                                             // stored value moves by `applied` only
+    return members.persist(new LedgerEntry(UUID.randomUUID(), b.getId(),
+        LedgerOp.ACCRUE, requested, applied, Instant.now(clock)));       // SATBAL-LEDGER-003 — both amounts, append-only
+}
+```
+
+**1. Ceiling clamp (SATBAL-CEILING-001) / floor clamp (SATBAL-FLOOR-002).** Accrual clamps at the cap; debit clamps at zero. Neither ever throws or rejects — a `@Check` DB backstop makes an out-of-range stored value unrepresentable even if the application logic regresses.
+
+**2. Requested vs applied, append-only (SATBAL-LEDGER-003).** Every operation's ledger entry carries BOTH values. When clamping occurred, `requested != applied`, and the gap is a permanent, auditable fact — never silently dropped. `Σ(applied)` for a balance always reconciles to its current stored value.
+
+**3. Concurrency (SATBAL-CONCURRENT-004 — keystone).** The balance row's `PESSIMISTIC_WRITE` lock is the same serialization discipline `remeasurement-trueup-l0` (TUP-CONCURRENT-001) and `external-reconciliation-l0` (RECON-CONCURRENT-001) already established: under N concurrent accruals near the cap, the final balance converges to EXACTLY the cap, and every caller still gets its own ledger entry — none silently dropped (CWE-362).
+
+Verification: review-tier — confirm accrue/debit never throw on an in-range-violating request (they clamp), the `@Check` constraint exists on both the entity and the migration, every ledger entry records requested and applied with no update path, and the balance row is locked before any read-modify-write.
+
+Reference: [CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization](https://cwe.mitre.org/data/definitions/362.html)
+
+
 <!-- @source rules/sealed-period-watermark-monotonic-close.md -->
 
 ---
@@ -16398,7 +16648,7 @@ upstream:
 evidence:
   - upstream_id: spring-security-csrf
     section: "Spring Security — Configuring CSRF Protection (ignoringRequestMatchers)"
-    quote: "ignoringRequestMatchers"
+    quote: 'ignoringRequestMatchers("/api/*")'
   - source_type: external
     citation: "OWASP Cross-Site Request Forgery Prevention Cheat Sheet"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
@@ -18209,13 +18459,14 @@ verification:
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
-    section: "Subscription lifecycle"
-    quote: "trialing — trial period active; active — subscription is current; past_due — latest invoice payment attempt failed; canceled — subscription ended"
+    section: "Subscription lifecycle (status table)"
+    quote: "trialing The subscription is currently in a trial period and you can safely provision your product for your customer. The subscription transitions automatically to active when a customer makes the first payment."
   - source_type: upstream_id
     upstream_id: toss-billing-2026-05
-    section: "정기결제 구독 상태 매핑"
-    quote: "ACTIVE: 정상 사용 가능, INACTIVE: 카드 만료/분실 등으로 비활성화"
+    section: "구독 상태는 가맹점이 직접 관리 (Toss는 상태 enum 미제공)"
+    quote: "구독 서비스는 API를 사용해서 직접 구축해야 합니다."
   - source_type: external
+    anchors: generic_principle_only
     citation: "Domain-Driven Design — Aggregates encapsulate invariants; state transitions are explicit methods on the aggregate, not raw field mutations"
     url: "https://martinfowler.com/bliki/DDD_Aggregate.html"
     quoted_at: "2026-05-18"
@@ -18853,10 +19104,10 @@ upstream:
 evidence:
   - upstream_id: rest-assured-usage
     section: REST-assured given/when/then DSL
-    quote: 'bers as BigDecimal: given (). config ( RestAssured . config (). jsonConfig ( jsonConfig (). numberReturnType ( BIG_DECIMAL ))). when (). get ( "/price" ). then (). body ( "price" , is ( new BigDecimal ( 12.12 )); JSON Schema validation From version 2.1.0 REST'
+    quote: 'given(). config(RestAssured.config().jsonConfig(jsonConfig().numberReturnType(BIG_DECIMAL))). when(). get("/price"). then().'
   - upstream_id: spring-boot-testing
     section: WebEnvironment.RANDOM_PORT and @LocalServerPort
-    quote: our test runs. The @LocalServerPort annotation can be used to inject the actual port used into your test. Tests that need to make REST calls to the started server can autowire a RestTestClient by annotating the test class with @AutoConfigureRestTestClient . Th
+    quote: "The @LocalServerPort annotation can be used to inject the actual port used into your test. Tests that need to make REST calls to the started server can autowire a RestTestClient"
   - source_type: external
     citation: 'REST-assured — Usage Guide'
     url: 'https://github.com/rest-assured/rest-assured/wiki/Usage'
@@ -19559,10 +19810,12 @@ evidence:
     section: "SLF4J Mapped Diagnostic Context (MDC)"
     quote: "Mapped Diagnostic Context"
   - source_type: external
+    anchors: generic_principle_only
     citation: "RFC 7807 §3.2 — Extension Members: problem detail objects may extend the base format with additional properties to aid debugging"
     url: "https://www.rfc-editor.org/rfc/rfc7807#section-3.2"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "OpenTelemetry Trace Context W3C Specification — trace-id propagation for cross-service correlation"
     url: "https://www.w3.org/TR/trace-context/#trace-id"
     quoted_at: "2026-05-18"
@@ -19650,10 +19903,10 @@ upstream:
 evidence:
   - upstream_id: spring-tx-declarative
     section: Self-invocation and the proxy
-    quote: ed. This means that self-invocation (in effect, a method within the target object calling another method of the target object) does not lead to an actual transaction at runtime even if the invoked method is marked with @Transactional . Also, the proxy must be
+    quote: "This means that self-invocation (in effect, a method within the target object calling another method of the target object) does not lead to an actual transaction at runtime even if the invoked method is marked with @Transactional"
   - upstream_id: spring-aop-proxying
-    section: Understanding AOP proxies
-    quote: ng do not have this self-invocation issue because they apply advice within the bytecode instead of via a proxy. Mixing Aspect Types Programmatic Creation of @AspectJ Proxies Spring Framework Stable 7.0.7 6.2.18 Snapshot 7.1.0-SNAPSHOT 7.0.8-SNAPSHOT 6.2.19-SNA
+    section: Understanding AOP proxies — self-invocation (AspectJ weaving exception)
+    quote: "AspectJ compile-time weaving and load-time weaving do not have this self-invocation issue because they apply advice within the bytecode instead of via a proxy."
   - source_type: external
     citation: 'Spring Framework Reference — §Declarative transaction management: Method visibility (proxy mechanism)'
     url: 'https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/annotations.html'
@@ -20733,13 +20986,13 @@ upstream:
 evidence:
   - upstream_id: owasp-mass-assignment
     section: Mass Assignment definition and remediation
-    quote: Mass Assignment - OWASP Cheat Sheet Series Skip to content OWASP Cheat Sheet Series Mass Assignment Initializing search OWASP/CheatSheetSeries OWASP Cheat Sheet Series OWASP/CheatSheetSeries Introduction Index Alphabetical Index ASVS Index
+    quote: "Software frameworks sometimes allow developers to automatically bind HTTP request parameters into program code variables or objects to make using that framework easier on developers."
   - upstream_id: cwe-915
     section: CWE-915 — Improperly Controlled Modification of Dynamically-Determined Object Attributes
-    quote: 'CWE - CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes (4.20) Common Weakness Enumeration A community-developed list of SW &amp; HW weaknesses that can become vulnerabilities Home &gt; CWE List &gt; CWE-915: Improper'
+    quote: "The product receives input from an upstream component that specifies multiple attributes, properties, or fields that are to be initialized or updated in an object, but it does not properly control which attributes can be modified."
   - upstream_id: spring-mvc-modelattribute
-    section: '@ModelAttribute / data binding'
-    quote: sources Validation, Data Binding, and Type Conversion Validation Using Spring&#8217;s Validator Interface Data Binding Resolving Error Codes to Error Messages Spring Type Conversion Spring Field Formatting Configuring a Global Date and Time Format Java Bean Va
+    section: '@ModelAttribute / data binding — security recommendation'
+    quote: "for security reasons it is recommended either to use an object tailored specifically for web binding, or to apply constructor binding only."
   - source_type: external
     citation: 'OWASP Mass Assignment Cheat Sheet'
     url: 'https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html'
@@ -21378,9 +21631,9 @@ verification:
 upstream:
   - "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html"
 evidence:
-  - upstream_id: spring-mvc-controlleradvice
-    section: "Spring MVC — HTTP method-specific shortcuts"
-    quote: "@GetMapping"
+  - upstream_id: spring-mvc-requestmapping
+    section: "HTTP method-specific shortcut variants of @RequestMapping"
+    quote: "HTTP method specific shortcut variants of @RequestMapping: @GetMapping @PostMapping @PutMapping @DeleteMapping @PatchMapping"
   - source_type: external
     citation: "Spring Framework Reference — HTTP method-specific shortcuts"
     url: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html"

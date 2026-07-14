@@ -16,13 +16,13 @@ upstream:
 evidence:
   - upstream_id: owasp-mass-assignment
     section: Mass Assignment definition and remediation
-    quote: Mass Assignment - OWASP Cheat Sheet Series Skip to content OWASP Cheat Sheet Series Mass Assignment Initializing search OWASP/CheatSheetSeries OWASP Cheat Sheet Series OWASP/CheatSheetSeries Introduction Index Alphabetical Index ASVS Index
+    quote: "Software frameworks sometimes allow developers to automatically bind HTTP request parameters into program code variables or objects to make using that framework easier on developers."
   - upstream_id: cwe-915
     section: CWE-915 — Improperly Controlled Modification of Dynamically-Determined Object Attributes
-    quote: 'CWE - CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes (4.20) Common Weakness Enumeration A community-developed list of SW &amp; HW weaknesses that can become vulnerabilities Home &gt; CWE List &gt; CWE-915: Improper'
+    quote: "The product receives input from an upstream component that specifies multiple attributes, properties, or fields that are to be initialized or updated in an object, but it does not properly control which attributes can be modified."
   - upstream_id: spring-mvc-modelattribute
-    section: '@ModelAttribute / data binding'
-    quote: sources Validation, Data Binding, and Type Conversion Validation Using Spring&#8217;s Validator Interface Data Binding Resolving Error Codes to Error Messages Spring Type Conversion Spring Field Formatting Configuring a Global Date and Time Format Java Bean Va
+    section: '@ModelAttribute / data binding — security recommendation'
+    quote: "for security reasons it is recommended either to use an object tailored specifically for web binding, or to apply constructor binding only."
   - source_type: external
     citation: 'OWASP Mass Assignment Cheat Sheet'
     url: 'https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html'

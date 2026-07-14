@@ -27,10 +27,12 @@ verification:
     Fail fixture: uses process.env.NEXT_PUBLIC_FEATURE_NEW_CHECKOUT — exits 1.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js Docs — Environment variables and the limitation of build-time NEXT_PUBLIC_ variables (cannot be changed at runtime without rebuild)"
     url: "https://nextjs.org/docs/app/building-your-application/configuring/environment-variables"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Martin Fowler — Feature Toggles (aka Feature Flags): Release toggles should be dynamic and externally managed, not baked into the build artifact"
     url: "https://martinfowler.com/articles/feature-toggles.html"
     quoted_at: "2026-05-18"

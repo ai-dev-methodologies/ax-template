@@ -1,0 +1,91 @@
+# practices/evals/fixtures/pre-push-decision/scenarios.yaml
+#
+# Committed expectation table for the pre-push hook decision surface (P2-17).
+# pre_push_decision_guard.sh asserts 1:1 parity between the `id`s below and the
+# top-level scenarios it executes, then verifies each expectation against a
+# throwaway git repo (real hook + lib; STUB recency guard + STUB gradlew — no
+# real gradle, no real R25 audit is ever touched).
+#
+# stages fired legend:
+#   r25        — completion_checklist_recency_guard invoked for a shipping ref
+#   regression — the gradle regression suite (testPractices testAsvs testCrud) ran
+#   none       — both stages skipped
+#
+# Each row maps to a branch of .githooks/pre-push (verified against the code).
+scenarios:
+  - id: s1-r25-uses-pushed-sha
+    branch: "R25 --expect-sha uses the pushed local_sha, not checkout HEAD"
+    input: "push feature tip while HEAD is on main (tips differ)"
+    exit: 0
+    stages: [r25]
+    assert: "recency guard received the feature sha, not the main HEAD sha"
+
+  - id: s2-delete-only-skips
+    branch: "SHIPPING stays 0 for an all-deletion push"
+    input: "single ref, local_sha == ZERO"
+    exit: 0
+    stages: [none]
+    assert: "'delete-only push' printed; recency never called; no regression"
+
+  - id: s3-multiref-ship-and-delete
+    branch: "deletion ref skipped, shipping ref processed"
+    input: "ref A ships commits, ref B is a deletion"
+    exit: 0
+    stages: [r25]
+    assert: "recency called exactly once, for the shipping ref's sha"
+
+  - id: s4-regression-union-once
+    branch: "REGRESSION_NEEDED accumulates; suite runs once after the loop"
+    input: "two in-scope refs (both touch backend/)"
+    exit: 0
+    stages: [r25, regression]
+    assert: "gradlew stub fired exactly once (union, not per-ref)"
+
+  - id: s5-out-of-scope-skips-regression
+    branch: "REGRESSION_NEEDED stays 0 when no ref touches scope"
+    input: "single ref, diff touches docs/ only"
+    exit: 0
+    stages: [r25]
+    assert: "recency ran; regression skipped (no gradlew, no 'running full regression')"
+
+  - id: s6-in-scope-runs-regression
+    branch: "diff touches backend/ → REGRESSION_NEEDED=1 → suite runs"
+    input: "single ref, diff touches backend/src"
+    exit: 0
+    stages: [r25, regression]
+    assert: "gradlew stub fired with '-q testPractices testAsvs testCrud'"
+
+  - id: s7-new-branch-mergebase
+    branch: "remote_sha ZERO → base = merge-base(local, origin/HEAD|main)"
+    input: "new remote branch; origin/main present"
+    exit: 0
+    stages: [r25, regression]
+    assert: "pp_resolve_ref_base resolves to the origin/main merge-base"
+
+  - id: s8-unresolvable-base-failclosed
+    branch: "ZERO remote + no origin refs → base empty → REGRESSION_NEEDED=1"
+    input: "new branch, no origin/main and no origin/HEAD"
+    exit: 0
+    stages: [r25, regression]
+    assert: "pp_resolve_ref_base returns non-zero; hook fail-closes and runs suite"
+
+  - id: s9-diff-failure-blocks
+    branch: "git diff itself fails → fail-closed BLOCK"
+    input: "remote_sha is a bogus non-existent object (not ZERO)"
+    exit: 1
+    stages: [r25]
+    assert: "'git diff failed' + 'push BLOCKED (fail-closed)' printed; exit 1"
+
+  - id: s10-empty-stdin-fallback
+    branch: "empty stdin → single-ref HEAD vs @{u} (or ZERO base)"
+    input: "no stdin; pp_effective_push_specs('')"
+    exit: 0
+    stages: [none]     # exercised at the pure-function layer (no side effect)
+    assert: "fallback yields 'HEAD <head> HEAD <upstream|ZERO>'; non-empty passthrough verbatim"
+
+  - id: primary-r25-block
+    branch: "PRIMARY block path — stale/missing R25 audit"
+    input: "shipping ref; recency guard exits 1 (AX_STUB_RECENCY_EXIT=1)"
+    exit: 1
+    stages: [r25]
+    assert: "'completion_checklist_recency_guard FAILED' printed; no regression; exit 1"

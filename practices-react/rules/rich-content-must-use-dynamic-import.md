@@ -35,6 +35,7 @@ verification:
     Fail fixture: statically imports RichTextEditor in a Server Component.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "TipTap v2 — Getting started with React: Add 'use client' to the component; the Editor is a browser-only construct."
     url: "https://tiptap.dev/docs/editor/getting-started/install/react"
     quoted_at: "2026-05-18"
@@ -43,6 +44,7 @@ evidence:
     section: "RSC Compatibility"
     quote: "Add `'use client'` to the component; the Editor is a browser-only construct."
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js 15 Docs — Lazy Loading: ssr:false is not allowed with next/dynamic in Server Components. Move it into a Client Component."
     url: "https://nextjs.org/docs/app/guides/lazy-loading"
     quoted_at: "2026-05-18"

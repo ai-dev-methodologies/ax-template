@@ -14,8 +14,8 @@ upstream:
   - "https://docs.spring.io/spring-framework/reference/integration/cache.html"
 evidence:
   - upstream_id: spring-cache-abstraction
-    section: "Spring Framework — Cache Abstraction usage guidance"
-    quote: "Cacheable"
+    section: "The @Cacheable Annotation — method demarcation"
+    quote: "you can use @Cacheable to demarcate methods that are cacheable"
   - source_type: external
     citation: "Spring Framework Reference — Cache Abstraction"
     url: "https://docs.spring.io/spring-framework/reference/integration/cache.html"

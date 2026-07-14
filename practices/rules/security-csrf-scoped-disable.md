@@ -14,7 +14,7 @@ upstream:
 evidence:
   - upstream_id: spring-security-csrf
     section: "Spring Security — Configuring CSRF Protection (ignoringRequestMatchers)"
-    quote: "ignoringRequestMatchers"
+    quote: 'ignoringRequestMatchers("/api/*")'
   - source_type: external
     citation: "OWASP Cross-Site Request Forgery Prevention Cheat Sheet"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"

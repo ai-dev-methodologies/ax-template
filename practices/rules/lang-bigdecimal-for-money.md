@@ -16,8 +16,8 @@ upstream:
   - "https://ieeexplore.ieee.org/document/8766229"
 evidence:
   - upstream_id: iso-4217
-    section: "Amount representation rules — decimal-string vs minor-units"
-    quote: "JSON number with a decimal point"
+    section: "Minor unit / decimal subdivision"
+    quote: "ISO 4217:2015 also shows the relationship between the minor unit and the currency itself (i.e. whether it divides into 100 or 1000)."
   - source_type: external
     citation: "Effective Java (3rd ed., Joshua Bloch) — Item 60: Avoid float and double if exact answers are required"
     url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html"

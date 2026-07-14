@@ -24,14 +24,17 @@ verification:
     recipe_governance_guard.sh validates fixture-level compliance.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js documentation — App Router: each route segment is an independent module; cross-segment imports create bundle coupling that prevents per-route code splitting"
     url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Vercel — How we optimized package imports in Next.js: barrel imports and cross-segment coupling prevent tree-shaking and inflate route bundle sizes"
     url: "https://vercel.com/blog/how-we-optimized-package-imports-in-next-js"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "토스 기술 블로그 — FE 플랫폼: 도메인별 번들 분리를 통해 route segment 간 의존을 끊고 각 도메인 번들이 독립적으로 로드되도록 합니다"
     url: "https://toss.tech/article/toss-frontend-chapter"
     quoted_at: "2026-05-18"

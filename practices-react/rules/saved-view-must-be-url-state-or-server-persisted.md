@@ -30,14 +30,17 @@ verification:
     lesson: name-based checks need shape/scope guards).
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "web.dev URL as state — encoding application state in the URL makes it shareable, bookmarkable, and resilient to session loss. localStorage state is invisible to the server and breaks link sharing."
     url: "https://web.dev/articles/url-state"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js useSearchParams — persisting filter/view state in search params allows deep-linking to exact table state without a database round-trip"
     url: "https://nextjs.org/docs/app/api-reference/functions/use-search-params"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "MDN Web Docs — localStorage: data is scoped to the origin and session, not shareable via URL, invisible to server, and cleared in incognito mode — making it unsuitable for collaborative or cross-device view state"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage"
     quoted_at: "2026-05-18"

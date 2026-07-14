@@ -17,31 +17,28 @@
 #      Fail-closed: if a ref's diff base cannot be resolved or `git diff` itself
 #      fails, the suite runs / the push blocks rather than silently skipping.
 #
+# The per-ref decision logic (effective push specs / deletion / base resolution /
+# scope) lives in .githooks/pre-push-lib.sh so it can be exercised in isolation by
+# practices/evals/pre_push_decision_guard.sh. This hook's observable behavior is
+# unchanged by that extraction — the lib only factors out the branch decisions.
+#
 # Activated by practices/scripts/install-hooks.sh together with pre-commit. The hook
 # is opt-in per clone; not installing it skips the regression locally but sentinel CI
 # remains the second line of defense for whichever git policy the fork-받은 팀 picks.
 set -uo pipefail
 
+# Source the pure decision logic before cd (resolve relative to this hook file).
+_PP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.githooks/pre-push-lib.sh
+source "$_PP_LIB_DIR/pre-push-lib.sh"
+
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-ZERO_SHA="0000000000000000000000000000000000000000"
-REGRESSION_SCOPE='^(backend/|practices/|specs/spring-practices-l0\.yaml)'
-
 # Git feeds (local_ref local_sha remote_ref remote_sha) on stdin per `man
-# githooks`. Capture it once — every stage below consumes it.
-PUSH_SPECS="$(cat)"
-
-# Fallback for a manual invocation with no stdin: behave as a single-ref push
-# of HEAD against the upstream tracking branch (or an unknown base).
-if [[ -z "$PUSH_SPECS" ]]; then
-    _head_sha="$(git rev-parse HEAD)"
-    if _up_sha="$(git rev-parse '@{u}' 2>/dev/null)"; then
-        PUSH_SPECS="HEAD $_head_sha HEAD $_up_sha"
-    else
-        PUSH_SPECS="HEAD $_head_sha HEAD $ZERO_SHA"
-    fi
-fi
+# githooks`. Capture it once — every stage below consumes it. An empty stdin
+# (manual invocation) falls back to a single-ref push of HEAD vs upstream.
+PUSH_SPECS="$(pp_effective_push_specs "$(cat)")"
 
 SHIPPING=0
 REGRESSION_NEEDED=0
@@ -51,7 +48,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     # Deletion ships no work — skip this ref. (ax-ledger dogfood_finding
     # 2026-07-10: the unconditional R25 stage was over-blocking post-merge
     # branch-deletion pushes.)
-    [[ "$local_sha" == "$ZERO_SHA" ]] && continue
+    pp_ref_is_deletion "$local_sha" && continue
     SHIPPING=1
 
     # R25 — 49th hard guard, per pushed ref: the audit must be fresh for the
@@ -70,23 +67,19 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     # Regression scope for THIS ref: remote tip when it exists, else the
     # merge-base with the default branch (new remote branch). Unresolvable
     # base → fail-closed: run the suite rather than assume out-of-scope.
-    base="$remote_sha"
-    if [[ "$base" == "$ZERO_SHA" ]]; then
-        base="$(git merge-base "$local_sha" origin/HEAD 2>/dev/null \
-             || git merge-base "$local_sha" origin/main 2>/dev/null || true)"
-    fi
-    if [[ -z "$base" ]]; then
+    if ! base="$(pp_resolve_ref_base "$local_sha" "$remote_sha")"; then
         REGRESSION_NEEDED=1
         continue
     fi
     # `git diff` failure (bad range, missing objects) is fail-closed: BLOCK,
     # never convert an error into a silent regression skip.
-    if ! diff_files="$(git diff --name-only "$base" "$local_sha" 2>&1)"; then
+    diff_out="$(pp_diff_touches_scope "$base" "$local_sha")"; scope_rc=$?
+    if [[ "$scope_rc" -eq 2 ]]; then
         echo "[practices] ✗ git diff failed for ${base:0:12}..${local_sha:0:12} — push BLOCKED (fail-closed)"
-        echo "$diff_files"
+        echo "$diff_out"
         exit 1
     fi
-    if grep -qE "$REGRESSION_SCOPE" <<< "$diff_files"; then
+    if [[ "$scope_rc" -eq 0 ]]; then
         REGRESSION_NEEDED=1
     fi
 done <<< "$PUSH_SPECS"

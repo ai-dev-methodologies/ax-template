@@ -12,9 +12,9 @@ verification:
 upstream:
   - "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html"
 evidence:
-  - upstream_id: spring-mvc-controlleradvice
-    section: "Spring MVC — HTTP method-specific shortcuts"
-    quote: "@GetMapping"
+  - upstream_id: spring-mvc-requestmapping
+    section: "HTTP method-specific shortcut variants of @RequestMapping"
+    quote: "HTTP method specific shortcut variants of @RequestMapping: @GetMapping @PostMapping @PutMapping @DeleteMapping @PatchMapping"
   - source_type: external
     citation: "Spring Framework Reference — HTTP method-specific shortcuts"
     url: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html"

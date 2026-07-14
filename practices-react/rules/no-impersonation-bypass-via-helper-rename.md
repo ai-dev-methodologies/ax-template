@@ -22,10 +22,12 @@ verification:
   notes: "Specialization of impersonation-banner-required-when-acting-as-other-user. The fixture fail_helper_renamed_runAsUser explicitly validates that runAsUser() without <ImpersonationBanner> is detected. The rule matches {actingAs: ...} return shape, not the helper function name."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "OWASP Session Management Cheat Sheet: Admin impersonation sessions must be visually distinct; a renamed helper wrapper does not change the security requirement."
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A): Impersonation context conveyed through presentation must also be available in text — renaming the helper does not satisfy this requirement."
     url: "https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html"
     quoted_at: "2026-05-18"

@@ -18,9 +18,9 @@ evidence:
   - upstream_id: owasp-logging-cheatsheet
     section: "OWASP Logging Cheat Sheet — Data to exclude"
     quote: "exclude"
-  - upstream_id: pci-dss-saq-a
-    section: "Requirement 3.4 — PAN rendered unreadable"
-    quote: "PAN is rendered unreadable anywhere it is stored"
+  - source_type: external
+    citation: "PCI DSS v4.0.1 Requirement 3.5.1 — PAN is rendered unreadable anywhere it is stored (via truncation, tokenization, or strong cryptography). (SAQ document library; requirement text is PDF-only, not offline-quotable.)"
+    url: "https://www.pcisecuritystandards.org/document_library/"
   - source_type: external
     citation: "OWASP Logging Cheat Sheet — Data to exclude"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude"

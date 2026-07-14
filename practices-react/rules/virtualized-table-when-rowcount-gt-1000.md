@@ -28,10 +28,12 @@ evidence:
     section: "INP — Interaction to Next Paint threshold"
     quote: "INP"
   - source_type: external
+    anchors: generic_principle_only
     citation: "web.dev Core Web Vitals — INP: rendering more than ~1000 DOM nodes in a single interaction causes INP to exceed the 200ms good threshold on mid-range Android devices"
     url: "https://web.dev/articles/inp"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "TanStack Virtual documentation — Row virtualization: only renders rows visible in the viewport, reducing DOM nodes from N to ~20-30 regardless of dataset size"
     url: "https://tanstack.com/virtual/latest/docs/introduction"
     quoted_at: "2026-05-18"

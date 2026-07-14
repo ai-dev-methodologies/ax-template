@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "8481e6d2c9cb8af5ff6641a142ac556dba10f6ec063ca01e6e3b83d5f94400e1"
+  source_concat_sha256: "1b212b3bc66cd4a9166a009108cf47c8126b00d3c855dc6dbae143b1146d24da"
   rule_count: 99
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -3136,10 +3136,12 @@ verification:
   notes: "Combobox onChange handler must check composingRef.current or nativeEvent.isComposing before invoking the filter/search. onCompositionStart must set the guard; onCompositionEnd must clear it and fire the deferred filter."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "MDN Web Docs — CompositionEvent: compositionstart / compositionend lifecycle for CJK input method editors"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "W3C UI Events specification §CompositionEvent — IME composition lifecycle (compositionstart, compositionupdate, compositionend)"
     url: "https://www.w3.org/TR/uievents/#events-composition-types"
     quoted_at: "2026-05-18"
@@ -3343,13 +3345,14 @@ verification:
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
-    section: "Amounts and currencies"
-    quote: "All amounts are stored in the smallest currency unit (e.g., 100 cents to charge $1.00). For zero-decimal currencies such as JPY or KRW, use the amount directly."
+    section: "Zero-decimal currencies"
+    quote: "For the following zero-decimal currencies, the charge and the amount are the same, without requiring multiplication. For example, to charge 500 JPY, provide an amount value of 500."
   - source_type: upstream_id
     upstream_id: toss-billing-2026-05
-    section: "금액 단위"
-    quote: "amount 필드는 항상 정수(원 단위)로 전달합니다. 소수점 금액은 허용하지 않습니다."
+    section: "자동결제 amount 파라미터"
+    quote: "금액이 바뀌었다면 자동결제 승인 API를 호출할 때 amount 파라미터를 변경된 결제 금액으로 설정하면 됩니다."
   - source_type: external
+    anchors: generic_principle_only
     citation: "WCAG 2.2 SC 1.3.3 Sensory Characteristics: Instructions do not rely solely on sensory characteristics. Formatted currency labels (₩10,000) are more accessible than raw numbers (10000) because screen readers announce the currency symbol."
     url: "https://www.w3.org/WAI/WCAG22/Understanding/sensory-characteristics.html"
     quoted_at: "2026-05-18"
@@ -3741,10 +3744,12 @@ verification:
   notes: "The fixture runner checks canonical session.actingAs mutation patterns (direct assignment, immutable update, any helper returning {actingAs}) without a co-located <ImpersonationBanner>. The fail_helper_renamed_runAsUser fixture specifically validates that the rule is NOT bypassable by renaming the helper function."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "OWASP Session Management Cheat Sheet: Admin impersonation sessions must be visually distinct and audited; the impersonated identity must always be visible to the operator."
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A): Information, structure, and relationships conveyed through presentation are also available in text. A banner conveying impersonation context must be programmatically determinable."
     url: "https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html"
     quoted_at: "2026-05-18"
@@ -5178,6 +5183,7 @@ audit:
 provenance_class: internal_design
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "React documentation — Passing Props to a Component: a parent passes data to a child through props, and the child renders the props it is given rather than sourcing its own data. (The L2 fetch/useQuery ban itself is an ax-template layer decision — this citation anchors only the generic props-boundary principle it rests on.)"
     url: "https://react.dev/learn/passing-props-to-a-component"
     quoted_at: "2026-07-14"
@@ -5307,6 +5313,7 @@ audit:
     status: complete
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "React documentation — Responding to Events (Passing event handlers as props): a child component receives event handlers such as onSubmit from its parent as props, keeping the child agnostic to what the handler does. (The server-action/lib import ban itself is an ax-template layer decision — this citation anchors only the generic callback-prop principle it rests on.)"
     url: "https://react.dev/learn/responding-to-events"
     quoted_at: "2026-07-14"
@@ -6398,10 +6405,12 @@ verification:
     Failing fixture: a billing page importing PaymentMethodSelector from payment UI.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Domain-Driven Design (Evans): Bounded contexts have explicit boundaries. UI components are part of the presentation layer of a bounded context; cross-importing presentation components couples contexts at the view layer."
     url: "https://martinfowler.com/bliki/BoundedContext.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js App Router documentation: Route groups allow separate domain-specific layouts. L4/billing/(billing)/** and L4/payment/(payment)/** are intentionally separate route groups with separate layouts."
     url: "https://nextjs.org/docs/app/building-your-application/routing/route-groups"
     quoted_at: "2026-05-18"
@@ -6597,10 +6606,12 @@ evidence:
     section: "useTranslations"
     quote: "const t = useTranslations('Payment');"
   - source_type: external
+    anchors: generic_principle_only
     citation: "next-intl docs — using t() for all user-visible text to enable locale switching"
     url: "https://next-intl.dev/docs/usage/messages"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Unicode — Hangul syllable block U+AC00 to U+D7A3; Hangul jamo U+3131 to U+3163"
     url: "https://unicode.org/charts/PDF/UAC00.pdf"
     quoted_at: "2026-05-18"
@@ -6717,10 +6728,12 @@ verification:
   notes: "Specialization of impersonation-banner-required-when-acting-as-other-user. The fixture fail_helper_renamed_runAsUser explicitly validates that runAsUser() without <ImpersonationBanner> is detected. The rule matches {actingAs: ...} return shape, not the helper function name."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "OWASP Session Management Cheat Sheet: Admin impersonation sessions must be visually distinct; a renamed helper wrapper does not change the security requirement."
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A): Impersonation context conveyed through presentation must also be available in text — renaming the helper does not satisfy this requirement."
     url: "https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html"
     quoted_at: "2026-05-18"
@@ -6818,10 +6831,12 @@ verification:
   notes: "No file under templates/L4/<domain-A>/ may import from templates/L4/<domain-B>/. Shared cross-cutting concerns (auth state, user context) must be sourced from shared hooks (hooks/), context providers (providers/), or L1/L2 components — never from another L4 domain."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Acyclic Dependencies Principle (Martin, Agile Software Development: Principles, Patterns, and Practices) — the dependency graph of packages must have no cycles; a package that depends on a sibling it may in turn be depended upon by introduces a cycle that prevents independent build and release. (The L4-to-L4 import ban itself is an ax-template layer decision — this citation anchors only the generic acyclic-package-dependency principle it rests on; shared concerns are re-routed to L1/L2/hooks rather than to a sibling domain.)"
     url: "https://en.wikipedia.org/wiki/Acyclic_dependencies_principle"
     quoted_at: "2026-07-14"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js documentation — Project organization and file colocation: application code can be colocated inside route segments, and private folders keep implementation details out of routing. (Anchors only the generic colocation/module-boundary principle; the cross-domain prohibition is an ax-template layer decision, not a Next.js requirement.)"
     url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"
     quoted_at: "2026-07-14"
@@ -7443,10 +7458,12 @@ verification:
     Fail fixture: uses process.env.NEXT_PUBLIC_FEATURE_NEW_CHECKOUT — exits 1.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js Docs — Environment variables and the limitation of build-time NEXT_PUBLIC_ variables (cannot be changed at runtime without rebuild)"
     url: "https://nextjs.org/docs/app/building-your-application/configuring/environment-variables"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Martin Fowler — Feature Toggles (aka Feature Flags): Release toggles should be dynamic and externally managed, not baked into the build artifact"
     url: "https://martinfowler.com/articles/feature-toggles.html"
     quoted_at: "2026-05-18"
@@ -7548,14 +7565,17 @@ verification:
     recipe_governance_guard.sh validates fixture-level compliance.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js documentation — App Router: each route segment is an independent module; cross-segment imports create bundle coupling that prevents per-route code splitting"
     url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Vercel — How we optimized package imports in Next.js: barrel imports and cross-segment coupling prevent tree-shaking and inflate route bundle sizes"
     url: "https://vercel.com/blog/how-we-optimized-package-imports-in-next-js"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "토스 기술 블로그 — FE 플랫폼: 도메인별 번들 분리를 통해 route segment 간 의존을 끊고 각 도메인 번들이 독립적으로 로드되도록 합니다"
     url: "https://toss.tech/article/toss-frontend-chapter"
     quoted_at: "2026-05-18"
@@ -10391,6 +10411,7 @@ verification:
     Fail fixture: statically imports RichTextEditor in a Server Component.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "TipTap v2 — Getting started with React: Add 'use client' to the component; the Editor is a browser-only construct."
     url: "https://tiptap.dev/docs/editor/getting-started/install/react"
     quoted_at: "2026-05-18"
@@ -10399,6 +10420,7 @@ evidence:
     section: "RSC Compatibility"
     quote: "Add `'use client'` to the component; the Editor is a browser-only construct."
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js 15 Docs — Lazy Loading: ssr:false is not allowed with next/dynamic in Server Components. Move it into a Client Component."
     url: "https://nextjs.org/docs/app/guides/lazy-loading"
     quoted_at: "2026-05-18"
@@ -10515,14 +10537,17 @@ verification:
     lesson: name-based checks need shape/scope guards).
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "web.dev URL as state — encoding application state in the URL makes it shareable, bookmarkable, and resilient to session loss. localStorage state is invisible to the server and breaks link sharing."
     url: "https://web.dev/articles/url-state"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js useSearchParams — persisting filter/view state in search params allows deep-linking to exact table state without a database round-trip"
     url: "https://nextjs.org/docs/app/api-reference/functions/use-search-params"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "MDN Web Docs — localStorage: data is scoped to the origin and session, not shareable via URL, invisible to server, and cleared in incognito mode — making it unsuitable for collaborative or cross-device view state"
     url: "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage"
     quoted_at: "2026-05-18"
@@ -11964,10 +11989,12 @@ verification:
   notes: "All Server Action return types must include a traceId field. The error branch must populate it from headers().get('x-trace-id') or crypto.randomUUID(). The success branch may omit traceId or include it for full observability."
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "W3C Trace Context — trace-id is the identifier of a whole trace, shared by all spans, and is propagated across service boundaries so a caller can be correlated with the server-side record of the same request. (Anchors the generic correlation-identifier principle; requiring traceId in EVERY Server Action error return is an ax-template layer decision, not a W3C requirement.)"
     url: "https://www.w3.org/TR/trace-context/#trace-id"
     quoted_at: "2026-07-14"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js documentation — Server Actions can return serializable values, so a mutation may return a result object the client inspects instead of throwing. (Anchors only that a Server Action return value is the client-visible channel; carrying traceId in that channel is an ax-template layer decision.)"
     url: "https://nextjs.org/docs/app/getting-started/mutating-data"
     quoted_at: "2026-07-14"
@@ -12090,14 +12117,17 @@ verification:
     component, not an inline demo of every variant.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "WCAG 2.2 SC 1.4.1 Use of Color: color is not used as the only visual means of conveying information; pairing each status with an icon plus a text label (not color alone) satisfies it."
     url: "https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html"
     quoted_at: "2026-06-03"
   - source_type: external
+    anchors: generic_principle_only
     citation: "WAI-ARIA 1.2 status role: a type of live region whose content is advisory information for the user that is not important enough to justify an alert; assistive technologies announce its changes."
     url: "https://www.w3.org/TR/wai-aria-1.2/#status"
     quoted_at: "2026-06-03"
   - source_type: external
+    anchors: generic_principle_only
     citation: "MDN CSS custom properties (--*): define design tokens once and reference them with var(); a single token swap re-themes every consumer (light/dark/brand) without touching component code."
     url: "https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties"
     quoted_at: "2026-06-03"
@@ -12181,10 +12211,12 @@ evidence:
     section: "INP — Interaction to Next Paint threshold"
     quote: "INP"
   - source_type: external
+    anchors: generic_principle_only
     citation: "web.dev Core Web Vitals — INP: rendering more than ~1000 DOM nodes in a single interaction causes INP to exceed the 200ms good threshold on mid-range Android devices"
     url: "https://web.dev/articles/inp"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "TanStack Virtual documentation — Row virtualization: only renders rows visible in the viewport, reducing DOM nodes from N to ~20-30 regardless of dataset size"
     url: "https://tanstack.com/virtual/latest/docs/introduction"
     quoted_at: "2026-05-18"

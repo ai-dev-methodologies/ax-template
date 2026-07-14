@@ -356,23 +356,29 @@ snapshots:
 
   - id: "stripe-billing-2026-05"
     tier: 2
-    source: "https://stripe.com/docs/billing/subscriptions/overview"
-    via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 4821
-    sha: "a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8"
+    source: "https://docs.stripe.com/billing/subscriptions/overview"
+    via: "curl"
+    fetched_at: "2026-07-14T00:00:00Z"
+    bytes: 1657
+    sha: "2e7d4ece6d2556a38db90177f281939f173bda8ba73fab25e74cf7ec1af7c88a"
     version_observed: "stripe-api@2024-06-20"
-    purpose: "Stripe Billing: subscription lifecycle (trialing/active/past_due/canceled), integer minor-unit amounts, idempotency (24h), webhook events, 300s replay tolerance"
+    curated_sources:
+      - "https://docs.stripe.com/billing/subscriptions/overview (subscription status table)"
+      - "https://docs.stripe.com/api/idempotent_requests (idempotency 24h)"
+      - "https://docs.stripe.com/currencies (zero-decimal currencies)"
 
   - id: "toss-billing-2026-05"
     tier: 2
     source: "https://docs.tosspayments.com/guides/billing/overview"
-    via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 3952
-    sha: "b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9"
+    via: "curl"
+    fetched_at: "2026-07-14T00:00:00Z"
+    bytes: 961
+    sha: "70d66b0c80e9a6707175f0bd1b8c9ac767494e9a5f11499055f0023b6a756200"
     version_observed: "toss-payments-api@2024"
-    purpose: "Toss Payments 정기결제: billingKey flow, integer KRW amounts, idempotency header, HMAC-SHA256 webhook, status mapping to ax-template canonical statuses"
+    curated_sources:
+      - "https://docs.tosspayments.com/guides/billing/overview (billingKey flow; merchant builds subscription lifecycle; amount 파라미터)"
+      - "https://docs.tosspayments.com/reference/using-api/idempotency-key (Idempotency-Key header)"
+    purpose: "Toss Payments 정기결제: billingKey flow, KRW amount 파라미터, idempotency header. NOTE: Toss defines NO subscription status enum — merchant builds the loop."
 
   - id: "tiptap-2026-05"
     tier: 2

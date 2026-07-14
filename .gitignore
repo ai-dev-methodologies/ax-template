@@ -1,9 +1,13 @@
 test-results/
 .env.local
 
-# Practices upstream snapshots — large, regenerable via practices/upstream/fetch.sh,
-# and may contain false-positive secret patterns from public docs (e.g. Algolia search keys).
-practices/upstream/*.snapshot.md
+# Practices upstream snapshots — COMMITTED as of 2026-07-14 (P2-18): they are the
+# offline quote-truth substrate for evidence_quote_spotcheck_guard [74] full-strict.
+# Previously ignored as "regenerable via fetch.sh", but un-committed bodies made [74]
+# unable to verify quote truth offline (advisory-only). Note: bodies are PUBLIC-doc
+# text and may contain false-positive secret-LIKE patterns (e.g. Algolia public search
+# keys in doc-site chrome) — private_boundary_guard does not scan practices/upstream
+# (by design; these are third-party public docs, not our code).
 
 # node_modules anywhere (eslint-plugin-ax, future tooling)
 node_modules/

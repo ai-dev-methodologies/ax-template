@@ -26,10 +26,12 @@ verification:
     Failing fixture: a billing page importing PaymentMethodSelector from payment UI.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Domain-Driven Design (Evans): Bounded contexts have explicit boundaries. UI components are part of the presentation layer of a bounded context; cross-importing presentation components couples contexts at the view layer."
     url: "https://martinfowler.com/bliki/BoundedContext.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Next.js App Router documentation: Route groups allow separate domain-specific layouts. L4/billing/(billing)/** and L4/payment/(payment)/** are intentionally separate route groups with separate layouts."
     url: "https://nextjs.org/docs/app/building-your-application/routing/route-groups"
     quoted_at: "2026-05-18"

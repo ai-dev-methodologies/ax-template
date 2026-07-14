@@ -16,10 +16,10 @@ upstream:
 evidence:
   - upstream_id: rest-assured-usage
     section: REST-assured given/when/then DSL
-    quote: 'bers as BigDecimal: given (). config ( RestAssured . config (). jsonConfig ( jsonConfig (). numberReturnType ( BIG_DECIMAL ))). when (). get ( "/price" ). then (). body ( "price" , is ( new BigDecimal ( 12.12 )); JSON Schema validation From version 2.1.0 REST'
+    quote: 'given(). config(RestAssured.config().jsonConfig(jsonConfig().numberReturnType(BIG_DECIMAL))). when(). get("/price"). then().'
   - upstream_id: spring-boot-testing
     section: WebEnvironment.RANDOM_PORT and @LocalServerPort
-    quote: our test runs. The @LocalServerPort annotation can be used to inject the actual port used into your test. Tests that need to make REST calls to the started server can autowire a RestTestClient by annotating the test class with @AutoConfigureRestTestClient . Th
+    quote: "The @LocalServerPort annotation can be used to inject the actual port used into your test. Tests that need to make REST calls to the started server can autowire a RestTestClient"
   - source_type: external
     citation: 'REST-assured — Usage Guide'
     url: 'https://github.com/rest-assured/rest-assured/wiki/Usage'

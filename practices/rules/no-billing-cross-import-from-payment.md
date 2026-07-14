@@ -27,14 +27,17 @@ verification:
     Failing fixture: any billing class with import ax.template.payment.* or vice versa.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "Domain-Driven Design (Evans): Each bounded context has an explicit contract at its boundary. Cross-importing internals couples contexts at the class level, violating autonomy and enabling cascading changes."
     url: "https://martinfowler.com/bliki/BoundedContext.html"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Stripe API Reference 2026-05 — Charges vs. Subscriptions are separate API resources with no direct dependency between them. A subscription's lifecycle uses invoice and billing objects, not charge objects."
     url: "https://stripe.com/docs/api/subscriptions"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Sam Newman — Building Microservices (2nd ed.): Services in separate bounded contexts must communicate via published events or APIs, never via direct class-level imports."
     url: "https://samnewman.io/books/building_microservices_2nd_edition/"
     quoted_at: "2026-05-18"

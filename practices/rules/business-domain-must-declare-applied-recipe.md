@@ -22,10 +22,12 @@ verification:
     Missing field or wrong value → VIOLATION.
 evidence:
   - source_type: external
+    anchors: generic_principle_only
     citation: "arc42 — Architecture Decision Records: every architectural decision must be traceable; undeclared composition cannot be verified or evolved without breaking hidden assumptions"
     url: "https://arc42.org/overview/"
     quoted_at: "2026-05-18"
   - source_type: external
+    anchors: generic_principle_only
     citation: "Spring Modulith reference — @ApplicationModule annotation makes module membership explicit and machine-verifiable; undeclared module boundaries are enforced to fail loudly"
     url: "https://docs.spring.io/spring-modulith/reference/fundamentals.html"
     quoted_at: "2026-05-18"

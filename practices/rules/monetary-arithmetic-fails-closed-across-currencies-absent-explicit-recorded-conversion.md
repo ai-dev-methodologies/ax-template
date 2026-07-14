@@ -20,7 +20,7 @@ upstream:
 evidence:
   - upstream_id: iso-4217
     section: "Alpha-3 code structure"
-    quote: "Each currency is identified by a three-letter alpha-3 code."
+    quote: "The first two letters of the ISO 4217 three-letter code are the same as the code for the country name"
   - source_type: external
     citation: "Martin Fowler, Patterns of Enterprise Application Architecture — Money pattern (martinfowler.com/eaaCatalog)"
     url: "https://martinfowler.com/eaaCatalog/money.html"

@@ -14,8 +14,8 @@ upstream:
   - "https://docs.spring.io/spring-framework/reference/core/aop/proxying.html"
 evidence:
   - upstream_id: spring-aop-proxying
-    section: CGLIB subclass-based proxying restrictions
-    quote: dynamic proxies or CGLIB to create the proxy for a given target object. JDK dynamic proxies are built into the JDK, whereas CGLIB is a common open-source class definition library (repackaged into spring-core ). If the target object to be proxied implements at
+    section: Proxying mechanisms — CGLIB final-class/method restriction
+    quote: "final classes cannot be proxied, because they cannot be extended. final methods cannot be advised, because they cannot be overridden."
   - source_type: external
     citation: 'Spring Framework Reference — §Proxying mechanisms (CGLIB final-class restriction)'
     url: 'https://docs.spring.io/spring-framework/reference/core/aop/proxying.html'

@@ -61,6 +61,10 @@
 #      보장의 부재가 Java PIT [84] 대비 약한 지점이다 (allowlist "밖"이 아니라 "안"의
 #      오도성이 잔여 리스크임을 명시 — 2026-07-14 리뷰 지적 반영).
 #   3. exit 0은 원인 불문 "flip"으로 인정된다 (mutation 결과 판정 로직은 변경 없음).
+#   4. Typed operator enum for neuter shapes was assessed 2026-07-14 and deferred
+#      as net-negative: a typed schema would break every existing manifest item
+#      and re-introduce the heredoc special-char hazard, for only marginal gain
+#      over the documented author-responsibility residual noted in limit 2 above.
 #
 # USAGE
 #   bash practices/evals/fixture_kill_proof_guard.sh

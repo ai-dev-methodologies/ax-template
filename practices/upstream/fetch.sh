@@ -8,6 +8,24 @@
 # 2026-05-15 URL revision: switched from `htmlsingle/index.html` navigation pages to
 # topic-level deep references so the snapshot body actually contains the prose each rule
 # claims. After this revision, `upstream_id` evidence in rule frontmatter becomes usable.
+#
+# 2026-07-14 P2-18 (evidence_quote_spotcheck_guard --strict promotion): the committed
+# {id}.snapshot.md BODIES are now the CANONICAL, guard-verified artifacts — every rule
+# `quote:` is proven to be a verbatim substring of its snapshot body. THIS SCRIPT IS NOW A
+# REFRESH HELPER ONLY, NOT the source of truth. Its raw curl output is NOT commit-ready:
+#   1. curl fetches raw HTML — it must be converted to the readable snapshot format
+#      (strip tags, decode entities, ATX headings; frontmatter id/source/fetched_at/
+#      version_observed/via/tier/bytes/sha + readable body) BEFORE committing.
+#   2. Several ids are curated multi-page or JS-rendered pages that plain curl cannot
+#      capture faithfully (stripe/toss = hand-curated multi-section; iso-4217, pci-dss-saq-a,
+#      wcag = JS/challenge pages). For those, refresh by hand and re-verify with
+#      `evidence_quote_spotcheck_guard.sh --strict`.
+#   3. emit_manifest() below is LOSSY — it rewrites every entry as tier:3/via:curl and drops
+#      tier-2 metadata (version_observed, purpose, curated_sources). DO NOT trust it for the
+#      real manifest; re-sync _MANIFEST.yaml sha/bytes by hand after any refresh.
+# In short: fetch.sh helps you RE-FETCH; the readable-format conversion + manifest re-sync +
+# strict-guard pass are the gate. The SNAPSHOTS array below is kept complete (all referenced
+# ids) so a refresh knows every source URL.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -54,10 +72,23 @@ SNAPSHOTS=(
   "spring-security-csrf|https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html"
   "spring-security-headers|https://docs.spring.io/spring-security/reference/servlet/exploits/headers.html"
   "spring-security-stateless|https://docs.spring.io/spring-security/reference/servlet/authentication/session-management.html"
-  "spring-boot-sql-migration|https://docs.spring.io/spring-boot/reference/data/sql.html"
-  "spring-cache-abstraction|https://docs.spring.io/spring-framework/reference/integration/cache.html"
+  "spring-boot-sql-migration|https://docs.spring.io/spring-boot/how-to/data-initialization.html"
+  "spring-cache-abstraction|https://docs.spring.io/spring-framework/reference/integration/cache/annotations.html"
   "spring-boot-cache|https://docs.spring.io/spring-boot/reference/io/caching.html"
   "spring-application-events|https://docs.spring.io/spring-framework/reference/core/beans/context-introduction.html"
+  # ── P2-18: ids added so the array is complete (all rule-referenced upstream_ids). ──
+  # New topic-scoped sub-pages split out during the phase-2 re-anchor:
+  "spring-jpa-locking|https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html"
+  "spring-mvc-requestmapping|https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html"
+  "spring-cache-2026-05|https://docs.spring.io/spring-framework/reference/integration/cache/specific-config.html"
+  # Tier-2 / JS-rendered / curated — plain curl output is NOT commit-ready (see header):
+  "caffeine-2026-05|https://github.com/ben-manes/caffeine/wiki/Eviction"
+  "iso-4217|https://www.iso.org/iso-4217-currency-codes.html"
+  "pci-dss-saq-a|https://www.pcisecuritystandards.org/document_library/?category=saqs"
+  "wcag-22-techniques-2026-05|https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
+  # Curated multi-section vendor snapshots (primary URL only; see manifest curated_sources):
+  "stripe-billing-2026-05|https://docs.stripe.com/billing/subscriptions/overview"
+  "toss-billing-2026-05|https://docs.tosspayments.com/guides/billing/overview"
 )
 
 MANIFEST="practices/upstream/_MANIFEST.yaml"
