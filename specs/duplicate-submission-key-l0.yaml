@@ -1,0 +1,115 @@
+version: "0.1.0"
+scope: "duplicate-submission-key-l0 — the generalized INTAKE-TIME DUPLICATE-SUBMISSION gate for
+  a single-source submission channel (a claim, a support ticket, an application). A submission
+  derives a NATURAL SAME-LOSS KEY from a configured attribute set for its channel (e.g. subject +
+  loss-date + loss-type). An EXACT key match against an existing non-withdrawn submission on the
+  same channel MUST be rejected (409) with a reference to the existing submission — backstopped by
+  a UNIQUE DB constraint on the derived key, never a service-layer pre-check alone. A NEAR-match
+  (a configurable secondary fuzzy band, e.g. same subject + loss-date within N days + same type)
+  MUST NOT be silently accepted nor hard-rejected: it is ACCEPTED but FLAGGED for review with a
+  linkage to the suspect submission. Withdrawing (or later rejecting) a submission RELEASES its
+  key — a legitimate resubmission after withdrawal succeeds. Distinct from record-linkage-l0
+  (LINK-BAND-001..): record-linkage scores CROSS-SOURCE identity matches between two records that
+  may denote the same real-world ENTITY (an MPI/dedup problem, reviewed via a banded
+  confirm/reject workflow); this spec gates a single-source INTAKE stream against ITSELF at
+  submission time — a simpler, narrower, channel-scoped duplicate check with no merge/survivorship
+  step. Realized by the duplicatesubmission reference workload
+  (com.ax.template.authblueprint.duplicatesubmission)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (a NULL-excluded-from-uniqueness active_key column
+  backstops the UNIQUE constraint portably across H2/PostgreSQL — no partial/filtered index
+  syntax required) + RFC 9457 Problem Details + Micrometer"
+standard: "Insurance industry duplicate-claim detection practice (a claim's natural key —
+  policyholder + date of loss + loss type — is checked against open claims before a new claim
+  record is created; a near-match band routes to a fraud/duplicate-review queue rather than an
+  automatic accept or reject) + CWE-694 (Use of Multiple Resources with Duplicate Identifier —
+  an unrecognized duplicate silently creates two records for the same real-world event) + RFC 9457
+  + RFC 9110 §15.5.10 (409)"
+domain_mode: backend_only
+introduced_at: "2026-07-14 backlog-100 wave, Lane I (intake) — BACKLOG P3-19"
+
+# OPT-IN duplicate-submission-key catalog. The intake-time duplicate gap: nothing in the
+# catalog stops the SAME real-world event from being submitted twice into a single-source
+# intake stream (two claims for the same loss, two tickets for the same incident). The wrong
+# answers are (a) silently accept both (duplicate processing / double payout) or (b) hard-reject
+# anything that merely resembles a prior submission (false positives block legitimate resubmits).
+# The right answer — an exact match is a deterministic 409 referencing the existing submission,
+# a near match is accepted-but-flagged for human review, and withdrawal legitimately frees the
+# key — is what this primitive ships. Generic; the claim/loss framing is an anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. DUPKEY-NATURAL-001   (the primitive — exact natural-key match → 409, UNIQUE DB backstop)
+#   2. DUPKEY-FUZZY-002     (near-match band → accepted but flagged REVIEW, linked to the suspect)
+#   3. DUPKEY-WITHDRAWN-003 (withdrawn/rejected submissions release their key — resubmission legal)
+
+# ── Composition note ──
+# DISTINCT from record-linkage-l0 (cross-source MPI matching + banded human-reviewed MERGE with
+# survivorship — a heavier identity-resolution pipeline for TWO OR MORE independent records) and
+# from self-reported-input-plausibility-l0 (validates a VALUE's range/rate, not whether TWO
+# SUBMISSIONS denote the same event). Submission references its DuplicateKeyChannel by id
+# (cross-aggregate reference, not object pointer) — both are separate @AggregateRoots, mirroring
+# record-linkage's LinkageRecord/MatchProposal split.
+
+items:
+  - id: "DUPKEY-NATURAL-001"
+    chapter: "An exact natural same-loss key match against an existing non-withdrawn submission is rejected 409, referencing the existing one"
+    verification:
+      mechanism: tag
+      ref: "DUPKEY-NATURAL-001"
+    requirement: "A submission against a duplicate-key channel MUST derive a NATURAL SAME-LOSS KEY
+      from the channel's configured attribute set (subject + loss-date + loss-type). If an EXISTING
+      non-withdrawn (ACTIVE) submission on the same channel carries the identical natural key, the
+      new submission MUST be rejected with 409 (DUPLICATE_SUBMISSION) and the response MUST
+      reference the existing submission's id. This MUST be backstopped by a UNIQUE database
+      constraint on the derived key scoped to non-terminal submissions (never a service-layer
+      pre-check alone, which would race under concurrent intake) — a service-layer pre-check MAY
+      run first for a clean 409 message, but a DB-level constraint violation on a racing insert
+      MUST ALSO translate to the same deterministic 409, never an opaque 500."
+    test_method: "RestAssured (first submission of a key → 201; an exact-key resubmission while
+      the first is ACTIVE → 409 DUPLICATE_SUBMISSION referencing the first submission's id;
+      structural: a UNIQUE constraint exists on the active-key column)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-694 — an unrecognized duplicate creating two records for one real-world
+      event): "The product allows the same resource identifier to be used for distinct resources,
+      or does not correctly enforce the uniqueness of an identifier that must be unique."
+      (https://cwe.mitre.org/data/definitions/694.html)
+  - id: "DUPKEY-FUZZY-002"
+    chapter: "A near-match on a configurable secondary check is accepted but flagged for review, linked to the suspect — never silently accepted nor hard-rejected"
+    requirement: "When no EXACT natural-key match exists, the channel's configured FUZZY secondary
+      check (e.g. same subject + loss-date within N days + same loss-type — the channel's
+      configured fuzzy window) MUST be evaluated against other ACTIVE submissions on the same
+      channel. A near-match MUST NOT be silently accepted as an ordinary submission (the resemblance
+      would be lost) and MUST NOT be hard-rejected (a near-match is not proof of duplication — a
+      legitimate distinct submission could still trigger it). Instead the new submission MUST be
+      PERSISTED (201) with a review flag set and a recorded linkage (suspectSubmissionId) to the
+      matched submission, so a human reviewer can adjudicate. This is intake-time, single-source,
+      and distinct from record-linkage-l0's cross-source MPI scoring/banding/merge pipeline — there
+      is no score, no band, and no merge here, only an accept-and-flag outcome."
+    test_method: "RestAssured (a submission within the fuzzy window of an existing ACTIVE submission
+      on the same subject+type → 201, flaggedForReview=true, suspectSubmissionId references the
+      existing submission; a submission outside the fuzzy window → 201, flaggedForReview=false)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Insurance duplicate-claim detection practice: a near-match on policyholder + date-of-loss
+      proximity + loss type routes to a fraud/duplicate-review queue rather than an automatic
+      accept or reject — the human-in-the-loop pattern this item generalizes.
+  - id: "DUPKEY-WITHDRAWN-003"
+    chapter: "Withdrawing (or later rejecting) a submission releases its key — a legitimate resubmission after withdrawal succeeds"
+    requirement: "Transitioning a submission to WITHDRAWN (an explicit caller action) or REJECTED
+      (a later business decision) MUST release its natural key: the active-key column MUST be
+      cleared so the UNIQUE backstop (DUPKEY-NATURAL-001) no longer considers it a match. A
+      subsequent submission carrying the SAME natural key MUST then be accepted as a fresh
+      submission (201), not rejected as a duplicate of the withdrawn/rejected one. An
+      already-withdrawn or already-rejected submission MUST NOT be withdrawn/rejected again
+      (409 — the transition is terminal, one-way)."
+    test_method: "RestAssured (submit → withdraw → resubmit the SAME natural key → 201, a NEW
+      submission id, no 409; double-withdraw → 409; structural: the state machine's ALLOWED
+      transition graph has no edge back out of WITHDRAWN/REJECTED)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The released key is what makes withdrawal genuinely reversible for the submitter — an
+      unreleased key would permanently lock out a legitimate resubmission after a mistaken
+      withdrawal, defeating the purpose of allowing withdrawal at all.

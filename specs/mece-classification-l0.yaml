@@ -1,0 +1,114 @@
+version: "0.1.0"
+scope: "mece-classification-l0 — the MUTUALLY-EXCLUSIVE-COLLECTIVELY-EXHAUSTIVE classification
+  primitive: an item is assigned to EXACTLY one category of a declared scheme (mutual exclusivity,
+  DB-UNIQUE-backstopped), every scheme MUST declare a residual/unclassified bucket at config time so
+  classification can NEVER fail open (collective exhaustiveness — an item matching no rule always
+  lands SOMEWHERE, visibly), and every category change is an append-only move record so the current
+  category is always derive-on-read from the latest move rather than an editable field. The catalog
+  had per-material versioned policies (material-divisibility-constraint-l0), polymorphic tagging
+  (Tag/TagAttachment, many-tags-per-item, no exclusivity), and hierarchy (TagAttachment parent/child) —
+  but no primitive for a classification SCHEME whose defining property is that categories are
+  mutually exclusive AND jointly exhaustive for every item, the two properties Minto's MECE principle
+  names together. Generic classification-completeness pattern (product taxonomies, risk-tiering
+  schemes, customer-segment assignment, defect-category triage) — the scheme/category vocabulary is
+  the anchor, not a fixed industry lock-in."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA, append-only move log, UNIQUE(scheme, item)
+  exclusivity backstop) + RFC 9457 Problem Details + Micrometer"
+standard: "The MECE (Mutually Exclusive, Collectively Exhaustive) classification principle
+  (Minto, The Pyramid Principle — a grouping is MECE when its categories do not overlap and, taken
+  together, cover every possible case) + CWE-1023-adjacent completeness reasoning (an
+  incomplete/ambiguous classification scheme is a correctness defect, not a UX nicety) + RFC 9457 +
+  RFC 9110 §15.5.10 (409 Conflict) / §15.5.21 (422 Unprocessable Content)"
+domain_mode: backend_only
+introduced_at: "Lane G capital-markets wave 2026-07-14 — BACKLOG P3-33"
+
+# OPT-IN mece-classification catalog. Adopted by any recipe that must guarantee every item lands in
+# exactly one category of a scheme and that the scheme itself can never leave an item unclassifiable:
+# risk-tiering (every counterparty/instrument has exactly one tier), product taxonomy (every SKU has
+# exactly one leaf category), defect/incident triage (every ticket has exactly one root-cause
+# bucket), customer segmentation. The catalog's existing Tag domain is deliberately NOT exclusive
+# (many tags per item, by design) — this is the complementary EXCLUSIVE-and-EXHAUSTIVE primitive.
+
+# ── Priority order for fork-receivers ──
+#   1. MECE-EXCLUSIVE-001  (the primitive — exactly one category per (item, scheme); second assignment attempt is 409, UNIQUE-backstopped)
+#   2. MECE-EXHAUSTIVE-002 (every scheme declares a residual bucket at config time; classification never fails open)
+#   3. MECE-RECLASS-003    (reclassification is an append-only move record; current category is derive-on-read from the latest move)
+
+# ── Composition note ──
+# DISTINCT from the Tag domain (tag-categorization-*): a Tag attachment is many-to-many and
+# non-exclusive by design (an item may carry any number of tags). A MECE scheme is the opposite
+# shape — exactly one category, and the scheme itself is required to be exhaustive (no item can
+# fall through). DISTINCT from material-divisibility-constraint-l0's versioned POLICY (one scalar
+# property per material, re-declared as a new version) — a MECE scheme's per-item state is a running
+# HISTORY of category assignments, not a re-declared scalar.
+
+items:
+  - id: "MECE-EXCLUSIVE-001"
+    chapter: "An item is assigned to EXACTLY one category of a scheme — a second assignment attempt is a 409, DB-UNIQUE-backstopped"
+    verification:
+      mechanism: tag
+      ref: "MECE-EXCLUSIVE-001"
+    requirement: "Assigning an item to a category of a scheme for the FIRST time MUST create the
+      item's classification identity for that (scheme, item) pair. A SECOND initial-assignment
+      attempt for the SAME (scheme, item) pair — as opposed to an explicit reclassification
+      (MECE-RECLASS-003) — MUST be rejected with 409 Conflict (`MECE_ALREADY_CLASSIFIED`), directing
+      the caller to reclassify instead of assign. A structural UNIQUE constraint on
+      `(schemeKey, itemRef)` MUST make a duplicate classification identity unrepresentable even under
+      a concurrent race — a native write that bypasses the service path MUST also fail at the
+      database, not merely at the service check."
+    test_method: "RestAssured (classify item I under scheme S → 201; classify I under S again → 409
+      MECE_ALREADY_CLASSIFIED) + a raw JDBC duplicate-insert attempt against the classification table
+      asserting DataIntegrityViolationException (proves the UNIQUE backstop independent of the
+      service path)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Reference: the MECE principle (Barbara Minto, The Pyramid Principle) names mutual exclusivity
+      as one of its two defining properties — categories within one grouping must not overlap. The
+      UNIQUE(scheme, item) constraint is the structural, DB-level expression of that property: it is
+      not merely a service-level check that a future refactor could silently drop.
+  - id: "MECE-EXHAUSTIVE-002"
+    chapter: "Every scheme MUST declare a residual/unclassified bucket at config time; classification NEVER fails open"
+    requirement: "Declaring a classification scheme MUST require a non-blank `residualCategory` at
+      config time — a scheme declared WITHOUT one MUST be rejected with 422
+      (`MECE_SCHEME_MISSING_RESIDUAL`). Rule-based classification (matching an item's attribute value
+      against the scheme's declared rules) MUST NEVER fail open: an item whose attribute value
+      matches NO declared rule MUST be classified into the scheme's `residualCategory` — it MUST NOT
+      be rejected, left unclassified, or silently dropped. The count of items currently in the
+      residual category MUST be queryable, so the residual bucket's population is a VISIBLE signal
+      (a large or growing residual count means the rule set is incomplete for the population it
+      covers), not a silent sink."
+    test_method: "RestAssured (declare a scheme with no residual category → 422; declare a scheme
+      WITH a residual category → 201; add one rule matching attribute value 'electronics'; classify
+      an item by an attribute value that matches NO rule → the item lands in the residual category;
+      query the residual category's item count → reflects the just-classified item)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Reference: the MECE principle's second property, collective exhaustiveness — the categories,
+      taken together, must cover every possible case. A scheme with no declared residual bucket
+      cannot be exhaustive by construction (there always exists some attribute value no rule
+      anticipated), so the 422 at config time is the fail-CLOSED enforcement of exhaustiveness,
+      mirroring how a `default:` branch in a switch/case statement guarantees total coverage.
+  - id: "MECE-RECLASS-003"
+    chapter: "Reclassification is an append-only move record (from, to, actor, reason); the current category is derive-on-read from the latest move, never an editable field"
+    requirement: "Changing an already-classified item's category MUST append a NEW, IMMUTABLE move
+      record carrying the FROM category (the item's current category at the time), the TO category,
+      the acting principal, a reason, and a timestamp — it MUST NOT edit or delete any prior move
+      record. The item's CURRENT category MUST be derived by reading the LATEST move record for that
+      (scheme, item) pair (by timestamp) — there MUST be no separate, independently-mutable
+      'current category' column that could drift out of sync with the move history. The full move
+      history for an item MUST be retrievable in order, oldest first, and MUST be unaffected by any
+      later reclassification."
+    test_method: "RestAssured (classify item → category A (move: from=null, to=A); reclassify → B
+      (move: from=A, to=B); reclassify again → C (move: from=B, to=C); GET current category → C; GET
+      move history → 3 moves in order, all three still present and unedited) + structural (every move
+      column @Column(updatable=false); no public setter; no delete method in the repository)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Derive-on-read-from-latest-append-only-history is the same reconstructibility discipline the
+      catalog already applies to material-divisibility-constraint-l0's versioned policy and
+      remeasurement-trueup-l0's forward-posted corrections: the current fact is never a mutable
+      field that could silently diverge from its own audit trail — it IS the audit trail, read at its
+      tip.

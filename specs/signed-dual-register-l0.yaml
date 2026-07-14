@@ -17,6 +17,7 @@ introduced_at: "P1-18 2026-06-23 (IDW14 energy residual — net-metering signed-
 #   2. NETM-NET-001       (the net is DERIVED = Σimport − Σexport, recorded as a basis, cross-checked by independent recompute)
 #   3. NETM-PERIOD-001    (a billing-period close snapshots both cumulatives + the net delta and freezes the period — backdate 409)
 #   4. NETM-CONCURRENT-001 (keystone — concurrent appends to one meter serialize on the meter row; every delta is vs the true prior cumulative)
+#   5. NETM-RATE-001      (opt-in — rate-asymmetric billing: billed = importDelta*rateImport − exportDelta*rateExport, derived + cross-checked, never independently stored)
 
 # ── Composition note ──
 # Builds on monotone-register-l0 (one value-monotone register). The DUAL coupling is the
@@ -60,6 +61,21 @@ items:
     applicable: true
     notes: >
       Period close freezes a net delta; closed periods are immutable (PURPA billing-period offset).
+  - id: "NETM-RATE-001"
+    chapter: "Rate-asymmetric conservation — the billed amount is derived from the SAME per-direction cumulatives, never an independently-stored total"
+    verification:
+      mechanism: rule
+      ref: net-meter-signed-net-is-derived-from-two-monotone-direction-registers
+    requirement: "When a net meter's IMPORT and EXPORT registers carry DIFFERENT per-unit rates (rateImport, rateExport — injected via policy at meter creation, never hardcoded, immutable once set), the billed monetary amount for a closed billing period MUST satisfy `billed == importDelta*rateImport − exportDelta*rateExport` (exact BigDecimal, scale/rounding fixed at NUMERIC(19,4) HALF_UP), where importDelta/exportDelta are the SAME per-direction cumulative deltas that already satisfy NETM-DIRECTION-001's quantity conservation (importDelta = cumulativeImport − importCumulativeAtPeriodStart, and symmetrically for export) — never an independently-stored monetary total that can drift. The period close MUST cross-check this derived billed amount, in the SAME transaction, against an INDEPENDENT recompute from the immutable reading chain (Σ reading deltas per direction whose effectiveAt falls within the closing period's window) — a divergence is a defect and MUST fail 422, mirroring NETM-NET-001's never-by-construction discipline. Rates omitted at creation default to 1 (the symmetric-rate case degenerates to the plain net delta)."
+    test_method: "RestAssured (asymmetric rates → closed period's billedAmount == importDelta*rateImport − exportDelta*rateExport exactly; rates omitted → billedAmount == periodNetDelta; the independent chain-sum recompute matches)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Extends signed-dual-register-l0 (netmetering reference workload) — the monetary
+      billing layer on top of the already-conserved quantity registers. Anchor: the
+      net-metering / net-billing distinction (utilities meter energy quantity but BILL at
+      possibly different import/export rates — net ENERGY metering does not imply net
+      DOLLAR billing) — generic regulatory framing, not a lock-in to one tariff design.
   - id: "NETM-CONCURRENT-001"
     chapter: "Keystone — concurrent appends to one meter serialize on the meter row; every delta is vs the true prior cumulative"
     requirement: "Across ANY interleaving of concurrent appends to ONE net meter (in EITHER direction), each reading's delta MUST be computed against the TRUE prior cumulative for its direction (the value left by the previously-committed reading for that direction), never a stale cumulative (which would double-count or lose energy — CWE-362). The meter row lock (PESSIMISTIC_WRITE on the meter, NOT per-direction) serializes ALL concurrent appenders regardless of direction, so the derived net is never computed from a half-applied pair. Under concurrency, for a run of committed reads, the recorded net equals the independent recompute Σ(committed import deltas) − Σ(committed export deltas), with exact decimal arithmetic (NUMERIC(19,4)), and committed readings are strictly monotone in sequence order per direction."

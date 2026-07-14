@@ -38,3 +38,12 @@ items:
     applicable: true
     notes: "Client exhausts quota (429). Wait > window_millis. Next request → 200"
     policy_ref: "blueprints/ratelimit-manifest.yaml#policy.window_millis"
+
+  - id: "RATELIMIT-5"
+    chapter: "Anonymous IP key + XFF anti-spoofing"
+    requirement: "For UNAUTHENTICATED endpoints, the rate-limit key MUST be the client IP resolved via a configured trusted-proxy hop count: the Nth-from-right X-Forwarded-For entry, where N is the trust depth — never the leftmost, client-controlled entry. When the header is absent, blank, the depth is 0, or the depth exceeds the number of entries present, the key falls back to the request's own remote address (fail-closed — never guess a position that cannot be trusted). Because the trusted entry is always counted from the RIGHT of the header, any attacker-controlled entries prepended to the LEFT of it (spoofed extra hops) MUST NOT shift which entry is selected — the resolved key, and therefore the bucket, is identical regardless of how many extra entries precede the trusted one."
+    test_method: "ratelimit_5_anonymousIpKeyWithTrustedProxyDepth"
+    verification_type: "api_test"
+    applicable: true
+    notes: "Attacker varies the leftmost (spoofed) XFF entries while holding the trust-depth-Nth-from-right entry constant → same bucket, same 429 outcome once exhausted. Two requests with distinct trust-depth-Nth-from-right entries → independent buckets, both succeed within quota."
+    policy_ref: "blueprints/ratelimit-manifest.yaml#policy.trusted_proxy_depth"

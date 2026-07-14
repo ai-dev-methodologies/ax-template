@@ -400,6 +400,42 @@ checklist:
       - command: "./gradlew testBilateralHandoff"
         working_directory: "backend"
         expected_exit: 0
+      - command: "./gradlew testFacetCount"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testDerivedStatement"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testSaturatingBalance"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testWithholdingSplit"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testCashInLieu"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testMeceClassification"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testIntervalExclusivity"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testDuplicateSubmission"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testRangeOwnership"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testProvisionalAttestation"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testCorrectionRefire"
+        working_directory: "backend"
+        expected_exit: 0
+      - command: "./gradlew testSignedArtifact"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testIntegration"
         working_directory: "backend"
         expected_exit: 0

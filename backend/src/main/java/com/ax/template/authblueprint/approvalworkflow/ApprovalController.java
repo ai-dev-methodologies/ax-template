@@ -5,7 +5,9 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -34,9 +37,33 @@ import java.util.UUID;
 public class ApprovalController {
 
     private final ApprovalService service;
+    private final RoutingRuleService routingRuleService;
 
-    public ApprovalController(ApprovalService service) {
+    public ApprovalController(ApprovalService service, RoutingRuleService routingRuleService) {
         this.service = service;
+        this.routingRuleService = routingRuleService;
+    }
+
+    // ── WF-ROUTE — routing-rule set. Nested under /api/approvals so the existing
+    // SecurityConfig matcher (/api/approvals/**.authenticated()) covers it without a
+    // new matcher; only the mutating admin actions need an extra @PreAuthorize. ──
+
+    @PostMapping("/routing-rules")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<RoutingRuleResponse> createRoutingRule(@Valid @RequestBody CreateRoutingRuleRequest body) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(routingRuleService.create(body));
+    }
+
+    @GetMapping("/routing-rules")
+    public List<RoutingRuleResponse> listRoutingRules() {
+        return routingRuleService.list();
+    }
+
+    @DeleteMapping("/routing-rules/{id}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<Void> deleteRoutingRule(@PathVariable UUID id) {
+        routingRuleService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping
@@ -127,6 +154,21 @@ public class ApprovalController {
     @ExceptionHandler(SelfApproveForbiddenException.class)
     public ResponseEntity<ProblemDetail> handleSelfApprove(SelfApproveForbiddenException ex) {
         return problem(HttpStatus.BAD_REQUEST, "SELF_APPROVE_FORBIDDEN", ex.getMessage());
+    }
+
+    @ExceptionHandler(RoutingAttributesRequiredException.class)
+    public ResponseEntity<ProblemDetail> handleRoutingAttributesRequired(RoutingAttributesRequiredException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "ROUTING_ATTRIBUTES_REQUIRED", ex.getMessage());
+    }
+
+    @ExceptionHandler(NoMatchingRoutingRuleException.class)
+    public ResponseEntity<ProblemDetail> handleNoMatchingRoutingRule(NoMatchingRoutingRuleException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "NO_MATCHING_ROUTING_RULE", ex.getMessage());
+    }
+
+    @ExceptionHandler(RoutingRuleNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleRoutingRuleNotFound(RoutingRuleNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "ROUTING_RULE_NOT_FOUND", ex.getMessage());
     }
 
     private static ResponseEntity<ProblemDetail> problem(HttpStatus status, String code, String detail) {

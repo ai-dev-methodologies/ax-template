@@ -11,7 +11,9 @@ public record RateLimitProperties(
     int maxPerWindow,
     long windowMillis,
     String keyHeader,
-    OnMissingKey onMissingKey
+    OnMissingKey onMissingKey,
+    KeyStrategy keyStrategy,
+    Integer trustedProxyDepth
 ) {
     public RateLimitProperties {
         if (maxPerWindow <= 0) {
@@ -26,7 +28,18 @@ public record RateLimitProperties(
         if (onMissingKey == null) {
             onMissingKey = OnMissingKey.REJECT;
         }
+        if (keyStrategy == null) {
+            keyStrategy = KeyStrategy.HEADER;
+        }
+        if (trustedProxyDepth == null || trustedProxyDepth < 0) {
+            // RATELIMIT-5 default: trust exactly one hop (a single reverse proxy in front
+            // of this app) when unconfigured — never an unbounded or negative depth.
+            trustedProxyDepth = 1;
+        }
     }
 
     public enum OnMissingKey { REJECT, ALLOW, ANONYMOUS }
+
+    /** RATELIMIT-5 — HEADER (the existing X-API-Key demo) or IP (trusted-proxy XFF resolution). */
+    public enum KeyStrategy { HEADER, IP }
 }

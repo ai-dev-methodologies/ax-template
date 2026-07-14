@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +20,10 @@ public record ApprovalRequestResponse(
     List<ApprovalStepResponse> steps,
     Instant createdAt,
     Instant submittedAt,
-    Instant completedAt
+    Instant completedAt,
+    String category,
+    BigDecimal amount,
+    List<String> resolvedChain
 ) {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
@@ -39,7 +43,10 @@ public record ApprovalRequestResponse(
             steps,
             r.getCreatedAt(),
             r.getSubmittedAt(),
-            r.getCompletedAt()
+            r.getCompletedAt(),
+            r.getCategory(),
+            r.getAmount(),
+            RoutingRuleResponse.parseChain(r.getResolvedChainJson(), objectMapper)
         );
     }
 

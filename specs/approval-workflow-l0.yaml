@@ -194,3 +194,39 @@ items:
       Test: UserA creates 2 requests. UserB (approver on A's request) GET /api/approvals → empty list
       (B has not requested anything). UserA GET /api/approvals → 2 items.
     policy_ref: "blueprints/approval-workflow-manifest.yaml#query"
+
+  # ─── ROUTE family (2 items) — P3-15 attribute-resolved approval routing ────
+  - id: "WF-ROUTE-001"
+    chapter: "ROUTE"
+    requirement: "A routing rule (categoryOrDept, amount-band → ordered approver-role chain) resolves the step chain AT SUBMISSION from the request's attributes (category + amount); the resolved chain is snapshotted immutably onto the request. A later change (or deletion) of the routing rule does NOT rewrite an already-resolved, in-flight request."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: create a routing rule (category='budget', band [0,1000000) → [MANAGER,DIRECTOR]).
+      POST /api/approvals with {type, category:'budget', amount:500000} (no approverUserIds) → 201
+      DRAFT with 0 steps. Submit → chain resolves from the rule; steps created with the resolved
+      role chain; resolvedChain snapshotted on the request. Then DELETE the routing rule and
+      re-fetch the request → resolvedChain and steps are unchanged (the snapshot, not a live join).
+      Implementation: ApprovalService.create() stores category/amount when no approverUserIds are
+      given (routing mode); ApprovalService.submit() resolves RoutingRuleRepository.findMatches(...)
+      exactly once (steps.isEmpty() guard) and writes ApprovalRequest.resolvedChainJson via a
+      sole-mutator package-private setter that rejects a second write.
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#routing"
+
+  - id: "WF-ROUTE-002"
+    chapter: "ROUTE"
+    requirement: "When no routing rule matches a routed request's (categoryOrDept, amount), submission is rejected with HTTP 422 (fail-closed — never a silent default chain); the request stays DRAFT. The routing rule set is queryable."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: no rule covers category='travel' amount=9999999 → POST + submit → 422
+      NO_MATCHING_ROUTING_RULE; GET the request afterward → still status=DRAFT, steps empty.
+      GET /api/approvals/routing-rules → the created rule set is listed (queryable, any
+      authenticated caller). Implementation: ApprovalService.submit() throws
+      NoMatchingRoutingRuleException BEFORE ApprovalRequestStateMachine.markSubmitted() runs, so
+      the transaction commits no state change; RoutingRuleController exposes GET (authenticated)
+      and POST/DELETE (ROLE_ADMIN) under /api/approvals/routing-rules (covered by the existing
+      /api/approvals/** SecurityConfig matcher).
+    policy_ref: "blueprints/approval-workflow-manifest.yaml#routing"

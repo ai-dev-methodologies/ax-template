@@ -1,0 +1,76 @@
+version: "0.1.0"
+scope: "facet-count-l0 — the generalized FACETED BUCKET-COUNT aggregation (a list endpoint that, alongside its rows, reports per-field bucket counts — e.g. \"12 OPEN / 3 CLOSED\" — computed over EXACTLY the same caller-visible, authorization/filter-scoped query the list itself runs over, never over the unfiltered table). A facet-count surface that computes its buckets over a wider (or narrower) query than the one the caller is authorized to see is an information-disclosure bug: it leaks the existence/volume of rows the caller cannot list (e.g. another tenant's or another user's counts bleeding into a shared aggregate). The primitive: (1) COUNT SCOPE PARITY — the facet aggregation MUST run over the identical authorization/filter predicate as the list query, never a broader one; (2) FIELD ALLOWLIST — the field a caller may facet on is a compile-time allowlist (composing the query-field-allowlist-l0 discipline: a non-allowlisted field name is rejected by NAME with 422, fail-closed, BEFORE any aggregation query runs — never silently ignored or defaulted to a different column); (3) BOUNDED CARDINALITY — the bucket list returned is top-K by count plus an explicit otherCount remainder, so a high-cardinality field (a free-text column, a UUID) can never make the response unbounded; Σ(bucket counts) + otherCount MUST always equal the total scoped row count (no row silently dropped by the bounding). Recurs in: admin dashboards, faceted search/filter UIs (\"12 in stock / 3 on backorder\"), report builders, any list endpoint that also renders a sidebar of counts-by-category. Realized by the facetcount reference workload (com.ax.template.authblueprint.facetcount) over a demonstrating caller-scoped FacetableItem resource."
+stack: "Spring Boot 3.2.x + Spring Data JPA (parameterized, allowlist-resolved GROUP BY queries — never a client string concatenated into JPQL) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "OWASP API Security Top 10 — API3:2023 Broken Object Property Level Authorization (the facet field allowlist is the same cherry-pick discipline query-field-allowlist-l0 anchors) + CWE-639 (Authorization Bypass Through User-Controlled Key — an unscoped aggregation is an authorization-boundary leak by another name) + RFC 9457"
+domain_mode: backend_only
+introduced_at: "Backlog wave 2026-07-14 lane F (fintech) — BACKLOG P3-10"
+
+# OPT-IN facet-count catalog. query-field-allowlist-l0 bounds WHICH field a client may
+# sort/filter on for the ROWS themselves; this spec bounds the same surface for a
+# derived AGGREGATE (bucket counts) and adds the two failure modes an aggregate
+# uniquely introduces: scope drift (the count query silently widening past the
+# list's authz/filter scope) and unbounded cardinality (a bucket per distinct value
+# of a high-cardinality field). Generic; the admin-dashboard framing is an anchor,
+# not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. FACET-COUNT-001     (the primitive — bucket counts scoped identically to the caller-visible query)
+#   2. FACET-ALLOWLIST-002 (facetable fields = compile-time allowlist; non-allowlisted → 422 fail-closed)
+#   3. FACET-BOUND-003     (bounded cardinality — top-K + explicit otherCount; Σ + otherCount == total)
+
+# ── Composition note ──
+# COMPOSES query-field-allowlist-l0's field-allowlist discipline (a public field name
+# resolved to an internal property, never a raw client string reaching a query) but
+# targets an AGGREGATE, not the row Sort/Specification. DISTINCT from pagination-l0
+# (bounds page SIZE, not bucket cardinality) and from authorization-parity (re-hashes
+# executed-vs-authorized params on a single resource fetch, not an aggregate rollup).
+# FacetableItem is the demonstrating resource: each row is scoped to its creating
+# caller (ownerId) — the facet endpoint's caller-visibility boundary is "my own rows",
+# so two different callers computing facets over the SAME table get DIFFERENT counts,
+# proving FACET-COUNT-001's scope-parity claim without needing a multi-tenant primitive.
+
+items:
+  - id: "FACET-COUNT-001"
+    chapter: "Bucket counts are computed over EXACTLY the caller-visible, filtered query scope — never the unfiltered table"
+    verification:
+      mechanism: rule
+      ref: facet-count-scope-parity-and-allowlist
+    requirement: "A facet-count endpoint MUST compute its per-field bucket counts over the IDENTICAL authorization/filter scope as the list query it accompanies (here: rows owned by the authenticated caller). It MUST NEVER aggregate over a wider scope (e.g. the whole table across all callers) and report that as the caller's facet counts. Two different authenticated callers computing facets over the same underlying table MUST see counts that reflect ONLY their own visible rows."
+    test_method: "RestAssured (caller A creates items in categories {X:2, Y:1}; caller B creates items in category {Z:5}; A's facet-count response for 'category' shows X=2,Y=1 and NEVER Z; B's shows Z=5 and NEVER X/Y — the two responses are scope-disjoint)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-639 — a user-controlled key granting access to another
+      principal's data): "The system's authorization functionality does not prevent
+      one user from gaining access to another user's data or record by modifying
+      the key value identifying the data." An unscoped aggregate leaks the SAME
+      class of fact (another principal's row volumes) through a rollup instead of
+      a direct record fetch.
+      (https://cwe.mitre.org/data/definitions/639.html)
+  - id: "FACET-ALLOWLIST-002"
+    chapter: "Facetable fields are a compile-time allowlist; a non-allowlisted field is rejected by NAME with 422, fail-closed, before any aggregation query runs"
+    verification:
+      mechanism: rule
+      ref: facet-count-scope-parity-and-allowlist
+    requirement: "The facet-count endpoint accepts a client-supplied field name naming WHICH column to bucket on. That name MUST be validated against a per-resource compile-time allowlist BEFORE any aggregation query is built or executed. A field outside the allowlist MUST be rejected with 422 (FACET_FIELD_NOT_ALLOWED) whose detail NAMES the offending field — never silently ignored, never defaulted to a different column, and never forwarded into a dynamically-built GROUP BY. The aggregation query itself MUST be built ONLY from the allowlist-resolved internal property via a parameterized/allowlist-selected query — never string concatenation of the client-supplied name into JPQL."
+    test_method: "RestAssured (field=category → 200 with real buckets; field=ownerId → 422 FACET_FIELD_NOT_ALLOWED naming 'ownerId', and the response body proves no aggregation ran (no buckets key); structural: the resolving code path never concatenates the request param into a query string)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (OWASP API3:2023 Broken Object Property Level Authorization):
+      "When exposing an object using an API endpoint, always make sure that the
+      user should have access to the object's properties you expose." The same
+      cherry-pick discipline query-field-allowlist-l0 established for sort/filter
+      fields applies identically to the facet-by field.
+      (https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/)
+  - id: "FACET-BOUND-003"
+    chapter: "Bucket cardinality is bounded — top-K by count plus an explicit otherCount remainder; Σ(buckets) + otherCount always equals the total scoped row count"
+    requirement: "The facet-count response MUST return at most K buckets (K a fixed policy constant), the K highest-count values for the requested field, PLUS an explicit otherCount field summing every remaining bucket's count. A field with more than K distinct values MUST NEVER produce an unbounded bucket list. The response MUST satisfy the conservation identity: Σ(returned bucket counts) + otherCount == the total row count in the caller's scope — no row is silently dropped by the bounding."
+    test_method: "RestAssured (seed 8 distinct category values for one caller, each with a distinct count; facet response returns exactly K buckets ordered by count descending, otherCount > 0, and Σ(bucket counts) + otherCount == total item count for that caller)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The unbounded-aggregate failure mode: a facet-by field with unbounded
+      cardinality (a UUID, a free-text note) turns a \"helpful sidebar\" into an
+      unbounded response body — the same shape of bug pagination-l0 closed for
+      row lists, applied here to the derived bucket list.

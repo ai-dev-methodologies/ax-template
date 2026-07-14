@@ -48,4 +48,18 @@ public interface ObligationRepository extends JpaRepository<Obligation, UUID> {
 
     @Query("SELECT d FROM DerivationRecord d WHERE d.obligationId = :obligationId ORDER BY d.derivedAt ASC")
     Page<DerivationRecord> findDerivationsPage(@Param("obligationId") UUID obligationId, Pageable pageable);
+
+    // ── OBL-CONSEQUENCE-001 / OBL-WAIVER-001/002 ──
+
+    @Query("SELECT c FROM BreachConsequence c WHERE c.obligationId = :obligationId")
+    Optional<BreachConsequence> findConsequence(@Param("obligationId") UUID obligationId);
+
+    @Query("SELECT w FROM ObligationWaiver w WHERE w.obligationId = :obligationId ORDER BY w.grantedAt ASC")
+    List<ObligationWaiver> findWaivers(@Param("obligationId") UUID obligationId);
+
+    @Query("SELECT w FROM ObligationWaiver w WHERE w.obligationId = :obligationId AND w.id = :waiverId")
+    Optional<ObligationWaiver> findWaiver(@Param("obligationId") UUID obligationId, @Param("waiverId") UUID waiverId);
+
+    @Query("SELECT COUNT(r) > 0 FROM WaiverRevocation r WHERE r.waiverId = :waiverId")
+    boolean isRevoked(@Param("waiverId") UUID waiverId);
 }

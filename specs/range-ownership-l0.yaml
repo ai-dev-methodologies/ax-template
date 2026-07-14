@@ -1,0 +1,145 @@
+version: "0.1.0"
+scope: "range-ownership-l0 — the generalized NUMBER-RANGE OWNERSHIP GOVERNANCE contract for a
+  numbering-plan-style resource: a set of non-overlapping HALF-OPEN [start, end) blocks, each
+  owned by exactly one owner, that together govern which owner may validly ASSIGN which
+  individual identifier value. (1) CONTAINMENT — assigning an identifier is valid ONLY when the
+  identifier falls inside a block owned by the assigning owner; outside any block the assigning
+  owner owns is a fail-closed 422, regardless of whether some OTHER owner's block contains it.
+  (2) NON-OVERLAP — range blocks MUST NOT overlap ACROSS owners (the numbering plan is a single
+  partition of the identifier space); registering an overlapping block is a 409, with adjacency
+  (one block's end equal to another's start) explicitly legal. (3) PORT — porting an assigned
+  identifier to a new owner is an APPEND-ONLY reassignment record (from-owner, to-owner, instant,
+  reason); containment is RE-VALIDATED against the NEW owner's blocks at port time (a port cannot
+  place an identifier under an owner who does not own a covering block); the current owner is
+  ALWAYS DERIVED-ON-READ from the latest reassignment record — never a separately-settable field
+  that could drift from the history. Realized by the rangeownership reference workload
+  (com.ax.template.authblueprint.rangeownership)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only ownership-event history +
+  PESSIMISTIC_WRITE global-registry-row serialization for the block-registration
+  check-then-insert — the portable backstop this catalog's H2 test database can express, since
+  a true range-exclusion constraint requires PostgreSQL's EXCLUDE USING gist + btree_gist, which
+  temporal-validity-l0 already documents as unavailable on H2; see that spec's scope note) + RFC
+  9457 Problem Details + Micrometer"
+standard: "ITU-T Recommendation E.164 (The international public telecommunication numbering
+  plan) numbering-plan administration — a national numbering authority allocates non-overlapping
+  number-range blocks to operators, and only the owning operator may validly assign a number
+  from its allocated block; a number ported to another operator carries an auditable
+  reassignment record + CWE-362 (Concurrent Execution using Shared Resource with Improper
+  Synchronization — the block-registration race this spec's global lock closes) + RFC 9457 +
+  RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "2026-07-14 backlog-100 wave, Lane I (intake) — BACKLOG P3-22"
+
+# OPT-IN range-ownership catalog. The numbering-plan-administration gap: nothing in the catalog
+# governs WHO may validly assign an individual identifier drawn from a partitioned range space.
+# The wrong answers are (a) let any owner assign any identifier (no containment gate — an
+# operator could claim a number outside its allocated block) or (b) let range blocks silently
+# overlap (two owners could both validly claim the same number). The right answer — containment
+# is fail-closed, non-overlap is a serialized invariant across ALL owners, and porting is an
+# auditable append-only history with derive-on-read current ownership — is what this primitive
+# ships. Generic; the E.164 telephone-numbering framing is an anchor, not a lock-in (equally
+# applicable to IP-block allocation, VIN-range assignment, SKU-range allocation).
+
+# ── Priority order for fork-receivers ──
+#   1. RNG-CONTAINMENT-001 (the primitive — an assignment is valid only inside the assigning owner's block)
+#   2. RNG-NONOVERLAP-002  (keystone — range blocks never overlap across owners; half-open + adjacency-legal)
+#   3. RNG-PORT-003        (porting re-validates containment against the NEW owner; history is append-only, current owner derive-on-read)
+
+# ── Composition note ──
+# DISTINCT from temporal-validity-l0 (TEMPORAL-NON-OVERLAP-001 — non-overlap over a TIME axis for
+# ONE scope key, authoritatively backstopped by a PostgreSQL range-exclusion constraint) — this
+# spec's non-overlap is over an INTEGER IDENTIFIER-SPACE axis ACROSS ALL owners, and because this
+# catalog's H2 test database cannot express a portable range-exclusion constraint, the
+# authoritative backstop here is a PESSIMISTIC_WRITE lock on a singleton registry row serializing
+# the check-then-insert sequence — an honest, catalog-precedented alternative (the same pattern
+# input-plausibility-l0's PLAUSIBILITY-CONCURRENT-001 and record-linkage-l0's
+# LINK-CONCURRENT-001 already use), not a partial substitute. RangeBlock and IdentifierAssignment
+# are separate @AggregateRoots referencing owners by an opaque string id, never by object pointer.
+
+items:
+  - id: "RNG-CONTAINMENT-001"
+    chapter: "An identifier assignment is valid only inside a range block owned by the assigning owner"
+    verification:
+      mechanism: tag
+      ref: "RNG-CONTAINMENT-001"
+    requirement: "Assigning an identifier value to an owner MUST validate CONTAINMENT: the
+      identifier value MUST fall inside the half-open [rangeStart, rangeEnd) interval of AT LEAST
+      ONE range block OWNED BY THAT SAME OWNER. An identifier outside every block the assigning
+      owner owns MUST be rejected with 422 (RANGE_NOT_OWNED) and MUST NOT create an assignment —
+      fail-closed — even when the identifier falls inside a block owned by a DIFFERENT owner (that
+      other owner's containment is irrelevant to this assignment; ownership is not transitively
+      implied by mere numeric containment). Assigning an identifier that already has an active
+      assignment MUST be rejected with 409 (IDENTIFIER_ALREADY_ASSIGNED) — porting (RNG-PORT-003)
+      is the only path to reassignment."
+    test_method: "RestAssured (an identifier inside the assigning owner's own block → 201; the same
+      identifier value inside ONLY a different owner's block → 422 RANGE_NOT_OWNED; an identifier
+      inside no block at all → 422 RANGE_NOT_OWNED; assigning an already-assigned identifier → 409)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (ITU-T E.164 — numbering-plan administration: only the owning operator may
+      validly assign from its allocated block): "The international public telecommunication
+      numbering plan... numbers are allocated to... entities for the purpose of... assignment."
+      (https://www.itu.int/rec/T-REC-E.164)
+  - id: "RNG-NONOVERLAP-002"
+    chapter: "Keystone — range blocks must not overlap across owners; half-open semantics make adjacency legal"
+    requirement: "Registering a new range block MUST validate NON-OVERLAP against EVERY existing
+      block regardless of owner: two half-open intervals [s1,e1) and [s2,e2) overlap iff s1 < e2 AND
+      s2 < e1. An overlapping registration MUST be rejected with 409 (RANGE_BLOCK_OVERLAP). Two
+      blocks that merely TOUCH (one's end equals the other's start) MUST NOT be treated as
+      overlapping — adjacency is legal, mirroring the half-open convention temporal-validity-l0
+      already establishes for time intervals, applied here to an integer identifier-space axis.
+      Because this catalog's H2 test database cannot express a true database range-exclusion
+      constraint (unlike the PostgreSQL-only EXCLUDE USING gist + btree_gist temporal-validity-l0
+      would use), the AUTHORITATIVE backstop for the check-then-register race MUST be a
+      PESSIMISTIC_WRITE lock on a singleton registry row, acquired BEFORE the overlap check and
+      held through the insert in the SAME transaction — never a bare pre-insert SELECT with no
+      lock (a CWE-362 time-of-check/time-of-use race that a concurrent registration could slip
+      through)."
+    test_method: "RestAssured (an overlapping registration → 409 RANGE_BLOCK_OVERLAP; two blocks
+      that exactly touch → both succeed, no overlap) + a 2-thread concurrent registration proof
+      (two overlapping ranges registered concurrently → exactly one 2xx and one 409, never both
+      persisted; the registry lock serializes the check-then-insert)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the check-then-register race the registry lock closes): "The
+      product contains a concurrent code sequence that requires temporary, exclusive access to a
+      shared resource, but a timing window exists in which the shared resource can be modified by
+      another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html)
+  - id: "RNG-PORT-003"
+    chapter: "Porting an assigned identifier is an append-only reassignment record; the destination must be a recognized numbering-plan participant; current owner is derive-on-read"
+    requirement: "Porting an assigned identifier to a new owner MUST append an IMMUTABLE
+      reassignment record (from-owner — the CURRENT owner, derived server-side, never
+      client-supplied — to-owner, instant, reason) to the identifier's ownership history; it MUST
+      NOT overwrite or delete any prior record. The destination owner's standing MUST be
+      RE-VALIDATED at port time: a port into an owner who owns NO range block anywhere in the
+      numbering plan MUST be rejected with 422 (RANGE_NOT_OWNED) and the history MUST be
+      unchanged. Deliberately DISTINCT from RNG-CONTAINMENT-001's initial-assignment gate — an
+      INITIAL assignment MUST originate from a block that specifically CONTAINS the identifier
+      value (only the range holder may mint a fresh number from its own allocation), but a PORT's
+      destination need NOT independently own a block covering that exact identifier (which, under
+      RNG-NONOVERLAP-002's global non-overlap invariant, no OTHER owner ever could — the covering
+      block is permanently held by whoever first registered it). This mirrors real E.164 number
+      portability: the numbering-plan block allocation (who originated the range) stays fixed
+      forever, while the carrier CURRENTLY SERVING a specific number changes via portability
+      records — the receiving carrier must be a licensed participant of the SAME numbering plan
+      (own at least one allocated block, anywhere), not the holder of the specific number's
+      original range. The CURRENT owner of an identifier MUST ALWAYS be DERIVED-ON-READ as the
+      to-owner of the LATEST reassignment record for that identifier — there MUST be no separate,
+      independently-settable current-owner field that could drift from the append-only history."
+    test_method: "RestAssured (port to an owner who owns at least one range block (anywhere in the
+      plan) → 201, new record appended, current owner reads as the new owner, prior records still
+      readable verbatim; port to an owner who owns NO range block at all → 422 RANGE_NOT_OWNED,
+      history unchanged; structural: no currentOwner column exists anywhere — only the
+      derive-on-read query over the append-only event table)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The append-only reassignment trail plus the recognized-participant re-validation is what
+      keeps a ported identifier's ownership always numbering-plan-consistent, never a bare
+      pointer update that could place a number under an entity the plan has never allocated
+      anything to — while correctly NOT requiring the impossible (a second, non-overlapping
+      owner's block covering the exact same point RNG-NONOVERLAP-002 already reserved to the
+      first).

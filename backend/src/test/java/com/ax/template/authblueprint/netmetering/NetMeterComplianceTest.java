@@ -76,6 +76,14 @@ class NetMeterComplianceTest {
         .when().post("/api/netmetering/meters/" + key + "/periods").thenReturn().then().extract();
     }
 
+    private String createMeterWithRates(String key, String imp, String exp, String rateImp, String rateExp) {
+        given().header("Authorization", "Bearer " + member).header("Content-Type", "application/json")
+            .body("{\"meterKey\":\"" + key + "\",\"initialImport\":" + imp + ",\"initialExport\":" + exp
+                + ",\"rateImport\":" + rateImp + ",\"rateExport\":" + rateExp + "}")
+        .when().post("/api/netmetering/meters").then().statusCode(201);
+        return key;
+    }
+
     private ExtractableResponse<Response> getMeter(String key) {
         return given().header("Authorization", "Bearer " + member)
             .when().get("/api/netmetering/meters/" + key).then().statusCode(200).extract();
@@ -241,6 +249,59 @@ class NetMeterComplianceTest {
                 prev = cur;
             }
         }
+    }
+
+    // ── NETM-RATE-001 — rate-asymmetric billed amount, derived from the SAME conserved cumulatives ──
+    @Test @Tag("NETM-RATE-001")
+    void closedPeriod_billedAmountIsRateAsymmetric_derivedFromConservedCumulatives() {
+        String s = createMeterWithRates("nm-" + UUID.randomUUID(), "0", "0", "2.5", "1.2");
+        append(s, "IMPORT", "100", T0);      // import delta 100
+        append(s, "EXPORT", "40", T1);       // export delta 40
+
+        ExtractableResponse<Response> close = closePeriod(s, T2);
+        assertThat(close.statusCode()).isEqualTo(201);
+        assertThat(new BigDecimal(close.jsonPath().getString("importDelta"))).isEqualByComparingTo("100");
+        assertThat(new BigDecimal(close.jsonPath().getString("exportDelta"))).isEqualByComparingTo("40");
+        // billed = 100*2.5 − 40*1.2 = 250 − 48 = 202
+        assertThat(new BigDecimal(close.jsonPath().getString("billedAmount"))).isEqualByComparingTo("202");
+
+        // a second period with more IMPORT only: billed keeps accruing from the NEW period-start baseline
+        assertThat(append(s, "IMPORT", "150", T3).statusCode()).isEqualTo(201);   // period-2 import delta = 50
+        ExtractableResponse<Response> close2 = closePeriod(s, "2026-05-01T00:00:00Z");
+        assertThat(close2.statusCode()).isEqualTo(201);
+        assertThat(new BigDecimal(close2.jsonPath().getString("importDelta"))).isEqualByComparingTo("50");
+        assertThat(new BigDecimal(close2.jsonPath().getString("exportDelta"))).isEqualByComparingTo("0");
+        assertThat(new BigDecimal(close2.jsonPath().getString("billedAmount"))).isEqualByComparingTo("125");  // 50*2.5
+    }
+
+    // ── NETM-RATE-001 — omitted rates default to 1: billed degenerates to the plain net delta ──
+    @Test @Tag("NETM-RATE-001")
+    void omittedRates_defaultToOne_billedEqualsNetDelta() {
+        String s = createMeter("nm-" + UUID.randomUUID(), "0", "0");    // no rates supplied
+        append(s, "IMPORT", "300", T0);
+        append(s, "EXPORT", "80", T1);
+
+        ExtractableResponse<Response> close = closePeriod(s, T2);
+        assertThat(close.statusCode()).isEqualTo(201);
+        assertThat(new BigDecimal(close.jsonPath().getString("rateImport"))).isEqualByComparingTo("1");
+        assertThat(new BigDecimal(close.jsonPath().getString("rateExport"))).isEqualByComparingTo("1");
+        assertThat(new BigDecimal(close.jsonPath().getString("billedAmount")))
+            .isEqualByComparingTo(new BigDecimal(close.jsonPath().getString("periodNetDelta")));
+    }
+
+    // ── NETM-RATE-001 — a non-positive rate is rejected 400 at the bean-validation boundary. This
+    //    catalog's convention (mirrored from thresholdterminal's identical @Positive-vs-invalidValue()
+    //    shape): the DTO's @Positive is the FIRST gate and always wins over HTTP (400); the service's
+    //    NetMeterException.invalidRate() (422) is defense-in-depth for a direct (non-HTTP) caller of
+    //    NetMeterService — it is not exercised by this HTTP-level test, by design. ──
+    @Test @Tag("NETM-RATE-001")
+    void nonPositiveRate_isRejectedAtValidationBoundary_400() {
+        ExtractableResponse<Response> bad = given()
+            .header("Authorization", "Bearer " + member).header("Content-Type", "application/json")
+            .body("{\"meterKey\":\"nm-" + UUID.randomUUID() + "\",\"initialImport\":0,\"initialExport\":0,"
+                + "\"rateImport\":-1,\"rateExport\":1}")
+        .when().post("/api/netmetering/meters").thenReturn().then().extract();
+        assertThat(bad.statusCode()).isEqualTo(400);   // @Positive on the DTO catches it at the boundary
     }
 
     // ── RBAC — unauthenticated append is rejected; unknown meter is an IDOR-safe 404 ──

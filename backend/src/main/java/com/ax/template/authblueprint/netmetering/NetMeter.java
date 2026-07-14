@@ -24,12 +24,18 @@ import com.ax.template.authblueprint.common.AggregateRoot;
  * the cumulatives and net move ONLY via the package-private {@link #advance}, and the period boundary ONLY
  * via {@link #closePeriod} (no public setter — {@link NetMeterService} is the sole mutator, always under a
  * PESSIMISTIC_WRITE row lock). {@code @Version} backstops.
+ *
+ * <p>NETM-RATE-001 extension: {@code rateImport}/{@code rateExport} are the per-unit billing rates
+ * (immutable once set at creation — injected via policy, never hardcoded); {@code
+ * importCumulativeAtPeriodStart}/{@code exportCumulativeAtPeriodStart} are the per-direction cumulatives
+ * snapshotted at the start of the currently-open period (mirrors {@code netAtPeriodStart}) so a period
+ * close can derive its per-direction delta from the SAME registers that already satisfy NETM-DIRECTION-001.
  */
 @AggregateRoot
 @Entity
 @Table(name = "net_meters")
-// NETM-DIRECTION-001 — each direction cumulative is non-negative. LIVE under ddl-auto.
-@Check(constraints = "cumulative_import >= 0 AND cumulative_export >= 0")
+// NETM-DIRECTION-001 / NETM-RATE-001 — direction cumulatives non-negative; rates strictly positive. LIVE under ddl-auto.
+@Check(constraints = "cumulative_import >= 0 AND cumulative_export >= 0 AND rate_import > 0 AND rate_export > 0")
 public class NetMeter {
 
     @Id
@@ -61,6 +67,22 @@ public class NetMeter {
     @Column(name = "net_at_period_start", nullable = false, precision = 19, scale = 4)
     private BigDecimal netAtPeriodStart;
 
+    /** NETM-RATE-001 — per-unit billing rate for IMPORT. Immutable once set (injected via policy at creation). */
+    @Column(name = "rate_import", nullable = false, updatable = false, precision = 19, scale = 4)
+    private BigDecimal rateImport;
+
+    /** NETM-RATE-001 — per-unit billing rate for EXPORT. Immutable once set (injected via policy at creation). */
+    @Column(name = "rate_export", nullable = false, updatable = false, precision = 19, scale = 4)
+    private BigDecimal rateExport;
+
+    /** NETM-RATE-001 — import cumulative at the start of the currently-open period (period-delta baseline). */
+    @Column(name = "import_cumulative_at_period_start", nullable = false, precision = 19, scale = 4)
+    private BigDecimal importCumulativeAtPeriodStart;
+
+    /** NETM-RATE-001 — export cumulative at the start of the currently-open period (period-delta baseline). */
+    @Column(name = "export_cumulative_at_period_start", nullable = false, precision = 19, scale = 4)
+    private BigDecimal exportCumulativeAtPeriodStart;
+
     /** Latest closed period boundary; a reading effective at/before it is a 409 backdate. */
     @Column(name = "closed_through_at", nullable = false)
     private Instant closedThroughAt;
@@ -75,7 +97,7 @@ public class NetMeter {
     protected NetMeter() {}
 
     public NetMeter(UUID id, String meterKey, BigDecimal cumulativeImport, BigDecimal cumulativeExport,
-                    Instant closedThroughAt, Instant createdAt) {
+                    BigDecimal rateImport, BigDecimal rateExport, Instant closedThroughAt, Instant createdAt) {
         this.id = id;
         this.meterKey = meterKey;
         this.cumulativeImport = cumulativeImport;
@@ -83,6 +105,10 @@ public class NetMeter {
         this.net = cumulativeImport.subtract(cumulativeExport);   // DERIVED at construction
         this.baselineNet = this.net;                              // immutable recompute baseline
         this.netAtPeriodStart = this.net;
+        this.rateImport = rateImport;
+        this.rateExport = rateExport;
+        this.importCumulativeAtPeriodStart = cumulativeImport;
+        this.exportCumulativeAtPeriodStart = cumulativeExport;
         this.closedThroughAt = closedThroughAt;
         this.createdAt = createdAt;
     }
@@ -97,10 +123,12 @@ public class NetMeter {
         this.net = this.cumulativeImport.subtract(this.cumulativeExport);   // net is ALWAYS derived
     }
 
-    /** Sole-mutator hook — snapshot the period and move the closed boundary + period-start net forward. */
+    /** Sole-mutator hook — snapshot the period and move the closed boundary + period-start baselines forward. */
     void closePeriod(Instant boundaryAt) {
         this.closedThroughAt = boundaryAt;
         this.netAtPeriodStart = this.net;
+        this.importCumulativeAtPeriodStart = this.cumulativeImport;
+        this.exportCumulativeAtPeriodStart = this.cumulativeExport;
     }
 
     /** The cumulative for one direction — import reads compare to this, export reads to the other. */
@@ -115,6 +143,10 @@ public class NetMeter {
     public BigDecimal getNet() { return net; }
     public BigDecimal getBaselineNet() { return baselineNet; }
     public BigDecimal getNetAtPeriodStart() { return netAtPeriodStart; }
+    public BigDecimal getRateImport() { return rateImport; }
+    public BigDecimal getRateExport() { return rateExport; }
+    public BigDecimal getImportCumulativeAtPeriodStart() { return importCumulativeAtPeriodStart; }
+    public BigDecimal getExportCumulativeAtPeriodStart() { return exportCumulativeAtPeriodStart; }
     public Instant getClosedThroughAt() { return closedThroughAt; }
     public Long getVersion() { return version; }
     public Instant getCreatedAt() { return createdAt; }

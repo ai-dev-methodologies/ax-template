@@ -27,8 +27,8 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 62 | 62 | **100%** |
 | P2 (verification escapes) | 20 | 20 | **100%** |
-| P3 (industry-niche deferrals) | 47 | 14 | ~30% |
-| **P0–P3 합계 (수렴 분모)** | **155** | **122** | **~79%** |
+| P3 (industry-niche deferrals) | 47 | 47 | **100%** |
+| **P0–P3 합계 (수렴 분모)** | **155** | **155** | **100%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
 > 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
@@ -259,46 +259,46 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 > 후보 20건 대조: EMR G9 cross-list record-linkage(P1-33~34 recordlinkage로 닫힘 확인)만 제외,
 > 불확실 6건 "(closure 여부 미검증)" 표기 포함. 기존 P3-32→P3-41, P3-33→P3-42 재번호.
 
-- [ ] P3-1 logistics: geo-query-l0 — PostGIS/GiST 공간 인덱스 특화 질의
+- [x] P3-1 logistics: geo-query-l0 — PostGIS/GiST 공간 인덱스 특화 질의 → **closed 2026-07-14 (backlog-100 wave)**: geo-bounded-query-l0 + geoquery(V094), 정직 축소 구현 — bbox prefilter+haversine postfilter, GiST 무주장(리뷰 전용 항목은 deferred 바인딩, realtime 관례) · 8 tests
 - [x] P3-2 logistics: two-sided statement-reconciliation — counterparty-billed vs own 대사 — **closed 2026-07-14 (VERIFIED-COVERED, census)**: external-reconciliation-l0(RECON-CLASSIFY/DISPOSE/RESOLVE/IDEMPOTENT/CONCURRENT-001)이 counterparty/custodian/bank statement 대사로 명시 일반화, ReconciliationComplianceTest.java:101-230 + testReconciliation task가 classify→dispose→resolve→멱등 재실행 전수 단언. reconciliation generic wave가 기능 포섭.
-- [ ] P3-3 logistics: 익명-IP rate-limit key (RATELIMIT-5 XFF spoofing 표면)
-- [ ] P3-4 logistics: chain-contiguity — leg N dest == leg N+1 origin
-- [ ] P3-5 logistics: geofence debounce/hysteresis (min-dwell + confirm)
-- [ ] P3-6 logistics: two-party-acceptance handoff (bilateral offer/accept)
-- [ ] P3-7 logistics: dual/triple-timestamp — occurred/captured/recorded 구분
-- [ ] P3-8 logistics: orthogonal-exception-dimension (DSR gate shape 재사용)
+- [x] P3-3 logistics: 익명-IP rate-limit key (RATELIMIT-5 XFF spoofing 표면) → **closed 2026-07-14 (backlog-100 wave)**: RATELIMIT-5 — 비인증 표면 IP 키 + trusted-proxy-depth(Nth-from-right XFF, leftmost 스푸핑 무효), blueprint 정책키, testRateLimit 5/5
+- [x] P3-4 logistics: chain-contiguity — leg N dest == leg N+1 origin → **closed 2026-07-14 (backlog-100 wave)**: route-leg-contiguity-l0 + routelegs(V095) — dest[n]==origin[n+1] 전 변이 재검증 atomic, 동시성 keystone 20/20 안정화(lock-timeout→409 매핑 실버그 봉합 + 이동표적 append의 완전 disjunction 단언)
+- [x] P3-5 logistics: geofence debounce/hysteresis (min-dwell + confirm) → **closed 2026-07-14 (backlog-100 wave)**: geofence-transition-l0 + geofence(V096) — min-dwell confirm, flap 억제 0-transition, observed/confirmed 이중 타임스탬프 불변, event-time 주입
+- [x] P3-6 logistics: two-party-acceptance handoff (bilateral offer/accept) → **closed 2026-07-14 (backlog-100 wave)**: bilateral-handoff-l0 + bilateralhandoff(V097) — 양 지명 당사자 독립 confirm, decline 전면 void(늦은 confirm 409), party binding 403, 2-thread exactly-once custody 20/20
+- [x] P3-7 logistics: dual/triple-timestamp — occurred/captured/recorded 구분 → **closed 2026-07-14 (backlog-100 wave)**: monotonic-event-ingest-l0 realize(V098 — spec-only 잠복 갭 해소) + capture 축 추가(occurred<=captured<=recorded, recorded_at 서버 지정 · 클라 설정 불가 ViolationProof) · 11 tests
+- [x] P3-8 logistics: orthogonal-exception-dimension (DSR gate shape 재사용) → **closed 2026-07-14 (backlog-100 wave)**: orthogonal-exception-gate-l0 추출(V099) — DSR restriction 형태의 generic 승격(원본 무수정, 출처 명기), 양방향 독립성+423 fail-closed pre-mutation+audited raise/lift · 8 tests
 - [x] P3-9 fintech-ledger: filter/sort field-allowlist의 query-side mass-assignment 확장 — **closed 2026-07-14 (VERIFIED-COVERED, census)**: specs/query-field-allowlist-l0.yaml scope가 IDW8 fintech-ledger deferral을 출처로 명시 + QueryGuardComplianceTest.java:61,96,130,144,166이 query-side mass-assignment 차단 단언. 정확히 이 항목이 이미 built — stale 등재.
-- [ ] P3-10 fintech-ledger: faceted facet-count 집계
-- [ ] P3-11 fintech-ledger: 파생 키 기반 멱등 statement 생성
-- [ ] P3-12 HR/payroll: clamped/saturating running-balance
+- [x] P3-10 fintech-ledger: faceted facet-count 집계 → **closed 2026-07-14 (backlog-100 wave)**: facet-count-l0 + facetcount(V101) — caller-visible 스코프 parity(A/B 상이 카운트 시험), facet 필드 allowlist 422, top-K+otherCount 유계 · 8 tests
+- [x] P3-11 fintech-ledger: 파생 키 기반 멱등 statement 생성 → **closed 2026-07-14 (backlog-100 wave)**: derived-statement-l0 + derivedstatement(V102) — (subject,period,basis) SHA-256 파생키 멱등(클라 헤더 불신뢰 by construction), 변경 basis→version append 불변 · 7 tests · 명시 이연(리뷰 MEDIUM): GET by-id에 소유자 스코핑 없음(horizontal read) — 카탈로그의 caller-scoping posture상 fork-receiver 결정 표면으로 이연 기록(비은폐)
+- [x] P3-12 HR/payroll: clamped/saturating running-balance → **closed 2026-07-14 (backlog-100 wave)**: saturating-balance-l0 + saturatingbalance(V103) — ceiling/floor clamp(거부 아님 — reservation의 rejecting dual과 대비 명기), requested+applied 원장 보존, 8-thread cap 정확 수렴 · 9 tests
 - [x] P3-13 HR/payroll: deterministic recomputable-run — **closed 2026-07-14 (VERIFIED-COVERED, census)**: remeasurement-trueup-l0가 "payroll retro-pay"를 Recurs-in으로 명시 + TUP-RUNVERSION-001(불변 basis→멱등 동일 run, 변경 basis→v+1 보존) + TrueUpComplianceTest.java:135 + ViolationProof:57,146.
 - [x] P3-14 HR/payroll: read-disclosure-audit (열람 공시) — **closed 2026-07-14 (VERIFIED-COVERED, census)**: sensitive-read-audit-l0가 "HR compensation records"를 Recurs-in으로 명시 + SENSITIVE-READ-001/SENSITIVE-QUERY-001 + SensitiveAccessComplianceTest.java:67,148.
-- [ ] P3-15 HR/payroll: attribute-resolved approval routing
-- [ ] P3-16 insurance: G9 asserted-event-date coverage 입력
-- [ ] P3-17 insurance: G11 appeal-decider-independence
-- [ ] P3-18 insurance: G12 amount-tiered decision authority (전결)
-- [ ] P3-19 insurance: G13 duplicate-claim/same-loss key
-- [ ] P3-20 insurance: G14 statutory-deadline substantive consequence (지연이자)
-- [ ] P3-21 insurance: G15 threshold-triggered regulatory filing (STR류)
-- [ ] P3-22 telecom: G4 E.164 number-range governance — 번호 블록의 range 소유권 정책
-- [ ] P3-23 telecom: G8 late/out-of-order additive-fact ingestion — 지연/비순서 팩트의 역산 적재
-- [ ] P3-24 energy: G12 rate-asymmetric conservation — import/export 비대칭 요율 하에서도 보존 성립 (closure 여부 미검증: P1-18 netmetering 부분 커버 가능성)
+- [x] P3-15 HR/payroll: attribute-resolved approval routing → **closed 2026-07-14 (backlog-100 wave)**: approval-workflow 확장 — 제출시점 라우팅룰 해석+불변 chain snapshot(재기록 차단), no-match 422 fail-closed(DRAFT 유지), 룰 삭제 후 스냅숏 생존 시험
+- [x] P3-16 insurance: G9 asserted-event-date coverage 입력 → **closed 2026-07-14 (backlog-100 wave)**: inputplausibility DATE 채널 확장(V113) — 기준시점 상대 창 + future 초과 fail-closed, 경계 exact 단언(tolerance 정각 통과/+1s 거부), clock 주입 · 7 tests
+- [x] P3-17 insurance: G11 appeal-decider-independence → **closed 2026-07-14 (backlog-100 wave)**: appeal-decider-independence-l0 + appealindependence(V093) — 4-eyes와 구분되는 두-결정 교차 독립성, 체인 전체 decider 중복 거부(3-level 시험), @Check DB backstop+native bypass proof, TOCTOU→409 handler
+- [x] P3-18 insurance: G12 amount-tiered decision authority (전결) → **closed 2026-07-14 (backlog-100 wave)**: amount-tiered-authority-l0 + tieredauthority(V092) — 전결: 반개구간 band tiling 422, 권한부족 403 fail-closed(자동 에스컬레이션 없음), 결정시점 tier-table version snapshot 불변(사후 개정 무영향 시험)
+- [x] P3-19 insurance: G13 duplicate-claim/same-loss key → **closed 2026-07-14 (backlog-100 wave)**: duplicate-submission-key-l0 + duplicatesubmission(V114) — intake-time natural key 409(active_key NULL-해제 트릭의 UNIQUE backstop), fuzzy 근접은 REVIEW flag(silent 수용/거부 금지), withdraw 시 키 해제
+- [x] P3-20 insurance: G14 statutory-deadline substantive consequence (지연이자) → **closed 2026-07-14 (backlog-100 wave)**: deadline-obligation 확장(V084) — breach 시 exactly-once consequence 바인딩(UNIQUE+sweeper 재진입), 지연이자 derive-on-read(저장 칼럼 0 — ViolationProof), exact-value 무벽시계 단언, EU 지연이자 지침 anchor(고정율 단순화 정직 기록)
+- [x] P3-21 insurance: G15 threshold-triggered regulatory filing (STR류) → **closed 2026-07-14 (backlog-100 wave)**: threshold-filing-obligation-l0 + thresholdfiling(V086) — same-tx exactly-once filing 바인딩(8-thread race 단언), 불변 filing record, 30일 법정 창(미국 SAR 규정 anchor)+ack-only 종결 · 9 tests
+- [x] P3-22 telecom: G4 E.164 number-range governance — 번호 블록의 range 소유권 정책 → **closed 2026-07-14 (backlog-100 wave)**: range-ownership-l0 + rangeownership(V115) — 소유 블록 내 배정만 허용 fail-closed, 소유자간 비중첩(registry-lock 직렬화+2-thread 시험), porting은 append-only 이력·현소유 derive-on-read(실제 번호이동성 시맨틱으로 원 한줄정의의 모순을 정직 재설계 — spec 노트 기록)
+- [x] P3-23 telecom: G8 late/out-of-order additive-fact ingestion — 지연/비순서 팩트의 역산 적재 → **closed 2026-07-14 (backlog-100 wave)**: additive-fact-ledger-l0 + additivefacts(V100) — 가산 축적(trueup REPLACE와 형태 구분 명기), 늦은 팩트는 frozen 폐기간 무변이 forward delta(보존 Σ 단언), (source,fact_id) 멱등 · 10 tests · JPA updatable=false 오용 실버그 발견·수정 포함
+- [x] P3-24 energy: G12 rate-asymmetric conservation — import/export 비대칭 요율 하에서도 보존 성립 (closure 여부 미검증: P1-18 netmetering 부분 커버 가능성) → **closed 2026-07-14 (backlog-100 wave)**: netmetering 확장(V087) — 비대칭 요율 금액 보존 billed==import*rate_i−export*rate_e(HALF_UP scale4, 단일 라운딩), rate 불변 주입, 검증 경계 정직화(bean-validation 400 명시)
 - [x] P3-25 energy: G13 period-boundary carried-net — 기간 경계에서 누적 net을 다음 기간으로 이월 — **closed 2026-07-14 (VERIFIED-COVERED, census)**: NETM-PERIOD-001 — NetMeter.closePeriod()가 netAtPeriodStart=net 이월 + NetMeterComplianceTest.java:172-178(close2.netStart==prior close.netEnd) 직접 단언.
 - [x] P3-26 energy: G14 reproducible computed-aggregate binding — 집계 계산이 입력에 결정론적으로 바인딩 (closure 여부 미검증: P1-7~9 reproducibility 부분 커버 가능성) — **closed 2026-07-14 (VERIFIED-COVERED, census)**: TUP-RUNVERSION-001 basisHash(SHA-256 of input reading-row set)가 집계를 입력에 결정론 바인딩 + TrueUpComplianceTest.java:135-157(불변 basis 멱등/변경 basis v+1). reproducibility 계열 sibling(trueup)이 커버 확인.
-- [ ] P3-27 energy: G15 piecewise deadband obligation-vs-actual — 구간별 데드밴드 내 의무 vs 실측 비교
-- [ ] P3-28 energy: G16 per-subject recurring count-budget reset — 주체별 기간 카운트 예산의 주기적 리셋 (closure 여부 미검증: P1-50 recurringinterval 부분 커버 가능성)
-- [ ] P3-29 energy: G17 count-threshold eligibility-degradation FSM — 카운트 임계 도달 시 자격 강등 FSM (closure 여부 미검증: P0-25 thresholdterminal 부분 커버 가능성)
-- [ ] P3-30 capital-markets: G8 withholding-tax split — 지급금에서 원천세 split-posting
-- [ ] P3-31 capital-markets: G10 cash-in-lieu — 주식 대신 현금 지급(단수주 처리)
+- [x] P3-27 energy: G15 piecewise deadband obligation-vs-actual — 구간별 데드밴드 내 의무 vs 실측 비교 → **closed 2026-07-14 (backlog-100 wave)**: piecewise-deadband-l0 + piecewisedeadband(V088) — 구간 tiling(gap/overlap 422), per-segment deadband 결정론 평가(2 vs 5 판별 시험), append-only 멱등 재평가 · 9 tests · 유료 표준 인용은 paraphrase로 정직 표기
+- [x] P3-28 energy: G16 per-subject recurring count-budget reset — 주체별 기간 카운트 예산의 주기적 리셋 (closure 여부 미검증: P1-50 recurringinterval 부분 커버 가능성) → **closed 2026-07-14 (backlog-100 wave)**: periodic-count-budget-l0 + countbudget(V089) — 영속 per-(subject,period) 카운트, 8-thread row-lock over-consume 차단(accepted==3 단언), calendar-aligned 감사 리셋(완료-트리거와 구분) · 11 tests
+- [x] P3-29 energy: G17 count-threshold eligibility-degradation FSM — 카운트 임계 도달 시 자격 강등 FSM (closure 여부 미검증: P0-25 thresholdterminal 부분 커버 가능성) → **closed 2026-07-14 (backlog-100 wave)**: tiered-eligibility-l0 + tieredeligibility(V090) — N-tier 단조 강등 FSM(atomic crossing same-tx), fail-closed derive, 명시 감사 restore만 상승, use-vs-accrue 혼합 동시성 실증 시험 · 13 tests
+- [x] P3-30 capital-markets: G8 withholding-tax split — 지급금에서 원천세 split-posting → **closed 2026-07-14 (backlog-100 wave)**: withholding-split-l0 + withholdingsplit(V105) — Σlegs==gross to the cent(odd-cent 잔여 결정론 배정 시험), rate snapshot 불변, 기간 멱등 remittance(중복집계 0), 정정은 반대분개 · 13 tests
+- [x] P3-31 capital-markets: G10 cash-in-lieu — 주식 대신 현금 지급(단수주 처리) → **closed 2026-07-14 (backlog-100 wave)**: cash-in-lieu-l0 + cashinlieu(V106) — 정수 현물+단수 현금화(rate snapshot 불변), units+cash 보존 재구성 exact(BigDecimal JsonPath 정밀도 처리), (subject,event) 멱등 · 10 tests
 - [x] P3-32 EMR: G8 natural-key-uniqueness-on-create — 자연키 중복 생성 거부(idempotent create) — **closed 2026-07-14 (VERIFIED-COVERED, census)**: 두 closure 스타일로 test-proven — favorites UNIQUE(user,entity_type,entity_id)+FAV-CRUD-001 멱등 add(FavoriteViolationProofTest:47,65 TOCTOU DB backstop) / tokenizedsecurities duplicateTokenCode·duplicateUnderlyingAsset 409-reject.
-- [ ] P3-33 EMR: G10 set-membership MECE conservation — 집합 멤버십이 MECE(상호배타·전체포함) 성립
-- [ ] P3-34 EMR: G14 provisional-now/attested-later — 현재는 provisional, 이후 attestation 으로 확정
-- [ ] P3-35 EMR: G16 corrected-record re-fires-ack — 정정 레코드가 ack 워크플로우 재트리거
-- [ ] P3-36 EMR: G17 as-of ordered-coverage-fallback — as-of 기준 커버리지 폴백 순서 (closure 여부 미검증: P1-28~30 valuationrun as-of 부분 커버 가능성)
-- [ ] P3-37 EMR: G18 two-identifier concordance — 두 식별자 체계 간 일치성 보장
-- [ ] P3-38 aviation: G10 two-sided temporal exclusivity — 양방향 시간 독점성(중복 스케줄 불가)
-- [ ] P3-39 aviation: G11 sign-to-content binding (attestation hash) — 서명이 내용에 바인딩 (closure 여부 미검증: P1-5 authzparity SHA-256 부분 커버 가능성)
-- [ ] P3-40 aviation: G13 time/cycle-bounded conditional waiver — 시간/주기 한정 조건부 면제
+- [x] P3-33 EMR: G10 set-membership MECE conservation — 집합 멤버십이 MECE(상호배타·전체포함) 성립 → **closed 2026-07-14 (backlog-100 wave)**: mece-classification-l0 + mececlassification(V107) — exactly-one(UNIQUE+raw-JDBC 우회 증명), residual 버킷 필수(no-match 안착·카운트 가시), append-only 재분류 이력 derive-on-read · 11 tests
+- [x] P3-34 EMR: G14 provisional-now/attested-later — 현재는 provisional, 이후 attestation 으로 확정 → **closed 2026-07-14 (backlog-100 wave)**: provisional-attestation-l0 + provisionalattestation(V109) — 2-state 생애주기, attestor<>author @Check backstop, ATTESTED content-hash freeze(변조 감지), provisional 명시 표기 · 10 tests
+- [x] P3-35 EMR: G16 corrected-record re-fires-ack — 정정 레코드가 ack 워크플로우 재트리거 → **closed 2026-07-14 (backlog-100 wave)**: correction-refire-l0 + correctionrefire(V110) — append-only supersession, closed ack 루프가 정정판에 same-tx 재개, identical-hash 무재발화(스팸 방지), current는 MAX derive(저장 포인터 0) · 9 tests
+- [x] P3-36 EMR: G17 as-of ordered-coverage-fallback — as-of 기준 커버리지 폴백 순서 (closure 여부 미검증: P1-28~30 valuationrun as-of 부분 커버 가능성) → **closed 2026-07-14 (backlog-100 wave)**: valuationrun 확장(V111) — 우선순위 소스 폴백(첫 qualifying 승자+제공 소스 provenance 기록), 전 소스 무점 시 fail-closed, testValuationRun 15/15
+- [x] P3-37 EMR: G18 two-identifier concordance — 두 식별자 체계 간 일치성 보장 → **closed 2026-07-14 (backlog-100 wave)**: identityverification 확장 — ci/di 쌍 일치 교차검사 fail-closed 409 + 전용 audit action 상수, blueprint concordance 섹션, 신규 테이블 0
+- [x] P3-38 aviation: G10 two-sided temporal exclusivity — 양방향 시간 독점성(중복 스케줄 불가) → **closed 2026-07-14 (backlog-100 wave)**: interval-exclusivity-l0 + intervalexclusivity(V108) — 반개구간 overlap 409(back-to-back 합법·경계 양방향 단언), 2-thread exactly-one(자원 row-lock — H2 GiST EXCLUDE 무주장 정직 기록), shrink 무조건/extend 재검증/cancel 즉시 해제 · 11 tests
+- [x] P3-39 aviation: G11 sign-to-content binding (attestation hash) — 서명이 내용에 바인딩 (closure 여부 미검증: P1-5 authzparity SHA-256 부분 커버 가능성) → **closed 2026-07-14 (backlog-100 wave)**: signed-artifact-l0 realize(V112 — spec-only 잠복 갭 해소) — ES256 JWS, verifier는 kid로 서버 config에서 alg+key 해석(토큰 헤더 불신), alg:none raw-header 선행 거부+parseable ES384로 allowlist 분기 독립 증명+HS256 confusion 거부, JWKS 사설 파라미터 무유출 · 10 tests
+- [x] P3-40 aviation: G13 time/cycle-bounded conditional waiver — 시간/주기 한정 조건부 면제 → **closed 2026-07-14 (backlog-100 wave)**: obligation waiver 확장(V085) — 시간+사이클 이중축 유효성(어느 축이든 상실 시 다음 sweep에서 fail-closed 재활성), 부여자<>의무자 4-eyes, 부여 불변·revoke는 append 레코드
 - [x] P3-41 — **closed 2026-07-13 (DECISION, base-repo maintainer, reversible)**: private_boundary_guard [86] 잔여 documented gaps — (a) `/src/test/` 경로 layer-2 제외, (b) 레포 root dotfiles(`.env` 등) 스캔 경로 밖. **DECISION**: 두 gap 모두 **public base의 documented scope로 수용(ACCEPT)** — public base는 실제 시크릿을 싣지 않으며 honest-gap 주석이 `private_boundary_guard.sh:57-65`에 이미 명시됨. 더 엄격한 prod 보안 정책을 가진 fork-receiver는 자기 fork에서 (a)·(b)를 활성화해 재개봉한다. 결정은 maintainer-reversible(영구 보증 아님). 출처: 2026-07-01 adversarial review m2 → 2026-07-13 backlog-convergence-wave에서 결정 기록.
 - [x] P3-42 — **closed 2026-07-13 (DECISION, base-repo maintainer, reversible)**: tokenized-securities F1/F2 read-surface authz 비대칭 심의 — `GET /tokens/{id}/holders`(인증 사용자) vs `GET /tokens/eligible-investors/{userId}`(ROLE_ADMIN). **DECISION**: 비대칭을 **base의 spec'd design intent로 유지(RETAIN)** — `READ-HOLDER-001`에 설계 의도로 명시돼 있고 holder 표시는 의도된 owner-read 표면. privacy-민감 배포 fork는 spec item 갱신 + `testTokenizedSecurities` READ-HOLDER 단언 수정으로 좁힌다. 결정은 maintainer-reversible. 출처: 2026-07-07 dogfood-closure review minor 3 → 2026-07-13 backlog-convergence-wave에서 결정 기록.
 - [x] P3-43 — **closed 2026-07-10**: doc-drift `specs/crud-l0.yaml` 죽은 참조 4곳 — SKILL.md:70·CLAUDE.md:399·CLAUDE.md:437·README.md:221이 존재하지 않는 `specs/crud-l0.yaml`을 AI entry-point 표에 노출. R5가 CRUD 내용을 `specs/crud-security.yaml`로 흡수했으나 사용자-facing 표에는 미반영 (R9 Codex Critic soft #2에서 기지적됐으나 PRD 문서에만 기록됨). done-when: 4곳 전부 `crud-security.yaml`로 치환. 출처: 2026-07-10 ultracode dogfood 감사 (adversarial-confirmed). closure: 4곳 전부 `crud-security.yaml` 치환.

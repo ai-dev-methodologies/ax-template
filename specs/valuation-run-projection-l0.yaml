@@ -105,3 +105,15 @@ items:
       backstop are the belt-and-suspenders the remeasurement-trueup and dunning
       domains taught the catalog: the lock serializes the happy path, the unique
       index makes the loser of any residual race a deterministic 409.
+  - id: "VALRUN-FALLBACK-001"
+    chapter: "As-of read falls back through a configured priority order of sources when the primary has no qualifying point; the served source is recorded (provenance visible), never a silent default"
+    requirement: "Each ValuationRun MUST record WHICH source computed it. An as-of read MAY be given a CONFIGURED priority-ordered list of sources instead of a single implicit one; the read MUST try each source in order and return the run from the FIRST source that has a qualifying point (an as-of ≤ T), even if a lower-priority source also has one — priority order wins, not recency across sources. The response MUST record which source served the read (provenance), so a caller can never mistake a fallback-served value for the primary source's own value. If NO configured source has a qualifying point, the read MUST fail closed (404) — never silently return an unrelated run or a default value."
+    test_method: "RestAssured (a SECONDARY-source run exists with no PRIMARY-source run yet -> as-of-fallback[PRIMARY, SECONDARY] returns the SECONDARY run with its source recorded; once a PRIMARY run also qualifies, the SAME fallback call returns the PRIMARY run (priority order, not most-recent-across-sources); a fallback naming sources with NO qualifying run anywhere -> 404 VALRUN_NO_QUALIFYING_SOURCE)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Extends VALRUN-ASOF-001's point-in-time discipline to a multi-source
+      setting: the greatest-as-of-≤-T rule still governs WITHIN a source, but
+      across sources the caller's configured priority order — not simple
+      recency — decides which source answers, and the answer always says which
+      source it came from.

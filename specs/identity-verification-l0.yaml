@@ -110,3 +110,22 @@ items:
       Implementation: @PreAuthorize("hasAuthority('ROLE_ADMIN')") on controller.
       SecurityConfig maps /api/admin/** to authenticated() + admin role check.
     policy_ref: "blueprints/identity-verification-manifest.yaml#admin"
+
+  # ─── CONCORDANCE family (1 item) ────────────────────────────────────────────
+  - id: "IDV-CONCORDANCE-001"
+    chapter: "CONCORDANCE"
+    requirement: "When a verified identity carries BOTH ci and di, a re-verification event for the same person MUST present a (ci, di) pair consistent with the stored one. A re-verification presenting the SAME ci with a DIFFERENT di (or the same di with a different ci) is a concordance mismatch: it MUST be detected, recorded as a distinct audit event (append-only, its own action constant — never folded into the generic callback audit action), and the verification MUST be rejected fail-closed (no VerifiedIdentity row persisted for the mismatched attempt)."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: verify ci=A/di=X (persisted). Re-verify ci=A/di=Y (different di,
+      same ci) -> rejected (409), no new VerifiedIdentity row persisted, and a
+      distinct-action audit event recorded (IDENTITY_VERIFICATION_CONCORDANCE_MISMATCH,
+      separate from the standard IDENTITY_VERIFICATION_CALLBACK audit action).
+      Symmetric case: same di, different ci -> same rejection.
+      Implementation: IdentityVerificationService checks stored VerifiedIdentity
+      rows by ci and by di before persisting a new one; a partial match
+      (one token equal, the other different) is a mismatch. A full match (both
+      equal) or no match (neither token seen before) proceeds normally.
+    policy_ref: "blueprints/identity-verification-manifest.yaml#concordance"

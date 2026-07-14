@@ -44,12 +44,18 @@ public class ObligationService {
     public record AxisSpec(AxisKind kind, Instant anchorAt, Integer intervalDays,
                            BigDecimal limitUnits, BigDecimal unitsPerDay) {}
 
-    /** Create with derivable axes — the deadline is computed, never accepted raw (OBL-GROUND-001). */
+    /** Create with derivable axes — the deadline is computed, never accepted raw (OBL-GROUND-001).
+     *  {@code breachBasisAmount} is OPTIONAL (OBL-CONSEQUENCE-001) — {@code null} means the obligation
+     *  never binds a monetary consequence, no matter how long it stays breached. */
     @Transactional
-    public Obligation create(String obligationKey, List<AxisSpec> axisSpecs) {
+    public Obligation create(String obligationKey, List<AxisSpec> axisSpecs, BigDecimal breachBasisAmount) {
         if (axisSpecs == null || axisSpecs.isEmpty()) {
             metrics.record("create", "invalid");
             throw ObligationException.invalidAxis();
+        }
+        if (breachBasisAmount != null && breachBasisAmount.signum() <= 0) {
+            metrics.record("create", "invalid");
+            throw ObligationException.invalidConsequenceBasis();
         }
         if (obligations.existsByObligationKey(obligationKey)) {
             metrics.record("create", "rejected");
@@ -60,7 +66,8 @@ public class ObligationService {
             Instant windowStart = axisSpecs.stream()
                 .map(spec -> spec.anchorAt() == null ? now : spec.anchorAt())
                 .min(Comparator.naturalOrder()).orElse(now);
-            Obligation o = new Obligation(UUID.randomUUID(), obligationKey, now, windowStart, now);
+            Obligation o = new Obligation(UUID.randomUUID(), obligationKey, now, windowStart, now,
+                breachBasisAmount == null ? null : breachBasisAmount.setScale(4));
             obligations.saveAndFlush(o);
             Instant earliest = null;
             for (AxisSpec spec : axisSpecs) {
@@ -115,6 +122,7 @@ public class ObligationService {
         members.persist(new DerivationRecord(UUID.randomUUID(), o.getId(), axis.getId(),
             candidate, axis.derivationFormula(now), now));
         o.reevaluate(earliestCandidate(o.getId()));
+        o.incrementUsageCycle();                          // OBL-WAIVER-001 — the cycle axis advances too
         metrics.record("usage", "ok");
         return o;
     }
@@ -162,6 +170,66 @@ public class ObligationService {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         return obligations.findDerivationsPage(get(obligationKey).getId(), PageRequest.of(safePage, safeSize));
+    }
+
+    /** OBL-INTEREST-ACCRUE-001 — the consequence, plus its accrued interest DERIVED fresh at read time. */
+    public record ConsequenceView(BreachConsequence consequence, BigDecimal accruedInterest) {}
+
+    @Transactional(readOnly = true)
+    public ConsequenceView consequence(String obligationKey) {
+        BreachConsequence c = obligations.findConsequence(get(obligationKey).getId())
+            .orElseThrow(ObligationException::notFound);
+        return new ConsequenceView(c, c.accruedInterest(Instant.now(clock)));
+    }
+
+    /** OBL-WAIVER-001 — a waiver plus its currently-derived validity (never stored as a flag). */
+    public record WaiverView(ObligationWaiver waiver, boolean active) {}
+
+    /** OBL-WAIVER-002 — 4-eyes (grantor != declared owner) + non-blank reason; immutable once granted. */
+    @Transactional
+    public ObligationWaiver grantWaiver(String obligationKey, String grantedBy, String obligationOwner,
+                                        String reason, Instant expiresAt, long expiresAfterCycles) {
+        Obligation o = obligations.findByObligationKeyForUpdate(obligationKey)
+            .orElseThrow(ObligationException::notFound);
+        if (obligationOwner == null || obligationOwner.isBlank() || reason == null || reason.isBlank()
+                || expiresAt == null || !expiresAt.isAfter(Instant.now(clock)) || expiresAfterCycles <= 0) {
+            metrics.record("waiver-grant", "invalid");
+            throw ObligationException.invalidWaiver();
+        }
+        if (grantedBy.strip().equals(obligationOwner.strip())) {
+            metrics.record("waiver-grant", "rejected");
+            throw ObligationException.waiverSelfGrant();
+        }
+        ObligationWaiver w = new ObligationWaiver(UUID.randomUUID(), o.getId(), grantedBy.strip(),
+            obligationOwner.strip(), reason.strip(), Instant.now(clock), o.getUsageCycleCount(),
+            expiresAt, expiresAfterCycles);
+        members.persist(w);
+        metrics.record("waiver-grant", "ok");
+        return w;
+    }
+
+    /** OBL-WAIVER-002 — revoke APPENDS a {@link WaiverRevocation}; the grant row is never re-mutated. */
+    @Transactional
+    public void revokeWaiver(String obligationKey, UUID waiverId, String revokedBy) {
+        Obligation o = obligations.findByObligationKeyForUpdate(obligationKey)
+            .orElseThrow(ObligationException::notFound);
+        ObligationWaiver w = obligations.findWaiver(o.getId(), waiverId).orElseThrow(ObligationException::notFound);
+        if (obligations.isRevoked(w.getId())) {
+            metrics.record("waiver-revoke", "rejected");
+            throw ObligationException.waiverAlreadyRevoked();
+        }
+        members.persist(new WaiverRevocation(UUID.randomUUID(), w.getId(), o.getId(), revokedBy, Instant.now(clock)));
+        metrics.record("waiver-revoke", "ok");
+    }
+
+    @Transactional(readOnly = true)
+    public List<WaiverView> waivers(String obligationKey) {
+        Obligation o = get(obligationKey);
+        Instant now = Instant.now(clock);
+        return obligations.findWaivers(o.getId()).stream()
+            .map(w -> new WaiverView(w, !obligations.isRevoked(w.getId())
+                && w.isValidAt(now, o.getUsageCycleCount())))
+            .toList();
     }
 
     private Instant earliestCandidate(UUID obligationId) {

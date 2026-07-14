@@ -93,8 +93,13 @@ public class SecurityConfig {
                 .requestMatchers("/api/decisions/**").authenticated()
                 // OBLIGATION (deadline-obligation-l0): any authenticated user creates a grounded
                 // multi-axis obligation, advances usage, triggers a deterministic sweep, and
-                // acknowledges (the ONLY terminal — the sweep never auto-expires).
+                // acknowledges (the ONLY terminal — the sweep never auto-expires). Extended (P3-20/40)
+                // with an opt-in BREACH consequence + a dual-axis waiver that suppresses it.
                 .requestMatchers("/api/obligations/**").authenticated()
+                // THRESHOLD_FILING (threshold-filing-obligation-l0): any authenticated user creates a
+                // filing register, accrues toward its threshold, and acknowledges the bound filing
+                // (the ONLY terminal). The overdue-listing view is ADMIN-only (@PreAuthorize).
+                .requestMatchers("/api/filing-registers/**").authenticated()
                 // RECORDLINKAGE (record-linkage-l0): any authenticated user creates identity
                 // records, proposes matches (banded verdicts), and decides the REVIEW band;
                 // merges tombstone the loser — no delete path exists.
@@ -397,6 +402,60 @@ public class SecurityConfig {
                 // transfers units (compliance-gated), and reads it; eligibility grant is ADMIN-only
                 // (enforced by @PreAuthorize on EligibleInvestorController).
                 .requestMatchers("/api/security-tokens/**").authenticated()
+                // LANE E (BACKLOG P3-7/8/23) — three new backend_only domains realized this
+                // batch; every endpoint requires a valid JWT, caller scoping (subject = the
+                // path param, not Authentication.getName()) is enforced inside each service.
+                .requestMatchers("/api/event-ingest/**").authenticated()
+                .requestMatchers("/api/exception-gate/**").authenticated()
+                .requestMatchers("/api/additive-facts/**").authenticated()
+                // LANE C (BACKLOG P3-18/17) — amount-tiered-authority-l0 (전결 규정): config
+                // mutation is ROLE_ADMIN-only (@PreAuthorize on TieredAuthorityController),
+                // decisions/reads are any authenticated user.
+                .requestMatchers("/api/tiered-authority/**").authenticated()
+                // appeal-decider-independence-l0: any authenticated user may file a decision
+                // or appeal; the acting decider is ALWAYS Authentication.getName().
+                .requestMatchers("/api/appeals/**").authenticated()
+                // LANE B (BACKLOG P3-27/28/29) — piecewise-deadband / periodic-count-budget /
+                // tiered-eligibility: every endpoint requires a valid JWT; per-subject scoping
+                // and admin-only config mutations are enforced inside each service/controller.
+                .requestMatchers("/api/piecewise-deadband/**").authenticated()
+                .requestMatchers("/api/count-budgets/**").authenticated()
+                .requestMatchers("/api/tiered-eligibility/**").authenticated()
+                // LANE D (BACKLOG P3-1/4/5/6) — geo-bounded-query / route-leg-contiguity /
+                // geofence-transition / bilateral-handoff: every endpoint requires a valid JWT;
+                // party binding (BHO-BIND-001) and per-subject scoping enforced in the services.
+                .requestMatchers("/api/geo/**").authenticated()
+                .requestMatchers("/api/route-legs/**").authenticated()
+                .requestMatchers("/api/geofence/**").authenticated()
+                .requestMatchers("/api/bilateral-handoff/**").authenticated()
+                // LANE I (BACKLOG P3-19/22) — duplicate-submission-key / range-ownership:
+                // every endpoint requires a valid JWT; withdraw releases the natural key,
+                // port re-validation and registry locking enforced inside the services.
+                .requestMatchers("/api/duplicate-submissions/**").authenticated()
+                .requestMatchers("/api/range-ownership/**").authenticated()
+                // LANE F (BACKLOG P3-10/11/12) — facet-count / derived-statement /
+                // saturating-balance: every endpoint requires a valid JWT; facet scope
+                // parity, derived-key idempotency and clamp semantics enforced in services.
+                .requestMatchers("/api/facet-count/**").authenticated()
+                .requestMatchers("/api/statements/**").authenticated()
+                .requestMatchers("/api/saturating-balances/**").authenticated()
+                // LANE G (BACKLOG P3-30/31/33/38) — withholding-split / cash-in-lieu /
+                // mece-classification / interval-exclusivity: every endpoint requires a
+                // valid JWT; conservation, idempotency and row-lock serialization in services.
+                .requestMatchers("/api/withholding-split/**").authenticated()
+                .requestMatchers("/api/cash-in-lieu/**").authenticated()
+                .requestMatchers("/api/mece/**").authenticated()
+                .requestMatchers("/api/interval-exclusivity/**").authenticated()
+                // LANE H (BACKLOG P3-34/35/39) — provisional-attestation / correction-refire /
+                // signed-artifact: issuance surfaces require a valid JWT. The verify + jwks
+                // endpoints are deliberately permitAll — a third-party verifier holds no bearer
+                // token, and the JWKS publishes ONLY the public verifying key (ComplianceTest
+                // asserts no private 'd' parameter ever leaves the server).
+                .requestMatchers("/api/provisional-attestation/**").authenticated()
+                .requestMatchers("/api/correction-refire/**").authenticated()
+                .requestMatchers("/api/signed-artifact/verify").permitAll()
+                .requestMatchers("/api/signed-artifact/jwks").permitAll()
+                .requestMatchers("/api/signed-artifact/**").authenticated()
                 .anyRequest().denyAll()
             )
             .headers(headers -> headers

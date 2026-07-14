@@ -51,4 +51,32 @@ public class ObligationException extends RuntimeException {
             "urn:problem:obligation-acknowledger-required", "OBLIGATION_ACKNOWLEDGER_REQUIRED",
             "An acknowledgment must record a non-blank acknowledger");
     }
+
+    /** OBL-CONSEQUENCE-001 — a declared basis amount must be positive. */
+    public static ObligationException invalidConsequenceBasis() {
+        return new ObligationException(HttpStatus.UNPROCESSABLE_ENTITY,
+            "urn:problem:obligation-invalid-consequence-basis", "OBLIGATION_INVALID_CONSEQUENCE_BASIS",
+            "A declared breach basis amount must be positive");
+    }
+
+    /** OBL-WAIVER-002 — the grantor must differ from the declared obligation owner (4-eyes). */
+    public static ObligationException waiverSelfGrant() {
+        return new ObligationException(HttpStatus.UNPROCESSABLE_ENTITY,
+            "urn:problem:obligation-waiver-self-grant", "OBLIGATION_WAIVER_SELF_GRANT",
+            "The grantor must differ from the declared obligation owner — a grantor cannot waive their own obligation");
+    }
+
+    /** OBL-WAIVER-001/002 — a waiver's axis bounds and reason must be derivable/non-blank. */
+    public static ObligationException invalidWaiver() {
+        return new ObligationException(HttpStatus.UNPROCESSABLE_ENTITY,
+            "urn:problem:obligation-invalid-waiver", "OBLIGATION_INVALID_WAIVER",
+            "A waiver requires a non-blank reason, a future expiresAt, and a positive expiresAfterCycles");
+    }
+
+    /** OBL-WAIVER-002 — a waiver revokes exactly once; the grant row is never re-mutated. */
+    public static ObligationException waiverAlreadyRevoked() {
+        return new ObligationException(HttpStatus.CONFLICT,
+            "urn:problem:obligation-waiver-already-revoked", "OBLIGATION_WAIVER_ALREADY_REVOKED",
+            "The waiver is already revoked");
+    }
 }

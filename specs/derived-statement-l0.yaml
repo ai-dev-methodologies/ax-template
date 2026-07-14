@@ -1,0 +1,75 @@
+version: "0.1.0"
+scope: "derived-statement-l0 — the generalized DERIVED-KEY IDEMPOTENT STATEMENT generation pipeline (a generated artifact — a billing statement, a payslip, a settlement confirmation — whose IDENTITY is a deterministic content hash of its (subject, period, basis rows), not a client-supplied idempotency header). When a caller asks the system to GENERATE a statement for a subject over a period from a set of basis line items, the system MUST (1) DERIVE the statement's identity from the CONTENT — a SHA-256 hash of the canonicalized (subject, period, basis) — so the SAME inputs always resolve to the SAME statement row (200, no duplicate insert) and a CHANGED basis produces a NEW version, the prior retained; (2) be safe under RETRY by construction — a client that resubmits the identical generation request (network timeout, double-click, at-least-once delivery) needs NO client-supplied idempotency header, because the key is derived from the request's own content, never trusted from the client; (3) keep every generated statement IMMUTABLE once written — regeneration never mutates a prior row, it either returns the existing one verbatim (unchanged basis) or appends a new version (changed basis). The IDW8 fintech-ledger dogfood family's basis-hash pattern (remeasurement-trueup-l0 TUP-RUNVERSION-001) and the reconciliation-l0 (sourceKey, feedSnapshotHash) identity precedent both established derived-key idempotency for a COMPUTATION run; this spec generalizes the same discipline to a GENERATED DOCUMENT/STATEMENT, where the artifact itself (not just a run record) is the append-only, hash-identified row. Realized by the derivedstatement reference workload (com.ax.template.authblueprint.derivedstatement). Recurs in: billing statement generation, payroll payslip generation, insurance premium confirmations, royalty statements, tax assessment notices, order confirmations — any 'generate a document from these inputs' endpoint."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only, fully @Column(updatable=false) statement rows + DB uq(subject, period, basis_hash) backstop) + SHA-256 canonical-content hash (the reconciliation-l0 / remeasurement-trueup-l0 basis-hash precedent, generalized from a computation run's identity to a generated document's identity) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "CWE-694 (Use of Multiple Resources with Duplicate Identifier — the class of bug a derived, content-addressed key structurally prevents: a client-controlled or absent idempotency signal producing duplicate authoritative artifacts) + RFC 9110 §9.2.2 (idempotent methods — POST is not idempotent by the HTTP method contract alone; this spec makes the GENERATE operation idempotent by DESIGN, not by relying on the verb) + RFC 9457"
+domain_mode: backend_only
+introduced_at: "Backlog wave 2026-07-14 lane F (fintech) — BACKLOG P3-11"
+
+# OPT-IN derived-statement catalog. Composes two existing internal precedents rather
+# than inventing a new mechanism: the external-reconciliation-l0 UNIQUE(source_key,
+# feed_snapshot_hash) run-identity pattern, and the remeasurement-trueup-l0
+# TUP-RUNVERSION-001 basis-hash idempotent-recompute pattern. Both of those key a
+# COMPUTATION RUN; this spec applies the identical derived-key discipline to a
+# GENERATED STATEMENT/DOCUMENT — the artifact IS the hash-identified row, not a
+# side-effect of one. Generic; the billing-statement framing is an anchor, not a
+# lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. STMT-DERIVE-001    (the primitive — statement identity = content hash of subject+period+basis)
+#   2. STMT-RETRY-002     (client retry is safe by construction — no client idempotency header needed)
+#   3. STMT-IMMUTABLE-003 (generated statement content is immutable; regeneration never mutates a prior row)
+
+# ── Composition note ──
+# DISTINCT from remeasurement-trueup-l0 (which versions a SETTLEMENT COMPUTATION's
+# basis and posts forward corrections into a period lifecycle) and from
+# reconciliation-l0 (which classifies a match/break SET against an external feed).
+# derived-statement-l0 has no period lifecycle and no correction-posting — it is the
+# narrower, more general primitive underneath both: given (subject, period, basis),
+# derive ONE deterministic identity and never duplicate or mutate the artifact at
+# that identity. A fork-receiver generating any kind of caller-facing document from
+# structured inputs can adopt this directly without a settlement/reconciliation model.
+
+items:
+  - id: "STMT-DERIVE-001"
+    chapter: "A statement's identity is a deterministic content hash of (subject, period, basis rows) — same inputs resolve to the SAME statement; changed basis produces a NEW version, prior retained"
+    verification:
+      mechanism: rule
+      ref: derived-key-idempotent-statement-generation
+    requirement: "Generating a statement for (subject, period, basis) MUST compute basisHash = SHA-256 of the canonicalized basis line items. If a statement already exists for (subject, period, basisHash), the generation call MUST return that EXISTING row verbatim (200, no new row inserted, no duplicate). If the basis has CHANGED for that (subject, period) — a different basisHash than the latest existing version — generation MUST append a NEW statement row at version+1; the prior version's row and content remain retained and readable verbatim. A DB UNIQUE(subject, period, basis_hash) constraint MUST backstop this identity even if application logic regresses."
+    test_method: "RestAssured (generate(subject, period, basis=[A,B]) → statement v1 with a basisHash; generate again with the IDENTICAL basis → the SAME statement id, still exactly 1 row for that (subject,period); generate with a CHANGED basis (basis=[A,B,C]) → a NEW statement v2, v1's row and content unchanged and still fetchable; structural: uq(subject, period, basis_hash) on the migration)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Composes the reconciliation-l0 UNIQUE(source_key, feed_snapshot_hash) run-identity
+      precedent and the remeasurement-trueup-l0 TUP-RUNVERSION-001 basis-hash
+      idempotent-recompute precedent — both generalize here from a computation RUN's
+      identity to a generated STATEMENT's identity.
+  - id: "STMT-RETRY-002"
+    chapter: "A client retry is safe by construction — no client-supplied idempotency header is needed, because the key is derived from the request's own content, never trusted from the client"
+    verification:
+      mechanism: rule
+      ref: derived-key-idempotent-statement-generation
+    requirement: "The statement-generation endpoint MUST NOT require, read, or trust any client-supplied idempotency key/header to prevent duplicate generation. Safety under retry (a client double-submitting the identical generate request after a timeout, a double-click, or an at-least-once delivery) MUST come ENTIRELY from STMT-DERIVE-001's derived content hash — a double-submit of the identical (subject, period, basis) resolves to the SAME statement, not a duplicate, with no header involved."
+    test_method: "RestAssured (submit an IDENTICAL generate request twice in immediate succession, without any Idempotency-Key-style header — both calls return 200 with the SAME statement id; GET the statement list for that (subject, period) → exactly 1 row, not 2; a benign UNIQUE-constraint race on concurrent identical submits is caught and resolved to the winning row, never a 500)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (RFC 9110 §9.2.2 Idempotent Methods — the general idempotency
+      contract POST does not carry by default): "the intended effect on the server
+      of multiple identical requests with that method is the same as the effect
+      for a single such request." POST is not among the methods this section
+      grants that property to — this spec makes the GENERATE operation idempotent
+      BY DESIGN via the derived content hash, not by relying on the HTTP method.
+      (https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2)
+  - id: "STMT-IMMUTABLE-003"
+    chapter: "Generated statement content is immutable; regeneration never mutates a prior row — corrections always append a new version"
+    requirement: "Every column of a generated statement row (subject, period, basisHash, basisJson, totalAmount, version, generatedAt) MUST be immutable once persisted (@Column(updatable=false)). There is no update/PUT path for a statement's content — the ONLY way a statement's derived value can change for a (subject, period) is STMT-DERIVE-001's append-a-new-version path. No public setter may exist on the entity."
+    test_method: "RestAssured + structural (generate v1, then v2 with a changed basis; fetch v1 by id afterward → its content is BYTE-IDENTICAL to what was returned at creation; reflection: every entity field's @Column carries updatable=false, and no method on the entity starts with 'set')"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The failure mode this forecloses: a regeneration endpoint that UPDATEs the
+      existing row in place destroys the audit trail of what the subject was
+      actually told at the time — exactly the trail remeasurement-trueup-l0's
+      append-only reading rows exist to preserve, applied here to the outward-facing
+      artifact instead of the internal measurement.

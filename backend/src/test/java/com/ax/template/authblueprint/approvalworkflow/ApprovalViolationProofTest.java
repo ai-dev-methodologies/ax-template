@@ -127,6 +127,40 @@ class ApprovalViolationProofTest {
         assertThatThrownBy(() -> requestSm.markRejected(r1)).isInstanceOf(IllegalStateException.class);
     }
 
+    /**
+     * WF-ROUTE-001 violation: attempt to write the resolved-chain snapshot twice on the same
+     * request. The sole-mutator MUST refuse the second write — otherwise a later rule change
+     * could rewrite an already-resolved, in-flight request's chain, which is exactly the
+     * invariant WF-ROUTE-001 forbids.
+     */
+    @Test
+    @Tag("WF-ROUTE-001")
+    void violation_resolvedChainWrittenTwice_isBlocked() throws Exception {
+        ApprovalRequest r = ApprovalRequest.builder()
+            .requesterUserId("u-1")
+            .type("budget")
+            .category("budget")
+            .amount(new java.math.BigDecimal("1000"))
+            .status(ApprovalRequestStatus.DRAFT)
+            .build();
+
+        java.lang.reflect.Method setResolved =
+            ApprovalRequest.class.getDeclaredMethod("setResolvedChainJson", String.class);
+        setResolved.setAccessible(true);
+        setResolved.invoke(r, "[\"MANAGER\"]");
+
+        assertThatThrownBy(() -> {
+            try {
+                setResolved.invoke(r, "[\"DIRECTOR\"]");
+            } catch (java.lang.reflect.InvocationTargetException wrapped) {
+                throw wrapped.getCause();
+            }
+        }).isInstanceOf(IllegalStateException.class);
+
+        // First snapshot is preserved untouched.
+        assertThat(r.getResolvedChainJson()).isEqualTo("[\"MANAGER\"]");
+    }
+
     private static ApprovalRequest newRequest() {
         return ApprovalRequest.builder()
             .requesterUserId("u-1")

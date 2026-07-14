@@ -73,10 +73,35 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String extractKey(HttpServletRequest request) {
+        if (properties.keyStrategy() == RateLimitProperties.KeyStrategy.IP) {
+            return extractIpKey(request);          // RATELIMIT-5 — always resolves, never null
+        }
         String raw = request.getHeader(properties.keyHeader());
         if (raw == null) return null;
         String trimmed = raw.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * RATELIMIT-5 — resolve the anonymous-endpoint key from X-Forwarded-For at the configured
+     * trusted-proxy depth: the Nth-from-right entry (N = trustedProxyDepth). Counting from the
+     * RIGHT means the value is invariant to how many attacker-controlled entries are prepended
+     * to the LEFT of it — a spoofed extra hop can never shift which entry is selected. Depth 0,
+     * an absent/blank header, or a depth exceeding the entry count all fall back to the
+     * request's own remote address (fail-closed — never trust a position we cannot place).
+     */
+    private String extractIpKey(HttpServletRequest request) {
+        int depth = properties.trustedProxyDepth();
+        String xff = request.getHeader("X-Forwarded-For");
+        if (depth <= 0 || xff == null || xff.isBlank()) {
+            return request.getRemoteAddr();
+        }
+        String[] hops = xff.split(",");
+        int index = hops.length - depth;
+        if (index < 0) {
+            return request.getRemoteAddr();
+        }
+        return hops[index].trim();
     }
 
     private void writeError(HttpServletResponse response, int status, String message)

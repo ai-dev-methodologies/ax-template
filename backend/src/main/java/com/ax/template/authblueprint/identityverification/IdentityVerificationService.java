@@ -44,6 +44,9 @@ public class IdentityVerificationService {
     public static final String AUDIT_ACTION = "IDENTITY_VERIFICATION_CALLBACK";
     public static final String RESOURCE_TYPE = "verified_identity";
 
+    /** IDV-CONCORDANCE-001 — distinct action constant; never folded into {@link #AUDIT_ACTION}. */
+    public static final String CONCORDANCE_AUDIT_ACTION = "IDENTITY_VERIFICATION_CONCORDANCE_MISMATCH";
+
     /** IDV-ADMIN-001 — pagination bounds for the admin browse surface. */
     public static final int DEFAULT_PAGE_SIZE = 20;
     public static final int MAX_PAGE_SIZE = 200;
@@ -81,12 +84,57 @@ public class IdentityVerificationService {
         }
         try {
             VerifiedIdentityData data = adapter.extract(rawBody);
+            detectConcordanceMismatch(data);
             VerifiedIdentity saved = repository.save(VerifiedIdentity.create(data));
             publishAudit(providerName, AuditOutcome.SUCCESS, "SUCCESS", data.ci());
             return saved;
         } catch (IdentityVerificationException ex) {
             publishAudit(providerName, AuditOutcome.FAILURE, ex.reason().name(), null);
             throw ex;
+        }
+    }
+
+    /**
+     * IDV-CONCORDANCE-001 — a re-verification presenting the SAME ci with a DIFFERENT di (or
+     * vice versa) is a concordance mismatch: rejected fail-closed BEFORE any persist, with its
+     * own distinct-action audit event (in addition to the generic per-callback audit the outer
+     * catch always fires). A full match (both tokens equal) or no prior match (neither token
+     * seen before) is not a mismatch and proceeds normally.
+     */
+    private void detectConcordanceMismatch(VerifiedIdentityData data) {
+        boolean mismatch = repository.findByCi(data.ci()).stream().anyMatch(v -> !v.getDi().equals(data.di()))
+            || repository.findByDi(data.di()).stream().anyMatch(v -> !v.getCi().equals(data.ci()));
+        if (mismatch) {
+            publishConcordanceMismatchAudit(data.providerName(), data.ci());
+            throw new IdentityVerificationException(IdentityVerificationException.Reason.CONCORDANCE_MISMATCH,
+                "Re-verification presented a ci/di pair inconsistent with a previously verified identity");
+        }
+    }
+
+    private void publishConcordanceMismatchAudit(String providerName, String ci) {
+        Map<String, String> meta = new LinkedHashMap<>();
+        meta.put("providerName", providerName == null ? "" : providerName);
+        meta.put("ci", ci);
+        // IDV-CALLBACK-003 posture preserved: no rrn / residentRegistrationNumber /
+        // 주민등록번호 key ever enters this audit metadata.
+        String metadataJson;
+        try {
+            metadataJson = objectMapper.writeValueAsString(meta);
+        } catch (JsonProcessingException ex) {
+            log.warn("Failed to serialise concordance-mismatch audit metadata (provider={})", providerName, ex);
+            metadataJson = null;
+        }
+        try {
+            auditLogService.record(AuditLogDto.builder()
+                .action(CONCORDANCE_AUDIT_ACTION)
+                .resourceType(RESOURCE_TYPE)
+                .resourceId(ci)
+                .outcome(AuditOutcome.FAILURE)
+                .timestamp(Instant.now())
+                .metadataJson(metadataJson)
+                .build());
+        } catch (RuntimeException ex) {
+            log.error("AuditLog publish failed for IDV concordance mismatch (provider={})", providerName, ex);
         }
     }
 

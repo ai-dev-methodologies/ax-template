@@ -1,6 +1,7 @@
 package com.ax.template.authblueprint.approvalworkflow;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.stereotype.Service;
@@ -28,43 +29,66 @@ import java.util.UUID;
 @Service
 public class ApprovalService {
 
+    private static final TypeReference<List<String>> ROLE_CHAIN_TYPE = new TypeReference<>() {};
+
     private final ApprovalRequestRepository requestRepository;
     private final ApprovalRequestStateMachine requestStateMachine;
     private final ApprovalStepStateMachine stepStateMachine;
     private final ApprovalWorkflowProperties properties;
     private final ObjectMapper objectMapper;
+    private final RoutingRuleRepository routingRuleRepository;
 
     public ApprovalService(ApprovalRequestRepository requestRepository,
                            ApprovalRequestStateMachine requestStateMachine,
                            ApprovalStepStateMachine stepStateMachine,
                            ApprovalWorkflowProperties properties,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           RoutingRuleRepository routingRuleRepository) {
         this.requestRepository = requestRepository;
         this.requestStateMachine = requestStateMachine;
         this.stepStateMachine = stepStateMachine;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.routingRuleRepository = routingRuleRepository;
     }
 
+    /**
+     * WF-ROUTE-001 — {@code approverUserIds} (direct mode) and {@code category}/{@code amount}
+     * (routing mode) are mutually exclusive; exactly one must be present. Routing mode leaves
+     * {@code steps} empty here — resolution happens later, at {@link #submit}.
+     */
     @Transactional
     public ApprovalRequestResponse create(String requesterUserId, CreateApprovalRequest body) {
-        validateApprovers(requesterUserId, body.approverUserIds());
-        ApprovalRequest request = ApprovalRequest.builder()
+        boolean direct = body.approverUserIds() != null && !body.approverUserIds().isEmpty();
+        boolean routed = body.category() != null && !body.category().isBlank() && body.amount() != null;
+        if (!direct && !routed) {
+            throw new RoutingAttributesRequiredException(
+                "either a non-empty approverUserIds list or both category and amount must be provided");
+        }
+
+        ApprovalRequest.Builder builder = ApprovalRequest.builder()
             .requesterUserId(requesterUserId)
             .type(body.type())
             .title(body.title())
             .payloadJson(serializePayload(body.payload()))
-            .status(ApprovalRequestStatus.DRAFT)
-            .build();
-
-        int order = 0;
-        for (String approverUserId : body.approverUserIds()) {
-            request.addStep(ApprovalStep.builder()
-                .orderIndex(order++)
-                .approverUserId(approverUserId)
-                .status(ApprovalStepStatus.PENDING)
-                .build());
+            .status(ApprovalRequestStatus.DRAFT);
+        if (routed) {
+            builder.category(body.category().strip()).amount(body.amount());
         }
+        ApprovalRequest request = builder.build();
+
+        if (direct) {
+            validateApprovers(requesterUserId, body.approverUserIds());
+            int order = 0;
+            for (String approverUserId : body.approverUserIds()) {
+                request.addStep(ApprovalStep.builder()
+                    .orderIndex(order++)
+                    .approverUserId(approverUserId)
+                    .status(ApprovalStepStatus.PENDING)
+                    .build());
+            }
+        }
+        // routed: steps stay empty until submit() resolves the routing rule.
 
         ApprovalRequest saved = requestRepository.save(request);
         return ApprovalRequestResponse.from(saved, objectMapper);
@@ -73,9 +97,46 @@ public class ApprovalService {
     @Transactional
     public ApprovalRequestResponse submit(String requesterUserId, UUID id) {
         ApprovalRequest request = loadOwn(requesterUserId, id);
+        if (request.getSteps().isEmpty() && request.getCategory() != null) {
+            resolveRouting(request);
+        }
         requestStateMachine.markSubmitted(request);
         ApprovalRequest saved = requestRepository.save(request);
         return ApprovalRequestResponse.from(saved, objectMapper);
+    }
+
+    /**
+     * WF-ROUTE-001/002 — resolves the step chain from the matching {@link RoutingRule} exactly
+     * once, BEFORE {@code requestStateMachine.markSubmitted} runs. A miss throws
+     * {@link NoMatchingRoutingRuleException} (→ 422) here, so the transaction commits no state
+     * change and the request stays DRAFT (fail-closed, never a silent default chain).
+     */
+    private void resolveRouting(ApprovalRequest request) {
+        RoutingRule rule = routingRuleRepository
+            .findMatches(request.getCategory(), request.getAmount())
+            .stream().findFirst()
+            .orElseThrow(() -> new NoMatchingRoutingRuleException(
+                "no routing rule matches category='" + request.getCategory()
+                + "' amount=" + request.getAmount()));
+
+        List<String> chain = parseChain(rule.getApproverRoleChainJson());
+        int order = 0;
+        for (String role : chain) {
+            request.addStep(ApprovalStep.builder()
+                .orderIndex(order++)
+                .approverUserId(role)
+                .status(ApprovalStepStatus.PENDING)
+                .build());
+        }
+        request.setResolvedChainJson(rule.getApproverRoleChainJson());
+    }
+
+    private List<String> parseChain(String json) {
+        try {
+            return objectMapper.readValue(json, ROLE_CHAIN_TYPE);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("routing rule role chain is not valid JSON: " + json, ex);
+        }
     }
 
     @Transactional

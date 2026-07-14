@@ -61,4 +61,18 @@ public class NetMeterException extends RuntimeException {
             "A closed billing period is immutable; the boundary must move strictly forward and a reading "
                 + "cannot be backdated at or before the latest closed boundary");
     }
+
+    /** NETM-RATE-001 — a per-unit billing rate that is not strictly positive. */
+    public static NetMeterException invalidRate() {
+        return new NetMeterException(HttpStatus.UNPROCESSABLE_ENTITY,
+            "urn:problem:netmeter-invalid-rate", "NETMETER_INVALID_RATE",
+            "A per-unit billing rate must be strictly positive when provided");
+    }
+
+    /** NETM-RATE-001 — the derived billed amount diverged from the independent chain-sum recompute (a defect). */
+    public static NetMeterException rateMismatch() {
+        return new NetMeterException(HttpStatus.UNPROCESSABLE_ENTITY,
+            "urn:problem:netmeter-rate-mismatch", "NETMETER_RATE_MISMATCH",
+            "The derived period billed amount diverged from the independent chain-sum recompute");
+    }
 }

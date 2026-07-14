@@ -1,0 +1,74 @@
+version: "0.1.0"
+scope: "provisional-attestation-l0 — the generalized PROVISIONAL-NOW / ATTESTED-LATER contract: a record is created PROVISIONAL by its author and becomes ATTESTED only through an explicit, distinct-person attestation action (a 2-state lifecycle, no other transitions). Distinct from attested-change-record-l0 (a per-field old->new provenance envelope on an ORDINARY edit) — this spec governs a whole-record co-signature workflow: the record itself carries no trust until a SECOND party independently attests it, and once attested its content is frozen and its attested content-hash is recorded so a later tamper is detectable. Cross-cutting, framework-agnostic. Generic EMR/LMS/QA/compliance co-signature pattern; zero Korean law cite."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (2-state EnumMap state machine, sole mutator) + SHA-256 content hash + injected java.time.Clock + RFC 9457 Problem Details"
+standard: "Joint Commission co-signature / countersignature practice for provisional clinical entries (a provisional note has no independent legal standing until a supervising clinician countersigns it) + CWE-841 (Improper Enforcement of Behavioral Workflow) — a workflow that lets the SAME actor complete both halves of a required two-person check is the CWE-841 class this spec closes."
+domain_mode: backend_only
+introduced_at: "backlog wave 2026-07-14 — P3-34 (Lane H attestation)"
+
+# OPT-IN provisional-attestation catalog. The provisional-now/attested-later gap:
+# the catalog has per-field change provenance (attested-change-record) and
+# approval-workflow (multi-step routed sign-off) but no PRIMITIVE for a simple
+# 2-state co-signature record where a SECOND, DISTINCT party's attestation is
+# what gives the record standing, freezes its content, and pins a tamper-evident
+# hash of exactly what was attested.
+
+# ── Priority order for fork-receivers ──
+#   1. PATT-LIFECYCLE-001  (the primitive — PROVISIONAL -> ATTESTED, 2-state, sole mutator)
+#   2. PATT-DISTINCT-002   (attestor MUST differ from author — CWE-841 self-attestation closed)
+#   3. PATT-FREEZE-003     (PROVISIONAL editable by author; ATTESTED frozen + content-hash binding)
+#   4. PATT-DOWNSTREAM-004 (attested-only vs include-provisional query filter; no silent pass-off)
+
+# ── Composition note ──
+# DISTINCT from attested-change-record-l0 (a per-FIELD old->new envelope on an
+# ordinary governed edit, any number of edits) and approval-workflow-l0 (a routed,
+# possibly multi-step sign-off with sequenced approvers). provisional-attestation
+# is the simplest possible co-signature: ONE record, TWO states, ONE distinct
+# attestor, content frozen the instant it is attested.
+
+items:
+  - id: "PATT-LIFECYCLE-001"
+    chapter: "A record is created PROVISIONAL by its author; it becomes ATTESTED only via an explicit attest action — a 2-state lifecycle with no other transitions, mutated only by its state machine"
+    requirement: "A ProvisionalRecord MUST be created in the PROVISIONAL state, recording the authoring principal. The ONLY legal transition is PROVISIONAL -> ATTESTED via an explicit attest action; ATTESTED is terminal (no transition out, including no reverse to PROVISIONAL). Any other attempted transition (attest an already-ATTESTED record, or any transition not in the 2-state graph) MUST be rejected with a deterministic 409. The `status` column MUST be mutated ONLY by the record's state machine (an EnumMap ALLOWED-transition graph), never by a direct setter reachable from a controller or service outside it."
+    test_method: "RestAssured (create -> PROVISIONAL; attest -> ATTESTED; re-attest an ATTESTED record -> 409; structural: no public status setter, state machine is the sole caller)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Joint Commission co-signature practice: a provisional clinical entry has no
+      independent standing until countersigned. The 2-state graph generalizes this
+      to any co-signature workflow (QA sign-off, compliance attestation, LMS
+      instructor countersignature).
+  - id: "PATT-DISTINCT-002"
+    chapter: "The attestor MUST differ from the author — self-attestation is rejected fail-closed, with a DB @Check backstop"
+    requirement: "The attesting principal MUST NOT equal the authoring principal recorded at creation. An attest call where attestor == author MUST be rejected with a deterministic fail-closed response (422 or 403) BEFORE the state transition is applied — no partial attestation. As a backstop against an application-layer bug, the persisted `attested_by` column carries a DB `@Check` (`attested_by IS NULL OR attested_by <> authored_by`) so even a direct-SQL or ORM-bypassing write cannot record a self-attestation."
+    test_method: "RestAssured (attest by the SAME principal who authored the record -> rejected, status remains PROVISIONAL; attest by a DIFFERENT principal -> 200/201, status ATTESTED); structural: @Check constraint present on the entity"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      CWE-841 (Improper Enforcement of Behavioral Workflow): "The software
+      supports a workflow, but does not ensure that the sequence of steps
+      operates in the order expected by the software." Letting one actor
+      complete both halves of a required two-person check (author +
+      attestor) collapses the workflow this spec exists to enforce.
+      (https://cwe.mitre.org/data/definitions/841.html)
+  - id: "PATT-FREEZE-003"
+    chapter: "PROVISIONAL content is editable by its author; ATTESTED content is frozen (409 on edit); the attestation records a content-hash of exactly what was attested, making post-attestation tamper detectable"
+    requirement: "While a record is PROVISIONAL, its author MAY edit its content. Once a record is ATTESTED, ANY edit attempt MUST be rejected with a deterministic 409 — the content is frozen at the moment of attestation. The attest action MUST compute and persist a content-hash (SHA-256 hex) of the content AS IT EXISTED at the moment of attestation. A verification read MUST recompute the hash of the currently-stored content and compare it to the persisted attested-hash; a mismatch (which can only occur via an out-of-band write that bypassed the frozen-content guard) MUST be reported as tamper-detected rather than silently trusted."
+    test_method: "RestAssured (author edits PROVISIONAL content -> 200; edit after ATTESTED -> 409, content unchanged; verify endpoint on an untouched ATTESTED record -> tamper=false; after an out-of-band content mutation bypassing the service, verify -> tamper=true)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The content-hash binding is the tamper-evidence primitive: attestation is
+      only meaningful if what was attested cannot silently drift afterward. The
+      hash lets a downstream verifier detect drift without needing to trust the
+      write path that produced it.
+  - id: "PATT-DOWNSTREAM-004"
+    chapter: "Downstream queries can filter attested-only vs include-provisional; a provisional record is never silently passed off as attested"
+    requirement: "A list/query surface over ProvisionalRecords MUST support an explicit filter distinguishing 'attested-only' (default) from 'include-provisional'. Every record in a response MUST carry its `status` field so a caller can never mistake a PROVISIONAL record for an ATTESTED one by omission — there is no response shape that drops the status field. A provisional record MUST NOT be returned from an attested-only query."
+    test_method: "RestAssured (2 records, one PROVISIONAL one ATTESTED; default/attested-only list returns only the ATTESTED one; include-provisional=true list returns both, each carrying its own status field)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The downstream-visibility discipline mirrors the catalog's general
+      no-silent-defaulting posture: a caller who wants only trustworthy
+      (attested) data must be able to ask for exactly that, and a caller who
+      wants everything must see the provisional/attested split explicitly.

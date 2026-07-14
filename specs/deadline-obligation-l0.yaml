@@ -17,6 +17,10 @@ introduced_at: "IDW12 deadline-ladder (G14-17) + IDW17 multi-axis-deadline/deadl
 #   3. OBL-ACK-001        (closed-loop — explicit ack is the ONLY terminal; never auto-expire)
 #   4. OBL-LADDER-001     (ordered rungs fire exactly once, in order, additive)
 #   5. OBL-CONCURRENT-001 (keystone — sweep vs ack vs usage-update serialize on the row lock)
+#   6. OBL-CONSEQUENCE-001    (BREACH crossing exactly-once binds a monetary consequence)
+#   7. OBL-INTEREST-ACCRUE-001 (the consequence's accrual is a derived, recomputable formula)
+#   8. OBL-WAIVER-001     (a dual-axis waiver suppresses the consequence while valid — never the ladder)
+#   9. OBL-WAIVER-002     (a waiver is granted 4-eyes and immutable; revoke is a new record, not a mutation)
 
 # ── Composition note ──
 # DISTINCT from scheduled-task-l0 (executes jobs; no obligation lifecycle), webhook
@@ -28,6 +32,20 @@ introduced_at: "IDW12 deadline-ladder (G14-17) + IDW17 multi-axis-deadline/deadl
 # end-state, applied from birth). The sweep is a CONCURRENT MUTATOR in the sense of
 # timeout-sweep-is-a-concurrent-mutator (satisfied here by the STRONGER means — the
 # same PESSIMISTIC_WRITE row lock as the API paths, vs that rule's optimistic shape).
+
+# ── P3-20/P3-40 extension note ──
+# BREACH firing (OBL-LADDER-001) is VISIBILITY ONLY — it never carried a substantive
+# consequence. OBL-CONSEQUENCE-001/OBL-INTEREST-ACCRUE-001 add an OPT-IN monetary
+# consequence (a declared basis amount accrues statutory-rate interest for every day
+# the obligation stays open past its effective deadline) bound exactly-once per
+# obligation, DERIVE-ON-READ (never a stored, hand-updated running total — the same
+# grounding posture as the deadline itself). OBL-WAIVER-001/002 add a dual-axis
+# (time AND usage-cycle) conditional exemption that suspends ONLY the consequence —
+# the escalation ladder still fires unconditionally, because escalation is additive
+# visibility (OBL-LADDER-001's own invariant) and a waiver is not a cancellation. The
+# consequence check runs on EVERY sweep pass past the deadline (not only the pass that
+# fires BREACH), so a waiver's expiry on either axis reactivates enforcement on the
+# very next sweep — fail-closed by default (no waiver = no suppression).
 
 items:
   - id: "OBL-GROUND-001"
@@ -89,3 +107,59 @@ items:
     notes: >
       The same single-serialization-point shape as register/threshold/decisiongov —
       the obligation row is the lock.
+  - id: "OBL-CONSEQUENCE-001"
+    chapter: "BREACH crossing binds a substantive consequence — exactly once, same-tx as the detection"
+    verification:
+      mechanism: rule
+      ref: deadline-obligation-grounded-multi-axis-ladder-closed-loop
+    requirement: "An obligation MAY declare an OPTIONAL basis amount at creation (a monetary sum the BREACH crossing is measured against — e.g. an outstanding invoice principal). Once the obligation is BOTH past its effective deadline AND carries a declared basis amount, the SAME transaction that (re-)evaluates the obligation on a sweep pass MUST bind exactly one consequence record to the obligation (obligation id + the instant the consequence was recorded + the declared basis amount), enforced by a UNIQUE(obligation_id) DB backstop so a racing or repeated sweep pass cannot create a second one. An obligation with NO declared basis amount never gets a consequence — the BREACH rung still fires (visibility is unconditional; OBL-LADDER-001), but no monetary exposure attaches. Binding the consequence MUST NOT touch the ladder's escalation events or the obligation's own lifecycle — it is an independent, additive fact."
+    test_method: "RestAssured (obligation with a basis amount, swept past deadline → consequence appears exactly once, re-sweep does not duplicate it; obligation with NO basis amount, swept past deadline → BREACH still fires but no consequence exists — 404 on the consequence read)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Anchor (EU Directive 2011/7/EU on combating late payment in commercial
+      transactions, Article 3(1)): "Member States shall ensure that... the
+      creditor is entitled to interest for late payment without the necessity
+      of a reminder" once the creditor has performed and payment is overdue —
+      generalized here as: overdue-ness alone (no separate demand) is what
+      creates the entitlement, deterministically and exactly once.
+      (https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32011L0007)
+  - id: "OBL-INTEREST-ACCRUE-001"
+    chapter: "The consequence's accrual is a DERIVED, recomputable formula — never a stored running total"
+    requirement: "The consequence's accrued amount MUST be a deterministic function of three recorded/derivable inputs — (1) the declared basis amount, (2) a statutory annual rate fixed by policy, and (3) the days overdue, computed from the obligation's own effective deadline to NOW (never from a separately-tracked 'days accrued' counter) — using simple interest: basisAmount × rate × daysOverdue / 365. The accrued amount MUST be DERIVE-ON-READ: there is no stored, mutated-in-place running-total column: reading it twice in quick succession without any state change MUST return the same (or, if time advanced, a purely larger) value computed FRESH each time from the same three inputs — recompute is idempotent given the same inputs, exactly like an axis's candidate deadline (OBL-GROUND-001)."
+    test_method: "RestAssured (read the consequence's accrued interest twice in immediate succession → equal within a negligible epsilon, proving it is recomputed fresh and not a stored counter that free-runs; structural: the consequence entity carries no persisted accrued-amount column)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The same grounding posture as the deadline itself (OBL-GROUND-001) applied
+      to money: an auditor re-derives the accrued amount from the three recorded
+      inputs alone, at any instant, without trusting a cached total. The rate is
+      a fixed, documented policy constant in this reference workload (not tied to
+      a fluctuating reference rate) — a deliberate simplification of Directive
+      2011/7/EU's reference-rate-plus-margin mechanism, made explicit in code,
+      not silently overclaimed as the full statutory formula.
+  - id: "OBL-WAIVER-001"
+    chapter: "A dual-axis (time AND usage-cycle) waiver suppresses the consequence while valid — never the ladder"
+    requirement: "An obligation MAY be granted a waiver bounded by BOTH a TIME axis (expiresAt) AND a USAGE-CYCLE axis (expiresAfterCycles, counted from the obligation's own usage-cycle counter at grant time) — reusing the OBL-AXIS-001 min-of-candidates shape: the waiver is VALID only while NEITHER bound has yet been reached (the EARLIER of the two lapses ends validity). While a valid, non-revoked waiver covers the obligation, a sweep pass that would otherwise bind a consequence (OBL-CONSEQUENCE-001) MUST skip binding it. The escalation ladder is UNAFFECTED by any waiver — it keeps firing on schedule (escalation is additive visibility, OBL-LADDER-001; a waiver is not a cancellation). The moment EITHER axis is exceeded (or the waiver is explicitly revoked), the waiver is no longer valid, and enforcement (consequence binding) MUST reactivate FAIL-CLOSED on the very next sweep pass — the default, absent an actively valid waiver, is always to enforce."
+    test_method: "RestAssured (grant a waiver, sweep past deadline → BREACH still fires, but no consequence is bound while the waiver is valid; advance usage past the waiver's cycle bound (the OTHER axis, time, still far in the future) → the very next sweep binds the consequence — proving EITHER axis lapsing alone reactivates enforcement)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (14 CFR §91.409, reused from OBL-AXIS-001 — the SAME
+      dual-axis, earliest-governs shape, applied here to a waiver's validity
+      window instead of a deadline): "no person may operate an aircraft
+      unless, within the preceding 12 calendar months, it has had... An annual
+      inspection... unless within the preceding 100 hours of time in
+      service the aircraft has received an annual or 100-hour inspection."
+      (https://www.law.cornell.edu/cfr/text/14/91.409)
+  - id: "OBL-WAIVER-002"
+    chapter: "A waiver is granted 4-eyes and immutable; revoke is a NEW record, never a mutation"
+    requirement: "Granting a waiver MUST require a non-blank, distinct declared obligation-owner (the grantor — the AUTHENTICATED caller — MUST differ from the declared obligation-owner; a grantor cannot waive their own obligation) and a non-blank reason; both requirements are rejected 422 if violated. Once granted, a waiver's grant fields (grantor, declared owner, reason, both axis bounds, the grant instant, and the usage-cycle count at grant time) are IMMUTABLE — there is no update endpoint or mutator. Revoking a waiver MUST NOT mutate or delete the waiver row: it MUST append a separate, immutable revocation record (who revoked it, when) — the grant remains in the historical record exactly as issued, and validity is computed by checking for the EXISTENCE of a revocation, never by flipping a flag on the original grant."
+    test_method: "RestAssured (grant with grantor == declared owner → 422 OBLIGATION_WAIVER_SELF_GRANT; grant with expiresAt in the past → 422 OBLIGATION_INVALID_WAIVER — a blank reason / non-positive expiresAfterCycles are additionally bean-validation-rejected [400] at the API boundary, so the service's own defensive checks for those two are unreachable through the reference API and load-bearing only for direct service consumers, exactly like OBL-ACK-001's acknowledgerRequired; grant → 201 with immutable fields; revoke → 200/204, the original waiver row's fields are unchanged, a SEPARATE revocation record now exists, re-revoke → 409, and the obligation's next sweep treats the waiver as no-longer-valid)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The same separation-of-duties posture as decision-governance's override
+      4-eyes (approved_by <> decided_by) applied to waivers: the party who
+      benefits from a suspended consequence cannot also be the one who grants
+      the suspension.

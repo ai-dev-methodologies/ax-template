@@ -254,6 +254,72 @@ class ValuationRunComplianceTest {
         assertThat(versions).as("exactly one run row at the next version").containsExactly(1);
     }
 
+    // ── VALRUN-FALLBACK-001 — priority-order fallback across sources; provenance recorded; fail-closed ──
+    @Test @Tag("VALRUN-FALLBACK-001")
+    void asOfFallback_triesSourcesInPriorityOrder_recordsProvenance_failsClosedWhenNoneQualify() {
+        String id = createSubject("PORT-FALLBACK");
+
+        // only a SECONDARY-source run exists — PRIMARY has no run at all yet
+        String tSecondary = given().header("Authorization", "Bearer " + member)
+            .header("Content-Type", "application/json")
+            .body("{\"expectedHeadVersion\":0,\"declaredTotal\":\"50.00\",\"basis\":\"b\","
+                + "\"positions\":{\"a\":50.00}}")
+        .when().post("/api/valuation-run/subjects/" + id + "/runs/sources/SECONDARY")
+            .then().statusCode(201).extract().jsonPath().getString("asOf");
+
+        // a fallback naming [PRIMARY, SECONDARY] at a time only SECONDARY qualifies -> served by SECONDARY
+        Instant afterSecondary = Instant.parse(tSecondary).plusMillis(1);
+        var fallbackToSecondary = given().header("Authorization", "Bearer " + member)
+            .queryParam("at", afterSecondary.toString())
+            .queryParam("sources", "PRIMARY").queryParam("sources", "SECONDARY")
+        .when().get("/api/valuation-run/subjects/" + id + "/as-of-fallback").thenReturn().then().extract();
+        assertThat(fallbackToSecondary.statusCode()).isEqualTo(200);
+        assertThat(fallbackToSecondary.jsonPath().getString("sourceRef")).isEqualTo("SECONDARY");
+
+        // now PRIMARY also gets a run — priority order means PRIMARY wins even though it's newer,
+        // not "most recent across sources" (SECONDARY's run also still qualifies at this instant)
+        String tPrimary = recompute(id, 1, "100.00", "basis", pos("a", "100.00")).jsonPath().getString("asOf");
+        Instant afterPrimary = Instant.parse(tPrimary).plusMillis(1);
+        var fallbackToPrimary = given().header("Authorization", "Bearer " + member)
+            .queryParam("at", afterPrimary.toString())
+            .queryParam("sources", "PRIMARY").queryParam("sources", "SECONDARY")
+        .when().get("/api/valuation-run/subjects/" + id + "/as-of-fallback").thenReturn().then().extract();
+        assertThat(fallbackToPrimary.statusCode()).isEqualTo(200);
+        assertThat(fallbackToPrimary.jsonPath().getString("sourceRef")).isEqualTo("PRIMARY");
+
+        // DISCRIMINATING case — give the LOWER-priority source (SECONDARY) a STRICTLY MORE
+        // RECENT qualifying run than PRIMARY's. If the implementation picked "most recent across
+        // sources" instead of the caller's priority order, this would now return SECONDARY; the
+        // spec (VALRUN-FALLBACK-001) requires priority order to still win, so PRIMARY must be
+        // returned even though its own run is the OLDER of the two qualifying runs.
+        String tSecondaryNewer = given().header("Authorization", "Bearer " + member)
+            .header("Content-Type", "application/json")
+            .body("{\"expectedHeadVersion\":2,\"declaredTotal\":\"75.00\",\"basis\":\"b2\","
+                + "\"positions\":{\"a\":75.00}}")
+        .when().post("/api/valuation-run/subjects/" + id + "/runs/sources/SECONDARY")
+            .then().statusCode(201).extract().jsonPath().getString("asOf");
+        Instant afterSecondaryNewer = Instant.parse(tSecondaryNewer).plusMillis(1);
+        assertThat(afterSecondaryNewer).isAfter(afterPrimary);   // SECONDARY's run is now the newer one
+
+        var fallbackStillPrimary = given().header("Authorization", "Bearer " + member)
+            .queryParam("at", afterSecondaryNewer.toString())
+            .queryParam("sources", "PRIMARY").queryParam("sources", "SECONDARY")
+        .when().get("/api/valuation-run/subjects/" + id + "/as-of-fallback").thenReturn().then().extract();
+        assertThat(fallbackStillPrimary.statusCode()).isEqualTo(200);
+        assertThat(fallbackStillPrimary.jsonPath().getString("sourceRef")).as(
+            "priority order must win over recency — PRIMARY still qualifies (older run) and is "
+                + "higher-priority than SECONDARY, even though SECONDARY now holds the newer run")
+            .isEqualTo("PRIMARY");
+
+        // a fallback naming sources with NO qualifying run anywhere -> 404, fail-closed
+        var noneQualify = given().header("Authorization", "Bearer " + member)
+            .queryParam("at", afterPrimary.toString())
+            .queryParam("sources", "TERTIARY").queryParam("sources", "QUATERNARY")
+        .when().get("/api/valuation-run/subjects/" + id + "/as-of-fallback").thenReturn().then().extract();
+        assertThat(noneQualify.statusCode()).isEqualTo(404);
+        assertThat(noneQualify.jsonPath().getString("code")).isEqualTo("VALRUN_NO_QUALIFYING_SOURCE");
+    }
+
     // ── VALRUN-ASOF-001 — empty fan-out is rejected ──
     @Test @Tag("VALRUN-FANOUT-001")
     void emptyFanOut_is422() {

@@ -1,0 +1,57 @@
+template_id: "amount-tiered-authority-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "전결 규정 / delegation-of-authority — a decision on an amount X must be made (or co-signed) by someone whose authority band covers X"
+  - "Approval limit tables where the MINIMUM decider level is a function of amount, not a fixed role"
+  - "Any control-activity gate (COSO Internal Control — Control Activities) that needs an auditable 'was this decision within authority when decided' trail"
+
+not_for:
+  - "Multi-signer / N-of-M signoff on ONE decision — this blueprint gates who MAY decide, not how many co-signers a single decision needs (compose with decision-governance-l0's four-eyes for that)"
+  - "Dynamic/organizational level resolution (org-chart lookup, reporting-line traversal) — v1 takes deciderLevel as an input; fork-receivers wire the real org-chart→level resolution"
+  - "Auto-escalation of an under-authorized decision to a higher approver — v1 is fail-closed reject (403), never a silent escalation queue"
+
+# ─── tier — the amount→minimum-decider-level table (ATA-TIER-001) ──────────
+tier:
+  description: "Sole source of truth: the latest AuthorityTierTable version's bands. Sole mutator: TieredAuthorityService.createTable (append-only new version)."
+  decider_level_provenance: "deciderLevel is a request-supplied field (generic composition-kit primitive) — NOT derived from an org chart or JWT role. Fork-receivers replace this with real authority resolution."
+  rejection:
+    rule: "deciderLevel < covering_band.minDeciderLevel → 403 INSUFFICIENT_AUTHORITY, nothing persisted"
+    escalation_policy: "never auto-escalate; the caller must resubmit through a sufficiently authorized decider"
+
+# ─── boundary — band tiling + half-open semantics (ATA-BOUNDARY-001) ──────
+boundary:
+  description: "Bands MUST tile the amount axis with no gap or overlap, validated at config (createTable) time."
+  semantics: "half-open [minAmount, maxAmount) — minAmount is IN the band, maxAmount is NOT; only the LAST band may have maxAmount == null (open-ended)"
+  rejection:
+    rule: "a gap, an overlap, or a non-last open-ended band → 422 TIER_BOUNDARY_INVALID, no table version created"
+
+# ─── snapshot — immutable decision log (ATA-SNAPSHOT-001) ─────────────────
+snapshot:
+  description: "Every TieredDecisionRecord is fully append-only (@Column(updatable=false) on every column) — it fixes the tableVersion, matched band, and deciderLevel it was evaluated against forever."
+  guarantee: "A later reconfiguration (new AuthorityTierTable version) NEVER rewrites a committed decision record; the audit trail always answers 'was this decision within authority when decided'."
+
+testing_baseline:
+  integration: "RestAssured black-box HTTP against @SpringBootTest RANDOM_PORT"
+  unit: "JUnit 5 + AssertJ — half-open band-match logic + structural immutability, no Spring context"
+
+verification_checkpoints:
+  - "Decider below the covering band's minimum is rejected with 403, never auto-escalated (ATA-TIER-001)"
+  - "Overlapping or gapped bands are rejected at config time with 422 (ATA-BOUNDARY-001)"
+  - "A boundary amount resolves to exactly one band (the one starting at that amount) (ATA-BOUNDARY-001)"
+  - "A committed decision record's tableVersion/band/deciderLevel survive a later reconfiguration unchanged (ATA-SNAPSHOT-001)"
+
+must_not:
+  - "Auto-escalate an under-authorized decision to a higher decider"
+  - "Allow a table version's bands to gap or overlap"
+  - "Mutate a committed TieredDecisionRecord row"
+  - "Re-evaluate a committed decision against a table version other than the one recorded on it"
+
+reject_if:
+  - "POST /api/tiered-authority/config with tiling gap/overlap → 422 TIER_BOUNDARY_INVALID"
+  - "POST /api/tiered-authority/decisions with deciderLevel below the covering band → 403 INSUFFICIENT_AUTHORITY"
+  - "POST /api/tiered-authority/decisions with an amount no configured band covers → 422 TIER_NOT_FOUND"
+
+source_precedence:
+  - "전결 규정 / corporate delegation-of-authority practice"
+  - "COSO Internal Control — Integrated Framework (2013), Control Activities component"

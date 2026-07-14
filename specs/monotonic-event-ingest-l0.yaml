@@ -29,6 +29,12 @@ introduced_at: "IDW6 2026-06-01 logistics dogfood"
 #   2. INGEST-REJECT-STALE-001  (reject anything at or behind the watermark)
 #   3. INGEST-IDEMPOTENT-APPLY-001 (dedup the exact-same event)
 #   4. INGEST-OBSERVABILITY-001 (count the drops)
+#   5. INGEST-CAPTURE-001       (the third timestamp axis: occurred/captured/recorded)
+#
+# realized backend/src/main/java/com/ax/template/authblueprint/eventingest (P3-7,
+# BACKLOG lane E V098) — this spec was previously spec-only (zero backend realization,
+# zero test, zero gradle task); item 5 below is the new third-axis addition, the other
+# four are the pre-existing generic invariants realized faithfully.
 
 items:
   - id: "INGEST-WATERMARK-001"
@@ -101,3 +107,42 @@ items:
       fixed enum to satisfy bounded-cardinality conventions (no verbatim
       single-sentence prohibition on the cited page; it constrains
       attribute cardinality per-metric).
+  - id: "INGEST-CAPTURE-001"
+    chapter: "세 번째 시간 축 (occurred_at / captured_at / recorded_at)"
+    requirement: "Every ingested event MUST carry THREE distinct timestamps, not one: `occurred_at`
+      (the domain event time — when the thing actually happened on the producing device/carrier
+      system), `captured_at` (the device/local capture instant — when the producing system stamped
+      it), and `recorded_at` (the server persist instant). The invariant `occurred_at <= captured_at
+      <= recorded_at` MUST be validated fail-closed (422) on every apply, with a configurable
+      clock-skew tolerance applied ONLY to the first inequality (`occurred_at <= captured_at +
+      tolerance`) to absorb ordinary device/producer clock drift; the second inequality
+      (`captured_at <= recorded_at`) is checked WITHOUT tolerance because `recorded_at` is the
+      server's own clock — a `captured_at` claiming to be later than the server's own persist
+      instant is definitionally impossible and must be rejected, not smoothed over. `recorded_at`
+      MUST NEVER be client-settable: the inbound request/DTO carries no `recorded_at` field at
+      all, and the row is stamped from the server's injected `Clock` at the moment of apply —
+      distinct from `occurred_at`/`captured_at`, which the event's producer supplies and this
+      item merely validates the ordering of."
+    test_method: "RestAssured integration test (POST an event with occurred_at > captured_at beyond
+      tolerance -> 422 INGEST_CAPTURE_ORDER_INVALID; POST an event with captured_at set into the
+      future relative to the server clock -> 422 INGEST_CAPTURE_ORDER_INVALID; POST a well-formed
+      event -> 200, and the returned recorded_at is server-set, never echoing any client-supplied
+      value because none exists in the request shape) + structural: reflect the request DTO and
+      assert it has no `recordedAt` component."
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Distinct from PRACTICES-TIME-001 (server clock as the source of truth for a DECISION) and
+      from the existing INGEST-WATERMARK-001 (which anchors the watermark to event-time alone):
+      this item is the three-way PROVENANCE trail for a single ingested event — when it happened,
+      when the producer noticed, and when the server actually persisted it — so a fork-receiver
+      auditing a disputed event can distinguish producer clock skew (occurred vs captured) from
+      network/queueing latency (captured vs recorded). Anchored to the same Apache Flink
+      event-time model as INGEST-WATERMARK-001
+      (https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/concepts/time/) plus the
+      OpenTelemetry Semantic Conventions distinction between an event's own timestamp and the
+      observation timestamp
+      (https://opentelemetry.io/docs/specs/semconv/general/events/). Quote anchor (OTel Semantic
+      Conventions, Event definition): "time - The time at which the occurrence happened." — the
+      occurrence time is explicitly a distinct field from the record's own observed/reported time,
+      which is exactly the occurred_at vs recorded_at split this item enforces.

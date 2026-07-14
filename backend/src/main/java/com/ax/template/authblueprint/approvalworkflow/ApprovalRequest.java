@@ -12,6 +12,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -97,6 +98,29 @@ public class ApprovalRequest {
     @OrderBy("orderIndex ASC")
     private List<ApprovalStep> steps = new ArrayList<>();
 
+    /**
+     * WF-ROUTE-001 — routing-mode attribute, captured once at creation (like
+     * {@link #payloadJson}). {@code null} means the request used the direct
+     * approverUserIds path instead.
+     */
+    @Column(name = "category", length = 64, updatable = false)
+    private String category;
+
+    @Column(name = "amount", precision = 15, scale = 2, updatable = false)
+    private BigDecimal amount;
+
+    /**
+     * WF-ROUTE-001 — snapshot of the resolved approver-role chain. Unlike
+     * {@code payloadJson}, this column is NOT {@code updatable=false}: in routing mode
+     * the row is first persisted with this null (resolution happens later, at
+     * {@link ApprovalService#submit}), so it must accept exactly one later write.
+     * {@link #setResolvedChainJson} is the sole mutator and rejects a second write —
+     * the state machine only lets {@code submit()} succeed once per request, so that
+     * single write is the only one that will ever happen.
+     */
+    @Column(name = "resolved_chain_json", length = 4096)
+    private String resolvedChainJson;
+
     /** Required by JPA. */
     protected ApprovalRequest() {}
 
@@ -108,6 +132,8 @@ public class ApprovalRequest {
         this.payloadJson = b.payloadJson;
         this.status = (b.status != null) ? b.status : ApprovalRequestStatus.DRAFT;
         this.createdAt = (b.createdAt != null) ? b.createdAt : Instant.now();
+        this.category = b.category;
+        this.amount = b.amount;
     }
 
     public UUID getId() { return id; }
@@ -119,6 +145,9 @@ public class ApprovalRequest {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getSubmittedAt() { return submittedAt; }
     public Instant getCompletedAt() { return completedAt; }
+    public String getCategory() { return category; }
+    public BigDecimal getAmount() { return amount; }
+    public String getResolvedChainJson() { return resolvedChainJson; }
 
     public List<ApprovalStep> getSteps() {
         return Collections.unmodifiableList(steps);
@@ -134,6 +163,15 @@ public class ApprovalRequest {
     void setSubmittedAt(Instant ts) { this.submittedAt = ts; }
     void setCompletedAt(Instant ts) { this.completedAt = ts; }
 
+    /** WF-ROUTE-001 sole mutator — writes exactly once; a second call is a programming bug. */
+    void setResolvedChainJson(String json) {
+        if (this.resolvedChainJson != null) {
+            throw new IllegalStateException(
+                "resolved chain already snapshotted for request " + id + " — routing resolves at most once");
+        }
+        this.resolvedChainJson = json;
+    }
+
     public static Builder builder() { return new Builder(); }
 
     public static final class Builder {
@@ -144,6 +182,8 @@ public class ApprovalRequest {
         private String payloadJson;
         private ApprovalRequestStatus status;
         private Instant createdAt;
+        private String category;
+        private BigDecimal amount;
 
         public Builder id(UUID v) { this.id = v; return this; }
         public Builder requesterUserId(String v) { this.requesterUserId = v; return this; }
@@ -152,6 +192,8 @@ public class ApprovalRequest {
         public Builder payloadJson(String v) { this.payloadJson = v; return this; }
         public Builder status(ApprovalRequestStatus v) { this.status = v; return this; }
         public Builder createdAt(Instant v) { this.createdAt = v; return this; }
+        public Builder category(String v) { this.category = v; return this; }
+        public Builder amount(BigDecimal v) { this.amount = v; return this; }
 
         public ApprovalRequest build() { return new ApprovalRequest(this); }
     }

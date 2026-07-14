@@ -25,12 +25,27 @@ policy:
   # "reject" -> 400 BadRequest; "allow" -> bypass limit; "anonymous" -> use shared "anonymous" bucket
   on_missing_key: "reject"
 
+  # RATELIMIT-5 — key strategy for UNAUTHENTICATED endpoints: the client IP resolved
+  # from X-Forwarded-For at this many trusted hops, counting from the RIGHT (the
+  # Nth-from-right entry). Attacker-controlled entries prepended to the LEFT of that
+  # position never shift the resolved key. 0, a missing header, or a depth exceeding
+  # the entries present all fall back to the request's own remote address.
+  trusted_proxy_depth: 1
+
   # Headers emitted on 429
   retry_after_header: true
 
-  # Paths the filter applies to (Ant-style)
+  # Paths the filters apply to — servlet url-pattern mapping (NOT Ant-style): a
+  # trailing "/*" recursively matches every nested path under the prefix, so the
+  # two filters below are registered on DISJOINT exact/prefix patterns rather than
+  # a single "/api/ratelimit/**" wildcard — that wildcard would have let the
+  # header-strategy filter (RATELIMIT-1..4) swallow the RATELIMIT-5 anonymous path
+  # too, since both filters live under /api/ratelimit. Any FUTURE endpoint added
+  # under /api/ratelimit/ MUST be assigned to (or excluded from) one of these two
+  # patterns explicitly — it does not automatically inherit either filter.
   applies_to:
-    - "/api/ratelimit/**"
+    - "/api/ratelimit/ping"        # header:X-API-Key strategy (RATELIMIT-1..4) — exact match only
+    - "/api/ratelimit/anon/*"      # trusted-proxy IP strategy (RATELIMIT-5) — this prefix only
 
 testing_baseline:
   unit: "n/a — filter behavior is verified end-to-end"
@@ -42,6 +57,7 @@ verification_checkpoints:
   - "RATELIMIT-2: 429 response has Retry-After header"
   - "RATELIMIT-3: distinct X-API-Key values have independent buckets"
   - "RATELIMIT-4: after window_millis the bucket refills"
+  - "RATELIMIT-5: the trust-depth-Nth-from-right XFF entry keys anonymous endpoints; spoofed leftmost entries never shift it"
 
 must_not:
   - "Block the entire JVM on a global lock during quota check"

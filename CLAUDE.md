@@ -168,7 +168,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 229 Java rules + 99 React rules + 14 ESLint rules + 90 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 232 Java rules + 99 React rules + 14 ESLint rules + 91 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -325,7 +325,7 @@ catalog claim **"`./gradlew test{Domain}` — 단일 명령 binary pass/fail"** 
 task 전 GREEN + aggregate `./gradlew test` 는 advisory PortabilityCyclic
 한 건을 제외하면 GREEN. 도메인별 상태:
 
-> 아래 표는 **대표 스냅숏(R22 baseline)** 이며 전수 목록이 아니다. 전체 per-domain task의 canonical 출처는 backend/build.gradle.kts(89 register<Test>) — `cd backend && ./gradlew tasks`로 조회. 신규 도메인은 verification-checklist.yaml + build.gradle.kts에 자동 등재된다.
+> 아래 표는 **대표 스냅숏(R22 baseline)** 이며 전수 목록이 아니다. 전체 per-domain task의 canonical 출처는 backend/build.gradle.kts(115 register<Test>) — `cd backend && ./gradlew tasks`로 조회. 신규 도메인은 verification-checklist.yaml + build.gradle.kts에 자동 등재된다.
 
 | Per-domain task                | 상태       | 비고 |
 |--------------------------------|----------|---|
@@ -425,7 +425,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 228룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 90 hard guards
+│   ├── evals/                 # 4 hard gates + 91 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
@@ -493,12 +493,12 @@ fork-receiver의 활성화는 opt-in이다.
 | PreToolUse hook (Claude Code) | `.claude/settings.local.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
 | `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 커밋을 ship하는 모든 push 시 (delete-only push는 제외) — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
-| `run-all-guards.sh` (89 guards, 165 invocations) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
+| `run-all-guards.sh` (90 guards) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
 
 ### 핵심 설명
 
-- **89개 guard는 `run-all-guards.sh` 경유 수동 실행 전용이다** (practices/evals 87 + practices-react/evals 2; 여기에 pre-push 전용 recency guard 1을 더해 총 90 hard guards). 커밋마다 자동 실행되지 않는다.
+- **89개 guard는 `run-all-guards.sh` 경유 수동 실행 전용이다** (practices/evals 87 + practices-react/evals 2; 여기에 pre-push 전용 recency guard 1을 더해 총 91 hard guards). 커밋마다 자동 실행되지 않는다.
   R25 완료 선언 전에 `verify-completion.sh`를 실행하면 이 guard들이 모두 돌아간다.
 - **pre-commit / pre-push hook은 opt-in이다.** `install-hooks.sh`를 실행한 클론에서만 활성화된다.
   ax-template 자체 HEAD에서는 활성화되어 있다; fork-receiver가 활성화 여부를 결정한다.

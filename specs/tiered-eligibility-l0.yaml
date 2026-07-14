@@ -1,0 +1,129 @@
+version: "0.1.0"
+scope: "tiered-eligibility-l0 — the N-TIER count-threshold eligibility-degradation ladder. A ladder holds
+  an ordered sequence of N >= 2 tiers (e.g. FULL → REDUCED → SUSPENDED), each entered at its own count
+  threshold; accruing a count that crosses a threshold atomically moves the ladder to the corresponding
+  tier in the SAME transaction as the accrual (composing thresholdterminal-l0's crossing mechanism,
+  generalized from a single binary ceiling to an N-tier ladder). Degradation via accrual is MONOTONE — the
+  automatic path can never move the ladder back up a tier; the ONLY way to move up is an EXPLICIT, audited
+  restore action that also resets the count (so tier and count never drift apart). A capability check
+  (`use`) reads the CURRENT persisted tier under the SAME row lock as accrual/restore, so a use racing a
+  crossing accrual is fail-closed. Cross-cutting, framework-agnostic. Recurs in: driver hours-of-service
+  violation ladders, account standing (good → warned → restricted → suspended), credit-score risk tiers,
+  loyalty-program tier demotion, content-moderation strike ladders — 5+ industries. Realized by the
+  tieredeligibility reference workload (com.ax.template.authblueprint.tieredeligibility)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (@Version optimistic + PESSIMISTIC_WRITE row lock +
+  @Check basic non-negativity backstop) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "US 49 CFR §395 (hours-of-service violation ladders — a driver's eligibility to dispatch degrades
+  through defined violation tiers, restored only through an explicit qualifying reset) + CWE-362 (race
+  between a crossing accrual and a derived use) + java.time.Clock + RFC 9457 + RFC 9110 §15.5.10 (409)"
+domain_mode: backend_only
+introduced_at: "P3-29 2026-07-14 (backlog-100 Lane B energy wave — composes thresholdterminal-l0)"
+
+# OPT-IN tiered-eligibility catalog. COMPOSES threshold-terminal-derivation-l0's core mechanism (a value
+# fact atomically becoming a lifecycle fact, with a derived capability blocked by it) but GENERALIZES from
+# a single binary ceiling (ACTIVE/EXPIRED, zero outgoing edges ever) to an N-tier ladder where the WORST
+# tier IS reachable back FROM only through an explicit, separately-audited action — the distinguishing
+# addition this domain contributes to the catalog.
+
+# ── Priority order for fork-receivers ──
+#   1. TIER-LADDER-001   (crossing a threshold atomically moves to the corresponding tier, same tx as the accrual)
+#   2. TIER-MONOTONE-001 (automatic degradation never skips back up; restoration is ONLY an explicit audited action)
+#   3. TIER-DERIVE-001    (the derived capability check reads the CURRENT persisted tier fail-closed, under the same lock)
+#   4. TIER-TERMINAL-001  (the worst tier is a one-way trip UNLESS an explicit, audited restore occurs — the chosen semantic)
+
+# ── Composition note ──
+# Tier is ALWAYS the pure derived function of count against the ladder's own threshold list — this is what
+# keeps TIER-DERIVE-001 meaningful without re-deriving on every read: accrual can only INCREASE count
+# (monotone), and restore is the ONLY path allowed to DECREASE it, always resetting count and tier TOGETHER
+# so they never disagree (an explicit restore that only relabeled the tier while leaving a high count would
+# let the very next accrual instantly re-degrade it — this design closes that gap by construction).
+
+items:
+  - id: "TIER-LADDER-001"
+    chapter: "Crossing a threshold atomically moves the ladder to the corresponding tier, in the SAME transaction as the accrual"
+    verification:
+      mechanism: tag
+      ref: "TIER-LADDER-001"
+    requirement: "A ladder declares N >= 2 ordered tier names and N-1 strictly-ascending positive count
+      thresholds (tier[0] is entered at count 0; tier[i>0] is entered once count >= thresholds[i-1]). An
+      accrual posted under the ladder's row lock (PESSIMISTIC_WRITE) MUST advance the count by its delta
+      and, in the SAME transaction, MUST set the ladder's tier to the tier whose threshold range covers the
+      NEW count — even if the accrual's delta is large enough to cross MULTIPLE tier boundaries at once (a
+      single accrual MAY skip directly from tier 0 to the worst tier; this is NOT a violation of
+      TIER-MONOTONE-001, which governs DIRECTION, not step size). The response MUST expose the tier
+      reached so the caller learns a degradation immediately."
+    test_method: "RestAssured (an accrual that crosses exactly one boundary → the next tier, exposed
+      immediately in the response; an accrual whose delta crosses TWO boundaries at once → the tier two
+      steps down, in one atomic call)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Generalizes threshold-terminal-derivation-l0's TTD-CROSS-001 (one ceiling) to an
+      N-tier ladder (N-1 ceilings, each landing on a NAMED tier rather than a single
+      terminal flag).
+  - id: "TIER-MONOTONE-001"
+    chapter: "Automatic degradation is monotone — it can never skip back up; restoration is ONLY an explicit audited action"
+    verification:
+      mechanism: tag
+      ref: "TIER-MONOTONE-001"
+    requirement: "The AUTOMATIC accrual path MUST NEVER decrease the ladder's tier index (i.e. count only
+      ever increases via accrual, so the derived tier never improves via accrual). The ONLY operation that
+      may move the ladder to a BETTER tier is an EXPLICIT `restore` action that (a) requires a non-blank
+      audit `reason`, (b) sets the count to a caller-supplied value STRICTLY LOWER than the current count
+      (a restore that does not actually reduce the count MUST be rejected 422 — a no-op restore is not
+      meaningful), and (c) re-derives the tier from that NEW count against the SAME threshold list (never an
+      arbitrary decoupled tier override) so tier and count can never disagree. Every restore MUST be
+      recorded in a permanent, append-only audit ledger distinct from the accrual ledger."
+    test_method: "RestAssured (repeated accruals only ever move the tier index UP or hold, never down; a
+      restore with a reason and a lower count moves the tier down [better] and is recorded in a SEPARATE
+      audit ledger from accruals; a restore attempting a count >= the current count → 422; a restore with a
+      blank reason → 400)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The distinguishing NEW piece vs threshold-terminal-derivation-l0: there IS a
+      legitimate path back up, but it is structurally distinct from the automatic path
+      and always audited.
+  - id: "TIER-DERIVE-001"
+    chapter: "The derived capability check reads the CURRENT persisted tier fail-closed, under the SAME row lock"
+    verification:
+      mechanism: tag
+      ref: "TIER-DERIVE-001"
+    requirement: "The reference workload's `use` endpoint (standing for dispatch / issue / transact) MUST
+      consult the ladder's CURRENT persisted tier under the SAME PESSIMISTIC_WRITE row lock used by accrual
+      and restore — never a cached or stale read. A `use` at any tier EXCEPT the WORST (terminal) tier MUST
+      succeed (200) and MUST NOT itself advance the count (using is not accruing); a `use` at the WORST tier
+      MUST be rejected with a deterministic 409 (`type=urn:problem:tiered-eligibility-suspended`,
+      `code=TIER_SUSPENDED`). A `use` that would otherwise race a concurrent crossing accrual MUST observe
+      the POST-crossing tier, never the pre-crossing one (CWE-362)."
+    test_method: "RestAssured (use at a non-worst tier → 200, count unchanged; use at the worst tier → 409
+      TIER_SUSPENDED; a `use` issued immediately after a crossing accrual observes the NEW worst tier, never
+      a stale better one) + a genuine concurrency proof (4 crossing accruals racing 4 `use` calls via
+      ExecutorService, same row lock — every accrual accepted, every use 200/409 well-formed and
+      self-consistent with its own reported tier, no deadlock/timeout, final state deterministic)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Mirrors threshold-terminal-derivation-l0's TTD-DERIVE-001 almost verbatim — the
+      row lock is what makes 'current' actually current under concurrency.
+  - id: "TIER-TERMINAL-001"
+    chapter: "The worst tier is a one-way trip UNLESS an explicit, audited restore occurs — the chosen semantic, asserted honestly"
+    verification:
+      mechanism: tag
+      ref: "TIER-TERMINAL-001"
+    requirement: "This reference workload picks ONE honest semantic and asserts it: the worst (highest-index)
+      tier is NEVER exited by the AUTOMATIC accrual path (there is no implicit un-degrade), and further
+      accruals posted while at the worst tier MUST still be ACCEPTED (the count keeps advancing — a
+      real-world violation count does not freeze once the worst tier is reached) but MUST NOT change the
+      tier (it is already at the worst). The WORST tier IS exitable, but ONLY via the explicit audited
+      `restore` action defined in TIER-MONOTONE-001 — never automatically, never implicitly, and never
+      without a reason on record."
+    test_method: "RestAssured (further accruals at the worst tier succeed, advance the count, tier stays at
+      the worst index; only an explicit restore call moves off the worst tier, and it is the SAME restore
+      path TIER-MONOTONE-001 already audits — no separate silent escape hatch)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Deliberately DIFFERENT from threshold-terminal-derivation-l0's EXPIRED (zero
+      outgoing edges, ever) — the honest ladder semantic is "one-way except an explicit,
+      audited human action," picked and asserted rather than left ambiguous.

@@ -1,0 +1,133 @@
+version: "0.1.0"
+scope: "additive-fact-ledger-l0 — the late/out-of-order ACCUMULATION pattern: many small facts
+  (usage records, call-detail records, sensor pulses, ad-impression events) arrive over time
+  and a period's total is the SUM of every fact assigned to it, never a single replaced value.
+  Distinct from remeasurement-trueup-l0 (a single value per slot, REPLACE-by-supersession
+  semantics — an estimate becomes an actual) and from monotone-register-l0 (one monotone
+  counter, no period boundary, no late-arrival correction): here MANY independent facts
+  ACCUMULATE into a period, and a fact that arrives AFTER its period closed must NOT mutate
+  the frozen aggregate — it posts forward as a delta into the currently-open period. Recurs in
+  telecom CDR (call-detail-record) late-arrival settlement, ad-spend reconciliation, usage-based
+  billing, IoT pulse aggregation, insurance claims-incurred-but-not-reported (IBNR) — 5+
+  industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only facts + postings, @Version
+  optimistic + PESSIMISTIC_WRITE row locks + @Check backstop) + RFC 9457 Problem Details +
+  injected java.time.Clock"
+standard: "Event-sourcing append-only-log principle (Fowler, Event Sourcing) applied to a
+  period-bounded aggregate + telecom CDR late-arrival settlement practice (GSMA / TAP billing
+  reconciliation conventions — the same shape as PJM Manual 29's net-adjustment already
+  anchoring remeasurement-trueup-l0, applied here to ACCUMULATING rather than REPLACING facts)
+  + CWE-682 (incorrect calculation — a silently-dropped late fact undercounts forever)"
+domain_mode: backend_only
+introduced_at: "BACKLOG P3-23 (lane E V100) — the conservation-family residual cluster's
+  ACCUMULATE sibling to remeasurement-trueup-l0's REPLACE semantics"
+
+# OPT-IN additive-fact-ledger catalog. remeasurement-trueup-l0 governs what happens when a
+# SINGLE measured value improves (estimate -> actual, one slot, one winner). Nothing in the
+# catalog governed the sibling shape where MANY independent facts accumulate and a late one
+# must still be honored without disturbing a period that already closed its books. Generic;
+# the CDR/billing framing is an anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. FACT-ADDITIVE-ACCUM-001    (the primitive — Σ facts == period total, facts append-only)
+#   2. FACT-IDEMPOTENT-004        (duplicate delivery accumulates once)
+#   3. FACT-CLOSED-PERIOD-ADD-003 (a closed period's aggregate has no rewrite path)
+#   4. FACT-LATE-DELTA-POST-002   (the correction: post forward, never mutate frozen)
+
+# ── Composition note ──
+# Facts and postings are @AggregateMember of FactPeriod: root-JPQL reads + common/MemberWriter
+# writes (AX-DDD-MEMBER-REPO end-state from birth, mirroring remeasurement-trueup-l0's
+# TrueUpPosting). A LateDeltaPosting's root is the CURRENT open period holding it; it merely
+# REFERENCES the closed origin period by id (cross-aggregate reference by identity, not object
+# pointer). Distinct from remeasurement-trueup-l0 (TUP-DELTA-001 posts a single NET delta
+# because supersession REPLACES a value; here every late fact posts its own delta because facts
+# never replace one another — they simply keep accumulating).
+
+items:
+  - id: "FACT-ADDITIVE-ACCUM-001"
+    chapter: "가산적 축적 (period total == Σ facts; facts are append-only)"
+    requirement: "A period's total MUST equal the SUM of every fact assigned to it — derived on
+      read while the period is OPEN, or maintained in the SAME transaction that freezes it at
+      close. A fact row, once written, MUST be immutable — there is no update path, only new
+      facts arriving and accumulating. This is the accumulation counterpart to
+      remeasurement-trueup-l0's TUP-SUPERSEDE-001 (which REPLACES a slot's value); here nothing
+      is ever replaced, values simply keep summing."
+    test_method: "RestAssured integration test (add 3 facts to an OPEN period; GET the period's
+      total == Σ of the 3 amounts; assert no fact update endpoint/path exists) + structural: every
+      Fact column is @Column(updatable=false)."
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Anchored to Fowler's Event Sourcing append-only-log principle
+      (https://martinfowler.com/eaaDev/EventSourcing.html) — "the fundamental idea ... is to
+      ensure that every change to the state of an application is captured in an event object" —
+      applied here to a bounded PERIOD aggregate rather than an unbounded stream: the period's
+      truth is always re-derivable from its fact log, never a mutable running total that could
+      silently drift from what was actually recorded.
+  - id: "FACT-LATE-DELTA-POST-002"
+    chapter: "만기지연 델타 순방향 게시 (a late fact for a CLOSED period posts forward, never mutates)"
+    requirement: "A fact arriving with a periodId that is already CLOSED MUST NOT be rejected and
+      MUST NOT mutate the closed period's frozen aggregate. It IS accepted and recorded (append-
+      only, same as any fact), and its full amount ADDITIONALLY posts as a delta record into a
+      caller-designated CURRENT OPEN period, referencing the origin (closed) period. The closed
+      period's frozen aggregate stays byte-for-byte unchanged. Conservation MUST hold:
+      origin.frozenAggregate + Σ(postings referencing that origin) == Σ of every fact EVER
+      assigned to the origin period (including the late one). Posting into a period that is not
+      OPEN is rejected (422); a late fact for a closed period with no designated current period
+      is rejected (422) — there must always be somewhere for the correction to land."
+    test_method: "RestAssured integration test (close a period at total T with 2 facts; open a
+      new current period; add a late fact assigned to the CLOSED period, naming the current
+      period as the correction target; assert the closed period's frozenAggregate is still T,
+      a LateDeltaPosting exists referencing the origin with the fact's full amount, and
+      frozenAggregate + posting.amount == Σ all 3 facts ever assigned to the origin)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      This is the accumulation-sibling of remeasurement-trueup-l0's TUP-DELTA-001 (prospective
+      correction, PJM Manual 29 §1.5 net-adjustment framing). The telecom CDR late-arrival
+      settlement practice follows exactly this shape — a call-detail record that reaches the
+      billing system after its cycle closed is posted into the NEXT cycle's reconciliation
+      rather than reopening the closed invoice (GSMA/TAP inter-operator settlement conventions;
+      no single canonical public URL to quote verbatim, hence a practice citation rather than a
+      standards-body quote anchor).
+  - id: "FACT-CLOSED-PERIOD-ADD-003"
+    chapter: "봉인된 합계 (a closed period's aggregate has no rewrite path — structurally impossible)"
+    requirement: "Once a period is CLOSED, its frozen aggregate value MUST be structurally
+      impossible to rewrite — not merely application-logic-guarded. The persistence column MUST
+      be immutable (no update path exists even in principle), the ONLY writer is the
+      package-private close-time mutator, and the entity's own consistency constraint MUST make
+      a CLOSED period without a frozen aggregate unrepresentable (@Check backstop). Any direct
+      attempt to write a new total onto a closed period's aggregate is rejected deterministically
+      (409/422) — the only way a closed period's true total can be updated in the record is
+      forward, via FACT-LATE-DELTA-POST-002's posting, never by touching the frozen column."
+    test_method: "RestAssured integration test (close a period; assert there is no close-again /
+      recompute-aggregate endpoint that succeeds — closing an already-CLOSED period -> 409) +
+      structural: frozenAggregate column @Column(updatable=false), the close() mutator is
+      package-private, and @Check enforces status='OPEN' OR frozen_aggregate IS NOT NULL."
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      The silent-corruption failure mode this forecloses: an aggregate value that CAN be
+      rewritten eventually drifts from its fact log with no trail of why, which is exactly the
+      calculation-integrity risk CWE-682 (Incorrect Calculation) describes
+      (https://cwe.mitre.org/data/definitions/682.html) when applied to a running total that
+      silently diverges from its inputs over time.
+  - id: "FACT-IDEMPOTENT-004"
+    chapter: "멱등 수집 (duplicate delivery accumulates once)"
+    requirement: "Fact ingestion MUST be idempotent on the natural key `(source, external_fact_id)`
+      — a redelivered fact (retry, at-least-once transport, replay) MUST NOT be recorded twice
+      and MUST NOT post a second correction delta even if the retry names a different periodId
+      than the original delivery. The UNIQUE constraint on `(source, external_fact_id)` is the DB
+      backstop a code regression cannot slip past; the service-level check is the fast, ergonomic
+      path that returns the EXISTING fact rather than erroring on a duplicate."
+    test_method: "RestAssured integration test (POST the identical fact body twice; assert the
+      second POST returns the SAME fact id, the period total is unchanged by the retry, and
+      GET the period's facts list has exactly one row for that (source, external_fact_id))"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Same Idempotent Consumer shape already anchoring monotonic-event-ingest-l0's
+      INGEST-IDEMPOTENT-APPLY-001 (microservices.io Idempotent Consumer pattern
+      https://microservices.io/patterns/communication-style/idempotent-consumer.html), applied
+      here to an accumulating fact rather than a current-state projection: "Make a consumer
+      idempotent by having it record the IDs of processed messages in the database."

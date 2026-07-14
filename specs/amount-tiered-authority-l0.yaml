@@ -1,0 +1,53 @@
+version: "0.1.0"
+scope: "amount-tiered-authority-l0 — 전결 규정 (amount-tiered decision authority). A decision on an amount X MUST be made by a decider whose authority band covers X; a decider without sufficient authority is REJECTED (403), never silently escalated to a higher authority on their behalf. The authority table is an ORDERED set of amount bands, each carrying the MINIMUM decider level required; bands MUST tile the amount axis without gap or overlap at config time (half-open [lo,hi) — a boundary amount belongs to exactly ONE band). Every decision record snapshots the tier-table version and the decider's authority level AT DECISION TIME, immutably — a later change to the authority table does NOT retroactively legitimize or delegitimize a past decision. Generalizes 전결 규정 / corporate delegation-of-authority (COSO Internal Control — Integrated Framework, Control Activities component) beyond any single industry."
+domain_mode: backend_only
+introduced_at: "Backlog wave 2026-07-14, P3-18 (Lane C authority verticals)"
+stack: "Spring Boot 3.2.x + JPA (append-only versioned config + append-only decision log) + RestAssured black-box"
+standard: "전결 규정 / corporate delegation-of-authority practice + COSO Internal Control — Integrated Framework (2013), Control Activities: \"the organization selects and develops control activities that contribute to the mitigation of risks... to acceptable levels\" (approval/authorization limits are a canonical control activity)"
+
+items:
+  - id: "ATA-TIER-001"
+    chapter: "TIER"
+    requirement: "An authority table is an ordered set of amount bands, each carrying a minimum decider level. A decision on amount X requires a decider whose level is >= the covering band's minimum — a decider below that level is REJECTED with HTTP 403 (fail-closed; the system never escalates the decision to a higher authority automatically)."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test: configure bands [0,1000000)→level2, [1000000,∞)→level3. Decide amount=500000 with
+      deciderLevel=1 → 403 INSUFFICIENT_AUTHORITY (table + decision log unchanged). Decide with
+      deciderLevel=2 → 201. Implementation: TieredAuthorityService.decide() loads the latest
+      AuthorityTierTable, finds the covering band, and rejects BEFORE persisting anything if
+      deciderLevel < band.minDeciderLevel.
+    policy_ref: "blueprints/amount-tiered-authority-manifest.yaml#tier"
+
+  - id: "ATA-BOUNDARY-001"
+    chapter: "BOUNDARY"
+    requirement: "Authority-table bands MUST tile the amount axis without gap or overlap at config time (rejected 422 otherwise); a boundary amount belongs to exactly ONE band — bands are half-open [lo, hi), so lo itself is IN the band and hi is NOT."
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Test: submit bands [0,500)+[400,1000) (overlap) → 422 TIER_BOUNDARY_INVALID. Submit
+      [0,500)+[600,1000) (gap) → 422. Submit [0,500)+[500,1000) (tiling, contiguous) → 201.
+      Decide amount=500 (exactly the boundary) → resolves to the SECOND band ([500,1000)), never
+      the first — proving the half-open semantics, not an ambiguous double-match.
+      Implementation: TieredAuthorityService.createTable() sorts bands by minAmount and asserts
+      each band's minAmount equals the previous band's maxAmount exactly; only the last band may
+      have a null (open-ended) maxAmount.
+    policy_ref: "blueprints/amount-tiered-authority-manifest.yaml#boundary"
+
+  - id: "ATA-SNAPSHOT-001"
+    chapter: "SNAPSHOT"
+    requirement: "Every decision record immutably snapshots, in the SAME transaction as the decision, the tier-table version and the decider's authority level it was evaluated against AT DECISION TIME. A later change to the authority table (new bands, different minimum levels) MUST NOT retroactively change what a past decision record reports — the audit trail can always answer \"was this within authority when decided\"."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: configure table v1 (band minDeciderLevel=2), decide amount=X with deciderLevel=2 →
+      201, decision snapshots tableVersion=1, bandMinDeciderLevel=2, deciderLevel=2. Reconfigure
+      table v2 (band minDeciderLevel=5 for the same amount — v2 would now REJECT the same
+      decider). GET the ORIGINAL decision by id → tableVersion/band/deciderLevel fields are
+      IDENTICAL to what was recorded at decision time (not re-evaluated against v2).
+      Implementation: TieredDecisionRecord columns are all @Column(updatable=false); the service
+      never re-reads a committed decision against the current table.
+    policy_ref: "blueprints/amount-tiered-authority-manifest.yaml#snapshot"

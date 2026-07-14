@@ -152,5 +152,19 @@ source_precedence:
   - "Korean enterprise 결재 workflow practice (sequential approval, 결재선)"
   - "OWASP ASVS V4 — authorization (visibility per role, IDOR-safe responses)"
 
+# ─── routing — attribute-resolved approval routing (WF-ROUTE-001/002) ─────
+routing:
+  description: >
+    An OPT-IN alternative to the direct approverUserIds path. A request may instead
+    carry (category, amount); ApprovalService.submit() resolves the ordered
+    approver-role chain from the matching RoutingRule EXACTLY ONCE, at submission
+    (not at creation) — the resolved chain is snapshotted onto the request
+    (resolvedChainJson) and the request's steps are built from it.
+  mutual_exclusivity: "approverUserIds (direct mode) and category+amount (routing mode) are mutually exclusive; a request with neither is rejected 400 ROUTING_ATTRIBUTES_REQUIRED."
+  rule_matching: "RoutingRule bands are half-open [minAmount, maxAmount) per (categoryOrDept); the first rule matching, ordered by minAmount, is used."
+  immutability: "Once resolved, resolvedChainJson is written by a sole-mutator setter that rejects a second write. A routing rule change or deletion AFTER a request has resolved never rewrites that request — RoutingRule is a standalone config entity, never re-joined against after submission."
+  fail_closed: "No matching RoutingRule for the request's (category, amount) → 422 NO_MATCHING_ROUTING_RULE at submit(); the request stays DRAFT (no silent default chain)."
+  rule_management: "GET /api/approvals/routing-rules is any authenticated caller (queryable); POST/DELETE are ROLE_ADMIN-only."
+
 # Multi-tenant deferral note (R37 guard requirement):
 #   Single-tenant default per specs/multi-tenant-l0.yaml#MULTI-TENANT-ISOLATION-DEFAULT-001

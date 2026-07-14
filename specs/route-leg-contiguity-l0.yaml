@@ -1,0 +1,69 @@
+version: "0.1.0"
+scope: "route-leg-contiguity-l0 — a ROUTE is an ORDERED sequence of LEGS (leg 1, leg 2, …, leg N), each leg carrying an origin and a destination. The catalog enforces CONTIGUITY: leg N's destination MUST equal leg N+1's origin, for every consecutive pair, at all times. Any mutation (append, insert, remove, replace, reorder) that would leave a gap or an overlap in the ordinal sequence, or break a neighbor's origin/destination match, is rejected atomically (422) — the route is never left in a mutated, partially-applied state. Concurrent mutations on the SAME route serialize via optimistic locking (@Version): the loser of a race sees a stale version and gets 409, never a silently lost or interleaved edit. This is DISTINCT from the dispatch/timed-offer assignment primitives (no candidate, no accept/decline, no deadline) — it is a pure ORDERING + ADJACENCY invariant over an aggregate's own child collection. Recurs in: multi-leg shipment routing, flight itinerary construction, delivery-run stop sequencing, pipeline/conveyor segment chaining, workflow step chaining — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (Route aggregate root with a RouteLeg @AggregateMember collection, cascade ALL + orphanRemoval, @Version optimistic locking on the root) + RFC 9457 Problem Details + Micrometer"
+standard: "RFC 9110 §15.5.10 (409 Conflict — the loser of a concurrent mutation) + RFC 9110 §15.5.21 (422 Unprocessable Content — a mutation that would violate contiguity)"
+domain_mode: backend_only
+introduced_at: "Backlog wave 2026-07-14, Lane D logistics (P3-4 NEW domain)"
+
+# OPT-IN route-leg-contiguity catalog. The gap: the catalog's append-only ladders
+# (timed-offer re-offer) and exclusivity primitives never enforce ORDERING/ADJACENCY
+# over a mutable child collection with insert/remove/replace/reorder. This primitive is
+# that shape — an aggregate root (Route) whose child collection (RouteLeg) MUST stay a
+# contiguous chain under any mutation, serialized by @Version (not a row lock — a
+# reorder/insert/remove is a whole-collection re-validation, not a single-row race).
+
+# ── Priority order for fork-receivers ──
+#   1. LEG-SEQUENCE-001 (the primitive — leg N dest MUST equal leg N+1 origin, at insert/append)
+#   2. LEG-GAP-001      (no gaps/overlaps in the ordinal sequence; reordering is atomic)
+#   3. LEG-MUTATE-001   (keystone — insert/remove/replace re-validates BOTH neighbors; concurrent mutation serializes via @Version)
+
+# ── Composition note ──
+# DISTINCT from timed-offer-exclusive-assignment (a candidate/deadline/accept primitive
+# over independent rows — no ordering invariant) and dunning-collections (a one-way
+# append-only ladder — no reordering, no neighbor re-validation). RouteLeg mutations
+# (replace/reorder) genuinely change existing rows — this is NOT an append-only domain;
+# it is an aggregate-consistency-boundary domain (Route is the root, RouteLeg is the
+# member, mutated only through Route's own service, one @Transactional write per root).
+
+items:
+  - id: "LEG-SEQUENCE-001"
+    chapter: "Leg N's destination MUST equal leg N+1's origin — enforced at insert/append"
+    verification:
+      mechanism: tag
+      ref: "LEG-SEQUENCE-001"
+    requirement: "A Route's legs form an ORDERED chain: for every consecutive pair (leg[i], leg[i+1]), leg[i]'s destination code MUST equal leg[i+1]'s origin code. Appending a new leg to a non-empty route MUST verify its origin equals the current last leg's destination, else the append is rejected (422 ROUTE_LEG_SEQUENCE_VIOLATION) and the route is unchanged. The first leg of an empty route may start at any origin."
+    test_method: "RestAssured (append leg A→B to an empty route → ok; append leg B→C → ok, chain now A→B→C; append a leg whose origin ≠ C (the current last destination) → 422 ROUTE_LEG_SEQUENCE_VIOLATION, route unchanged)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The primitive — an ordered chain where each link's tail is the next link's head,
+      generalized from the logistics multi-leg routing pattern (shipment / itinerary /
+      delivery-run) any fork-receiver composes over its own place/stop identifiers.
+  - id: "LEG-GAP-001"
+    chapter: "No gaps or overlaps in the ordinal sequence — reordering is atomic"
+    requirement: "A Route's legs MUST occupy a strictly contiguous ordinal sequence 1..N with no gaps and no duplicate ordinals, at every committed state. A reorder operation (re-sequencing the SAME set of legs into a new order) MUST validate the ENTIRE proposed new sequence for contiguity (every consecutive pair's dest==origin under the NEW order) BEFORE applying any ordinal change — if the proposed order is not itself a valid contiguous chain, the whole reorder is rejected (422 ROUTE_LEG_GAP_VIOLATION) and NO ordinal is changed (all-or-nothing)."
+    test_method: "RestAssured (a 3-leg route A→B, B→C, C→D reordered to a permutation that is still a valid contiguous chain → ok, ordinals renumbered 1..3 atomically; a reorder to a permutation that breaks adjacency → 422 ROUTE_LEG_GAP_VIOLATION, ordinals unchanged; structural: uq(route_id, ordinal) backstop)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (RFC 9110 §15.5.21 — the 422 a mutation that would violate the
+      chain invariant receives): "The 422 (Unprocessable Content) status code indicates
+      that the server understands the content type of the request content... but was
+      unable to process the contained instructions." (https://www.rfc-editor.org/rfc/rfc9110.html)
+  - id: "LEG-MUTATE-001"
+    chapter: "Keystone — insert/remove/replace re-validates BOTH affected neighbors; concurrent mutation on the same route serializes"
+    verification:
+      mechanism: tag
+      ref: "LEG-MUTATE-001"
+    requirement: "Inserting a leg at an arbitrary position, removing a leg, or replacing a leg's origin/destination MUST re-validate BOTH affected neighbor boundaries (the leg immediately before AND the leg immediately after the mutated position) in the SAME transaction — a mutation that leaves either neighbor boundary broken is rejected (422) and the route is unchanged. Across ANY interleaving of two concurrent mutations on the SAME route, they MUST serialize — via the root's @Version optimistic lock AND the uq(route_id, ordinal) backstop — such that EXACTLY ONE mutation ever commits and the loser is deterministically rejected, never silently lost or interleaved (CWE-362). For an append specifically (a value computed from the CURRENT tail, not a fixed-identity check), the loser's deterministic rejection code is itself scheduling-dependent and BOTH outcomes are correct: genuine read-phase overlap → 409 (ROUTE_CONCURRENT_MODIFICATION, the stale-version/uq collision); full OS-level serialization (the winner commits before the loser even reads) → 422 (ROUTE_LEG_SEQUENCE_VIOLATION, because the loser's identical append is now genuinely invalid against the tail the winner already advanced). This is not two possible bugs — it is the complete, provably exhaustive disjunction for a tail-relative mutation; a fixed-identity mutation (replace/remove at a given ordinal) is not subject to this disjunction and is always 409 on conflict."
+    test_method: "RestAssured (insert a leg between two existing legs whose origin/dest match both neighbors → ok; insert a leg that breaks either neighbor → 422; remove a middle leg whose remaining neighbors no longer match → 422, leg not removed; 2-thread concurrency proof: two concurrent appendLeg calls on ONE route → exactly one 2xx, and the loser is EITHER 409 ROUTE_CONCURRENT_MODIFICATION (true overlap) OR 422 ROUTE_LEG_SEQUENCE_VIOLATION (full serialization past the winner's committed tail) — never anything else, and never both/neither; final route state contiguous with no lost/duplicated leg)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent-mutation race on one route's leg
+      collection): "The product contains a concurrent code sequence that requires
+      temporary, exclusive access to a shared resource, but a timing window exists in
+      which the shared resource can be modified by another code sequence operating
+      concurrently." (https://cwe.mitre.org/data/definitions/362.html) The root's
+      @Version is the serialization point — no row lock is taken because the whole
+      collection re-validation, not a single row, is the unit of consistency.

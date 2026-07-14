@@ -1,0 +1,69 @@
+version: "0.1.0"
+scope: "geofence-transition-l0 — a raw containment observation (INSIDE/OUTSIDE a zone) for a tracked subject is NOT immediately a committed transition. A transition is CONFIRMED only after the subject's raw signal holds toward the same direction (ENTER or EXIT) continuously for a minimum DWELL duration with no opposite observation in between — the debounce/hysteresis discipline that separates a real crossing from GPS jitter or a momentary drive-past. Rapid flapping (ENTER, EXIT, ENTER, EXIT, …) within the dwell window MUST produce ZERO committed transitions — every flap resets or cancels the pending confirmation. A committed transition record is IMMUTABLE and carries BOTH the observed-at timestamp (when the raw signal that started the pending confirmation was first seen) and the confirmed-at timestamp (when the dwell threshold was reached) — the dual timestamp is the audit record of the debounce discipline, not just the outcome. All logic is EVENT-TIME driven: every observation carries its own timestamp, and the domain never reads the wall clock to make a debounce decision — this is what makes the flap/dwell tests fully deterministic. Recurs in: fleet/delivery geofencing, workplace/campus check-in zones, retail proximity marketing zones, restricted-area intrusion detection, wildlife/asset zone-dwell tracking — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (GeofenceTracker aggregate root + GeofenceTransition @AggregateMember, @Version optimistic locking, event-time Instant params — no Clock reads in transition logic) + RFC 9457 Problem Details + Micrometer"
+standard: "Android Geofencing API loitering-delay / DWELL transition convention (the debounce discipline this primitive generalizes beyond mobile geofencing) + CWE-362 (n/a — single-writer-per-tracker event stream; no concurrency keystone claimed in this spec)"
+domain_mode: backend_only
+introduced_at: "Backlog wave 2026-07-14, Lane D logistics (P3-5 NEW domain)"
+
+# OPT-IN geofence-transition catalog. The gap: the catalog's threshold-terminal
+# (irreversible value crossing) and dispatch/timed-offer (accept/decline) primitives both
+# react to a SINGLE observation immediately. Neither encodes "wait and see" — a transition
+# CONFIRMED only after a raw signal sustains for a minimum duration with no reversal. This
+# primitive is that debounce/hysteresis discipline, generalized beyond mobile-device
+# geofencing to any zone-dwell confirmation problem.
+
+# ── Priority order for fork-receivers ──
+#   1. GEOFENCE-DWELL-001        (the primitive — sustained raw signal + no reversal + dwell elapsed → confirmed)
+#   2. GEOFENCE-FLAP-SUPPRESS-001 (rapid flapping within the dwell window → ZERO committed transitions)
+#   3. GEOFENCE-CONFIRM-001      (the committed record is immutable, dual-timestamped: observed-at vs confirmed-at)
+
+# ── Composition note ──
+# DISTINCT from threshold-terminal-derivation (a single irreversible value-crossing — no
+# "wait and see", no reversal-cancels-pending) and timed-offer-exclusive-assignment (a
+# candidate accept/decline with a deadline — no debounce, the first valid signal commits
+# immediately). This primitive is event-time driven throughout: every observation carries
+# its own timestamp (observedAt), and no domain logic reads the wall clock — the dwell
+# arithmetic is always Duration.between(pendingSince, observedAt), making flap/dwell
+# scenarios fully replayable and deterministic in tests.
+
+items:
+  - id: "GEOFENCE-DWELL-001"
+    chapter: "A raw ENTER/EXIT observation does not commit until it sustains, unreversed, for the minimum dwell duration"
+    verification:
+      mechanism: tag
+      ref: "GEOFENCE-DWELL-001"
+    requirement: "A raw observation (subject's containment state at an event-time instant: INSIDE or OUTSIDE) that DIFFERS from the tracker's currently CONFIRMED state starts (or continues) a PENDING transition toward that direction, recording the FIRST such observation's timestamp as pendingSince. The pending transition is CONFIRMED — flipping the tracker's confirmed state and committing an immutable GeofenceTransition record — only once a LATER observation, still toward the SAME direction, arrives with (observedAt − pendingSince) ≥ the minimum dwell duration, with NO opposite-direction observation having arrived in between. A raw observation that matches the ALREADY-confirmed state is a no-op (nothing pending, nothing to confirm)."
+    test_method: "RestAssured (a tracker OUTSIDE receives ENTER-direction raw observations at t=0, t=+30s, t=+61s with dwell=60s and no intervening EXIT-direction observation → no transition at t=0/t=+30s, CONFIRMED ENTER at t=+61s; the tracker is INSIDE)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (Android Geofencing API — the loitering-delay / DWELL convention this
+      primitive generalizes beyond mobile geofencing): "If you receive a large number of
+      alerts when driving briefly past a geofence, the best way to reduce the alerts is
+      to use a transition type of GEOFENCE_TRANSITION_DWELL instead of
+      GEOFENCE_TRANSITION_ENTER. This way, the dwelling alert is sent only when the user
+      stops inside a geofence for a given period of time."
+      (https://developer.android.com/develop/sensors-and-location/location/geofencing)
+      This primitive generalizes the SAME discipline to any subject/zone pair and any
+      event source, event-time driven rather than device-clock driven.
+  - id: "GEOFENCE-FLAP-SUPPRESS-001"
+    chapter: "Rapid flapping within the dwell window produces ZERO committed transitions"
+    requirement: "If, while a transition is PENDING toward a direction, an observation arrives that matches the tracker's CURRENTLY CONFIRMED state (i.e., the raw signal reverted before the dwell threshold elapsed), the pending transition MUST be CANCELLED (cleared, not merely paused) — a subsequent same-direction observation starts a FRESH pending window from ITS OWN timestamp, not a resumption of the cancelled one. A sequence of rapid ENTER/EXIT/ENTER/EXIT raw observations, none of which sustains unreversed for the full dwell duration, MUST commit ZERO GeofenceTransition rows and leave the tracker's confirmed state exactly as it started."
+    test_method: "RestAssured (dwell=60s; observations ENTER@0, EXIT@30 (cancels pending — matches confirmed OUTSIDE), ENTER@31 (fresh pending), EXIT@59 (cancels again) → zero transitions committed, tracker still OUTSIDE, GET transitions list is empty)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      The suppression is what makes this primitive worth having — without it, GPS/signal
+      jitter near a zone boundary would flood a naive enter/exit-on-every-observation
+      design with false transitions (the false-transition / hysteresis problem geofencing
+      literature and patents describe; the debounce is the fix generalized here).
+  - id: "GEOFENCE-CONFIRM-001"
+    chapter: "The committed transition record is immutable and dual-timestamped"
+    requirement: "A committed GeofenceTransition row MUST be immutable after creation (no public setter, identity/value columns @Column(updatable=false)) and MUST record: the zone, the direction (ENTER/EXIT), the OBSERVED-AT timestamp (the first raw observation that started the pending confirmation — pendingSince), and the CONFIRMED-AT timestamp (the observation whose arrival satisfied the dwell threshold). confirmedAt MUST be strictly not-before observedAt (DB-backstopped: @Check confirmed_at >= observed_at)."
+    test_method: "RestAssured + structural (a confirmed transition's observedAt equals the FIRST pending observation's timestamp, confirmedAt equals the triggering observation's timestamp, both non-null; structural: no setter on GeofenceTransition, immutable columns, @Check confirmed_at >= observed_at present on the entity and in the migration)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The dual timestamp is the auditable evidence of the debounce discipline itself —
+      a caller reading only confirmedAt cannot tell whether the crossing was instantaneous
+      or barely cleared the dwell threshold; observedAt makes that reconstructible.

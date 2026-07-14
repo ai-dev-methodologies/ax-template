@@ -62,6 +62,10 @@ public class ValuationRun {
     @Column(name = "rebased_from_run_version", updatable = false)
     private Integer rebasedFromRunVersion;
 
+    /** VALRUN-FALLBACK-001 — WHICH source computed this run (provenance for a fallback read). */
+    @Column(name = "source_ref", nullable = false, updatable = false, length = 200)
+    private String sourceRef;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -69,7 +73,7 @@ public class ValuationRun {
 
     public ValuationRun(UUID id, UUID subjectId, int runVersion, Instant asOf, String basis,
                         BigDecimal totalValue, BigDecimal outputSum, Integer rebasedFromRunVersion,
-                        Instant createdAt) {
+                        String sourceRef, Instant createdAt) {
         this.id = id;
         this.subjectId = subjectId;
         this.runVersion = runVersion;
@@ -78,6 +82,7 @@ public class ValuationRun {
         this.totalValue = totalValue;
         this.outputSum = outputSum;
         this.rebasedFromRunVersion = rebasedFromRunVersion;
+        this.sourceRef = sourceRef;
         this.createdAt = createdAt;
     }
 
@@ -93,5 +98,6 @@ public class ValuationRun {
     public BigDecimal getTotalValue() { return totalValue; }
     public BigDecimal getOutputSum() { return outputSum; }
     public Integer getRebasedFromRunVersion() { return rebasedFromRunVersion; }
+    public String getSourceRef() { return sourceRef; }
     public Instant getCreatedAt() { return createdAt; }
 }

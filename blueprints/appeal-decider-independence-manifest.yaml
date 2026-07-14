@@ -1,0 +1,57 @@
+template_id: "appeal-decider-independence-blueprint"
+version: "0.1.0"
+
+when_to_use:
+  - "행정심판 / administrative-appeal independence — an appeal of a decision must be decided by someone who did not make (or previously appeal-decide) that decision"
+  - "Any procedural-fairness gate needing nemo iudex in causa sua (no one may judge their own cause) across a MULTI-LEVEL appeal chain, not just a single co-signoff"
+  - "Append-only appeal outcomes where the original decision must remain provably untouched"
+
+not_for:
+  - "Four-eyes co-signoff on ONE decision (two people approving the SAME determination) — compose with decision-governance-l0's DG-OVERRIDE-001 for that; this blueprint governs decider independence ACROSS separate decisions in a chain"
+  - "Automatic outcome propagation to external systems — an OVERTURN does not auto-notify; fork-receivers compose a domain event at the controller boundary"
+  - "Time-boxed appeal windows / statute-of-limitations gates — out of scope for v1 (no expiry on filing an appeal)"
+
+# ─── distinct — appeal decider must differ from the row it appeals (APPEAL-DISTINCT-001) ──
+distinct:
+  description: "The immediate-parent pairwise case: an appeal's decidedBy MUST differ from the row it appeals (appealedDeciderBy, denormalized onto the appeal row)."
+  enforcement: "DB @Check((kind = 'ORIGINAL') OR (appealed_decider_by IS NOT NULL AND decided_by <> appealed_decider_by)) — holds even under a code path that forgets the service-level gate."
+  rejection:
+    rule: "same decider as the appealed row → 422 APPEAL_DECIDER_NOT_INDEPENDENT, rejected before persistence"
+
+# ─── chain — one appeal per level; independence across the WHOLE chain (APPEAL-CHAIN-001) ──
+chain:
+  description: "An appeal references its original decision immutably (parentDecisionId); AT MOST ONE appeal per decision (UNIQUE(parent_decision_id))."
+  independence_scope: "EVERY level's decider must differ from ALL prior deciders in the chain (walked via chainRootId), not only the immediate parent — this is an app-level check (AppealService.fileAppeal) since a single-row DB @Check cannot express a chain-wide constraint."
+  rejection:
+    rule_duplicate_appeal: "a second appeal against an already-appealed decision → 409 APPEAL_ALREADY_FILED"
+    rule_reused_decider: "a decider who already decided ANYWHERE earlier in the chain → 422 APPEAL_DECIDER_NOT_INDEPENDENT"
+
+# ─── outcome — append-only; original row never mutated (APPEAL-OUTCOME-001) ──
+outcome:
+  description: "Every AppealDecision row (ORIGINAL or APPEAL) is fully immutable (@Column(updatable=false) on every column, no public setter) — an appeal's outcome is a NEW row, never a rewrite."
+  derivation: "A client derives the 'current' outcome by reading the LAST row in the chain (highest level) — derive-on-read, mirroring attested-change-record's correction-by-append posture."
+
+testing_baseline:
+  integration: "RestAssured black-box HTTP against @SpringBootTest RANDOM_PORT, including a native-SQL @Check bypass proof via JdbcTemplate"
+  unit: "structural reflection (no public setter, @Column(updatable=false) sweep) — no Spring context"
+
+verification_checkpoints:
+  - "Same decider as the original is rejected 422, DB-backstopped by native-write proof (APPEAL-DISTINCT-001)"
+  - "A 3-level chain rejects a decider reused from ANY earlier level, not just the immediate parent (APPEAL-CHAIN-001)"
+  - "A second appeal against an already-appealed decision is rejected 409 (APPEAL-CHAIN-001)"
+  - "The original decision row is unchanged after an appeal is filed against it (APPEAL-OUTCOME-001)"
+
+must_not:
+  - "Allow an appeal decided by the same person as the row it appeals"
+  - "Allow more than one appeal against a single decision"
+  - "Allow a decider who already decided earlier in the chain to decide again at any later level"
+  - "Mutate a committed AppealDecision row (original or appeal)"
+
+reject_if:
+  - "POST /api/appeals/{id}/appeal by the same decider as {id} → 422 APPEAL_DECIDER_NOT_INDEPENDENT"
+  - "POST /api/appeals/{id}/appeal against an already-appealed {id} → 409 APPEAL_ALREADY_FILED"
+  - "POST /api/appeals/{id}/appeal by a decider present anywhere earlier in the chain → 422 APPEAL_DECIDER_NOT_INDEPENDENT"
+
+source_precedence:
+  - "Procedural fairness — nemo iudex in causa sua (natural-justice principle underlying administrative/judicial appeal systems)"
+  - "행정심판법 (Administrative Appeals Act) 재결의 독립성 practice"

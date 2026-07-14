@@ -1,0 +1,84 @@
+version: "0.1.0"
+scope: "geo-bounded-query-l0 — a radius (proximity) query over registered lat/lon points, realized as a HONEST DEGRADED SUBSET of what a real geospatial datastore offers. This catalog runs its verification suite on H2 (no PostGIS, no native spatial index, no GiST). PostGIS/GiST-specific behavior (native R-tree bounding-box operators, KNN <-> distance operators, ST_DWithin using the spatial index directly) is explicitly NOT claimed or verified here — H2 cannot verify it. What IS claimed and mechanically verified: an indexed bounding-box PREFILTER on lat/lon min/max columns (plain B-tree range predicates any RDBMS supports) followed by an exact haversine POSTFILTER in application code, deterministic ordering, and fail-closed input validation. This is the same two-pass shape PostGIS's own && bounding-box operator + exact ST_Intersects check uses — the catalog realizes the SHAPE without the native index. A fork-receiver on Postgres/PostGIS composes the upgrade path (see GEO-GIST-REVIEW-001, review-only) by swapping the prefilter query for a GiST-indexed && / ST_DWithin call; the postfilter contract (exact-radius, deterministic order) is unchanged."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (plain lat/lon NUMERIC columns, no spatial extension) + exact BigDecimal → double haversine postfilter + RFC 9457 Problem Details + Micrometer"
+standard: "ISO 6709 (Standard representation of geographic point location by coordinates — the latitude/longitude sign-and-range convention) + PostGIS bounding-box-index-then-exact-check pattern (the shape this primitive realizes without the native index)"
+domain_mode: backend_only
+introduced_at: "Backlog wave 2026-07-14, Lane D logistics (P3-1 DEGRADED-IMPL)"
+
+# OPT-IN geo-bounded-query catalog. HONEST DEGRADED SUBSET — see scope above. No PostGIS
+# claim anywhere in this spec; the GiST/native-index upgrade path is documented as a single
+# review-only item (GEO-GIST-REVIEW-001), mirroring the realtime-policy-l0 convention for
+# RT-PROTOCOL-001 (a fork-receiver decision recorded in review, not mechanically verified).
+
+# ── Priority order for fork-receivers ──
+#   1. GEO-INPUT-001       (fail-closed bounds — lat/lon/radius validated before any query runs)
+#   2. GEO-BBOX-001        (the primitive — indexed bbox prefilter, exact haversine postfilter, no over-inclusion)
+#   3. GEO-DETERMINISM-001 (same inputs → same ordered result — distance asc, id tiebreak)
+#   4. GEO-GIST-REVIEW-001 (review-only — the PostGIS/GiST upgrade path; no test)
+
+# ── Composition note ──
+# This is NOT a claim of PostGIS parity. The catalog has no domain that reasons about
+# bounding-box prefilter + exact geometric postfilter; this is that shape, generalized
+# against plain lat/lon columns any RDBMS supports, with the native-index upgrade path
+# explicitly deferred to the fork-receiver's Postgres/PostGIS choice.
+
+items:
+  - id: "GEO-INPUT-001"
+    chapter: "Fail-closed input bounds — lat/lon/radius validated before any query runs"
+    verification:
+      mechanism: tag
+      ref: "GEO-INPUT-001"
+    requirement: "A registered point's latitude MUST be in [-90, 90] and longitude MUST be in [-180, 180] (ISO 6709 sign-and-range convention); a radius query's radius MUST be a positive value not exceeding the policy maximum (MAX_RADIUS_METERS). Any point registration or radius query outside these bounds MUST be rejected with 422 (GEO_INVALID_INPUT) before any query executes — never clamped, never silently corrected."
+    test_method: "RestAssured (lat=91 / lat=-91 / lon=181 / lon=-181 → 422; radius=0 / radius<0 / radius>policy-max → 422; valid bounds → 201/200)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Quote anchor (ISO 6709 sign convention — the source of the -90..90 / -180..180
+      range this validation enforces): "A plus sign (+) denotes northern hemisphere or
+      the equator, and a minus sign (-) denotes southern hemisphere" (latitude) and "A
+      plus sign (+) denotes east longitude or the prime meridian, and a minus sign (-)
+      denotes west longitude or 180° meridian" (longitude).
+      (https://en.wikipedia.org/wiki/ISO_6709) — the numeric bounds (-90/+90, -180/+180)
+      are the standard WGS84 range these sign conventions imply.
+  - id: "GEO-BBOX-001"
+    chapter: "Indexed bounding-box prefilter, exact haversine postfilter — no over-inclusion"
+    requirement: "A radius query around a center point MUST first compute an axis-aligned bounding box (lat/lon min/max derived from the radius) and run an indexed range predicate (plain lat BETWEEN / lon BETWEEN — no spatial extension required) to obtain CANDIDATE points. It MUST THEN apply an exact haversine great-circle distance check to each candidate and DISCARD any candidate whose true distance exceeds the radius (a point can sit inside the bounding box's corner region while being outside the circle it approximates). The returned result set MUST be provably a subset of the bbox candidates, and every returned point MUST be within the radius — no bbox-only shortcut may be exposed as the final answer. The bbox candidate read is bounded (BBOX_CANDIDATE_CAP = 2000 rows) — a large enough cap that it is never reached in practice because GEO-INPUT-001's radius policy max (50 km) already keeps the bounding box's real-world area small; the cap is a defense-in-depth bound on the prefilter read, not a silent truncation a caller could hit under normal use."
+    test_method: "RestAssured (register a point inside-bbox-but-outside-radius (a corner point) alongside points genuinely inside the radius; the corner point MUST NOT appear in the query result even though it is a bbox candidate; every returned point's exact distance ≤ radius)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (PostGIS docs — the two-pass shape this primitive realizes without
+      the native index): "The way the database efficiently answers the question 'what
+      lines intersect the yellow star' is to first answer the question 'what boxes
+      intersect the yellow box' using the index (which is very fast) and then do an
+      exact calculation... only for those features returned by the first test."
+      (http://postgis.net/workshops/postgis-intro/indexing.html) PostGIS's native &&
+      operator IS this bbox prefilter on a GiST index; this primitive is the same shape
+      on plain B-tree-indexable lat/lon columns — the GiST/&& upgrade is
+      GEO-GIST-REVIEW-001, not claimed here.
+  - id: "GEO-DETERMINISM-001"
+    chapter: "Same inputs → same ordered result — distance ascending, id tiebreak"
+    requirement: "A radius query's result list MUST be ordered by exact haversine distance ascending, with a stable secondary sort key (point id ascending) for points at equal distance from the center. Repeating the identical query (same center, same radius, unchanged data) MUST return the identical ordered list every time — no non-deterministic tie ordering, no dependency on scan order or insertion order."
+    test_method: "RestAssured (two points registered at the exact same coordinates — distance 0 from a center at that point — always order by id ascending across repeated calls; a full query repeated twice returns byte-identical ordered id lists)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Determinism is the load-bearing guarantee for any caller that paginates or diffs
+      successive query results — a query whose tie order varies by scan plan is a
+      silent pagination-corruption hazard.
+  - id: "GEO-GIST-REVIEW-001"
+    chapter: "PostGIS/GiST upgrade path — review-only, no test"
+    verification:
+      mechanism: deferred
+      citation: "review-only fork-receiver upgrade path (RT-PROTOCOL-001 convention) — H2 harness cannot assert GiST/ST_DWithin behavior; the mechanically-verified subset is GEO-BBOX-001's bbox-prefilter + haversine-postfilter realization"
+    requirement: "A fork-receiver deploying on PostgreSQL/PostGIS MAY replace the bounding-box prefilter query (GEO-BBOX-001) with a GiST-indexed geometry column and the && / ST_DWithin operators, and MAY replace the haversine postfilter with ST_Distance on a geography type. This upgrade is NOT mechanically verified by this catalog (H2 has no PostGIS) — it is a documented, reviewed decision the fork-receiver records, mirroring the realtime-policy-l0 RT-PROTOCOL-001 convention (protocol choice declared in review, not gated by a test)."
+    test_method: "static analysis / manual review"
+    verification_type: "review"
+    applicable: true
+    notes: >
+      No native spatial index, no KNN <-> operator, no true great-circle ST_Distance
+      accuracy claim is made anywhere in this spec — GEO-BBOX-001 and
+      GEO-DETERMINISM-001 are verified entirely against the plain-column,
+      application-code postfilter shape. A future recipe_postgis_upgrade_guard.sh
+      would mechanize a fork-receiver's declared choice once a Postgres-backed L4
+      runtime ships, same posture as RT-PROTOCOL-001.

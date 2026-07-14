@@ -24,6 +24,13 @@ public interface ValuationRunRepository extends JpaRepository<ValuationRun, UUID
     Optional<ValuationRun> findAsOf(@Param("subjectId") UUID subjectId, @Param("asOf") Instant asOf,
                                     Limit limit);
 
+    /** VALRUN-FALLBACK-001 — the run with the GREATEST as-of ≤ T, scoped to ONE named source. */
+    @Query("SELECT r FROM ValuationRun r WHERE r.subjectId = :subjectId AND r.sourceRef = :sourceRef "
+        + "AND r.asOf <= :asOf ORDER BY r.asOf DESC, r.runVersion DESC")
+    Optional<ValuationRun> findAsOfBySource(@Param("subjectId") UUID subjectId,
+                                            @Param("sourceRef") String sourceRef,
+                                            @Param("asOf") Instant asOf, Limit limit);
+
     /** Full version history, bounded by the subject predicate (a small per-subject set). */
     List<ValuationRun> findBySubjectIdOrderByRunVersionAsc(UUID subjectId);
 

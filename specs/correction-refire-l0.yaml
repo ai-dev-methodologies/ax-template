@@ -1,0 +1,77 @@
+version: "0.1.0"
+scope: "correction-refire-l0 — the generalized CORRECTED-RECORD-RE-OPENS-ACKNOWLEDGEMENT contract: a correction to a previously-published record is an append-only NEW version referencing the prior one (the prior is never mutated); if an acknowledgement/notification loop was already CLOSED against an earlier version, publishing a correction RE-OPENS the loop by creating a new pending-ack against the corrected version — a closed-loop communication system MUST NOT let a stale acknowledgement of the WRONG content stand in for acknowledgement of the CORRECTED content. Cross-cutting, framework-agnostic. Generic EMR corrected-result / financial restatement / published-document errata pattern; zero Korean law cite."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (append-only versioned chain + per-version ack rows) + content-hash idempotency check + injected java.time.Clock + RFC 9457 Problem Details"
+standard: "The Joint Commission closed-loop communication standard (a critical result must be acknowledged by its recipient; an amended/corrected result requires a NEW acknowledgement of the correction, not reliance on the acknowledgement of the original) + CWE-372 (Incomplete Internal State Distinction — treating a stale acknowledgement of superseded content as if it acknowledged the current content)"
+domain_mode: backend_only
+introduced_at: "backlog wave 2026-07-14 — P3-35 (Lane H attestation)"
+
+# OPT-IN correction-refire catalog. The corrected-record gap: the catalog has
+# append-only supersession (record-linkage, remeasurement-trueup) and ack/
+# notification primitives (webhook, outbox) but no primitive tying the two
+# together — a correction to an ALREADY-ACKNOWLEDGED record must reopen the
+# acknowledgement loop against the NEW version, not silently leave the closed
+# ack from the wrong (superseded) content standing.
+
+# ── Priority order for fork-receivers ──
+#   1. CRF-SUPERSEDE-001  (the primitive — correction is append-only, prior never mutated)
+#   2. CRF-REFIRE-002     (a correction to a version with a CLOSED ack re-opens the loop)
+#   3. CRF-IDEMPOTENT-003 (re-publishing IDENTICAL content does not re-fire — no ack spam)
+#   4. CRF-CHAIN-004      (multi-correction chain: each version's ack state independent)
+
+# ── Composition note ──
+# DISTINCT from remeasurement-trueup (an estimate superseded by an actual, with a
+# forward NET delta posting into an open period — a financial-posting concern, no
+# acknowledgement loop) and record-linkage (entity-resolution survivorship between
+# TWO records about the same subject, not a version chain of ONE record). Builds
+# on the append-only supersession discipline those domains established, adding the
+# closed-loop re-fire behavior a corrected-result notification system needs.
+
+items:
+  - id: "CRF-SUPERSEDE-001"
+    chapter: "A correction is an append-only NEW version referencing the prior; the prior is never mutated"
+    requirement: "Correcting a published record MUST create a NEW version row carrying a forward reference to the version it corrects, while the PRIOR version remains byte-for-byte unchanged and permanently readable. There MUST be no update path on a published version's content — no public setter, every content column `@Column(updatable=false)`. Version numbers per subject MUST be strictly increasing with no gaps introduced by a correction (version N+1 always follows version N)."
+    test_method: "RestAssured + ViolationProofTest (publish v1; correct -> v2 with correctsVersion=1; v1's content unchanged after v2 exists; structural: no setter, updatable=false columns)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Reuses the append-only supersession discipline (record-linkage /
+      remeasurement-trueup precedent): a correction is always a NEW fact, never
+      an edit of a recorded one.
+  - id: "CRF-REFIRE-002"
+    chapter: "If an ack/notification loop was already CLOSED against version N, publishing version N+1 RE-OPENS the loop by creating a new pending ack against the correction — in the SAME transaction"
+    requirement: "When a correction is published for a subject whose PRIOR version's acknowledgement is CLOSED (acknowledged), the correction publish MUST, in the SAME transaction, create a NEW pending-ack row scoped to the corrected version. The prior version's CLOSED ack row MUST be left untouched (it remains the true historical record that version N was acknowledged) — it is NOT reopened or mutated; a DISTINCT new ack row is created for version N+1. A recipient who acknowledged the original content MUST NOT be treated as having acknowledged the corrected content: the corrected version starts PENDING regardless of the prior version's ack state."
+    test_method: "RestAssured (publish v1 -> ack v1 (CLOSED) -> correct to v2 -> assert a NEW pending ack row exists for v2 AND the v1 ack row is untouched/still CLOSED)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (The Joint Commission closed-loop communication standard —
+      NPSG.02.03.01 discipline): a critical result requires a documented read-
+      back/acknowledgement by the receiving clinician; an amended or corrected
+      result is a NEW critical communication requiring its OWN acknowledgement,
+      not reliance on the acknowledgement of the original (now-superseded)
+      content. CWE-372 names the failure mode this guards against: treating a
+      stale acknowledgement as covering content it never actually confirmed.
+      (https://cwe.mitre.org/data/definitions/372.html)
+  - id: "CRF-IDEMPOTENT-003"
+    chapter: "Re-publishing IDENTICAL content (same content-hash) does NOT re-fire a new pending ack — no acknowledgement spam"
+    requirement: "Publishing a 'correction' whose content-hash (SHA-256 over the canonical content) is IDENTICAL to the current version's content-hash MUST NOT create a new version or a new pending ack — it is a no-op re-publish, not a correction. Only a content-hash CHANGE constitutes a real correction that creates a new version and (per CRF-REFIRE-002) potentially re-opens the ack loop. This prevents acknowledgement-spam from a retry or a no-op re-submission being mistaken for a substantive correction."
+    test_method: "RestAssured (publish v1 with content C; ack v1 (CLOSED); re-publish with the SAME content C -> no new version created, v1's ack row remains CLOSED and unchanged, no new pending ack)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      The idempotency check is content-hash-based (not a client-supplied
+      idempotency key) so it holds even across independent retries with no
+      shared request context — a defense the outbox/webhook idempotency
+      primitives established for delivery, applied here to correction
+      publishing.
+  - id: "CRF-CHAIN-004"
+    chapter: "A multi-correction chain keeps each version's ack state independent; the CURRENT version is derived on read, never stored redundantly"
+    requirement: "A subject MAY be corrected more than once, forming a chain v1 -> v2 -> v3 .... Each version's acknowledgement state (PENDING / CLOSED) MUST be tracked and queried independently — acknowledging v2 MUST NOT retroactively close v1's or v3's ack row, and correcting to v3 after v2 was CLOSED MUST re-open the loop for v3 exactly as CRF-REFIRE-002 describes for v2. Resolving the subject's CURRENT version MUST be derived on read (the highest version number in the chain), never a separately stored pointer that could drift from the chain."
+    test_method: "RestAssured (v1 -> ack CLOSED -> correct v2 -> ack CLOSED -> correct v3 -> assert v3 is PENDING, v2 remains CLOSED and unchanged, v1 remains CLOSED and unchanged; current-version read returns v3 derived from the chain, not a stored field)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Deriving 'current' on read (rather than a mutable pointer column) avoids
+      a second place the chain's integrity could be silently violated — the
+      same anti-drift posture as valuation-run-projection's forward-pointer
+      rebase chain.

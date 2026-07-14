@@ -21,6 +21,8 @@ introduced_at: "IDW9-G11 plausibility-gate for self-reported server-unverifiable
 #   3. PLAUSIBILITY-PROVENANCE-001 (an accepted reading persists as SELF_REPORTED_UNVERIFIED + the recorded plausibility basis)
 #   4. PLAUSIBILITY-REJECT-001  (an implausible submission is rejected AND recorded — the attempt is auditable)
 #   5. PLAUSIBILITY-CONCURRENT-001 (keystone — concurrent submissions serialize on the channel row; the prior-reading read/append is atomic)
+#   6. PLAUSIBILITY-DATE-RANGE-001 (BACKLOG P3-16 — a DATE-typed asserted fact within its own [reference-maxLookback, reference+maxLookahead] window)
+#   7. PLAUSIBILITY-DATE-FUTURE-001 (BACKLOG P3-16 — the future-tolerance boundary of the same window, fail-closed, injected-Clock precision)
 
 # ── Composition note ──
 # DISTINCT from monotone-register (a register's reads only ever increase and are
@@ -100,3 +102,41 @@ items:
       exists in which the shared resource can be modified by another code
       sequence operating concurrently."
       (https://cwe.mitre.org/data/definitions/362.html)
+  - id: "PLAUSIBILITY-DATE-RANGE-001"
+    chapter: "A DATE-typed asserted fact must fall within a configured plausible window relative to a reference instant"
+    requirement: "A DATE-typed self-reported asserted fact (e.g. a claimed event/loss date) submitted against a
+      date-plausibility channel MUST be validated against the channel's configured window: the asserted date MUST
+      satisfy (reference - maxLookback) <= assertedDate <= (reference + maxLookahead), where the reference instant
+      is ALWAYS the injected Clock's now — NEVER wall-clock. An asserted date outside this window MUST be rejected
+      with 422 (IMPLAUSIBLE_DATE_RANGE) and MUST NOT be accepted as a reading — the same reject/flag semantics as
+      the numeric channel (PLAUSIBILITY-RANGE/RATE-001): neither blindly trusted nor silently dropped. Distinct
+      from the numeric channel: a single asserted date has no prior-reading rate-of-change concept, so only the
+      window (not a rate) gates it."
+    test_method: "RestAssured (an asserted date inside the window → 201 accepted, SELF_REPORTED_UNVERIFIED; a date
+      before reference-maxLookback → 422 IMPLAUSIBLE_DATE_RANGE; a date after reference+maxLookahead → 422
+      IMPLAUSIBLE_DATE_RANGE; the rejected date is NOT persisted as a reading but IS recorded as a rejected attempt)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (OWASP Input Validation Cheat Sheet — semantic validation, same anchor as
+      PLAUSIBILITY-RANGE-001, applied here to a DATE-typed value's business-context plausibility):
+      "Semantic validation should enforce correctness of their values in the specific business
+      context." (https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html)
+  - id: "PLAUSIBILITY-DATE-FUTURE-001"
+    chapter: "A future-dated asserted fact beyond the channel's lookahead tolerance is rejected fail-closed at an exact boundary"
+    requirement: "The forward (future) edge of PLAUSIBILITY-DATE-RANGE-001's window MUST be enforced fail-closed with
+      exact boundary precision: an asserted date EQUAL to (reference + maxLookahead) MUST be accepted (the upper
+      bound is INCLUSIVE), and an asserted date one second beyond that tolerance MUST be rejected (422
+      IMPLAUSIBLE_DATE_RANGE). The reference instant MUST come from an injected Clock passed through the whole
+      evaluation path — the requirement MUST NOT be satisfiable by reading wall-clock time anywhere in the gate
+      logic, so the boundary is deterministically testable."
+    test_method: "RestAssured + boundary assertion (assertedAt == reference + maxLookahead → 201; assertedAt ==
+      reference + maxLookahead + 1s → 422 IMPLAUSIBLE_DATE_RANGE; structural: the service takes java.time.Clock,
+      not Instant.now(), anywhere in the gate)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-1284 — the same anchor as PLAUSIBILITY-RATE-001, applied to a future-dated
+      quantity/date whose bound is not validated): "The product receives input that is expected to
+      specify a quantity (such as size or length), but it does not validate or incorrectly validates
+      that the quantity has the required properties." (https://cwe.mitre.org/data/definitions/1284.html)

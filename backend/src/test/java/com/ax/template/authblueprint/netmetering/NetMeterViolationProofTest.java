@@ -33,7 +33,7 @@ class NetMeterViolationProofTest {
                     + "the net is DERIVED, never settable (a setNet would let it drift from the registers)")
                 .doesNotStartWith("set");
         }
-        for (String f : new String[]{"id", "meterKey", "createdAt"}) {
+        for (String f : new String[]{"id", "meterKey", "createdAt", "rateImport", "rateExport"}) {
             Column col = NetMeter.class.getDeclaredField(f).getAnnotation(Column.class);
             assertThat(col).as(f + " must carry @Column").isNotNull();
             assertThat(col.updatable()).as("NetMeter." + f + " must be immutable").isFalse();
@@ -46,7 +46,8 @@ class NetMeterViolationProofTest {
     @Test @Tag("NETM-NET-001")
     void violation_advanceAlwaysReDerivesNet() {
         NetMeter m = new NetMeter(UUID.randomUUID(), "k-" + UUID.randomUUID(),
-            new BigDecimal("100.0000"), new BigDecimal("0.0000"), Instant.MIN, Instant.now());
+            new BigDecimal("100.0000"), new BigDecimal("0.0000"), BigDecimal.ONE, BigDecimal.ONE,
+            Instant.MIN, Instant.now());
         assertThat(m.getNet()).as("net derived at construction = 100 − 0").isEqualByComparingTo("100");
 
         m.advance(MeterDirection.EXPORT, new BigDecimal("160.0000"));     // export now dominates → net negative
@@ -80,7 +81,8 @@ class NetMeterViolationProofTest {
                 .doesNotStartWith("set");
         }
         for (String f : new String[]{"id", "meterId", "boundaryAt", "importCumulative", "exportCumulative",
-                "netStart", "netEnd", "periodNetDelta", "sequenceNo", "closedAt"}) {
+                "netStart", "netEnd", "periodNetDelta", "importDelta", "exportDelta", "rateImport", "rateExport",
+                "billedAmount", "sequenceNo", "closedAt"}) {
             Column col = NetMeterPeriod.class.getDeclaredField(f).getAnnotation(Column.class);
             assertThat(col).as(f + " must carry @Column").isNotNull();
             assertThat(col.updatable()).as("NetMeterPeriod." + f + " must be immutable").isFalse();
@@ -100,5 +102,22 @@ class NetMeterViolationProofTest {
         assertThat(sql).contains("cumulative_import >= 0 AND cumulative_export >= 0");
         assertThat(sql).contains("chk_net_meter_reading_delta");
         assertThat(sql).contains("delta >= 0 AND reading_value >= 0");
+    }
+
+    // ── NETM-RATE-001 — the entity's @Check folds in strict rate positivity; the extension migration
+    //    carries the same backstop ──
+    @Test @Tag("NETM-RATE-001")
+    void violation_rateIsStrictlyPositive_backstoppedByCheckAndMigration() throws Exception {
+        org.hibernate.annotations.Check check = NetMeter.class.getAnnotation(org.hibernate.annotations.Check.class);
+        assertThat(check).as("NetMeter must carry @Check (NETM-RATE-001)").isNotNull();
+        assertThat(check.constraints().replaceAll("\\s+", " ")).contains("rate_import > 0 AND rate_export > 0");
+
+        String sql;
+        try (InputStream in = getClass().getClassLoader()
+                .getResourceAsStream("db/migration/V087__extend_netmetering_rate.sql")) {
+            assertThat(in).as("V087 migration must be on the classpath").isNotNull();
+            sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        assertThat(sql).contains("rate_import > 0 AND rate_export > 0");
     }
 }

@@ -17,6 +17,12 @@ import com.ax.template.authblueprint.common.AggregateMember;
  * net_start}). EVERY column is {@code @Column(updatable=false)} and there is no setter — a closed period is
  * frozen; a later reading backdated at/before {@code boundaryAt} is a 409, never an UPDATE of this row.
  * {@code sequenceNo} is strictly monotonic per meter (boundaries move strictly forward).
+ *
+ * <p>NETM-RATE-001 extension: {@code importDelta}/{@code exportDelta} are the per-direction quantities
+ * consumed THIS period (derived from the same cumulatives that satisfy NETM-DIRECTION-001 conservation);
+ * {@code rateImport}/{@code rateExport} are the rates in effect AT CLOSE (immutable evidence — a later rate
+ * change never reshapes an already-closed period); {@code billedAmount = importDelta*rateImport −
+ * exportDelta*rateExport}, cross-checked against an independent chain recompute before being persisted here.
  */
 @AggregateMember(root = NetMeter.class)
 @Entity
@@ -53,6 +59,26 @@ public class NetMeterPeriod {
     @Column(name = "period_net_delta", nullable = false, updatable = false, precision = 19, scale = 4)
     private BigDecimal periodNetDelta;
 
+    /** NETM-RATE-001 — import quantity consumed THIS period (= importCumulative − importCumulativeStart). */
+    @Column(name = "import_delta", nullable = false, updatable = false, precision = 19, scale = 4)
+    private BigDecimal importDelta;
+
+    /** NETM-RATE-001 — export quantity consumed THIS period (= exportCumulative − exportCumulativeStart). */
+    @Column(name = "export_delta", nullable = false, updatable = false, precision = 19, scale = 4)
+    private BigDecimal exportDelta;
+
+    /** NETM-RATE-001 — rate in effect at close (immutable evidence). */
+    @Column(name = "rate_import", nullable = false, updatable = false, precision = 19, scale = 4)
+    private BigDecimal rateImport;
+
+    /** NETM-RATE-001 — rate in effect at close (immutable evidence). */
+    @Column(name = "rate_export", nullable = false, updatable = false, precision = 19, scale = 4)
+    private BigDecimal rateExport;
+
+    /** NETM-RATE-001 — billed = importDelta*rateImport − exportDelta*rateExport, cross-checked before persist. */
+    @Column(name = "billed_amount", nullable = false, updatable = false, precision = 19, scale = 4)
+    private BigDecimal billedAmount;
+
     @Column(name = "sequence_no", nullable = false, updatable = false)
     private long sequenceNo;
 
@@ -63,7 +89,9 @@ public class NetMeterPeriod {
 
     public NetMeterPeriod(UUID id, UUID meterId, Instant boundaryAt, BigDecimal importCumulative,
                           BigDecimal exportCumulative, BigDecimal netStart, BigDecimal netEnd,
-                          BigDecimal periodNetDelta, long sequenceNo, Instant closedAt) {
+                          BigDecimal periodNetDelta, BigDecimal importDelta, BigDecimal exportDelta,
+                          BigDecimal rateImport, BigDecimal rateExport, BigDecimal billedAmount,
+                          long sequenceNo, Instant closedAt) {
         this.id = id;
         this.meterId = meterId;
         this.boundaryAt = boundaryAt;
@@ -72,6 +100,11 @@ public class NetMeterPeriod {
         this.netStart = netStart;
         this.netEnd = netEnd;
         this.periodNetDelta = periodNetDelta;
+        this.importDelta = importDelta;
+        this.exportDelta = exportDelta;
+        this.rateImport = rateImport;
+        this.rateExport = rateExport;
+        this.billedAmount = billedAmount;
         this.sequenceNo = sequenceNo;
         this.closedAt = closedAt;
     }
@@ -84,6 +117,11 @@ public class NetMeterPeriod {
     public BigDecimal getNetStart() { return netStart; }
     public BigDecimal getNetEnd() { return netEnd; }
     public BigDecimal getPeriodNetDelta() { return periodNetDelta; }
+    public BigDecimal getImportDelta() { return importDelta; }
+    public BigDecimal getExportDelta() { return exportDelta; }
+    public BigDecimal getRateImport() { return rateImport; }
+    public BigDecimal getRateExport() { return rateExport; }
+    public BigDecimal getBilledAmount() { return billedAmount; }
     public long getSequenceNo() { return sequenceNo; }
     public Instant getClosedAt() { return closedAt; }
 }

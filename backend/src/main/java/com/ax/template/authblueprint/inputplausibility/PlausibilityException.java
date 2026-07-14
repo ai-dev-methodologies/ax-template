@@ -44,4 +44,11 @@ public class PlausibilityException extends RuntimeException {
         return new PlausibilityException(HttpStatus.UNPROCESSABLE_ENTITY,
             "urn:problem:plausibility-invalid-channel", "PLAUSIBILITY_INVALID_CHANNEL", detail);
     }
+
+    /** PLAUSIBILITY-DATE-RANGE/FUTURE-001 — the asserted date is outside the channel's window. */
+    public static PlausibilityException implausibleDateRange() {
+        return new PlausibilityException(HttpStatus.UNPROCESSABLE_ENTITY,
+            "urn:problem:plausibility-implausible-date-range", "IMPLAUSIBLE_DATE_RANGE",
+            "The asserted date is outside the channel's plausible lookback/lookahead window");
+    }
 }

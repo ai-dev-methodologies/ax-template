@@ -169,6 +169,10 @@ SHARING_SIGNAL_ALLOWLIST = {
     "NetMeter#getCumulativeExport",        # energy exported to grid (BigDecimal kWh) — not data export
     "NetMeterPeriod#getExportCumulative",  # period-end export register (BigDecimal kWh) — not data export
     "NetMeterReading#getExportAfter",      # export cumulative on this reading (BigDecimal kWh) — not data export
+    "NetMeter#getRateExport",              # per-unit billing rate for energy exported (BigDecimal KRW/kWh) — not data export
+    "NetMeter#getExportCumulativeAtPeriodStart",  # period-start export register snapshot (BigDecimal kWh) — not data export
+    "NetMeterPeriod#getExportDelta",       # in-period exported quantity (BigDecimal kWh) — not data export
+    "NetMeterPeriod#getRateExport",        # rate snapshot frozen on the closed period (BigDecimal KRW/kWh) — not data export
 }
 
 # A method head: optional annotations are scanned separately; here we capture the

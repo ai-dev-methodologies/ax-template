@@ -50,10 +50,11 @@ public class ValuationRunController {
     }
 
     public record RunDto(UUID id, UUID subjectId, int runVersion, Instant asOf, String basis,
-                         BigDecimal totalValue, BigDecimal outputSum, Integer rebasedFromRunVersion) {
+                         BigDecimal totalValue, BigDecimal outputSum, Integer rebasedFromRunVersion,
+                         String sourceRef) {
         static RunDto of(ValuationRun r) {
             return new RunDto(r.getId(), r.getSubjectId(), r.getRunVersion(), r.getAsOf(), r.getBasis(),
-                r.getTotalValue(), r.getOutputSum(), r.getRebasedFromRunVersion());
+                r.getTotalValue(), r.getOutputSum(), r.getRebasedFromRunVersion(), r.getSourceRef());
         }
     }
 
@@ -83,10 +84,27 @@ public class ValuationRunController {
             service.rebase(id, req.fromRunVersion(), req.declaredTotal(), req.basis(), req.positions())));
     }
 
+    /** VALRUN-FALLBACK-001 — recompute tagged with a NAMED source (not the implicit PRIMARY). */
+    @PostMapping("/api/valuation-run/subjects/{id}/runs/sources/{source}")
+    public ResponseEntity<RunDto> recomputeForSource(@PathVariable UUID id, @PathVariable String source,
+                                                     @Valid @RequestBody RecomputeReq req) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(RunDto.of(
+            service.recomputeForSource(id, source, req.expectedHeadVersion(), req.declaredTotal(),
+                req.basis(), req.positions())));
+    }
+
     /** VALRUN-ASOF-001 — the run that was current AS OF the given instant (greatest as-of ≤ T). */
     @GetMapping("/api/valuation-run/subjects/{id}/as-of")
     public RunDto asOf(@PathVariable UUID id, @RequestParam("at") Instant at) {
         return RunDto.of(service.asOf(id, at));
+    }
+
+    /** VALRUN-FALLBACK-001 — as-of read that tries {@code sources} in priority order; the
+     *  response's {@code sourceRef} records which source served it (never a silent default). */
+    @GetMapping("/api/valuation-run/subjects/{id}/as-of-fallback")
+    public RunDto asOfFallback(@PathVariable UUID id, @RequestParam("at") Instant at,
+                              @RequestParam("sources") java.util.List<String> sources) {
+        return RunDto.of(service.asOfWithFallback(id, at, sources));
     }
 
     /** VALRUN-REBASE-001 — the subject's current run (the latest head version). */

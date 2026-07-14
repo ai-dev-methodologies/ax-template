@@ -1,0 +1,97 @@
+version: "0.1.0"
+scope: "orthogonal-exception-gate-l0 — a generic exception dimension (a raised/lifted flag) that
+  is ORTHOGONAL to whatever PRIMARY lifecycle a subject already has. While raised, a
+  configurable set of gated operations is refused fail-closed regardless of the subject's
+  primary state; the flag itself is mutated only by an explicit raise/lift, and mutating it
+  never touches the primary lifecycle (and vice versa). Cross-cutting catalog pattern,
+  domain-agnostic and framework-agnostic. Generalized from the proven reference-workload shape
+  in backend/.../dsr/DsrRestrictionGate.java (GDPR Art 18 processing restriction) — that gate is
+  the FIRST INSTANCE of exactly this pattern (a fail-closed dimension independent of the DSR
+  request's own DRAFT/SUBMITTED/APPROVED lifecycle). Recurs anywhere a compliance/safety/legal
+  flag must block SOME operations without touching the subject's own state machine: a
+  litigation hold blocking deletion regardless of a record's retention status, a KYC freeze
+  blocking withdrawals regardless of an account's own approval state, a content takedown
+  blocking publish regardless of a draft's own review state."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (a single boolean-flag row per subject +
+  an append-only audit ledger) + RFC 9457 Problem Details + injected java.time.Clock"
+standard: "GDPR Art 18 (Right to restriction of processing) as the proven first instance +
+  US FRCP Rule 37(e) (litigation-hold preservation obligation, the same
+  independent-of-primary-state shape) + RFC 9110 §15.5.22 (423 Locked)"
+domain_mode: backend_only
+introduced_at: "IDW6-derived, extracted 2026-07-14 — BACKLOG P3-8 (lane E V099)"
+
+# OPT-IN orthogonal-exception-gate catalog. The reference workload already proved this shape
+# once (DsrRestrictionGate) but left it welded to the DSR domain — a different subject needing
+# the SAME independent-fail-closed-flag shape (a litigation hold, a KYC freeze) would have had
+# to hand-roll it again. This spec extracts the generic primitive so the NEXT instance composes
+# instead of reimplementing. Generic; DSR remains the origin/reference instance, not a dependency.
+
+# ── Priority order for fork-receivers (adopt in order) ──
+#   1. EXC-DIM-INDEPENDENT-001 (the flag and the primary lifecycle never touch each other)
+#   2. EXC-DIM-BLOCK-001       (gated operations fail-closed BEFORE mutation while raised)
+#   3. EXC-DIM-LIFT-001        (lift restores everything; raise/lift is audited + idempotent)
+
+items:
+  - id: "EXC-DIM-INDEPENDENT-001"
+    chapter: "차원 독립성 (raising/lifting never mutates the primary lifecycle, and vice versa)"
+    requirement: "Raising or lifting the exception dimension for a subject MUST mutate ONLY the
+      exception dimension's own fields (the raised flag + its reason) — it MUST NOT read, derive
+      from, or write any field belonging to the subject's PRIMARY lifecycle. Symmetrically,
+      advancing the subject's primary lifecycle MUST NOT touch the raised flag or its reason.
+      Both directions MUST be independently testable: raise the flag, assert the primary state
+      is byte-for-byte unchanged; separately, advance the primary state, assert the flag's raised
+      value and reason are byte-for-byte unchanged. A gate implementation that derives 'raised'
+      FROM a primary-lifecycle value (e.g. `raised = (primaryState == 'FROZEN')`) fails this item
+      — the two MUST be genuinely separate, independently-settable fields."
+    test_method: "RestAssured integration test (raise the gate, GET the subject, assert
+      primaryState unchanged; separately, advance primaryState, GET the gate, assert raised/
+      reason unchanged) + structural: raise/lift/advancePrimary are three DISTINCT mutator
+      methods, none calling the others."
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      This is the exact independence DsrRestrictionGate already demonstrates: restricting a
+      DSR subject (Art 18) never advances the DsrRequest's own DRAFT/SUBMITTED/APPROVED
+      lifecycle, and approving/rejecting a request never touches the restriction set. Anchored
+      to GDPR Art 18 (https://gdpr-info.eu/art-18-gdpr/), whose restriction right is explicitly
+      distinct from erasure/rectification — the record is unchanged, only PROCESSING stops.
+  - id: "EXC-DIM-BLOCK-001"
+    chapter: "게이트 차단 (gated operations fail-closed BEFORE any mutation while raised)"
+    requirement: "While a subject's exception dimension is raised, an attempt to perform any
+      operation in the gate's configured GATED operation set MUST be refused with a distinct,
+      fail-closed status (423 Locked, precedent: RFC 9110 §15.5.22) BEFORE any mutation is
+      attempted — the check happens first, unconditionally, regardless of what the primary
+      lifecycle's own authorization would otherwise allow. An operation NOT in the gated set
+      MUST be completely unaffected by the raised flag — the gate is a scoped block, not a
+      global freeze. Default-deny is the correct failure mode for an unreachable/erroring gate
+      lookup (fail-closed, mirroring DSR-LEGALHOLD-001's 'unreachable means assume held')."
+    test_method: "RestAssured integration test (raise the gate; probe a GATED operation -> 423
+      EXCEPTION_GATE_BLOCKED; probe a NON-GATED operation -> 200 unaffected; lift; probe the
+      previously-gated operation again -> 200)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Mirrors DsrRestrictionGate#checkProcessingAllowed: default-deny while raised, the
+      restriction set is the source of truth so a path that forgets to consult the gate is the
+      bug, never a silent allow. Anchored to RFC 9110 §15.5.22 (423 Locked)
+      (https://www.rfc-editor.org/rfc/rfc9110#section-15.5.22) and to the same DSR-LEGALHOLD-001
+      fail-closed posture already shipped in specs/data-subject-rights-l0.yaml.
+  - id: "EXC-DIM-LIFT-001"
+    chapter: "해제 및 감사 (lift restores the full operation set; raise/lift is audited + idempotent)"
+    requirement: "Lifting the exception dimension MUST restore the FULL gated operation set —
+      no residual partial block. Both raising and lifting MUST write an append-only audit
+      record carrying {action, reason, actor, occurred_at}; the audit trail is never mutated or
+      deleted, only appended to. Raising an ALREADY-raised subject (or lifting an already-lifted
+      one) MUST be idempotent — it MUST NOT error and MUST NOT corrupt the raised/lifted state,
+      though it MAY still append its own audit record (the call happened, even if the state
+      transition was a no-op)."
+    test_method: "RestAssured integration test (raise twice in a row -> both succeed, gate stays
+      raised, 2 audit RAISE entries; lift -> gated operation now unaffected, 1 audit LIFT entry;
+      lift again -> idempotent, no error)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Anchored to the same GDPR Art 18 origin (https://gdpr-info.eu/art-18-gdpr/) — "Lifting
+      restriction requires the subject's request or documented legal ground; lift writes an
+      audit record" per specs/data-subject-rights-l0.yaml DSR-RESTRICT-001, generalized here to
+      any subject, not only a DSR request.

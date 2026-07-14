@@ -1,0 +1,107 @@
+version: "0.1.0"
+scope: "piecewise-deadband-l0 — the PIECEWISE deadband-tolerance evaluator. An obligation curve over a
+  bounded domain is split into ORDERED, CONTIGUOUS segments; each segment carries its own obligation target
+  AND its own deadband (tolerance) width — a wider band on a coarse segment, a tighter band on a precise one.
+  Evaluating an actual value at a domain point compares it against the target of the segment that COVERS that
+  point: within the segment's own deadband is COMPLIANT, outside is a DEVIATION recorded with the segment id
+  and the SIGNED magnitude (never just a boolean — the direction and size of the miss are evidence).
+  Evaluations are APPEND-ONLY and IDEMPOTENT: re-evaluating the identical (config, point, actual) triple
+  returns the SAME stored result rather than creating a duplicate row. Cross-cutting, framework-agnostic.
+  Recurs in: control-theory hysteresis bands that widen/narrow across an operating range, grid-code voltage/
+  frequency tolerance bands that vary by segment, SLA tiers with per-band tolerance, manufacturing tolerance
+  stack-ups that vary by dimension range — 3+ industries. Realized by the piecewisedeadband reference
+  workload (com.ax.template.authblueprint.piecewisedeadband)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (immutable append-only evaluations; the config itself has
+  no update endpoint and carries no @Version — it is genuinely immutable after creation, not
+  optimistic-locked) + exact BigDecimal (NUMERIC(19,4)) + injected java.time.Clock + RFC 9457 Problem
+  Details + Micrometer"
+standard: "IEC 60255-1 (measuring relays and protection equipment — operating characteristics expressed as
+  tolerance bands around a set point) + control-theory hysteresis/deadband (a dead zone around a setpoint
+  inside which no corrective action is taken) + CWE-682 (incorrect calculation — an unvalidated segment
+  tiling silently mis-evaluates a point in a gap) + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "P3-27 2026-07-14 (backlog-100 Lane B energy wave)"
+
+# OPT-IN piecewise-deadband catalog. DISTINCT from a single flat deadband (one target, one tolerance for
+# the whole domain): here the obligation curve is SEGMENTED, and each segment owns its own target AND its
+# own tolerance width, so the same evaluator must first resolve WHICH segment covers a point before
+# comparing.
+
+# ── Priority order for fork-receivers ──
+#   1. PWDB-SEGMENT-001   (segments must tile the domain exactly — no gap, no overlap; invalid config 422)
+#   2. PWDB-EVAL-001       (compare actual vs the covering segment's own target/deadband; signed deviation)
+#   3. PWDB-IMMUTABLE-001  (evaluations are append-only; re-evaluating the same inputs is idempotent)
+
+# ── Composition note ──
+# A config is immutable after creation (no update endpoint) — a change to the obligation curve is a NEW
+# config with its own key, keeping every historical evaluation attributable to the exact curve it was
+# evaluated against.
+
+items:
+  - id: "PWDB-SEGMENT-001"
+    chapter: "Segments must tile the domain exactly — no gap, no overlap; an invalid config is rejected 422"
+    verification:
+      mechanism: tag
+      ref: "PWDB-SEGMENT-001"
+    requirement: "A piecewise-deadband config declares a bounded domain [domainStart, domainEnd) and an
+      ORDERED list of segments, each `{start, end, obligationTarget, deadbandWidth}` (deadbandWidth >= 0;
+      start < end). Sorted by `start`, the segments MUST tile the domain EXACTLY: the first segment's
+      `start` MUST equal `domainStart`, each segment's `end` MUST equal the next segment's `start`
+      (no gap, no overlap), and the last segment's `end` MUST equal `domainEnd`. A config whose segments
+      leave a gap, overlap, or fail to span the full domain MUST be rejected with a deterministic 422
+      (`type=urn:problem:piecewise-deadband-invalid-segments`, `code=PWDB_INVALID_SEGMENTS`) — never
+      silently accepted (which would leave a domain point with an undefined, or ambiguously double-defined,
+      obligation target)."
+    test_method: "RestAssured (segments that exactly tile the domain → 201; a gap between two segments →
+      422; an overlap → 422; a domain not fully spanned → 422)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Framing note (IEC 60255-1 operating-characteristic concept — PARAPHRASE, not a verbatim
+      quote: this is a paid ISO/IEC standard with no freely citable clause/URL available, unlike
+      this catalog's RFC/CFR anchors): a protection relay's operating boundary is conventionally
+      defined piecewise across its measured range; an undefined region between characteristics
+      would be a fault condition, not a silent default. The anchor is the CONCEPT (piecewise
+      operating characteristics), not a quoted clause.
+  - id: "PWDB-EVAL-001"
+    chapter: "Evaluation compares actual vs the COVERING segment's own target/deadband; a miss is a signed deviation, never just a boolean"
+    verification:
+      mechanism: tag
+      ref: "PWDB-EVAL-001"
+    requirement: "Evaluating an actual value at a domain point `x` MUST first resolve the SINGLE segment
+      whose `[start, end)` covers `x` (a point outside `[domainStart, domainEnd)` MUST be rejected 422,
+      `code=PWDB_POINT_OUT_OF_DOMAIN`), then compute `deviation = actual − segment.obligationTarget`.
+      `|deviation| <= segment.deadbandWidth` MUST be recorded COMPLIANT; otherwise a DEVIATION MUST be
+      recorded carrying the covering segment's id AND the SIGNED `deviation` (never a boolean alone — the
+      direction and exact magnitude of the miss is the evidence a downstream consumer needs). The
+      comparison MUST be deterministic: the SAME `(config, x, actual)` MUST always resolve the SAME
+      segment and produce the SAME compliant/deviation verdict."
+    test_method: "RestAssured (a point whose actual is within its segment's own (possibly wider/narrower)
+      deadband → compliant=true, deviation within band; outside the band → compliant=false, deviation
+      carries the exact signed magnitude and the covering segment's id; a point in a segment with a
+      DIFFERENT deadband width than its neighbor demonstrates the per-segment tolerance is honored, not a
+      single flat band)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The distinguishing signature vs a flat deadband: the SAME evaluator must pick a
+      DIFFERENT tolerance width depending on which segment the point falls in.
+  - id: "PWDB-IMMUTABLE-001"
+    chapter: "Evaluations are append-only; re-evaluating the identical inputs is idempotent (no duplicate row)"
+    verification:
+      mechanism: tag
+      ref: "PWDB-IMMUTABLE-001"
+    requirement: "Every evaluation row MUST be immutable once written (every column `@Column(updatable=false)`,
+      no setter, never UPDATEd or deleted). Re-evaluating the IDENTICAL `(config, x, actual)` triple MUST
+      be IDEMPOTENT: it MUST return the ALREADY-RECORDED evaluation (same id, same verdict) rather than
+      inserting a new row — identity is derived from a deterministic hash of the input triple (a
+      basis-hash), backstopped by a DB unique constraint on `(config_id, idempotency_key)` so a race
+      between two identical concurrent evaluate calls cannot produce two rows for the same input."
+    test_method: "RestAssured (evaluate the same (x, actual) twice → the SAME evaluation id both times, the
+      evaluations list count does NOT increase on the second call; a DIFFERENT actual at the same x
+      produces a NEW row)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Idempotency-by-input-hash — the identity is a pure function of the triple, so a
+      retried caller (timeout + resend) cannot double-record a deviation.

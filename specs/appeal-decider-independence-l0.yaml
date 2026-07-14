@@ -1,0 +1,55 @@
+version: "0.1.0"
+scope: "appeal-decider-independence-l0 — an appeal of a decision MUST be decided by someone OTHER than the decider(s) already in that decision's chain. Distinct from a four-eyes SIGNOFF (two people co-approving ONE decision, e.g. decision-governance-l0's DG-OVERRIDE-001): this is TWO (or more) SEPARATE decisions — an original and its appeal — with decider independence enforced ACROSS them. An appeal-of-appeal forms a CHAIN; each level's decider must differ from EVERY prior decider in that chain, not just the immediate parent. Appeal outcomes are append-only new records — the original decision row is never mutated; an OVERTURN takes effect via the newer record winning derive-on-read, mirroring attested-change-record's correction-by-append posture. Generalizes 행정심판 (administrative appeal) 독립성 원칙 / procedural-fairness nemo iudex in causa sua (no one should be a judge in their own cause) beyond any single industry."
+domain_mode: backend_only
+introduced_at: "Backlog wave 2026-07-14, P3-17 (Lane C authority verticals)"
+stack: "Spring Boot 3.2.x + JPA (fully append-only self-referencing chain + @Check DB backstop for the immediate-parent case) + RestAssured black-box"
+standard: "Procedural fairness — nemo iudex in causa sua (no one may judge their own cause; a foundational natural-justice principle underlying administrative and judicial appeal systems) + 행정심판법 (Administrative Appeals Act) 재결의 독립성 practice"
+
+items:
+  - id: "APPEAL-DISTINCT-001"
+    chapter: "DISTINCT"
+    requirement: "An appeal's decider MUST differ from the original decision's decider. Filing an appeal decided by the SAME person who made the decision being appealed is rejected (422) fail-closed at decide time — DB-backstopped where expressible (a @Check comparing the appeal row's own decider column against the decider it denormalizes from the appealed row), mirroring decision-governance-l0's DG-OVERRIDE-001 four-eyes @Check precedent."
+    test_method: "RestAssured integration test + native SQL write past the @Check"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test: alice files an original decision. alice attempts to file the appeal against it →
+      422 APPEAL_DECIDER_NOT_INDEPENDENT (rejected before persistence). bob files the appeal →
+      201. Native-write proof: an INSERT that sets decided_by = appealed_decider_by on an APPEAL
+      row is rejected by the DB @Check, not only by the service.
+      Implementation: AppealDecision.appealedDeciderBy denormalizes the row-being-appealed's
+      decidedBy; @Check((kind = 'ORIGINAL') OR (decided_by <> appealed_decider_by)).
+    policy_ref: "blueprints/appeal-decider-independence-manifest.yaml#distinct"
+
+  - id: "APPEAL-CHAIN-001"
+    chapter: "CHAIN"
+    requirement: "An appeal references its original decision immutably; a decision may have AT MOST ONE appeal filed against it (one appeal per decision level). An appeal-of-appeal forms a chain, and EACH level's decider MUST differ from ALL prior deciders in that chain, not only the immediate parent."
+    test_method: "RestAssured integration test (3-level chain)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test: alice decides (level 0). bob appeals (level 1) → 201. carol appeals bob's appeal
+      (level 2) → 201. alice attempts a THIRD-level appeal (level 3) against carol's decision →
+      422 (alice already decided at level 0, even though she is not the IMMEDIATE parent decider
+      carol). A second appeal attempt against an ALREADY-appealed decision → 409
+      APPEAL_ALREADY_FILED (one appeal per level). Implementation: AppealDecision.parentDecisionId
+      is UNIQUE (nullable, so multiple ORIGINAL rows with null parent don't collide);
+      AppealService.fileAppeal collects every decidedBy in the chain
+      (findByChainRootIdOrderByLevelAsc) and rejects a repeat decider anywhere in that set, not
+      just the parent row.
+    policy_ref: "blueprints/appeal-decider-independence-manifest.yaml#chain"
+
+  - id: "APPEAL-OUTCOME-001"
+    chapter: "OUTCOME"
+    requirement: "An appeal's outcome (UPHOLD or OVERTURN) is recorded as an append-only NEW row; the original decision row is NEVER mutated. An OVERTURN takes effect via the newer record winning on read (derive-on-read), not by rewriting history."
+    test_method: "RestAssured integration test"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Test: alice decides outcome=DENIED (level 0, kind=ORIGINAL). bob appeals with
+      outcome=OVERTURN (level 1, kind=APPEAL). GET the chain → level 0 row STILL reports
+      outcome=DENIED, decidedBy=alice, unchanged; level 1 row reports outcome=OVERTURN,
+      decidedBy=bob. A client deriving the "current" outcome reads the LAST row in the chain
+      (highest level), never an in-place mutation. Implementation: every AppealDecision column
+      is @Column(updatable=false); AppealService never issues an UPDATE, only INSERT.
+    policy_ref: "blueprints/appeal-decider-independence-manifest.yaml#outcome"

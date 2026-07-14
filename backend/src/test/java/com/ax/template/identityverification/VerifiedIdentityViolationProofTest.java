@@ -95,4 +95,14 @@ class VerifiedIdentityViolationProofTest {
         assertThat(IdentityVerificationService.RESOURCE_TYPE)
             .isEqualTo("verified_identity");
     }
+
+    @Test
+    void violation_concordanceAuditActionIsDistinctFromCallbackAction() {
+        // IDV-CONCORDANCE-001 — the mismatch audit MUST use its OWN action constant,
+        // never folded into the generic per-callback AUDIT_ACTION.
+        assertThat(IdentityVerificationService.CONCORDANCE_AUDIT_ACTION)
+            .as("the concordance-mismatch audit action must be distinct from the callback audit action")
+            .isNotEqualTo(IdentityVerificationService.AUDIT_ACTION)
+            .isEqualTo("IDENTITY_VERIFICATION_CONCORDANCE_MISMATCH");
+    }
 }

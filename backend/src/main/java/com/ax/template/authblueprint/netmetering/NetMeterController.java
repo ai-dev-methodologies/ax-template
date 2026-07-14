@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
@@ -36,17 +37,23 @@ public class NetMeterController {
 
     public record CreateReq(@NotBlank @Size(max = 200) String meterKey,
                             @NotNull @PositiveOrZero @Digits(integer = 15, fraction = 4) BigDecimal initialImport,
-                            @NotNull @PositiveOrZero @Digits(integer = 15, fraction = 4) BigDecimal initialExport) {}
+                            @NotNull @PositiveOrZero @Digits(integer = 15, fraction = 4) BigDecimal initialExport,
+                            // NETM-RATE-001 — optional; omitted defaults to 1 (symmetric rate). Never hardcoded
+                            // server-side: the caller's policy is the only source, and it is REQUIRED to be
+                            // strictly positive when supplied.
+                            @Positive @Digits(integer = 15, fraction = 4) BigDecimal rateImport,
+                            @Positive @Digits(integer = 15, fraction = 4) BigDecimal rateExport) {}
     public record ReadingReq(@NotNull MeterDirection direction,
                              @NotNull @PositiveOrZero @Digits(integer = 15, fraction = 4) BigDecimal readingValue,
                              Instant effectiveAt) {}
     public record CloseReq(@NotNull Instant boundaryAt) {}
 
     public record MeterDto(String meterKey, BigDecimal cumulativeImport, BigDecimal cumulativeExport,
-                           BigDecimal net, Instant closedThroughAt, Long version) {
+                           BigDecimal net, BigDecimal rateImport, BigDecimal rateExport,
+                           Instant closedThroughAt, Long version) {
         static MeterDto of(NetMeter m) {
             return new MeterDto(m.getMeterKey(), m.getCumulativeImport(), m.getCumulativeExport(),
-                m.getNet(), m.getClosedThroughAt(), m.getVersion());
+                m.getNet(), m.getRateImport(), m.getRateExport(), m.getClosedThroughAt(), m.getVersion());
         }
     }
     public record ReadingDto(UUID id, MeterDirection direction, BigDecimal readingValue,
@@ -61,10 +68,13 @@ public class NetMeterController {
     }
     public record PeriodDto(UUID id, Instant boundaryAt, BigDecimal importCumulative,
                             BigDecimal exportCumulative, BigDecimal netStart, BigDecimal netEnd,
-                            BigDecimal periodNetDelta, long sequenceNo, Instant closedAt) {
+                            BigDecimal periodNetDelta, BigDecimal importDelta, BigDecimal exportDelta,
+                            BigDecimal rateImport, BigDecimal rateExport, BigDecimal billedAmount,
+                            long sequenceNo, Instant closedAt) {
         static PeriodDto of(NetMeterPeriod p) {
             return new PeriodDto(p.getId(), p.getBoundaryAt(), p.getImportCumulative(), p.getExportCumulative(),
-                p.getNetStart(), p.getNetEnd(), p.getPeriodNetDelta(), p.getSequenceNo(), p.getClosedAt());
+                p.getNetStart(), p.getNetEnd(), p.getPeriodNetDelta(), p.getImportDelta(), p.getExportDelta(),
+                p.getRateImport(), p.getRateExport(), p.getBilledAmount(), p.getSequenceNo(), p.getClosedAt());
         }
     }
 
@@ -76,7 +86,8 @@ public class NetMeterController {
 
     @PostMapping("/api/netmetering/meters")
     public ResponseEntity<MeterDto> create(@Valid @RequestBody CreateReq req) {
-        NetMeter m = service.createMeter(req.meterKey(), req.initialImport(), req.initialExport());
+        NetMeter m = service.createMeter(req.meterKey(), req.initialImport(), req.initialExport(),
+            req.rateImport(), req.rateExport());
         return ResponseEntity.status(HttpStatus.CREATED).body(MeterDto.of(m));
     }
 

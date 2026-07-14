@@ -79,6 +79,29 @@ public class ObligationSweeper {
                 fired++;
             }
         }
+        bindConsequenceIfDue(o, now);                      // OBL-CONSEQUENCE-001/OBL-WAIVER-001 — additive, never touches the ladder above
         return fired;                                     // NEVER closes/expires the obligation
+    }
+
+    /** OBL-CONSEQUENCE-001 — checked on EVERY pass past the deadline (not only the pass that fires
+     *  BREACH), so a waiver's expiry on EITHER axis reactivates enforcement on the very next sweep
+     *  (OBL-WAIVER-001). Idempotent: the existence check + the entity's own UNIQUE(obligation_id)
+     *  backstop make a second bind impossible even under a racing re-sweep. */
+    private void bindConsequenceIfDue(Obligation o, Instant now) {
+        if (o.getBreachBasisAmount() == null || now.isBefore(o.getEffectiveDeadline())) {
+            return;
+        }
+        if (obligations.findConsequence(o.getId()).isPresent()) {
+            return;                                        // already bound — exactly-once holds
+        }
+        boolean waived = obligations.findWaivers(o.getId()).stream()
+            .anyMatch(w -> !obligations.isRevoked(w.getId()) && w.isValidAt(now, o.getUsageCycleCount()));
+        if (waived) {
+            metrics.record("sweep", "waived");             // an active waiver suppresses ONLY the consequence
+            return;
+        }
+        members.persist(new BreachConsequence(UUID.randomUUID(), o.getId(), now, o.getBreachBasisAmount(),
+            o.getEffectiveDeadline()));
+        metrics.record("sweep", "consequence-bound");
     }
 }

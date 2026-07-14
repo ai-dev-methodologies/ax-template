@@ -9,13 +9,15 @@ import org.springframework.http.HttpStatus;
  * IDV-PROVIDER-002: unknown provider → 400.
  * IDV-CALLBACK-001: invalid HMAC → 401.
  * EXTRACTION_FAIL (per IDV-AUDIT-001): 422.
+ * IDV-CONCORDANCE-001: ci/di pair inconsistent with a stored identity → 409.
  */
 public class IdentityVerificationException extends RuntimeException {
 
     public enum Reason {
         UNKNOWN_PROVIDER(HttpStatus.BAD_REQUEST),
         HMAC_FAIL(HttpStatus.UNAUTHORIZED),
-        EXTRACTION_FAIL(HttpStatus.UNPROCESSABLE_ENTITY);
+        EXTRACTION_FAIL(HttpStatus.UNPROCESSABLE_ENTITY),
+        CONCORDANCE_MISMATCH(HttpStatus.CONFLICT);
 
         private final HttpStatus status;
 

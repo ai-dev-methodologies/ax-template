@@ -117,6 +117,42 @@ class RateLimitComplianceTest {
             .when().get("/api/ratelimit/ping").then().statusCode(200);
     }
 
+    @Test
+    @Tag("RATELIMIT")
+    @Tag("RATELIMIT-5")
+    void ratelimit_5_anonymousIpKeyWithTrustedProxyDepth() {
+        int max = properties.maxPerWindow();
+
+        // ── spoofing invariance: the trust-depth-Nth-from-right entry stays constant while the
+        // attacker-controlled LEFTMOST entries vary — the bucket must not shift. ──
+        String trustedEntry = "trusted-" + UUID.randomUUID();
+        for (int i = 0; i < max; i++) {
+            String spoofedPrefix = "attacker-junk-" + UUID.randomUUID() + ", another-junk-" + i;
+            given().header("X-Forwarded-For", spoofedPrefix + ", " + trustedEntry)
+                .when().get("/api/ratelimit/anon/ping")
+                .then().statusCode(200);
+        }
+        given().header("X-Forwarded-For", "yet-more-junk-" + UUID.randomUUID() + ", " + trustedEntry)
+            .when().get("/api/ratelimit/anon/ping")
+            .then().statusCode(429);
+
+        // ── two distinct trust-depth-Nth-from-right entries → independent buckets ──
+        String clientA = "trusted-" + UUID.randomUUID();
+        String clientB = "trusted-" + UUID.randomUUID();
+        for (int i = 0; i < max; i++) {
+            given().header("X-Forwarded-For", "junk-a, " + clientA)
+                .when().get("/api/ratelimit/anon/ping").then().statusCode(200);
+        }
+        given().header("X-Forwarded-For", "junk-a, " + clientA)
+            .when().get("/api/ratelimit/anon/ping").then().statusCode(429);
+        given().header("X-Forwarded-For", "junk-b, " + clientB)
+            .when().get("/api/ratelimit/anon/ping").then().statusCode(200);
+
+        // ── header absent → falls back to the remote address, never a 400 reject ──
+        Response noHeader = given().when().get("/api/ratelimit/anon/ping");
+        assertThat(noHeader.statusCode()).isNotEqualTo(400);
+    }
+
     /** Generate a fresh key per test so previous test buckets do not leak. */
     private String freshKey() {
         return "test-" + UUID.randomUUID();

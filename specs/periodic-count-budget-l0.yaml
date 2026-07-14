@@ -1,0 +1,106 @@
+version: "0.1.0"
+scope: "periodic-count-budget-l0 — the PER-SUBJECT recurring count-budget with a CALENDAR-ALIGNED reset. A
+  subject (e.g. an API key, a user, a device) is allotted a cap of N consumptions per recurring calendar
+  period (DAILY/WEEKLY/MONTHLY); consuming past the cap is a fail-closed 422, row-lock serialized so no
+  concurrent race over-consumes. The period boundary is CALENDAR-DERIVED, not completion-triggered — the
+  first consume request in a new calendar period lazily starts a FRESH counter, with no explicit 'close the
+  old period' action required. Every consume and every first-touch-of-a-period is a permanent, queryable
+  audit row — counter rows are never deleted. Changing the cap takes effect for FUTURE periods only; a
+  period already touched keeps the cap it captured at its first touch. Cross-cutting, framework-agnostic.
+  Recurs in: API rate/quota plans (N calls/day), SMS/email send allowances, free-tier usage caps that reset
+  monthly, attempt limits that reset daily — 3+ industries. Realized by the countbudget reference workload
+  (com.ax.template.authblueprint.countbudget)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (PESSIMISTIC_WRITE policy-row lock serializes both period
+  creation and consumption; append-only consumption ledger) + injected java.time.Clock (UTC calendar
+  boundaries, TZ-independent) + RFC 9457 Problem Details + Micrometer"
+standard: "IETF RFC 6585 §4 (429 Too Many Requests — the canonical over-cap-rejection framing; this catalog
+  maps the domain rejection to 422 per its existing fail-closed-validation convention, RFC 9110 §15.5.21)
+  + CWE-362 (concurrent race over a shared counter) + java.time.Clock + RFC 9457"
+domain_mode: backend_only
+introduced_at: "P3-28 2026-07-14 (backlog-100 Lane B energy wave)"
+
+# OPT-IN periodic-count-budget catalog. DISTINCT from ratelimit-l0 (a sliding/fixed WINDOW over
+# wall-clock time, typically sub-minute, protecting an endpoint) and from accumulator-consume (a single
+# non-recurring floor-at-zero counter): here the counter recurs on a CALENDAR cadence (day/week/month) and
+# EACH period is its own permanent, independently-capped row — not a rolling window, not a one-shot floor.
+
+# ── Priority order for fork-receivers ──
+#   1. PCB-CONSUME-001 (row-lock serialized decrement-by-consumption; over-cap 422 fail-closed)
+#   2. PCB-RESET-001    (calendar-aligned period boundary; NOT completion-triggered — lazy fresh start)
+#   3. PCB-AUDIT-001    (every consume + every first-touch is a permanent, queryable row)
+#   4. PCB-CAP-001      (changing the cap affects only FUTURE periods, never an already-touched one)
+
+# ── Composition note ──
+# The policy ROOT row is the single serialization point for BOTH period-creation-on-first-touch AND
+# consumption — the same PESSIMISTIC_WRITE lock covers both, so two concurrent first requests in a new
+# period can never create two period rows, and two concurrent consumes can never both succeed past the cap.
+
+items:
+  - id: "PCB-CONSUME-001"
+    chapter: "Consume decrements a persisted per-(subject,period) counter; past cap → 422 fail-closed, row-lock serialized"
+    verification:
+      mechanism: tag
+      ref: "PCB-CONSUME-001"
+    requirement: "Consuming against a subject's current calendar period MUST be evaluated under the
+      subject's PESSIMISTIC_WRITE row lock: if the period's already-recorded consumption count has reached
+      its captured cap, the consume MUST be REJECTED with a deterministic 422 (`type=urn:problem:
+      periodic-count-budget-exhausted`, `code=PCB_BUDGET_EXHAUSTED`) and MUST NOT record a consumption row.
+      Two concurrent consume calls for the SAME subject MUST serialize on the row lock so that, across ANY
+      interleaving, the number of accepted consumptions in a period NEVER exceeds that period's captured
+      cap (CWE-362) — proved by a 2-thread concurrency test."
+    test_method: "RestAssured concurrency proof (N concurrent consume calls against a small cap via
+      ExecutorService → accepted count == cap exactly, every excess call 422 PCB_BUDGET_EXHAUSTED, no
+      accepted consumption lost or double-counted)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      RFC 6585 §4 gives the canonical over-cap semantics (429); this catalog's existing
+      fail-closed-validation convention maps a domain-level cap rejection to 422 (RFC
+      9110 §15.5.21), consistent with every other domain's 422 usage in this template.
+  - id: "PCB-RESET-001"
+    chapter: "The period boundary is calendar-aligned and NOT completion-triggered — a new period starts fresh lazily"
+    requirement: "The active period for a consume call MUST be derived PURELY from the policy's configured
+      calendar cadence (DAILY/WEEKLY/MONTHLY, UTC) and the current instant — `periodKey` is a deterministic
+      function of `(cadence, instant)`, never of a prior period's completion or explicit close action. The
+      FIRST consume request whose derived `periodKey` has no existing period row MUST lazily create a
+      FRESH counter row for that `(subject, periodKey)`, capturing the policy's cap AT THAT MOMENT
+      (PCB-CAP-001) — no separate 'close the previous period' call is required or exists."
+    test_method: "RestAssured (consume across a calendar-day boundary via an explicit `asOf` instant →
+      the later day's consume succeeds with a FRESH counter even though the earlier day's counter was at
+      cap, with no intervening close call)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Lazy calendar-derived reset — the counter for a new period exists the instant it
+      is first needed, never before, and never because a prior period was 'finished'.
+  - id: "PCB-AUDIT-001"
+    chapter: "Each consume and each first-touch-of-period is visible in query; counter rows are never deleted"
+    requirement: "Every accepted consumption MUST be recorded as a permanent, append-only ledger row
+      (sequence-numbered per period) queryable via the audit endpoint; every period's first-touch MUST
+      itself be queryable (periodKey, capAtPeriodStart, firstTouchedAt). No period row and no consumption
+      row is EVER deleted or updated after creation — a corrected count is a NEW period (a fresh subject or
+      an explicit administrative action outside this ledger), never an edit of history."
+    test_method: "RestAssured (after N consumes, the consumption ledger lists exactly N rows in sequence
+      order; the period list shows the period's first-touch metadata; both persist unchanged after further
+      unrelated activity)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Append-only audit trail mirrors the catalog's existing evidence-ledger pattern
+      (net-meter readings, threshold accruals) applied to a recurring counter.
+  - id: "PCB-CAP-001"
+    chapter: "Changing the cap affects only FUTURE periods; an already-touched period keeps its captured cap"
+    requirement: "A policy's cap MAY be changed at any time; the change MUST take effect ONLY for periods
+      NOT YET first-touched. A period that has ALREADY been first-touched (its `capAtPeriodStart` already
+      captured) MUST continue to enforce ITS OWN captured cap for the remainder of that period, even after
+      a subsequent cap change — the captured value is immutable evidence, never re-read from the policy at
+      consume time."
+    test_method: "RestAssured (cap=2, consume twice in period A → captured cap 2; raise cap to 5; a THIRD
+      consume in the SAME period A → still 422 (2 already reached); a consume in the NEXT period → succeeds
+      against the NEW cap of 5)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The captured-at-first-touch cap is what makes PCB-CAP-001 provable without racing
+      real calendar time — the reference workload accepts an explicit `asOf` instant so
+      a period boundary can be crossed deterministically in a test.

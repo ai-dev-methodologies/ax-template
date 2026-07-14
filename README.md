@@ -42,7 +42,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-25 L4 domains + 11 active recipes · 229 Java rules · 99 React rules · 14 ESLint rules · 90 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+25 L4 domains + 11 active recipes · 232 Java rules · 99 React rules · 14 ESLint rules · 91 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -237,7 +237,7 @@ ax-template/
 ├── practices/                      # Java/Spring catalog
 │   ├── rules/                      # 228 rule.md files
 │   ├── upstream/                   # External doc snapshots
-│   ├── evals/                      # 4 hard gates + 90 hard guards
+│   ├── evals/                      # 4 hard gates + 91 hard guards
 │   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)
 │   ├── SKILL.md                    # subsystem skill
 │   ├── MAINTAINER.md               # catalog maintainer guide

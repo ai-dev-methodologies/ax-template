@@ -59,4 +59,11 @@ public class ValuationRunException extends RuntimeException {
             "urn:problem:valuation-version-conflict", "VALRUN_VERSION_CONFLICT",
             "Another recompute or rebase created this version first — exactly one new version wins");
     }
+
+    /** VALRUN-FALLBACK-001 — none of the caller's configured sources has a qualifying as-of point. */
+    public static ValuationRunException noQualifyingSource() {
+        return new ValuationRunException(HttpStatus.NOT_FOUND,
+            "urn:problem:valuation-no-qualifying-source", "VALRUN_NO_QUALIFYING_SOURCE",
+            "No configured source has a run with an as-of at or before the requested time");
+    }
 }

@@ -1,0 +1,73 @@
+version: "0.1.0"
+scope: "threshold-filing-obligation-l0 — the generalized THRESHOLD-TRIGGERED REGULATORY FILING. A per-subject cumulative register carries a configured filing threshold; the accrual that makes the register's value reach/cross the threshold MUST, in the SAME transaction, bind an IMMUTABLE filing-obligation record (subject + threshold snapshot + trigger instant + a statutory due date derived from the trigger) exactly once, and MUST flip the register to a TRIGGERED state so it can never re-trigger (further accrual is rejected, composing the SAME atomic-crossing shape as threshold-terminal-derivation). The filing obligation is CLOSED-LOOP: it reaches its terminal ONLY through an explicit acknowledgment, it NEVER silently expires, and an overdue-but-unacknowledged filing MUST remain visible via a fail-closed query for as long as it stays open (composing the SAME never-auto-expire shape as deadline-obligation). The IDW17 aviation/MRO dogfood's threshold→terminal derivation and IDW12/16/17's deadline-obligation closed-loop are each individually realized in the catalog (thresholdterminal, obligation) but NEVER composed: no existing domain derives a REGULATORY FILING OBLIGATION from a value crossing a compliance threshold. Realized by the thresholdfiling reference workload (com.ax.template.authblueprint.thresholdfiling). Recurs in: AML/CTF suspicious/currency transaction reporting, tax withholding remittance thresholds, environmental emissions reporting triggers, workplace-injury/OSHA-recordable reporting, data-breach notification thresholds — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (@Version optimistic + PESSIMISTIC_WRITE row lock + @Check backstop, mirroring threshold-terminal-derivation's register shape) + FilingObligation as an @AggregateMember of FilingRegister (through-root reads/writes, mirroring deadline-obligation's escalation/derivation members) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "31 CFR §1020.320(b)(3) (US BSA Suspicious Activity Report — the canonical fixed statutory filing window: \"no later than 30 calendar days after the date of the initial detection\") + 14 CFR §43.10 (the SAME atomic-crossing derivation shape, reused from threshold-terminal-derivation) + peer-reviewed closed-loop communication (PMC7510293, reused from deadline-obligation) + CWE-362 (crossing vs late-accrual race) + RFC 9457 + RFC 9110 §15.5.10 (409) / §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "BACKLOG P3-21 (2026-07-14 backlog-100 wave, Lane A) — composes threshold-terminal-derivation's atomic-crossing shape with deadline-obligation's closed-loop shape; no new invariant beyond composition"
+
+# OPT-IN threshold-filing-obligation catalog. NOT a third independent primitive: it composes
+# two ALREADY-REALIZED catalog shapes (crossing-derives-a-fact; closed-loop-never-auto-expires)
+# for the specific case where the derived fact is a REGULATORY FILING OBLIGATION with its own
+# statutory due date — a composition the IDW17/IDW12 dogfoods each proved individually but never
+# together. Generic; the AML/BSA framing is the anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. TFO-TRIGGER-001       (the primitive — crossing binds a filing obligation, exactly once, same-tx)
+#   2. TFO-FILING-RECORD-001 (the bound record is immutable: subject/threshold-snapshot/trigger/due-date)
+#   3. TFO-DEADLINE-001      (statutory due date; overdue-but-open stays visible; ack-only closure)
+
+# ── Composition note ──
+# FilingRegister (@AggregateRoot) mirrors threshold-terminal-derivation's ThresholdRegister:
+# ACTIVE→TRIGGERED is the ONE-WAY crossing edge, sole-mutated by FilingRegisterStateMachine, and
+# further accrual after TRIGGERED is rejected — there is deliberately no re-trigger. FilingObligation
+# is an @AggregateMember(root = FilingRegister.class) — NOT its own aggregate root — specifically so
+# the crossing accrual (which mutates the register) and the filing-obligation bind happen inside
+# ONE @Transactional method mutating ONE aggregate root (HG-ANTI-GODSERVICE-TX); the filing's own
+# ack-only closed-loop lifecycle (OPEN → ACKNOWLEDGED) is still mutated only under the register's
+# row lock, exactly like deadline-obligation's escalation events are members of Obligation. DISTINCT
+# from deadline-obligation itself: there is no multi-axis deadline and no escalation ladder here —
+# the due date is a SINGLE fixed statutory offset from the trigger instant, not a derived/re-derived
+# multi-candidate deadline.
+
+items:
+  - id: "TFO-TRIGGER-001"
+    chapter: "The accrual that crosses the threshold binds a filing obligation — exactly once, same transaction"
+    verification:
+      mechanism: tag
+      ref: "TFO-TRIGGER-001"
+    requirement: "Every filing register MUST carry a mandatory threshold (> 0) fixed at registration. An accrual posted under the register's row lock (PESSIMISTIC_WRITE) that makes the accrued value reach or exceed the threshold MUST be ACCEPTED (the crossing accrual — exact overshoot recorded, exactly like threshold-terminal-derivation's TTD-CROSS-001) AND, in the SAME transaction, MUST (a) flip the register to TRIGGERED and (b) bind exactly one filing-obligation record to it — enforced by a UNIQUE(register_id) DB backstop so a racing or repeated crossing cannot bind a second one. Once TRIGGERED, further accrual MUST be rejected with a deterministic 409 (no re-trigger, no second filing from the same register — a new reporting period is a NEW register with its own identity, exactly like a replacement threshold-terminal asset)."
+    test_method: "RestAssured (accrual below threshold → 200 ACTIVE; the crossing accrual → 200 status=TRIGGERED with a filing obligation now bound; a repeated/late accrual on TRIGGERED → 409; concurrent accruals that jointly cross → exactly one filing bound — N racing accruals via ExecutorService)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The SAME atomic-crossing shape as threshold-terminal-derivation's TTD-CROSS-001/
+      TTD-CONCURRENT-001, applied here so the derived FACT is a filing obligation instead
+      of a bare terminal flag. Quote anchor (14 CFR §43.10(a), reused): "Life-limited part
+      means any part for which a mandatory replacement limit is specified..."
+      (https://www.ecfr.gov/current/title-14/chapter-I/subchapter-C/part-43/section-43.10)
+  - id: "TFO-FILING-RECORD-001"
+    chapter: "The bound filing-obligation record is immutable: subject, threshold snapshot, trigger instant, due date"
+    requirement: "The filing-obligation record bound by TFO-TRIGGER-001 MUST carry, as IMMUTABLE columns (no update path anywhere in the codebase): the subject identifier (denormalized from the register, so the record self-describes even if inspected in isolation), a SNAPSHOT of the threshold value at the moment of triggering (independent of the register's own — already immutable — threshold, for auditability of the specific record), the trigger instant, and the statutory due date DERIVED from the trigger instant (never a free-typed date). Only the record's OWN lifecycle fields (status, ack-by, ack-at — TFO-DEADLINE-001) may ever change; every other column is `@Column(updatable = false)`."
+    test_method: "RestAssured (the bound filing record exposes subject/thresholdSnapshot/triggerInstant/dueAt matching the crossing accrual's context); structural: every non-lifecycle column on the entity is updatable=false; no public setter exists for any of the four fields"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The grounding posture of OBL-GROUND-001 (deadline-obligation) applied to a
+      regulatory record: an auditor reconstructs the filing's provenance from the
+      record alone, without trusting the register's current (possibly since-changed
+      by a later register) state.
+  - id: "TFO-DEADLINE-001"
+    chapter: "Filing due = trigger + a fixed statutory window; overdue-but-open stays visible; ack-only closure"
+    requirement: "The filing obligation's due date MUST equal the trigger instant plus a FIXED statutory window (a documented policy constant in this reference workload). The filing obligation's ONLY terminal transition is an explicit acknowledgment (OPEN → ACKNOWLEDGED, recording who/when) — there is NO silent/scheduled expiry, exactly like deadline-obligation's OBL-ACK-001. An overdue-but-still-OPEN filing obligation MUST remain queryable via a dedicated fail-closed overdue-listing endpoint (it is never silently filtered out just because it is late — lateness is exactly the condition the endpoint surfaces) for as long as no one has acknowledged it. Acknowledging an already-acknowledged filing is a deterministic 409."
+    test_method: "RestAssured (dueAt == triggerInstant + the fixed window; an overdue OPEN filing appears in the overdue-listing endpoint; ack → ACKNOWLEDGED w/ who+when, and it now DISAPPEARS from the overdue listing — not because it silently expired, but because it was explicitly closed; double-ack → 409)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (31 CFR §1020.320(b)(3)): "A bank shall file a suspicious
+      activity report no later than 30 calendar days after the date of initial
+      detection of facts that may constitute a basis for filing..." — the fixed
+      30-day window used in this reference workload is this exact statutory
+      figure, chosen because it is a single, unambiguous number (unlike FATF
+      Recommendation 20, which leaves the exact window to national law).
+      (https://www.ecfr.gov/current/title-31/subtitle-B/chapter-X/part-1020/subpart-C/section-1020.320)
+      Closed-loop posture reused from deadline-obligation's OBL-ACK-001 (PMC7510293).

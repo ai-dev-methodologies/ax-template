@@ -89,6 +89,15 @@ class IdentityVerificationFlowIT {
             "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3"
             + "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5";
 
+    // IDV-CONCORDANCE-001 — a SECOND di paired with the SAME VALID_CI (and vice versa) to
+    // construct a concordance-mismatch re-verification.
+    private static final String OTHER_DI =
+            "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"
+            + "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6";
+    private static final String OTHER_CI =
+            "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5"
+            + "f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7";
+
     @LocalServerPort
     private int port;
 
@@ -437,6 +446,71 @@ class IdentityVerificationFlowIT {
         assertThat(response).doesNotContain("\"di\"");
     }
 
+    // ─── IDV-CONCORDANCE-001 — re-verification ci/di pair inconsistency ───
+
+    private List<AuditLog> concordanceAudits() {
+        Specification<AuditLog> action = (root, query, cb) ->
+            cb.equal(root.get("action"), IdentityVerificationService.CONCORDANCE_AUDIT_ACTION);
+        return auditLogRepository.findAll(action);
+    }
+
+    @Test
+    @Tag("IDV-CONCORDANCE-001")
+    @DisplayName("IDV-CONCORDANCE-001: re-verification with the SAME ci but a DIFFERENT di is rejected 409, no new row persisted")
+    void reverification_sameCiDifferentDi_isRejected409() throws Exception {
+        String first = buildPassPayload(VALID_CI, VALID_DI);
+        given().contentType(ContentType.JSON)
+            .header("X-Identity-Signature", "sha256=" + computeHmacSha256(first, PASS_SECRET))
+            .body(first).when().post(PASS_CALLBACK_ENDPOINT).then().statusCode(200);
+
+        long baseline = concordanceAudits().size();
+        String mismatched = buildPassPayload(VALID_CI, OTHER_DI);
+        given().contentType(ContentType.JSON)
+            .header("X-Identity-Signature", "sha256=" + computeHmacSha256(mismatched, PASS_SECRET))
+            .body(mismatched).when().post(PASS_CALLBACK_ENDPOINT)
+            .then().statusCode(409);
+
+        // no second VerifiedIdentity row for the mismatched attempt
+        assertThat(verifiedIdentityRepository.findAll()).hasSize(1);
+        // a distinct-action audit event was recorded for the mismatch
+        assertThat(concordanceAudits()).hasSize((int) baseline + 1);
+    }
+
+    @Test
+    @Tag("IDV-CONCORDANCE-001")
+    @DisplayName("IDV-CONCORDANCE-001: re-verification with the SAME di but a DIFFERENT ci is rejected 409")
+    void reverification_sameDiDifferentCi_isRejected409() throws Exception {
+        String first = buildPassPayload(VALID_CI, VALID_DI);
+        given().contentType(ContentType.JSON)
+            .header("X-Identity-Signature", "sha256=" + computeHmacSha256(first, PASS_SECRET))
+            .body(first).when().post(PASS_CALLBACK_ENDPOINT).then().statusCode(200);
+
+        String mismatched = buildPassPayload(OTHER_CI, VALID_DI);
+        given().contentType(ContentType.JSON)
+            .header("X-Identity-Signature", "sha256=" + computeHmacSha256(mismatched, PASS_SECRET))
+            .body(mismatched).when().post(PASS_CALLBACK_ENDPOINT)
+            .then().statusCode(409);
+
+        assertThat(verifiedIdentityRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    @Tag("IDV-CONCORDANCE-001")
+    @DisplayName("IDV-CONCORDANCE-001: an identical re-verification (same ci AND di) is not a mismatch")
+    void reverification_sameCiSameDi_isNotAMismatch() throws Exception {
+        String body = buildPassPayload(VALID_CI, VALID_DI);
+        String signature = computeHmacSha256(body, PASS_SECRET);
+        given().contentType(ContentType.JSON)
+            .header("X-Identity-Signature", "sha256=" + signature)
+            .body(body).when().post(PASS_CALLBACK_ENDPOINT).then().statusCode(200);
+        // re-verifying with the exact same (ci, di) pair proceeds normally — a full match
+        given().contentType(ContentType.JSON)
+            .header("X-Identity-Signature", "sha256=" + signature)
+            .body(body).when().post(PASS_CALLBACK_ENDPOINT).then().statusCode(200);
+
+        assertThat(verifiedIdentityRepository.findAll()).hasSize(2);
+    }
+
     private String obtainToken(String email, String role) {
         given()
             .header("Content-Type", "application/json")
@@ -454,9 +528,13 @@ class IdentityVerificationFlowIT {
     // ─── Helper methods ─────────────────────────────────────────────────────
 
     private String buildPassPayload() {
+        return buildPassPayload(VALID_CI, VALID_DI);
+    }
+
+    private String buildPassPayload(String ci, String di) {
         return String.format(
                 "{\"ci_value\":\"%s\",\"di_value\":\"%s\",\"user_name\":\"홍길동\",\"birth_date\":\"19900101\",\"carrier\":\"SKT\"}",
-                VALID_CI, VALID_DI);
+                ci, di);
     }
 
     private String buildKcbPayload() {

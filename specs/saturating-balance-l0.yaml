@@ -1,0 +1,80 @@
+version: "0.1.0"
+scope: "saturating-balance-l0 — the generalized CLAMPED / SATURATING running-balance (a balance that accrues toward a ceiling and debits toward a floor of zero, where an operation that would cross either bound CLAMPS AT the bound instead of erroring or overflowing — e.g. a leave-accrual balance capped at a policy maximum, a loyalty-points balance that never overdraws below zero). Unlike a RESERVATION-style balance (specs/two-axis-inventory-reservation-l0.yaml), which REJECTS an operation that would breach a bound (insufficient stock → 409/422, explicit denial), a saturating balance NEVER rejects on this account — it silently absorbs the excess by clamping, and instead makes the ABSORBED REMAINDER an auditable fact: every accrual/debit records both the REQUESTED amount and the APPLIED (post-clamp) amount, append-only, so 'what was asked for' and 'what actually happened to the balance' are both permanently on the record, and Σ(applied amounts) always reconciles to the current stored balance. The system MUST (1) clamp accrual AT the ceiling — never error, never store a value above cap; (2) clamp debit AT the floor of zero — never error, never store a negative value; (3) record requested vs applied on every ledger entry, append-only, so the clamped remainder is an auditable fact, not a silent loss; (4) under concurrent accrual near the ceiling, converge to EXACTLY the ceiling — never overshoot it, and every concurrent caller's ledger entry is still present with its own correctly-clamped applied amount. Recurs in: payroll leave/PTO accrual caps, loyalty/rewards point balances, prepaid usage credits, rate-limit token buckets modeled as a balance, any 'accumulate up to a max, spend down to zero' counter. Realized by the saturatingbalance reference workload (com.ax.template.authblueprint.saturatingbalance)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (a single mutable balance row behind PESSIMISTIC_WRITE row-lock serialization + @Check(balance BETWEEN 0 AND cap) DB backstop + an append-only, fully immutable ledger of requested-vs-applied amounts) + injected java.time.Clock + RFC 9457 Problem Details + Micrometer"
+standard: "Saturation arithmetic (clamped/saturating addition — a standard numeric-computing discipline: a value that would exceed a representable/policy bound is clamped to that bound rather than wrapping or erroring) + common payroll leave-accrual-cap practice (a jurisdiction- or policy-set PTO/leave accrual ceiling beyond which further accrual is capped, not rejected or lost) + CWE-362 (concurrent balance mutation race) + RFC 9457"
+domain_mode: backend_only
+introduced_at: "Backlog wave 2026-07-14 lane F (fintech) — BACKLOG P3-12"
+
+# OPT-IN saturating-balance catalog. DISTINCT from two-axis-inventory-reservation-l0 (which
+# REJECTS an operation that would breach a bound — insufficient stock is a 409/422
+# denial) and from the register-l0 monotone counter (which only ever accrues, with
+# no ceiling and no debit). This is the third balance shape the catalog was missing:
+# one that ABSORBS instead of rejecting or overflowing, and proves it did so on the
+# permanent record instead of silently discarding the excess. Generic; the
+# leave-accrual framing is an anchor, not a lock-in.
+
+# ── Priority order for fork-receivers ──
+#   1. SATBAL-CEILING-001    (accrual beyond the ceiling clamps AT the ceiling — no error, no overflow row)
+#   2. SATBAL-FLOOR-002      (debit beyond the current balance clamps at 0 — never negative, never rejected)
+#   3. SATBAL-LEDGER-003     (every accrual/debit records requested AND applied amount, append-only; Σapplied == balance)
+#   4. SATBAL-CONCURRENT-004 (keystone — concurrent accrual near the ceiling converges to EXACTLY the cap)
+
+# ── Composition note ──
+# The balance row's PESSIMISTIC_WRITE lock is the same serialization discipline
+# remeasurement-trueup-l0 and reconciliation-l0 already established for
+# concurrency-sensitive single-row mutation (TUP-CONCURRENT-001 / RECON-CONCURRENT-001);
+# this domain applies it to a clamp-on-write balance instead of a versioned run or a
+# disposed item. LedgerEntry rows are @AggregateMember of Balance: root-JPQL reads +
+# common/MemberWriter writes, mirroring TrueUpPosting / ReconciliationItem.
+
+items:
+  - id: "SATBAL-CEILING-001"
+    chapter: "Accrual beyond the ceiling clamps AT the ceiling — no error, no overflow row; the stored balance never exceeds cap"
+    verification:
+      mechanism: rule
+      ref: saturating-clamped-running-balance
+    requirement: "Accruing an amount onto a balance whose (current + requested) would exceed the balance's declared cap MUST clamp the stored result AT the cap — it MUST NOT throw, reject, or store any value above cap. The clamped case is a normal 200 response, not an error. A DB @Check(balance <= cap) backstop MUST make a stored value above cap unrepresentable even if application logic regresses."
+    test_method: "RestAssured (balance with cap=100, current=90; accrue(20) → 200, stored balance == 100, NOT 110, no exception; accrue(5) again while already at cap → 200, balance stays 100; structural: @Check constraint present on the migration and entity)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (saturation/clamped arithmetic — the generic numeric discipline
+      this domain anchors): a saturating operation computes the mathematically exact
+      result and, if it falls outside the representable/policy range, returns the
+      nearest boundary value instead of wrapping or erroring — the behavior this
+      spec requires for the accrual-side bound.
+  - id: "SATBAL-FLOOR-002"
+    chapter: "Debit beyond the current balance clamps at 0 — never negative, never rejected; contrast with reservation's explicit rejection"
+    requirement: "Debiting an amount from a balance whose (current − requested) would fall below zero MUST clamp the stored result AT ZERO — it MUST NOT throw, reject, or store a negative value. This is the deliberate contrast with inventory-reservation-l0 (specs/two-axis-inventory-reservation-l0.yaml), which REJECTS an operation that would breach its bound with an explicit 409/422 denial: a saturating balance never denies on this account, it absorbs. A DB @Check(balance >= 0) backstop MUST make a stored negative value unrepresentable even if application logic regresses."
+    test_method: "RestAssured (balance with current=10; debit(15) → 200, stored balance == 0, NOT -5, no exception, no rejection; debit(5) again while already at 0 → 200, balance stays 0; structural: @Check constraint present)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The deliberate design choice this item pins: a saturating balance and a
+      reservation balance answer the SAME question (\"can this operation go
+      through?\") with OPPOSITE policies (absorb vs reject) — a fork-receiver
+      choosing this primitive is choosing NOT to reject, and this test is what
+      keeps that choice from silently drifting into a 409 over time.
+  - id: "SATBAL-LEDGER-003"
+    chapter: "Every accrual/debit records BOTH the requested amount and the applied (post-clamp) amount, append-only — the clamped remainder is an auditable fact, never a silent loss"
+    requirement: "Every accrual or debit operation MUST append an immutable ledger entry recording (a) the REQUESTED amount (what the caller asked for, verbatim) and (b) the APPLIED amount (what actually changed the stored balance after clamping). When clamping occurred, requested != applied, and BOTH values remain on the permanent record — the difference (the clamped remainder) is never silently discarded. Σ(all applied amounts, accruals positive, debits negative) for a balance MUST always equal its current stored value (the conservation identity a fork-receiver can audit independently of the balance row itself)."
+    test_method: "RestAssured (cap=100, current=90; accrue(20) → ledger entry requested=20, applied=10 (only the room to the cap); debit(200) from a balance at 50 → ledger entry requested=200, applied=-50; walk the full ledger for the balance and assert Σ(applied) == current stored balance; structural: ledger entry columns @Column(updatable=false), no public setters)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      This is the primitive's core auditability claim: \"clamped\" must never mean
+      \"forgotten\". A caller or auditor reading the ledger alone (without trusting
+      the balance row) can reconstruct exactly how much was ever asked for versus
+      how much ever actually landed.
+  - id: "SATBAL-CONCURRENT-004"
+    chapter: "Keystone — under concurrent accrual near the ceiling, the final balance converges to EXACTLY the cap, and every concurrent caller's ledger entry is present with its correctly-clamped applied amount"
+    requirement: "Across N concurrent accrual calls on a balance sitting near its cap (such that the SUM of all N requested amounts would exceed the remaining headroom), the balance row's PESSIMISTIC_WRITE lock MUST serialize every accrual so the final stored balance is EXACTLY the cap — never above it (SATBAL-CEILING-001 still holds under concurrency) and never short of it if the combined requests reach or exceed the remaining headroom. EVERY one of the N concurrent calls MUST still produce its own ledger entry (no silently dropped request), with applied amounts that individually sum to exactly the headroom that was available (CWE-362)."
+    test_method: "Concurrency proof (balance cap=100, current=95, headroom=5; 8 concurrent threads each accrue(10) — i.e. combined requested=80, headroom=5; final balance == 100 EXACTLY; ledger has 8 entries, one per caller, with Σ(applied across all 8) == 5 and every entry NOT already-applied duplicated or lost)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The same lock-then-mutate serialization discipline TUP-CONCURRENT-001 and
+      RECON-CONCURRENT-001 already proved for a versioned run and a disposed item,
+      applied here to a clamp-on-write balance: the row lock is the single
+      serialization point a fork-receiver can rely on regardless of which of the
+      N concurrent callers' requests logically \"arrive first\".

@@ -1,0 +1,140 @@
+version: "0.1.0"
+scope: "withholding-split-l0 — the GROSS-SPLITS-INTO-WITHHOLDING-PLUS-NET posting primitive: a gross
+  payment posting splits into EXACTLY two legs (a withholding leg and a net leg) in one transaction,
+  the withholding amount is derived from a rate SNAPSHOT recorded immutably on the posting (never a
+  live lookup at read time), the rounding remainder is assigned deterministically so the two legs
+  reconstruct the gross to the cent, and a period-scoped remittance run collects the withholding legs
+  idempotently. DISTINCT from balanced-posting-l0: that primitive asserts signed legs of ONE operation
+  net to ZERO (debit == credit, conservation of a moving value between two parties); THIS primitive
+  asserts two POSITIVE legs of one gross amount sum to that GROSS (a partition of one amount into
+  parts, not a transfer between two sides) — they compose (a real remittance ledger may also want the
+  withholding leg balanced against a payable account), but the two invariants are checked differently
+  and neither substitutes for the other. Generic split-posting pattern; 원천징수(withholding-at-source)
+  is the illustrative recurring case, not a Korean-law lock-in — the same shape recurs anywhere one
+  gross figure must be divided into a retained portion and a paid portion (payroll withholding,
+  royalty withholding, marketplace commission-plus-payout splits, tax-at-source on interest/dividends)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA, single @Transactional unit, sole-mutator entities)
+  + BigDecimal exact currency arithmetic (scale 2, HALF_UP) + RFC 9457 Problem Details + Micrometer"
+standard: "Double-entry / split-posting general accounting practice (a gross figure decomposed into
+  named sub-components that must reconstruct the whole) + CWE-682 (Incorrect Calculation — the
+  rounding remainder must be assigned by an explicit deterministic rule, never silently dropped) +
+  RFC 9457 (Problem Details for HTTP APIs) + RFC 9110 §15.5.21 (422 Unprocessable Content) + IEEE 754 /
+  BigDecimal exact-decimal arithmetic"
+domain_mode: backend_only
+introduced_at: "Lane G capital-markets wave 2026-07-14 — BACKLOG P3-30"
+
+# OPT-IN withholding-split catalog. Adopted by any recipe that pays out a gross amount but must
+# retain and separately remit a withheld portion: payroll (income tax withholding), royalty /
+# licensing payouts, marketplace seller payouts (platform fee withheld at source), interest/dividend
+# disbursement. The catalog had balanced-posting-l0 (net-zero transfer) but nothing for a PARTITION of
+# one gross amount into named parts that must reconstruct it — a distinct, simpler invariant (no
+# transfer, no counterparty, just "the parts add up to the whole, and we can prove which rate produced
+# them").
+
+# ── Priority order for fork-receivers ──
+#   1. WHT-SPLIT-001    (the primitive — gross splits into withholding + net legs, sum == gross)
+#   2. WHT-RATE-002     (the rate snapshot is recorded immutably; rounding remainder to net leg)
+#   3. WHT-REMIT-003    (idempotent per-period remittance collection)
+#   4. WHT-IMMUTABLE-004 (append-only legs; correction is a reversing entry, never a mutation)
+
+# ── Composition note ──
+# DISTINCT from balanced-posting-l0 (CONSERVATION-LEGS-NET-ZERO-001): that primitive's legs are
+# SIGNED and must net to ZERO (a transfer/conservation invariant across two sides of one movement).
+# THIS primitive's legs are POSITIVE amounts of ONE gross figure and must sum to that GROSS (a
+# partition invariant, not a conservation-under-transfer invariant). A real ledger MAY compose both —
+# post the withholding leg as a balanced-posting-l0 debit/credit against a "withholding payable"
+# account — but that composition is a fork-receiver decision, out of this spec's scope.
+# DISTINCT from remeasurement-trueup-l0 (estimate→actual supersession over time) and from
+# threshold-terminal-derivation-l0 (a ceiling-crossing lifecycle terminal) — withholding-split has no
+# lifecycle and no re-estimation; every posting is a one-shot, immutable, exact partition.
+
+items:
+  - id: "WHT-SPLIT-001"
+    chapter: "A gross payment posting splits into EXACTLY withholding + net legs in the SAME transaction; the legs sum to gross to the cent"
+    verification:
+      mechanism: tag
+      ref: "WHT-SPLIT-001"
+    requirement: "Posting a gross payment MUST persist EXACTLY two legs — a WITHHOLDING leg and a NET
+      leg — inside ONE `@Transactional` unit through a single sole-mutator, both legs carrying the
+      SAME posting id. All amounts MUST use `BigDecimal` at a fixed currency scale (2); the sum of the
+      two legs' amounts MUST equal the gross amount EXACTLY, compared via `BigDecimal::compareTo`
+      (never `equals`, which is scale-sensitive). The system MUST NOT derive the net leg independently
+      and then merely hope it reconstructs the gross — the net leg MUST be computed as
+      `gross - withholding` so the sum is exact BY CONSTRUCTION, and a pre-commit backstop MUST re-read
+      the persisted legs and re-assert the sum equals gross before the transaction commits (the
+      service-form backstop; no partial commit is ever visible)."
+    test_method: "RestAssured integration test posting a gross amount + rate, asserting exactly 2 legs
+      persisted, both leg amounts positive, and legAmounts.sum() compareTo gross == 0"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The keystone partition invariant. Distinct from balanced-posting-l0's net-ZERO conservation —
+      here the target sum is the GROSS, not zero, and both legs are positive components of one
+      figure rather than opposing signed sides of a transfer. Anchored to CWE-682 (Incorrect
+      Calculation — MITRE): "The product performs a calculation that generates incorrect or
+      unintended results that are later used in security-critical decisions or resource
+      management." (https://cwe.mitre.org/data/definitions/682.html) — computing net independently
+      of gross-minus-withholding would be exactly this incorrect calculation; deriving net BY
+      CONSTRUCTION from the gross and the withholding leg makes the sum exact, not merely tested.
+  - id: "WHT-RATE-002"
+    chapter: "The withholding amount is derived from a rate snapshot recorded immutably on the posting; the rounding remainder is assigned deterministically to the net leg"
+    requirement: "Every withholding posting MUST record the RATE that produced the split as an
+      immutable column on the posting (never a live policy lookup at read time — the audit question
+      'which rate produced this split' MUST be answerable from the posting row alone). The withholding
+      leg amount MUST be computed as `gross * rate`, rounded to the currency scale (2) with a FIXED,
+      documented `RoundingMode` (HALF_UP); the net leg amount MUST be `gross - withholdingAmount`
+      (exact `BigDecimal` subtraction, no independent rounding) — this is what makes the rounding
+      remainder land deterministically on the net leg rather than being split, dropped, or
+      re-rounded a second time. An odd-cent case (a rate that does not divide the gross evenly at
+      scale 2) MUST be exercised and MUST still sum to gross exactly."
+    test_method: "RestAssured (gross=100.01, rate=0.333333 → withholding rounds HALF_UP to 33.34, net
+      = 66.67 computed as gross-withholding, sum == 100.01 exactly; the recorded rate on the posting
+      equals the submitted rate)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-682, Incorrect Calculation — MITRE, the same anchor as WHT-SPLIT-001,
+      applied here to the ROUNDING step specifically): "The product performs a calculation that
+      generates incorrect or unintended results..." A rate applied at read time (rather than
+      snapshotted at posting time) would make the split retroactively unreproducible if the rate
+      later changes — the immutable snapshot is what keeps the audit trail honest.
+  - id: "WHT-REMIT-003"
+    chapter: "A remittance run collects the withholding legs for a period idempotently — a rerun produces the same remittance, never a double-count"
+    requirement: "Collecting withholding legs for remittance MUST be scoped to a PERIOD (e.g. a
+      calendar month) and MUST be idempotent: the first collection for a given period computes and
+      PERSISTS the total withheld amount and posting count as a remittance run row; every SUBSEQUENT
+      collection request for the SAME period MUST return the SAME persisted remittance run
+      UNCHANGED — it MUST NOT re-sum and MUST NOT double-count, even if additional postings for that
+      period are created after the first collection. A structural UNIQUE constraint on the period
+      column MUST make a duplicate remittance run for one period unrepresentable, even under a
+      concurrent race (the losing writer catches the constraint violation and returns the winner's
+      row, never a second row)."
+    test_method: "RestAssured (post two withholding postings in period P; collect remittance for P →
+      totalWithheld = sum of both; post a THIRD withholding posting in P; collect remittance for P
+      again → identical totalWithheld/count as the first collection, not re-summed)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Idempotent-per-key collection is the same UNIQUE-constraint-plus-catch pattern the catalog
+      already uses for per-material policy versions (material-divisibility-constraint-l0) and
+      per-scope registers (threshold-terminal-derivation-l0) — a structural backstop, not an
+      application-level "check then insert" race left ungoverned.
+  - id: "WHT-IMMUTABLE-004"
+    chapter: "Posted legs are append-only; a correction is a reversing entry, never a mutation of the original posting"
+    requirement: "A withholding posting and its legs MUST be immutable once persisted — every column
+      is `@Column(updatable = false)`, and the entities expose NO public setter. Correcting a posting
+      (e.g. the gross amount was wrong) MUST NOT edit the original row; it MUST create a NEW posting
+      that reverses the original (a negative-gross posting referencing the original posting's id as
+      its correction target), computed through the SAME split logic (WHT-SPLIT-001/002) so the
+      reversal's legs also sum to the (negative) gross exactly. The original posting and its legs
+      remain on record unchanged — the correction is additional evidence, not an edit."
+    test_method: "Structural (every posting/leg column @Column(updatable=false); no public setter on
+      either entity; no delete method anywhere in the repository/service) + RestAssured (reverse an
+      existing posting → a NEW posting is created with gross = -original.gross, its own legs summing
+      to that negative gross, and the original posting's legs are byte-for-byte unchanged on re-read)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Append-only-plus-reversing-entry is the same discipline the catalog already applies to
+      remeasurement-trueup-l0 (a correction is a NEW forward posting, never an edit of a settled
+      period) — corrections are evidence, not amendments.

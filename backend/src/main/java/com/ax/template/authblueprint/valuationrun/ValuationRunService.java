@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -28,6 +29,9 @@ import java.util.UUID;
  */
 @Service
 public class ValuationRunService {
+
+    /** VALRUN-FALLBACK-001 — the implicit source every plain recompute/rebase is tagged with. */
+    public static final String PRIMARY_SOURCE = "PRIMARY";
 
     private final ValuationSubjectRepository subjects;
     private final ValuationRunRepository runs;
@@ -63,13 +67,22 @@ public class ValuationRunService {
     @Transactional
     public ValuationRun recompute(UUID subjectId, int expectedHeadVersion, BigDecimal declaredTotal,
                                   String basis, Map<String, BigDecimal> positions) {
+        return recomputeForSource(subjectId, PRIMARY_SOURCE, expectedHeadVersion, declaredTotal, basis, positions);
+    }
+
+    /** VALRUN-FALLBACK-001 — recompute tagged with a NAMED source, so a fallback as-of read can
+     *  later try sources in a configured priority order. Otherwise identical to {@link #recompute}. */
+    @Transactional
+    public ValuationRun recomputeForSource(UUID subjectId, String sourceRef, int expectedHeadVersion,
+                                           BigDecimal declaredTotal, String basis,
+                                           Map<String, BigDecimal> positions) {
         ValuationSubject subject = subjects.findByIdForUpdate(subjectId)
             .orElseThrow(ValuationRunException::notFound);
         if (subject.getHeadRunVersion() != expectedHeadVersion) {
             metrics.record("recompute", "conflict");
             throw ValuationRunException.versionConflict();    // the head already moved — loser of the race
         }
-        ValuationRun run = appendVersion(subject, declaredTotal, basis, positions, null);
+        ValuationRun run = appendVersion(subject, declaredTotal, basis, positions, null, sourceRef);
         metrics.record("recompute", "ok");
         return run;
     }
@@ -84,7 +97,8 @@ public class ValuationRunService {
             metrics.record("rebase", "not_current");
             throw ValuationRunException.notCurrent();         // rebase only from the current head — chain stays linear
         }
-        ValuationRun baseline = appendVersion(subject, declaredTotal, newBasis, positions, fromRunVersion);
+        ValuationRun baseline = appendVersion(subject, declaredTotal, newBasis, positions, fromRunVersion,
+            PRIMARY_SOURCE);
         metrics.record("rebase", "ok");
         return baseline;
     }
@@ -98,7 +112,7 @@ public class ValuationRunService {
      * rebase baseline.
      */
     private ValuationRun appendVersion(ValuationSubject subject, BigDecimal declaredTotal, String basis,
-                                       Map<String, BigDecimal> positions, Integer rebasedFrom) {
+                                       Map<String, BigDecimal> positions, Integer rebasedFrom, String sourceRef) {
         String op = rebasedFrom == null ? "recompute" : "rebase";
         if (positions == null || positions.isEmpty()) {
             metrics.record(op, "empty");
@@ -112,7 +126,7 @@ public class ValuationRunService {
             // @Check (output_sum = total_value) ties the persisted columns; the meaningful
             // conservation proof is the independent repo SUM below against the caller's total.
             run = runs.saveAndFlush(new ValuationRun(UUID.randomUUID(), subject.getId(), nextVersion,
-                now, basis, declaredTotal, declaredTotal, rebasedFrom, now));
+                now, basis, declaredTotal, declaredTotal, rebasedFrom, sourceRef, now));
         } catch (DataIntegrityViolationException dup) {
             metrics.record(op, "conflict");
             throw ValuationRunException.versionConflict();    // loser of the concurrent advance → 409
@@ -139,6 +153,25 @@ public class ValuationRunService {
             .orElseThrow(ValuationRunException::noRunAsOf);
         metrics.record("as_of_read", "ok");
         return run;
+    }
+
+    /** VALRUN-FALLBACK-001 — try {@code sourcePriority} in order; the FIRST source with a
+     *  qualifying as-of ≤ T run wins (priority order, not most-recent-across-sources). The
+     *  returned run's {@code sourceRef} tells the caller which source actually served the read
+     *  (provenance). No source in the list qualifying is fail-closed (404), never a silent
+     *  default. */
+    @Transactional(readOnly = true)
+    public ValuationRun asOfWithFallback(UUID subjectId, Instant asOf, List<String> sourcePriority) {
+        getSubject(subjectId);                                // 404 before a no-run-as-of
+        for (String source : sourcePriority) {
+            Optional<ValuationRun> hit = runs.findAsOfBySource(subjectId, source, asOf, Limit.of(1));
+            if (hit.isPresent()) {
+                metrics.record("as_of_fallback_read", "ok");
+                return hit.get();
+            }
+        }
+        metrics.record("as_of_fallback_read", "no_qualifying_source");
+        throw ValuationRunException.noQualifyingSource();
     }
 
     /** VALRUN-REBASE-001 — resolve the subject's CURRENT run (the latest head version). */

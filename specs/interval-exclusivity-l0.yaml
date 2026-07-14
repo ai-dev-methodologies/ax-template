@@ -1,0 +1,120 @@
+version: "0.1.0"
+scope: "interval-exclusivity-l0 — the TWO-SIDED TEMPORAL EXCLUSIVITY primitive: booking a resource
+  for a half-open interval `[start, end)` rejects ANY overlapping booking on that resource, using
+  HALF-OPEN semantics so back-to-back intervals (`[a,b)` followed by `[b,c)`) are LEGAL, not
+  overlapping. Concurrent overlapping booking attempts on the same resource serialize to exactly one
+  winner. An interval MAY be shortened at any time (always safe — it can only reduce, never create,
+  overlap); extending an interval MUST re-validate overlap atomically before the extension commits;
+  cancelling a booking frees its window IMMEDIATELY for new bookings. HONEST DEGRADATION: PostgreSQL's
+  GiST exclusion constraint (`EXCLUDE USING gist (resource_key WITH =, during WITH &&)`) is the
+  textbook structural backstop for this invariant, but it is NOT expressible on H2 (this catalog's
+  test database has no range-type / GiST index support) — this spec's guarantee therefore rests on a
+  PESSIMISTIC_WRITE row lock on a per-resource anchor row (the same single-lock-serializes-all-writes
+  discipline threshold-terminal-derivation-l0 uses), NOT a database-level exclusion constraint. This is
+  documented here explicitly rather than claimed as a GiST-equivalent guarantee — mirrors the
+  geo-bounded-query-l0 DEGRADED-IMPL precedent (bounding-box + haversine standing in for PostGIS)."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA, PESSIMISTIC_WRITE row lock on a per-resource
+  anchor entity, sole-mutator state machine) + java.time.Instant half-open interval arithmetic + RFC
+  9457 Problem Details + Micrometer"
+standard: "Allen's Interval Algebra (the 'before/meets/overlaps' relations between two intervals — a
+  half-open interval model where two intervals meet, not overlap, when one's end equals the other's
+  start) + PostgreSQL range types / exclusion constraints documentation (the textbook DB-native
+  solution to this invariant, honestly noted as unavailable on H2) + RFC 9457 + RFC 9110 §15.5.10
+  (409 Conflict)"
+domain_mode: backend_only
+introduced_at: "Lane G capital-markets wave 2026-07-14 — BACKLOG P3-38"
+
+# OPT-IN interval-exclusivity catalog. Adopted by any recipe that allocates a resource exclusively
+# over a time window: meeting-room / equipment booking, vehicle or asset reservation, on-call /
+# shift scheduling (one person per slot), settlement-window locking. The catalog had
+# bounded-capacity-claim (a one-sided COUNTER cap, no notion of time) and threshold-terminal-
+# derivation (a value-crossing lifecycle terminal) but nothing asserting that TWO TIME WINDOWS on
+# the same resource can never coexist.
+
+# ── Priority order for fork-receivers ──
+#   1. IVX-OVERLAP-001    (the primitive — half-open overlap rejection, back-to-back legal, both boundary directions)
+#   2. IVX-CONCURRENT-002 (2-thread simultaneous overlapping booking → exactly one wins; H2-honest lock-based serialization)
+#   3. IVX-MUTATE-003     (shorten always allowed; extend re-validates atomically; cancel frees the window immediately)
+
+# ── Composition note ──
+# DISTINCT from bounded-capacity-claim-l0 (a one-sided numeric counter with no time dimension) and
+# threshold-terminal-derivation-l0 (a value crossing a ceiling drives an irreversible lifecycle
+# terminal — no notion of overlapping WINDOWS). Half-open semantics (`[start, end)`) is the same
+# convention Allen's interval algebra and virtually every scheduling system use so that adjacency
+# is representable without an off-by-one: an interval "meets" the next without "overlapping" it.
+
+items:
+  - id: "IVX-OVERLAP-001"
+    chapter: "Booking a resource for [start, end) rejects ANY overlap; half-open semantics make back-to-back intervals legal"
+    verification:
+      mechanism: tag
+      ref: "IVX-OVERLAP-001"
+    requirement: "Booking a resource for the half-open interval `[newStart, newEnd)` MUST be
+      REJECTED with 409 Conflict (`IVX_OVERLAP`) if it overlaps ANY existing ACTIVE booking on that
+      resource, where overlap is defined as `newStart < existingEnd AND newEnd > existingStart`. Two
+      intervals that MEET but do not overlap (`[a,b)` immediately followed by `[b,c)`) MUST be LEGAL
+      in BOTH directions (a booking may be placed immediately before or immediately after an
+      existing one). The exact-boundary case (a new interval whose `end` equals an existing
+      interval's `start`, or whose `start` equals an existing interval's `end`) MUST be exercised and
+      MUST succeed."
+    test_method: "RestAssured (book [10:00,11:00) → 201; book overlapping [10:30,11:30) → 409
+      IVX_OVERLAP; book back-to-back-after [11:00,12:00) → 201 legal; book back-to-back-before
+      [09:00,10:00) → 201 legal; a fully-contained sub-interval [10:15,10:45) → 409 IVX_OVERLAP)"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Half-open interval semantics is the standard scheduling-system convention (and Allen's
+      Interval Algebra's own convention) precisely because it makes "meets" cleanly distinct from
+      "overlaps" without an off-by-one special case: `end == otherStart` is meets (legal), never
+      overlaps. An inclusive-inclusive (`[start, end]`) model would make every back-to-back booking
+      illegal unless a 1-unit gap were manually reserved — a common scheduling-system bug this
+      primitive is designed to make structurally impossible.
+  - id: "IVX-CONCURRENT-002"
+    chapter: "2-thread simultaneous overlapping booking → exactly one wins; H2-honest lock-based serialization (no GiST EXCLUDE available)"
+    requirement: "Under concurrent booking attempts for OVERLAPPING windows on the SAME resource,
+      exactly ONE attempt MUST succeed (201) and every other overlapping attempt MUST be rejected
+      (409 `IVX_OVERLAP`) — no interleaving may commit two bookings that overlap each other. THE
+      GUARANTEE'S MECHANISM MUST BE DOCUMENTED HONESTLY: PostgreSQL's `EXCLUDE USING gist` range
+      constraint is the canonical database-native backstop for this invariant, but it is NOT
+      expressible on H2 (no range-type / GiST index support in this catalog's test database); this
+      spec's serialization instead rests on a `PESSIMISTIC_WRITE` row lock acquired on a per-resource
+      anchor row BEFORE the overlap check runs, so the overlap-check-then-insert sequence for one
+      resource can never interleave across two concurrent requests. A fork-receiver deploying on
+      PostgreSQL in production MAY additionally add the GiST exclusion constraint as true
+      defense-in-depth; this spec does not claim that additional guarantee for the H2-verified
+      baseline."
+    test_method: "RestAssured concurrency proof: 2 threads simultaneously book the exact same
+      overlapping window on one resource via a CountDownLatch-gated ExecutorService → exactly one
+      201, exactly one 409 IVX_OVERLAP, no interleaving lets both commit"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Honest-degradation precedent: geo-bounded-query-l0 documents bounding-box + haversine standing
+      in for PostGIS's native spatial index rather than silently claiming PostGIS-equivalent
+      behavior; this spec does the same for the H2-vs-PostgreSQL-GiST gap. The row-lock mechanism is
+      the SAME single-anchor-row-serializes-all-writes discipline threshold-terminal-derivation-l0
+      uses for its `PESSIMISTIC_WRITE` register lock — a proven pattern in this catalog, just applied
+      to a per-resource booking ledger instead of a per-scope cumulative register.
+  - id: "IVX-MUTATE-003"
+    chapter: "Shortening an interval is always allowed; extending re-validates overlap atomically; cancelling frees the window immediately"
+    requirement: "Shortening a booking's interval (the new interval is a SUBSET of the current one —
+      `newStart >= currentStart AND newEnd <= currentEnd`) MUST be allowed UNCONDITIONALLY — a
+      shrinking window can never newly overlap anything it did not already fit within. Extending a
+      booking's interval (the new interval is NOT a subset of the current one) MUST re-validate
+      overlap against every OTHER active booking on the resource, ATOMICALLY under the same
+      per-resource lock used for creation, and MUST be rejected (409 `IVX_OVERLAP`) if the extension
+      would newly overlap another active booking. Cancelling a booking MUST free its window
+      IMMEDIATELY — a cancelled booking MUST be excluded from every subsequent overlap check, so a
+      new booking for the just-freed window succeeds without delay."
+    test_method: "RestAssured (book A=[10:00,12:00) and B=[12:00,13:00); shrink A to [11:00,11:30) →
+      200 unconditionally; extend A to [11:00,12:30) → 409 IVX_OVERLAP (would overlap B); extend A to
+      [10:30,12:00) → 200 (fits the gap, no overlap with B); cancel B; extend A to [10:30,13:00) → 200
+      (B's window is immediately free once cancelled))"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      The three operations (shrink / extend / cancel) are handled by three DISTINCT code paths with
+      distinct guarantees rather than one generic "update" — shrinking needs no overlap re-check at
+      all (a pure safety argument: a subset of a previously-valid window is trivially still valid),
+      while extending genuinely needs the same atomic re-validation a fresh booking does. Collapsing
+      these into one path would either over-reject shrink requests or under-validate extend requests.

@@ -92,6 +92,21 @@ audit:
   trace:
     IDV-AUDIT-001: every callback attempt is audited
 
+# ─── concordance ──────────────────────────────────────────────────────────────
+concordance:
+  policy: >
+    When a verified identity carries BOTH ci and di, a re-verification event for
+    the same person MUST present a (ci, di) pair consistent with the stored one.
+    A partial match (same ci with a different di, or the same di with a
+    different ci) is a concordance mismatch: rejected fail-closed BEFORE any
+    persist, and recorded via its OWN distinct audit action constant
+    (IDENTITY_VERIFICATION_CONCORDANCE_MISMATCH) — never folded into the
+    generic per-callback IDENTITY_VERIFICATION_CALLBACK action.
+  response: 409
+  audit_action: IDENTITY_VERIFICATION_CONCORDANCE_MISMATCH
+  trace:
+    IDV-CONCORDANCE-001: ci/di pair inconsistent with a stored identity → 409 + distinct-action audit
+
 # ─── admin ────────────────────────────────────────────────────────────────────
 admin:
   endpoints:

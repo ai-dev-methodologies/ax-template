@@ -10,6 +10,7 @@ import jakarta.persistence.Version;
 
 import org.hibernate.annotations.Check;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import com.ax.template.authblueprint.common.AggregateRoot;
@@ -53,6 +54,16 @@ public class Obligation {
     @Column(name = "ack_at")
     private Instant ackAt;
 
+    /** OBL-CONSEQUENCE-001 — the OPTIONAL basis a BREACH consequence is measured against;
+     *  declared once at creation, never a mutable "amount owed" the sweep must keep in sync. */
+    @Column(name = "breach_basis_amount", updatable = false, precision = 19, scale = 4)
+    private BigDecimal breachBasisAmount;
+
+    /** OBL-WAIVER-001 — the SAME dual-axis shape as OBL-AXIS-001, applied to a waiver's validity
+     *  window: how many usage-advance events this obligation has seen so far. */
+    @Column(name = "usage_cycle_count", nullable = false)
+    private long usageCycleCount;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
@@ -64,12 +75,19 @@ public class Obligation {
 
     public Obligation(UUID id, String obligationKey, Instant effectiveDeadline, Instant windowStart,
                       Instant createdAt) {
+        this(id, obligationKey, effectiveDeadline, windowStart, createdAt, null);
+    }
+
+    public Obligation(UUID id, String obligationKey, Instant effectiveDeadline, Instant windowStart,
+                      Instant createdAt, BigDecimal breachBasisAmount) {
         this.id = id;
         this.obligationKey = obligationKey;
         this.status = ObligationStatus.OPEN;
         this.effectiveDeadline = effectiveDeadline;
         this.windowStart = windowStart;
         this.createdAt = createdAt;
+        this.breachBasisAmount = breachBasisAmount;
+        this.usageCycleCount = 0;
     }
 
     /** Sole-mutator hook (service, under the row lock) — the deadline is always min(candidates). */
@@ -84,6 +102,12 @@ public class Obligation {
         this.ackAt = at;
     }
 
+    /** Sole-mutator hook (service, under the row lock) — one usage-cycle event has occurred;
+     *  this is the axis a waiver's expiresAfterCycles bound is measured against (OBL-WAIVER-001). */
+    void incrementUsageCycle() {
+        this.usageCycleCount++;
+    }
+
     public UUID getId() { return id; }
     public String getObligationKey() { return obligationKey; }
     public ObligationStatus getStatus() { return status; }
@@ -91,6 +115,8 @@ public class Obligation {
     public Instant getWindowStart() { return windowStart; }
     public String getAckBy() { return ackBy; }
     public Instant getAckAt() { return ackAt; }
+    public BigDecimal getBreachBasisAmount() { return breachBasisAmount; }
+    public long getUsageCycleCount() { return usageCycleCount; }
     public Long getVersion() { return version; }
     public Instant getCreatedAt() { return createdAt; }
 }

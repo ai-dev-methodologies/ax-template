@@ -1,0 +1,114 @@
+version: "0.1.0"
+scope: "cash-in-lieu-l0 — the FRACTIONAL-ENTITLEMENT-NEVER-ALLOCATED-IN-KIND primitive: an
+  entitlement calculation (e.g. a corporate-action ratio applied to a holding) splits into an
+  INTEGER units-in-kind part and a fractional remainder; the integer part is allocated as units, the
+  fractional remainder is converted to cash at a rate SNAPSHOT recorded immutably at allocation time
+  — it is NEVER allocated as a fraction of a unit. The allocation run is idempotent per (subject,
+  event). DISTINCT from material-divisibility-constraint-l0 (DIV-INTEGRAL-001): that primitive
+  REJECTS a fractional quantity outright (422, the caller must resubmit a whole quantity); THIS
+  primitive never rejects — a fractional entitlement is EXPECTED and is always resolved by splitting
+  it into an in-kind part plus a cash part. The two are the deliberate opposite reactions to the same
+  underlying fact (a computed quantity is not a whole number): reject-and-ask-again vs
+  split-and-monetize. Generic corporate-action / entitlement pattern (stock splits, mergers, spin-offs,
+  rights issues producing a fractional new-share entitlement); the corporate-action framing is the
+  anchor, not a jurisdiction lock-in — the same shape recurs in loyalty-point conversion ratios and
+  in-kind benefit distributions that round to a fractional unit."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA, append-only allocation rows, UNIQUE(subject,
+  event) idempotency backstop) + BigDecimal exact arithmetic (share-quantity scale for the
+  units/remainder split, currency scale 2 for the monetized cash value) + RFC 9457 Problem Details +
+  Micrometer"
+standard: "Corporate-action cash-in-lieu-of-fractional-shares practice (a well-established mechanism:
+  a shareholder entitled to a fractional new share receives cash instead, valued at a reference
+  price) + CWE-682 (Incorrect Calculation — the units/remainder split and the cash rounding must both
+  be exact, deterministic operations, never a lossy shortcut) + RFC 9457 + RFC 9110 §15.5.21 (422)"
+domain_mode: backend_only
+introduced_at: "Lane G capital-markets wave 2026-07-14 — BACKLOG P3-31"
+
+# OPT-IN cash-in-lieu catalog. Adopted by any recipe that computes an entitlement from a ratio applied
+# to a holding and must never allocate a fraction of an indivisible unit: stock splits / reverse
+# splits, mergers/exchanges with a non-integer exchange ratio, spin-off share distributions, rights
+# issues. The catalog had material-divisibility-constraint-l0 (reject a fraction) but nothing for the
+# complementary, equally common resolution — accept the fraction and monetize it.
+
+# ── Priority order for fork-receivers ──
+#   1. CIL-FRACTION-001  (the primitive — integer units in kind, fraction NEVER allocated, converted to cash at a recorded rate snapshot)
+#   2. CIL-CONSERVE-002  (units + fractional remainder reconstructs the full entitlement exactly; cash rounding is a separate, explicit step)
+#   3. CIL-IDEMPOTENT-003 (allocation is idempotent per (subject, event) — UNIQUE backstop, rerun returns the existing allocation)
+
+# ── Composition note (DISTINCT from material-divisibility-constraint-l0) ──
+# material-divisibility-constraint-l0's DIV-INTEGRAL-001 REJECTS a fractional quantity against an
+# INTEGER_ONLY material (422, the caller resubmits) — it never converts anything to cash. THIS domain
+# never rejects: the fractional part of a computed entitlement is an EXPECTED, routine outcome of a
+# ratio calculation, and the resolution is always split-in-kind-plus-cash, never a 422. The two
+# primitives answer different questions: divisibility asks "is this SUBMITTED quantity representable
+# for this material?"; cash-in-lieu asks "this COMPUTED entitlement has a fractional remainder — how
+# do we settle it?" A fork-receiver never needs both on the same value in the same flow.
+
+items:
+  - id: "CIL-FRACTION-001"
+    chapter: "An entitlement splits into integer units-in-kind + a fractional remainder; the fraction is NEVER allocated in kind — it is converted to cash at a rate snapshot recorded immutably"
+    verification:
+      mechanism: tag
+      ref: "CIL-FRACTION-001"
+    requirement: "Computing an entitlement (`holdingQuantity * ratio`) MUST split the raw result into
+      an INTEGER `unitsInKind` (the floor of the raw entitlement) and a `fractionalRemainder` (the
+      raw entitlement minus `unitsInKind`, in `[0, 1)`). `unitsInKind` MUST be allocated as whole
+      units; `fractionalRemainder` MUST NEVER be allocated as a fraction of a unit — it MUST be
+      converted to a cash value using a rate SNAPSHOT (e.g. a reference price) that is recorded
+      IMMUTABLY on the allocation record at the time of allocation, never re-derived from a live
+      price lookup on a later read. The cash value MUST be `fractionalRemainder * cashRate`, rounded
+      to the currency scale (2) with a fixed, documented `RoundingMode` (HALF_UP)."
+    test_method: "RestAssured (holdingQuantity=10, ratio=0.35 → rawEntitlement=3.5 → unitsInKind=3,
+      fractionalRemainder=0.5; cashRate=7.33 → cashValue = 0.5*7.33 rounded HALF_UP = 3.67; assert the
+      response never expresses unitsInKind as anything but a whole number)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Corporate-action cash-in-lieu is the well-established real-world anchor: a shareholder entitled
+      to (for example) 3.5 new shares under a split ratio receives 3 whole shares plus cash for the
+      0.5-share remainder, valued at a stated reference price — no brokerage allocates half a share
+      certificate. Contrast material-divisibility-constraint-l0's DIV-INTEGRAL-001, which rejects
+      (422) rather than settling; this primitive settles, it never rejects.
+  - id: "CIL-CONSERVE-002"
+    chapter: "unitsInKind + fractionalRemainder reconstructs the full entitlement exactly; cash rounding is a separate, explicitly-defined step"
+    requirement: "`unitsInKind + fractionalRemainder` MUST equal the raw entitlement EXACTLY (compared
+      via `BigDecimal::compareTo`) — this is a pure `BigDecimal` subtraction with no rounding
+      involved, since `fractionalRemainder` is DEFINED as `rawEntitlement - unitsInKind`. The
+      subsequent conversion of `fractionalRemainder` into a currency `cashValue` is a SEPARATE,
+      explicitly-defined rounding step (HALF_UP at scale 2) and MUST NOT be conflated with the
+      units/remainder conservation check — a fork-receiver reading the allocation record can verify
+      the share-quantity split is exact even though the cash figure it produced is, necessarily,
+      rounded to the cent."
+    test_method: "RestAssured + structural assertion: for a range of holdingQuantity/ratio pairs
+      (including a repeating-decimal ratio), assert `unitsInKind + fractionalRemainder ==
+      rawEntitlement` exactly via compareTo, independent of the cashRate/cashValue rounding"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-682, Incorrect Calculation — MITRE): "The product performs a calculation
+      that generates incorrect or unintended results that are later used in security-critical
+      decisions or resource management." (https://cwe.mitre.org/data/definitions/682.html)
+      Keeping the exact share-quantity conservation (subtraction, no rounding) strictly separate from
+      the currency rounding (HALF_UP, scale 2) is what prevents this class of incorrect calculation —
+      conflating the two would silently let a cent-level rounding error masquerade as a share-quantity
+      defect, or vice versa.
+  - id: "CIL-IDEMPOTENT-003"
+    chapter: "An allocation run is idempotent per (subject, event) — a rerun returns the existing allocation, UNIQUE-backstopped"
+    requirement: "Allocating cash-in-lieu for a (subject, event) pair MUST be idempotent: the FIRST
+      allocation request for a given (subject, event) computes and PERSISTS the allocation (units,
+      remainder, cash rate, cash value); every SUBSEQUENT request for the SAME (subject, event) MUST
+      return the SAME persisted allocation UNCHANGED, even if the request carries different inputs
+      (a different holding quantity, ratio, or rate) — the FIRST allocation is authoritative and
+      frozen. A structural UNIQUE constraint on `(subjectRef, eventRef)` MUST make a duplicate
+      allocation unrepresentable even under a concurrent race (the losing writer catches the
+      constraint violation and returns the winner's row)."
+    test_method: "RestAssured (allocate for subject S / event E → persisted; allocate again for the
+      SAME S/E with DIFFERENT holdingQuantity → returns the FIRST allocation's values unchanged, no
+      second row created)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The same UNIQUE-constraint-plus-catch idempotency pattern already used by
+      material-divisibility-constraint-l0 (per-material policy version) and
+      threshold-terminal-derivation-l0 (per-scope register) — a structural backstop rather than an
+      ungoverned check-then-insert race.

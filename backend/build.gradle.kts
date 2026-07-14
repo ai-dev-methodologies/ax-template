@@ -787,6 +787,231 @@ tasks.register<Test>("testCurrencyArithmetic") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testThresholdFiling") {
+    useJUnitPlatform {
+        includeTags("THRESHOLD_FILING")
+    }
+    description = "Run threshold-filing domain compliance tests (threshold-filing-obligation-l0: TFO-TRIGGER/FILING-RECORD/DEADLINE — crossing binds an immutable filing obligation exactly-once same-tx, 30-day statutory window, ack-only closure)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testTieredAuthority") {
+    useJUnitPlatform {
+        includeTags("TIEREDAUTHORITY")
+    }
+    description = "Run amount-tiered-authority domain compliance tests (amount-tiered-authority-l0: ATA-TIER/BOUNDARY/SNAPSHOT — 전결 규정: half-open amount bands tile without gap/overlap, insufficient authority fails closed 403, decision records snapshot the tier-table version immutably)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testAppealIndependence") {
+    useJUnitPlatform {
+        includeTags("APPEALINDEPENDENCE")
+    }
+    description = "Run appeal-decider-independence domain compliance tests (appeal-decider-independence-l0: APPEAL-DISTINCT/CHAIN/OUTCOME — appeal decider differs from every prior decider in the chain (@Check backstop), one appeal per level, outcomes append-only)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testPiecewiseDeadband") {
+    useJUnitPlatform {
+        includeTags("PIECEWISE_DEADBAND")
+    }
+    description = "Run piecewise-deadband domain compliance tests (piecewise-deadband-l0: PWDB-SEGMENT/EVAL/IMMUTABLE — segments tile the obligation domain without gap/overlap, per-segment deadband evaluation deterministic, evaluations append-only)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testCountBudget") {
+    useJUnitPlatform {
+        includeTags("COUNT_BUDGET")
+    }
+    description = "Run periodic-count-budget domain compliance tests (periodic-count-budget-l0: PCB-CONSUME/RESET/AUDIT/CAP — persisted per-subject count budget, row-lock serialized consume past cap fails closed, calendar-aligned audited reset)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testTieredEligibility") {
+    useJUnitPlatform {
+        includeTags("TIERED_ELIGIBILITY")
+    }
+    description = "Run tiered-eligibility domain compliance tests (tiered-eligibility-l0: TIER-LADDER/MONOTONE/DERIVE/TERMINAL — N ordered degradation tiers driven by count thresholds, monotone descent, fail-closed derived reads, explicit audited restore only)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testEventIngest") {
+    useJUnitPlatform {
+        includeTags("EVENTINGEST")
+    }
+    description = "Run event-ingest domain compliance tests (monotonic-event-ingest-l0 realized: watermark holds latest EVENT time, stale events ack'd not errored, idempotent apply, bounded drop counters, + INGEST-CAPTURE-001 occurred<=captured<=recorded with server-assigned recorded_at)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testExceptionGate") {
+    useJUnitPlatform {
+        includeTags("EXCEPTIONGATE")
+    }
+    description = "Run orthogonal-exception-gate domain compliance tests (orthogonal-exception-gate-l0, generalized from DSR restriction gate: exception dimension independent of primary lifecycle, gated ops fail closed 423 pre-mutation, audited raise/lift)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testAdditiveFacts") {
+    useJUnitPlatform {
+        includeTags("ADDITIVEFACTS")
+    }
+    description = "Run additive-fact-ledger domain compliance tests (additive-fact-ledger-l0: period aggregate == sum of append-only facts, late facts post forward as deltas against frozen closed periods with conservation, duplicate delivery accumulates once)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testGeoQuery") {
+    useJUnitPlatform {
+        includeTags("GEOQUERY")
+    }
+    description = "Run geo-bounded-query domain compliance tests (geo-bounded-query-l0, honest degraded subset: indexed bounding-box prefilter + exact haversine postfilter, bounded inputs 422, deterministic distance-then-id ordering; PostGIS/GiST explicitly NOT claimed — GEO-GIST-REVIEW-001 is review-only)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testRouteLegs") {
+    useJUnitPlatform {
+        includeTags("ROUTELEGS")
+    }
+    description = "Run route-leg-contiguity domain compliance tests (route-leg-contiguity-l0: leg N dest == leg N+1 origin at every mutation, no ordinal gap/overlap, insert/remove/replace re-validates both neighbors atomically, concurrent mutation serialized)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testGeofence") {
+    useJUnitPlatform {
+        includeTags("GEOFENCE")
+    }
+    description = "Run geofence-transition domain compliance tests (geofence-transition-l0: min-dwell confirm-after-delay, flap suppression commits zero transitions, committed transitions immutable with dual observed/confirmed timestamps; event-time driven, no wall-clock)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testBilateralHandoff") {
+    useJUnitPlatform {
+        includeTags("BILATERALHANDOFF")
+    }
+    description = "Run bilateral-handoff domain compliance tests (bilateral-handoff-l0: two NAMED parties must independently confirm, either declining voids terminally, caller-party binding fail-closed 403, custody flips exactly-once at second confirm under concurrency)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testFacetCount") {
+    useJUnitPlatform {
+        includeTags("FACETCOUNT")
+    }
+    description = "Run facet-count domain compliance tests (facet-count-l0: per-field bucket counts scoped to the caller-visible filtered query, allowlisted facet fields fail closed 422, top-K bounded cardinality with explicit otherCount remainder)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testDerivedStatement") {
+    useJUnitPlatform {
+        includeTags("DERIVEDSTATEMENT")
+    }
+    description = "Run derived-statement domain compliance tests (derived-statement-l0: statement key = content hash of (subject, period, basis) — retry-safe by construction without client idempotency headers, changed basis appends a version, content immutable)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testSaturatingBalance") {
+    useJUnitPlatform {
+        includeTags("SATURATINGBALANCE")
+    }
+    description = "Run saturating-balance domain compliance tests (saturating-balance-l0: accrual clamps at ceiling, debit clamps at floor 0, requested+applied amounts ledgered append-only with conservation, 8-thread concurrent accrual converges exactly on the cap)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testWithholdingSplit") {
+    useJUnitPlatform {
+        includeTags("WITHHOLDING_SPLIT")
+    }
+    description = "Run withholding-split domain compliance tests (withholding-split-l0: gross posting splits into withholding+net legs same-tx with sum conservation to the cent, rate snapshot immutable on the posting, remittance run idempotent per period, corrections via reversing entries only)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testCashInLieu") {
+    useJUnitPlatform {
+        includeTags("CASH_IN_LIEU")
+    }
+    description = "Run cash-in-lieu domain compliance tests (cash-in-lieu-l0: fractional entitlement remainder converts to cash at an immutable rate snapshot, units+cash reconstructs the entitlement exactly, allocation idempotent per (subject,event))"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testMeceClassification") {
+    useJUnitPlatform {
+        includeTags("MECE_CLASSIFICATION")
+    }
+    description = "Run mece-classification domain compliance tests (mece-classification-l0: exactly-one category per (item,scheme) with UNIQUE backstop, schemes must define a residual bucket — no-rule-match lands there never fails open, reclassification is an append-only move history)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testIntervalExclusivity") {
+    useJUnitPlatform {
+        includeTags("INTERVAL_EXCLUSIVITY")
+    }
+    description = "Run interval-exclusivity domain compliance tests (interval-exclusivity-l0: half-open [start,end) overlap rejection with back-to-back legal, 2-thread concurrent booking exactly-one-wins via resource row lock — H2 GiST EXCLUDE honestly not claimed, shrink free / extend re-validates / cancel frees immediately)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testDuplicateSubmission") {
+    useJUnitPlatform {
+        includeTags("DUPLICATESUBMISSION")
+    }
+    description = "Run duplicate-submission domain compliance tests (duplicate-submission-key-l0: intake-time natural same-loss key exact match 409 with active_key UNIQUE backstop, fuzzy near-match flags REVIEW with linkage never silently accepts/rejects, withdrawal releases the key)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testRangeOwnership") {
+    useJUnitPlatform {
+        includeTags("RANGEOWNERSHIP")
+    }
+    description = "Run range-ownership domain compliance tests (range-ownership-l0: identifier assignment only inside the owner's block, half-open non-overlapping blocks with registry-lock serialized registration, porting = append-only ownership events with current owner derive-on-read)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testProvisionalAttestation") {
+    useJUnitPlatform {
+        includeTags("PROVISIONALATTESTATION")
+    }
+    description = "Run provisional-attestation domain compliance tests (provisional-attestation-l0: PROVISIONAL→ATTESTED 2-state lifecycle, attestor must differ from author with DB backstop, attested content frozen with content-hash binding, provisional never passes as attested)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testCorrectionRefire") {
+    useJUnitPlatform {
+        includeTags("CORRECTIONREFIRE")
+    }
+    description = "Run correction-refire domain compliance tests (correction-refire-l0: corrections append-only supersession, a closed ack loop re-opens against the corrected version same-tx, identical-content republish does not re-fire, per-version ack state independent)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
+tasks.register<Test>("testSignedArtifact") {
+    useJUnitPlatform {
+        includeTags("SIGNEDARTIFACT")
+    }
+    description = "Run signed-artifact domain compliance tests (signed-artifact-l0 realized: JWS asymmetric signing over content hash, verification validates signature + signer key id, tampered content fails verification, algorithm allowlist)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Exec>("specRefGuard") {
     workingDir = rootDir.parentFile
     commandLine = listOf("bash", "practices/evals/spec_ref_guard.sh")

@@ -35,7 +35,7 @@ class ValuationRunViolationProofTest {
             assertThat(m.getName()).as("ValuationRun must have no public setter").doesNotStartWith("set");
         }
         for (String f : new String[]{"id", "subjectId", "runVersion", "asOf", "basis", "totalValue",
-                "outputSum", "rebasedFromRunVersion", "createdAt"}) {
+                "outputSum", "rebasedFromRunVersion", "sourceRef", "createdAt"}) {
             Column col = ValuationRun.class.getDeclaredField(f).getAnnotation(Column.class);
             assertThat(col).as(f + " must carry @Column").isNotNull();
             assertThat(col.updatable()).as("ValuationRun." + f + " must be immutable").isFalse();
@@ -114,13 +114,15 @@ class ValuationRunViolationProofTest {
 
         String svc = Files.readString(Path.of(System.getProperty("user.dir"), "src", "main", "java",
             "com", "ax", "template", "authblueprint", "valuationrun", "ValuationRunService.java"));
-        for (String method : new String[]{"public ValuationRun recompute(", "public ValuationRun rebase("}) {
+        // recompute(...) is a thin delegate to recomputeForSource(...) (VALRUN-FALLBACK-001) — the
+        // lock-taking write core lives in recomputeForSource, which is what must be checked here.
+        for (String method : new String[]{"public ValuationRun recomputeForSource(", "public ValuationRun rebase("}) {
             int start = svc.indexOf(method);
             assertThat(start).as(method + " must exist").isPositive();
             String body = svc.substring(start, svc.indexOf("\n    }", start));
             assertThat(body).as(method + " must take the subject row lock").contains("findByIdForUpdate");
         }
-        // recompute gates on the observed head version; rebase gates on the observed head too
+        // recompute gates on the observed head version (via recomputeForSource); rebase gates too
         assertThat(svc).as("recompute gates on the observed head version (exactly-one-wins)")
             .contains("getHeadRunVersion() != expectedHeadVersion");
         assertThat(svc).as("rebase gates on the observed head version (linear chain)")
@@ -142,6 +144,27 @@ class ValuationRunViolationProofTest {
             assertThat(sql).contains("(subject_id, run_version)");
             assertThat(sql).contains("UNIQUE INDEX uq_valuation_output_position");
             assertThat(sql).contains("(run_id, position_ref)");
+        }
+    }
+
+    // ── VALRUN-FALLBACK-001 — sourceRef is immutable; the read tries sources in order, fail-closed ──
+    @Test @Tag("VALRUN-FALLBACK-001")
+    void violation_sourceRefImmutable_andFallbackTriesInOrderFailClosed() throws Exception {
+        Column col = ValuationRun.class.getDeclaredField("sourceRef").getAnnotation(Column.class);
+        assertThat(col).as("sourceRef must carry @Column").isNotNull();
+        assertThat(col.updatable()).as("ValuationRun.sourceRef must be immutable").isFalse();
+
+        String svc = Files.readString(Path.of(System.getProperty("user.dir"), "src", "main", "java",
+            "com", "ax", "template", "authblueprint", "valuationrun", "ValuationRunService.java"));
+        assertThat(svc).as("the fallback read iterates the caller's priority order, not most-recent-across-sources")
+            .contains("for (String source : sourcePriority)");
+        assertThat(svc).as("no qualifying source in ANY source is fail-closed, never a silent default")
+            .contains("noQualifyingSource()");
+
+        try (InputStream in = getClass().getResourceAsStream("/db/migration/V111__extend_valuation_run_source.sql")) {
+            assertThat(in).as("V111__extend_valuation_run_source.sql must exist").isNotNull();
+            String sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(sql).contains("source_ref");
         }
     }
 }

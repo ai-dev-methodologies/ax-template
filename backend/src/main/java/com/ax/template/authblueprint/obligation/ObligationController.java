@@ -42,16 +42,38 @@ public class ObligationController {
                           @jakarta.validation.constraints.Digits(integer = 15, fraction = 4)
                           @jakarta.validation.constraints.DecimalMin("0.0001") BigDecimal unitsPerDay) {}
     public record CreateReq(@NotBlank @Size(max = 200) String obligationKey,
-                            @NotEmpty List<@Valid AxisReq> axes) {}
+                            @NotEmpty List<@Valid AxisReq> axes,
+                            @jakarta.validation.constraints.Positive
+                            @jakarta.validation.constraints.Digits(integer = 15, fraction = 4)
+                            BigDecimal breachBasisAmount) {}
     public record UsageReq(@NotNull @Positive
                            @jakarta.validation.constraints.Digits(integer = 15, fraction = 4) BigDecimal units) {}
+    public record WaiverReq(@NotBlank @Size(max = 200) String obligationOwner,
+                            @NotBlank @Size(max = 500) String reason,
+                            @NotNull Instant expiresAt,
+                            @NotNull @Positive Long expiresAfterCycles) {}
 
     public record ObligationDto(String obligationKey, ObligationStatus status,
                                 Instant effectiveDeadline, String ackBy, Instant ackAt,
-                                Instant createdAt) {
+                                BigDecimal breachBasisAmount, long usageCycleCount, Instant createdAt) {
         static ObligationDto of(Obligation o) {
             return new ObligationDto(o.getObligationKey(), o.getStatus(), o.getEffectiveDeadline(),
-                o.getAckBy(), o.getAckAt(), o.getCreatedAt());
+                o.getAckBy(), o.getAckAt(), o.getBreachBasisAmount(), o.getUsageCycleCount(), o.getCreatedAt());
+        }
+    }
+    public record ConsequenceDto(Instant recordedAt, BigDecimal basisAmount, Instant deadlineAtRecording,
+                                 BigDecimal accruedInterest) {
+        static ConsequenceDto of(ObligationService.ConsequenceView v) {
+            return new ConsequenceDto(v.consequence().getRecordedAt(), v.consequence().getBasisAmount(),
+                v.consequence().getDeadlineAtRecording(), v.accruedInterest());
+        }
+    }
+    public record WaiverDto(UUID id, String grantedBy, String obligationOwner, String reason,
+                            Instant grantedAt, Instant expiresAt, long expiresAfterCycles, boolean active) {
+        static WaiverDto of(ObligationService.WaiverView v) {
+            ObligationWaiver w = v.waiver();
+            return new WaiverDto(w.getId(), w.getGrantedBy(), w.getObligationOwner(), w.getReason(),
+                w.getGrantedAt(), w.getExpiresAt(), w.getExpiresAfterCycles(), v.active());
         }
     }
     public record AxisDto(UUID id, AxisKind kind, Instant anchorAt, Integer intervalDays,
@@ -88,7 +110,7 @@ public class ObligationController {
                 a.limitUnits(), a.unitsPerDay()))
             .toList();
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(ObligationDto.of(service.create(req.obligationKey(), specs)));
+            .body(ObligationDto.of(service.create(req.obligationKey(), specs, req.breachBasisAmount())));
     }
 
     @PostMapping("/api/obligations/{key}/usage")
@@ -131,6 +153,34 @@ public class ObligationController {
                                                    @RequestParam(defaultValue = "0") int page,
                                                    @RequestParam(defaultValue = "100") int size) {
         return PageEnvelope.from(service.derivations(key, page, size), DerivationDto::of);
+    }
+
+    /** OBL-CONSEQUENCE-001/OBL-INTEREST-ACCRUE-001 — 404 until BREACH binds a consequence. */
+    @GetMapping("/api/obligations/{key}/consequence")
+    public ConsequenceDto consequence(@PathVariable String key) {
+        return ConsequenceDto.of(service.consequence(key));
+    }
+
+    /** OBL-WAIVER-002 — the grantor is ALWAYS the authenticated caller (never a body field). */
+    @PostMapping("/api/obligations/{key}/waivers")
+    public ResponseEntity<WaiverDto> grantWaiver(@PathVariable String key, @Valid @RequestBody WaiverReq req,
+                                                 Authentication auth) {
+        ObligationWaiver w = service.grantWaiver(key, auth.getName(), req.obligationOwner(), req.reason(),
+            req.expiresAt(), req.expiresAfterCycles());
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(WaiverDto.of(new ObligationService.WaiverView(w, true)));
+    }
+
+    @PostMapping("/api/obligations/{key}/waivers/{waiverId}/revoke")
+    public ResponseEntity<Void> revokeWaiver(@PathVariable String key, @PathVariable UUID waiverId,
+                                             Authentication auth) {
+        service.revokeWaiver(key, waiverId, auth.getName());
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/api/obligations/{key}/waivers")
+    public List<WaiverDto> waivers(@PathVariable String key) {
+        return service.waivers(key).stream().map(WaiverDto::of).toList();
     }
 
     @ExceptionHandler(ObligationException.class)

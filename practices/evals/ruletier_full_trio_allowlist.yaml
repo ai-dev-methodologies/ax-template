@@ -26,8 +26,6 @@ exemptions:
     rationale: "rule-tier — no-dual-write outbox+relay invariant enforced by transactional-outbox-no-dual-write rule; cross-cutting reliability pattern, no standalone outbox domain"
   - spec: value-provenance-l0.yaml
     rationale: "rule-tier — machine-computed value must track override provenance, enforced by machine-computed-value-tracks-override-provenance rule; cross-cutting field-level discipline, no own domain"
-  - spec: signed-artifact-l0.yaml
-    rationale: "rule-tier — externally-verifiable artifacts use asymmetric signatures, enforced by externally-verifiable-artifact-uses-asymmetric-signature rule; cross-cutting crypto posture, no own domain"
   - spec: resilience-l0.yaml
     rationale: "rule-tier — circuit-breaker/retry/timeout/bulkhead policy enforced by resilience-circuit-breaker-retry-bulkhead rule; cross-cutting outbound-call hardening, no own domain"
   - spec: cors-l0.yaml

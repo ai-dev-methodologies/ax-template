@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -41,15 +42,25 @@ public class NetMeterService {
 
     @Transactional
     public NetMeter createMeter(String meterKey, BigDecimal initialImport, BigDecimal initialExport) {
+        return createMeter(meterKey, initialImport, initialExport, null, null);
+    }
+
+    /** NETM-RATE-001 — rates are injected via policy at creation, never hardcoded; omitted rates default
+     *  to 1 (the symmetric-rate case degenerates to the plain net delta). */
+    @Transactional
+    public NetMeter createMeter(String meterKey, BigDecimal initialImport, BigDecimal initialExport,
+                                BigDecimal rateImport, BigDecimal rateExport) {
         BigDecimal imp = requireNonNegative(initialImport, "create");
         BigDecimal exp = requireNonNegative(initialExport, "create");
+        BigDecimal rImp = requirePositiveRate(rateImport);
+        BigDecimal rExp = requirePositiveRate(rateExport);
         if (meters.existsByMeterKey(meterKey)) {
             metrics.record("create", "rejected");
             throw NetMeterException.duplicateMeter();
         }
         try {
             // closedThroughAt = Instant.MIN so the first reading at any real instant is forward of it.
-            NetMeter m = meters.saveAndFlush(new NetMeter(UUID.randomUUID(), meterKey, imp, exp,
+            NetMeter m = meters.saveAndFlush(new NetMeter(UUID.randomUUID(), meterKey, imp, exp, rImp, rExp,
                 Instant.MIN, Instant.now(clock)));
             metrics.record("create", "ok");
             return m;
@@ -98,22 +109,45 @@ public class NetMeterService {
         return row;
     }
 
-    /** NETM-PERIOD-001 — close a billing period: snapshot both cumulatives + the net delta; freeze the period. */
+    /** NETM-PERIOD-001 / NETM-RATE-001 — close a billing period: snapshot both cumulatives + the net delta +
+     *  the rate-asymmetric billed amount (cross-checked against an independent chain recompute); freeze
+     *  the period. */
     @Transactional
     public NetMeterPeriod closePeriod(String meterKey, Instant boundaryAt) {
         NetMeter m = meters.findByMeterKeyForUpdate(meterKey).orElseThrow(NetMeterException::notFound);
-        if (boundaryAt == null || boundaryAt.compareTo(m.getClosedThroughAt()) <= 0) {  // strictly-forward boundary
+        Instant priorBoundary = m.getClosedThroughAt();
+        if (boundaryAt == null || boundaryAt.compareTo(priorBoundary) <= 0) {  // strictly-forward boundary
             metrics.record("close", "period_closed");
             throw NetMeterException.periodClosed();
         }
         BigDecimal netStart = m.getNetAtPeriodStart();
         BigDecimal netEnd = m.getNet();
         BigDecimal periodNetDelta = netEnd.subtract(netStart).setScale(MEASURE_SCALE);
+
+        // NETM-RATE-001 — the SAME per-direction cumulatives that already satisfy NETM-DIRECTION-001 conservation.
+        BigDecimal importDelta = m.getCumulativeImport().subtract(m.getImportCumulativeAtPeriodStart())
+            .setScale(MEASURE_SCALE);
+        BigDecimal exportDelta = m.getCumulativeExport().subtract(m.getExportCumulativeAtPeriodStart())
+            .setScale(MEASURE_SCALE);
+        // independent recompute from the immutable reading chain — never trusted by-construction.
+        BigDecimal importDeltaRecomputed = meters.sumImportDeltaInRange(m.getId(), priorBoundary, boundaryAt)
+            .setScale(MEASURE_SCALE);
+        BigDecimal exportDeltaRecomputed = meters.sumExportDeltaInRange(m.getId(), priorBoundary, boundaryAt)
+            .setScale(MEASURE_SCALE);
+        if (importDelta.compareTo(importDeltaRecomputed) != 0 || exportDelta.compareTo(exportDeltaRecomputed) != 0) {
+            metrics.record("close", "rate_mismatch");
+            throw NetMeterException.rateMismatch();
+        }
+        BigDecimal billedAmount = importDelta.multiply(m.getRateImport())
+            .subtract(exportDelta.multiply(m.getRateExport()))
+            .setScale(MEASURE_SCALE, RoundingMode.HALF_UP);
+
         long seq = meters.maxPeriodSequence(m.getId()) + 1;
         NetMeterPeriod period = members.persist(new NetMeterPeriod(UUID.randomUUID(), m.getId(), boundaryAt,
-            m.getCumulativeImport(), m.getCumulativeExport(), netStart, netEnd, periodNetDelta, seq,
+            m.getCumulativeImport(), m.getCumulativeExport(), netStart, netEnd, periodNetDelta,
+            importDelta, exportDelta, m.getRateImport(), m.getRateExport(), billedAmount, seq,
             Instant.now(clock)));
-        m.closePeriod(boundaryAt);                                     // move the boundary + period-start net forward
+        m.closePeriod(boundaryAt);                                     // move the boundary + period-start baselines forward
         metrics.record("close", "ok");
         return period;
     }
@@ -133,6 +167,18 @@ public class NetMeterService {
     public Page<NetMeterPeriod> listPeriods(String meterKey, int page, int size) {
         NetMeter m = meters.findByMeterKey(meterKey).orElseThrow(NetMeterException::notFound);
         return meters.findPeriodsPage(m.getId(), PageRequest.of(safePage(page), safeSize(size)));
+    }
+
+    /** NETM-RATE-001 — a null rate defaults to 1 (symmetric); a provided rate must be strictly positive. */
+    private BigDecimal requirePositiveRate(BigDecimal rate) {
+        if (rate == null) {
+            return BigDecimal.ONE.setScale(MEASURE_SCALE);
+        }
+        if (rate.signum() <= 0) {
+            metrics.record("create", "invalid");
+            throw NetMeterException.invalidRate();
+        }
+        return rate.setScale(MEASURE_SCALE);
     }
 
     private BigDecimal requireNonNegative(BigDecimal v, String op) {

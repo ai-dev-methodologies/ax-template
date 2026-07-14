@@ -1,0 +1,80 @@
+version: "0.1.0"
+scope: "bilateral-handoff-l0 — a HANDOFF is PROPOSED between two NAMED parties, a releasor (current custodian) and a receiver (incoming custodian). Unlike a unilateral timed-offer (one candidate, one accept/decline decision), a bilateral handoff completes ONLY when BOTH named parties have INDEPENDENTLY confirmed — confirming is per-party and idempotent (a party confirming twice is a no-op, not an error). Either party may instead DECLINE, which VOIDS the whole handoff TERMINALLY (not just that party's side) — a late confirm arriving after a void is rejected (409). The confirming caller MUST BE one of the two named parties (fail-closed 403 for anyone else — the two parties are named at proposal time, so this is a role-mismatch, not an existence leak). The custody-transfer EFFECT (a `custodyHolder` field flips from releasor to receiver) applies EXACTLY ONCE, atomically, at the moment the SECOND confirmation lands — never on the first confirmation, never twice. This is DISTINCT from timed-offer-exclusive-assignment (ONE candidate accepts/declines against a deadline — no second party, no bilateral confirmation) and from decision-governance (a computed value re-approved by a second approver — no custody effect). Recurs in: two-party asset/custody handoff (equipment, vehicle, keys), bilateral contract execution (four-corners — both signatories must execute), shift handover with dual sign-off, escrow release requiring both parties, chain-of-custody transfer in evidence handling — 5+ industries."
+stack: "Spring Boot 3.2.x + Jakarta Persistence (Handoff aggregate root, PESSIMISTIC_WRITE row lock serializing the two independent confirmations onto one atomic completion check, @Check DB backstop, injected java.time.Clock) + RFC 9457 Problem Details + Micrometer"
+standard: "CWE-362 (the concurrent-confirmation race that must serialize to an exactly-once completion) + RFC 9110 §15.5.10 (409 — a late action on a terminal handoff) + the common-law four-corners doctrine of bilateral contract formation (both parties' assent required before the instrument is complete) — the generic principle this primitive's PROPOSED→COMPLETED-only-when-both-confirm shape formalizes"
+domain_mode: backend_only
+introduced_at: "Backlog wave 2026-07-14, Lane D logistics (P3-6 NEW domain)"
+
+# OPT-IN bilateral-handoff catalog. The gap: timed-offer-exclusive-assignment is
+# UNILATERAL (one candidate decides); this primitive is BILATERAL (both named parties
+# must independently assent) with an atomic custody-flip effect gated on the SECOND
+# confirmation, not the first. Distinct shape, distinct primitive.
+
+# ── Priority order for fork-receivers ──
+#   1. BHO-FSM-001   (the primitive — PROPOSED with two named parties; completes ONLY when both confirm)
+#   2. BHO-VOID-001  (either party declining voids the WHOLE handoff terminally; late confirm on voided → 409)
+#   3. BHO-BIND-001  (confirm caller must BE the named party — fail-closed 403; per-party idempotent confirm)
+#   4. BHO-ATOMIC-001 (keystone — the custody-flip effect applies exactly-once atomically at the second confirm)
+
+# ── Composition note ──
+# DISTINCT from timed-offer-exclusive-assignment (ONE candidate, a deadline, exclusivity
+# ACROSS competing offers for a subject — no second-party confirmation) and
+# decision-governance (a computed basis re-approved by a second approver, four-eyes —
+# no custody/asset-transfer effect, no releasor/receiver framing). This primitive has
+# exactly two named roles per handoff and exactly one atomic effect (custody flip) gated
+# on BOTH having confirmed.
+
+items:
+  - id: "BHO-FSM-001"
+    chapter: "PROPOSED with two named parties; completes ONLY when both have independently confirmed"
+    verification:
+      mechanism: tag
+      ref: "BHO-FSM-001"
+    requirement: "A Handoff is proposed with two NAMED parties fixed at creation: a releasor and a receiver (immutable thereafter). It stays PROPOSED — custody unchanged — until BOTH parties have independently confirmed. Each party's confirmation is recorded separately (releasorConfirmedAt / receiverConfirmedAt); confirming does not itself change status unless it is the SECOND confirmation, at which point status moves to COMPLETED and custody flips to the receiver, atomically, via the state machine (the sole mutator of status — no other code path sets it). COMPLETED and VOIDED are both terminal (zero outgoing edges)."
+    test_method: "RestAssured (propose a handoff between releasor R and receiver X → PROPOSED, custody=R; R confirms → still PROPOSED, custody=R, releasorConfirmedAt set; X confirms → COMPLETED, custody=X, receiverConfirmedAt set; structural: status has no public setter, mutated only by HandoffStateMachine)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      The primitive — TWO independent assents required, not one. Quote anchor (the
+      four-corners doctrine of bilateral contract formation — the generic legal
+      principle this shape formalizes as a state machine): a bilateral contract is
+      formed and becomes binding only once BOTH parties have manifested assent to its
+      terms; neither party's unilateral signature completes the instrument alone. This
+      is the generic principle anchor (not a specific statute/RFC) — the FSM
+      PROPOSED→COMPLETED-only-when-both-confirm shape is the formalization.
+  - id: "BHO-VOID-001"
+    chapter: "Either party declining voids the WHOLE handoff terminally; a late confirm on a voided handoff is rejected"
+    requirement: "Either named party MAY decline a PROPOSED handoff, which moves it to VOIDED — terminally, regardless of whether the OTHER party had already confirmed (a partial confirmation is discarded, not preserved for a future retry; a fresh Handoff must be proposed to try again). VOIDED has zero outgoing edges: any subsequent confirm OR decline on a voided handoff MUST be rejected with a deterministic 409 (HANDOFF_VOIDED), and custody MUST remain at the releasor (the flip never happens for a voided handoff, even if one party had confirmed before the decline)."
+    test_method: "RestAssured (propose; receiver confirms; releasor declines → VOIDED, custody remains at releasor despite the receiver's prior confirm; a subsequent confirm by either party → 409 HANDOFF_VOIDED; a subsequent decline → 409 HANDOFF_VOIDED)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Quote anchor (RFC 9110 §15.5.10 — the 409 a late action on a terminal handoff
+      receives): "The 409 (Conflict) status code indicates that the request could not
+      be completed due to a conflict with the current state of the target resource."
+      (https://www.rfc-editor.org/rfc/rfc9110.html)
+  - id: "BHO-BIND-001"
+    chapter: "The confirming/declining caller MUST BE a named party — fail-closed 403; confirm is per-party idempotent"
+    requirement: "A confirm or decline call's authenticated caller MUST equal EITHER the releasor OR the receiver named on the handoff; any other caller MUST be rejected with a deterministic 403 (HANDOFF_NOT_A_PARTY) — this is a role-mismatch on a resource whose two participants were named at proposal time, not an existence leak, so 403 (not a 404 IDOR guard) is the correct fail-closed response. A party confirming a SECOND time (after already having confirmed) is IDEMPOTENT — it returns the current state without error and without re-triggering completion or re-recording the timestamp."
+    test_method: "RestAssured (confirm called by a third party who is neither the releasor nor the receiver → 403 HANDOFF_NOT_A_PARTY, handoff unchanged; the releasor confirms twice → both calls 200, releasorConfirmedAt unchanged after the second call, status not double-transitioned)"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Party binding is structural: the caller identity is always
+      Authentication.getName() compared against the two immutable named-party columns —
+      never a path/body parameter standing in for identity.
+  - id: "BHO-ATOMIC-001"
+    chapter: "Keystone — the custody-flip effect applies exactly-once, atomically, at the second confirm"
+    requirement: "Across ANY interleaving of the two parties' concurrent confirm calls on ONE handoff, the custody-flip effect (status→COMPLETED, custody→receiver) MUST apply EXACTLY ONCE — never on the first confirmation alone, never twice, and never left half-applied (status flips and custody flips together, in the same transaction, under the handoff row's PESSIMISTIC_WRITE lock). A handoff MUST NEVER end in a state where status=COMPLETED but custody was not flipped, or where the flip happened without both confirmations recorded (CWE-362, DB-backstopped: @Check status<>'COMPLETED' OR (releasor_confirmed_at IS NOT NULL AND receiver_confirmed_at IS NOT NULL))."
+    test_method: "Concurrency proof (2 threads: the releasor and the receiver call confirm() SIMULTANEOUSLY on the same PROPOSED handoff → both calls succeed 200; the handoff ends COMPLETED exactly once with custody=receiver; a metrics counter for the 'completed' outcome increments exactly once, never twice, across the race)"
+    verification_type: "positive"
+    applicable: true
+    notes: >
+      Quote anchor (CWE-362 — the concurrent-confirmation race the row lock closes):
+      "The product contains a concurrent code sequence that requires temporary,
+      exclusive access to a shared resource, but a timing window exists in which the
+      shared resource can be modified by another code sequence operating concurrently."
+      (https://cwe.mitre.org/data/definitions/362.html) The PESSIMISTIC_WRITE lock on
+      the handoff row is the serialization point — the second locker to run always sees
+      the first locker's committed confirmation before deciding whether both are now
+      present.
