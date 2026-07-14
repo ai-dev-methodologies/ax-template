@@ -47,9 +47,13 @@
 #      condition-constant(False/false 단독) · truncation(neuter에서 `| head -N` 1회 제거 시
 #      anchor와 byte-identical) · over-broad-glob(`*)` 단독) · variable-substitution(anchor와
 #      skeleton 동일, $var만 교체) 6개 shape 중 하나에 매칭해야 하며,
-#      exit/return/kill/exec/eval/source/trap·체인 exit·후행 & 같은 escape 토큰이 있으면
-#      shape 매칭과 무관하게 즉시 BLOCK된다. `exit 0`·`exec true # NEUTER_BYPASS` 류
-#      short-circuit/name-drop neuter는 등재 시점에 차단된다 (self-proof 2건).
+#      neuter가 anchor 대비 **새로 도입**하는 escape 토큰(exit/return/kill/exec/eval/
+#      source/trap·후행 &·명령치환 $( )·백틱·프로세스치환 <( ))이 있으면 shape 매칭과
+#      무관하게 즉시 BLOCK된다(anchor에 이미 있는 <( ) 보존은 허용 — 카운트 비교).
+#      차단 실증: `exit 0` / `exec true # NEUTER_BYPASS` / `SECRET_A="$(true) NEUTER_X"`
+#      (따옴표 안 명령치환) / 파이프라인 중간 `| head -1 foo`. truncation은 head 절
+#      제거 시 anchor와 byte-identical이고 그 절이 파이프라인 **마지막 단계**일 때만 인정.
+#      또한 manifest가 0 항목으로 파싱되면 PASS 대신 BLOCK한다(공허 통과 차단).
 #   2. 잔여 리스크(honest residual): 4개 shape(sentinel/truncation/variable-substitution은
 #      anchor-skeleton 바인딩, 상수형은 단독-토큰 강제)이지만 여전히 토큰/구조 매칭이지
 #      완전한 semantic 검증이 아니다 — 예: variable-substitution에서 엉뚱한 변수를 고르는
@@ -123,9 +127,14 @@ if [ "$parse_rc" -ne 0 ]; then
     echo "fixture_kill_proof_guard: failed to parse manifest: $MANIFEST" >&2; exit 2
 fi
 
+# ZERO-ITEM VACUITY GUARD (2026-07-14): an empty item set must never report PASS —
+# a broken parse or an emptied manifest would otherwise "prove" every fail fixture
+# non-vacuous while proving nothing. The live manifest is required to be non-empty;
+# only an explicitly-empty --manifest override is tolerated, and even then it reports
+# a distinct non-PASS status.
 if [ -z "$ITEMS" ]; then
-    echo "fixture_kill_proof_guard: PASS — manifest has no items (nothing to prove)"
-    exit 0
+    echo "fixture_kill_proof_guard: BLOCK — manifest yielded zero items ($MANIFEST). A zero-item run cannot prove non-vacuity." >&2
+    exit 1
 fi
 
 FAIL=0
@@ -170,7 +179,12 @@ import re, sys
 anchor = sys.argv[1]
 neuter = sys.argv[2]
 
-# control-flow / process escape tokens are rejected unconditionally (any shape).
+# control-flow / process escape tokens are rejected unconditionally, any shape.
+# CAUTION: this python body lives inside a bash command substitution — literal
+# parens, backticks and apostrophes in THIS block break the bash scanner, so such
+# characters are built via chr and comments avoid them.
+OPEN = chr(40)      # opening paren
+BT = chr(96)        # backtick
 reject_patterns = [
     r'\bexit\b',
     r'\breturn\b',
@@ -179,12 +193,23 @@ reject_patterns = [
     r'\beval\b',
     r'\bsource\b',
     r'\btrap\b',
-    r'(&&|\|\|)\s*exit\b',
     r'&\s*$',
+    # command / process substitution: executable code smuggled INSIDE what would
+    # otherwise look like a plain literal swap. 2026-07-14 리뷰 F1 재지적:
+    # SECRET_A="$" + OPEN + "true..." passed the sentinel shape because quoted
+    # literals are collapsed by str_skeleton — yet bash EXECUTES it.
+    r'\$' + '\\' + OPEN,
+    BT,
+    '<\\' + OPEN,
+    '>\\' + OPEN,
 ]
+# A token is an escape only if the NEUTER INTRODUCES it — an anchor may legitimately
+# contain process substitution, and preserving it while truncating the pipeline is
+# surgical. Reject when the neuter occurrence count for a pattern EXCEEDS the anchor
+# occurrence count.
 for pat in reject_patterns:
-    if re.search(pat, neuter):
-        print(f"REJECT: neuter contains control-flow escape token (pattern {pat!r}): {neuter!r}")
+    if len(re.findall(pat, neuter)) > len(re.findall(pat, anchor)):
+        print(f"REJECT: neuter introduces control-flow escape token (pattern {pat!r}): {neuter!r}")
         sys.exit(0)
 
 def skeleton(s):
@@ -195,8 +220,8 @@ def skeleton(s):
 def str_skeleton(s):
     # collapse quoted string literals so a pure string-literal swap can be
     # recognized: everything OUTSIDE the quotes must be byte-identical to the
-    # anchor. Blocks arbitrary code that merely name-drops a NEUTER_ token
-    # (e.g. `exec true # NEUTER_BYPASS`).
+    # anchor. Blocks arbitrary code that merely name-drops a NEUTER_ token,
+    # e.g. an exec/true one-liner carrying a NEUTER_ comment.
     s2 = re.sub(r"'[^']*'", 'STR', s)
     return re.sub(r'"[^"]*"', 'STR', s2)
 
@@ -208,8 +233,17 @@ if (re.search(r'NEUTER_[A-Z0-9_]+', neuter) and neuter != anchor
     shapes.append('sentinel-string')
 if neuter.strip() in ('False', 'false'):
     shapes.append('condition-constant')
-if re.sub(r'\s*\|\s*head\s+-?\d+', '', neuter, count=1) == anchor:
-    shapes.append('truncation')
+# truncation: removing exactly one head clause must yield the anchor verbatim, AND that
+# clause must be the LAST stage of its pipeline — what follows may only be whitespace or
+# closers. A mid-pipeline head that is followed by another command re-shapes the
+# pipeline instead of truncating it, and is rejected. 2026-07-14 리뷰 F1 재지적.
+CLOSERS = set(' \t' + chr(41) + chr(39) + chr(34))
+for m in re.finditer(r'\s*\|\s*head\s+-?\d+', neuter):
+    if neuter[:m.start()] + neuter[m.end():] != anchor:
+        continue
+    if all(ch in CLOSERS for ch in neuter[m.end():]):
+        shapes.append('truncation')
+        break
 if neuter.strip() == '*)':
     shapes.append('over-broad-glob')
 if neuter != anchor and skeleton(neuter) == skeleton(anchor):

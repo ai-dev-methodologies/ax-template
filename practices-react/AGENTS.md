@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "af4cb723606220c2b3da1488c7f916c5c2a42f02e36df263843a3a052878efe0"
+  source_concat_sha256: "8481e6d2c9cb8af5ff6641a142ac556dba10f6ec063ca01e6e3b83d5f94400e1"
   rule_count: 99
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -3015,9 +3015,6 @@ evidence:
   - upstream_id: vercel-react-best-practices
     section: "client-swr-dedup"
     quote: "SWR enables request deduplication, caching, and revalidation across component instances."
-  - upstream_id: nextjs-fetching-data
-    section: "On Server Component data fetching"
-    quote: "Identical `fetch` requests in a React component tree are memoized by default, so you can fetch data in the component that needs it instead of drilling props."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"
@@ -6821,13 +6818,13 @@ verification:
   notes: "No file under templates/L4/<domain-A>/ may import from templates/L4/<domain-B>/. Shared cross-cutting concerns (auth state, user context) must be sourced from shared hooks (hooks/), context providers (providers/), or L1/L2 components — never from another L4 domain."
 evidence:
   - source_type: external
-    citation: "Next.js documentation — Domain-driven architecture: each feature domain should be self-contained with no cross-domain imports at the route layer"
-    url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"
-    quoted_at: "2026-05-18"
+    citation: "Acyclic Dependencies Principle (Martin, Agile Software Development: Principles, Patterns, and Practices) — the dependency graph of packages must have no cycles; a package that depends on a sibling it may in turn be depended upon by introduces a cycle that prevents independent build and release. (The L4-to-L4 import ban itself is an ax-template layer decision — this citation anchors only the generic acyclic-package-dependency principle it rests on; shared concerns are re-routed to L1/L2/hooks rather than to a sibling domain.)"
+    url: "https://en.wikipedia.org/wiki/Acyclic_dependencies_principle"
+    quoted_at: "2026-07-14"
   - source_type: external
-    citation: "Vercel best practices — Vertical slice architecture: L4 domains are independent vertical slices; cross-slice imports create coupling that breaks hot reloading and incremental static regeneration"
-    url: "https://vercel.com/blog/how-we-optimized-package-imports-in-next-js"
-    quoted_at: "2026-05-18"
+    citation: "Next.js documentation — Project organization and file colocation: application code can be colocated inside route segments, and private folders keep implementation details out of routing. (Anchors only the generic colocation/module-boundary principle; the cross-domain prohibition is an ax-template layer decision, not a Next.js requirement.)"
+    url: "https://nextjs.org/docs/app/building-your-application/routing/colocation"
+    quoted_at: "2026-07-14"
 decided_at: "2026-05-18"
 ---
 
@@ -11967,13 +11964,13 @@ verification:
   notes: "All Server Action return types must include a traceId field. The error branch must populate it from headers().get('x-trace-id') or crypto.randomUUID(). The success branch may omit traceId or include it for full observability."
 evidence:
   - source_type: external
-    citation: "W3C Trace Context — trace-id as a correlation identifier propagated across service boundaries including browser-to-server calls"
+    citation: "W3C Trace Context — trace-id is the identifier of a whole trace, shared by all spans, and is propagated across service boundaries so a caller can be correlated with the server-side record of the same request. (Anchors the generic correlation-identifier principle; requiring traceId in EVERY Server Action error return is an ax-template layer decision, not a W3C requirement.)"
     url: "https://www.w3.org/TR/trace-context/#trace-id"
-    quoted_at: "2026-05-18"
+    quoted_at: "2026-07-14"
   - source_type: external
-    citation: "Next.js documentation — Server Actions error handling: return a result object with error field so callers can handle failures gracefully"
-    url: "https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions-and-mutations#error-handling"
-    quoted_at: "2026-05-18"
+    citation: "Next.js documentation — Server Actions can return serializable values, so a mutation may return a result object the client inspects instead of throwing. (Anchors only that a Server Action return value is the client-visible channel; carrying traceId in that channel is an ax-template layer decision.)"
+    url: "https://nextjs.org/docs/app/getting-started/mutating-data"
+    quoted_at: "2026-07-14"
 decided_at: "2026-05-18"
 ---
 

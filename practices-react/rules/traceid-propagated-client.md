@@ -21,13 +21,13 @@ verification:
   notes: "All Server Action return types must include a traceId field. The error branch must populate it from headers().get('x-trace-id') or crypto.randomUUID(). The success branch may omit traceId or include it for full observability."
 evidence:
   - source_type: external
-    citation: "W3C Trace Context — trace-id as a correlation identifier propagated across service boundaries including browser-to-server calls"
+    citation: "W3C Trace Context — trace-id is the identifier of a whole trace, shared by all spans, and is propagated across service boundaries so a caller can be correlated with the server-side record of the same request. (Anchors the generic correlation-identifier principle; requiring traceId in EVERY Server Action error return is an ax-template layer decision, not a W3C requirement.)"
     url: "https://www.w3.org/TR/trace-context/#trace-id"
-    quoted_at: "2026-05-18"
+    quoted_at: "2026-07-14"
   - source_type: external
-    citation: "Next.js documentation — Server Actions error handling: return a result object with error field so callers can handle failures gracefully"
-    url: "https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions-and-mutations#error-handling"
-    quoted_at: "2026-05-18"
+    citation: "Next.js documentation — Server Actions can return serializable values, so a mutation may return a result object the client inspects instead of throwing. (Anchors only that a Server Action return value is the client-visible channel; carrying traceId in that channel is an ax-template layer decision.)"
+    url: "https://nextjs.org/docs/app/getting-started/mutating-data"
+    quoted_at: "2026-07-14"
 decided_at: "2026-05-18"
 ---
 
