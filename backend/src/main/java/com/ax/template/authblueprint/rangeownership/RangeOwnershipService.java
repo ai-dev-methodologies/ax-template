@@ -57,11 +57,9 @@ public class RangeOwnershipService {
         lockInitializer.ensureExists();
         lock.lockForUpdate(RangeRegistryLock.GLOBAL_ID).orElseThrow(RangeOwnershipException::notFound);
 
-        for (RangeBlock existing : blocks.findAll()) {
-            if (existing.overlaps(rangeStart, rangeEnd)) {
-                metrics.record("registerBlock", "overlap");
-                throw RangeOwnershipException.blockOverlap();
-            }
+        if (!blocks.findOverlapping(rangeStart, rangeEnd).isEmpty()) {
+            metrics.record("registerBlock", "overlap");
+            throw RangeOwnershipException.blockOverlap();
         }
         RangeBlock saved = blocks.save(new RangeBlock(UUID.randomUUID(), ownerRef, rangeStart, rangeEnd, Instant.now(clock)));
         metrics.record("registerBlock", "ok");

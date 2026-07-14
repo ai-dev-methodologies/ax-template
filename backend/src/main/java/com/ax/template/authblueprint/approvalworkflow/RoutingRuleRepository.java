@@ -11,7 +11,12 @@ import java.util.List;
 @Repository
 public interface RoutingRuleRepository extends JpaRepository<RoutingRule, java.util.UUID> {
 
-    List<RoutingRule> findAllByOrderByCategoryOrDeptAscMinAmountAsc();
+    /**
+     * WF-ROUTE-002 — bounded rule-set listing (pagination-l0 PAGE-LIMIT-001: findAll* collection
+     * reads must carry a Pageable). Ordering comes from the derived name; the service passes a
+     * bounded page (routing rules are small config data — the cap is defense-in-depth).
+     */
+    List<RoutingRule> findAllByOrderByCategoryOrDeptAscMinAmountAsc(org.springframework.data.domain.Pageable pageable);
 
     /**
      * WF-ROUTE-001 — half-open band match: {@code minAmount <= amount < maxAmount}

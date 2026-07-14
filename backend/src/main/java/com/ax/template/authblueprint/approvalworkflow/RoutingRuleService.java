@@ -46,7 +46,8 @@ public class RoutingRuleService {
 
     @Transactional(readOnly = true)
     public List<RoutingRuleResponse> list() {
-        return repository.findAllByOrderByCategoryOrDeptAscMinAmountAsc().stream()
+        return repository.findAllByOrderByCategoryOrDeptAscMinAmountAsc(
+                org.springframework.data.domain.PageRequest.of(0, 500)).stream()
             .map(r -> RoutingRuleResponse.from(r, objectMapper))
             .toList();
     }
