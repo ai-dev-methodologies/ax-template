@@ -27,8 +27,8 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | P0 (expiry-bound / live defects) | 26 | 26 | **100%** |
 | P1 (generic signature backlog) | 62 | 62 | **100%** |
 | P2 (verification escapes) | 20 | 16 | **80%** |
-| P3 (industry-niche deferrals) | 47 | 6 | ~13% |
-| **P0–P3 합계 (수렴 분모)** | **155** | **110** | **~71%** |
+| P3 (industry-niche deferrals) | 47 | 13 | ~28% |
+| **P0–P3 합계 (수렴 분모)** | **155** | **117** | **~75%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
 > 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
@@ -260,19 +260,19 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 > 불확실 6건 "(closure 여부 미검증)" 표기 포함. 기존 P3-32→P3-41, P3-33→P3-42 재번호.
 
 - [ ] P3-1 logistics: geo-query-l0 — PostGIS/GiST 공간 인덱스 특화 질의
-- [ ] P3-2 logistics: two-sided statement-reconciliation — counterparty-billed vs own 대사
+- [x] P3-2 logistics: two-sided statement-reconciliation — counterparty-billed vs own 대사 — **closed 2026-07-14 (VERIFIED-COVERED, census)**: external-reconciliation-l0(RECON-CLASSIFY/DISPOSE/RESOLVE/IDEMPOTENT/CONCURRENT-001)이 counterparty/custodian/bank statement 대사로 명시 일반화, ReconciliationComplianceTest.java:101-230 + testReconciliation task가 classify→dispose→resolve→멱등 재실행 전수 단언. reconciliation generic wave가 기능 포섭.
 - [ ] P3-3 logistics: 익명-IP rate-limit key (RATELIMIT-5 XFF spoofing 표면)
 - [ ] P3-4 logistics: chain-contiguity — leg N dest == leg N+1 origin
 - [ ] P3-5 logistics: geofence debounce/hysteresis (min-dwell + confirm)
 - [ ] P3-6 logistics: two-party-acceptance handoff (bilateral offer/accept)
 - [ ] P3-7 logistics: dual/triple-timestamp — occurred/captured/recorded 구분
 - [ ] P3-8 logistics: orthogonal-exception-dimension (DSR gate shape 재사용)
-- [ ] P3-9 fintech-ledger: filter/sort field-allowlist의 query-side mass-assignment 확장
+- [x] P3-9 fintech-ledger: filter/sort field-allowlist의 query-side mass-assignment 확장 — **closed 2026-07-14 (VERIFIED-COVERED, census)**: specs/query-field-allowlist-l0.yaml scope가 IDW8 fintech-ledger deferral을 출처로 명시 + QueryGuardComplianceTest.java:61,96,130,144,166이 query-side mass-assignment 차단 단언. 정확히 이 항목이 이미 built — stale 등재.
 - [ ] P3-10 fintech-ledger: faceted facet-count 집계
 - [ ] P3-11 fintech-ledger: 파생 키 기반 멱등 statement 생성
 - [ ] P3-12 HR/payroll: clamped/saturating running-balance
-- [ ] P3-13 HR/payroll: deterministic recomputable-run
-- [ ] P3-14 HR/payroll: read-disclosure-audit (열람 공시)
+- [x] P3-13 HR/payroll: deterministic recomputable-run — **closed 2026-07-14 (VERIFIED-COVERED, census)**: remeasurement-trueup-l0가 "payroll retro-pay"를 Recurs-in으로 명시 + TUP-RUNVERSION-001(불변 basis→멱등 동일 run, 변경 basis→v+1 보존) + TrueUpComplianceTest.java:135 + ViolationProof:57,146.
+- [x] P3-14 HR/payroll: read-disclosure-audit (열람 공시) — **closed 2026-07-14 (VERIFIED-COVERED, census)**: sensitive-read-audit-l0가 "HR compensation records"를 Recurs-in으로 명시 + SENSITIVE-READ-001/SENSITIVE-QUERY-001 + SensitiveAccessComplianceTest.java:67,148.
 - [ ] P3-15 HR/payroll: attribute-resolved approval routing
 - [ ] P3-16 insurance: G9 asserted-event-date coverage 입력
 - [ ] P3-17 insurance: G11 appeal-decider-independence
@@ -283,14 +283,14 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [ ] P3-22 telecom: G4 E.164 number-range governance — 번호 블록의 range 소유권 정책
 - [ ] P3-23 telecom: G8 late/out-of-order additive-fact ingestion — 지연/비순서 팩트의 역산 적재
 - [ ] P3-24 energy: G12 rate-asymmetric conservation — import/export 비대칭 요율 하에서도 보존 성립 (closure 여부 미검증: P1-18 netmetering 부분 커버 가능성)
-- [ ] P3-25 energy: G13 period-boundary carried-net — 기간 경계에서 누적 net을 다음 기간으로 이월
-- [ ] P3-26 energy: G14 reproducible computed-aggregate binding — 집계 계산이 입력에 결정론적으로 바인딩 (closure 여부 미검증: P1-7~9 reproducibility 부분 커버 가능성)
+- [x] P3-25 energy: G13 period-boundary carried-net — 기간 경계에서 누적 net을 다음 기간으로 이월 — **closed 2026-07-14 (VERIFIED-COVERED, census)**: NETM-PERIOD-001 — NetMeter.closePeriod()가 netAtPeriodStart=net 이월 + NetMeterComplianceTest.java:172-178(close2.netStart==prior close.netEnd) 직접 단언.
+- [x] P3-26 energy: G14 reproducible computed-aggregate binding — 집계 계산이 입력에 결정론적으로 바인딩 (closure 여부 미검증: P1-7~9 reproducibility 부분 커버 가능성) — **closed 2026-07-14 (VERIFIED-COVERED, census)**: TUP-RUNVERSION-001 basisHash(SHA-256 of input reading-row set)가 집계를 입력에 결정론 바인딩 + TrueUpComplianceTest.java:135-157(불변 basis 멱등/변경 basis v+1). reproducibility 계열 sibling(trueup)이 커버 확인.
 - [ ] P3-27 energy: G15 piecewise deadband obligation-vs-actual — 구간별 데드밴드 내 의무 vs 실측 비교
 - [ ] P3-28 energy: G16 per-subject recurring count-budget reset — 주체별 기간 카운트 예산의 주기적 리셋 (closure 여부 미검증: P1-50 recurringinterval 부분 커버 가능성)
 - [ ] P3-29 energy: G17 count-threshold eligibility-degradation FSM — 카운트 임계 도달 시 자격 강등 FSM (closure 여부 미검증: P0-25 thresholdterminal 부분 커버 가능성)
 - [ ] P3-30 capital-markets: G8 withholding-tax split — 지급금에서 원천세 split-posting
 - [ ] P3-31 capital-markets: G10 cash-in-lieu — 주식 대신 현금 지급(단수주 처리)
-- [ ] P3-32 EMR: G8 natural-key-uniqueness-on-create — 자연키 중복 생성 거부(idempotent create)
+- [x] P3-32 EMR: G8 natural-key-uniqueness-on-create — 자연키 중복 생성 거부(idempotent create) — **closed 2026-07-14 (VERIFIED-COVERED, census)**: 두 closure 스타일로 test-proven — favorites UNIQUE(user,entity_type,entity_id)+FAV-CRUD-001 멱등 add(FavoriteViolationProofTest:47,65 TOCTOU DB backstop) / tokenizedsecurities duplicateTokenCode·duplicateUnderlyingAsset 409-reject.
 - [ ] P3-33 EMR: G10 set-membership MECE conservation — 집합 멤버십이 MECE(상호배타·전체포함) 성립
 - [ ] P3-34 EMR: G14 provisional-now/attested-later — 현재는 provisional, 이후 attestation 으로 확정
 - [ ] P3-35 EMR: G16 corrected-record re-fires-ack — 정정 레코드가 ack 워크플로우 재트리거
