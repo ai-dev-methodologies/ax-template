@@ -3,6 +3,8 @@
 > **Full-stack React 19 / Next.js 15 + Spring Boot 3 fork-base template. The catalog mechanically enforces development rules on its own HEAD (and in any fork that opts into the hooks) so AI agents can't drift off the rails.**
 > This claim is falsifiable — run `bash practices/scripts/ax-prove-gate-blocks-agent.sh` to confirm the block→correct→log triple on the current HEAD (maintainer-run, opt-in; see [`skills/ax-ledger/SKILL.md`](./skills/ax-ledger/SKILL.md)).
 
+**처음 오셨나요? → [docs/GETTING-STARTED.md](./docs/GETTING-STARTED.md)** — 이걸로 뭘 할 수 있고, 어떻게 만들고, 결과가 어떻게 나오는지 한 문서로.
+
 ax = **AI transformation**. This repo is the source of the Claude Code skill
 **`/ax-transform`** and a composition kit you fork to start a new
 project. Every layer of the stack ships with rule-enforcement wired in:
