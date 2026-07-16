@@ -116,7 +116,9 @@ public class PaymentExceptionHandler {
         pd.setType(URI.create("urn:ax:payment:tenders-underfunded"));
         pd.setTitle("Tenders underfunded");
         pd.setDetail("Active tenders do not cover the order total; shortfall=" + ex.getShortfall());
-        pd.setProperty("orderId", ex.getOrderId());
+        // Amplification guard: orderId is client-derived; bound it like every other reflected value
+        // (truncate() only wrapped setDetail before — this closes the setProperty leak).
+        pd.setProperty("orderId", truncate(ex.getOrderId()));
         pd.setProperty("orderTotal", ex.getOrderTotal());
         pd.setProperty("covered", ex.getCovered());
         pd.setProperty("shortfall", ex.getShortfall());

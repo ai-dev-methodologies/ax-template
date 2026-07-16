@@ -310,6 +310,38 @@ class PaymentSecurityTest {
             .isLessThan(5_000);
     }
 
+    /**
+     * DEFENSE 4 — the sibling-record miss. {@code CoverageConfirmRequest} previously had no bounds
+     * and its endpoint no {@code @Valid}, so an oversized orderId flowed straight into the service.
+     * With {@code @Valid} + {@code @Size(max=200)} it is fast-rejected at bean-validation and never
+     * echoed back (bounded amplification).
+     */
+    @Test
+    void oversizedCoverageOrderId_isRejected400_andNotEchoedInBody() {
+        String authToken = obtainToken("sec-coverage-amp@test.test", "MEMBER");
+
+        String marker = "COVERAGEMARKER0123456789";
+        String hugeOrderId = marker + "Z".repeat(1_000_000);
+
+        io.restassured.response.Response response = given()
+            .header("Authorization", "Bearer " + authToken)
+            .header("Content-Type", "application/json")
+            .body("{\"orderId\":\"" + hugeOrderId + "\",\"currency\":\"KRW\",\"orderTotal\":10000}")
+        .when().post("/api/payments/coverage/confirm");
+
+        String body = response.getBody().asString();
+
+        assertThat(response.statusCode())
+            .as("Oversized orderId must be fast-rejected with 400 (@Valid + @Size(max=200)).")
+            .isEqualTo(400);
+        assertThat(body)
+            .as("Error body must NOT reflect the oversized orderId (amplification defense).")
+            .doesNotContain(marker);
+        assertThat(body.length())
+            .as("Error body must be bounded, not ~1MB.")
+            .isLessThan(5_000);
+    }
+
     // ─── helpers ──────────────────────────────────────────────────────────────
 
     private String obtainToken(String email, String role) {

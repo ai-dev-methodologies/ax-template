@@ -1,3 +1,12 @@
+server:
+  tomcat:
+    # When RequestBodySizeLimitFilter rejects an oversized body with 413 BEFORE reading it, the
+    # container must still drain the unsent request body so the error response reaches the client
+    # instead of resetting the connection. -1 = swallow unlimited: the drain is a streamed discard
+    # into a small recycled buffer (O(1) heap), so it does NOT reintroduce the amplification this
+    # filter closes — the message converters still never buffer the body.
+    max-swallow-size: -1
+
 spring:
   application:
     name: auth-blueprint-backend

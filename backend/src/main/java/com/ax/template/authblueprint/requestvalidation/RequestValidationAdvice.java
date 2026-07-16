@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.requestvalidation;
 
+import com.ax.template.authblueprint.common.ValidationErrorBounds;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
@@ -51,30 +52,40 @@ public class RequestValidationAdvice {
         this.metrics = metrics;
     }
 
-    /** @Valid body-binding failures — every field + cross-field + object error, no fail-fast. */
+    /** @Valid body-binding failures — every field + cross-field + object error, no fail-fast
+     *  (bounded: capped at {@link ValidationErrorBounds#MAX_FIELD_ERRORS} + each message truncated). */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> handleBodyValidation(MethodArgumentNotValidException ex) {
+        List<FieldError> fieldErrors = ex.getBindingResult().getFieldErrors();
+        List<ObjectError> globalErrors = ex.getBindingResult().getGlobalErrors();
+        int total = fieldErrors.size() + globalErrors.size();
         List<Map<String, String>> errors = new ArrayList<>();
-        for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
-            errors.add(entry(pointerFromSpring(fe.getField()), code(fe.getCode()), message(fe.getDefaultMessage())));
+        for (FieldError fe : fieldErrors) {
+            if (errors.size() >= ValidationErrorBounds.MAX_FIELD_ERRORS) break;
+            errors.add(entry(pointerFromSpring(fe.getField()), code(fe.getCode()),
+                    ValidationErrorBounds.truncate(message(fe.getDefaultMessage()))));
         }
-        for (ObjectError oe : ex.getBindingResult().getGlobalErrors()) {
-            errors.add(entry("", code(oe.getCode()), message(oe.getDefaultMessage())));
+        for (ObjectError oe : globalErrors) {
+            if (errors.size() >= ValidationErrorBounds.MAX_FIELD_ERRORS) break;
+            errors.add(entry("", code(oe.getCode()), ValidationErrorBounds.truncate(message(oe.getDefaultMessage()))));
         }
-        return problem(errors);
+        return problem(errors, total > errors.size());
     }
 
-    /** @Validated method-parameter / path / query constraint failures. */
+    /** @Validated method-parameter / path / query constraint failures (same bounded treatment). */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ProblemDetail> handleParamValidation(ConstraintViolationException ex) {
         List<Map<String, String>> errors = new ArrayList<>();
+        int total = 0;
         if (ex.getConstraintViolations() != null) {
+            total = ex.getConstraintViolations().size();
             for (ConstraintViolation<?> cv : ex.getConstraintViolations()) {
+                if (errors.size() >= ValidationErrorBounds.MAX_FIELD_ERRORS) break;
                 errors.add(entry(pointerFromSpring(leaf(cv.getPropertyPath())),
-                        code(annotationCode(cv)), message(cv.getMessage())));
+                        code(annotationCode(cv)), ValidationErrorBounds.truncate(message(cv.getMessage()))));
             }
         }
-        return problem(errors);
+        return problem(errors, total > errors.size());
     }
 
     /**
@@ -101,17 +112,20 @@ public class RequestValidationAdvice {
         }
         List<Map<String, String>> errors = new ArrayList<>();
         errors.add(entry(pointer, code, detail));
-        return problem(errors);
+        return problem(errors, false);
     }
 
     // ── shared problem+json builder ─────────────────────────────────────────────
 
-    private ResponseEntity<ProblemDetail> problem(List<Map<String, String>> errors) {
+    private ResponseEntity<ProblemDetail> problem(List<Map<String, String>> errors, boolean truncated) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "One or more fields failed validation.");
         pd.setType(VALIDATION_TYPE);
         pd.setTitle("Validation Failed");
         pd.setProperty("code", "VALIDATION_FAILED");
         pd.setProperty("errors", errors);
+        if (truncated) {
+            pd.setProperty("errorsTruncated", true);
+        }
 
         for (Map<String, String> e : errors) {
             metrics.failure(e.get("pointer"), e.get("code")); // OBSERVABILITY-001: bounded {field,code}

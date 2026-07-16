@@ -44,8 +44,8 @@ public final class BillingDto {
     }
 
     public record CreateSubscriptionRequest(
-        @NotBlank String planId,
-        @NotBlank String provider
+        @NotBlank @Size(max = 64) String planId,
+        @NotBlank @Size(max = 64) String provider
     ) {}
 
     public record SubscriptionResponse(

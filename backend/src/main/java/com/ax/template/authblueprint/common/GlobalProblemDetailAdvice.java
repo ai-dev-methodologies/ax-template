@@ -22,6 +22,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.TransactionSystemException;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -138,13 +139,24 @@ public class GlobalProblemDetailAdvice {
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
+        List<FieldError> fieldErrors = ex.getBindingResult().getFieldErrors();
+        List<ObjectError> globalErrors = ex.getBindingResult().getGlobalErrors();
+        int total = fieldErrors.size() + globalErrors.size();
+        // Response-amplification defense: cap the number of echoed errors and truncate each message,
+        // so a request carrying many violations (each with a client-influenced message) can never
+        // inflate the response body (mirrors PaymentExceptionHandler / requestvalidation twin).
         List<Map<String, String>> errors = new ArrayList<>();
-        for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
-            errors.add(errorEntry(fe.getField(), constraintCode(fe.getCode()), defaultMessage(fe.getDefaultMessage())));
+        for (FieldError fe : fieldErrors) {
+            if (errors.size() >= ValidationErrorBounds.MAX_FIELD_ERRORS) break;
+            errors.add(errorEntry(fe.getField(), constraintCode(fe.getCode()),
+                    ValidationErrorBounds.truncate(defaultMessage(fe.getDefaultMessage()))));
         }
-        ex.getBindingResult().getGlobalErrors().forEach(ge ->
-                errors.add(errorEntry(ge.getObjectName(), constraintCode(ge.getCode()), defaultMessage(ge.getDefaultMessage()))));
-        return validationProblem(errors);
+        for (ObjectError ge : globalErrors) {
+            if (errors.size() >= ValidationErrorBounds.MAX_FIELD_ERRORS) break;
+            errors.add(errorEntry(ge.getObjectName(), constraintCode(ge.getCode()),
+                    ValidationErrorBounds.truncate(defaultMessage(ge.getDefaultMessage()))));
+        }
+        return validationProblem(errors, total > errors.size());
     }
 
     /**
@@ -154,12 +166,16 @@ public class GlobalProblemDetailAdvice {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ProblemDetail> handleConstraintViolation(ConstraintViolationException ex) {
         List<Map<String, String>> errors = new ArrayList<>();
+        int total = 0;
         if (ex.getConstraintViolations() != null) {
+            total = ex.getConstraintViolations().size();
             for (ConstraintViolation<?> cv : ex.getConstraintViolations()) {
-                errors.add(errorEntry(leafField(cv.getPropertyPath()), constraintCode(annotationCode(cv)), defaultMessage(cv.getMessage())));
+                if (errors.size() >= ValidationErrorBounds.MAX_FIELD_ERRORS) break;
+                errors.add(errorEntry(leafField(cv.getPropertyPath()), constraintCode(annotationCode(cv)),
+                        ValidationErrorBounds.truncate(defaultMessage(cv.getMessage()))));
             }
         }
-        return validationProblem(errors);
+        return validationProblem(errors, total > errors.size());
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -342,10 +358,14 @@ public class GlobalProblemDetailAdvice {
         return false;
     }
 
-    private static ResponseEntity<ProblemDetail> validationProblem(List<Map<String, String>> errors) {
+    private static ResponseEntity<ProblemDetail> validationProblem(List<Map<String, String>> errors, boolean truncated) {
         ProblemDetail pd = problem(HttpStatus.BAD_REQUEST, VALIDATION_TYPE, "Validation Failed",
                 "VALIDATION_FAILED", "One or more fields failed validation.");
         pd.setProperty("errors", errors);
+        if (truncated) {
+            // Signal that the errors[] array was capped at MAX_FIELD_ERRORS (amplification bound).
+            pd.setProperty("errorsTruncated", true);
+        }
         return entity(HttpStatus.BAD_REQUEST, pd);
     }
 

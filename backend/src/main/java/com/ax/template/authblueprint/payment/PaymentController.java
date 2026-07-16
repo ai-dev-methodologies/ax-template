@@ -1,6 +1,7 @@
 package com.ax.template.authblueprint.payment;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -120,7 +121,7 @@ public class PaymentController {
     @PostMapping("/{id}/refund")
     public ResponseEntity<RefundResponse> refund(
         @PathVariable UUID id,
-        @RequestBody(required = false) RefundRequest request,
+        @Valid @RequestBody(required = false) RefundRequest request,
         @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
         @AuthenticationPrincipal Jwt jwt) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
@@ -147,7 +148,7 @@ public class PaymentController {
      */
     @PostMapping("/coverage/confirm")
     public ResponseEntity<Map<String, Object>> confirmCoverage(
-        @RequestBody CoverageConfirmRequest request) {
+        @Valid @RequestBody CoverageConfirmRequest request) {
 
         PaymentService.CoverageResult result =
             paymentService.confirmCoverage(request.orderId(), request.currency(), request.orderTotal());
@@ -160,8 +161,16 @@ public class PaymentController {
         return ResponseEntity.ok(body);
     }
 
-    /** Request DTO for {@code POST /api/payments/coverage/confirm}. */
-    record CoverageConfirmRequest(String orderId, String currency, java.math.BigDecimal orderTotal) {}
+    /**
+     * Request DTO for {@code POST /api/payments/coverage/confirm}. Bounds mirror the hardened
+     * sibling {@link CreatePaymentRequest}: ISO-4217 currency is exactly 3 chars, and orderId is
+     * free-text with a generous cap — both fast-reject an oversized (~1MB) value at bean-validation
+     * BEFORE it can reach the service and be echoed into an error (response-amplification defense).
+     */
+    record CoverageConfirmRequest(
+        @Size(max = 200) String orderId,
+        @Size(max = 3) String currency,
+        java.math.BigDecimal orderTotal) {}
 
     private static Map<String, Object> paymentBody(Payment p) {
         Map<String, Object> body = new LinkedHashMap<>();

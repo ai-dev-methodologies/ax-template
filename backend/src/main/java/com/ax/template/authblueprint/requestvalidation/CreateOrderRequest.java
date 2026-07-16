@@ -62,7 +62,7 @@ public final class CreateOrderRequest {
     @NotNull @Valid
     private final Address address;
 
-    @NotEmpty
+    @NotEmpty @Size(max = 200)
     private final List<@Valid LineItem> items;
 
     /** VALIDATION-TYPE-001: any property not matching a declared field lands here, not dropped. */

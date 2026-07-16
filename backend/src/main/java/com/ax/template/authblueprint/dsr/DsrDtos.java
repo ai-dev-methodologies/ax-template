@@ -1,6 +1,7 @@
 package com.ax.template.authblueprint.dsr;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 import java.util.List;
@@ -15,12 +16,13 @@ public final class DsrDtos {
 
     private DsrDtos() {}
 
-    /** DSR-RECTIFY-001 body. */
+    /** DSR-RECTIFY-001 body. Free-text fields carry generous caps so an oversized value cannot
+     *  become a response-amplification vector (no {@code corrections} map here to bound). */
     public record RectifyRequest(
-        @NotBlank String fieldPath,
-        String currentValue,
-        @NotBlank String correctedValue,
-        @NotBlank String justification
+        @NotBlank @Size(max = 200) String fieldPath,
+        @Size(max = 500) String currentValue,
+        @NotBlank @Size(max = 500) String correctedValue,
+        @NotBlank @Size(max = 500) String justification
     ) {}
 
     /** Common tracking envelope returned by every open/get endpoint (DSR-SLA-001). */
@@ -69,8 +71,8 @@ public final class DsrDtos {
     }
 
     /** DSR-RESTRICT-001 lift body. */
-    public record LiftRequest(@NotBlank String justification) {}
+    public record LiftRequest(@NotBlank @Size(max = 500) String justification) {}
 
     /** DSR-SLA-001 extension body. */
-    public record ExtendRequest(int extensionDays, @NotBlank String extensionReason) {}
+    public record ExtendRequest(int extensionDays, @NotBlank @Size(max = 500) String extensionReason) {}
 }

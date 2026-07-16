@@ -26,7 +26,7 @@ public final class ActivityDtos {
         @Size(max = 64) String subjectType,
         @Size(max = 255) String subjectId,
         @Size(max = 100) List<String> audienceUserIds,
-        Map<String, Object> metadata,
+        @Size(max = 50) Map<String, Object> metadata,
         @Size(max = 128) String idempotencyKey
     ) {}
 

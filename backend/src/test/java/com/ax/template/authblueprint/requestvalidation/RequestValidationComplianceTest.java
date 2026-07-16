@@ -134,6 +134,32 @@ class RequestValidationComplianceTest {
         assertThat(pointers).contains("/items/1/sku", "/items/1/quantity", "/items/2/quantity");
     }
 
+    /**
+     * DEFENSE 2 — response-amplification bound. A request carrying MANY violations must not inflate
+     * the response: the errors[] array is capped at {@code ValidationErrorBounds.MAX_FIELD_ERRORS}
+     * (10) and an {@code errorsTruncated} flag signals the cap. 15 invalid items → 30 element errors
+     * → response holds exactly 10, flagged truncated.
+     */
+    @Test
+    @Tag("REQUEST_VALIDATION")
+    void manyValidationErrorsAreCountCapped() {
+        StringBuilder items = new StringBuilder("[");
+        for (int i = 0; i < 15; i++) {
+            if (i > 0) items.append(',');
+            items.append("{\"sku\":\"\",\"quantity\":0}"); // @NotBlank + @Positive → 2 errors each
+        }
+        items.append(']');
+        String bad = validBody().replace("\"items\":[{\"sku\":\"A1\",\"quantity\":2}]",
+                "\"items\":" + items);
+        JsonPath body = auth().body(bad).post("/api/request-validation/orders")
+            .then().statusCode(400)
+            .body("errorsTruncated", org.hamcrest.Matchers.equalTo(true))
+            .extract().jsonPath();
+        assertThat(body.getList("errors").size())
+            .as("errors[] array is count-capped at the amplification bound")
+            .isEqualTo(10);
+    }
+
     @Test
     @Tag("REQUEST_VALIDATION")
     @Tag("VALIDATION-SANITIZE-001")

@@ -50,9 +50,12 @@ public class IdempotencyDemoController {
     static final long WORK_LATENCY_MS = 200;
 
     /**
-     * Reject an oversized request body BEFORE it reaches {@link RequestFingerprint} (which parses +
-     * reserializes it). Matches the standalone mapper's 20MB read cap so a huge body never triggers a
-     * large tree/string allocation. Response-amplification defense; the rejection never echoes the body.
+     * Belt-and-suspenders bound on the already-read body BEFORE it reaches {@link RequestFingerprint}
+     * (which parses + reserializes it). The PRIMARY transport bound is now
+     * {@code common.RequestBodySizeLimitFilter} (20 MiB), which rejects an oversized body at the
+     * outermost filter — before any converter buffers it. This tighter char cap stays as a defensive
+     * inner bound matching the standalone mapper's 20M read cap. Response-amplification defense; the
+     * rejection never echoes the body.
      */
     static final int MAX_BODY_CHARS = 20_000_000;
 

@@ -735,7 +735,7 @@ tasks.register<Test>("testCommonPrimitives") {
         includeTags(
             "COMMON_BREAK_GLASS", "COMMON_BULK_RESULT", "COMMON_CALLER_SCOPE",
             "COMMON_CONSENT", "COMMON_IDEMPOTENCY", "COMMON_PAGE_ENVELOPE",
-            "COMMON_PARTICIPANT_SCOPE", "OBSERVABILITY"
+            "COMMON_PARTICIPANT_SCOPE", "COMMON_BODY_SIZE", "OBSERVABILITY"
         )
     }
     description = "Run the cross-cutting backend tests not owned by a single domain vertical: common/* primitives (BreakGlass, BulkResult, CallerScope, Consent, Idempotency, PageEnvelope, ParticipantScope) + the MDC correlation-id observability IT. Closes the @Tag→per-domain-task hard-gate escape (2026-06-01 audit)."

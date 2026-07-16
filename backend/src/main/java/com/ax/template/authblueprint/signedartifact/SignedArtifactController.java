@@ -32,7 +32,7 @@ public class SignedArtifactController {
     public record IssueReq(@NotBlank @Size(max = 200) String subjectRef,
                            @NotBlank @Size(max = 4000) String content) {}
 
-    public record VerifyReq(@NotBlank String jws, @NotBlank @Size(max = 4000) String content) {}
+    public record VerifyReq(@NotBlank @Size(max = 8192) String jws, @NotBlank @Size(max = 4000) String content) {}
 
     public record ArtifactDto(UUID id, String subjectRef, String contentHash, String kid, String alg,
                               String jws, Instant issuedAt) {

@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * idempotency-l0 compliance — every item verified against the live reference workload. Domain
@@ -37,6 +38,9 @@ class IdempotencyComplianceTest {
 
     @Autowired
     MeterRegistry registry;
+
+    @Autowired
+    tools.jackson.databind.ObjectMapper objectMapper;
 
     String token;
 
@@ -90,6 +94,37 @@ class IdempotencyComplianceTest {
         assertThat(body)
             .as("413 body must not echo the oversized request payload")
             .doesNotContain(marker);
+    }
+
+    @Test
+    @Tag("IDEMPOTENCY")
+    void transportFilterRejectsOverCapBodyBeforeBuffering() {
+        // DEFENSE 1 (end-to-end wiring): a body OVER the transport filter cap (20 MiB) is rejected
+        // 413 by RequestBodySizeLimitFilter at the outermost edge — before any converter buffers it.
+        // This body (21 MiB) exceeds the filter's byte cap, unlike oversizedBodyRejectedBeforeFingerprint
+        // (< 20 MiB) which the controller belt catches. Marker must not echo.
+        String marker = "TRANSPORTFILTERMARKER";
+        String hugeBody = "{\"v\":\"" + marker + "Z".repeat(21 * 1024 * 1024) + "\"}";
+        String body = post(token, UUID.randomUUID().toString(), hugeBody)
+            .post("/api/idempotency-demo/resources")
+            .then().statusCode(413).extract().asString();
+        assertThat(body)
+            .as("413 body must not echo the oversized request payload")
+            .doesNotContain(marker)
+            .contains("REQUEST_BODY_TOO_LARGE");
+    }
+
+    @Test
+    @Tag("IDEMPOTENCY")
+    void autoconfiguredMapperRejectsOversizedJsonString() {
+        // DEFENSE 5 (regression guard): the auto-configured Spring MVC mapper is pinned to a 20M
+        // max-string-length (application.yml). A JSON string field > 20M chars must be REJECTED on
+        // the parse path (Jackson 3's default 100M would otherwise silently accept it). If a future
+        // change removes the pin, this parse succeeds and the test fails.
+        String oversized = "{\"s\":\"" + "a".repeat(20_000_050) + "\"}";
+        assertThatThrownBy(() -> objectMapper.readValue(oversized, Object.class))
+            .as("oversized JSON string is rejected by the pinned 20M max-string-length")
+            .isInstanceOf(tools.jackson.core.JacksonException.class);
     }
 
     @Test

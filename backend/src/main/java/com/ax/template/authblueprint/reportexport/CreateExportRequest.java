@@ -13,7 +13,7 @@ import java.util.Map;
  * {@link ReportRowSource} SPI without inspection.
  */
 public record CreateExportRequest(
-    @NotBlank String format,
+    @NotBlank @Size(max = 32) String format,
     @Size(max = 128) String name,
-    Map<String, Object> query
+    @Size(max = 50) Map<String, Object> query
 ) {}
