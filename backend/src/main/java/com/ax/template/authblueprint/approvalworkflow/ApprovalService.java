@@ -1,8 +1,8 @@
 package com.ax.template.authblueprint.approvalworkflow;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -134,7 +134,7 @@ public class ApprovalService {
     private List<String> parseChain(String json) {
         try {
             return objectMapper.readValue(json, ROLE_CHAIN_TYPE);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IllegalStateException("routing rule role chain is not valid JSON: " + json, ex);
         }
     }
@@ -280,7 +280,7 @@ public class ApprovalService {
         }
         try {
             return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IllegalArgumentException("payload is not JSON-serializable", ex);
         }
     }

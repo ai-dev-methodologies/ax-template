@@ -1,6 +1,6 @@
 package com.ax.template.authblueprint.payment;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 
 import java.math.BigDecimal;
 

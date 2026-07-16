@@ -1,12 +1,12 @@
 package com.ax.template.authblueprint.requestvalidation;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonDeserializer;
-import com.fasterxml.jackson.databind.exc.MismatchedInputException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonParser;
+import tools.jackson.core.JsonToken;
+import tools.jackson.databind.DeserializationContext;
+import tools.jackson.databind.ValueDeserializer;
+import tools.jackson.databind.exc.MismatchedInputException;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 
 /**
@@ -21,10 +21,10 @@ import java.math.BigDecimal;
  * instance validates successfully if its type matches the type represented by the value of
  * the string." Spec: specs/request-validation-l0.yaml#VALIDATION-TYPE-001.
  */
-public class StrictNumericDeserializer extends JsonDeserializer<BigDecimal> {
+public class StrictNumericDeserializer extends ValueDeserializer<BigDecimal> {
 
     @Override
-    public BigDecimal deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+    public BigDecimal deserialize(JsonParser p, DeserializationContext ctxt) throws JacksonException {
         JsonToken token = p.currentToken();
         if (token == JsonToken.VALUE_NUMBER_INT || token == JsonToken.VALUE_NUMBER_FLOAT) {
             return p.getDecimalValue();

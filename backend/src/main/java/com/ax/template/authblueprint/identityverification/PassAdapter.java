@@ -1,8 +1,8 @@
 package com.ax.template.authblueprint.identityverification;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import org.springframework.stereotype.Component;
 
@@ -40,14 +40,10 @@ public class PassAdapter implements IdentityVerificationProvider {
         JsonNode root;
         try {
             root = objectMapper.readTree(rawBody);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IdentityVerificationException(
                 IdentityVerificationException.Reason.EXTRACTION_FAIL,
                 "PASS payload not valid JSON", ex);
-        } catch (java.io.IOException ex) {
-            throw new IdentityVerificationException(
-                IdentityVerificationException.Reason.EXTRACTION_FAIL,
-                "PASS payload read failure", ex);
         }
         String ci = textOrThrow(root, "ci_value");
         String di = textOrThrow(root, "di_value");

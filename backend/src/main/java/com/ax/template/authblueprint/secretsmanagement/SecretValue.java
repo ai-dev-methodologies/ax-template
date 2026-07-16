@@ -1,6 +1,6 @@
 package com.ax.template.authblueprint.secretsmanagement;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import tools.jackson.databind.annotation.JsonSerialize;
 
 import java.util.Objects;
 

@@ -12,8 +12,8 @@ import com.ax.template.authblueprint.dsr.DsrDtos.ErasureManifest;
 import com.ax.template.authblueprint.dsr.DsrDtos.RectifyRequest;
 import com.ax.template.authblueprint.dsr.PersonalDataProvider.RetainedCategory;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -186,7 +186,7 @@ public class DsrService {
     private String writeManifest(ErasureManifest manifest) {
         try {
             return objectMapper.writeValueAsString(manifest);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("DSR erasure manifest serialization failed", e);
         }
     }
@@ -194,7 +194,7 @@ public class DsrService {
     private ErasureManifest readManifest(String json) {
         try {
             return objectMapper.readValue(json, ErasureManifest.class);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("DSR erasure manifest deserialization failed", e);
         }
     }

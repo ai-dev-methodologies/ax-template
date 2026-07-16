@@ -1,12 +1,12 @@
 package com.ax.template.authblueprint.payment;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonDeserializer;
-import com.fasterxml.jackson.databind.JsonMappingException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonParser;
+import tools.jackson.core.JsonToken;
+import tools.jackson.databind.DatabindException;
+import tools.jackson.databind.DeserializationContext;
+import tools.jackson.databind.ValueDeserializer;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.regex.Pattern;
 
@@ -22,20 +22,20 @@ import java.util.regex.Pattern;
  *
  * <p>Rejected:
  * <ul>
- *   <li>Float JSON token: {@code "amount": 10.99} → {@link JsonMappingException}
+ *   <li>Float JSON token: {@code "amount": 10.99} → {@link DatabindException}
  *       translated to HTTP 400 + RFC 7807 detail by Spring's MessageNotReadable handler.</li>
  * </ul>
  *
  * <p>Rationale: IEEE 754 binary floating point cannot represent most decimal fractions
  * exactly; BigDecimal precision only survives integer-minor-units or decimal-string encoding.
  */
-public class MoneyDeserializer extends JsonDeserializer<BigDecimal> {
+public class MoneyDeserializer extends ValueDeserializer<BigDecimal> {
 
     private static final Pattern DECIMAL = Pattern.compile("^[0-9]+(\\.[0-9]{1,8})?$");
 
     @Override
-    public BigDecimal deserialize(JsonParser p, DeserializationContext ctx) throws IOException {
-        JsonToken token = p.getCurrentToken();
+    public BigDecimal deserialize(JsonParser p, DeserializationContext ctx) throws JacksonException {
+        JsonToken token = p.currentToken();
         if (token == JsonToken.VALUE_NUMBER_INT) {
             return BigDecimal.valueOf(p.getLongValue());
         }
@@ -44,16 +44,16 @@ public class MoneyDeserializer extends JsonDeserializer<BigDecimal> {
             if (text != null && DECIMAL.matcher(text).matches()) {
                 return new BigDecimal(text);
             }
-            throw JsonMappingException.from(p,
+            throw DatabindException.from(p,
                 "invalid amount '" + text + "'; expected integer minor units or decimal string "
                     + "matching ^[0-9]+(\\.[0-9]{1,8})?$");
         }
         if (token == JsonToken.VALUE_NUMBER_FLOAT) {
-            throw JsonMappingException.from(p,
+            throw DatabindException.from(p,
                 "float JSON number not supported for amount; use integer minor units or decimal string. "
                     + "Reason: IEEE 754 binary float cannot losslessly represent most decimal fractions.");
         }
-        throw JsonMappingException.from(p,
+        throw DatabindException.from(p,
             "amount must be an integer minor-units value or a decimal string; got token " + token);
     }
 }

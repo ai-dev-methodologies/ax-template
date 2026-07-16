@@ -1,10 +1,9 @@
 package com.ax.template.authblueprint.secretsmanagement;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
-
-import java.io.IOException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonGenerator;
+import tools.jackson.databind.SerializationContext;
+import tools.jackson.databind.ser.std.StdSerializer;
 
 /**
  * SECRET-NO-LOG-001 — the JSON egress half of {@link SecretValue}'s masking. Any DTO that
@@ -20,7 +19,7 @@ public class SecretValueSerializer extends StdSerializer<SecretValue> {
     }
 
     @Override
-    public void serialize(SecretValue value, JsonGenerator gen, SerializerProvider provider) throws IOException {
+    public void serialize(SecretValue value, JsonGenerator gen, SerializationContext provider) throws JacksonException {
         gen.writeString(SecretValue.MASK);
     }
 }

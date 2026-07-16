@@ -1,8 +1,8 @@
 package com.ax.template.authblueprint.activityfeed;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -78,7 +78,7 @@ public final class ActivityDtos {
             if (json == null || json.isBlank()) return Map.of();
             try {
                 return mapper.readValue(json, MAP_TYPE);
-            } catch (JsonProcessingException ex) {
+            } catch (JacksonException ex) {
                 return Map.of();
             }
         }

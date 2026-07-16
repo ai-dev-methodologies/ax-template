@@ -1,7 +1,8 @@
 package com.ax.template.authblueprint.requestvalidation;
 
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DatabindException;
+import tools.jackson.databind.exc.UnrecognizedPropertyException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
@@ -80,7 +81,7 @@ public class RequestValidationAdvice {
      * Strict-type / unknown-field / malformed-body binding failures (VALIDATION-TYPE-001).
      * No {@code BindingResult} exists for these, so the offending field + a stable code are
      * recovered from the Jackson cause: a {@link UnrecognizedPropertyException} → {@code UnknownField},
-     * any other {@link JsonMappingException} (wrong type, strict numeric, unlisted enum) →
+     * any other {@link DatabindException} (wrong type, strict numeric, unlisted enum) →
      * {@code TypeMismatch}.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -93,7 +94,7 @@ public class RequestValidationAdvice {
             pointer = pointerFromJackson(upe.getPath());
             code = "UnknownField";
             detail = "Unknown field is not permitted by the schema.";
-        } else if (cause instanceof JsonMappingException jme) {
+        } else if (cause instanceof DatabindException jme) {
             pointer = pointerFromJackson(jme.getPath());
             code = "TypeMismatch";
             detail = "Field value does not match the declared type; no coercion is applied.";
@@ -157,14 +158,14 @@ public class RequestValidationAdvice {
     }
 
     /** Jackson reference chain → RFC 6901 pointer (field names + collection indices). */
-    static String pointerFromJackson(List<JsonMappingException.Reference> refs) {
+    static String pointerFromJackson(List<JacksonException.Reference> refs) {
         if (refs == null || refs.isEmpty()) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        for (JsonMappingException.Reference ref : refs) {
-            if (ref.getFieldName() != null) {
-                sb.append('/').append(ref.getFieldName());
+        for (JacksonException.Reference ref : refs) {
+            if (ref.getPropertyName() != null) {
+                sb.append('/').append(ref.getPropertyName());
             } else if (ref.getIndex() >= 0) {
                 sb.append('/').append(ref.getIndex());
             }

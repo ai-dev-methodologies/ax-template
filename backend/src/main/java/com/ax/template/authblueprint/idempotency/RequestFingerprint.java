@@ -1,7 +1,8 @@
 package com.ax.template.authblueprint.idempotency;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -21,7 +22,7 @@ public final class RequestFingerprint {
 
     // SORT_KEYS so {"a":1,"b":2} and {"b":2,"a":1} canonicalize identically.
     private static final ObjectMapper CANONICAL =
-            new ObjectMapper().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+            JsonMapper.builder().enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS).build();
 
     private RequestFingerprint() {}
 

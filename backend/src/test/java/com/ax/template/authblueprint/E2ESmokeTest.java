@@ -2,7 +2,7 @@ package com.ax.template.authblueprint;
 
 import com.ax.template.authblueprint.auth.VerificationTokenRepository;
 import com.ax.template.authblueprint.user.UserRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

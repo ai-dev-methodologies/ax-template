@@ -1,7 +1,7 @@
 package com.ax.template.authblueprint.signedartifact;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import com.nimbusds.jose.Algorithm;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -128,7 +128,7 @@ public class SignedArtifactService {
         }
     }
 
-    private com.fasterxml.jackson.databind.JsonNode readPayload(JWSObject jwsObject) {
+    private tools.jackson.databind.JsonNode readPayload(JWSObject jwsObject) {
         try {
             return objectMapper.readTree(jwsObject.getPayload().toString());
         } catch (Exception ex) {

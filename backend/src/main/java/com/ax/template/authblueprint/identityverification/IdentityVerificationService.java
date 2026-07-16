@@ -3,8 +3,8 @@ package com.ax.template.authblueprint.identityverification;
 import com.ax.template.authblueprint.auditlog.AuditLogDto;
 import com.ax.template.authblueprint.auditlog.AuditLogService;
 import com.ax.template.authblueprint.auditlog.AuditOutcome;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -120,7 +120,7 @@ public class IdentityVerificationService {
         String metadataJson;
         try {
             metadataJson = objectMapper.writeValueAsString(meta);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             log.warn("Failed to serialise concordance-mismatch audit metadata (provider={})", providerName, ex);
             metadataJson = null;
         }
@@ -206,7 +206,7 @@ public class IdentityVerificationService {
         String metadataJson;
         try {
             metadataJson = objectMapper.writeValueAsString(meta);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             log.warn("Failed to serialise audit metadata for IDV callback "
                   + "(provider={}, outcome={})", providerName, outcomeDetail, ex);
             metadataJson = null;

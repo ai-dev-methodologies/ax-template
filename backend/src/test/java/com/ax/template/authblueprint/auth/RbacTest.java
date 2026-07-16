@@ -3,7 +3,7 @@ package com.ax.template.authblueprint.auth;
 import com.ax.template.authblueprint.user.UserEntity;
 import com.ax.template.authblueprint.user.UserRepository;
 import com.ax.template.authblueprint.user.UserRole;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -25,10 +25,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 28 | 28 | **100%** |
-| P1 (generic signature backlog) | 63 | 62 | ~98% |
+| P1 (generic signature backlog) | 63 | 63 | **100%** |
 | P2 (verification escapes) | 20 | 20 | **100%** |
 | P3 (industry-niche deferrals) | 47 | 47 | **100%** |
-| **P0–P3 합계 (수렴 분모)** | **158** | **157** | **~99%** |
+| **P0–P3 합계 (수렴 분모)** | **158** | **158** | **100%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
 > 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
@@ -177,7 +177,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 **tokenized-securities 잔여 (STO-arc 파생, 2026-07-07)**
 - [x] **P1-61** — **closed 2026-07-13 (backlog-convergence-wave)**: tokenized-securities `issue()` 동시성 keystone — `concurrentIssue_exactlyOneWins_registerConserved()` (`TokenizedSecuritiesComplianceTest`, @Tag ISSUE-002) 추가: 동일 DRAFT 토큰에 ×2 동시 issue → 정확히 1×200 + 1×409 `TS_ALREADY_ISSUED`(순서 무관) + 사후 Σholdings==totalUnits(이중 seed 없음). 기존 `CountDownLatch`+`ExecutorService` keystone idiom(ThresholdTerminal/DecisionGov) 미러. 기존 `findByTokenCodeForUpdate` pessimistic lock이 이미 구조 보장 — 첫 실행 GREEN, 프로덕션 무수정(기계적 단언 추가가 done-when 그 자체). testTokenizedSecurities 34 tests 0 failures.
 - [x] **P1-62** — **closed 2026-07-13 (backlog-convergence-wave, evidence-backed doc closure)**: `fromHolderId`↔인증주체 바인딩은 **이미 구현·검증 완료 상태**였음 — `SecurityTokenRegisterService.transfer():110`이 mutation 전 `holderAuthorization.controls(callerPrincipal, fromHolderId)` 호출(deny-by-default `OwnershipHolderAuthorization` SPI), 비통제 holder → 403 `TS_NOT_HOLDER_CONTROLLER`. 행위 검증: `TokenizedSecuritiesComplianceTest#transferFromUncontrolledHolder_isRejected_403_registerUnchanged`(@Tag HOLDER-AUTHZ-001, issue 후 probe라 409 shadowing 없음) + `TokenizedSecuritiesViolationProofTest:135`(빈 ownership repo에서 default-SPI deny). 실제 갭은 stale 문서뿐 — spec 헤더·CLAUDE.md 매트릭스의 "Phase 1 미구현" 표기를 "binding realized today, Phase 1 잔여 = ERC-3643 ON-CHAIN identity(fork-receiver 관심사)"로 정정. spec id `HOLDER-AUTHZ-001` 유지(STO- rename은 @Tag 참조 파괴라 기각). TDD waiver(정직 명시): 불변식이 이미 TDD-covered라 신규 테스트 없음 — doc-only closure. testTokenizedSecurities GREEN.
-- [ ] **P1-63** Jackson 2→3 마이그레이션 (spring-boot-jackson2 bridge 해소) *(2026-07-16 SB4 wave 등재 — deprecated-compat 부채)* — Boot 4.1 마이그레이션에서 Jackson 3(tools.jackson) 기본 대신 **의도적으로 Jackson 2 bridge(spring-boot-jackson2, deprecated)를 선택**(34파일·SPI 서브클래스 4개의 동작 보존 우선 — 돈/입력엄격성 역직렬화기 포함). 단일 클래스패스(tools.jackson 완전 부재)는 적대 리뷰로 실증됨. done-when: 4개 SPI 서브클래스(payment/MoneyDeserializer·requestvalidation/StrictNumericDeserializer·secretsmanagement/SecretValueSerializer + advice pointer 로직)와 ~30 ObjectMapper 사용처를 tools.jackson API로 이관, spring-boot-jackson2 의존 제거, 전 태스크 GREEN + 돈 역직렬화 동작 동등성 명시 검증. Boot 5에서 bridge 제거 예상 — 그 전 처리.
+- [x] **P1-63** Jackson 2→3 마이그레이션 (spring-boot-jackson2 bridge 해소) *(2026-07-16 SB4 wave 등재 — deprecated-compat 부채)* — Boot 4.1 마이그레이션에서 Jackson 3(tools.jackson) 기본 대신 **의도적으로 Jackson 2 bridge(spring-boot-jackson2, deprecated)를 선택**(34파일·SPI 서브클래스 4개의 동작 보존 우선 — 돈/입력엄격성 역직렬화기 포함). 단일 클래스패스(tools.jackson 완전 부재)는 적대 리뷰로 실증됨. done-when: 4개 SPI 서브클래스(payment/MoneyDeserializer·requestvalidation/StrictNumericDeserializer·secretsmanagement/SecretValueSerializer + advice pointer 로직)와 ~30 ObjectMapper 사용처를 tools.jackson API로 이관, spring-boot-jackson2 의존 제거, 전 태스크 GREEN + 돈 역직렬화 동작 동등성 명시 검증. Boot 5에서 bridge 제거 예상 — 그 전 처리. → **closed 2026-07-16 (J3 wave)**: bridge 완전 제거 — 38파일 tools.jackson 3.1.4 이관(돈 SPI 5개는 정밀 lane: 거부 메시지 byte-identical, Reference.getPropertyName 개명·포인터 불변식 보존, 실제 jar 바이트코드로 API 검증). 적대 리뷰 6렌즈 MUST-FIX 0(spring-web 컨버터 예외 테이블→400 매핑 linchpin 바이트코드 확인, 시크릿 마스킹·서명 해시·멱등 지문 전부 보존 입증, KcbAdapter IOException 분기는 dead-code 증명 후 병합). 테스트 하네스용 jackson-databind 2.x는 test 스코프 명시 유지(RestAssured 클라이언트측 — 앱 classpath는 Jackson 3 단독). 테스트 무수정, R25 10/0/0.
 
 ## P2 — verification escapes (검증 체계 자체의 갭)
 

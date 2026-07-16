@@ -26,20 +26,13 @@ repositories {
 }
 
 dependencies {
-    // SB4 Jackson 2/3 split-brain avoidance (P0-27 Fix 2, PATH A): spring-boot-starter-web
-    // transitively pulls spring-boot-starter-jackson (tools.jackson.* / Jackson 3), but our
-    // 24 SPI classes (payment/MoneyDeserializer, requestvalidation/StrictNumericDeserializer,
-    // secretsmanagement/SecretValueSerializer, requestvalidation/RequestValidationAdvice, etc.)
-    // are written against com.fasterxml.jackson.databind.* (Jackson 2). spring-boot-jackson2 is
-    // Boot 4's DEPRECATED stay-on-Jackson-2 compat/bridge (the forward path is Jackson 3 /
-    // tools.jackson — registered as BACKLOG P1-63). Chosen deliberately: behavior preservation
-    // of the 4 money/input-strictness SPI subclasses outranks being on the new default this
-    // pass. Excluding spring-boot-starter-jackson keeps the classpath single-brained: MVC
-    // message conversion and our SPI classes resolve to the SAME (Jackson 2) databind.
-    implementation("org.springframework.boot:spring-boot-starter-web") {
-        exclude(group = "org.springframework.boot", module = "spring-boot-starter-jackson")
-    }
-    implementation("org.springframework.boot:spring-boot-jackson2")
+    // Jackson 3 (tools.jackson) — Boot 4's default. P1-63 closed the deprecated
+    // spring-boot-jackson2 bridge that the initial SB4 migration used for behavior
+    // preservation: all SPI subclasses (payment/MoneyDeserializer, requestvalidation/
+    // StrictNumericDeserializer, secretsmanagement/SecretValueSerializer) and every
+    // ObjectMapper site now target tools.jackson.*, so the plain starter suffices.
+    // java.time support is built into Jackson 3 databind (no separate jsr310 module).
+    implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
@@ -86,6 +79,13 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("io.rest-assured:rest-assured:5.5.7")
+    // TEST-HARNESS ONLY: RestAssured 5.x discovers a Jackson-2 (com.fasterxml) databind for
+    // serializing `.body(pojo/map)` request bodies — it cannot see Jackson 3 (tools.jackson).
+    // P1-63 removed the app-wide Jackson-2 bridge, so the CLIENT-side serializer must be
+    // supplied on the test classpath explicitly. The APPLICATION classpath stays Jackson-3-only
+    // (this is testImplementation; server-side MVC conversion uses tools.jackson). Remove when
+    // rest-assured ships Jackson-3 support (same revisit point as the groovy substitution above).
+    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.21.4")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 
     // PIT JUnit 5 support. Must be on the test classpath (not only PIT's tool classpath) so
