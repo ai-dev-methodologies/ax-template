@@ -111,10 +111,37 @@ class IdempotencyComplianceTest {
         // connection reset — NEVER acceptance, NEVER an echo of the payload, NEVER an unbounded hold.
         String marker = "TRANSPORTFILTERMARKER";
         String hugeBody = "{\"v\":\"" + marker + "Z".repeat(21 * 1024 * 1024) + "\"}";
+
+        // NON-VACUITY WITNESS (server-side, deterministic): the edge filter increments this counter
+        // exactly once per 413 it commits BEFORE any converter buffers the body. Snapshot the delta
+        // around the request. A hugely-oversized body seen client-side as a connection reset gives no
+        // readable 413, and an edge 413 is indistinguishable from a downstream controller-belt 413 by
+        // response bytes — so this counter, not client forensics, is what locks "the reject happened at
+        // the transport edge." Revert the edge reject (raise the filter cap) → controller belt handles
+        // it → this counter never moves → the assertion below fails RED.
+        double rejectsBefore = rejectionCounter();
+
+        // NO-UNBOUNDED-HOLD PROOF: measure wall-clock around ONLY the request. The bounded max-swallow
+        // posture resets the connection promptly instead of holding the request thread to drain 21 MiB.
+        // A stalled/held thread (the DoS this prevents) would blow past this bound.
+        long startNanos = System.nanoTime();
+        Exception thrown = null;
+        io.restassured.response.Response resp = null;
         try {
-            io.restassured.response.Response resp = post(token, UUID.randomUUID().toString(), hugeBody)
+            resp = post(token, UUID.randomUUID().toString(), hugeBody)
                 .post("/api/idempotency-demo/resources").thenReturn();
-            // If a response was delivered at all, it must be the 413 rejection with no echo.
+        } catch (Exception e) {
+            thrown = e;
+        }
+        long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
+
+        assertThat(elapsedMs)
+            .as("over-cap request must resolve promptly (bounded reset / prompt 413), never hold the "
+                + "request thread to drain the body — a stall would exceed this bound (elapsed=%dms)", elapsedMs)
+            .isLessThan(10_000L);
+
+        if (thrown == null) {
+            // A response was delivered: it MUST be the clean 413 rejection with no echo (never 2xx).
             assertThat(resp.statusCode())
                 .as("if a response is delivered, it is the 413 rejection (never 2xx acceptance)")
                 .isEqualTo(413);
@@ -122,31 +149,50 @@ class IdempotencyComplianceTest {
                 .as("413 body must not echo the oversized request payload")
                 .doesNotContain(marker)
                 .contains("REQUEST_BODY_TOO_LARGE");
-        } catch (Exception thrown) {
-            // Bounded-swallow posture: Tomcat reset the connection (connection reset / broken pipe)
-            // rather than drain 21 MiB unbounded. Walk the cause chain and classify precisely.
-            boolean timeoutStall = false;
-            boolean transportFailure = false;
+        } else {
+            // No readable response: the ONLY acceptable transport outcome is a connection RESET /
+            // broken pipe (a SocketException that is NOT an InterruptedIOException subtype). A timeout
+            // (InterruptedIOException — covers SocketTimeoutException AND ConnectTimeoutException) or a
+            // connect-establishment failure (ConnectException) signals a STALL / held thread, the exact
+            // failure the bounded swallow prevents — those must FAIL, not pass.
+            boolean stallOrConnectFailure = false;
+            boolean connectionReset = false;
             for (Throwable c = thrown; c != null; c = (c.getCause() == c) ? null : c.getCause()) {
-                // A SocketTimeoutException = a STALLED / held request thread — the very DoS the
-                // bounded max-swallow-size prevents. It must NOT be accepted as the secure outcome.
-                if (c instanceof java.net.SocketTimeoutException) {
-                    timeoutStall = true;
+                if (c instanceof java.io.InterruptedIOException || c instanceof java.net.ConnectException) {
+                    stallOrConnectFailure = true; // timeout / connect-establishment problem == a stall
                 }
-                if (c instanceof java.io.IOException) {
-                    transportFailure = true;
+                if (c instanceof java.net.SocketException && !(c instanceof java.io.InterruptedIOException)) {
+                    String msg = c.getMessage() == null ? "" : c.getMessage().toLowerCase(java.util.Locale.ROOT);
+                    if (msg.contains("reset") || msg.contains("broken pipe") || msg.contains("connection")) {
+                        connectionReset = true; // Tomcat reset mid-write rather than drain unbounded
+                    }
                 }
             }
-            assertThat(timeoutStall)
-                .as("outcome must NOT be a SocketTimeoutException — a timeout signals a stalled/held "
+            assertThat(stallOrConnectFailure)
+                .as("outcome must NOT be a timeout/connect-stall (InterruptedIOException — incl. "
+                    + "Socket/ConnectTimeoutException — or ConnectException): those signal a held/stalled "
                     + "request thread, the exact failure the bounded swallow prevents: " + thrown)
                 .isFalse();
-            assertThat(transportFailure)
-                .as("hugely-oversized body rejected by a NON-timeout transport failure (connection "
-                    + "reset / broken pipe) under the bounded swallow (no unbounded thread-hold); "
-                    + "payload never buffered: " + thrown)
+            assertThat(connectionReset)
+                .as("hugely-oversized body rejected by a clean connection RESET / broken pipe (SocketException, "
+                    + "NOT a timeout) under the bounded swallow — no unbounded thread-hold; payload never "
+                    + "buffered: " + thrown)
                 .isTrue();
         }
+
+        // Edge-reject witness: the filter committed a 413 at the transport edge for this over-cap body.
+        assertThat(rejectionCounter() - rejectsBefore)
+            .as("RequestBodySizeLimitFilter must have rejected the over-cap body AT THE EDGE (metric "
+                + "'%s' incremented) — reverting the edge reject makes this stay 0 (RED)",
+                com.ax.template.authblueprint.common.RequestBodySizeLimitFilter.REJECTIONS_METRIC)
+            .isGreaterThanOrEqualTo(1.0);
+    }
+
+    /** Current value of the edge-reject witness counter (0.0 until the filter first commits a 413). */
+    private double rejectionCounter() {
+        var counter = registry.find(
+            com.ax.template.authblueprint.common.RequestBodySizeLimitFilter.REJECTIONS_METRIC).counter();
+        return counter == null ? 0.0 : counter.count();
     }
 
     @Test
@@ -193,7 +239,11 @@ class IdempotencyComplianceTest {
         // REJECTED with 413 (NOT accepted with a degraded raw-hash fingerprint, NOT an OOM/500). A
         // degraded fingerprint would let a same-key reorder retry get a false 422 instead of a replay.
         // The rejection must not echo the body.
-        StringBuilder sb = new StringBuilder("{\"x\":[");
+        // A unique marker is embedded as the array's object KEY so the body carries a distinctive
+        // substring: if the 413 ever reflected any request content, the marker would surface. The
+        // marker does not alter the ~1.4M structural-token count that trips the bound.
+        String marker = "TOKENDENSEBODYMARKER";
+        StringBuilder sb = new StringBuilder("{\"" + marker + "\":[");
         for (int i = 0; i < 700_000; i++) {
             sb.append("{},");
         }
@@ -203,7 +253,8 @@ class IdempotencyComplianceTest {
             .then().statusCode(413).extract().asString();
         assertThat(resp)
             .as("413 rejection carries the bounded error code and never echoes the body")
-            .contains("REQUEST_BODY_TOO_LARGE");
+            .contains("REQUEST_BODY_TOO_LARGE")
+            .doesNotContain(marker);
     }
 
     @Test

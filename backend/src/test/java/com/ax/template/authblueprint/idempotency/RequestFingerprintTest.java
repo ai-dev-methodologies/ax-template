@@ -32,6 +32,27 @@ class RequestFingerprintTest {
     }
 
     @Test
+    void nonJsonBodyPreservedNotCollapsed() {
+        // Regression lock on canonicalizeJson's non-JSON branch (`return body`). A non-JSON body is a
+        // SUPPORTED case: it is hashed as-is so distinct raw payloads stay distinct and an identical
+        // raw payload replays. If the branch were mutated to `return ""` (or any constant), ALL
+        // non-JSON bodies would canonicalize to the same fingerprint — two genuinely different raw
+        // payloads would collide (same key → false replay of the wrong resource), and the mutant would
+        // survive the JSON-only tests. Lock BOTH directions:
+        String fpA = RequestFingerprint.of("POST", "/api/x", null, "not json A");
+        String fpB = RequestFingerprint.of("POST", "/api/x", null, "not json B");
+        assertThat(fpA)
+            .as("two DISTINCT non-JSON bodies must produce DIFFERENT fingerprints "
+                + "(kills `return \"\"` / `return constant` mutants that collapse all non-JSON)")
+            .isNotEqualTo(fpB);
+        // ... and the SAME non-JSON body still canonicalizes stably so a legitimate retry replays.
+        String fpArepeat = RequestFingerprint.of("POST", "/api/x", null, "not json A");
+        assertThat(fpArepeat)
+            .as("the SAME non-JSON body produces the SAME fingerprint (replay of a raw-body retry works)")
+            .isEqualTo(fpA);
+    }
+
+    @Test
     void smallReorderCanonicalizesToSameFingerprint() {
         // Positive control (non-vacuity): for an under-bound body the mapper DOES canonicalize, so a
         // pure key-order reorder produces the SAME fingerprint. This proves canonicalization is live —

@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.common;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,9 +20,10 @@ import org.springframework.core.Ordered;
 public class RequestBodySizeLimitConfig {
 
     @Bean
-    public FilterRegistrationBean<RequestBodySizeLimitFilter> requestBodySizeLimitFilterRegistration() {
+    public FilterRegistrationBean<RequestBodySizeLimitFilter> requestBodySizeLimitFilterRegistration(
+            MeterRegistry meterRegistry) {
         FilterRegistrationBean<RequestBodySizeLimitFilter> registration =
-                new FilterRegistrationBean<>(new RequestBodySizeLimitFilter());
+                new FilterRegistrationBean<>(new RequestBodySizeLimitFilter(meterRegistry));
         registration.addUrlPatterns("/*");
         // Before Spring Security (DEFAULT_FILTER_ORDER = -100) and every application filter, so an
         // oversized body is rejected at the outermost edge — nothing downstream ever buffers it.

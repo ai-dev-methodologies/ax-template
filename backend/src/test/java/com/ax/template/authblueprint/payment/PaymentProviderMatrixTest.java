@@ -316,6 +316,78 @@ class PaymentProviderMatrixTest {
             .isEqualTo(firstPaymentId);
     }
 
+    // ─── resolveFailureMode fail-closed + locale regression locks ────────────────
+
+    /**
+     * Regression lock for the FAIL-CLOSED branch of {@link PaymentController#resolveFailureMode}.
+     * An explicit, NON-blank, unrecognized failure mode must be REJECTED with 400 — never silently
+     * folded to APPROVED. Reverting the fix (catch → {@code return APPROVED} instead of throwing)
+     * would flip a requested provider FAILURE into a SUCCESS on a money path; this request would then
+     * be accepted (2xx) and the assertion below (400) would FAIL. The unknown value must also never
+     * be echoed into the 400 body (response-amplification defense).
+     */
+    @Test
+    @Tag("PAYMENT")
+    void explicitUnknownFailureMode_isRejected400_andNotEchoed() {
+        String token = obtainToken("provider-unknown@test.test", "MEMBER");
+        String unknownMode = "TOTALLY_UNKNOWN_MODE";
+
+        Response response =
+            given()
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .header("X-Test-Provider-Mode", unknownMode)
+                .body("{\"amount\":10000,\"currency\":\"KRW\",\"orderId\":\"order-unknown\"}")
+            .when().post("/api/payments");
+
+        assertThat(response.statusCode())
+            .as("an explicit unrecognized failure mode must fail CLOSED with 400 "
+                + "(reverting fail-closed→APPROVED would accept the request with a 2xx)")
+            .isEqualTo(400);
+        assertThat(response.body().asString())
+            .as("the (untrusted) unknown mode value must NOT be echoed back in the 400 body")
+            .doesNotContain(unknownMode);
+    }
+
+    /**
+     * Regression lock for the {@code Locale.ROOT} case-fold in {@link PaymentController#resolveFailureMode}.
+     * The bug only manifests under a Turkish default locale, where a default-locale {@code toUpperCase()}
+     * maps 'i'→'İ' — so lowercase {@code "timeout"} becomes {@code "TİMEOUT"}, misses the enum, and (under
+     * fail-closed) is REJECTED instead of resolving to TIMEOUT. The fix folds with {@code Locale.ROOT}, which
+     * is locale-independent, so {@code "timeout"}→{@code "TIMEOUT"}→{@code FailureMode.TIMEOUT} regardless of
+     * the default locale. This test FORCES tr as the default locale (restored in finally so no other test is
+     * polluted) and invokes the private {@code resolveFailureMode} reflectively, asserting it resolves to
+     * TIMEOUT — not APPROVED, and not a thrown rejection. Reverting {@code Locale.ROOT}→plain {@code toUpperCase()}
+     * makes this throw under tr → the assertion FAILS.
+     */
+    @Test
+    @Tag("PAYMENT")
+    void lowercaseTimeout_resolvesToTimeout_underTurkishLocale() throws Exception {
+        java.lang.reflect.Method resolve = PaymentController.class
+            .getDeclaredMethod("resolveFailureMode", String.class, String.class);
+        resolve.setAccessible(true);
+
+        java.util.Locale previous = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr"));
+            // sanity: under tr, a naive default-locale fold WOULD corrupt "timeout" — the exact bug
+            // the Locale.ROOT fix prevents (guards against the test silently no-op'ing on a JVM where
+            // tr didn't take effect).
+            assertThat("timeout".toUpperCase())
+                .as("Turkish default locale is in effect (naive fold dots the i)")
+                .isNotEqualTo("TIMEOUT");
+
+            Object result = resolve.invoke(null, null, "timeout");
+            assertThat(result)
+                .as("lowercase \"timeout\" must fold via Locale.ROOT to FailureMode.TIMEOUT under tr "
+                    + "(reverting to plain toUpperCase() throws here → NOT TIMEOUT)")
+                .isEqualTo(PaymentProvider.FailureMode.TIMEOUT);
+        } finally {
+            java.util.Locale.setDefault(previous);
+        }
+    }
+
     // ─── helpers ──────────────────────────────────────────────────────────────
 
     private String obtainToken(String email, String role) {

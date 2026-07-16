@@ -1,5 +1,7 @@
 package com.ax.template.authblueprint.common;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
@@ -63,6 +65,29 @@ public class RequestBodySizeLimitFilter extends OncePerRequestFilter {
             + "\"code\":\"REQUEST_BODY_TOO_LARGE\","
             + "\"detail\":\"The request body exceeds the maximum allowed size.\"}";
 
+    /**
+     * Server-side observable of an edge rejection: incremented once per 413 this filter commits at the
+     * transport edge (BEFORE any converter buffers the body). It is the honest, deterministic witness
+     * that the over-cap body was stopped HERE — a real-Tomcat integration test cannot reliably tell an
+     * edge 413 from a downstream controller-belt 413 by client-side response bytes alone (and, under a
+     * hugely-oversized body, sees a connection reset instead of a readable 413). Reading this counter's
+     * delta proves the edge reject fired. Adding it does NOT change reject behavior (status/body/order).
+     */
+    public static final String REJECTIONS_METRIC = "ax.request_body.too_large.rejections";
+
+    /** Null when the filter is constructed without a registry (unit tests) — increment is then a no-op. */
+    private final Counter rejections;
+
+    /** No-arg: no metric wiring (used by focused unit tests that assert status/body directly). */
+    public RequestBodySizeLimitFilter() {
+        this(null);
+    }
+
+    /** Registry-wired: emits {@link #REJECTIONS_METRIC} on each committed 413 (production registration). */
+    public RequestBodySizeLimitFilter(MeterRegistry registry) {
+        this.rejections = registry == null ? null : registry.counter(REJECTIONS_METRIC);
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
@@ -111,6 +136,9 @@ public class RequestBodySizeLimitFilter extends OncePerRequestFilter {
     }
 
     private void writeTooLarge(HttpServletResponse response) throws IOException {
+        if (rejections != null) {
+            rejections.increment(); // witness: an over-cap body was rejected at the transport edge
+        }
         response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE); // 413
         response.setContentType("application/problem+json");
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
