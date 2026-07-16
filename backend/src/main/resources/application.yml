@@ -1,27 +1,32 @@
-server:
-  tomcat:
-    # When RequestBodySizeLimitFilter rejects an oversized body with 413 BEFORE reading it, the
-    # container must still drain the unsent request body so the error response reaches the client
-    # instead of resetting the connection. -1 = swallow unlimited: the drain is a streamed discard
-    # into a small recycled buffer (O(1) heap), so it does NOT reintroduce the amplification this
-    # filter closes — the message converters still never buffer the body.
-    max-swallow-size: -1
-
+# NOTE: server.tomcat.max-swallow-size is intentionally NOT overridden. Tomcat's bounded default
+# (2 MiB) applies. An earlier fix set it to -1 (swallow UNLIMITED) so a fast-path 413 could always
+# drain the unread body for a clean response — but -1 lets an attacker declare a 1 TB Content-Length,
+# receive the 413, then trickle bytes forever while Tomcat drains and holds the request thread
+# (unbounded thread-hold DoS). With the bounded default, a hugely-oversized rejected body gets a
+# connection reset instead of a clean 413 once the unread remainder exceeds the swallow bound — that
+# is the correct safe posture (no unbounded hold). Legitimate traffic (< 20 MiB) is never rejected by
+# RequestBodySizeLimitFilter, so the drain path is only ever exercised by already-abusive bodies.
 spring:
   application:
     name: auth-blueprint-backend
 
-  # Jackson 3 (tools.jackson) raised the default StreamReadConstraints max string length from the
-  # Jackson-2-era 20_000_000 (20M) to 100_000_000 (100M). Restore the 20M cap globally so an oversized
-  # JSON string cannot reach any deserializer as a DoS / response-amplification vector. Boot 4.1 applies
-  # this property to StreamReadConstraints via JacksonAutoConfiguration (readConstraintsFrom → the
-  # auto-configured JsonMapper used by Spring MVC). Defense-in-depth: money deserializers additionally
-  # enforce a tight per-field length bound (~32 chars) before any regex/BigDecimal work.
+  # Jackson 3 (tools.jackson) ships StreamReadConstraints with SEVERAL knobs left UNBOUNDED by default
+  # (verified against jackson-core-3.1.4: DEFAULT_MAX_TOKEN_COUNT=-1, DEFAULT_MAX_DOC_LEN=-1) plus a
+  # string-length default raised from the Jackson-2-era 20M to 100M. An unbounded token count is a real
+  # DoS: a sub-20MB body like {"x":[{},{},…]} deserializes into millions of maps → heap exhaustion, even
+  # though every individual string/number is tiny. Pin the FULL envelope so no streaming knob is left
+  # unbounded (nesting=500, number=1000, name=50000 are already bounded by Jackson defaults). Boot 4.1
+  # binds each of these to StreamReadConstraints via JacksonAutoConfiguration (spring-boot-jackson
+  # JacksonProperties$Factory$Constraints$Read → the auto-configured JsonMapper used by Spring MVC).
+  # The standalone RequestFingerprint mapper pins the SAME bounds (property binding does not reach it).
+  # Defense-in-depth: money deserializers additionally enforce a tight per-field length bound (~32 chars).
   jackson:
     factory:
       constraints:
         read:
-          max-string-length: 20000000
+          max-string-length: 20000000     # 20M chars (Jackson default 100M) — mirrors RequestFingerprint.MAX_STRING_LEN
+          max-token-count: 1000000         # 1M tokens (Jackson default -1 = unbounded) — mirrors RequestFingerprint.MAX_TOKEN_COUNT
+          max-document-length: 20000000    # 20M bytes (Jackson default -1 = unbounded) — mirrors RequestFingerprint.MAX_DOCUMENT_LEN
 
   datasource:
     # MODE=PostgreSQL enables the Payment blueprint's reconciliation tests to use

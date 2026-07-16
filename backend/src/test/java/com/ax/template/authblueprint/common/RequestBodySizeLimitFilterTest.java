@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -106,6 +107,37 @@ class RequestBodySizeLimitFilterTest {
             .isEqualTo(413);
         assertThat(response.getContentType()).startsWith("application/problem+json");
         assertThat(response.getContentAsString()).doesNotContain("Z");
+    }
+
+    @Test
+    void multipartDetectionIsLocaleIndependent() throws Exception {
+        // Regression guard (Finding 4): multipart content-type detection must NOT use the default
+        // locale. Under the Turkish locale, "MULTIPART/FORM-DATA".toLowerCase() maps 'I'→'ı' (dotless)
+        // so the "multipart/" prefix test fails and a legit large upload is wrongly capped at 20 MiB.
+        // The filter uses Locale.ROOT, so an UPPERCASE multipart content-type is still recognized and
+        // EXCLUDED (streamed to the multipart resolver's own finite limits) even under the tr locale.
+        Locale previous = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr"));
+        try {
+            MockHttpServletRequest request = new MockHttpServletRequest() {
+                @Override public long getContentLengthLong() { return CAP + 1; } // over cap on purpose
+            };
+            request.setMethod("POST");
+            request.setContentType("MULTIPART/FORM-DATA; boundary=xyz"); // uppercase — the locale trap
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            RecordingChain chain = new RecordingChain(false);
+
+            new RequestBodySizeLimitFilter().doFilter(request, response, chain);
+
+            assertThat(chain.invoked)
+                .as("uppercase multipart is recognized (Locale.ROOT) and excluded — passes to the chain")
+                .isTrue();
+            assertThat(response.getStatus())
+                .as("multipart must NOT be 413'd by the JSON body cap — it has its own finite limits")
+                .isNotEqualTo(413);
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 
     @Test

@@ -12,6 +12,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -95,7 +96,10 @@ public class RequestBodySizeLimitFilter extends OncePerRequestFilter {
 
     private static boolean isMultipart(HttpServletRequest request) {
         String contentType = request.getContentType();
-        return contentType != null && contentType.toLowerCase().startsWith("multipart/");
+        // Locale.ROOT: a default-locale toLowerCase() mis-maps ASCII under some locales (Turkish
+        // 'I' → 'ı'), so "MULTIPART/FORM-DATA" would fail the prefix test and a legit large upload
+        // would be wrongly capped at 20 MiB. Locale-independent lowering keeps detection correct.
+        return contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/");
     }
 
     private void handleOverflow(HttpServletResponse response) throws IOException {

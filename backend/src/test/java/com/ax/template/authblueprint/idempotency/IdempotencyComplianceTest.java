@@ -98,20 +98,45 @@ class IdempotencyComplianceTest {
 
     @Test
     @Tag("IDEMPOTENCY")
-    void transportFilterRejectsOverCapBodyBeforeBuffering() {
-        // DEFENSE 1 (end-to-end wiring): a body OVER the transport filter cap (20 MiB) is rejected
-        // 413 by RequestBodySizeLimitFilter at the outermost edge — before any converter buffers it.
-        // This body (21 MiB) exceeds the filter's byte cap, unlike oversizedBodyRejectedBeforeFingerprint
-        // (< 20 MiB) which the controller belt catches. Marker must not echo.
+    void transportFilterRejectsOverCapBodyAtEdge_boundedSwallowPosture() {
+        // DEFENSE 1 (end-to-end wiring): a body FAR over the transport filter cap (20 MiB) is rejected
+        // at the outermost edge by RequestBodySizeLimitFilter BEFORE any converter buffers it. This
+        // body (21 MiB) exceeds the filter's byte cap, so the filter's fast path commits a 413 WITHOUT
+        // reading it (unlike oversizedBodyRejectedBeforeFingerprint, < 20 MiB, which the controller belt
+        // catches after a full read). The container is then left with ~21 MiB of unread body. With
+        // server.tomcat.max-swallow-size at its BOUNDED default (2 MiB) — the fix for the unbounded
+        // thread-hold DoS (an attacker declaring a 1 TB Content-Length and trickling forever) — Tomcat
+        // REFUSES to drain 21 MiB and resets the connection instead of holding the request thread.
+        // Correct secure outcome: EITHER a 413 (if the small committed response flushed first) OR a
+        // connection reset — NEVER acceptance, NEVER an echo of the payload, NEVER an unbounded hold.
         String marker = "TRANSPORTFILTERMARKER";
         String hugeBody = "{\"v\":\"" + marker + "Z".repeat(21 * 1024 * 1024) + "\"}";
-        String body = post(token, UUID.randomUUID().toString(), hugeBody)
-            .post("/api/idempotency-demo/resources")
-            .then().statusCode(413).extract().asString();
-        assertThat(body)
-            .as("413 body must not echo the oversized request payload")
-            .doesNotContain(marker)
-            .contains("REQUEST_BODY_TOO_LARGE");
+        try {
+            io.restassured.response.Response resp = post(token, UUID.randomUUID().toString(), hugeBody)
+                .post("/api/idempotency-demo/resources").thenReturn();
+            // If a response was delivered at all, it must be the 413 rejection with no echo.
+            assertThat(resp.statusCode())
+                .as("if a response is delivered, it is the 413 rejection (never 2xx acceptance)")
+                .isEqualTo(413);
+            assertThat(resp.asString())
+                .as("413 body must not echo the oversized request payload")
+                .doesNotContain(marker)
+                .contains("REQUEST_BODY_TOO_LARGE");
+        } catch (Exception connectionReset) {
+            // Bounded-swallow posture: Tomcat reset the connection rather than drain 21 MiB unbounded.
+            // A SocketException (extends IOException) anywhere in the cause chain is the correct signal.
+            boolean transportFailure = false;
+            for (Throwable c = connectionReset; c != null; c = (c.getCause() == c) ? null : c.getCause()) {
+                if (c instanceof java.io.IOException) {
+                    transportFailure = true;
+                    break;
+                }
+            }
+            assertThat(transportFailure)
+                .as("hugely-oversized body rejected by connection reset under the bounded swallow "
+                    + "(no unbounded thread-hold); payload never buffered: " + connectionReset)
+                .isTrue();
+        }
     }
 
     @Test
@@ -124,6 +149,28 @@ class IdempotencyComplianceTest {
         String oversized = "{\"s\":\"" + "a".repeat(20_000_050) + "\"}";
         assertThatThrownBy(() -> objectMapper.readValue(oversized, Object.class))
             .as("oversized JSON string is rejected by the pinned 20M max-string-length")
+            .isInstanceOf(tools.jackson.core.JacksonException.class);
+    }
+
+    @Test
+    @Tag("IDEMPOTENCY")
+    void autoconfiguredMapperRejectsTokenDenseBody() {
+        // DEFENSE 5b (token-count seal): the auto-configured Spring MVC mapper is pinned to a 1M
+        // max-token-count (spring.jackson.factory.constraints.read.max-token-count). Jackson 3's
+        // default is -1 (UNBOUNDED), so a sub-20MB body packed with millions of tiny STRUCTURAL
+        // tokens — {"x":[{},{},…]} — would otherwise deserialize into millions of maps → heap
+        // exhaustion, even though every individual string/number is tiny (max-string-length never
+        // trips). The pinned bound aborts the parse with a JacksonException (NOT an OOM / 500). This
+        // body is ~2.1MB (~1.4M structural tokens) — over the 1M token bound, under the 20M string
+        // and 20M document bounds — so ONLY the token-count knob can reject it.
+        StringBuilder sb = new StringBuilder("{\"x\":[");
+        for (int i = 0; i < 700_000; i++) {
+            sb.append("{},");
+        }
+        sb.append("{}]}");
+        String tokenDense = sb.toString();
+        assertThatThrownBy(() -> objectMapper.readValue(tokenDense, Object.class))
+            .as("token-dense body rejected by the pinned 1M max-token-count (parse aborted, not OOM)")
             .isInstanceOf(tools.jackson.core.JacksonException.class);
     }
 

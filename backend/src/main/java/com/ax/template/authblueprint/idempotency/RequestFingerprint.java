@@ -23,17 +23,27 @@ import java.util.Locale;
 public final class RequestFingerprint {
 
     /**
-     * Match Boot's auto-configured 20MB read cap (spring.jackson.factory.constraints.read.max-string-length)
-     * — that property does NOT reach hand-built standalone mappers, so Jackson 3's 100MB default would
-     * otherwise apply here, allowing a large body to be parsed + reserialized. Pin it explicitly.
+     * Pin the FULL {@link StreamReadConstraints} envelope on this hand-built standalone mapper — the
+     * Boot property {@code spring.jackson.factory.constraints.read.*} binds only the auto-configured
+     * mapper and does NOT reach a mapper built by hand. Jackson 3 leaves several knobs UNBOUNDED by
+     * default (verified against jackson-core-3.1.4: {@code DEFAULT_MAX_TOKEN_COUNT=-1},
+     * {@code DEFAULT_MAX_DOC_LEN=-1}; string default raised 20M→100M), so without these pins a sub-20MB
+     * token-dense body like {@code {"x":[{},{},…]}} would canonicalize into millions of maps → heap
+     * exhaustion. These literals mirror the application.yml properties for the auto-config mapper.
      */
-    private static final int MAX_STRING_LEN = 20_000_000;
+    static final int MAX_STRING_LEN = 20_000_000;
+    /** 1M tokens — Jackson default is -1 (unbounded). A token-dense body is aborted before materializing. */
+    static final long MAX_TOKEN_COUNT = 1_000_000L;
+    /** 20M bytes — Jackson default is -1 (unbounded). Matches the transport-level body cap. */
+    static final long MAX_DOCUMENT_LEN = 20_000_000L;
 
     // SORT_KEYS so {"a":1,"b":2} and {"b":2,"a":1} canonicalize identically.
     private static final ObjectMapper CANONICAL = JsonMapper.builder(
             JsonFactory.builder()
                     .streamReadConstraints(StreamReadConstraints.builder()
                             .maxStringLength(MAX_STRING_LEN)
+                            .maxTokenCount(MAX_TOKEN_COUNT)
+                            .maxDocumentLength(MAX_DOCUMENT_LEN)
                             .build())
                     .build())
             .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
