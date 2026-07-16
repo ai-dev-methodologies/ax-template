@@ -219,6 +219,21 @@ class OptlockComplianceTest {
         }
     }
 
+    @Test
+    @Tag("OPTLOCK")
+    @Tag("OPTLOCK-NULLPRIMITIVE-001")
+    void nullForPrimitiveQuantityIsRejected400NotCoercedToZero() {
+        // Contract pin (Jackson 2→3 migration): an explicit JSON null for the primitive `int quantity`
+        // now fails binding (Jackson 3 fail-on-null-for-primitives is ON by default) → 400. Jackson 2
+        // silently coerced null→0. The 400 is the DESIRED safer behavior: a null quantity is a client
+        // error, not a request for quantity 0. This ADDS a pin; it changes no existing assertion.
+        var resp = auth().body("{\"name\":\"nullqty\",\"quantity\":null}")
+            .post("/api/optlock/resources").then().extract();
+        assertThat(resp.statusCode())
+            .as("explicit null for primitive int quantity must be rejected 400, not coerced to 0")
+            .isEqualTo(400);
+    }
+
     // ── concurrency helper ───────────────────────────────────────────────────
 
     private record ConflictResult(String id, int success, int conflict, int conflictStatus,

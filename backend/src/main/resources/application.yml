@@ -2,6 +2,18 @@ spring:
   application:
     name: auth-blueprint-backend
 
+  # Jackson 3 (tools.jackson) raised the default StreamReadConstraints max string length from the
+  # Jackson-2-era 20_000_000 (20M) to 100_000_000 (100M). Restore the 20M cap globally so an oversized
+  # JSON string cannot reach any deserializer as a DoS / response-amplification vector. Boot 4.1 applies
+  # this property to StreamReadConstraints via JacksonAutoConfiguration (readConstraintsFrom → the
+  # auto-configured JsonMapper used by Spring MVC). Defense-in-depth: money deserializers additionally
+  # enforce a tight per-field length bound (~32 chars) before any regex/BigDecimal work.
+  jackson:
+    factory:
+      constraints:
+        read:
+          max-string-length: 20000000
+
   datasource:
     # MODE=PostgreSQL enables the Payment blueprint's reconciliation tests to use
     # PostgreSQL-flavored JSON operators (payload->>'amount') against the H2 test DB.

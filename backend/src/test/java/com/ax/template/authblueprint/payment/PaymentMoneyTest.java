@@ -168,6 +168,54 @@ class PaymentMoneyTest {
             );
     }
 
+    // ─── PAYMENT-MONEY-002 (negative — oversized amount string, DoS/amplification) ──
+
+    /**
+     * PAYMENT-MONEY-002 (negative, DoS): Jackson 3 raised the default StreamReadConstraints max
+     * string length 20M→100M, so a huge decimal-STRING amount can now reach the deserializer. A 1MB
+     * amount string must be rejected with 400 FAST (on length, before any regex/BigDecimal work) and
+     * the 400 body MUST NOT echo the oversized payload (response-amplification guard).
+     */
+    @Test
+    @Tag("PAYMENT")
+    @Tag("PAYMENT-MONEY-002")
+    void oversizedAmountString_rejectedFast_withoutEchoingPayload() {
+        String authToken = obtainToken("money002d@test.test", "MEMBER");
+
+        // 1MB decimal string: under the global 20M pin (so it reaches the deserializer), but over the
+        // per-field length pre-bound (~32) → rejected before regex/BigDecimal.
+        String huge = "9".repeat(1_000_000);
+
+        long startNanos = System.nanoTime();
+        Response response =
+            given()
+                .header("Authorization", "Bearer " + authToken)
+                .header("Content-Type", "application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .body("{\"amount\":\"" + huge + "\",\"currency\":\"USD\",\"orderId\":\"order-money002d\"}")
+            .when().post("/api/payments");
+        long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
+
+        assertThat(response.statusCode())
+            .as("oversized amount string must be rejected with 400")
+            .isEqualTo(400);
+
+        String body = response.body().asString();
+        assertThat(body)
+            .as("the 400 body must NOT reflect the oversized payload (response-amplification guard)")
+            .doesNotContain(huge)
+            .doesNotContain("9".repeat(64));
+        assertThat(body.length())
+            .as("the 400 body stays small — no payload reflection")
+            .isLessThan(4_000);
+        // "quickly": rejected on length, not by running regex/BigDecimal over a 1MB string. Generous
+        // ceiling (context already warm; only the single POST is timed) to avoid CI flakiness — the
+        // load-bearing proof is the non-echo + 400 above.
+        assertThat(elapsedMs)
+            .as("oversized rejection is fast (length pre-bound, no regex/BigDecimal on 1MB)")
+            .isLessThan(10_000);
+    }
+
     // ─── PAYMENT-MONEY-003 (negative — KRW with fractional) ──────────────────
 
     /**

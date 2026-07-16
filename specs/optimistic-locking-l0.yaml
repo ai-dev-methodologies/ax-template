@@ -184,3 +184,30 @@ items:
       its own descendants -> assert 409/422 + tree-cycle problem type + parent
       column unchanged; positive test: reparent under an unrelated subtree ->
       assert 200/204 + acyclic forest preserved.
+
+  - id: "OPTLOCK-NULLPRIMITIVE-001"
+    chapter: "Primitive numeric field rejects null (no silent coercion)"
+    requirement: >
+      A mutable-resource create / update request whose body carries an EXPLICIT JSON
+      null for a primitive numeric field (e.g. a `int quantity` component) MUST be
+      rejected with 400 Bad Request — the binding layer MUST NOT silently coerce the
+      null to the primitive zero value and let a semantically-absent quantity reach
+      business logic. A null quantity is a client error (the field was sent but empty),
+      not a request for quantity 0; coercion would mask the error and could, on a
+      versioned resource, persist an unintended 0. Fork-receivers MUST keep the
+      framework's fail-on-null-for-primitives binding strictness ON (do not re-enable
+      lossy coercion).
+    test_method: "RestAssured integration test"
+    verification_type: "negative"
+    applicable: true
+    notes: >
+      Pairs with the strict-binding posture of request-validation-l0#VALIDATION-TYPE-001
+      (no silent coercion). Anchored to RFC 8259 §3 (JSON `null` is a distinct value,
+      not a number) + JSON Schema 2020-12 `type` keyword (a null instance does not
+      validate against `integer`). The reference optlock CreateRequest declares
+      `int quantity` (a Java primitive); a JSON null cannot bind to it, so the strict
+      binder rejects the request rather than defaulting to 0. Quote anchor (RFC 8259
+      §3 Values): "A JSON value MUST be an object, array, number, or string, or one of
+      the following three literal names: false null true." — null is not a number.
+      Negative test: POST the create endpoint with {"quantity":null} → assert 400 and
+      the resource is NOT created with quantity 0.

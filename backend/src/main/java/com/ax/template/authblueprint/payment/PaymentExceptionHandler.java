@@ -19,6 +19,9 @@ import java.net.URI;
 @Order(0)
 public class PaymentExceptionHandler {
 
+    /** Max length of a sanitized Jackson detail echoed into a 400 body (response-amplification cap). */
+    private static final int MAX_DETAIL_LEN = 200;
+
     @ExceptionHandler(PaymentValidationException.class)
     public ResponseEntity<ProblemDetail> handleValidation(PaymentValidationException ex) {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
@@ -118,6 +121,12 @@ public class PaymentExceptionHandler {
         if (sourceIdx >= 0) {
             head = head.substring(0, sourceIdx).trim();
         }
-        return head.isEmpty() ? "request body is unreadable" : head;
+        if (head.isEmpty()) {
+            return "request body is unreadable";
+        }
+        // Amplification guard: a generic Jackson error can embed the offending value; never reflect
+        // unbounded client input into the 400 body. Cap to a short, human-readable prefix. (Jackson 3
+        // raised the default max string length 20M→100M; a large value could otherwise echo back.)
+        return head.length() <= MAX_DETAIL_LEN ? head : head.substring(0, MAX_DETAIL_LEN) + "…";
     }
 }
