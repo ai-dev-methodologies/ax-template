@@ -269,6 +269,47 @@ class PaymentSecurityTest {
             .contains("max-age=");
     }
 
+    // ─── PAYMENT-SEC-004 (response-amplification) ─────────────────────────────
+
+    /**
+     * PAYMENT-SEC-004: an oversized free-text field (here {@code currency}) must be fast-rejected
+     * with a 400 AND must NOT be echoed back into the error body (response amplification).
+     *
+     * Threat model (Jackson 3 migration): Jackson 3 raised the default stream max-string-length
+     * 20MB→100MB, so an authenticated client could send a huge {@code currency} value; without a
+     * tight bound + a total-defense error handler it would pass validation and be reflected whole
+     * into the 400 body (amplification). This asserts:
+     *   (1) status is 400 (fast reject via @Size(max=3) → MethodArgumentNotValidException), and
+     *   (2) the response body does NOT contain the oversized marker and is small (bounded).
+     */
+    @Test
+    void oversizedCurrency_isRejected400_andNotEchoedInBody() {
+        String authToken = obtainToken("sec004amp@test.test", "MEMBER");
+
+        String marker = "AMPLIFYMARKER0123456789";
+        // ~1MB currency value carrying a unique marker; must never be reflected back.
+        String hugeCurrency = marker + "Z".repeat(1_000_000);
+
+        io.restassured.response.Response response = given()
+            .header("Authorization", "Bearer " + authToken)
+            .header("Content-Type", "application/json")
+            .header("Idempotency-Key", UUID.randomUUID().toString())
+            .body("{\"amount\":10000,\"currency\":\"" + hugeCurrency + "\",\"orderId\":\"order-sec004\"}")
+        .when().post("/api/payments");
+
+        String body = response.getBody().asString();
+
+        assertThat(response.statusCode())
+            .as("Oversized currency must be fast-rejected with 400 (bean-validation @Size).")
+            .isEqualTo(400);
+        assertThat(body)
+            .as("Error body must NOT reflect the oversized currency value (amplification defense).")
+            .doesNotContain(marker);
+        assertThat(body.length())
+            .as("Error body must be bounded, not ~1MB (response-amplification cap).")
+            .isLessThan(5_000);
+    }
+
     // ─── helpers ──────────────────────────────────────────────────────────────
 
     private String obtainToken(String email, String role) {

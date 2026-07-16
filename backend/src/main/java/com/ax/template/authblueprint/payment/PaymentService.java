@@ -281,18 +281,31 @@ public class PaymentService {
             throw new PaymentValidationException("currency is required");
         }
         if (!ALLOWED_CURRENCIES.contains(currency)) {
-            throw new PaymentValidationException("unsupported currency: " + currency);
+            throw new PaymentValidationException("unsupported currency: " + capCurrency(currency));
         }
         try {
             Currency.getInstance(currency);
         } catch (IllegalArgumentException e) {
-            throw new PaymentValidationException("invalid ISO 4217 currency code: " + currency);
+            throw new PaymentValidationException("invalid ISO 4217 currency code: " + capCurrency(currency));
         }
         Integer maxScale = CURRENCY_SCALES.get(currency);
         if (maxScale != null && amount.scale() > maxScale) {
             throw new PaymentValidationException("amount scale " + amount.scale()
-                + " exceeds " + currency + " minor-unit scale " + maxScale);
+                + " exceeds " + capCurrency(currency) + " minor-unit scale " + maxScale);
         }
+    }
+
+    /**
+     * Bound the currency value embedded into a validation message (ISO-4217 is 3 chars; the DTO
+     * @Size(max=3) already fast-rejects oversized values at the controller, but a service-layer call
+     * path must never echo an unbounded client value into an exception message — response-amplification
+     * defense, defence-in-depth with PaymentExceptionHandler's 400-body cap).
+     */
+    private static String capCurrency(String currency) {
+        if (currency == null) {
+            return "";
+        }
+        return currency.length() <= 8 ? currency : currency.substring(0, 8) + "…";
     }
 
     private BigDecimal scale(BigDecimal raw, String currency) {

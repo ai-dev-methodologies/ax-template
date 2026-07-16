@@ -6,10 +6,14 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * RFC 7807 ProblemDetail responses for payment exceptions. Stable {@code type} URIs
@@ -19,15 +23,50 @@ import java.net.URI;
 @Order(0)
 public class PaymentExceptionHandler {
 
-    /** Max length of a sanitized Jackson detail echoed into a 400 body (response-amplification cap). */
+    /** Max length of any client-derived detail echoed into a 400 body (response-amplification cap). */
     private static final int MAX_DETAIL_LEN = 200;
+
+    /** Max number of field errors joined into a bean-validation 400 body (bounds many-field amplification). */
+    private static final int MAX_FIELD_ERRORS = 10;
 
     @ExceptionHandler(PaymentValidationException.class)
     public ResponseEntity<ProblemDetail> handleValidation(PaymentValidationException ex) {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
         pd.setType(URI.create("urn:ax:payment:validation-error"));
         pd.setTitle("Validation error");
-        pd.setDetail(ex.getMessage());
+        // Amplification guard: a service-thrown validation message can embed a client value
+        // (e.g. "unsupported currency: <value>"); cap it so it can never inflate the 400 body.
+        pd.setDetail(truncate(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
+    }
+
+    /**
+     * Bean-validation (@Valid) failures on the request body. TOTAL amplification defense: EVERY
+     * reflected field error is bounded — the raw rejected value is never echoed, and each field's
+     * message is truncated to {@link #MAX_DETAIL_LEN} — so no single field (regardless of which one)
+     * can inflate the 400 body. A tight @Size(max=3) on {@code currency} fast-rejects an oversized
+     * (~1MB) value here before it ever reaches the service layer.
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ProblemDetail> handleBeanValidation(MethodArgumentNotValidException ex) {
+        List<String> fieldMessages = new ArrayList<>();
+        for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
+            String msg = (fe.getDefaultMessage() != null && !fe.getDefaultMessage().isBlank())
+                ? fe.getDefaultMessage()
+                : "invalid value";
+            // Deliberately DO NOT echo fe.getRejectedValue() — that is the untrusted client input.
+            fieldMessages.add(truncate(fe.getField() + ": " + msg));
+            if (fieldMessages.size() >= MAX_FIELD_ERRORS) {
+                break;
+            }
+        }
+        String detail = fieldMessages.isEmpty()
+            ? "request validation failed"
+            : truncate(String.join("; ", fieldMessages));
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+        pd.setType(URI.create("urn:ax:payment:validation-error"));
+        pd.setTitle("Validation error");
+        pd.setDetail(detail);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
     }
 
@@ -127,6 +166,17 @@ public class PaymentExceptionHandler {
         // Amplification guard: a generic Jackson error can embed the offending value; never reflect
         // unbounded client input into the 400 body. Cap to a short, human-readable prefix. (Jackson 3
         // raised the default max string length 20M→100M; a large value could otherwise echo back.)
-        return head.length() <= MAX_DETAIL_LEN ? head : head.substring(0, MAX_DETAIL_LEN) + "…";
+        return truncate(head);
+    }
+
+    /**
+     * Cap any client-derived string to at most {@link #MAX_DETAIL_LEN} characters INCLUDING the
+     * ellipsis, so the promised 200-char bound is exact (was off-by-one: substring(0,200)+"…"=201).
+     */
+    private static String truncate(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() <= MAX_DETAIL_LEN ? s : s.substring(0, MAX_DETAIL_LEN - 1) + "…";
     }
 }

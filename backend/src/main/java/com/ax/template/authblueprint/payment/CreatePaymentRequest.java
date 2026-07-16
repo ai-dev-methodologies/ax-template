@@ -3,6 +3,7 @@ package com.ax.template.authblueprint.payment;
 import tools.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 
@@ -23,9 +24,15 @@ import java.math.BigDecimal;
  */
 public record CreatePaymentRequest(
     @NotNull @JsonDeserialize(using = MoneyDeserializer.class) BigDecimal amount,
-    @NotBlank String currency,
-    @NotBlank String orderId,
-    String paymentMethodToken,
-    String mockFailureMode
+    // ISO-4217 currency codes are exactly 3 chars. The tight @Size(max=3) fast-rejects an
+    // oversized (~1MB) currency at bean-validation BEFORE it can reach PaymentService and be
+    // echoed into an error message (response-amplification defense — Jackson 3 raised the
+    // stream max-string-length default 20M→100M, so an unbounded field could otherwise be huge).
+    @NotBlank @Size(max = 3) String currency,
+    // orderId / paymentMethodToken / mockFailureMode are free-text; generous upper bounds keep any
+    // rejected value from being an amplification vector while comfortably fitting real inputs.
+    @NotBlank @Size(max = 200) String orderId,
+    @Size(max = 512) String paymentMethodToken,
+    @Size(max = 64) String mockFailureMode
 ) {
 }

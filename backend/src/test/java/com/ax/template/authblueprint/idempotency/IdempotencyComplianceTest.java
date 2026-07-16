@@ -78,6 +78,22 @@ class IdempotencyComplianceTest {
 
     @Test
     @Tag("IDEMPOTENCY")
+    void oversizedBodyRejectedBeforeFingerprint() {
+        // Jackson 3 raised the default stream max-string-length 20MB→100MB, and that cap does NOT
+        // reach RequestFingerprint's hand-built standalone mapper. The controller therefore rejects a
+        // body larger than 20MB with 413 BEFORE it can be parsed/reserialized. Marker must not echo.
+        String marker = "OVERSIZEDBODYMARKER";
+        String hugeBody = "{\"v\":\"" + marker + "Z".repeat(20_000_050) + "\"}";
+        String body = post(token, UUID.randomUUID().toString(), hugeBody)
+            .post("/api/idempotency-demo/resources")
+            .then().statusCode(413).extract().asString();
+        assertThat(body)
+            .as("413 body must not echo the oversized request payload")
+            .doesNotContain(marker);
+    }
+
+    @Test
+    @Tag("IDEMPOTENCY")
     @Tag("IDEMPOTENCY-CACHE-001")
     void keysAreIsolatedPerTenant() {
         String key = UUID.randomUUID().toString();

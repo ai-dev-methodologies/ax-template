@@ -1,5 +1,7 @@
 package com.ax.template.authblueprint.idempotency;
 
+import tools.jackson.core.StreamReadConstraints;
+import tools.jackson.core.json.JsonFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.json.JsonMapper;
@@ -20,9 +22,22 @@ import java.util.Locale;
  */
 public final class RequestFingerprint {
 
+    /**
+     * Match Boot's auto-configured 20MB read cap (spring.jackson.factory.constraints.read.max-string-length)
+     * — that property does NOT reach hand-built standalone mappers, so Jackson 3's 100MB default would
+     * otherwise apply here, allowing a large body to be parsed + reserialized. Pin it explicitly.
+     */
+    private static final int MAX_STRING_LEN = 20_000_000;
+
     // SORT_KEYS so {"a":1,"b":2} and {"b":2,"a":1} canonicalize identically.
-    private static final ObjectMapper CANONICAL =
-            JsonMapper.builder().enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS).build();
+    private static final ObjectMapper CANONICAL = JsonMapper.builder(
+            JsonFactory.builder()
+                    .streamReadConstraints(StreamReadConstraints.builder()
+                            .maxStringLength(MAX_STRING_LEN)
+                            .build())
+                    .build())
+            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+            .build();
 
     private RequestFingerprint() {}
 

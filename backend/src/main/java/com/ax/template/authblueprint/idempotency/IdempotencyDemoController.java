@@ -49,6 +49,15 @@ public class IdempotencyDemoController {
      */
     static final long WORK_LATENCY_MS = 200;
 
+    /**
+     * Reject an oversized request body BEFORE it reaches {@link RequestFingerprint} (which parses +
+     * reserializes it). Matches the standalone mapper's 20MB read cap so a huge body never triggers a
+     * large tree/string allocation. Response-amplification defense; the rejection never echoes the body.
+     */
+    static final int MAX_BODY_CHARS = 20_000_000;
+
+    private static final URI PAYLOAD_TOO_LARGE_TYPE = URI.create("https://errors.example.com/request-body-too-large");
+
     private final IdempotencyReplayService service;
 
     public IdempotencyDemoController(IdempotencyReplayService service) {
@@ -60,6 +69,9 @@ public class IdempotencyDemoController {
             @RequestHeader(value = "Idempotency-Key", required = false) String key,
             @RequestBody(required = false) String body,
             Authentication auth) {
+        if (body != null && body.length() > MAX_BODY_CHARS) {
+            return payloadTooLarge();                                    // reject before fingerprint parse
+        }
         if (key == null || key.isBlank()) {
             return resource(createResource(body), false, 201);          // SCOPE-001: absent → no dedup
         }
@@ -109,6 +121,16 @@ public class IdempotencyDemoController {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .header(HttpHeaders.RETRY_AFTER, "1")
+                .body(pd);
+    }
+
+    private ResponseEntity<ProblemDetail> payloadTooLarge() {
+        // Never echo the (oversized) body back in the error detail.
+        ProblemDetail pd = problem(HttpStatus.PAYLOAD_TOO_LARGE, PAYLOAD_TOO_LARGE_TYPE, "Request body too large",
+                "REQUEST_BODY_TOO_LARGE",
+                "The request body exceeds the maximum allowed size.");
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .body(pd);
     }
 
