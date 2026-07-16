@@ -122,19 +122,29 @@ class IdempotencyComplianceTest {
                 .as("413 body must not echo the oversized request payload")
                 .doesNotContain(marker)
                 .contains("REQUEST_BODY_TOO_LARGE");
-        } catch (Exception connectionReset) {
-            // Bounded-swallow posture: Tomcat reset the connection rather than drain 21 MiB unbounded.
-            // A SocketException (extends IOException) anywhere in the cause chain is the correct signal.
+        } catch (Exception thrown) {
+            // Bounded-swallow posture: Tomcat reset the connection (connection reset / broken pipe)
+            // rather than drain 21 MiB unbounded. Walk the cause chain and classify precisely.
+            boolean timeoutStall = false;
             boolean transportFailure = false;
-            for (Throwable c = connectionReset; c != null; c = (c.getCause() == c) ? null : c.getCause()) {
+            for (Throwable c = thrown; c != null; c = (c.getCause() == c) ? null : c.getCause()) {
+                // A SocketTimeoutException = a STALLED / held request thread — the very DoS the
+                // bounded max-swallow-size prevents. It must NOT be accepted as the secure outcome.
+                if (c instanceof java.net.SocketTimeoutException) {
+                    timeoutStall = true;
+                }
                 if (c instanceof java.io.IOException) {
                     transportFailure = true;
-                    break;
                 }
             }
+            assertThat(timeoutStall)
+                .as("outcome must NOT be a SocketTimeoutException — a timeout signals a stalled/held "
+                    + "request thread, the exact failure the bounded swallow prevents: " + thrown)
+                .isFalse();
             assertThat(transportFailure)
-                .as("hugely-oversized body rejected by connection reset under the bounded swallow "
-                    + "(no unbounded thread-hold); payload never buffered: " + connectionReset)
+                .as("hugely-oversized body rejected by a NON-timeout transport failure (connection "
+                    + "reset / broken pipe) under the bounded swallow (no unbounded thread-hold); "
+                    + "payload never buffered: " + thrown)
                 .isTrue();
         }
     }
@@ -172,6 +182,42 @@ class IdempotencyComplianceTest {
         assertThatThrownBy(() -> objectMapper.readValue(tokenDense, Object.class))
             .as("token-dense body rejected by the pinned 1M max-token-count (parse aborted, not OOM)")
             .isInstanceOf(tools.jackson.core.JacksonException.class);
+    }
+
+    @Test
+    @Tag("IDEMPOTENCY")
+    void tokenDenseBodyRejectedByControllerNotAcceptedOrOom() {
+        // END-TO-END for the over-constraint reject path: a token-dense body (~2.1MB, ~1.4M
+        // structural tokens) is UNDER the 20MB char cap (controller length check passes) but OVER
+        // RequestFingerprint's 1M max-token-count. The fingerprint parse aborts → the request is
+        // REJECTED with 413 (NOT accepted with a degraded raw-hash fingerprint, NOT an OOM/500). A
+        // degraded fingerprint would let a same-key reorder retry get a false 422 instead of a replay.
+        // The rejection must not echo the body.
+        StringBuilder sb = new StringBuilder("{\"x\":[");
+        for (int i = 0; i < 700_000; i++) {
+            sb.append("{},");
+        }
+        sb.append("{}]}");
+        String resp = post(token, UUID.randomUUID().toString(), sb.toString())
+            .post("/api/idempotency-demo/resources")
+            .then().statusCode(413).extract().asString();
+        assertThat(resp)
+            .as("413 rejection carries the bounded error code and never echoes the body")
+            .contains("REQUEST_BODY_TOO_LARGE");
+    }
+
+    @Test
+    @Tag("IDEMPOTENCY")
+    void legitimateKeyOrderReorderStillReplaysUnderTheCap() {
+        // Control paired with the reject test above: a LEGITIMATE under-cap body whose retry differs
+        // ONLY in object-key order STILL canonicalizes to the same fingerprint → replay (not 422).
+        // Proves the reject path did not collateral-damage normal idempotency canonicalization.
+        String key = UUID.randomUUID().toString();
+        String id = post(token, key, "{\"a\":1,\"b\":2}").post("/api/idempotency-demo/resources")
+            .then().statusCode(201).extract().jsonPath().getString("id");
+        post(token, key, "{\"b\":2,\"a\":1}").post("/api/idempotency-demo/resources")
+            .then().statusCode(201).header("Idempotency-Replayed", "true")
+            .body("id", org.hamcrest.Matchers.equalTo(id));
     }
 
     @Test

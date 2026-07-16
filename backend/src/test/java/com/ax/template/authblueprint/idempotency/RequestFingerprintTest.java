@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit proof that {@link RequestFingerprint}'s hand-built standalone mapper pins the FULL Jackson 3
@@ -11,12 +12,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * bound (Jackson 3 default is -1 = UNBOUNDED). Without the bound, a sub-20MB token-dense body would
  * canonicalize into millions of maps → heap exhaustion during fingerprinting.
  *
- * <p>The canonicalizer swallows any parse failure and falls back to hashing the RAW body, so the
- * bound tripping is observed BEHAVIORALLY: canonicalization normalizes JSON key order (order-INsensitive
- * fingerprint) ONLY when the parse succeeds. For a token-dense body over the bound the parse aborts and
- * the raw (order-SENSITIVE) body is hashed instead — so two dense bodies that differ ONLY in key order
- * yield DIFFERENT fingerprints. If the bound were removed, both would canonicalize identically and the
- * fingerprints would collide; this test would then fail. Runs in tens of ms (parse aborts at the bound).
+ * <p>The bound tripping is observed by REJECTION: a body over the streaming constraints is abusive,
+ * so the canonicalizer propagates a {@link RequestBodyConstraintViolationException} instead of
+ * silently degrading to an order-sensitive raw hash (which would give a same-key reorder retry a
+ * false 422 instead of a replay). The positive control below proves canonicalization is live for a
+ * legitimate under-bound body. Runs in tens of ms (parse aborts at the bound).
  */
 @Tag("IDEMPOTENCY")
 class RequestFingerprintTest {
@@ -42,19 +42,17 @@ class RequestFingerprintTest {
     }
 
     @Test
-    void tokenDenseBodyAbortsCanonicalizationAndFallsBackToRawHash() {
-        // Over the 1M token bound: the parse aborts (StreamConstraintsException) → the canonicalizer
-        // falls back to hashing the RAW body, which is order-SENSITIVE. So the same-semantics /
-        // different-key-order pair yields DIFFERENT fingerprints. Without maxTokenCount bounded, both
-        // would canonicalize to the identical sorted-key form and collide — proving the bound is active.
+    void tokenDenseBodyRejectedNotDegradedToRawHash() {
+        // Over the 1M token bound: the parse aborts (StreamConstraintsException). The canonicalizer
+        // must REJECT (propagate RequestBodyConstraintViolationException) rather than silently fall
+        // back to an order-SENSITIVE raw hash — a degraded fingerprint would give a same-key reorder
+        // retry a false 422 instead of a replay. If maxTokenCount were removed, the body would
+        // materialize into millions of maps (heap risk) instead of aborting; this bound prevents that.
         long start = System.nanoTime();
-        String fpDenseB = RequestFingerprint.of("POST", "/api/x", null, dense(true));
-        String fpDenseA = RequestFingerprint.of("POST", "/api/x", null, dense(false));
+        assertThatThrownBy(() -> RequestFingerprint.of("POST", "/api/x", null, dense(true)))
+            .as("over-constraint body is rejected, not accepted with a degraded raw hash")
+            .isInstanceOf(RequestBodyConstraintViolationException.class);
         long ms = (System.nanoTime() - start) / 1_000_000;
-
-        assertThat(fpDenseB)
-            .as("token-dense reorder does NOT canonicalize (parse aborted at the token bound → raw hash)")
-            .isNotEqualTo(fpDenseA);
         assertThat(ms)
             .as("bound aborts the parse fast — no full materialization of millions of maps")
             .isLessThan(5_000);

@@ -10,6 +10,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.util.Locale;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
@@ -65,7 +66,7 @@ class PaymentMoneyTest {
 
         // Also verify no float/double field named 'amount' slips in under a different name
         for (Field f : paymentClass.getDeclaredFields()) {
-            if (f.getName().toLowerCase().contains("amount")) {
+            if (f.getName().toLowerCase(Locale.ROOT).contains("amount")) {
                 assertThat(f.getType())
                     .as("Field '%s' in Payment must not be a floating-point type", f.getName())
                     .isNotIn(float.class, double.class, Float.class, Double.class);

@@ -1,6 +1,7 @@
 package com.ax.template.authblueprint.idempotency;
 
 import tools.jackson.core.StreamReadConstraints;
+import tools.jackson.core.exc.StreamConstraintsException;
 import tools.jackson.core.json.JsonFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.SerializationFeature;
@@ -16,7 +17,10 @@ import java.util.Locale;
  * request: {@code method + path + sorted query params + body}. Headers are EXCLUDED (User-Agent /
  * Date / tracing ids vary). JSON bodies are canonicalized to sorted-keys + minified so two
  * semantically-identical payloads with different key order produce the SAME fingerprint (no
- * false IDEMPOTENCY_KEY_REUSED mismatch); a non-JSON body is hashed as-is.
+ * false IDEMPOTENCY_KEY_REUSED mismatch); a non-JSON body is hashed as-is. A body that is valid
+ * JSON but TRIPS the streaming constraints (token/document/string bound) is ABUSIVE and is REJECTED
+ * ({@link RequestBodyConstraintViolationException}) rather than degraded to a raw-body hash — a
+ * degraded fingerprint would give a same-key reorder retry a false 422 instead of a replay.
  *
  * <p>Anchored to FIPS 180-4 (SHA-256). Spec: specs/idempotency-l0.yaml#IDEMPOTENCY-PAYLOAD-001.
  */
@@ -60,7 +64,11 @@ public final class RequestFingerprint {
         return sha256Hex(canonical);
     }
 
-    /** Re-emit JSON with keys sorted + minified; leave non-JSON (or blank) untouched. */
+    /**
+     * Re-emit JSON with keys sorted + minified; leave non-JSON (or blank) untouched. A constraint
+     * violation (token/document/string bound tripped) is REJECTED, not swallowed: an abusive body
+     * must not be accepted with a degraded (order-sensitive raw) fingerprint.
+     */
     private static String canonicalizeJson(String body) {
         if (body == null || body.isBlank()) {
             return "";
@@ -70,8 +78,13 @@ public final class RequestFingerprint {
             // sorts object keys on re-serialization; array element order is preserved (significant).
             Object tree = CANONICAL.readValue(body, Object.class);
             return CANONICAL.writeValueAsString(tree);
+        } catch (StreamConstraintsException abusive) {
+            // Valid JSON that exceeds the streaming constraints = abusive. REJECT (mapped to 413 by
+            // IdempotencyAdvice) instead of falling back to a raw-body hash — a degraded fingerprint
+            // would give a same-key reorder retry a false 422 mismatch instead of a replay.
+            throw new RequestBodyConstraintViolationException(abusive);
         } catch (Exception notJson) {
-            return body; // binary / non-JSON: hash the raw bytes
+            return body; // binary / non-JSON (a supported case): hash the raw bytes
         }
     }
 

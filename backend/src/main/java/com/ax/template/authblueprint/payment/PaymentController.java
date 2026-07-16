@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -217,17 +218,23 @@ public class PaymentController {
     private static PaymentProvider.FailureMode resolveFailureMode(String header, String bodyValue) {
         String value = header != null && !header.isBlank() ? header : bodyValue;
         if (value == null || value.isBlank()) {
+            // Ordinary success path: no failure mode requested → APPROVED.
             return PaymentProvider.FailureMode.APPROVED;
         }
+        // "DECLINE" is a tested alias for HTTP_4XX_DECLINE ("any failure" coverage).
+        if (value.equalsIgnoreCase("DECLINE")) {
+            return PaymentProvider.FailureMode.HTTP_4XX_DECLINE;
+        }
         try {
-            return PaymentProvider.FailureMode.valueOf(value.toUpperCase());
-        } catch (IllegalArgumentException ignored) {
-            // Unknown mode names like "DECLINE" map to HTTP_4XX_DECLINE so tests covering
-            // "any failure" behavior do not silently fall back to APPROVED.
-            if (value.equalsIgnoreCase("DECLINE")) {
-                return PaymentProvider.FailureMode.HTTP_4XX_DECLINE;
-            }
-            return PaymentProvider.FailureMode.APPROVED;
+            // Locale.ROOT: a default-locale fold mis-maps ASCII under some locales (Turkish
+            // 'I'→'ı'), so a valid mode like "timeout" would become "TİMEOUT", miss the enum, and —
+            // under the old fail-OPEN — silently downgrade a requested provider FAILURE to APPROVED.
+            return PaymentProvider.FailureMode.valueOf(value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException unknown) {
+            // Fail CLOSED: an explicit but unrecognized failure mode must NOT become APPROVED (that
+            // would flip a requested FAILURE into a SUCCESS on a payment path). Reject with 400.
+            // The (unrecognized) value is NOT echoed back.
+            throw new PaymentValidationException("Unknown provider failure mode");
         }
     }
 

@@ -28,6 +28,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -214,7 +215,9 @@ public class DsrService {
         // validation — a restricted subject sending a bad format must see 423
         // (security-enforced), not a 400 that leaks the check order.
         restrictionGate.checkProcessingAllowed(subject);
-        String fmt = (format == null || format.isBlank()) ? "json" : format.toLowerCase();
+        // Locale.ROOT: locale-independent fold for the format lookup (a default-locale toLowerCase()
+        // mis-maps ASCII under some locales, e.g. Turkish 'I'→'ı').
+        String fmt = (format == null || format.isBlank()) ? "json" : format.toLowerCase(Locale.ROOT);
         if (!fmt.equals("json") && !fmt.equals("csv")) {
             throw DsrException.portabilityFormatInvalid(format);
         }
