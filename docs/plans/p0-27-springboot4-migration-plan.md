@@ -47,3 +47,10 @@
 census에서 ①실패 도메인 > 40개 또는 ②Hibernate DDL 비호환이 @Check 표면 전반에서 구조적으로
 확인되면: 즉시 중단하고 "수정 규모 견적 + 분할 전략(도메인 그룹별 단계 마이그레이션)"만 보고서로
 남긴 뒤 사람 판단으로 넘긴다. 반쯤 마이그레이션된 인증 스택을 남기는 것이 최악의 결과다.
+
+## 집행 결과 부기 (2026-07-16)
+
+계획 대비 1건 의도적 이탈: Jackson은 tools.jackson 이관 대신 **Jackson 2 bridge
+(spring-boot-jackson2, deprecated) 유지**를 선택 — 돈/입력엄격성 SPI 서브클래스 4개의
+동작 보존을 우선(적대 리뷰가 단일 클래스패스 실증). 잔여 부채는 BACKLOG P1-63으로 등재.
+Groovy 4→5 GMM 강제정렬 결함(536건 위장 실패)은 dependencySubstitution으로 봉합.

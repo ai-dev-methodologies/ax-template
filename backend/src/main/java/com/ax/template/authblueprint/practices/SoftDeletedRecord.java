@@ -11,7 +11,7 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.Where;
+import org.hibernate.annotations.SQLRestriction;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedBy;
@@ -37,7 +37,7 @@ import com.ax.template.authblueprint.common.AggregateRoot;
 @Entity
 @Table(name = "soft_deleted_records")
 @SQLDelete(sql = "UPDATE soft_deleted_records SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND version = ?")
-@Where(clause = "deleted_at IS NULL")
+@SQLRestriction("deleted_at IS NULL")
 @EntityListeners(AuditingEntityListener.class)
 public class SoftDeletedRecord {
 

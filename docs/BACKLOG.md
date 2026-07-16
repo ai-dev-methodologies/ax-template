@@ -24,11 +24,11 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
-| P0 (expiry-bound / live defects) | 28 | 27 | ~96% |
-| P1 (generic signature backlog) | 62 | 62 | **100%** |
+| P0 (expiry-bound / live defects) | 28 | 28 | **100%** |
+| P1 (generic signature backlog) | 63 | 62 | ~98% |
 | P2 (verification escapes) | 20 | 20 | **100%** |
 | P3 (industry-niche deferrals) | 47 | 47 | **100%** |
-| **P0–P3 합계 (수렴 분모)** | **157** | **156** | **~99%** |
+| **P0–P3 합계 (수렴 분모)** | **158** | **157** | **~99%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
 > 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
@@ -88,7 +88,7 @@ DDD allowlist 예외는 **ecom-composition 1건만 잔존** (composition은 설�
       sole-mutator seam + forceVoid 감사형 admin escape hatch(LEGAL 맵 불변 — /void 엔드포인트
       시맨틱 보존). setter package-private; 14 call-site 이관; governed_state_mutators 2→0
       (bijection 수용 = retire 증명). testPayment GREEN.
-- [ ] **P0-27** Spring Boot 3.2.12 → 4.1 major migration *(2026-07-14 freshness 감사 등재, expiry-bound)* — 3.x 전 라인 OSS 지원 종료(3.2는 2024-11, 마지막 minor 3.5도 2026-06-30 EOL) → 현재 pin은 보안패치 무수신. 4.1(GA 2026-06, EOL 2027-07)로 직행 필요(3.x 내 범프는 무의미). 선행 완료: Gradle wrapper 8.14.5(본 wave). 마이그레이션 표면: Hibernate major bump의 H2 @Check DDL 재검증(다수 도메인이 @Check backstop 사용), Security 6→7, OAuth2 조건 클래스 재배치(SecurityConfig 직접 영향), Jakarta EE 11/Servlet 6.1, Jackson 2→3 여부 점검. done-when: 4.1 pin + 전 per-domain task GREEN + aggregate GREEN + PD7급 검증(보안/인증 표면 — cross-family reviewer 게이트). 참고: 프론트엔드 스택은 lockfile 기준 전부 최신 확인(React 19.2.7/Next 15.5.20/TS 6.0.3 — 조치 불요).
+- [x] **P0-27** Spring Boot 3.2.12 → 4.1 major migration *(2026-07-14 freshness 감사 등재, expiry-bound)* — 3.x 전 라인 OSS 지원 종료(3.2는 2024-11, 마지막 minor 3.5도 2026-06-30 EOL) → 현재 pin은 보안패치 무수신. 4.1(GA 2026-06, EOL 2027-07)로 직행 필요(3.x 내 범프는 무의미). 선행 완료: Gradle wrapper 8.14.5(본 wave). 마이그레이션 표면: Hibernate major bump의 H2 @Check DDL 재검증(다수 도메인이 @Check backstop 사용), Security 6→7, OAuth2 조건 클래스 재배치(SecurityConfig 직접 영향), Jakarta EE 11/Servlet 6.1, Jackson 2→3 여부 점검. done-when: 4.1 pin + 전 per-domain task GREEN + aggregate GREEN + PD7급 검증(보안/인증 표면 — cross-family reviewer 게이트). 참고: 프론트엔드 스택은 lockfile 기준 전부 최신 확인(React 19.2.7/Next 15.5.20/TS 6.0.3 — 조치 불요). → **closed 2026-07-16 (SB4 wave)**: 4.1.0 직행 완료 — Framework 7.0.8/Security 7.1.0/Hibernate 7.4.1/Tomcat 11. census-first 집행(계통 원인 2개: Jackson 3 기본화→deprecated bridge로 동작 보존 선택·후속 부채는 별도 등재, BOM 비관리化 3핀). Groovy 4→5 GMM 강제정렬 결함(536건 위장 실패) dependencySubstitution 봉합. 위장 403 3건은 Security 아닌 Data JPA 4 null-Specification 규약 변경 — unrestricted() 치환, SecurityConfig 무변경(도달성 delta 전수 무변화 감사). @Check native-bypass proof PASS. aggregate 1834+ 전green + R25 10/0/0(실제 pitest 포함) + 적대 리뷰 10렌즈.
 - [x] **P0-28** ESLint 10 호환 스파이크 *(2026-07-14 freshness 감사 등재, expiry-bound — 데드라인 2026-08-06)* — ESLint 9.x EOL 2026-08-06(3주). eslint-plugin-ax peerDep는 >=9.0.0으로 10 허용이나 미검증. done-when: ESLint 10에서 14룰 로드 + 6 reference 앱 0-violation 확인(또는 실패 시 9.x pin의 risk-accept를 데드라인 전 명시 결정). 룰 등록 API 변화 재검증 필요(warn→error 승격 2룰 포함). → **closed 2026-07-15**: ESLint 10.7.0 스파이크 PASS — 플러그인 14룰 RuleTester 전건 통과 + 6 reference 앱 lint 0-violation(각 2회 안정), 코드 수정 0(devDep 범프만: plugin/frontend eslint ^10.7.0, peerDep >=9.0.0 유지). 데드라인 3주 전 실범프 완료 — EOL 노출 해소. core-rule 동작 변화 0 확인.
 
 ## P1 — generic signature backlog (cross-industry, 산업 dogfood가 발견)
@@ -177,6 +177,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 **tokenized-securities 잔여 (STO-arc 파생, 2026-07-07)**
 - [x] **P1-61** — **closed 2026-07-13 (backlog-convergence-wave)**: tokenized-securities `issue()` 동시성 keystone — `concurrentIssue_exactlyOneWins_registerConserved()` (`TokenizedSecuritiesComplianceTest`, @Tag ISSUE-002) 추가: 동일 DRAFT 토큰에 ×2 동시 issue → 정확히 1×200 + 1×409 `TS_ALREADY_ISSUED`(순서 무관) + 사후 Σholdings==totalUnits(이중 seed 없음). 기존 `CountDownLatch`+`ExecutorService` keystone idiom(ThresholdTerminal/DecisionGov) 미러. 기존 `findByTokenCodeForUpdate` pessimistic lock이 이미 구조 보장 — 첫 실행 GREEN, 프로덕션 무수정(기계적 단언 추가가 done-when 그 자체). testTokenizedSecurities 34 tests 0 failures.
 - [x] **P1-62** — **closed 2026-07-13 (backlog-convergence-wave, evidence-backed doc closure)**: `fromHolderId`↔인증주체 바인딩은 **이미 구현·검증 완료 상태**였음 — `SecurityTokenRegisterService.transfer():110`이 mutation 전 `holderAuthorization.controls(callerPrincipal, fromHolderId)` 호출(deny-by-default `OwnershipHolderAuthorization` SPI), 비통제 holder → 403 `TS_NOT_HOLDER_CONTROLLER`. 행위 검증: `TokenizedSecuritiesComplianceTest#transferFromUncontrolledHolder_isRejected_403_registerUnchanged`(@Tag HOLDER-AUTHZ-001, issue 후 probe라 409 shadowing 없음) + `TokenizedSecuritiesViolationProofTest:135`(빈 ownership repo에서 default-SPI deny). 실제 갭은 stale 문서뿐 — spec 헤더·CLAUDE.md 매트릭스의 "Phase 1 미구현" 표기를 "binding realized today, Phase 1 잔여 = ERC-3643 ON-CHAIN identity(fork-receiver 관심사)"로 정정. spec id `HOLDER-AUTHZ-001` 유지(STO- rename은 @Tag 참조 파괴라 기각). TDD waiver(정직 명시): 불변식이 이미 TDD-covered라 신규 테스트 없음 — doc-only closure. testTokenizedSecurities GREEN.
+- [ ] **P1-63** Jackson 2→3 마이그레이션 (spring-boot-jackson2 bridge 해소) *(2026-07-16 SB4 wave 등재 — deprecated-compat 부채)* — Boot 4.1 마이그레이션에서 Jackson 3(tools.jackson) 기본 대신 **의도적으로 Jackson 2 bridge(spring-boot-jackson2, deprecated)를 선택**(34파일·SPI 서브클래스 4개의 동작 보존 우선 — 돈/입력엄격성 역직렬화기 포함). 단일 클래스패스(tools.jackson 완전 부재)는 적대 리뷰로 실증됨. done-when: 4개 SPI 서브클래스(payment/MoneyDeserializer·requestvalidation/StrictNumericDeserializer·secretsmanagement/SecretValueSerializer + advice pointer 로직)와 ~30 ObjectMapper 사용처를 tools.jackson API로 이관, spring-boot-jackson2 의존 제거, 전 태스크 GREEN + 돈 역직렬화 동작 동등성 명시 검증. Boot 5에서 bridge 제거 예상 — 그 전 처리.
 
 ## P2 — verification escapes (검증 체계 자체의 갭)
 

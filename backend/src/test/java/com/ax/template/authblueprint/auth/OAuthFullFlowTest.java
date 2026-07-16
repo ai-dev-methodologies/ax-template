@@ -4,11 +4,16 @@ import com.ax.template.authblueprint.user.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.*;
+// Explicit single-type import: JUnit Jupiter 6 introduced its own MediaType class, which
+// collides with org.springframework.http.MediaType.* via the wildcard import above. A
+// single-type import always wins over a wildcard, resolving the ambiguity for the one
+// unqualified MediaType.APPLICATION_JSON usage below without touching call sites.
+import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.client.RestTemplate;
 
@@ -29,7 +34,7 @@ class OAuthFullFlowTest {
     @Autowired MockMvc mockMvc;
     @Autowired UserRepository userRepository;
     @Autowired OAuthStateStore stateStore;
-    @MockBean RestTemplate restTemplate;
+    @MockitoBean RestTemplate restTemplate;
     ObjectMapper mapper = new ObjectMapper();
 
     private void mockGoogleTokenAndUserInfo() {

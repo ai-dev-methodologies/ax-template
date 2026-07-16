@@ -9,7 +9,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
 import java.util.List;
 import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.Where;
+import org.hibernate.annotations.SQLRestriction;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.annotation.CreatedBy;
@@ -41,7 +41,7 @@ class BaseEntitySoftDeleteArchTest {
         // because Hibernate has no automatic filter clause. Both annotations are required.
         ArchRule rule = classes()
                 .that().areAnnotatedWith(SQLDelete.class)
-                .should().beAnnotatedWith(Where.class)
+                .should().beAnnotatedWith(SQLRestriction.class)
                 .allowEmptyShould(true);
         rule.check(CLASSES);
     }

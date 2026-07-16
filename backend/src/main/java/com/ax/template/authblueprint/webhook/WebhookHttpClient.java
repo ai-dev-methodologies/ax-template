@@ -1,7 +1,7 @@
 package com.ax.template.authblueprint.webhook;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -40,8 +40,8 @@ public class WebhookHttpClient {
     @Autowired
     public WebhookHttpClient(RestTemplateBuilder builder) {
         this.restTemplate = builder
-            .setConnectTimeout(CONNECT_TIMEOUT)
-            .setReadTimeout(READ_TIMEOUT)
+            .connectTimeout(CONNECT_TIMEOUT)
+            .readTimeout(READ_TIMEOUT)
             .build();
     }
 

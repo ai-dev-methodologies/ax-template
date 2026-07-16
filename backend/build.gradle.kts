@@ -1,7 +1,7 @@
 plugins {
     java
-    id("org.springframework.boot") version "3.2.12"
-    id("io.spring.dependency-management") version "1.1.6"
+    id("org.springframework.boot") version "4.1.0"
+    id("io.spring.dependency-management") version "1.1.7"
     // PIT mutation testing — backs the non-vacuity / hollow-test enforcement spine
     // (METHODOLOGY.md "Non-Vacuity / Hollow-Test Enforcement"). Scoped, parameterized
     // runs are driven by practices/evals/vacuity_class_proof_guard.sh.
@@ -26,7 +26,20 @@ repositories {
 }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-web")
+    // SB4 Jackson 2/3 split-brain avoidance (P0-27 Fix 2, PATH A): spring-boot-starter-web
+    // transitively pulls spring-boot-starter-jackson (tools.jackson.* / Jackson 3), but our
+    // 24 SPI classes (payment/MoneyDeserializer, requestvalidation/StrictNumericDeserializer,
+    // secretsmanagement/SecretValueSerializer, requestvalidation/RequestValidationAdvice, etc.)
+    // are written against com.fasterxml.jackson.databind.* (Jackson 2). spring-boot-jackson2 is
+    // Boot 4's DEPRECATED stay-on-Jackson-2 compat/bridge (the forward path is Jackson 3 /
+    // tools.jackson — registered as BACKLOG P1-63). Chosen deliberately: behavior preservation
+    // of the 4 money/input-strictness SPI subclasses outranks being on the new default this
+    // pass. Excluding spring-boot-starter-jackson keeps the classpath single-brained: MVC
+    // message conversion and our SPI classes resolve to the SAME (Jackson 2) databind.
+    implementation("org.springframework.boot:spring-boot-starter-web") {
+        exclude(group = "org.springframework.boot", module = "spring-boot-starter-jackson")
+    }
+    implementation("org.springframework.boot:spring-boot-jackson2")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
@@ -34,6 +47,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-cache")
+    // RestTemplateBuilder moved out of spring-boot-starter-web into its own module in Boot 4
+    // (org.springframework.boot.restclient.RestTemplateBuilder, see webhook/WebhookHttpClient.java).
+    implementation("org.springframework.boot:spring-boot-restclient")
     implementation("com.github.ben-manes.caffeine:caffeine")
 
     // H2 is on the implementation classpath (not runtimeOnly) so the Payment blueprint
@@ -55,9 +71,21 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
+    // Boot 4 split @AutoConfigureMockMvc / @DataJpaTest out of spring-boot-test-autoconfigure
+    // into dedicated per-technology modules — no longer transitively pulled by
+    // spring-boot-starter-test. Bare (non-starter) artifacts avoid pulling in
+    // spring-boot-starter-jackson-test, which would reintroduce the Jackson 2/3 split-brain
+    // this dependencies block otherwise avoids (see spring-boot-jackson2 above).
+    testImplementation("org.springframework.boot:spring-boot-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-data-jpa-test")
+    // testcontainers + rest-assured are no longer version-managed by the Spring Boot 4.1 BOM
+    // (P0-27 Fix 1) — pin explicitly. testcontainers via its own BOM (latest 1.x line; the 2.x
+    // major is out of scope for this migration). rest-assured pinned to the latest 5.x release
+    // (6.x targets Spring 7 differently and is a separate migration surface).
+    testImplementation(platform("org.testcontainers:testcontainers-bom:1.21.4"))
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
-    testImplementation("io.rest-assured:rest-assured")
+    testImplementation("io.rest-assured:rest-assured:5.5.7")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 
     // PIT JUnit 5 support. Must be on the test classpath (not only PIT's tool classpath) so
@@ -65,6 +93,26 @@ dependencies {
     // without it pitest reports "Ran 0 tests" / NO_COVERAGE. The solidsoft plugin auto-detects
     // it here and forwards it to PIT. Pinned to 1.2.1 (compatible with PIT 1.15.0 + JUnit Platform 1.10.x).
     testImplementation("org.pitest:pitest-junit5-plugin:1.2.1")
+}
+
+// P0-27 Fix 1 follow-up: org.apache.groovy:groovy:4.0.22's own published module metadata
+// declares a transitive dependency on org.apache.groovy:groovy-bom with NO version pin,
+// which Gradle resolves to whatever the latest groovy-bom on Maven Central is (5.0.6) and
+// then platform-aligns every other org.apache.groovy:* artifact up to that version — even
+// though io.rest-assured:rest-assured:5.5.7 explicitly requests groovy 4.0.22 and was
+// built/tested against it. Groovy 5 is a major bump that breaks binary/behavioral
+// compatibility in rest-assured's Groovy-based HTTPBuilder engine: every RestAssured call
+// NPEs deep inside org.codehaus.groovy.runtime.metaclass.ClosureMetaClass (Class.isAssignableFrom
+// on a null Class). Fix: dependencySubstitution pins the concrete groovy artifacts to 4.0.22
+// (config-level force/exclude cannot override GMM platform alignment). LIMITS: 4.0.22 is
+// hardcoded — a future rest-assured bump (esp. 6.x, which targets Groovy 5) will be silently
+// downgraded by this block and break; revisit/remove the substitution when bumping rest-assured.
+configurations.all {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("org.apache.groovy:groovy")).using(module("org.apache.groovy:groovy:4.0.22"))
+        substitute(module("org.apache.groovy:groovy-xml")).using(module("org.apache.groovy:groovy-xml:4.0.22"))
+        substitute(module("org.apache.groovy:groovy-json")).using(module("org.apache.groovy:groovy-json:4.0.22"))
+    }
 }
 
 tasks.withType<Test> {
