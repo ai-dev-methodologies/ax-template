@@ -95,19 +95,17 @@ dependencies {
     testImplementation("org.pitest:pitest-junit5-plugin:1.2.1")
 }
 
-// P0-27 Fix 1 follow-up: org.apache.groovy:groovy:4.0.22's own published module metadata
-// declares a transitive dependency on org.apache.groovy:groovy-bom with NO version pin,
-// which Gradle resolves to whatever the latest groovy-bom on Maven Central is (5.0.6) and
-// then platform-aligns every other org.apache.groovy:* artifact up to that version — even
-// though io.rest-assured:rest-assured:5.5.7 explicitly requests groovy 4.0.22 and was
-// built/tested against it. Groovy 5 is a major bump that breaks binary/behavioral
-// compatibility in rest-assured's Groovy-based HTTPBuilder engine: every RestAssured call
-// NPEs deep inside org.codehaus.groovy.runtime.metaclass.ClosureMetaClass (Class.isAssignableFrom
-// on a null Class). Fix: dependencySubstitution pins the concrete groovy artifacts to 4.0.22
-// (config-level force/exclude cannot override GMM platform alignment). LIMITS: 4.0.22 is
-// hardcoded — a future rest-assured bump (esp. 6.x, which targets Groovy 5) will be silently
-// downgraded by this block and break; revisit/remove the substitution when bumping rest-assured.
-configurations.all {
+// P0-27 Fix 1 follow-up (scoping per cross-family review): rest-assured 5.5.7 requests
+// org.apache.groovy:* 4.0.22, but Spring Boot 4.1's BOM aligns the Groovy platform up to
+// 5.0.6 — a major bump rest-assured was never built against. Groovy 5 breaks rest-assured's
+// Groovy-based HTTP engine: every RestAssured call NPEs inside
+// org.codehaus.groovy.runtime.metaclass.ClosureMetaClass (Class.isAssignableFrom on null).
+// Plain force/exclude cannot override GMM platform alignment; dependencySubstitution can.
+// Scoped to TEST configurations only — groovy exists solely via testImplementation
+// (rest-assured); a global configurations.all would silently downgrade any FUTURE
+// production dependency requesting Groovy 5 (invisible linkage breakage).
+// LIMITS: 4.0.22 hardcoded — remove/revisit when bumping rest-assured (esp. 6.x/Groovy 5).
+configurations.matching { it.name.startsWith("test") || it.name.startsWith("pitest") }.configureEach {
     resolutionStrategy.dependencySubstitution {
         substitute(module("org.apache.groovy:groovy")).using(module("org.apache.groovy:groovy:4.0.22"))
         substitute(module("org.apache.groovy:groovy-xml")).using(module("org.apache.groovy:groovy-xml:4.0.22"))
