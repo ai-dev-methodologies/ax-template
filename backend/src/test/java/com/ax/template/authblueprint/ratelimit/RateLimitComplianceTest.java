@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.annotation.DirtiesContext;
 
 import java.util.UUID;
 
@@ -20,6 +21,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Uses RestAssured against random port — portable, no MockMvc, no @WithMockUser.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// R22 aggregate-test isolation: see FeatureFlagFlowIT / BillingFlowIT for the
+// ContextCache LRU eviction root cause. `BEFORE_CLASS` ensures this class also
+// boots a fresh context during the heavy per-domain run, so @LocalServerPort
+// cannot point at an evicted (dead) Tomcat instance.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 class RateLimitComplianceTest {
 
     @LocalServerPort int port;
