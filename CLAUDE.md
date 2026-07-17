@@ -168,7 +168,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 232 Java rules + 99 React rules + 14 ESLint rules + 91 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 232 Java rules + 99 React rules + 14 ESLint rules + 92 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -225,7 +225,7 @@ catalog 시스템.**
 ### 이 skill이 제공하는 것
 
 1. **Spec Trio** — `specs/` + `contracts/` + `blueprints/`. AI가 코드보다 spec을 먼저 읽도록 강제하는 contract-first 구조. AI 환각 차단의 1차 방어선.
-2. **practices/ catalog** — Java/Spring best-practices 228룰 + practices-react 99룰 + ESLint 14룰. evidence-anchored (외부 URL/quote 필수)라 AI가 임의로 룰을 발명하지 못함.
+2. **practices/ catalog** — Java/Spring best-practices 232룰 + practices-react 99룰 + ESLint 14룰. evidence-anchored (외부 URL/quote 필수)라 AI가 임의로 룰을 발명하지 못함.
 3. **Verification feedback loop** — `./gradlew test{Domain}` 단일 명령으로 binary pass/fail. AI가 자기 결과를 self-verify 가능.
 4. **AGENTS.md sentinel** — AI agent가 진입 시 즉시 컨텍스트 받음. sha256 anchoring으로 catalog와 동기화 보장.
 5. **4 hard gates** — spec_ref / substance / time_decay / evidence. AI 결과물이 외부 사실에 anchor 안 되면 통과 불가.
@@ -236,7 +236,7 @@ catalog 시스템.**
 - **Deployment / release** — 어떻게 배포하든 catalog 품질과 무관
 - **Code review** — 1인 maintainer, 팀 review, AI review 어떤 방식이든 OK
 - **CI 정책** — sentinel CI는 catalog quality probe로만 제공. merge gate 여부는 fork받는 팀이 결정
-- **언어/프레임워크 확장** — Java/Spring 카탈로그(228 rules) + React/Next.js 카탈로그(99 rules + 14 ESLint rules) 둘 다 active. 다른 stack(Kotlin/Go/Python 등) 추가는 동일 패턴 (spec → rule → evidence → test) 따라 확장.
+- **언어/프레임워크 확장** — Java/Spring 카탈로그(232 rules) + React/Next.js 카탈로그(99 rules + 14 ESLint rules) 둘 다 active. 다른 stack(Kotlin/Go/Python 등) 추가는 동일 패턴 (spec → rule → evidence → test) 따라 확장.
 
 → 한 줄: **catalog 품질**은 skill이 보장, **인간 협업 정책**은 fork받은 팀 자율.
 
@@ -260,7 +260,7 @@ AI agent (Claude Code 등)가 코드를 작성할 때 가장 큰 risk:
 
 - `./gradlew testAsvs` — auth 도메인 (26 ASVS items)
 - `./gradlew testCrud` — CRUD 도메인 (Spec Trio 시연)
-- `./gradlew testPractices` — 228 practices rules
+- `./gradlew testPractices` — 232 practices rules
 - `./gradlew testPortability` — advisory; 외부 fixture에 룰 적용
 
 ### 외부 참조 정규화
@@ -331,7 +331,7 @@ task 전 GREEN + aggregate `./gradlew test` 는 advisory PortabilityCyclic
 |--------------------------------|----------|---|
 | `./gradlew testCrud`           | GREEN    | 7/7 PASS |
 | `./gradlew testAsvs`           | GREEN    | 26 ASVS items PASS |
-| `./gradlew testPractices`      | GREEN    | 228 rules PASS |
+| `./gradlew testPractices`      | GREEN    | 232 rules PASS |
 | `./gradlew testRateLimit`      | GREEN    | RATELIMIT 전 PASS |
 | `./gradlew testNotification`   | GREEN    | NOTIFICATION 전 PASS |
 | `./gradlew testPayment`        | GREEN    | PAYMENT 29 items PASS |
@@ -388,7 +388,7 @@ cd backend && ./gradlew build         # 빌드
 cd backend && ./gradlew test          # 전체 — 위 매트릭스의 aggregate
 cd backend && ./gradlew testAsvs      # auth ASVS 검증 (GREEN)
 cd backend && ./gradlew testCrud      # CRUD spec 검증 (GREEN)
-cd backend && ./gradlew testPractices # practices/ 228룰 검증 (GREEN)
+cd backend && ./gradlew testPractices # practices/ 232룰 검증 (GREEN)
 cd backend && ./gradlew testPortability  # advisory: 외부 fixture에 룰 적용
 
 # Frontend
@@ -423,9 +423,9 @@ ax-template/
 ├── blueprints/                # 정책 매니페스트 (핵심)
 │   └── auth-manifest.yaml
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
-│   ├── rules/                 # 228룰, 22+ categories (R50/R58/R61 추가분 포함)
+│   ├── rules/                 # 232룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 91 hard guards
+│   ├── evals/                 # 4 hard gates + 92 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
@@ -454,7 +454,7 @@ ax-template/
 |---|---|---|---|
 | Auth | `specs/auth-asvs-l1.yaml` | 14 (signup, login, OAuth Google/Naver/Kakao 등) | 26 ASVS items |
 | CRUD | `specs/crud-security.yaml` | 5 (CRUD-001~005) | 7 security tests |
-| Practices | `specs/spring-practices-l0.yaml` | — | 228 rules / 22 categories |
+| Practices | `specs/spring-practices-l0.yaml` | — | 232 rules / 22 categories |
 
 각 도메인은 동일한 패턴: spec YAML → `@Tag` test → `./gradlew test{Domain}` binary verification.
 
@@ -493,12 +493,12 @@ fork-receiver의 활성화는 opt-in이다.
 | PreToolUse hook (Claude Code) | `.claude/settings.local.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
 | `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 커밋을 ship하는 모든 push 시 (delete-only push는 제외) — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
-| `run-all-guards.sh` (90 guards) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
+| `run-all-guards.sh` (91 guards) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
 
 ### 핵심 설명
 
-- **89개 guard는 `run-all-guards.sh` 경유 수동 실행 전용이다** (practices/evals 87 + practices-react/evals 2; 여기에 pre-push 전용 recency guard 1을 더해 총 91 hard guards). 커밋마다 자동 실행되지 않는다.
+- **91개 guard는 `run-all-guards.sh` 경유 수동 실행 전용이다** (practices/evals 89 + practices-react/evals 2; 여기에 pre-push 전용 recency guard 1을 더해 총 92 hard guards). 커밋마다 자동 실행되지 않는다.
   R25 완료 선언 전에 `verify-completion.sh`를 실행하면 이 guard들이 모두 돌아간다.
 - **pre-commit / pre-push hook은 opt-in이다.** `install-hooks.sh`를 실행한 클론에서만 활성화된다.
   ax-template 자체 HEAD에서는 활성화되어 있다; fork-receiver가 활성화 여부를 결정한다.
