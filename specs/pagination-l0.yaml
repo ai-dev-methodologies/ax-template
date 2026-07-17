@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "pagination-l0 — offset+envelope (canonical default) + cursor (opt-in high-throughput tier) pagination contract for fork-receivers building any list/collection API. Cross-cutting catalog pattern — jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / API platform applicable."
 stack: "Spring Boot 3.2.x + JPA / R2DBC pageable + JSON cursor encoding + Micrometer metrics"
 standard: "RFC 5988 (Web Linking — Link header) + RFC 8288 (Web Linking, BCP) + RFC 9457 (Problem Details for HTTP APIs) + GraphQL Cursor Connections Specification (Relay) + OpenAPI 3.1 pagination patterns + IETF draft-ietf-httpapi-pagination (in progress)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R102 phase α (#1 of 2 simultaneous) — pivot to cross-cutting generic catalog per user feedback (R99-R101 over-fitted to Korean verticals). Generic pattern applicable to any fork-receiver. P11 황태완 standards lens active (RFC 5988 + GraphQL Connections + IETF draft) + P10 신경수 backward-compat lens (offset→cursor migration). Companion phase α: idempotency-l0 (same R102 wave). R102 P12 NEW finding TBD."
 
 # pagination is BASELINE — every list/collection API benefits. Recipes

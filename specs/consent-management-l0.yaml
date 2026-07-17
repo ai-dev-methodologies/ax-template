@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "consent-management-l0 — explicit opt-in capture + withdrawal + audit record + purpose-scoped consent + cookie category gating + policy-version re-consent for fork-receivers handling personal data. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
 stack: "Spring Boot 3.2.x + JPA (consent record persistence) + Bucket cookie category mapping + Micrometer metrics"
 standard: "GDPR Art 7 (conditions for consent) + GDPR Recital 32 (unambiguous affirmative action) + ePrivacy Directive 2002/58/EC Art 5(3) (cookie consent) + IAB Europe TCF v2.2 (de facto consent-string framework) + ISO/IEC 29184:2020 (online privacy notices and consent)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R110 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 standards lens + P9 distributed-system lens active. R110 P12 NEW finding TBD."
 
 # OPT-IN consent layer. Any fork-receiver collecting personal data (auth

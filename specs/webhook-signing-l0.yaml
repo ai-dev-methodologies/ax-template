@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "webhook-signing-l0 — HMAC-SHA256 signature scheme over (timestamp + raw body) for signing & verifying outbound/inbound webhooks. Cross-cutting catalog pattern, jurisdiction-agnostic."
 stack: "Spring Boot 3.2.x + javax.crypto.Mac (HmacSHA256) + MessageDigest.isEqual (constant-time) + Micrometer metrics"
 standard: "RFC 2104 (HMAC) + RFC 9421 (HTTP Message Signatures) + RFC 3339 (timestamp) + Stripe / GitHub / Svix webhook signature schemes (de facto)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
 
 # webhook-signing-l0 is OPT-IN. It is the cryptographic SIGNATURE PRIMITIVE

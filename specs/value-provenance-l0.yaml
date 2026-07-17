@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "value-provenance-l0 — provenance + non-clobber contract for any entity field that is machine-computed yet human-overridable. When a system writes a value (fraud score, suggested tag, ML label, auto-grade, risk tier, predicted category) AND a human is allowed to correct it, the field MUST record WHO last set it (SYSTEM vs USER) and a recompute/batch job MUST NOT overwrite a value a human deliberately set. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / admin-CRUD / LMS / moderation applicable."
 stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA) + RFC 9457 Problem Details. Provenance is a column-level concern (valueSource enum + override audit columns); no framework lock-in."
 standard: "GDPR Art 22 (automated individual decision-making — right to obtain human intervention) + OWASP ASVS V7 Error Handling & Logging (security-relevant event logging) + Fowler Audit-Log / value-source provenance pattern (de facto reference)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "IDW5 2026-06-01 LMS dogfood"
 
 # OPT-IN provenance catalog. Adopted by any recipe whose entity carries a

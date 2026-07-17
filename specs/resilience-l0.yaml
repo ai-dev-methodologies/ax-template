@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "resilience-l0 — circuit breaker + retry + timeout + bulkhead + fallback + client-side rate limiting contract for fork-receivers calling any external dependency (HTTP API, DB, message broker, third-party SaaS). Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
 stack: "Spring Boot 3.2.x + Resilience4j (CircuitBreaker / Retry / TimeLimiter / Bulkhead / RateLimiter) + Spring Cloud OpenFeign or RestClient + Micrometer metrics"
 standard: "Resilience4j reference documentation (de facto JVM standard) + Michael Nygard, Release It! 2nd ed. (Circuit Breaker + Bulkhead stability patterns) + RFC 7231 §7.1.3 (Retry-After) + RFC 6585 §4 (429 Too Many Requests) + AWS Architecture Blog Exponential Backoff And Jitter (full jitter) + RFC 9457 (Problem Details for HTTP APIs)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R109 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 standards lens active (Resilience4j de facto + RFC 7231/6585 + Nygard stability patterns) + P9 distributed-system lens active (circuit breaker / bulkhead / backpressure = partial-failure containment for any fan-out call graph). R109 P12 NEW finding TBD."
 
 # resilience is BASELINE for any service that calls an external dependency.

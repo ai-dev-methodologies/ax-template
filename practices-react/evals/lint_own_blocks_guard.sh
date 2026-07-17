@@ -46,6 +46,13 @@ fi
 rm -rf "$TMP"; mkdir -p "$TMP"
 [ -d "$ROOT/templates/L2/blocks" ] && cp -R "$ROOT/templates/L2/blocks" "$TMP/blocks"
 [ -d "$ROOT/templates/L0" ] && cp -R "$ROOT/templates/L0" "$TMP/L0"
+# P2-22 (audit-seal): templates/L1 (primitives) and templates/L4 (the domain
+# verticals fork-receivers copy) were linted by NOTHING — 215 previously-unchecked
+# .ts/.tsx files. The catalog must eat its own dogfood across EVERY shipped layer,
+# not just L2/L0. Same copy+lint mechanism; ax rules are purely syntactic so copies
+# lint identically.
+[ -d "$ROOT/templates/L1" ] && cp -R "$ROOT/templates/L1" "$TMP/L1"
+[ -d "$ROOT/templates/L4" ] && cp -R "$ROOT/templates/L4" "$TMP/L4"
 
 # Collect shipped blocks (portable — macOS ships bash 3.2, no `mapfile`).
 # Exclude test code: *.spec.* / *.test.* / any _fixtures dir / node_modules.
@@ -76,7 +83,10 @@ except Exception as e:
 viol = []
 for f in data:
     path = f.get("filePath", "")
-    rel = path.replace(tmp + "/blocks", "templates/L2/blocks").replace(tmp + "/L0", "templates/L0")
+    rel = (path.replace(tmp + "/blocks", "templates/L2/blocks")
+                .replace(tmp + "/L0", "templates/L0")
+                .replace(tmp + "/L1", "templates/L1")
+                .replace(tmp + "/L4", "templates/L4"))
     for m in f.get("messages", []):
         rid = m.get("ruleId") or ""
         if rid.startswith("ax/"):
@@ -101,5 +111,5 @@ if [ "${COUNT:-0}" -ne 0 ]; then
   exit 1
 fi
 
-echo "lint_own_blocks: PASS — ${#FILES[@]} shipped blocks (templates/L2/blocks + L0) satisfy all ax/* rules"
+echo "lint_own_blocks: PASS — ${#FILES[@]} shipped blocks (templates/L0 + L1 + L2/blocks + L4) satisfy all ax/* rules"
 exit 0

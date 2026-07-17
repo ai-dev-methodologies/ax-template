@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "request-validation-l0 — declarative boundary input validation (Bean Validation / JSON Schema) + strict typing / no silent coercion + reject-not-sanitize + nested/collection path-qualified errors, all surfaced through the shared RFC 9457 problem+json error array, for fork-receivers accepting any structured HTTP request body. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
 stack: "Spring Boot 3.2.x + Jakarta Bean Validation 3.0 (Hibernate Validator) + Spring MVC @Valid / MethodArgumentNotValidException handling + Jackson strict deserialization + Micrometer metrics"
 standard: "Jakarta Bean Validation 3.0 (JSR 380) + JSON Schema (json-schema.org draft 2020-12) + RFC 9457 (Problem Details for HTTP APIs) + RFC 6901 (JSON Pointer) + OWASP Input Validation Cheat Sheet + RFC 8259 (JSON data interchange) + RFC 9110 (HTTP Semantics, 415/422 status)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
 
 # OPT-IN baseline request-validation contract. Any fork-receiver accepting a

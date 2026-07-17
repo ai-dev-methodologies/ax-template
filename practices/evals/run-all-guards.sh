@@ -92,17 +92,23 @@ run_guard "time_decay_guard/practices-react" 0 \
 
 # ── 5. trio_integrity_guard (live repo) ──────────────────────────────────────
 echo "[5] trio_integrity_guard.sh (live repo)"
-# Live repo currently has no domain frontend trios — the allowlist domains exist
-# but their fixture files are not yet created (SP2 creates them). The guard
-# should fail gracefully against the live repo; we accept any exit code here
-# and only enforce fixture-level correctness below.
-# For the acceptance gate, we validate fixtures only.
+# P2-21: the Spec Trio is ax-template's self-declared primary defense against AI
+# hallucination — it MUST be gated on the LIVE repo, not fixtures only. The
+# SP3-era stub that accepted "any exit code / fixtures only" left the live specs+
+# templates un-gated for the entire maturity window (the guard now passes live:
+# 88 files scanned across the allowlist domains). Run it live in the ALWAYS-ON
+# section; the fixture calls below retain falsification coverage.
+run_guard "trio_integrity/live" 0 \
+    bash "$SCRIPT_DIR/trio_integrity_guard.sh"
 
 # ── 6. cross_trio_guard (live repo) ──────────────────────────────────────────
 echo "[6] cross_trio_guard.sh (live repo)"
-# Same as above: templates/L4/ is currently empty (gitkeep only), so cross_trio
-# fires ZERO_SCAN on the live repo. This is expected during SP3 (Phase 0).
-# Fixture-level verification validates the guard logic.
+# P2-21: templates/L4/ is no longer empty (137 files across 21 domains); the
+# SP3-era ZERO_SCAN stub is stale. Gate live imports on the LIVE repo so an
+# orphaned L2 import in a real template can never slip past R25. Fixture calls
+# below retain falsification coverage.
+run_guard "cross_trio/live" 0 \
+    bash "$SCRIPT_DIR/cross_trio_guard.sh"
 
 if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     echo ""
@@ -1221,6 +1227,16 @@ run_guard "fixture_kill_proof/fixture_midpipe_head_reject" 1 \
 echo "[88] pre_push_decision_guard.sh (P2-17 — behavior-tests the pre-push hook's 10 decision branches + primary R25 block against throwaway git repos with a STUB recency guard + STUB gradlew; asserts exit code AND which stages fired per scenario, 1:1 with the committed fixtures/pre-push-decision/scenarios.yaml table. Pure decision logic extracted to .githooks/pre-push-lib.sh {sourced by the hook; refactor proven byte-identical vs original across 8 scenario runs}. Non-vacuity is INTERNAL: scenario_selfproof_nonvacuous mutates the lib and requires a scenario regression every sweep — fixture_kill_manifest deliberately NOT used {the [87] model mutates a guard and reruns a fixture dir; here the subject-under-test is the hook/lib, which the manifest schema cannot express}. Live exits 0.)"
 run_guard "pre_push_decision/live" 0 \
     bash "$SCRIPT_DIR/pre_push_decision_guard.sh"
+
+echo "[89] full_trio_artifact_completeness_guard.sh (P2-22 — FRONTEND-axis obverse of full_trio_spec_backend_or_exempt: every spec declaring domain_mode: full_trio MUST own its frontend Trio on disk {contracts/<stem>-*.yaml + blueprints/<stem>-*.yaml + templates/L4/<stem>/}. METHODOLOGY.md defines full_trio = Backend Trio AND Frontend Trio REQUIRED; before this guard NO surface checked domain_mode-vs-artifact, so 29 cross-cutting specs sat on full_trio while owning zero frontend artifacts {reclassified to backend_only in the same pass}. Zero-scan FAILs {non-vacuity — a rename of the field can't make the gate vacuous}. Live scans 21 full_trio stems, exits 0.)"
+run_guard "full_trio_artifact_completeness/live" 0 \
+    bash "$SCRIPT_DIR/full_trio_artifact_completeness_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "full_trio_artifact_completeness/fixture_pass" 0 \
+        bash "$SCRIPT_DIR/full_trio_artifact_completeness_guard.sh" --root "$SCRIPT_DIR/fixtures/full_trio_artifact_completeness/pass"
+    run_guard "full_trio_artifact_completeness/fixture_fail_missing" 1 \
+        bash "$SCRIPT_DIR/full_trio_artifact_completeness_guard.sh" --root "$SCRIPT_DIR/fixtures/full_trio_artifact_completeness/fail_missing_artifacts"
+fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""

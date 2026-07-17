@@ -130,13 +130,14 @@ function buildTree(items: CommentResponse[]): CommentNode[] {
       roots.push(node)
     }
   }
-  // Sort by createdAt ascending at every level
-  const sortRec = (ns: CommentNode[]) => {
-    ns.sort((a, b) => a.comment.createdAt.localeCompare(b.comment.createdAt))
-    ns.forEach((n) => sortRec(n.replies))
+  // Sort by createdAt ascending at every level (immutable: sort a copy, then
+  // reassign each node's replies — never mutate an array in place; ax/no-array-mutate-on-state)
+  const sortRec = (ns: CommentNode[]): CommentNode[] => {
+    const sorted = [...ns].sort((a, b) => a.comment.createdAt.localeCompare(b.comment.createdAt))
+    for (const n of sorted) n.replies = sortRec(n.replies)
+    return sorted
   }
-  sortRec(roots)
-  return roots
+  return sortRec(roots)
 }
 
 // ─── view ────────────────────────────────────────────────────────────────────

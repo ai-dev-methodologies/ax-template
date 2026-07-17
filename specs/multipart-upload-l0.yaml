@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "multipart-upload-l0 — resumable chunked upload (offset-based PATCH append + HEAD resume + per-chunk checksum) for fork-receivers building any large-file ingest API. Cross-cutting catalog pattern, jurisdiction-agnostic."
 stack: "Spring Boot 3.2.x + JPA (upload session persistence) + S3-compatible blob store (chunk staging) + Micrometer"
 standard: "tus.io resumable upload protocol 1.0.0 (Upload-Offset / Upload-Length / Tus-Resumable / checksum + expiration extensions) + RFC 9110 (HTTP Semantics — Range / Content-Range) + RFC 7233 (Range Requests)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R115 P12 TBD."
 
 # OPT-IN: multipart-upload is the RESUMABLE UPLOAD PROTOCOL (transport

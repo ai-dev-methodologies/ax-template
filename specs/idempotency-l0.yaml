@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "idempotency-l0 — Idempotency-Key header + request dedup + replay response contract for fork-receivers building any state-changing HTTP API (POST / PUT / PATCH / DELETE). Cross-cutting catalog pattern — jurisdiction-agnostic. Stripe / Square / Adyen / PayPal industry de facto standard."
 stack: "Spring Boot 3.2.x + Redis (key cache) OR JPA (key persistence) + Micrometer metrics"
 standard: "IETF draft-ietf-httpapi-idempotency-key (in progress, near consensus) + RFC 9457 (Problem Details) + RFC 7231 (HTTP Semantics, §4.2.2 Idempotent Methods baseline) + Stripe Idempotency Documentation (de facto industry reference) + Square Idempotency Keys (de facto) + AWS Idempotency Token (de facto)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R102 phase α (#2 of 2 simultaneous) — pivot to cross-cutting generic catalog per user feedback. Generic pattern applicable to any fork-receiver. P11 황태완 standards lens active (IETF draft + Stripe de facto) + P9 윤재호 distributed-system lens (idempotency = saga compensation prerequisite). Companion phase α: pagination-l0 (same R102 wave). R102 P12 NEW finding TBD."
 
 # idempotency is BASELINE for any non-idempotent HTTP method. Recipes

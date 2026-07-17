@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "customs-e-trade-l0 — 관세청 UNI-PASS 연동 전자세관 (수출입 신고 / EDI 메시지 + HS Code 분류 + 관세청 인증서 + AEO 자격 / 5년 audit 보관 / 관측) contract for fork-receivers building 무역업체 또는 관세사 SaaS / 국제물류 / B2B 수출입 platform. R99 e-government extension category — R101+ derived vertical from R93 probability table 종료."
 stack: "Spring Boot 3.2.x + JPA + UNI-PASS SOAP/REST adapter (관세청 e-Customs API) + JAXB UN/EDIFACT D.16B parser + Apache Camel routing + identity-verification (R54 무역업체 본인확인) + document-signing (R97 신고 서명) + Micrometer metrics"
 standard: "관세법 §38 (수출입 신고 의무 + 5년 보관) + 관세법 §51 (HS Code 분류) + 관세법 §214 (AEO 공인 경제운영자) + 전자상거래법 §13 (신원 표시 의무) + 관세청 UNI-PASS API 사양 (4.0+) + 관세청 e-Customs 시행규칙 + WCO Customs Data Model 3.x + UN/EDIFACT D.16B (Customs Declaration syntax) + HS 2022 (관세협력이사회 협약) + ISO 6346 (Container ID 표준) + ISO 8601 (date format)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R101 phase α — first R101+ derived vertical candidate post-R93-table-completion (R94~R100 covered all 7 R93 candidates A1-A7). Selected as e-government extension category per R100 mandatory_R101_iter1_agenda item #5. P6 최영숙 한국 규제 lens active wave (관세법 + 관세청 시행규칙 + 전자상거래법 §13) + P11 황태완 standards lens (WCO + UN/EDIFACT + HS 2022 + ISO 6346 + UNI-PASS API) + P9 윤재호 backward-compat lens (기존 종이 통관에서 e-Customs 전환) — heaviest international standards mix in catalog (8+ international standards cross-cited). R101 P12 NEW finding TBD at iter1."
 
 # customs-e-trade is OPT-IN. ax-template's reference workloads do NOT

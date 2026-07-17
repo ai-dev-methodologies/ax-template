@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "config-validation-l0 — typed configuration binding + declarative Bean Validation constraints + fail-fast startup + required-key enforcement + secret/config separation + profile explicitness + post-startup immutability for fork-receivers wiring any externalized configuration. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
 stack: "Spring Boot 3.2.x + Spring Boot @ConfigurationProperties + @Validated + Jakarta Bean Validation 3.0 (Hibernate Validator) + Spring profiles + Spring Cloud Config / environment externalization + Micrometer metrics"
 standard: "The Twelve-Factor App (III. Config — strict env/config separation) + Jakarta Bean Validation 3.0 (JSR 380 declarative constraints) + Spring Boot @ConfigurationProperties validation + @Validated fail-fast startup binding"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R115 P12 TBD."
 
 # OPT-IN configuration-hardening catalog. Fork-receivers externalizing any

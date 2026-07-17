@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "saga-orchestration-l0 — multi-step distributed transaction (saga) contract for fork-receivers coordinating a business operation that spans multiple services or aggregates without a global ACID transaction. Cross-cutting catalog pattern, jurisdiction-agnostic."
 stack: "Spring Boot 3.2.x + JPA (saga state persistence) + Spring Statemachine or hand-rolled state machine + Spring @Transactional (per-step local tx) + optional Spring Cloud Stream / Kafka (choreography events) + Micrometer metrics"
 standard: "Saga pattern (microservices.io / Chris Richardson, de facto microservices reference) + Hector Garcia-Molina & Kenneth Salem, Sagas (1987, ACM SIGMOD Record) — long-lived transactions decomposed into local transactions with compensating transactions + orchestration vs choreography coordination styles"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards lens active (Garcia-Molina & Salem 1987 + microservices.io saga) + P9 distributed-system lens active (saga = atomicity surrogate for any fan-out write across service / aggregate boundaries; compensations are the rollback substitute when 2PC is unavailable). R115 P12 TBD."
 
 # saga IS the baseline for any business operation that must update state

@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "soft-delete-l0 — tombstone (deleted_at) soft-delete contract: logical delete instead of physical DELETE, default-excluding queries, bounded recovery window, consistent cascade, retention purge + GDPR-style erasure. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
 stack: "Spring Boot 3.2.x + Hibernate ORM 6.4.x (@SoftDelete / @SQLDelete / @SQLRestriction) + JPA + PostgreSQL partial index + Micrometer metrics"
 standard: "RFC 9457 (Problem Details for HTTP APIs) + GDPR Article 17 (Right to erasure, generic data-protection baseline) + Hibernate ORM Soft Delete / @SQLDelete / @SQLRestriction reference + ISO/IEC 27040:2024 (storage security, secure data sanitization) + PostgreSQL Partial Indexes (de facto unique-constraint interplay)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R104 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 황태완 standards lens active (RFC 9457 + Hibernate Soft Delete + ISO/IEC 27040 sanitization) + P9 윤재호 distributed-system lens (cascade soft-delete consistency + retention purge as bounded eventual cleanup). R104 P12 NEW finding TBD."
 
 # soft-delete is BASELINE for any mutable entity that needs reversible

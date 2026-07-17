@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "bulk-operation-l0 — batch / bulk-write endpoint contract (max-batch-size limit, per-item partial-success status array, declared atomicity mode, multi-format input, async job hand-off, pre-validation pass) for fork-receivers exposing any high-volume create/update/delete-many HTTP API. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
 stack: "Spring Boot 3.2.x + JPA (batch persistence) + Jackson (JSON / JSONL streaming) + Apache Commons CSV or univocity (RFC 4180) + Micrometer metrics"
 standard: "RFC 9457 (Problem Details for HTTP APIs — per-item error objects) + RFC 4918 §11.1 (HTTP 207 Multi-Status, source of the 207 code) + JSON Lines text format (jsonlines.org, de facto) + RFC 4180 (CSV) + RFC 9110 §15.5.14 (413 Content Too Large) + OData v4 Batch Requests (de facto) + Google Cloud API batch request pattern (de facto)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
 
 # OPT-IN bulk-write catalog. Fork-receivers exposing import / bulk-create

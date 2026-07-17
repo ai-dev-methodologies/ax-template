@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "cors-l0 — Cross-Origin Resource Sharing preflight + allowlist + credential policy contract for fork-receivers exposing browser-reachable HTTP APIs. Cross-cutting catalog pattern, jurisdiction-agnostic."
 stack: "Spring Boot 3.2.x + Spring Web CorsConfigurationSource / CorsFilter + Spring Security CORS bridge + Micrometer metrics"
 standard: "WHATWG Fetch Standard (CORS protocol) + W3C CORS (Cross-Origin Resource Sharing, historical Recommendation) + RFC 9110 (HTTP Semantics) + OWASP CORS guidance (HTML5 Security Cheat Sheet / OWASP Testing Guide)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
 
 # OPT-IN browser-CORS contract. Any fork-receiver whose API is called from

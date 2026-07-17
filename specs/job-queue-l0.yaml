@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "job-queue-l0 — on-demand async job queue contract (enqueue + at-least-once worker delivery + retry/backoff + dead-letter + priority fairness + status query) for fork-receivers offloading work to background workers. Cross-cutting catalog pattern, jurisdiction-agnostic."
 stack: "Spring Boot 3.2.x + RabbitMQ OR Apache Kafka OR JPA outbox-poller (broker-agnostic) + Micrometer metrics"
 standard: "Generic async job queue pattern + RabbitMQ AMQP 0-9-1 (ack/nack/dead-letter) + Apache Kafka consumer group (at-least-once) + Amazon SQS Developer Guide (visibility timeout + dead-letter queue model) + RFC 7231 §7.1.3 (Retry-After) + RFC 9457 (Problem Details for HTTP APIs)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards lens active (RabbitMQ AMQP + Kafka consumer-group + SQS visibility-timeout de facto + RFC 7231) + P9 distributed-system lens active (at-least-once delivery + dead-letter + priority fairness = async work-distribution containment for any fan-out workload). R114 P12 TBD."
 
 # job-queue is the ON-DEMAND async sibling of scheduled-task-l0: where

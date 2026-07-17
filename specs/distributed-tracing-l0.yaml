@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "distributed-tracing-l0 — W3C Trace Context propagation + span lifecycle + baggage + sampling + OTel semantic conventions + log-trace correlation for fork-receivers running multi-service request flows. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
 stack: "Spring Boot 3.2.x + Micrometer Tracing (Brave / OpenTelemetry bridge) + OpenTelemetry SDK + SLF4J/Logback MDC + Micrometer metrics"
 standard: "W3C Trace Context (traceparent / tracestate, W3C Recommendation) + W3C Baggage (W3C Recommendation) + OpenTelemetry Specification (Trace API + SDK Samplers) + OpenTelemetry Semantic Conventions + RFC 9457 (Problem Details for HTTP APIs)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R112 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 standards lens + P9 distributed-system lens active. R112 P12 NEW finding TBD."
 
 # OPT-IN observability catalog. Fork-receivers running 2+ cooperating

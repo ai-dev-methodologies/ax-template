@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "content-negotiation-l0 — HTTP proactive content negotiation (Accept / Content-Type / Accept-Language / Accept-Encoding) + 406 / 415 selection contract for fork-receivers serving any HTTP API with multiple representations. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
 stack: "Spring Boot 3.2.x + Spring MVC ContentNegotiationManager / HttpMessageConverter + Accept-header parsing (MediaType.parseMediaTypes) + LocaleResolver + Servlet response compression + Micrometer metrics"
 standard: "RFC 9110 §12 (Content Negotiation) + RFC 9110 §12.5.1 (Accept) + RFC 9110 §8.3 (Content-Type) + RFC 9110 §15.5.16 (406 Not Acceptable) + RFC 9110 §15.5.18 (415 Unsupported Media Type)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
 
 # OPT-IN baseline content-negotiation contract. Any fork-receiver whose HTTP

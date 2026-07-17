@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "caching-l0 — HTTP + application-tier caching contract (Cache-Control / ETag / invalidation / stampede / TTL jitter) for fork-receivers building any read-heavy API. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
 stack: "Spring Boot 3.2.x + Spring Cache abstraction + Redis (distributed cache) + Caffeine (local cache) + Micrometer metrics"
 standard: "RFC 9111 (HTTP Caching) + RFC 7234 (HTTP/1.1 Caching, obsoleted-by baseline) + RFC 9110 (HTTP Semantics — ETag / conditional requests) + RFC 7232 (Conditional Requests, If-None-Match / 304) + RFC 5861 (HTTP Cache-Control Extensions for Stale Content — stale-while-revalidate / stale-if-error)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R103 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 standards lens active (RFC 9111 + RFC 9110 conditional requests + RFC 5861 SWR) + P9 distributed-system lens active (cache stampede = thundering-herd failure mode + multi-tenant key isolation). R103 P12 NEW finding TBD."
 
 # caching-l0 is OPT-IN. Recipes serving read-heavy collections, reference

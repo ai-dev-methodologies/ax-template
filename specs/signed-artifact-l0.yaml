@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "signed-artifact-l0 — detached-signature contract for any artifact that a party OTHER than the signer must independently verify (completion certificate, signed receipt / invoice, exportable report, public badge, federated attestation). Draws the bright line between third-party-verifiable artifacts (asymmetric, published verifying key) and signer==verifier integrity envelopes (symmetric HMAC: webhook-hmac, presigned-url). Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / LMS / B2B-federation applicable."
 stack: "JOSE / JWS (RFC 7515) + JWA alg registry (RFC 7518 / RFC 8037 EdDSA) + published JWKS verifying key (RFC 7517) + canonical payload (JCS RFC 8785 or a recipe-pinned canonicalization)"
 standard: "RFC 7515 (JSON Web Signature) + RFC 7518 (JSON Web Algorithms — alg values & implementation requirements) + RFC 8037 (EdDSA for JOSE) + OWASP JSON Web Token Cheat Sheet (alg:none + algorithm-confusion attack class)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "IDW5 2026-06-01 LMS dogfood"
 
 # OPT-IN signing catalog. Adopted by any recipe that emits an artifact a

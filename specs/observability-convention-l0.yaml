@@ -3,7 +3,7 @@ version: "0.1.0"
 scope: "observability-convention-l0 — unified cross-spec observability convention: declared SLIs/SLOs + error-budget multi-window multi-burn-rate alerting + alert severity routing + metric label cardinality budget + RED/USE method + metric-to-trace exemplar linkage + dashboards-and-alerts-as-code for fork-receivers operating any HTTP service or background worker. Cross-cutting catalog pattern, jurisdiction-agnostic."
 stack: "Spring Boot 3.2.x + Micrometer (registry + meter filters) + Micrometer Tracing (exemplar bridge) + OpenTelemetry semantic conventions + Prometheus/OpenMetrics exposition + Grafana (dashboards-as-code)"
 standard: "Google SRE Workbook (SLO / error budget / multi-window multi-burn-rate alerting) + Google SRE Book Ch.6 (symptom-based alerting) + OpenTelemetry Semantic Conventions (general metrics + naming) + RED method (Tom Wilkie / Grafana) + USE method (Brendan Gregg) + Micrometer (meter naming + bounded tags) + OpenMetrics exemplars (W3C Trace Context trace_id linkage)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R115 P12 TBD."
 
 # OPT-IN unified observability convention. This is the cross-spec

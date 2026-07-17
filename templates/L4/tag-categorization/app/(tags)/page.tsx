@@ -115,12 +115,14 @@ function buildTree(items: TagResponse[]): TagNode[] {
       roots.push(node)
     }
   }
-  const sortAlpha = (ns: TagNode[]) => {
-    ns.sort((a, b) => a.tag.name.localeCompare(b.tag.name))
-    ns.forEach((n) => sortAlpha(n.children))
+  // Immutable sort: sort a copy, then reassign each node's children — never
+  // mutate an array in place (ax/no-array-mutate-on-state).
+  const sortAlpha = (ns: TagNode[]): TagNode[] => {
+    const sorted = [...ns].sort((a, b) => a.tag.name.localeCompare(b.tag.name))
+    for (const n of sorted) n.children = sortAlpha(n.children)
+    return sorted
   }
-  sortAlpha(roots)
-  return roots
+  return sortAlpha(roots)
 }
 
 // ─── row ─────────────────────────────────────────────────────────────────────

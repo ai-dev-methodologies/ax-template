@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "problem-details-l0 — RFC 9457 application/problem+json error response contract for fork-receivers building any HTTP API surface. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic."
 stack: "Spring Boot 3.2.x + Spring MVC ProblemDetail / ResponseEntityExceptionHandler + Jackson + Micrometer metrics"
 standard: "RFC 9457 (Problem Details for HTTP APIs) + RFC 7807 (obsoleted predecessor, retained for legacy interop) + IANA HTTP Problem Type registry + RFC 5646 / BCP 47 (language tags) + W3C Trace Context + RFC 9110 (HTTP Semantics, content negotiation)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R105 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 standards lens + P9 distributed-system lens active. R105 P12 NEW finding TBD."
 
 # OPT-IN baseline error-format contract. Any fork-receiver exposing HTTP

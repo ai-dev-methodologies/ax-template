@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "api-versioning-l0 — HTTP API version negotiation + deprecation / sunset signalling + backward-compatibility policy + migration window + version discovery for fork-receivers evolving a public or partner-facing API surface. Cross-cutting catalog pattern, jurisdiction-agnostic."
 stack: "Spring Boot 3.2.x + Spring Web (content negotiation / custom request mapping) + Micrometer metrics"
 standard: "RFC 8594 (The Sunset HTTP Header Field) + The Deprecation HTTP Header Field (draft-ietf-httpapi-deprecation-header, in progress) + RFC 9110 (HTTP Semantics §12 Content Negotiation) + Semantic Versioning 2.0.0"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R114 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R114 P12 TBD."
 
 # OPT-IN versioning catalog. Fork-receivers that expose an API to clients

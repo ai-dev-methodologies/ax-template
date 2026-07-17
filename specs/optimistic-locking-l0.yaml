@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "optimistic-locking-l0 — ETag + If-Match conditional-request optimistic concurrency contract for fork-receivers building any mutable-resource HTTP API (PUT / PATCH / DELETE). Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic e-commerce / SaaS / admin-CRUD applicable."
 stack: "Spring Boot 3.2.x + Jakarta Persistence (JPA @Version) + Spring Web ETag/ShallowEtagHeaderFilter + RFC 9457 Problem Details + Micrometer metrics"
 standard: "RFC 7232 (Conditional Requests — ETag / If-Match) + RFC 9110 (HTTP Semantics, conditional request supersedes) + RFC 9457 (Problem Details for HTTP APIs) + Jakarta Persistence 3.1 @Version (optimistic locking) + MDN HTTP Conditional Requests (de facto reference)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R106 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 standards lens + P9 distributed-system lens active. R106 P12 NEW finding TBD."
 
 # OPT-IN concurrency-control catalog. Adopted by any recipe exposing

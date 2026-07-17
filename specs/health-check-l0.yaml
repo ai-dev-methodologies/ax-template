@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "health-check-l0 — liveness / readiness / startup probe + downstream dependency health + application/health+json response contract for fork-receivers running any containerized HTTP service. Cross-cutting catalog pattern, jurisdiction-agnostic + framework-agnostic. Generic Kubernetes / cloud-native / on-prem orchestrator applicable."
 stack: "Spring Boot 3.2.x + Spring Boot Actuator (health groups) + Kubernetes probes + Micrometer metrics"
 standard: "Kubernetes liveness/readiness/startup probes (de facto orchestration contract) + IETF draft-inadarei-api-health-check (health+json media type, in progress) + RFC 9110 (HTTP Semantics, §15 Status Codes baseline) + RFC 8615 (Well-Known URIs, /.well-known baseline) + OpenTelemetry Semantic Conventions (metrics)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R107 phase α — generic cross-cutting catalog (R102+ generic principle, memory feedback_prefer_generic_catalog). P11 황태완 standards lens active (Kubernetes probe contract + IETF health+json draft + RFC 9110 status semantics) + P9 윤재호 distributed-system lens (readiness gates dependency fan-out + graceful drain ordering). R107 P12 NEW finding TBD."
 
 # health-check is BASELINE for any containerized service. OPT-IN: recipes

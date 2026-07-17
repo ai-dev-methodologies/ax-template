@@ -2,7 +2,7 @@ version: "0.1.0"
 scope: "transactional-outbox-l0 — Transactional Outbox pattern (atomic local-DB persist of a domain change + its outbox row, then a relay reliably publishes to the broker at-least-once) for fork-receivers that must emit events/messages without dual-write loss. Cross-cutting catalog pattern, jurisdiction-agnostic."
 stack: "Spring Boot 3.2.x + JPA (outbox table) + Debezium CDC OR a polling-publisher relay + RabbitMQ OR Apache Kafka (broker) + Micrometer metrics"
 standard: "Transactional Outbox pattern (microservices.io / Chris Richardson) + Polling Publisher pattern (microservices.io) + Debezium Outbox Event Router (CDC relay) + at-least-once delivery semantics + Amazon SQS Developer Guide (dead-letter queue model) + AWS Architecture Blog (exponential backoff and jitter) + RFC 9457 (Problem Details for HTTP APIs)"
-domain_mode: full_trio
+domain_mode: backend_only   # P2-22: cross-cutting backend concern, no UI surface (no frontend Trio / contract / blueprint / L4); governed by spec_item_verification_binding_guard, not a full Trio
 introduced_at: "R115 phase α — generic cross-cutting (memory feedback_prefer_generic_catalog). P11 standards + P9 distributed-system lens. R115 P12 TBD."
 
 # transactional-outbox is the RELIABLE-EMIT primitive: it closes the
