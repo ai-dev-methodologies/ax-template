@@ -82,6 +82,17 @@ export default function SearchPalette({
   const [value, setValue] = React.useState('')
   const isComposingRef = React.useRef(false)
 
+  // Mac/Ctrl shortcut symbol is a client-only value (navigator.platform is
+  // unavailable during SSR). Default to the SSR-safe 'Ctrl' on first render
+  // and resolve the real platform after mount, so the server-rendered HTML
+  // and the client's first paint always match — no hydration mismatch.
+  const [hasMounted, setHasMounted] = React.useState(false)
+  React.useEffect(() => {
+    setHasMounted(true)
+  }, [])
+  const shortcutSymbol =
+    hasMounted && navigator?.platform?.includes('Mac') ? '⌘' : 'Ctrl'
+
   // ── Cmd+K / Ctrl+K shortcut ─────────────────────────────────────────────
   React.useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -132,7 +143,7 @@ export default function SearchPalette({
           'hover:bg-muted transition-colors',
           className ?? '',
         ].join(' ')}
-        aria-label={`검색 열기 (${navigator?.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+${shortcutKey.toUpperCase()})`}
+        aria-label={`검색 열기 (${shortcutSymbol}+${shortcutKey.toUpperCase()})`}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -149,7 +160,7 @@ export default function SearchPalette({
         </svg>
         <span>{placeholder}</span>
         <kbd className="ml-auto text-xs border rounded px-1 py-0.5 bg-background">
-          {navigator?.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+{shortcutKey.toUpperCase()}
+          {shortcutSymbol}+{shortcutKey.toUpperCase()}
         </kbd>
       </button>
     )

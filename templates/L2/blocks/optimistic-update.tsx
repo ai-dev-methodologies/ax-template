@@ -58,6 +58,12 @@ export interface OptimisticUpdateResult<T> {
  * When SSE is active, server-pushed events may confirm the mutation before
  * the mutation promise resolves — the hook handles both orderings correctly.
  *
+ * **Concurrent calls:** `apply()` may be invoked again before a prior call has
+ * settled. Pending state is tracked with an in-flight counter (not a single
+ * shared boolean), and each call captures its own local rollback snapshot —
+ * so one call settling does not resync the value to the stale `initialValue`
+ * prop or roll back a sibling call's still-pending optimistic update.
+ *
  * @example
  * const { value, apply, isPending } = useOptimisticUpdate(task, {
  *   mutationFn: (update) => api.patch(`/api/tasks/${task.id}`, update),
@@ -75,20 +81,31 @@ export function useOptimisticUpdate<T extends object>(
   options: OptimisticUpdateOptions<T>
 ): OptimisticUpdateResult<T> {
   const [value, setValue] = React.useState<T>(initialValue)
-  const [isPending, setIsPending] = React.useState(false)
+  // In-flight counter (not a single shared boolean) — apply() may be called
+  // again before a prior call settles, and each concurrent call must keep
+  // "pending" true until ALL of them have settled, not just the first to finish.
+  const [pendingCount, setPendingCount] = React.useState(0)
   const [didRollback, setDidRollback] = React.useState(false)
   const [error, setError] = React.useState<unknown>(null)
-  const snapshotRef = React.useRef<T>(initialValue)
+  const isPending = pendingCount > 0
 
-  // Keep value in sync with external changes (e.g. SSE or polling refresh)
+  // Keep value in sync with external changes (e.g. SSE or polling refresh).
+  // Gated on the in-flight counter (not a per-call boolean) — if this only
+  // fired once "isPending" flipped false, a call settling while a sibling
+  // call is still in flight would resync to the stale initialValue prop and
+  // silently discard the sibling's still-pending optimistic update.
   React.useEffect(() => {
-    if (!isPending) setValue(initialValue)
-  }, [initialValue, isPending])
+    if (pendingCount === 0) setValue(initialValue)
+  }, [initialValue, pendingCount])
 
   const apply = React.useCallback(async (update: Partial<T>) => {
-    snapshotRef.current = value
+    // Local per-call snapshot — NOT a shared ref. A shared ref would be
+    // overwritten by a second apply() call before the first one's rollback
+    // runs, causing the first call to roll back to the second call's
+    // pre-state instead of its own.
+    const snapshot = value
     setValue(prev => ({ ...prev, ...update }))
-    setIsPending(true)
+    setPendingCount(count => count + 1)
     setDidRollback(false)
     setError(null)
 
@@ -97,12 +114,12 @@ export function useOptimisticUpdate<T extends object>(
       setValue(confirmed)
       options.onSuccess?.(confirmed)
     } catch (err) {
-      setValue(snapshotRef.current)
+      setValue(snapshot)
       setDidRollback(true)
       setError(err)
-      options.onRollback?.(err, snapshotRef.current)
+      options.onRollback?.(err, snapshot)
     } finally {
-      setIsPending(false)
+      setPendingCount(count => count - 1)
     }
   }, [value, options])
 
