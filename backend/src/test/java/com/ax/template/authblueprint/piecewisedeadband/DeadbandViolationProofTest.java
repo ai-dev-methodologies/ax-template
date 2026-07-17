@@ -99,4 +99,21 @@ class DeadbandViolationProofTest {
         assertThat(sql).contains("uq_deadband_segment_ordinal");
         assertThat(sql).contains("uq_deadband_evaluation_idempotency");
     }
+
+    // ── P1-64 — the racy evaluation insert crosses a REQUIRES_NEW boundary (poisoned-tx seal) ──
+    @Test @Tag("PWDB-IMMUTABLE-001")
+    void violation_racyInsertIsolatedInRequiresNewBoundary() throws Exception {
+        Method insert = com.ax.template.authblueprint.common.IdempotentInsert.class
+            .getMethod("insert", java.util.function.Supplier.class);
+        org.springframework.transaction.annotation.Transactional tx =
+            insert.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(tx).as("IdempotentInsert.insert must be @Transactional").isNotNull();
+        assertThat(tx.propagation())
+            .as("the racy insert must run in a REQUIRES_NEW inner tx (25P02 poisoned-tx seal)")
+            .isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
+        assertThat(java.util.Arrays.stream(DeadbandService.class.getDeclaredFields())
+                .anyMatch(f -> f.getType() == com.ax.template.authblueprint.common.IdempotentInsert.class))
+            .as("DeadbandService must delegate its racy insert through IdempotentInsert (revert-proof)")
+            .isTrue();
+    }
 }

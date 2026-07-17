@@ -59,4 +59,22 @@ class DerivedStatementViolationProofTest {
             assertThat(sql).contains("basis_hash");
         }
     }
+
+    // ── P1-65 — save()→saveAndFlush inside a REQUIRES_NEW boundary; the replay catch is dead code
+    //    without it, and a raw saveAndFlush would poison the outer requery on PostgreSQL (25P02) ──
+    @Test @Tag("STMT-RETRY-002")
+    void violation_racyInsertIsolatedInRequiresNewBoundary() throws Exception {
+        Method insert = com.ax.template.authblueprint.common.IdempotentInsert.class
+            .getMethod("insert", java.util.function.Supplier.class);
+        org.springframework.transaction.annotation.Transactional tx =
+            insert.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(tx).as("IdempotentInsert.insert must be @Transactional").isNotNull();
+        assertThat(tx.propagation())
+            .as("the racy insert must run in a REQUIRES_NEW inner tx (25P02 poisoned-tx seal)")
+            .isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
+        assertThat(java.util.Arrays.stream(DerivedStatementService.class.getDeclaredFields())
+                .anyMatch(f -> f.getType() == com.ax.template.authblueprint.common.IdempotentInsert.class))
+            .as("DerivedStatementService must delegate its racy insert through IdempotentInsert (revert-proof)")
+            .isTrue();
+    }
 }

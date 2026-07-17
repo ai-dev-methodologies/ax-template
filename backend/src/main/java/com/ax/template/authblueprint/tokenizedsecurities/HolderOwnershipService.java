@@ -4,6 +4,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 
+import com.ax.template.authblueprint.common.IdempotentInsert;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,10 +21,13 @@ public class HolderOwnershipService {
     public record ClaimResult(HolderOwnership ownership, boolean created) {}
 
     private final HolderOwnershipRepository ownerships;
+    private final IdempotentInsert idempotentInsert;
     private final Clock clock;
 
-    public HolderOwnershipService(HolderOwnershipRepository ownerships, Clock clock) {
+    public HolderOwnershipService(HolderOwnershipRepository ownerships,
+                                  IdempotentInsert idempotentInsert, Clock clock) {
         this.ownerships = ownerships;
+        this.idempotentInsert = idempotentInsert;
         this.clock = clock;
     }
 
@@ -51,8 +56,11 @@ public class HolderOwnershipService {
                 })
                 .orElseGet(() -> {
                     try {
-                        HolderOwnership saved = ownerships.saveAndFlush(
-                                new HolderOwnership(holderId, callerPrincipal, Instant.now(clock)));
+                        // P1-64 — isolate the racy insert in a REQUIRES_NEW inner tx so a uq(holder)
+                        // violation aborts only that inner tx; the catch-block re-read below runs in
+                        // this (unpoisoned) outer tx even on PostgreSQL (25P02).
+                        HolderOwnership saved = idempotentInsert.insert(() -> ownerships.saveAndFlush(
+                                new HolderOwnership(holderId, callerPrincipal, Instant.now(clock))));
                         return new ClaimResult(saved, true);  // first claim → 201
                     } catch (DataIntegrityViolationException e) {
                         // concurrent race: another thread inserted first; re-read to classify

@@ -1,5 +1,7 @@
 package com.ax.template.authblueprint.derivedstatement;
 
+import com.ax.template.authblueprint.common.IdempotentInsert;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,12 +29,14 @@ import java.util.UUID;
 public class DerivedStatementService {
 
     private final DerivedStatementRepository statements;
+    private final IdempotentInsert idempotentInsert;
     private final DerivedStatementMetrics metrics;
     private final Clock clock;
 
-    public DerivedStatementService(DerivedStatementRepository statements, DerivedStatementMetrics metrics,
-                                   Clock clock) {
+    public DerivedStatementService(DerivedStatementRepository statements, IdempotentInsert idempotentInsert,
+                                   DerivedStatementMetrics metrics, Clock clock) {
         this.statements = statements;
+        this.idempotentInsert = idempotentInsert;
         this.metrics = metrics;
         this.clock = clock;
     }
@@ -63,8 +67,14 @@ public class DerivedStatementService {
         BigDecimal total = basis.stream().map(LineItem::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         try {
-            DerivedStatement saved = statements.save(new DerivedStatement(UUID.randomUUID(), subject, period,
-                nextVersion, basisHash, basisJson, total, Instant.now(clock)));
+            // P1-65 — save() defers the INSERT to commit (outside this try), so a race would surface
+            // at commit as a 500 and this catch would never fire. saveAndFlush forces the uq(subject,
+            // period, basis_hash) violation to fire INSIDE the try; the REQUIRES_NEW boundary keeps
+            // that violation from poisoning this outer tx on PostgreSQL (25P02) so the replay requery
+            // below runs clean.
+            DerivedStatement saved = idempotentInsert.insert(() -> statements.saveAndFlush(
+                new DerivedStatement(UUID.randomUUID(), subject, period,
+                    nextVersion, basisHash, basisJson, total, Instant.now(clock))));
             metrics.record("created");
             return saved;
         } catch (DataIntegrityViolationException raced) {

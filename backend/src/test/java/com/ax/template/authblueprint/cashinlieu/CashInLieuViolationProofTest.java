@@ -57,6 +57,24 @@ class CashInLieuViolationProofTest {
             .contains("uq_cil_subject_event");
     }
 
+    // ── P1-64 — the racy insert crosses a REQUIRES_NEW boundary (poisoned-tx seal) ──
+    @Test @Tag("CIL-IDEMPOTENT-003")
+    void violation_racyInsertIsolatedInRequiresNewBoundary() throws Exception {
+        java.lang.reflect.Method insert = com.ax.template.authblueprint.common.IdempotentInsert.class
+            .getMethod("insert", java.util.function.Supplier.class);
+        org.springframework.transaction.annotation.Transactional tx =
+            insert.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(tx).as("IdempotentInsert.insert must be @Transactional").isNotNull();
+        assertThat(tx.propagation())
+            .as("the racy insert must run in a REQUIRES_NEW inner tx so a uq violation cannot poison "
+                + "the outer requery on PostgreSQL (25P02)")
+            .isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
+        assertThat(Arrays.stream(CashInLieuService.class.getDeclaredFields())
+                .anyMatch(f -> f.getType() == com.ax.template.authblueprint.common.IdempotentInsert.class))
+            .as("CashInLieuService must delegate its racy insert through IdempotentInsert (revert-proof)")
+            .isTrue();
+    }
+
     // ── no delete method anywhere in the repository ──
     @Test @Tag("CIL-IDEMPOTENT-003")
     void violation_noDeleteMethodDeclared() {

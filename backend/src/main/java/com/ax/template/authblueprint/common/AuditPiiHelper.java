@@ -68,7 +68,8 @@ public final class AuditPiiHelper {
      *
      * <p>Patterns redacted:
      * <ul>
-     *   <li>KR RRN — {@code \d{6}-\d{7}}</li>
+     *   <li>KR RRN — {@code \d{6}-?\d{7}} (P3-48 — hyphen optional; a 13-digit
+     *       un-hyphenated 주민등록번호 must not leak)</li>
      *   <li>KR mobile — {@code 01[016789]-?\d{3,4}-?\d{4}}</li>
      *   <li>JWT shape — {@code eyJ[A-Za-z0-9._-]{20,}}</li>
      *   <li>Bearer header value</li>
@@ -82,7 +83,7 @@ public final class AuditPiiHelper {
     public static String sanitizeReason(String raw) {
         if (raw == null) return null;
         String s = raw;
-        s = s.replaceAll("\\d{6}-\\d{7}", "[REDACTED]");
+        s = s.replaceAll("\\d{6}-?\\d{7}", "[REDACTED]");
         s = s.replaceAll("01[016789]-?\\d{3,4}-?\\d{4}", "[REDACTED]");
         s = s.replaceAll("eyJ[A-Za-z0-9._-]{20,}", "[REDACTED]");
         s = s.replaceAll("(?i)Bearer\\s+[A-Za-z0-9._-]+", "[REDACTED]");

@@ -97,4 +97,21 @@ class WithholdingSplitViolationProofTest {
             assertThat(sql).contains("UNIQUE INDEX uq_remittance_period");
         }
     }
+
+    // ── P1-64 — the racy remittance insert crosses a REQUIRES_NEW boundary (poisoned-tx seal) ──
+    @Test @Tag("WHT-REMIT-003")
+    void violation_racyInsertIsolatedInRequiresNewBoundary() throws Exception {
+        Method insert = com.ax.template.authblueprint.common.IdempotentInsert.class
+            .getMethod("insert", java.util.function.Supplier.class);
+        org.springframework.transaction.annotation.Transactional tx =
+            insert.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(tx).as("IdempotentInsert.insert must be @Transactional").isNotNull();
+        assertThat(tx.propagation())
+            .as("the racy insert must run in a REQUIRES_NEW inner tx (25P02 poisoned-tx seal)")
+            .isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
+        assertThat(Arrays.stream(RemittanceService.class.getDeclaredFields())
+                .anyMatch(f -> f.getType() == com.ax.template.authblueprint.common.IdempotentInsert.class))
+            .as("RemittanceService must delegate its racy insert through IdempotentInsert (revert-proof)")
+            .isTrue();
+    }
 }

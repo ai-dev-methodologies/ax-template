@@ -236,4 +236,48 @@ class ReconciliationComplianceTest {
         assertThat(items.jsonPath().getBoolean("find { it.classification == 'BREAK' }.disposed")).isTrue();
         assertThat(items.jsonPath().getString("find { it.classification == 'BREAK' }.dispositionType")).isEqualTo("ACCEPT_INTERNAL");
     }
+
+    /**
+     * RECON-IDEMPOTENT-001 concurrency keystone (P1-65, audit-seal-11 revert) — two concurrent runs
+     * on the SAME (sourceKey, feedSnapshotHash) both pass the pre-check before either commits; the
+     * loser hits the uq(source, feed-hash) constraint. Both MUST resolve to the SAME run, the winner
+     * run MUST carry its full classified item set (NEVER an empty orphan), and NEITHER may surface a
+     * 500. The run insert + items are now ONE atomic unit in ReconciliationRunCreator.doRun, and
+     * run() catches the constraint violation OUTSIDE that tx so the loser's run+items roll back
+     * atomically before requerying the winner in a fresh tx — on PostgreSQL a same-tx requery would
+     * fail with 25P02 (500), and an isolated-run insert would leave a durable zero-item orphan. H2
+     * cannot reproduce 25P02, so this proves the happy-path + no-orphan contract; the structural
+     * atomic-doRun / catch-outside guard in ReconciliationViolationProofTest is the real regression
+     * guard.
+     */
+    @Test @Tag("RECON-IDEMPOTENT-001")
+    void concurrentRunSameFeed_singleWinner_withItems_neither500() throws Exception {
+        String source = "src-" + UUID.randomUUID();
+        String feedHash = "feed-" + UUID.randomUUID();
+        int n = 2;
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch start = new CountDownLatch(1);
+        ConcurrentLinkedQueue<Integer> statusCodes = new ConcurrentLinkedQueue<>();
+        ConcurrentLinkedQueue<String> ids = new ConcurrentLinkedQueue<>();
+        for (int i = 0; i < n; i++) {
+            pool.submit(() -> {
+                start.await();
+                ExtractableResponse<Response> r = runFourKey(source, feedHash);
+                statusCodes.add(r.statusCode());
+                if (r.statusCode() == 201) ids.add(r.jsonPath().getString("id"));
+                return null;
+            });
+        }
+        start.countDown();
+        pool.shutdown();
+        assertThat(pool.awaitTermination(60, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(statusCodes).as("neither racer surfaces an unmapped 500").allMatch(code -> code == 201);
+        assertThat(ids.stream().distinct()).as("both runs resolve to the SAME run").hasSize(1);
+        // the surviving run MUST carry its full 4-key classified set — a REQUIRES_NEW-isolated run
+        // insert would leave a durable ZERO-item orphan the pre-check then short-circuits onto.
+        String winnerId = ids.peek();
+        assertThat(items(winnerId).jsonPath().getList("$"))
+            .as("the winner run is fully classified — never an empty orphan").hasSize(4);
+    }
 }

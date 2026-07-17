@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.uomconversion;
 
+import com.ax.template.authblueprint.common.IdempotentInsert;
 import com.ax.template.authblueprint.common.MemberWriter;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -33,13 +34,15 @@ public class UomConversionService {
 
     private final MaterialRepository materials;
     private final MemberWriter members;
+    private final IdempotentInsert idempotentInsert;
     private final UomConversionMetrics metrics;
     private final Clock clock;
 
     public UomConversionService(MaterialRepository materials, MemberWriter members,
-                                UomConversionMetrics metrics, Clock clock) {
+                                IdempotentInsert idempotentInsert, UomConversionMetrics metrics, Clock clock) {
         this.materials = materials;
         this.members = members;
+        this.idempotentInsert = idempotentInsert;
         this.metrics = metrics;
         this.clock = clock;
     }
@@ -143,7 +146,10 @@ public class UomConversionService {
             return existing.get();
         }
         try {
-            members.persistAndFlush(c);
+            // P1-64 — isolate the racy insert in a REQUIRES_NEW inner tx so a uq(idempotency_basis)
+            // violation aborts only that inner tx; the catch-block requery runs in this (unpoisoned)
+            // outer tx even on PostgreSQL (25P02).
+            idempotentInsert.insert(() -> members.persistAndFlush(c));
         } catch (DataIntegrityViolationException dup) {
             metrics.record("convert", "idempotent");
             return materials.findConversionByBasis(c.getIdempotencyBasis()).orElseThrow(UomConversionException::notFound);

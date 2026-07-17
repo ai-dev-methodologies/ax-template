@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.orgscope;
 
 import com.ax.template.authblueprint.common.MemberWriter;
 
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,6 +73,20 @@ public class OrgScopeService {
      *  resolve to exactly one row (CWE-362); a re-grant returns the existing row unchanged. */
     @Transactional
     public ScopeGrant grant(UUID nodeId, String principal, ScopeRole role, String grantedBy) {
+        // ORGSCOPE-CONCURRENT-001 — the node's PESSIMISTIC_WRITE row lock serializes ALL grants at
+        // this node: a concurrent same-key caller BLOCKS here until the winner commits, and once it
+        // acquires the lock the recheck below sees the committed grant → returns it, never reaching
+        // the insert. Lock + recheck give idempotency AND serialization to exactly one row — the
+        // uq(org_unit_id, principal, role) is the DB backstop, not the live race resolver.
+        //
+        // The insert therefore stays in THIS outer tx (P1-64 reverted for this service only). A
+        // ScopeGrant is an FK child of org_units; isolating the insert in a REQUIRES_NEW inner tx on
+        // a SEPARATE connection would make PostgreSQL acquire a FOR KEY SHARE lock on the very
+        // org_units row this suspended outer tx already holds FOR UPDATE → the inner tx blocks on its
+        // own parent's lock and self-hangs until lock_timeout (unset ⇒ forever), on the NORMAL
+        // first-grant path. Keeping the insert in the outer tx (which already owns the FOR UPDATE
+        // lock) avoids the cross-connection deadlock; the lock+recheck make the racy-catch path
+        // unreachable, so no poisoned-tx (25P02) requery is possible either.
         OrgUnit node = units.findByIdForUpdate(nodeId).orElseThrow(OrgScopeException::nodeNotFound);
         Optional<ScopeGrant> existing = units.findGrant(node.getId(), principal, role);
         if (existing.isPresent()) {
@@ -82,13 +95,7 @@ public class OrgScopeService {
         }
         ScopeGrant g = new ScopeGrant(UUID.randomUUID(), node.getId(), principal, role,
             grantedBy, Instant.now(clock));
-        try {
-            members.persistAndFlush(g);
-        } catch (DataIntegrityViolationException dup) {
-            // a concurrent same-key grant beat us to the uq — return the row that won, idempotently
-            metrics.record("grant", "idempotent");
-            return units.findGrant(node.getId(), principal, role).orElseThrow(() -> dup);
-        }
+        members.persist(g);
         metrics.record("grant", "granted");
         return g;
     }

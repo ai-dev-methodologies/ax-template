@@ -46,7 +46,16 @@ public class AuditLogExportController {
             .body(new ExportJobResponse(job.getId(), job.getStatus()));
     }
 
+    /**
+     * P1-66 — AUDIT-EXPORT-002 covers "Export requests" as a whole: the status/poll surface is
+     * role-gated identically to the enqueue POST. Without this a ROLE_MEMBER / X-API-Key principal
+     * holding any jobId could read a completed ADMIN/AUDITOR export's downloadUrl + recordCount
+     * (IDOR). Audit-log exports are an ADMIN-global artifact (the requestedBy field is provenance,
+     * not an ownership boundary), so a role-gate — not per-owner scoping — is the correct fix: an
+     * ADMIN must still be able to poll a job an AUDITOR enqueued.
+     */
     @GetMapping("/{jobId}")
+    @PreAuthorize("hasAnyRole('ADMIN','AUDITOR')")
     public ResponseEntity<ExportJobStatusResponse> status(@PathVariable UUID jobId) {
         return exportService.findById(jobId)
             .map(j -> ResponseEntity.ok(new ExportJobStatusResponse(

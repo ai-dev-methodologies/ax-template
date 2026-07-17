@@ -3,6 +3,8 @@ package com.ax.template.authblueprint.tokenizedsecurities;
 import java.time.Clock;
 import java.time.Instant;
 
+import com.ax.template.authblueprint.common.IdempotentInsert;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -17,12 +19,15 @@ public class EligibleInvestorService {
 
     private final EligibleInvestorRepository grants;
     private final SecurityTokenRegisterRepository registers;
+    private final IdempotentInsert idempotentInsert;
     private final Clock clock;
 
     public EligibleInvestorService(EligibleInvestorRepository grants,
-                                   SecurityTokenRegisterRepository registers, Clock clock) {
+                                   SecurityTokenRegisterRepository registers,
+                                   IdempotentInsert idempotentInsert, Clock clock) {
         this.grants = grants;
         this.registers = registers;
+        this.idempotentInsert = idempotentInsert;
         this.clock = clock;
     }
 
@@ -50,7 +55,11 @@ public class EligibleInvestorService {
                     .orElseThrow(TokenizedSecuritiesException::notFound);
         }
         try {
-            return grants.saveAndFlush(new EligibleInvestor(register.getId(), holderId, Instant.now(clock)));
+            // P1-64 — isolate the racy insert in a REQUIRES_NEW inner tx so a uq(register,holder)
+            // violation aborts only that inner tx; the catch-block requery runs in this (unpoisoned)
+            // outer tx even on PostgreSQL (25P02).
+            return idempotentInsert.insert(() ->
+                    grants.saveAndFlush(new EligibleInvestor(register.getId(), holderId, Instant.now(clock))));
         } catch (DataIntegrityViolationException e) {
             // concurrent duplicate grant — idempotent
             return grants.findByRegisterIdAndHolderId(register.getId(), holderId)

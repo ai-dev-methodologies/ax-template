@@ -135,4 +135,37 @@ class OrgScopeViolationProofTest {
             assertThat(sql).contains("(org_unit_id, principal, role)");
         }
     }
+
+    // ── P1-64 REVERT (audit-seal-11) — grant()'s idempotency is the node-lock + recheck, NOT a
+    //    REQUIRES_NEW isolated insert. A ScopeGrant is an FK child of the FOR-UPDATE-locked org_units
+    //    row, so an inner-tx insert on a separate connection would self-hang on PostgreSQL waiting for
+    //    a FOR KEY SHARE lock the suspended outer tx already holds. The insert MUST stay in the outer
+    //    tx; the node lock + recheck serialize concurrent same-key grants to exactly one row. ──
+    @Test @Tag("ORGSCOPE-CONCURRENT-001")
+    void violation_grantIdempotencyIsLockPlusRecheck_notRequiresNewIsolation() throws Exception {
+        String svc = Files.readString(Path.of(System.getProperty("user.dir"), "src", "main", "java",
+            "com", "ax", "template", "authblueprint", "orgscope", "OrgScopeService.java"));
+        int gs = svc.indexOf("public ScopeGrant grant(");
+        assertThat(gs).as("grant() must exist").isPositive();
+        String grantBody = svc.substring(gs, svc.indexOf("\n    }", gs));
+
+        // order: take the node row lock → recheck for an existing grant → insert only if absent
+        int lockAt = grantBody.indexOf("findByIdForUpdate");
+        int recheckAt = grantBody.indexOf("findGrant(");
+        int insertAt = grantBody.indexOf("members.persist");
+        assertThat(lockAt).as("grant() must take the node row lock").isNotNegative();
+        assertThat(recheckAt).as("grant() must recheck for an existing grant AFTER taking the lock")
+            .isGreaterThan(lockAt);
+        assertThat(insertAt).as("grant() must insert AFTER the recheck (idempotent under the lock)")
+            .isGreaterThan(recheckAt);
+
+        // the FK-child insert must NOT be isolated in a REQUIRES_NEW inner tx while the parent
+        // org_units row is held FOR UPDATE — that self-hangs on PostgreSQL. No IdempotentInsert.
+        assertThat(grantBody).as("the grant insert must stay in the outer tx (no REQUIRES_NEW isolation)")
+            .doesNotContain("idempotentInsert");
+        assertThat(java.util.Arrays.stream(OrgScopeService.class.getDeclaredFields())
+                .noneMatch(f -> f.getType() == com.ax.template.authblueprint.common.IdempotentInsert.class))
+            .as("OrgScopeService must NOT hold an IdempotentInsert — lock+recheck is the idempotency mechanism")
+            .isTrue();
+    }
 }

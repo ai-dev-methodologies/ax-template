@@ -46,6 +46,19 @@ class AuditPiiHelperTest {
     }
 
     @Test
+    void sanitizeReason_redactsUnhyphenatedKoreanRrn() {
+        // P3-48 — a 13-digit un-hyphenated 주민등록번호 must also be redacted (the hyphen is
+        // optional in the pattern, mirroring the KR mobile pattern). RED-on-revert: with the old
+        // \d{6}-\d{7} pattern the un-hyphenated case leaks and this assertion fails.
+        String s = AuditPiiHelper.sanitizeReason("SMTP error: user 9012311234567 rejected");
+        assertThat(s).doesNotContain("9012311234567");
+        assertThat(s).contains("[REDACTED]");
+        // the hyphenated form still redacts (no regression).
+        assertThat(AuditPiiHelper.sanitizeReason("RRN 901231-1234567 denied"))
+            .doesNotContain("901231-1234567").contains("[REDACTED]");
+    }
+
+    @Test
     void sanitizeReason_redactsKoreanMobile() {
         assertThat(AuditPiiHelper.sanitizeReason("error to 010-1234-5678 failed")).contains("[REDACTED]");
         assertThat(AuditPiiHelper.sanitizeReason("error to 01012345678 failed")).contains("[REDACTED]");

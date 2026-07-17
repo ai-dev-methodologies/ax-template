@@ -133,4 +133,51 @@ class ReconciliationViolationProofTest {
             assertThat(sql).contains("(run_id, item_key)");
         }
     }
+
+    // ── P1-65 REVERT (audit-seal-11) — the run insert is NON-TERMINAL (items follow), so it must NOT
+    //    be isolated in a REQUIRES_NEW inner tx (that would durably commit a run whose items can then
+    //    be lost → a permanent orphan a later re-run short-circuits onto). Run + items are ONE atomic
+    //    unit in ReconciliationRunCreator.doRun, and run() catches the uq(source,feed) race OUTSIDE
+    //    that tx so the loser rolls back atomically (no orphan) and requeries the winner in a fresh tx. ──
+    @Test @Tag("RECON-IDEMPOTENT-001")
+    void violation_runAndItemsAtomic_catchOutsideReplay_noRequiresNewIsolation() throws Exception {
+        // the collaborator commits run + items atomically in ONE (REQUIRED, not REQUIRES_NEW) tx
+        Method doRun = ReconciliationRunCreator.class.getDeclaredMethod("doRun",
+            String.class, String.class, java.util.Map.class, java.util.Map.class);
+        org.springframework.transaction.annotation.Transactional tx =
+            doRun.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(tx).as("doRun must be @Transactional (run + items atomic)").isNotNull();
+        assertThat(tx.propagation())
+            .as("doRun must be REQUIRED — run + items share ONE tx, never an isolated run insert")
+            .isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRED);
+
+        String creatorSrc = Files.readString(Path.of(System.getProperty("user.dir"), "src", "main", "java",
+            "com", "ax", "template", "authblueprint", "reconciliation", "ReconciliationRunCreator.java"));
+        int drAt = creatorSrc.indexOf("ReconciliationRun doRun(");
+        assertThat(drAt).as("doRun must exist").isPositive();
+        String drBody = creatorSrc.substring(drAt, creatorSrc.indexOf("\n    }", drAt));
+        int runInsertAt = drBody.indexOf("saveAndFlush");
+        int itemInsertAt = drBody.indexOf("members.persist");
+        assertThat(runInsertAt).as("doRun inserts the run").isNotNegative();
+        assertThat(itemInsertAt).as("doRun persists the items in the SAME tx AFTER the run")
+            .isGreaterThan(runInsertAt);
+
+        // run() is NON-transactional and catches the DIVE OUTSIDE doRun's tx, then replays the winner
+        String svc = Files.readString(Path.of(System.getProperty("user.dir"), "src", "main", "java",
+            "com", "ax", "template", "authblueprint", "reconciliation", "ReconciliationService.java"));
+        assertThat(svc).as("run() must NOT be @Transactional — the catch must run OUTSIDE doRun's tx")
+            .doesNotContain("@Transactional\n    public ReconciliationRun run(");
+        int runAt = svc.indexOf("public ReconciliationRun run(");
+        assertThat(runAt).as("run() must exist").isPositive();
+        String runBody = svc.substring(runAt, svc.indexOf("\n    }", runAt));
+        assertThat(runBody).as("run() delegates the atomic insert to the creator").contains("creator.doRun");
+        assertThat(runBody).as("run() catches the race OUTSIDE the creator's tx and replays the winner")
+            .contains("catch (DataIntegrityViolationException").contains("creator.replay");
+
+        // the service no longer isolates a run insert through IdempotentInsert (atomic doRun replaces it)
+        assertThat(java.util.Arrays.stream(ReconciliationService.class.getDeclaredFields())
+                .noneMatch(f -> f.getType() == com.ax.template.authblueprint.common.IdempotentInsert.class))
+            .as("ReconciliationService must NOT hold an IdempotentInsert — atomic doRun replaces the isolated insert")
+            .isTrue();
+    }
 }

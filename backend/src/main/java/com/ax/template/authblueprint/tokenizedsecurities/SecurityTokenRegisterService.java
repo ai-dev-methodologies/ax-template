@@ -3,6 +3,8 @@ package com.ax.template.authblueprint.tokenizedsecurities;
 import java.time.Clock;
 import java.time.Instant;
 
+import com.ax.template.authblueprint.common.IdempotentInsert;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +17,7 @@ public class SecurityTokenRegisterService {
     private final InvestorEligibility eligibility;
     private final HolderAuthorization holderAuthorization;
     private final OnChainAnchor onChainAnchor;
+    private final IdempotentInsert idempotentInsert;
     private final Clock clock;
     private final SecurityTokenIssuanceStateMachine issuanceStateMachine;
 
@@ -23,6 +26,7 @@ public class SecurityTokenRegisterService {
                                         InvestorEligibility eligibility,
                                         HolderAuthorization holderAuthorization,
                                         OnChainAnchor onChainAnchor,
+                                        IdempotentInsert idempotentInsert,
                                         Clock clock,
                                         SecurityTokenIssuanceStateMachine issuanceStateMachine) {
         this.registers = registers;
@@ -30,6 +34,7 @@ public class SecurityTokenRegisterService {
         this.eligibility = eligibility;
         this.holderAuthorization = holderAuthorization;
         this.onChainAnchor = onChainAnchor;
+        this.idempotentInsert = idempotentInsert;
         this.clock = clock;
         this.issuanceStateMachine = issuanceStateMachine;
     }
@@ -49,14 +54,16 @@ public class SecurityTokenRegisterService {
             throw TokenizedSecuritiesException.duplicateTokenCode();
         }
         try {
-            return registers.saveAndFlush(new SecurityTokenRegister(
+            // P1-64 — isolate the racy insert in a REQUIRES_NEW inner tx so the unique-constraint
+            // violation aborts only that inner tx; the catch-block discrimination reads below then
+            // run in this (unpoisoned) outer tx even on PostgreSQL (25P02).
+            return idempotentInsert.insert(() -> registers.saveAndFlush(new SecurityTokenRegister(
                     tokenCode, underlyingAssetId, securityType, totalUnits, issuerHolderId,
-                    lockupUntil, holdingLimitPerInvestor, Instant.now(clock)));
+                    lockupUntil, holdingLimitPerInvestor, Instant.now(clock))));
         } catch (DataIntegrityViolationException e) {
             // Race backstop (the pre-checks above catch the single-threaded path); the unique
             // constraint that fired is either token_code or underlying_asset_id — re-read to map it.
-            // Phase 1 (PostgreSQL): a re-read after a flush failure runs in an aborted tx — wrap this
-            // discrimination in REQUIRES_NEW, or parse the violated constraint name from the exception.
+            // The re-read is safe because the failing insert ran in its own (now rolled-back) inner tx.
             if (registers.existsByUnderlyingAssetId(underlyingAssetId)) {
                 throw TokenizedSecuritiesException.duplicateUnderlyingAsset();
             }

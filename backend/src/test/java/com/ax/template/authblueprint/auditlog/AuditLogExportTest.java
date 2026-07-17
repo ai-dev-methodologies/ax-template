@@ -86,4 +86,46 @@ class AuditLogExportTest {
         .when().post("/api/audit-logs/export")
         .then().statusCode(202);
     }
+
+    /**
+     * AUDIT-EXPORT-002 (P1-66) — the GET status/poll surface is an "Export request" too and MUST be
+     * role-gated. Before the fix it carried no @PreAuthorize, so any authenticated principal holding
+     * a jobId could read a completed ADMIN/AUDITOR export's downloadUrl + recordCount (IDOR). A
+     * ROLE_MEMBER polling a real ADMIN-enqueued job must now be rejected with 403 — never 200.
+     */
+    @Test
+    @Tag("AUDIT_LOG")
+    @Tag("AUDIT-EXPORT-002")
+    void export_002_getStatusByNonAdminNonAuditorRejectedWith403() {
+        // ADMIN enqueues a real export job.
+        String adminToken = AuditLogTestSupport.obtainToken(
+            AuditLogTestSupport.freshEmail("export-002-get-admin"), "ADMIN");
+        String jobId =
+            given()
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(ContentType.JSON)
+                .body("{\"format\":\"CSV\"}")
+            .when().post("/api/audit-logs/export")
+            .then().statusCode(202)
+                .extract().path("jobId");
+
+        // A ROLE_MEMBER attempting to read that job's status is rejected with 403 (IDOR sealed).
+        String memberToken = AuditLogTestSupport.obtainToken(
+            AuditLogTestSupport.freshEmail("export-002-get-member"), "MEMBER");
+        given()
+            .header("Authorization", "Bearer " + memberToken)
+            .accept(ContentType.JSON)
+        .when().get("/api/audit-logs/export/" + jobId)
+        .then().statusCode(403);
+
+        // AUDITOR may still read it (legitimately admin-global resource; not owner-scoped).
+        String auditorToken = AuditLogTestSupport.obtainToken(
+            AuditLogTestSupport.freshEmail("export-002-get-auditor"), "AUDITOR");
+        given()
+            .header("Authorization", "Bearer " + auditorToken)
+            .accept(ContentType.JSON)
+        .when().get("/api/audit-logs/export/" + jobId)
+        .then().statusCode(200)
+            .body("jobId", equalTo(jobId));
+    }
 }

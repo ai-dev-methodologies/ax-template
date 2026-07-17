@@ -1,5 +1,7 @@
 package com.ax.template.authblueprint.cashinlieu;
 
+import com.ax.template.authblueprint.common.IdempotentInsert;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,10 +30,13 @@ public class CashInLieuService {
     static final int CASH_SCALE = 2;
 
     private final CashInLieuAllocationRepository allocations;
+    private final IdempotentInsert idempotentInsert;
     private final Clock clock;
 
-    public CashInLieuService(CashInLieuAllocationRepository allocations, Clock clock) {
+    public CashInLieuService(CashInLieuAllocationRepository allocations,
+                             IdempotentInsert idempotentInsert, Clock clock) {
         this.allocations = allocations;
+        this.idempotentInsert = idempotentInsert;
         this.clock = clock;
     }
 
@@ -56,8 +61,12 @@ public class CashInLieuService {
             BigDecimal cashValue = fractionalRemainder.multiply(cashRate).setScale(CASH_SCALE, RoundingMode.HALF_UP);
 
             try {
-                return allocations.saveAndFlush(new CashInLieuAllocation(UUID.randomUUID(), subjectRef, eventRef,
-                    raw, unitsInKind, fractionalRemainder, cashRate, cashValue, Instant.now(clock)));
+                // P1-64 — isolate the racy insert in a REQUIRES_NEW inner tx so a uq(subject,event)
+                // violation aborts only that inner tx; the catch-block requery below runs in this
+                // (unpoisoned) outer tx even on PostgreSQL (25P02).
+                return idempotentInsert.insert(() -> allocations.saveAndFlush(
+                    new CashInLieuAllocation(UUID.randomUUID(), subjectRef, eventRef,
+                        raw, unitsInKind, fractionalRemainder, cashRate, cashValue, Instant.now(clock))));
             } catch (DataIntegrityViolationException e) {                 // lost the uq(subject,event) race
                 return allocations.findBySubjectRefAndEventRef(subjectRef, eventRef)
                     .orElseThrow(CashInLieuException::allocationNotFound);

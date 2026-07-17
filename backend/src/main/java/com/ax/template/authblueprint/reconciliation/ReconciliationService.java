@@ -1,7 +1,5 @@
 package com.ax.template.authblueprint.reconciliation;
 
-import com.ax.template.authblueprint.common.MemberWriter;
-
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,7 +10,6 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeSet;
 import java.util.UUID;
 
 /**
@@ -25,20 +22,21 @@ import java.util.UUID;
  * SAME feed returns the EXISTING run, a CHANGED feed appends a new run, prior retained
  * (RECON-IDEMPOTENT-001). The dispose path takes the item's PESSIMISTIC_WRITE row lock so
  * concurrent disposes converge to exactly one winner (RECON-CONCURRENT-001 / CWE-362).
- * ReconciliationItem rows are members: {@link MemberWriter} writes, root-JPQL reads.
+ * ReconciliationItem rows are members: {@link ReconciliationRunCreator} writes them through the
+ * MemberWriter seam inside the run's atomic transaction, root-JPQL reads.
  */
 @Service
 public class ReconciliationService {
 
     private final ReconciliationRunRepository runs;
-    private final MemberWriter members;
+    private final ReconciliationRunCreator creator;
     private final ReconciliationMetrics metrics;
     private final Clock clock;
 
-    public ReconciliationService(ReconciliationRunRepository runs, MemberWriter members,
+    public ReconciliationService(ReconciliationRunRepository runs, ReconciliationRunCreator creator,
                                  ReconciliationMetrics metrics, Clock clock) {
         this.runs = runs;
-        this.members = members;
+        this.creator = creator;
         this.metrics = metrics;
         this.clock = clock;
     }
@@ -49,35 +47,35 @@ public class ReconciliationService {
      * (sourceKey, feedSnapshotHash): a re-run on the SAME feed returns the EXISTING run verbatim
      * (no new run, no duplicate items); a CHANGED feed appends a NEW run, prior retained.
      */
-    @Transactional
+    // NOT @Transactional (audit-seal-11 P1-65 revert) — the DataIntegrityViolationException catch
+    // MUST sit OUTSIDE the run+items transaction. run() owns no tx of its own; the atomic unit is
+    // ReconciliationRunCreator.doRun, and the loser of a race rolls THAT whole unit back before this
+    // catch requeries the winner in a fresh tx.
     public ReconciliationRun run(String sourceKey, String feedSnapshotHash,
                                  Map<String, BigDecimal> internal, Map<String, BigDecimal> external) {
-        // RECON-IDEMPOTENT-001 — the same (source, feed-hash) returns the existing run verbatim.
+        // RECON-IDEMPOTENT-001 — sequential-retry fast path: the same (source, feed-hash) returns the
+        // existing run verbatim (no new run, no duplicate items). Keeps the common idempotent case
+        // off the constraint-violation path entirely.
         var existing = runs.findBySourceKeyAndFeedSnapshotHash(sourceKey, feedSnapshotHash);
         if (existing.isPresent()) {
             metrics.record("run", "replayed");
             return existing.get();
         }
-        Instant now = Instant.now(clock);
-        ReconciliationRun saved;
         try {
-            saved = runs.save(new ReconciliationRun(UUID.randomUUID(), sourceKey, feedSnapshotHash, now));
+            // creator.doRun inserts the run AND persists all classified items in ONE atomic tx: the
+            // run insert is NON-TERMINAL, so it must NOT be isolated in a REQUIRES_NEW inner tx — an
+            // independently-committed run that then lost its items would be a permanent orphan that a
+            // later re-run short-circuits onto. Because run() holds no tx, a concurrent identical run
+            // that wins the uq(source, feed-hash) makes doRun's saveAndFlush throw; doRun's tx
+            // (run + items) rolls back ATOMICALLY, the exception surfaces HERE, outside any tx, and we
+            // requery the winner in a fresh tx — no orphan, no poisoned-tx (25P02) 500.
+            ReconciliationRun saved = creator.doRun(sourceKey, feedSnapshotHash, internal, external);
+            metrics.record("run", "created");
+            return saved;
         } catch (DataIntegrityViolationException raced) {
-            // a concurrent identical re-run won the uq(source, feed-hash) — return its run.
             metrics.record("run", "replayed");
-            return runs.findBySourceKeyAndFeedSnapshotHash(sourceKey, feedSnapshotHash)
-                .orElseThrow(ReconciliationException::notFound);
+            return creator.replay(sourceKey, feedSnapshotHash);
         }
-        // the union of keys, deterministically ordered, each classified exactly once.
-        TreeSet<String> keys = new TreeSet<>();
-        keys.addAll(internal.keySet());
-        keys.addAll(external.keySet());
-        for (String key : keys) {
-            members.persist(new ReconciliationItem(UUID.randomUUID(), saved.getId(), key,
-                internal.get(key), external.get(key), now));
-        }
-        metrics.record("run", "created");
-        return saved;
     }
 
     /**

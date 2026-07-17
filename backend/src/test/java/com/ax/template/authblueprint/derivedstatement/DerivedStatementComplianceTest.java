@@ -11,6 +11,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.annotation.DirtiesContext;
 
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -103,6 +109,42 @@ class DerivedStatementComplianceTest {
             .when().get("/api/statements/" + v1.jsonPath().getString("id")).thenReturn().then().extract();
         assertThat(refetched.jsonPath().getString("basisHash")).isEqualTo(v1Hash);
         assertThat(refetched.jsonPath().getInt("versionNo")).isEqualTo(1);
+    }
+
+    /**
+     * STMT-RETRY-002 concurrency keystone (P1-65) — two concurrent generates with the SAME
+     * (subject, period, basis) both pass the pre-check before either commits; the loser hits the
+     * uq(subject, period, basis_hash) constraint. Both MUST resolve to the SAME statement and NEITHER
+     * may surface a 500. The insert (formerly a save() whose deferred INSERT made the replay catch
+     * dead code) is now a saveAndFlush isolated in a REQUIRES_NEW inner tx, so the loser's requery
+     * runs on an unpoisoned connection — on PostgreSQL a same-tx requery would fail with 25P02 (500).
+     * H2 cannot reproduce 25P02, so this proves the happy-path contract; the structural REQUIRES_NEW
+     * lock in DerivedStatementViolationProofTest is the real regression guard.
+     */
+    @Test @Tag("STMT-RETRY-002")
+    void concurrentGenerateSameBasis_singleWinner_neither500() throws Exception {
+        String period = "2026-10";
+        String basis = "[{\"label\":\"A\",\"amount\":10.00},{\"label\":\"B\",\"amount\":20.00}]";
+        int n = 2;
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch start = new CountDownLatch(1);
+        ConcurrentLinkedQueue<Integer> statusCodes = new ConcurrentLinkedQueue<>();
+        ConcurrentLinkedQueue<String> ids = new ConcurrentLinkedQueue<>();
+        for (int i = 0; i < n; i++) {
+            pool.submit(() -> {
+                start.await();
+                ExtractableResponse<Response> r = generate(period, basis);
+                statusCodes.add(r.statusCode());
+                if (r.statusCode() == 201) ids.add(r.jsonPath().getString("id"));
+                return null;
+            });
+        }
+        start.countDown();
+        pool.shutdown();
+        assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(statusCodes).as("neither racer surfaces an unmapped 500").allMatch(code -> code == 201);
+        assertThat(ids.stream().distinct()).as("both generates resolve to the SAME statement").hasSize(1);
     }
 
     // ── AuthZ — every endpoint requires a JWT ──

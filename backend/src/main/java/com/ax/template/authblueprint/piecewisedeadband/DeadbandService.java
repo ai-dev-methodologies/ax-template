@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import com.ax.template.authblueprint.common.IdempotentInsert;
 import com.ax.template.authblueprint.common.MemberWriter;
 
 /**
@@ -32,13 +33,15 @@ public class DeadbandService {
 
     private final DeadbandConfigRepository configs;
     private final MemberWriter members;
+    private final IdempotentInsert idempotentInsert;
     private final DeadbandMetrics metrics;
     private final Clock clock;
 
     public DeadbandService(DeadbandConfigRepository configs, MemberWriter members,
-                           DeadbandMetrics metrics, Clock clock) {
+                           IdempotentInsert idempotentInsert, DeadbandMetrics metrics, Clock clock) {
         this.configs = configs;
         this.members = members;
+        this.idempotentInsert = idempotentInsert;
         this.metrics = metrics;
         this.clock = clock;
     }
@@ -130,9 +133,13 @@ public class DeadbandService {
 
         try {
             long seq = configs.maxEvaluationSequence(config.getId()) + 1;
-            DeadbandEvaluation row = members.persistAndFlush(new DeadbandEvaluation(UUID.randomUUID(),
-                config.getId(), covering.getId(), x, actual, covering.getObligationTarget(),
-                covering.getDeadbandWidth(), deviation, compliant, idempotencyKey, seq, Instant.now(clock)));
+            // P1-64 — isolate the racy insert in a REQUIRES_NEW inner tx so a uq(idempotencyKey)
+            // violation aborts only that inner tx; the catch-block replay requery runs in this
+            // (unpoisoned) outer tx even on PostgreSQL (25P02).
+            DeadbandEvaluation row = idempotentInsert.insert(() -> members.persistAndFlush(
+                new DeadbandEvaluation(UUID.randomUUID(), config.getId(), covering.getId(), x, actual,
+                    covering.getObligationTarget(), covering.getDeadbandWidth(), deviation, compliant,
+                    idempotencyKey, seq, Instant.now(clock))));
             metrics.record("evaluate", compliant ? "compliant" : "deviation");
             return new EvaluationResult(row, true);
         } catch (DataIntegrityViolationException e) {

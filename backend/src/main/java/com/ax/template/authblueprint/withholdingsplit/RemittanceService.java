@@ -1,5 +1,7 @@
 package com.ax.template.authblueprint.withholdingsplit;
 
+import com.ax.template.authblueprint.common.IdempotentInsert;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,11 +28,14 @@ public class RemittanceService {
 
     private final RemittanceRunRepository remittances;
     private final WithholdingPostingRepository postings;
+    private final IdempotentInsert idempotentInsert;
     private final Clock clock;
 
-    public RemittanceService(RemittanceRunRepository remittances, WithholdingPostingRepository postings, Clock clock) {
+    public RemittanceService(RemittanceRunRepository remittances, WithholdingPostingRepository postings,
+                             IdempotentInsert idempotentInsert, Clock clock) {
         this.remittances = remittances;
         this.postings = postings;
+        this.idempotentInsert = idempotentInsert;
         this.clock = clock;
     }
 
@@ -43,8 +48,11 @@ public class RemittanceService {
             BigDecimal total = postings.sumWithholdingForPeriod(period);
             long count = postings.countByPeriod(period);
             try {
-                return remittances.saveAndFlush(
-                    new RemittanceRun(UUID.randomUUID(), period, total, (int) count, Instant.now(clock)));
+                // P1-64 — isolate the racy insert in a REQUIRES_NEW inner tx so a uq(period)
+                // violation aborts only that inner tx; the catch-block requery runs in this
+                // (unpoisoned) outer tx even on PostgreSQL (25P02).
+                return idempotentInsert.insert(() -> remittances.saveAndFlush(
+                    new RemittanceRun(UUID.randomUUID(), period, total, (int) count, Instant.now(clock))));
             } catch (DataIntegrityViolationException e) {                 // lost the uq(period) race
                 return remittances.findByPeriod(period).orElseThrow(WithholdingSplitException::remittanceNotFound);
             }

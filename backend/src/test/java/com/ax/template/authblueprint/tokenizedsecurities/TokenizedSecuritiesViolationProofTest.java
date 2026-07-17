@@ -186,7 +186,8 @@ class TokenizedSecuritiesViolationProofTest {
         HolderOwnershipRepository ownershipsRepo =
                 org.mockito.Mockito.mock(HolderOwnershipRepository.class);
         SecurityTokenRegisterService svc =
-                new SecurityTokenRegisterService(repo, ownershipsRepo, eligibility, holderAuth, blankAnchor, fixed,
+                new SecurityTokenRegisterService(repo, ownershipsRepo, eligibility, holderAuth, blankAnchor,
+                        new com.ax.template.authblueprint.common.IdempotentInsert(), fixed,
                         new SecurityTokenIssuanceStateMachine());
 
         // ISSUE-001: register must be ISSUED (not DRAFT) before transfer gate runs;
@@ -277,5 +278,25 @@ class TokenizedSecuritiesViolationProofTest {
                 org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
         assertThat(new AllowlistInvestorEligibility(repo).isEligible(java.util.UUID.randomUUID(), "nobody"))
                 .as("default impl must deny when no grant row exists").isFalse();
+    }
+
+    // ── P1-64 — every racy insert in this domain crosses a REQUIRES_NEW boundary (poisoned-tx seal) ──
+    @Test @Tag("TS-TRANSFER-006")
+    void violation_racyInsertsIsolatedInRequiresNewBoundary() throws Exception {
+        Method insert = com.ax.template.authblueprint.common.IdempotentInsert.class
+                .getMethod("insert", java.util.function.Supplier.class);
+        org.springframework.transaction.annotation.Transactional tx =
+                insert.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(tx).as("IdempotentInsert.insert must be @Transactional").isNotNull();
+        assertThat(tx.propagation())
+                .as("the racy insert must run in a REQUIRES_NEW inner tx (25P02 poisoned-tx seal)")
+                .isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
+        for (Class<?> svc : new Class<?>[]{EligibleInvestorService.class, HolderOwnershipService.class,
+                SecurityTokenRegisterService.class}) {
+            assertThat(java.util.Arrays.stream(svc.getDeclaredFields())
+                    .anyMatch(f -> f.getType() == com.ax.template.authblueprint.common.IdempotentInsert.class))
+                    .as(svc.getSimpleName() + " must delegate its racy insert through IdempotentInsert (revert-proof)")
+                    .isTrue();
+        }
     }
 }

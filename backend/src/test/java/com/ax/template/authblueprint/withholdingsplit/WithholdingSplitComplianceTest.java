@@ -14,6 +14,11 @@ import org.springframework.test.annotation.DirtiesContext;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.restassured.RestAssured.given;
@@ -144,6 +149,41 @@ class WithholdingSplitComplianceTest {
             .isEqualTo(first.jsonPath().getString("totalWithheld"));
         assertThat(second.jsonPath().getInt("postingCount")).isEqualTo(firstCount);
         assertThat(second.jsonPath().getString("id")).isEqualTo(first.jsonPath().getString("id"));
+    }
+
+    /**
+     * WHT-REMIT-003 concurrency keystone (P1-64) — two concurrent collects on the SAME period both
+     * pass the pre-check before either commits; the loser hits the uq(period) constraint. Both MUST
+     * resolve to the SAME frozen run and NEITHER may surface a 500. The racy insert is isolated in a
+     * REQUIRES_NEW inner tx so the loser's requery runs on an unpoisoned connection — on PostgreSQL a
+     * same-tx requery would fail with 25P02 (500). H2 cannot reproduce 25P02, so this test proves the
+     * happy-path contract; the structural REQUIRES_NEW lock in WithholdingSplitViolationProofTest is
+     * the real regression guard against reverting the fix.
+     */
+    @Test @Tag("WHT-REMIT-003")
+    void concurrentCollectSamePeriod_singleWinner_neither500() throws Exception {
+        String period = freshPeriod();
+        post("100", "0.1", period);                                    // one posting so the run has a basis
+        int n = 2;
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch start = new CountDownLatch(1);
+        ConcurrentLinkedQueue<Integer> statusCodes = new ConcurrentLinkedQueue<>();
+        ConcurrentLinkedQueue<String> ids = new ConcurrentLinkedQueue<>();
+        for (int i = 0; i < n; i++) {
+            pool.submit(() -> {
+                start.await();
+                ExtractableResponse<Response> r = collect(period);
+                statusCodes.add(r.statusCode());
+                if (r.statusCode() == 201) ids.add(r.jsonPath().getString("id"));
+                return null;
+            });
+        }
+        start.countDown();
+        pool.shutdown();
+        assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(statusCodes).as("neither racer surfaces an unmapped 500").allMatch(code -> code == 201);
+        assertThat(ids.stream().distinct()).as("both collects resolve to the SAME frozen run").hasSize(1);
     }
 
     @Test @Tag("WHT-REMIT-003")
