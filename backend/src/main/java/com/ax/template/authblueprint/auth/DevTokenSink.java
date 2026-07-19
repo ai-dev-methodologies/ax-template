@@ -18,11 +18,18 @@ import org.springframework.stereotype.Component;
  * {@link Environment#getActiveProfiles() active profiles}, matched by <b>exact element
  * equality</b> (never substring): a profile literally named e.g. {@code livedev} or
  * {@code dev-shared} is NOT the {@code dev} profile and must never enable emission.
+ *
+ * <p><b>Production is an unconditional veto.</b> When an exact {@code prod} / {@code production}
+ * profile is active, this sink NEVER emits — the opt-in property CANNOT override the prod
+ * block. A bearer-credential dump has no legitimate use in production, so the opt-in escape
+ * hatch only exists in non-production environments. This is stricter than the R47 email
+ * dev-stub pattern, because the hazard here is a credential leak, not a functional no-op.
  * <ul>
- *   <li>explicit opt-in ({@code ax.auth.expose-dev-tokens=true}) — the ONLY way to expose
- *       tokens under a {@code prod} profile;</li>
- *   <li>the exact {@code dev} profile present in the active-profiles array (and no exact
- *       {@code prod}/{@code production}) — convenience for local development;</li>
+ *   <li>an exact {@code prod} / {@code production} profile — ALWAYS a no-op, regardless of
+ *       the opt-in property;</li>
+ *   <li>otherwise (non-production): the exact {@code dev} profile OR the explicit opt-in
+ *       ({@code ax.auth.expose-dev-tokens=true}) enables emission — the opt-in only
+ *       force-enables in non-production environments (e.g. staging);</li>
  *   <li>anything else is a SILENT no-op. In particular, empty/absent active profiles (the
  *       default state — {@code getActiveProfiles()} returns an empty array when only the
  *       default profile is active) is a no-op: the fork-receiver-never-sets-a-profile case
@@ -54,8 +61,10 @@ public class DevTokenSink {
                 isDev = true;
             }
         }
-        // Opt-in overrides the prod block; otherwise only an exact dev profile emits.
-        this.enabled = exposeOptIn || (isDev && !isProd);
+        // Production is an ABSOLUTE veto: an exact prod/production profile NEVER emits,
+        // regardless of the opt-in. In non-production, emit if the dev profile is active OR
+        // the explicit opt-in property is set (the opt-in only force-enables off-prod).
+        this.enabled = !isProd && (isDev || exposeOptIn);
     }
 
     boolean isEnabled() {

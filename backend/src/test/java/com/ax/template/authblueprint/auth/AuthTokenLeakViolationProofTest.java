@@ -64,7 +64,17 @@ class AuthTokenLeakViolationProofTest {
 
     @Test
     @Tag("ASVS-AUTH-TOKEN-LEAK-002")
-    void violation_devTokenSinkGatedOffInProdAndDefaultWithoutOptIn() {
+    void violation_devTokenSinkGatedOffInProdRegardlessOfOptIn() {
+        // ── PROD HARD-VETO (headline security assertion) ──────────────────────────────
+        // prod-hard-veto invariant: an exact prod/production profile NEVER emits, and the
+        // opt-in property CANNOT override it. This is the exact cross-family exploit config
+        // (prod + expose-dev-tokens=true) — it MUST be vetoed, or a public password-reset
+        // logs the raw RESET bearer token at INFO into prod logs.
+        assertThat(new DevTokenSink(true, env("prod")).isEnabled())
+            .as("prod-hard-veto: opt-in MUST NOT override the prod block "
+              + "(prod + expose-dev-tokens=true must no-op)").isFalse();
+        assertThat(new DevTokenSink(true, env("production")).isEnabled())
+            .as("prod-hard-veto: opt-in MUST NOT override the production block").isFalse();
         // prod / production profiles without opt-in MUST be a no-op sink.
         assertThat(new DevTokenSink(false, env("prod")).isEnabled())
             .as("prod profile without opt-in must not expose tokens").isFalse();
@@ -88,15 +98,16 @@ class AuthTokenLeakViolationProofTest {
 
     @Test
     @Tag("ASVS-AUTH-TOKEN-LEAK-003")
-    void violation_devTokenSinkEnabledOnlyByOptInOrDevProfile() {
-        // The ONLY ways to expose tokens: explicit opt-in (any profile, incl. prod),
-        // or the exact dev profile.
-        assertThat(new DevTokenSink(true, env("prod")).isEnabled())
-            .as("explicit opt-in overrides the prod block").isTrue();
-        assertThat(new DevTokenSink(true, env()).isEnabled())
-            .as("explicit opt-in enables even with no active profile").isTrue();
+    void violation_devTokenSinkEnabledOnlyByDevProfileOrOptInOffProd() {
+        // The ONLY ways to expose tokens are NON-PRODUCTION: the exact dev profile, or the
+        // explicit opt-in in a non-prod environment (e.g. staging / default). The opt-in can
+        // NEVER expose tokens under prod (proven in LEAK-002's prod-hard-veto).
         assertThat(new DevTokenSink(false, env("dev")).isEnabled())
             .as("exact dev profile enables the convenience dump").isTrue();
+        assertThat(new DevTokenSink(true, env()).isEnabled())
+            .as("explicit opt-in enables in non-prod with no active profile").isTrue();
+        assertThat(new DevTokenSink(true, env("staging")).isEnabled())
+            .as("explicit opt-in force-enables in a non-prod (staging) environment").isTrue();
     }
 
     /** A test {@link Environment} whose {@code getActiveProfiles()} returns exactly {@code profiles}. */
