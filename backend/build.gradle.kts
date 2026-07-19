@@ -60,7 +60,7 @@ dependencies {
     // XLSX generation — report-export domain (EXPORT-FORMAT-001 / EXPORT-INJECT-002).
     // SXSSF streaming workbook keeps memory bounded for large exports (manifest:
     // blueprints/report-export-manifest.yaml#xlsx.window_size).
-    implementation("org.apache.poi:poi-ooxml:5.2.5")
+    implementation("org.apache.poi:poi-ooxml:5.5.1")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
@@ -71,21 +71,13 @@ dependencies {
     // this dependencies block otherwise avoids (see spring-boot-jackson2 above).
     testImplementation("org.springframework.boot:spring-boot-webmvc-test")
     testImplementation("org.springframework.boot:spring-boot-data-jpa-test")
-    // testcontainers + rest-assured are no longer version-managed by the Spring Boot 4.1 BOM
-    // (P0-27 Fix 1) — pin explicitly. testcontainers via its own BOM (latest 1.x line; the 2.x
-    // major is out of scope for this migration). rest-assured pinned to the latest 5.x release
-    // (6.x targets Spring 7 differently and is a separate migration surface).
-    testImplementation(platform("org.testcontainers:testcontainers-bom:1.21.4"))
-    testImplementation("org.testcontainers:junit-jupiter")
-    testImplementation("org.testcontainers:postgresql")
-    testImplementation("io.rest-assured:rest-assured:5.5.7")
-    // TEST-HARNESS ONLY: RestAssured 5.x discovers a Jackson-2 (com.fasterxml) databind for
-    // serializing `.body(pojo/map)` request bodies — it cannot see Jackson 3 (tools.jackson).
-    // P1-63 removed the app-wide Jackson-2 bridge, so the CLIENT-side serializer must be
-    // supplied on the test classpath explicitly. The APPLICATION classpath stays Jackson-3-only
-    // (this is testImplementation; server-side MVC conversion uses tools.jackson). Remove when
-    // rest-assured ships Jackson-3 support (same revisit point as the groovy substitution above).
-    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.21.4")
+    // rest-assured is no longer version-managed by the Spring Boot 4.1 BOM
+    // (P0-27 Fix 1) — pin explicitly. rest-assured 6.0.1 (2026-07-10) ships native
+    // Jackson 3 (tools.jackson) + Groovy 5 + Spring 7 support, which retired both the
+    // test-scope Jackson-2 client shim and the Groovy 4.0.22 dependencySubstitution block
+    // the initial SB4 migration needed for 5.x. The CLIENT-side `.body(pojo/map)` serializer
+    // now sees Jackson 3 directly, so the whole application + test classpath is Jackson-3-only.
+    testImplementation("io.rest-assured:rest-assured:6.0.1")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 
     // PIT JUnit 5 support. Must be on the test classpath (not only PIT's tool classpath) so
@@ -93,24 +85,6 @@ dependencies {
     // without it pitest reports "Ran 0 tests" / NO_COVERAGE. The solidsoft plugin auto-detects
     // it here and forwards it to PIT. Pinned to 1.2.1 (compatible with PIT 1.15.0 + JUnit Platform 1.10.x).
     testImplementation("org.pitest:pitest-junit5-plugin:1.2.1")
-}
-
-// P0-27 Fix 1 follow-up (scoping per cross-family review): rest-assured 5.5.7 requests
-// org.apache.groovy:* 4.0.22, but Spring Boot 4.1's BOM aligns the Groovy platform up to
-// 5.0.6 — a major bump rest-assured was never built against. Groovy 5 breaks rest-assured's
-// Groovy-based HTTP engine: every RestAssured call NPEs inside
-// org.codehaus.groovy.runtime.metaclass.ClosureMetaClass (Class.isAssignableFrom on null).
-// Plain force/exclude cannot override GMM platform alignment; dependencySubstitution can.
-// Scoped to TEST configurations only — groovy exists solely via testImplementation
-// (rest-assured); a global configurations.all would silently downgrade any FUTURE
-// production dependency requesting Groovy 5 (invisible linkage breakage).
-// LIMITS: 4.0.22 hardcoded — remove/revisit when bumping rest-assured (esp. 6.x/Groovy 5).
-configurations.matching { it.name.startsWith("test") || it.name.startsWith("pitest") }.configureEach {
-    resolutionStrategy.dependencySubstitution {
-        substitute(module("org.apache.groovy:groovy")).using(module("org.apache.groovy:groovy:4.0.22"))
-        substitute(module("org.apache.groovy:groovy-xml")).using(module("org.apache.groovy:groovy-xml:4.0.22"))
-        substitute(module("org.apache.groovy:groovy-json")).using(module("org.apache.groovy:groovy-json:4.0.22"))
-    }
 }
 
 tasks.withType<Test> {
