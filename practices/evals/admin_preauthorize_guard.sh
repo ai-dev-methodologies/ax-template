@@ -110,7 +110,11 @@
 # the admin-surface method-path detector and the per-endpoint requirement
 # check. The bare-quoted-string form (`@PostMapping("/path")`) is still
 # honored as a fallback, but only when positional (no attribute name
-# precedes it).
+# precedes it). Round-6 codex: the extractor now returns the FULL LIST of
+# paths (not a single scalar) — a mapping annotation legally accepts an ARRAY
+# of paths (`value = {"/public", "/api/admin/missed"}`), and an admin path
+# buried as a non-first array element was silently dropped by both consumers
+# (Fix 6).
 #
 # The `SecurityConfig` path-matchers STAY in the real repo (belt + suspenders);
 # this guard simply does not TRUST them for coverage.
@@ -119,7 +123,8 @@
 # (verification.guard: admin_preauthorize_guard.sh). Origin: iter2-G1 dogfood
 # (docs/dogfood-ledger/engine-w1-iter2.yaml); round-4 codex convergence closed the
 # @PostAuthorize/recognition/SpEL-weakener holes and the detection-scope gap;
-# round-5 codex closed the attribute-ordered mapping-path parse gap (Fix 5).
+# round-5 codex closed the attribute-ordered mapping-path parse gap (Fix 5);
+# round-6 codex closed the array-valued path shape (Fix 6).
 #
 # Exit codes:
 #   0 — every REQUIRED mutating admin endpoint carries an effective admin
@@ -182,6 +187,12 @@ REQUEST_METHOD_RE = re.compile(r"RequestMethod\.([A-Za-z]+)")
 # in EITHER order relative to the annotation's other attributes (e.g.
 # `@PostMapping(produces = "application/json", path = "/api/admin/x")`).
 PATH_ATTR_RE = re.compile(r'\b(?:path|value)\s*=\s*"([^"]*)"')
+# Fix 6 (round-6 codex): the ARRAY form of the same attribute — Spring mapping
+# annotations legally accept a path/value LIST, e.g.
+# `@PostMapping(value = {"/public", "/api/admin/missed"})`. Matched separately
+# from PATH_ATTR_RE (which only matches a scalar `"..."` immediately after the
+# `=`) so an admin path buried as a NON-FIRST array element is not lost.
+PATH_ATTR_ARRAY_RE = re.compile(r'\b(?:path|value)\s*=\s*\{([^}]*)\}')
 
 MUTATING_ANNOT = {"PostMapping", "PutMapping", "PatchMapping", "DeleteMapping"}
 MUTATING_VERBS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -289,31 +300,51 @@ def annotation_args(text, name_end):
     return ""
 
 
-def extract_mapping_path(args):
-    """Extract the endpoint path from a mapping annotation's argument string.
+def extract_mapping_paths(args):
+    """Extract ALL endpoint paths from a mapping annotation's argument string.
 
-    Round-5 codex finding: `QUOTED_RE.search(args)` (the prior implementation)
-    took the FIRST quoted string in the annotation regardless of which named
-    attribute it belonged to. For
-      @PostMapping(produces = "application/json", path = "/api/admin/x")
-    that mis-read "application/json" as the path, so the /api/admin path
-    detector never matched — the endpoint was silently treated as NOT an
-    admin surface / NOT requiring authz, even with zero @PreAuthorize.
+    Round-6 codex finding: `extract_mapping_path` (the prior implementation,
+    round-5) returned a single SCALAR path. Spring mapping annotations legally
+    accept an ARRAY of paths —
+      @PostMapping(value = {"/public", "/api/admin/missed"})
+      @RequestMapping(path = {"/a", "/api/admin/b"})
+    — and the scalar-only extractor read `PATH_ATTR_RE` (which requires a
+    literal `"` immediately after `path=`/`value=`) and found no match against
+    a `{...}` array value, silently returning "" for that endpoint. An admin
+    path buried as a NON-FIRST array element (or ANY array-valued path=/value=)
+    was therefore dropped from BOTH the admin-surface method-path detector and
+    the per-endpoint requirement check — the same false-negative shape as
+    round-5's attribute-ordering gap, recurring one level down.
 
-    Fix: prefer an explicit `path = "..."` or `value = "..."` attribute
-    (checked first, regardless of position among other attributes); only
-    fall back to the first bare quoted string for the shorthand form
-    (`@PostMapping("/path")`), where the string is positional and not
-    preceded by any other attribute name."""
+    Fix: return the FULL LIST of literal path strings found for this mapping.
+    Preference order:
+      1. an explicit `path = {...}` / `value = {...}` ARRAY attribute — every
+         quoted string inside the braces;
+      2. an explicit `path = "..."` / `value = "..."` SCALAR attribute;
+      3. the POSITIONAL leading argument (no attribute name precedes it),
+         covering both shorthand forms — `@PostMapping("/path")` (scalar) and
+         `@PostMapping({"/a", "/b"})` (array).
+    `params=`/`headers=`/`consumes=`/`name=`/`produces=` quoted strings are
+    NEVER treated as paths — this function only ever matches attributes whose
+    name is literally `path` or `value` (the round-5 attribute-name
+    discrimination is unchanged and still applies to the array form)."""
+    m = PATH_ATTR_ARRAY_RE.search(args)
+    if m:
+        return QUOTED_RE.findall(m.group(1))
     m = PATH_ATTR_RE.search(args)
     if m:
-        return m.group(1)
+        return [m.group(1)]
     stripped_args = args.lstrip()
+    if stripped_args.startswith("{"):
+        end = stripped_args.find("}")
+        if end != -1:
+            return QUOTED_RE.findall(stripped_args[1:end])
+        return []
     if stripped_args.startswith('"'):
         m2 = QUOTED_RE.match(stripped_args)
         if m2:
-            return m2.group(1)
-    return ""
+            return [m2.group(1)]
+    return []
 
 
 def spel_requires_admin(spel):
@@ -452,7 +483,7 @@ for path in java_files:
             is_mutating = False
             verbs = ["GET"]
 
-        ep_path = extract_mapping_path(args)
+        ep_paths = extract_mapping_paths(args)
         lineno = stripped.count("\n", 0, off) + 1
         li = lineno - 1  # 0-based line index of the mapping annotation start
 
@@ -487,7 +518,7 @@ for path in java_files:
 
         endpoints.append({
             "annot": annot, "verbs": verbs, "is_mutating": is_mutating,
-            "path": ep_path, "lineno": lineno,
+            "paths": ep_paths, "lineno": lineno,
             "method_has_own": method_has_own, "method_authz_eff": method_authz_eff,
         })
 
@@ -496,7 +527,8 @@ for path in java_files:
         "/admin" in p for p in class_paths
     )
     admin_by_method = any(
-        ep["is_mutating"] and ADMIN_PATH_RE.match(ep["path"] or "") for ep in endpoints
+        ep["is_mutating"] and any(ADMIN_PATH_RE.match(p) for p in ep["paths"])
+        for ep in endpoints
     )
     if not (admin_by_class or admin_by_method):
         continue
@@ -515,16 +547,17 @@ for path in java_files:
             continue
         # An endpoint must carry admin authz if the whole controller is an admin
         # surface (by name/class-path) OR the endpoint's own path is under /admin.
-        requires = admin_by_class or bool(ADMIN_PATH_RE.match(ep["path"] or ""))
+        requires = admin_by_class or any(ADMIN_PATH_RE.match(p) for p in ep["paths"])
         if not requires:
             continue
         mutating_endpoints += 1
         effective = ep["method_authz_eff"] if ep["method_has_own"] else class_authz_eff
         if not effective:
             vlabel = "|".join(ep["verbs"])
+            plabel = "|".join(ep["paths"]) or "/"
             violations.append(
                 f"{path}:{ep['lineno']}: mutating admin endpoint "
-                f"[{vlabel} {ep['path'] or '/'}] on {class_name} has no EFFECTIVE "
+                f"[{vlabel} {plabel}] on {class_name} has no EFFECTIVE "
                 f"admin @PreAuthorize (method- or class-level SpEL requiring "
                 f"ROLE_ADMIN; @PostAuthorize does NOT gate a mutation)"
             )
