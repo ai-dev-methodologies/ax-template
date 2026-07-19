@@ -156,7 +156,7 @@ is an opaque bean method that always returns `true` — **will PASS this lint**.
 makes is exactly its behavior: it is a presence-and-obvious-weakener lint, nothing more. The
 **authoritative** BFLA control is the per-domain integration tests that assert HTTP 403 for a non-admin
 caller **plus** `SecurityConfig.java` — see the closing paragraph below; the coverage-map non-vacuity for
-`S2.AUTHZ.BE` stays those ViolationProof / AUTHZ integration tests, and this guard is a supplementary net.
+`S2.AUTHZ.BE` stays those `*ComplianceTest` `AUTHZ` integration tests, and this guard is a supplementary net.
 
 `admin_preauthorize_guard.sh` reads **only the controller file**. It does **not** parse
 `SecurityConfig.java` and does **not** credit the `authorizeHttpRequests` matcher chain for coverage.
@@ -180,10 +180,20 @@ annotation may be asked to inline a literal SpEL — acceptable for a defense-in
 The `SecurityConfig` path-matchers stay in the real repo as a **complementary** layer (belt +
 suspenders), and `@EnableMethodSecurity` is active so the annotation this guard requires is a genuine
 second runtime gate. The guard is **not the authoritative BFLA control and not the primary non-vacuity
-proof**. The authoritative control is `SecurityConfig.java` **plus the per-domain integration tests that
-assert HTTP 403 for a non-admin caller** (e.g. `AuthzParityViolationProofTest` /
-`AccessGrantViolationProofTest` and the `./gradlew test{Domain}` `AUTHZ` items). This guard is a cheap,
-precise local regression net for the "annotation dropped from a mutating admin endpoint" shape; it
-complements those tests, it does not replace them.
+proof**. The authoritative control is `SecurityConfig.java` **plus the per-domain `*ComplianceTest`
+integration tests that assert HTTP 403 for a non-admin caller** — e.g.
+`AnnouncementComplianceTest#authz_memberCannotWrite_readableByMember_unknownIs404_unauthIs401`
+(`@Tag("ANN-AUTHZ-001")`: MEMBER `POST /api/admin/announcements` → `statusCode(403)`),
+`SessionComplianceTest#authz_003_adminCanForceRevokeAnyUserSession` (`@Tag("SESS-AUTHZ-003")`:
+non-admin `DELETE /api/admin/sessions/{id}` → `statusCode(403)`), and
+`TagComplianceTest#authz_002_memberCannotMutateButCanAttach` (`@Tag("TAG-AUTHZ-002")`: MEMBER
+`POST`/`PUT`/`DELETE /api/tags/**` → `statusCode(403)`) — and the `./gradlew test{Domain}` `AUTHZ`
+items generally. (`AuthzParityViolationProofTest` and `AccessGrantViolationProofTest` are
+**cell-NONVACUITY proofs for unrelated domains** — `authorization-parity-l0` and
+`time-bounded-access-grant-l0` respectively — that assert entity-immutability and predicate-shape
+via reflection; neither file makes an HTTP call or contains a `403`/`FORBIDDEN` assertion anywhere,
+so they were mis-cited here as "the" 403 example and do not belong in this paragraph.) This guard is
+a cheap, precise local regression net for the "annotation dropped from a mutating admin endpoint"
+shape; it complements those tests, it does not replace them.
 
 Reference: [OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/)

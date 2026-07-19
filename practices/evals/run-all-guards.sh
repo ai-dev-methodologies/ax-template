@@ -1238,7 +1238,7 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/full_trio_artifact_completeness_guard.sh" --root "$SCRIPT_DIR/fixtures/full_trio_artifact_completeness/fail_missing_artifacts"
 fi
 
-echo "[90] admin_preauthorize_guard.sh (iter2-G1 BFLA closure; binds practices/rules/bfla-privileged-endpoint-authz-presence.md's verification.guard). PURELY-LOCAL static LINT: every REQUIRED mutating admin endpoint MUST carry an effective method-/class-level @PreAuthorize requiring ROLE_ADMIN. SecurityConfig is NOT parsed (that bypass class is MOOT — no config chain to model) and adversarial SpEL evaluation is OUT OF LINT SCOPE (authoritative = domain 403 integration tests + SecurityConfig). Round-4 codex convergence: @PostAuthorize does NOT gate a mutation (Fix 1); FQN/multiline mappings + non-public handlers are scanned (Fix 2); obviously-ineffective SpEL (negation · trivial always-true disjunction) is rejected (Fix 3); admin-surface detection WIDENED to method-level /api/admin mappings (Fix 4).)"
+echo "[90] admin_preauthorize_guard.sh (iter2-G1 BFLA closure; binds practices/rules/bfla-privileged-endpoint-authz-presence.md's verification.guard). PURELY-LOCAL static LINT: every REQUIRED mutating admin endpoint MUST carry an effective method-/class-level @PreAuthorize requiring ROLE_ADMIN. SecurityConfig is NOT parsed (that bypass class is MOOT — no config chain to model) and adversarial SpEL evaluation is OUT OF LINT SCOPE (authoritative = domain 403 integration tests + SecurityConfig). Round-4 codex convergence: @PostAuthorize does NOT gate a mutation (Fix 1); FQN/multiline mappings + non-public handlers are scanned (Fix 2); obviously-ineffective SpEL (negation · trivial always-true disjunction) is rejected (Fix 3); admin-surface detection WIDENED to method-level /api/admin mappings (Fix 4). Round-5 codex: mapping-path extraction now reads an explicit path=/value= attribute wherever it appears, instead of the first quoted string, which misread e.g. @PostMapping(produces = \"...\", path = \"/api/admin/x\") and silently dropped the endpoint from detection (Fix 5).)"
 run_guard "admin_preauthorize/live" 0 \
     bash "$SCRIPT_DIR/admin_preauthorize_guard.sh"
 if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
@@ -1276,6 +1276,13 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     # short-circuits to always-true → BLOCK.
     run_guard "admin_preauthorize/fixture_fail_disjunction_true" 1 \
         bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_disjunction_true"
+    # Fix 5 (round-5 codex) — an attribute-ordered mapping
+    # (`@PostMapping(produces = "...", path = "/api/admin/x")`) with NO
+    # @PreAuthorize at all. The OLD guard took the FIRST quoted string in the
+    # annotation as the path, misread "application/json" as the path, and
+    # silently did not require this endpoint to carry authz → false pass.
+    run_guard "admin_preauthorize/fixture_fail_attr_ordered_mapping" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_attr_ordered_mapping"
 fi
 
 echo "[91] locale_aware_format_guard.sh (wave-1 exit cleanup — was shipped alongside practices-react/rules/locale-aware-number-date-format.md but never wired into run-all-guards.sh; iter1-G2 / CANARY-001 closure)"

@@ -32,13 +32,20 @@
 # where `someComplexAlwaysTrue()` is an opaque bean method that always returns
 # true — will PASS this lint. That is a CODE-REVIEW / malicious-insider concern,
 # NOT what a static presence-lint defends. The AUTHORITATIVE BFLA control is:
-#   1. the per-domain integration tests that assert HTTP 403 for a non-admin
-#      caller (AuthzParityViolationProofTest / AccessGrantViolationProofTest and
-#      the `./gradlew test{Domain}` AUTHZ items — these stay the S2.AUTHZ.BE
-#      non-vacuity proof), and
+#   1. the per-domain *ComplianceTest integration tests that actually assert
+#      HTTP 403 for a non-admin caller on the privileged endpoint — e.g.
+#      AnnouncementComplianceTest#authz_memberCannotWrite_... (ANN-AUTHZ-001,
+#      MEMBER POST /api/admin/announcements → 403),
+#      SessionComplianceTest#authz_003_adminCanForceRevokeAnyUserSession
+#      (SESS-AUTHZ-003, non-admin DELETE /api/admin/sessions/{id} → 403), and
+#      TagComplianceTest#authz_002_memberCannotMutateButCanAttach
+#      (TAG-AUTHZ-002) — run via the `./gradlew test{Domain}` AUTHZ items, and
 #   2. SecurityConfig.java's `authorizeHttpRequests` matcher chain
 #      (`/api/admin/**` → hasAuthority("ROLE_ADMIN")), enforced at runtime with
 #      @EnableMethodSecurity active.
+# (AuthzParityViolationProofTest / AccessGrantViolationProofTest are structural
+#  cell non-vacuity proofs for OTHER domains — they contain no 403 assertion and
+#  are NOT the BFLA runtime control; do not cite them as 403 integration tests.)
 # This lint is a SUPPLEMENTARY defense-in-depth regression net for the "admin
 # mutating endpoint lost / never had its @PreAuthorize annotation" shape; it
 # complements those controls, it does not replace them.
@@ -94,13 +101,25 @@
 # annotations, and NON-PUBLIC (package-private / protected) handler methods are
 # all scanned.
 #
+# Mapping-path extraction (Fix 5 — round-5 codex): the endpoint path is read
+# from an explicit `path = "..."` / `value = "..."` attribute wherever it
+# appears among the annotation's attributes — NOT just "the first quoted
+# string", which misread e.g.
+#   @PostMapping(produces = "application/json", path = "/api/admin/x")
+# as path `"application/json"` and silently dropped the endpoint from BOTH
+# the admin-surface method-path detector and the per-endpoint requirement
+# check. The bare-quoted-string form (`@PostMapping("/path")`) is still
+# honored as a fallback, but only when positional (no attribute name
+# precedes it).
+#
 # The `SecurityConfig` path-matchers STAY in the real repo (belt + suspenders);
 # this guard simply does not TRUST them for coverage.
 #
 # Bound by practices/rules/bfla-privileged-endpoint-authz-presence.md
 # (verification.guard: admin_preauthorize_guard.sh). Origin: iter2-G1 dogfood
 # (docs/dogfood-ledger/engine-w1-iter2.yaml); round-4 codex convergence closed the
-# @PostAuthorize/recognition/SpEL-weakener holes and the detection-scope gap.
+# @PostAuthorize/recognition/SpEL-weakener holes and the detection-scope gap;
+# round-5 codex closed the attribute-ordered mapping-path parse gap (Fix 5).
 #
 # Exit codes:
 #   0 — every REQUIRED mutating admin endpoint carries an effective admin
@@ -159,6 +178,10 @@ METHOD_DECL_RE = re.compile(
 )
 QUOTED_RE = re.compile(r'"([^"]*)"')
 REQUEST_METHOD_RE = re.compile(r"RequestMethod\.([A-Za-z]+)")
+# Fix 5 (round-5 codex): an explicit `path = "..."` / `value = "..."` attribute,
+# in EITHER order relative to the annotation's other attributes (e.g.
+# `@PostMapping(produces = "application/json", path = "/api/admin/x")`).
+PATH_ATTR_RE = re.compile(r'\b(?:path|value)\s*=\s*"([^"]*)"')
 
 MUTATING_ANNOT = {"PostMapping", "PutMapping", "PatchMapping", "DeleteMapping"}
 MUTATING_VERBS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -263,6 +286,33 @@ def annotation_args(text, name_end):
         i += 1
     if i < n and text[i] == "(":
         return balanced_args(text, i)
+    return ""
+
+
+def extract_mapping_path(args):
+    """Extract the endpoint path from a mapping annotation's argument string.
+
+    Round-5 codex finding: `QUOTED_RE.search(args)` (the prior implementation)
+    took the FIRST quoted string in the annotation regardless of which named
+    attribute it belonged to. For
+      @PostMapping(produces = "application/json", path = "/api/admin/x")
+    that mis-read "application/json" as the path, so the /api/admin path
+    detector never matched — the endpoint was silently treated as NOT an
+    admin surface / NOT requiring authz, even with zero @PreAuthorize.
+
+    Fix: prefer an explicit `path = "..."` or `value = "..."` attribute
+    (checked first, regardless of position among other attributes); only
+    fall back to the first bare quoted string for the shorthand form
+    (`@PostMapping("/path")`), where the string is positional and not
+    preceded by any other attribute name."""
+    m = PATH_ATTR_RE.search(args)
+    if m:
+        return m.group(1)
+    stripped_args = args.lstrip()
+    if stripped_args.startswith('"'):
+        m2 = QUOTED_RE.match(stripped_args)
+        if m2:
+            return m2.group(1)
     return ""
 
 
@@ -402,8 +452,7 @@ for path in java_files:
             is_mutating = False
             verbs = ["GET"]
 
-        path_m = QUOTED_RE.search(args)
-        ep_path = path_m.group(1) if path_m else ""
+        ep_path = extract_mapping_path(args)
         lineno = stripped.count("\n", 0, off) + 1
         li = lineno - 1  # 0-based line index of the mapping annotation start
 
