@@ -1312,6 +1312,16 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     # (`ADMIN_BASE + "/x"`) is constant-folded to `/api/admin/x`.
     run_guard "admin_preauthorize/fixture_fail_samefile_constant" 1 \
         bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_samefile_constant"
+    # F3-simple (round-8 codex constant-CHAIN closure) — a same-file constant
+    # whose OWN initializer is an expression referencing ANOTHER same-file
+    # constant (`static final String API = "/api"; static final String ADMIN =
+    # API + "/admin";`) was never entered into the constant map pre-fix, so
+    # `@PostMapping(ADMIN + "/x")` silently extracted no path. Fixed-point
+    # resolution now folds ADMIN -> "/api/admin" first, then ADMIN + "/x" ->
+    # "/api/admin/x" (proven a genuine RED-on-revert: the pre-fix guard exited
+    # 0 on this fixture).
+    run_guard "admin_preauthorize/fixture_fail_constant_chain" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_constant_chain"
     # F4 — class-level + method-level path COMPOSITION: class `@RequestMapping("/api")`
     # × method `@PostMapping("/admin/x")` → effective `/api/admin/x`.
     run_guard "admin_preauthorize/fixture_fail_class_method_composition" 1 \

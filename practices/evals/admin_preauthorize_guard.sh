@@ -145,6 +145,17 @@
 #   F3-simple  same-file `static final String IDENT = "literal"` constants and
 #       `+`-concatenations of string literals and/or such same-file constants
 #       are constant-folded to the resulting literal, then treated as a path.
+#       Round-8 codex: this now resolves constant-to-constant CHAINS to a FIXED
+#       POINT — a constant whose OWN initializer is an expression referencing
+#       ANOTHER same-file constant (e.g. `static final String API = "/api";
+#       static final String ADMIN = API + "/admin";`) is folded too, so
+#       `@PostMapping(ADMIN + "/x")` resolves to `/api/admin/x` instead of
+#       silently dropping the endpoint (ADMIN previously never entered the
+#       constant map at all, because only a single bare string-literal RHS was
+#       captured). Same literal/identifier/`+` subset as before — no scope
+#       expansion; self-/mutually-cyclic constant references simply never
+#       resolve (fail-OPEN, deferred), and the fixed-point loop is bounded by
+#       the number of same-file constants, so it always terminates.
 #   F4  class-level + method-level path COMPOSITION: the effective route is the
 #       class×method CROSS-PRODUCT (a method with no explicit path inherits the
 #       class path); every composed route is matched in BOTH admin-surface
@@ -161,12 +172,18 @@
 #       — a variable segment whose regex constraint happens to match "admin".
 #       Deciding this requires evaluating Spring PathPattern regex-constraint
 #       INTERSECTION against `/api/admin/**` — the same non-decidable
-#       full-Spring-semantics modeling rejected above. Moreover such a route is
-#       NOT matched by the runtime `/api/admin/**` matcher either, so it is a
-#       self-inflicted footgun caught by the domain's 403 *ComplianceTest, not
-#       by any static lint. (We deliberately do NOT "fail closed on any variable
-#       in the prefix" — that would false-positive on legitimate
-#       `/api/{tenant}/...` non-admin routes and break the real repo.)
+#       full-Spring-semantics modeling rejected above. This static lint does
+#       NOT detect this obfuscated annotation shape — but (round-8 codex
+#       correction: the prior text here claimed the OPPOSITE and was WRONG) a
+#       request satisfying the `{scope:admin}` constraint has a CONCRETE URI of
+#       `/api/admin/x`, which the runtime `/api/admin/**` matcher DOES match.
+#       So the concrete admin route IS runtime-protected — by SecurityConfig's
+#       matcher AND the domain's 403 *ComplianceTest — which STRENGTHENS rather
+#       than weakens the scope-out rationale: this is a static-lint BLIND SPOT
+#       on the obfuscated annotation source, not a runtime authorization hole.
+#       (We deliberately do NOT "fail closed on any variable in the prefix" —
+#       that would false-positive on legitimate `/api/{tenant}/...` non-admin
+#       routes and break the real repo.)
 #   F3-tail  imported/opaque constants, Spring `${...}` / `#{...}` property
 #       placeholders (controller-locally undecidable — codex itself conceded
 #       these are "not counted"), Java Unicode escapes (`a`), octal escapes
@@ -195,7 +212,12 @@
 # tokenization (F1), quote-aware array braces (F2), same-file constant fold
 # (F3-simple), class×method composition (F4), leading-slash normalization (F5),
 # class-level FQN recognition (F7) — and documented the undecidable tail
-# (F6, F3-tail, F7-tail) as out-of-scope above (Fix 7).
+# (F6, F3-tail, F7-tail) as out-of-scope above (Fix 7). Round-8 codex closed a
+# constant-CHAIN gap in F3-simple (a same-file constant's OWN initializer
+# referencing another same-file constant now resolves via fixed-point folding)
+# and corrected a factual error in the F6 out-of-scope note (the obfuscated
+# `{scope:admin}` route's CONCRETE URI IS matched by the runtime
+# `/api/admin/**` matcher — the prior text claimed the opposite).
 #
 # Exit codes:
 #   0 — every REQUIRED mutating admin endpoint carries an effective admin
@@ -266,10 +288,15 @@ REQUEST_METHOD_RE = re.compile(r"RequestMethod\.([A-Za-z]+)")
 # A top-level attribute name is `IDENT =` (a single `=`, not `==`) at the head
 # of a top-level segment.
 ATTR_NAME_RE = re.compile(r"^\s*([A-Za-z_]\w*)\s*=(?!=)")
-# Same-file `static final String IDENT = "literal";` declarations, for the
-# constant-fold (Finding 3-simple). Optional access modifier precedes `static`.
-CONST_DECL_RE = re.compile(
-    r'\bstatic\s+final\s+String\s+([A-Za-z_]\w*)\s*=\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*;'
+# Same-file `static final String IDENT = <expr>;` declarations, for the
+# constant-fold (Finding 3-simple, extended round-8 to constant-to-constant
+# CHAINS). This regex only anchors the declaration HEAD (`IDENT =`); the RHS
+# expression — which may itself reference OTHER same-file constants, e.g.
+# `static final String ADMIN = API + "/admin";` — is captured separately by
+# `scan_decl_expr` (quote-aware, so a `;` inside a string literal does not
+# terminate the declaration early). Optional access modifier precedes `static`.
+CONST_DECL_HEAD_RE = re.compile(
+    r'\bstatic\s+final\s+String\s+([A-Za-z_]\w*)\s*=\s*'
 )
 # Class-level mapping recogniser — the SAME FQN-tolerant shape used for method
 # mappings (MAPPING_START_RE), so a fully-qualified class-level
@@ -445,10 +472,75 @@ def brace_inner(s):
     return None
 
 
+def scan_decl_expr(text, start):
+    """From `start` (immediately after 'IDENT =' in a `static final String`
+    declaration matched by CONST_DECL_HEAD_RE), scan forward QUOTE-AWARE to
+    the terminating TOP-LEVEL ';' and return the raw RHS expression text
+    (excluding the ';'), so a ';' inside a string literal does not terminate
+    the declaration early. None if no top-level ';' is found before EOF
+    (malformed / unterminated — out of scope, mirrors the fail-open posture
+    used throughout this extractor)."""
+    i, n = start, len(text)
+    in_str = None
+    while i < n:
+        c = text[i]
+        if in_str is not None:
+            if c == "\\" and i + 1 < n:
+                i += 2; continue
+            if c == in_str:
+                in_str = None
+            i += 1; continue
+        if c == '"' or c == "'":
+            in_str = c; i += 1; continue
+        if c == ";":
+            return text[start:i]
+        i += 1
+    return None
+
+
 def build_const_map(stripped_text):
-    """Map same-file `static final String IDENT = "literal"` declarations to
-    their literal value (Finding 3-simple). Comment-stripped text in."""
-    return {m.group(1): m.group(2) for m in CONST_DECL_RE.finditer(stripped_text)}
+    """Map same-file `static final String IDENT = <expr>;` declarations to
+    their fully constant-folded literal value (Finding 3-simple), resolving
+    CONSTANT-TO-CONSTANT CHAINS to a FIXED POINT (round-8 codex): a constant
+    whose initializer is itself an EXPRESSION referencing ANOTHER same-file
+    constant — e.g. `static final String API = "/api"; static final String
+    ADMIN = API + "/admin";` — is now folded too. Pre-fix, this map only ever
+    captured a constant with a single bare string-literal RHS; `ADMIN` never
+    entered the map at all, so `@PostMapping(ADMIN + "/x")` silently extracted
+    no path and the endpoint went uncounted. Comment-stripped text in.
+
+    Algorithm: first collect every declaration's RAW (unresolved) RHS
+    expression text via `scan_decl_expr` (quote-aware — a ';' inside a string
+    literal does not end the declaration). Then repeatedly fold each
+    not-yet-resolved raw expression against the constants resolved SO FAR,
+    reusing `fold_scalar` UNCHANGED — the same literal/identifier/'+' subset,
+    no scope expansion (an expression referencing an unresolved or
+    out-of-scope term simply stays unresolved, fail-OPEN, deferred to the
+    domain 403 tests + runtime — see header). Each pass that resolves at least
+    one NEW constant may unlock others that reference it; a pass that resolves
+    NOTHING new means a fixed point has been reached and the loop stops. This
+    is guaranteed to TERMINATE: with N raw declarations, at most N passes can
+    make progress (each such pass grows the resolved set by >= 1, bounded by
+    N), so a self- or mutually-CYCLIC reference (`static final String A = A +
+    "/x";`, or A referencing B which references A) can never resolve — it
+    simply stays out of the map forever — without ever looping indefinitely."""
+    raw = {}
+    for m in CONST_DECL_HEAD_RE.finditer(stripped_text):
+        expr = scan_decl_expr(stripped_text, m.end())
+        if expr is not None:
+            raw[m.group(1)] = expr
+    resolved = {}
+    changed = True
+    while changed:
+        changed = False
+        for ident, expr in raw.items():
+            if ident in resolved:
+                continue
+            folded = fold_scalar(expr, resolved)
+            if folded is not None:
+                resolved[ident] = folded
+                changed = True
+    return resolved
 
 
 def fold_scalar(expr, const_map):
