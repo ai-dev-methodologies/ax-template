@@ -116,6 +116,72 @@
 # buried as a non-first array element was silently dropped by both consumers
 # (Fix 6).
 #
+# ─────────────────────────────────────────────────────────────────────────────
+# Mapping-path extraction — decidable scope vs out-of-scope tail
+# (Fix 7 / round-7 convergence)
+# ─────────────────────────────────────────────────────────────────────────────
+# This lint reads the endpoint route from the controller source. Round-7 codex
+# enumerated the ways an HONEST route can be written that the round-6 extractor
+# still misread, PLUS an adversarial/undecidable tail. The decision, matching
+# this guard's existing "adversarial SpEL is OUT OF LINT SCOPE" philosophy:
+# a cheap purely-LOCAL static presence-lint FIXES what honest code writes
+# (decidable, common shapes) and DOCUMENTS the undecidable/adversarial tail as
+# out-of-scope, deferring it to the AUTHORITATIVE controls (the per-domain
+# *ComplianceTest 403 assertions + the runtime SecurityConfig `/api/admin/**`
+# matcher). It does NOT try to be a sound static verifier of full Spring
+# routing semantics — that is the same whack-a-mole this guard already rejected
+# for SecurityConfig parsing.
+#
+# HANDLED (decidable, real-world common — each has a failing fixture):
+#   F1  non-path attribute contents no longer impersonate path syntax: the
+#       annotation's TOP-LEVEL attributes are tokenized (commas outside string
+#       literals / braces / parens), `path`/`value` is selected by its top-level
+#       NAME, and only THEN is its value read — quoted content inside
+#       name/produces/consumes/headers/params is never read as a path.
+#   F2  URI-template `{id}` no longer breaks array matching: the `{...}` array
+#       initializer is scanned with QUOTE/ESCAPE-AWARE brace balancing (only a
+#       `}` OUTSIDE a string literal closes the array); admin element first /
+#       middle / last is caught identically.
+#   F3-simple  same-file `static final String IDENT = "literal"` constants and
+#       `+`-concatenations of string literals and/or such same-file constants
+#       are constant-folded to the resulting literal, then treated as a path.
+#   F4  class-level + method-level path COMPOSITION: the effective route is the
+#       class×method CROSS-PRODUCT (a method with no explicit path inherits the
+#       class path); every composed route is matched in BOTH admin-surface
+#       detection AND the per-endpoint requirement check.
+#   F5  Spring's optional leading slash is normalized: a non-empty extracted /
+#       composed path lacking a leading `/` gets one prepended before matching
+#       (`@PostMapping("api/admin/x")` → `/api/admin/x`).
+#   F7  class-level mappings are recognized with the SAME FQN-tolerant
+#       recognizer as method mappings (`@(?:[A-Za-z_][\w.]*\.)?RequestMapping`),
+#       so a fully-qualified class-level mapping is no longer invisible.
+#
+# OUT OF SCOPE (undecidable / adversarial tail — deferred, NOT fixed here):
+#   F6  fixed path-pattern obfuscation, e.g. `@PostMapping("/api/{scope:admin}/x")`
+#       — a variable segment whose regex constraint happens to match "admin".
+#       Deciding this requires evaluating Spring PathPattern regex-constraint
+#       INTERSECTION against `/api/admin/**` — the same non-decidable
+#       full-Spring-semantics modeling rejected above. Moreover such a route is
+#       NOT matched by the runtime `/api/admin/**` matcher either, so it is a
+#       self-inflicted footgun caught by the domain's 403 *ComplianceTest, not
+#       by any static lint. (We deliberately do NOT "fail closed on any variable
+#       in the prefix" — that would false-positive on legitimate
+#       `/api/{tenant}/...` non-admin routes and break the real repo.)
+#   F3-tail  imported/opaque constants, Spring `${...}` / `#{...}` property
+#       placeholders (controller-locally undecidable — codex itself conceded
+#       these are "not counted"), Java Unicode escapes (`a`), octal escapes
+#       (`\057`), and text blocks. General Java constant-expression evaluation
+#       with full lexical escape / text-block decoding is disproportionate to a
+#       cheap lint; an unresolvable path yields no route (fail-OPEN, deferred).
+#   F7-tail  inner-dot WHITESPACE in an FQN annotation
+#       (`@org.springframework.web.bind.annotation . PostMapping`) — an exotic
+#       lexical form no honest code writes; deferred with the rest of the tail.
+# Authoritative control for the entire out-of-scope tail: the per-domain
+# *ComplianceTest 403 assertions + the runtime SecurityConfig `/api/admin/**`
+# matcher (@EnableMethodSecurity active). This lint is a SUPPLEMENTARY,
+# defense-in-depth regression net — it complements those controls, it does not
+# replace them.
+#
 # The `SecurityConfig` path-matchers STAY in the real repo (belt + suspenders);
 # this guard simply does not TRUST them for coverage.
 #
@@ -124,7 +190,12 @@
 # (docs/dogfood-ledger/engine-w1-iter2.yaml); round-4 codex convergence closed the
 # @PostAuthorize/recognition/SpEL-weakener holes and the detection-scope gap;
 # round-5 codex closed the attribute-ordered mapping-path parse gap (Fix 5);
-# round-6 codex closed the array-valued path shape (Fix 6).
+# round-6 codex closed the array-valued path shape (Fix 6); round-7 codex closed
+# the extraction/composition surface in ONE principled pass — attribute
+# tokenization (F1), quote-aware array braces (F2), same-file constant fold
+# (F3-simple), class×method composition (F4), leading-slash normalization (F5),
+# class-level FQN recognition (F7) — and documented the undecidable tail
+# (F6, F3-tail, F7-tail) as out-of-scope above (Fix 7).
 #
 # Exit codes:
 #   0 — every REQUIRED mutating admin endpoint carries an effective admin
@@ -183,16 +254,29 @@ METHOD_DECL_RE = re.compile(
 )
 QUOTED_RE = re.compile(r'"([^"]*)"')
 REQUEST_METHOD_RE = re.compile(r"RequestMethod\.([A-Za-z]+)")
-# Fix 5 (round-5 codex): an explicit `path = "..."` / `value = "..."` attribute,
-# in EITHER order relative to the annotation's other attributes (e.g.
-# `@PostMapping(produces = "application/json", path = "/api/admin/x")`).
-PATH_ATTR_RE = re.compile(r'\b(?:path|value)\s*=\s*"([^"]*)"')
-# Fix 6 (round-6 codex): the ARRAY form of the same attribute — Spring mapping
-# annotations legally accept a path/value LIST, e.g.
-# `@PostMapping(value = {"/public", "/api/admin/missed"})`. Matched separately
-# from PATH_ATTR_RE (which only matches a scalar `"..."` immediately after the
-# `=`) so an admin path buried as a NON-FIRST array element is not lost.
-PATH_ATTR_ARRAY_RE = re.compile(r'\b(?:path|value)\s*=\s*\{([^}]*)\}')
+# ── Mapping-path extraction: tokenizer + constant-folder (Fix 7 — round-7) ────
+# See the header block "Mapping-path extraction — decidable scope vs
+# out-of-scope tail". Rather than regex-scanning the WHOLE annotation argument
+# string for a `path=`/`value=` literal (which let a NON-path attribute's quoted
+# contents impersonate path syntax — Finding 1 — and let a URI-template `{id}`
+# brace break array matching — Finding 2), the extractor TOKENIZES the
+# annotation's TOP-LEVEL attributes, selects `path`/`value` by its top-level
+# NAME, and constant-FOLDS same-file String constants + literal concatenations
+# (Finding 3-simple).
+# A top-level attribute name is `IDENT =` (a single `=`, not `==`) at the head
+# of a top-level segment.
+ATTR_NAME_RE = re.compile(r"^\s*([A-Za-z_]\w*)\s*=(?!=)")
+# Same-file `static final String IDENT = "literal";` declarations, for the
+# constant-fold (Finding 3-simple). Optional access modifier precedes `static`.
+CONST_DECL_RE = re.compile(
+    r'\bstatic\s+final\s+String\s+([A-Za-z_]\w*)\s*=\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*;'
+)
+# Class-level mapping recogniser — the SAME FQN-tolerant shape used for method
+# mappings (MAPPING_START_RE), so a fully-qualified class-level
+# `@org.springframework.web.bind.annotation.RequestMapping(...)` is recognised
+# (Finding 7). Inner-dot WHITESPACE (`@org.x . RequestMapping`) is exotic and
+# documented OUT OF SCOPE in the header.
+CLASS_RM_RE = re.compile(r"@(?:[A-Za-z_][\w.]*\.)?RequestMapping\s*\(")
 
 MUTATING_ANNOT = {"PostMapping", "PutMapping", "PatchMapping", "DeleteMapping"}
 MUTATING_VERBS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -300,51 +384,185 @@ def annotation_args(text, name_end):
     return ""
 
 
-def extract_mapping_paths(args):
-    """Extract ALL endpoint paths from a mapping annotation's argument string.
+def split_top_level(s, seps):
+    """Split `s` on any char in `seps` that is at the TOP level — outside string
+    literals ("..." / '...', escape-aware) and outside (), {}, [] nesting. This
+    is the quote/brace-aware tokenizer underlying Findings 1 & 2."""
+    parts, cur = [], []
+    depth = 0
+    in_str = None
+    i, n = 0, len(s)
+    while i < n:
+        c = s[i]
+        if in_str is not None:
+            cur.append(c)
+            if c == "\\" and i + 1 < n:
+                cur.append(s[i + 1]); i += 2; continue
+            if c == in_str:
+                in_str = None
+            i += 1; continue
+        if c == '"' or c == "'":
+            in_str = c; cur.append(c); i += 1; continue
+        if c in "({[":
+            depth += 1; cur.append(c); i += 1; continue
+        if c in ")}]":
+            depth -= 1; cur.append(c); i += 1; continue
+        if depth == 0 and c in seps:
+            parts.append("".join(cur)); cur = []; i += 1; continue
+        cur.append(c); i += 1
+    parts.append("".join(cur))
+    return parts
 
-    Round-6 codex finding: `extract_mapping_path` (the prior implementation,
-    round-5) returned a single SCALAR path. Spring mapping annotations legally
-    accept an ARRAY of paths —
-      @PostMapping(value = {"/public", "/api/admin/missed"})
-      @RequestMapping(path = {"/a", "/api/admin/b"})
-    — and the scalar-only extractor read `PATH_ATTR_RE` (which requires a
-    literal `"` immediately after `path=`/`value=`) and found no match against
-    a `{...}` array value, silently returning "" for that endpoint. An admin
-    path buried as a NON-FIRST array element (or ANY array-valued path=/value=)
-    was therefore dropped from BOTH the admin-surface method-path detector and
-    the per-endpoint requirement check — the same false-negative shape as
-    round-5's attribute-ordering gap, recurring one level down.
 
-    Fix: return the FULL LIST of literal path strings found for this mapping.
-    Preference order:
-      1. an explicit `path = {...}` / `value = {...}` ARRAY attribute — every
-         quoted string inside the braces;
-      2. an explicit `path = "..."` / `value = "..."` SCALAR attribute;
-      3. the POSITIONAL leading argument (no attribute name precedes it),
-         covering both shorthand forms — `@PostMapping("/path")` (scalar) and
-         `@PostMapping({"/a", "/b"})` (array).
-    `params=`/`headers=`/`consumes=`/`name=`/`produces=` quoted strings are
-    NEVER treated as paths — this function only ever matches attributes whose
-    name is literally `path` or `value` (the round-5 attribute-name
-    discrimination is unchanged and still applies to the array form)."""
-    m = PATH_ATTR_ARRAY_RE.search(args)
-    if m:
-        return QUOTED_RE.findall(m.group(1))
-    m = PATH_ATTR_RE.search(args)
-    if m:
-        return [m.group(1)]
-    stripped_args = args.lstrip()
-    if stripped_args.startswith("{"):
-        end = stripped_args.find("}")
-        if end != -1:
-            return QUOTED_RE.findall(stripped_args[1:end])
+def brace_inner(s):
+    """s.lstrip() begins with '{'; return the content between the OUTER braces
+    using QUOTE/ESCAPE-AWARE balancing — only a '}' OUTSIDE a string literal
+    closes the array, so a URI-template `{id}` inside an element does not close
+    it early (Finding 2). None when unbalanced / not an array."""
+    s = s.lstrip()
+    if not s or s[0] != "{":
+        return None
+    depth = 0
+    in_str = None
+    i, n = 0, len(s)
+    while i < n:
+        c = s[i]
+        if in_str is not None:
+            if c == "\\" and i + 1 < n:
+                i += 2; continue
+            if c == in_str:
+                in_str = None
+            i += 1; continue
+        if c == '"' or c == "'":
+            in_str = c; i += 1; continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return s[1:i]
+        i += 1
+    return None
+
+
+def build_const_map(stripped_text):
+    """Map same-file `static final String IDENT = "literal"` declarations to
+    their literal value (Finding 3-simple). Comment-stripped text in."""
+    return {m.group(1): m.group(2) for m in CONST_DECL_RE.finditer(stripped_text)}
+
+
+def fold_scalar(expr, const_map):
+    """Constant-fold a SCALAR path expression to its literal string, or None if
+    any term is not controller-locally decidable.
+
+    In scope (decidable): a "..." string literal; a same-file `static final
+    String` IDENT; and any `+`-concatenation of those (Finding 3-simple). Out of
+    scope (→ None, fail-OPEN, deferred to the domain 403 tests + runtime — see
+    header): an opaque/imported IDENT, a `${...}`/`#{...}` placeholder, a
+    parenthesised/ternary expression, Java Unicode/octal escapes, and text
+    blocks (Finding 3-tail). Literal content is taken RAW — escapes are NOT
+    decoded, so the undecoded adversarial tail stays out of scope rather than
+    being silently 'fixed'."""
+    if expr is None:
+        return None
+    out = []
+    for t in split_top_level(expr, "+"):
+        t = t.strip()
+        if not t:
+            return None
+        if len(t) >= 2 and t[0] == '"' and t[-1] == '"':
+            out.append(t[1:-1])
+        elif re.fullmatch(r"[A-Za-z_]\w*", t) and t in const_map:
+            out.append(const_map[t])
+        else:
+            return None  # non-literal / opaque / placeholder → undecidable
+    return "".join(out)
+
+
+def parse_path_expr(expr, const_map):
+    """Turn a path/value expression (scalar OR `{...}` array) into the list of
+    literal path strings it denotes; array elements are folded individually."""
+    if expr is None:
         return []
-    if stripped_args.startswith('"'):
-        m2 = QUOTED_RE.match(stripped_args)
-        if m2:
-            return [m2.group(1)]
-    return []
+    expr = expr.strip()
+    if not expr:
+        return []
+    if expr[0] == "{":
+        inner = brace_inner(expr)
+        if inner is None:
+            return []
+        out = []
+        for elem in split_top_level(inner, ","):
+            folded = fold_scalar(elem, const_map)
+            if folded is not None:
+                out.append(folded)
+        return out
+    folded = fold_scalar(expr, const_map)
+    return [folded] if folded is not None else []
+
+
+def extract_mapping_paths(args, const_map):
+    """Extract ALL endpoint paths from a mapping annotation's argument string
+    (round-5 → round-7 codex convergence).
+
+    Round-7: the argument string is TOKENIZED into top-level attributes first
+    (splitting on commas OUTSIDE string literals and braces), the `path`/`value`
+    attribute is selected by its TOP-LEVEL NAME, and only THEN is its value
+    read — so quoted content inside a NON-path attribute (name/produces/
+    consumes/headers/params) can no longer impersonate path syntax (Finding 1),
+    and a URI-template `{id}` brace inside an array element no longer breaks the
+    array scan (Finding 2). Preference: an explicit `path=`/`value=` attribute
+    (scalar or `{...}` array), else the POSITIONAL leading argument
+    (`@PostMapping("/x")` / `@PostMapping({"/a","/b"})`). Bare-identifier and
+    literal-concatenation values are constant-folded against same-file String
+    constants (Finding 3-simple); undecidable expressions yield no path
+    (fail-open, deferred — see header)."""
+    chosen = None
+    positional = None
+    for part in split_top_level(args, ","):
+        m = ATTR_NAME_RE.match(part)
+        if m:
+            if m.group(1) in ("path", "value") and chosen is None:
+                chosen = part[m.end():]
+        elif positional is None and part.strip():
+            positional = part
+    expr = chosen if chosen is not None else positional
+    return parse_path_expr(expr, const_map)
+
+
+def normalize_path(p):
+    """Spring's PathPatternParser prepends '/' to a non-empty path lacking one
+    (Finding 5). Applied after extraction + class×method composition."""
+    p = p.strip()
+    if p and not p.startswith("/"):
+        p = "/" + p
+    return p
+
+
+def join_class_method(cp, mp):
+    """Join a class-level path with a method-level path the way Spring
+    concatenates them (Finding 4): the method segment is appended with exactly
+    one '/' at the seam."""
+    cp = cp.strip()
+    mp = mp.strip()
+    if not cp:
+        return mp
+    if not mp:
+        return cp
+    return cp.rstrip("/") + (mp if mp.startswith("/") else "/" + mp)
+
+
+def compose_paths(class_paths, method_paths):
+    """Effective routes for one endpoint = the class×method CROSS-PRODUCT
+    (Finding 4), each normalised for the optional leading slash (Finding 5). A
+    method with NO explicit path inherits the class path(s); a class with no
+    mapping leaves the method path(s) unchanged (normalised)."""
+    if not method_paths:
+        return [normalize_path(p) for p in class_paths] if class_paths else []
+    if not class_paths:
+        return [normalize_path(p) for p in method_paths]
+    return [normalize_path(join_class_method(cp, mp))
+            for cp in class_paths for mp in method_paths]
 
 
 def spel_requires_admin(spel):
@@ -397,11 +615,12 @@ def spel_requires_admin(spel):
     return True
 
 
-def class_level_facts(stripped_text):
+def class_level_facts(stripped_text, const_map):
     """(class_name, class_paths, class_authz_effective, class_decl_line0, class_off).
     class_paths = literal paths of the class-level @RequestMapping (path=/value=/
-    array aliases handled). class_authz_effective = the class-level @PreAuthorize
-    is an effective admin gate. Operates on the FIRST top-level class."""
+    array aliases + FQN handled). class_authz_effective = the class-level
+    @PreAuthorize is an effective admin gate. Operates on the FIRST top-level
+    class."""
     class_off = None
     class_line0 = None
     class_name = None
@@ -416,12 +635,15 @@ def class_level_facts(stripped_text):
     before = stripped_text[:class_off]
 
     # class-level @RequestMapping — LAST occurrence before the class decl.
+    # FQN-tolerant (Finding 7) + tokenized/constant-folded path extraction (the
+    # same extractor used for method mappings), so a fully-qualified class
+    # mapping and an attribute-ordered/array/constant class path are all read.
     class_paths = []
-    rm_iters = list(re.finditer(r"@RequestMapping\s*\(", before))
+    rm_iters = list(CLASS_RM_RE.finditer(before))
     if rm_iters:
         last = rm_iters[-1]
         args = balanced_args(before, last.end() - 1)
-        class_paths = QUOTED_RE.findall(args)
+        class_paths = extract_mapping_paths(args, const_map)
 
     # class-level @PreAuthorize — LAST occurrence before the class decl.
     class_authz_effective = False
@@ -452,7 +674,8 @@ for path in java_files:
     with open(path, encoding="utf-8") as fh:
         raw_text = fh.read()
     stripped = strip_comments_preserve_lines(raw_text)
-    class_name, class_paths, class_authz_eff, class_line0, class_off = class_level_facts(stripped)
+    const_map = build_const_map(stripped)
+    class_name, class_paths, class_authz_eff, class_line0, class_off = class_level_facts(stripped, const_map)
     if class_name is None:
         continue
 
@@ -483,7 +706,7 @@ for path in java_files:
             is_mutating = False
             verbs = ["GET"]
 
-        ep_paths = extract_mapping_paths(args)
+        ep_paths = extract_mapping_paths(args, const_map)
         lineno = stripped.count("\n", 0, off) + 1
         li = lineno - 1  # 0-based line index of the mapping annotation start
 
@@ -518,16 +741,20 @@ for path in java_files:
 
         endpoints.append({
             "annot": annot, "verbs": verbs, "is_mutating": is_mutating,
-            "paths": ep_paths, "lineno": lineno,
+            "paths": ep_paths,
+            # Effective routes = class×method composition (Finding 4) + optional
+            # leading-slash normalisation (Finding 5). BOTH consumers below match
+            # ADMIN_PATH_RE against these composed routes, never the raw pieces.
+            "composed": compose_paths(class_paths, ep_paths), "lineno": lineno,
             "method_has_own": method_has_own, "method_authz_eff": method_authz_eff,
         })
 
-    # ── Admin-surface detection (name OR class-path OR method-path) ────────────
+    # ── Admin-surface detection (name OR class-path OR composed method-path) ───
     admin_by_class = class_name.endswith("AdminController") or any(
         "/admin" in p for p in class_paths
     )
     admin_by_method = any(
-        ep["is_mutating"] and any(ADMIN_PATH_RE.match(p) for p in ep["paths"])
+        ep["is_mutating"] and any(ADMIN_PATH_RE.match(p) for p in ep["composed"])
         for ep in endpoints
     )
     if not (admin_by_class or admin_by_method):
@@ -546,15 +773,16 @@ for path in java_files:
         if not ep["is_mutating"]:
             continue
         # An endpoint must carry admin authz if the whole controller is an admin
-        # surface (by name/class-path) OR the endpoint's own path is under /admin.
-        requires = admin_by_class or any(ADMIN_PATH_RE.match(p) for p in ep["paths"])
+        # surface (by name/class-path) OR its own EFFECTIVE (composed) route is
+        # under /admin.
+        requires = admin_by_class or any(ADMIN_PATH_RE.match(p) for p in ep["composed"])
         if not requires:
             continue
         mutating_endpoints += 1
         effective = ep["method_authz_eff"] if ep["method_has_own"] else class_authz_eff
         if not effective:
             vlabel = "|".join(ep["verbs"])
-            plabel = "|".join(ep["paths"]) or "/"
+            plabel = "|".join(ep["composed"]) or "/"
             violations.append(
                 f"{path}:{ep['lineno']}: mutating admin endpoint "
                 f"[{vlabel} {plabel}] on {class_name} has no EFFECTIVE "
