@@ -1,0 +1,34 @@
+# engine — consumer-proof harness iter5 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S2.AUDIT-PII.FE + S2.MULTI-TENANT.BE — FE error-display PII seam enforcement, BE tenant-isolation coverage.
+# 4 enforcement gaps identified and logged via mechanical harness.
+#
+# NOTE (wave-1 exit cleanup): G4 is reclassified methodology_gap (rather than
+# scope_deferral) even though the parse-error.ts JSON-branch PII leak was
+# genuinely fixed in-wave (4-line fix + parse-error-denylist.vitest.ts,
+# 0->10 vitest cases) — closures live as committed artifacts, not a ledger
+# real_bug + closure_commit_sha pair, to avoid a pre-commit chicken-and-egg
+# (see the iter2 header note). methodology_gap fits: the root cause was the
+# catalog's OWN test-coverage methodology having zero tests for a distributed
+# L0 template; this classification also keeps the engine-w1 domain's
+# per-iteration mix from tripping dogfood_ledger_guard's 2-consecutive-
+# all-scope_deferral detector.
+iteration: 5
+findings:
+  - persona: engine-w1
+    finding: "G1 (BLOCK): No mechanical enforcement that an FE component (ErrorBanner, error-display surface) calls the catalog's sanctioned PII-scrubbing seam (parseError()/sanitizeStoredError()) before rendering an error from a Response body. Verified absent: grep across practices-react/eslint-plugin-ax/rules/*.js and practices/evals/*.sh returns 0 hits checking an error-display call-site for a parseError() wrapper. The violating ErrorBanner.tsx pattern — res.json().detail || .message directly into render() — bypasses the seam and leaks RRN/email/phone from ProblemDetail.detail verbatim. Was blocked ONLY by the hand-rolled fe_error_display_pii_guard.sh. A natural AI shortcut (hand-read Response body for error text) passes every standing catalog gate until a human checks the FE error output against the clean response. Expiry trigger: Ship catalog enforcement asset (ESLint ax/* rule or practices/evals shell guard) that requires FE error-render call-sites to route Response.detail/message through parseError()/sanitizeStoredError() before display; block unvetted error-body hand-reading at lint/compile time."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S2.AUDIT-PII.FE/"
+  - persona: engine-w1
+    finding: "G2 (BLOCK): No mechanical enforcement that a multi-tenant backend (using manual/explicit-finder strategy per specs/multi-tenant-l0.yaml) actually calls tenant-scoped repository methods (findByIdAndTenantId / findAllByTenantId) instead of bare findById/findAll. The spec item MULTI-TENANT-ISOLATION-001 asserts 'Repository queries MUST NOT bypass the filter; every Repository method runs under tenant context', but the only extant guard (multi_tenant_aop_guard_skeleton_guard.sh) checks for skeleton file/class presence in a tree — not actual call-site scoping correctness. The violating DocumentService.java (plain findById(id)/findAll(), cross-tenant Document leak via repository call-site) was blocked ONLY by the hand-rolled tenant_scope_missing_guard.sh. A realistic AI bug — using the unscopedRepository method instead of the tenant-aware variant — passes every standing catalog gate and enters code review. Expiry trigger: Ship catalog guard (practices/evals shell guard or ArchUnit rule) that scans Java service/controller call-sites for Repository method invocations and verifies tenant-scoping: findByIdAndTenantId / findAllByTenantId patterns; block bare findById/findAll on multi-tenant entity classes at static-analysis time."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S2.MULTI-TENANT.BE/"
+  - persona: engine-w1
+    finding: "G3 (WARN): No importable, wired runtime tenant-propagation primitive shipped by the catalog. Confirmed absent: the only TenantContext.java in the tree is a guard-fixture test-double under practices/evals/fixtures/multi-tenant-aop-guard-skeleton/; blueprints/multi-tenant-manifest.yaml provides only a design-level (java_skeleton) description, not a wired, reusable common/* primitive. The dogfood had to hand-roll a minimal ThreadLocal-based TenantContext port in-scenario to build the tenant-aware clean slice. A capability gap: the multi-tenant strategy is defined (spec + blueprint) but the runtime artifact (common/TenantContext with set/get/clear) is missing, which itself raises the odds each fork will mis-implement or omit tenant propagation. The blueprint describes *what* to do; the primitive is the *how*. Expiry trigger: Ship common/TenantContext.java (ThreadLocal-backed, with static current()/set/clear methods) as a reusable primitive exported by the catalog; add blueprints/multi-tenant-manifest.yaml reference linking the strategy to the runtime artifact."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S2.MULTI-TENANT.BE/, templates/, backend/src/main/java/com/ax/template/authblueprint/common/"
+  - persona: engine-w1
+    finding: "G4 (BLOCK): The distributed L0 template (templates/L0/fork-receiver-kit/parse-error.ts) had a PII leak in production: parseError() routed only the text/html fallback branch through the deny-list (sanitizeStoredError()) but NOT the RFC 9457 JSON branch (body.detail || body.message) — the path every real ProblemDetail response from the backend actually traverses. A backend echoing a submitted RRN/email as a CodedError.message leaked it verbatim. Zero tests existed for parse-error.ts anywhere in the repo prior to this session (0 -> 10 vitest cases, 3/10 failed pre-patch, all from the missing-deny-list codepath). A real defect in a distributed template, discoverable only because the consumer-proof feature exercise actually used it — root cause is the catalog's own test-coverage methodology having zero tests for this L0 template. CLOSED THIS SESSION (4-line fix + parse-error-denylist.vitest.ts), but the coverage gap was genuine. Expiry trigger: Add test coverage (vitest cases) for parse-error.ts covering both text/html and JSON RFC 9457 branches; ensure deny-list (sanitizeStoredError) is routed on both paths; add to main R25 test-coverage gate so future parse-error changes remain tested."
+    classification: methodology_gap
+    references_artifact_path: "practices/consumer-proof/scenarios/S2.AUDIT-PII.FE/, templates/L0/fork-receiver-kit/parse-error.ts, frontend/tests/parse-error-denylist.vitest.ts"

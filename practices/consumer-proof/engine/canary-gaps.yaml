@@ -28,6 +28,8 @@ generated_at: "2026-07-19"
 canaries:
   - id: CANARY-001
     canary: true
+    stale: true
+    superseded_by: CANARY-007
     need: "FE rule/enforcement requiring locale-aware number and date formatting (Intl.NumberFormat / Intl.DateTimeFormat) in L4 pages, instead of raw toLocaleString()/string concatenation."
     layer: FE
     related_cell: S2.TIME-LOCALE.FE
@@ -37,6 +39,13 @@ canaries:
       verified_at: "2026-07-19"
       false_positive_note: "A broader keyword sweep (toLocaleString|Intl\\.) hits js-cache-function-results.md (uses Intl.NumberFormat only as a caching-cost EXAMPLE) and rendering-hydration-suppress-warning.md (lists 'locale formatting' only as an example of an ACCEPTABLE suppressHydrationWarning mismatch, not a correctness rule). Both inspected and confirmed irrelevant to a locale-formatting-correctness rule."
     excluded_from_backlog: true
+    staleness_note: "STALE as of 2026-07-20 (wave-1 exit cleanup): the absence_proof command now MATCHES —
+      practices-react/rules/locale-aware-number-date-format.md exists (re-run:
+      `grep -rlE \"locale.{0,20}(number|date).{0,25}format|toLocaleString.{0,100}(require|enforce|must|MUST)\"
+      practices-react/rules/*.md` returns that file, exit 0). Per this file's own staleness protocol
+      (see header comment), this canary can no longer prove the loop's gap-detection reflex and is
+      superseded by CANARY-007 below for wave-2. Kept on disk (not deleted) as an honest historical
+      record that CANARY-001 was surfaced and closed in wave-1."
 
   - id: CANARY-002
     canary: true
@@ -97,3 +106,16 @@ canaries:
       verified_at: "2026-07-19"
       false_positive_note: "backend/src/main/java/.../orgscope/ IS real and IS the enforcement for S2.TENANCY-SCOPE.BE (covered) — but orgscope is a per-request authorization-scope primitive, not the common.tenancy runtime (TenantContext/Filter/Hibernate @Filter) the multi-tenant README specifically names as future work. The two are related but distinct; this canary targets the latter, confirmed absent."
     excluded_from_backlog: true
+
+  - id: CANARY-007
+    canary: true
+    need: "A frontend/tests/*.vitest.ts application-level unit test that exercises Intl.NumberFormat/Intl.DateTimeFormat usage in a real component against practices-react/rules/locale-aware-number-date-format.md — the rule + shell guard shipped in wave-1 (S2.TIME-LOCALE.FE), but the cell was deliberately left at 'partial' rather than 'covered' in coverage-map.yaml because no such test exists yet (only the guard's own self-test fixtures do)."
+    layer: FE
+    related_cell: S2.TIME-LOCALE.FE
+    absence_proof:
+      command: 'grep -rliE "Intl\.(NumberFormat|DateTimeFormat)|locale.{0,20}format" frontend/tests/*.vitest.ts'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-20"
+      false_positive_note: null
+    excluded_from_backlog: true
+    supersedes: CANARY-001

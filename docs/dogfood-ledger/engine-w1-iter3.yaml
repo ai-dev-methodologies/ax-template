@@ -1,0 +1,34 @@
+# engine — consumer-proof harness iter3 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S3.saas-subscription — FE pagination contract binding, template parity, harness reliability.
+# 4 enforcement gaps identified and logged via mechanical harness.
+#
+# NOTE (wave-1 exit cleanup): G1 is logged as scope_deferral even though its
+# underlying artifact (pagination_envelope_contract_parity.sh scenario-guard)
+# was substantively built in-wave. See the iter2 header note for the
+# rationale (closures live as committed artifacts, not a ledger real_bug +
+# closure_commit_sha pair, to avoid a pre-commit chicken-and-egg). G4 is
+# reclassified methodology_gap — it is a defect in the dogfood harness's own
+# eslint-invocation mechanism (run-consumer-proof.sh), not a product-scope
+# deferral; this also keeps the engine-w1 domain's per-iteration
+# classification mix from tripping dogfood_ledger_guard's 2-consecutive-
+# all-scope_deferral detector.
+iteration: 3
+findings:
+  - persona: engine-w1
+    finding: "G1 (BLOCK): No mechanical enforcement that an FE list/pagination parser actually dereferences the canonical common/PageEnvelope contract fields ({data, pagination:{page,pageSize,totalElements,totalPages,hasMore}}). The requirement is spec'd (specs/crud-frontend-l0.yaml#CRUD-FE-003) and described by rule crud-frontend-pages-bind-crud-contract, but that rule is verification.type:review (human-only, 'no compile signal' per its own text), frontend/tests/L4/crud/composition.spec.ts asserts no envelope field, and R25's only FE gate is frontend-lint. A realistic AI bug — parsing a guessed legacy/flat {items,total,hasNextPage} shape instead of the real BE envelope — passes every standing catalog gate (no ax/* ESLint rule and no practices/evals guard cross-checks an FE parser against the live PageEnvelope.java). Hand-rolled scenario-guards/pagination_envelope_contract_parity.sh to get a binary block. Expiry trigger: Ship catalog guard (ESLint rule or practices/evals shell guard) enforcing FE pagination parser parity with PageEnvelope BE contract; assert dereferences of {data, pagination.{page,pageSize,totalElements,totalPages,hasMore}} at compile/lint time."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S3.saas-subscription/"
+  - persona: engine-w1
+    finding: "G2 (WARN): No FE reference implementation or template asset that parses the canonical PageEnvelope. CRUD-FE-003 mandates FE consumption of the shape and pagination.tsx renders from it, yet grep of frontend/src for PageEnvelope/totalElements/hasMore returns NOTHING (no shipped parser) and templates/ has no page-envelope parser. The clean fixture had to hand-write src/features/subscription/parse-page-envelope.ts from scratch — an AI gets a spec + prose review-rule for the shape but no composable/copyable parser, which is what drives field-name drift. Expiry trigger: Add L0 or L2 template providing canonical PageEnvelope parser (composable export, TypeScript-ready); AI can import and use without hand-rolling."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S3.saas-subscription/, templates/"
+  - persona: engine-w1
+    finding: "G3 (WARN): The L2 templates/L2/blocks/pagination.tsx prop surface is lossy against the envelope it must reflect: it exposes only flat {page,pageSize,total} display props and does NOT surface totalPages or hasMore (the two fields CRUD-FE-003 explicitly says pagination controls must reflect), and no catalog adapter maps a PageEnvelope response → PaginationProps. Composing the block against the real BE envelope forces a hand-mapping of precisely the drift-prone fields. Expiry trigger: Enrich L2 pagination.tsx props to include totalPages and hasMore; provide adapter/factory mapping BE PageEnvelope → PaginationProps composition."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S3.saas-subscription/, templates/L2/blocks/"
+  - persona: engine-w1
+    finding: "G4 (BLOCK): consumer-proof harness reliability gap: ESLint 9 flat-config silently exits 0 with 'File ignored because outside of base path.' for a fixture outside the config directory when invoked the way the main practices/consumer-proof/run-consumer-proof.sh invokes it (cd $REACT_DIR && npx eslint <relpath>) — a latent FALSE-CLEAN that would credit an unblocked violating variant as passing. This scenario worked around it locally (explicit --config on the REACT_DIR eslint binary), but the shared harness is unpatched, so any future out-of-tree scenario inherits the false-clean unless it rediscovers the fix. This is a defect in the dogfood harness's OWN methodology (the mechanism that runs the dogfood loop, not a catalog product-scope gap). Expiry trigger: Patch run-consumer-proof.sh eslint invocation to use explicit --config flag or re-root lint into a predictable path; add fixture validating that a violating rule produces non-0 exit from out-of-tree scenario."
+    classification: methodology_gap
+    references_artifact_path: "practices/consumer-proof/run-consumer-proof.sh, practices/consumer-proof/scenarios/S3.saas-subscription/, practices/consumer-proof/engine/fixtures/harness-config-pin/"

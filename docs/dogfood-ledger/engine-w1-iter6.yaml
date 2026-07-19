@@ -1,0 +1,28 @@
+# engine — consumer-proof harness iter6 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S2.AUDIT-PII.XB — cross-boundary AUDIT-PII: a BE audit/error
+# record with a PII field crossing to the FE, plus a signature-verification
+# UX gap in a webhook-delivery status component.
+#
+# BACKFILL NOTE (wave-1 exit cleanup, 2026-07-20): this iteration ran during
+# wave-1 but was never logged to docs/dogfood-ledger/, .ax-ledger/events.jsonl,
+# or docs/coverage-map/BACKLOG-CANDIDATES.md — a gap-logging hole surfaced by
+# fable5 xhigh wave-exit verification. Backfilled from
+# practices/consumer-proof/scenarios/S2.AUDIT-PII.XB/README.md and its
+# fixtures. G1 below is the scenario-local analog of the REAL production fix
+# already made this wave to AuditLogService.record(AuditLogDto) (routing
+# dto.actorIp() through AuditLogPiiRedactor) — that fix closed ONE concrete
+# instance but did not generalize into a reusable catalog guard, so the
+# residual capability gap (no generic DTO-PII-crossing check) is genuine and
+# logged here rather than folded silently into the production closure.
+iteration: 6
+findings:
+  - persona: engine-w1
+    finding: "G1 (BLOCK): No catalog guard enforces that every PII field on an audit-adjacent entity is routed through a redactor (AuditLogPiiRedactor) or hash helper (common/AuditPiiHelper#piiHash) at the exact seam where a row becomes a FE-facing DTO. The catalog is not empty-handed — AuditLogPiiRedactor masks actorIp at write time and AuditPiiHelper#piiHash exists precisely for this — but nothing enforces that EVERY DTO factory method (`*Response.from()` / `*Dto.from()`) actually calls one of them for every PII-shaped getter it maps. Confirmed live: the real AuditLogDto.Detail.from() mapped log.getActorIp() and log.getMetadataJson() straight across before this wave's fix; metadataJson (a free-form Map<String,Object>-derived column) STILL has no field-level redaction of any kind after the fix — the fix closed the one actorIp instance, not the general seam. grep -ril \"Response\\|Dto\" practices/evals/*.sh returns 0 hits that scan a DTO factory method body for an unredacted PII getter; phi_in_logs_guard.sh is the nearest neighbor but checks SLF4J log statements, a different surface. Was blocked ONLY by the hand-rolled audit_pii_cross_boundary_guard.sh. Expiry trigger: Ship a practices/evals shell guard (or ArchUnit rule) that scans *Response.from()/*Dto.from() factory method bodies for a PII-shaped getter (actorEmail/actorIp/metadataJson/userAgent-adjacent names) not wrapped in AuditLogPiiRedactor/AuditPiiHelper#piiHash before assignment; close the remaining metadataJson/userAgent residual on both AuditLogDto paths."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S2.AUDIT-PII.XB/, backend/src/main/java/com/ax/template/authblueprint/auditlog/AuditLogService.java, templates/backend/audit-log/AuditLogPiiRedactor.java"
+  - persona: engine-w1
+    finding: "G2 (WARN): No catalog invariant or asset enforces that a FE component consuming an inbound webhook signature-verification outcome actually surfaces a failed-verification state — templates/L2/blocks/status-badge.tsx is a generic status pill with no invariant that a verification-failure outcome must be distinctly rendered, and templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx lists deliveries but has no signature-verification-failed state either. A consumer can wire any StatusKind to any UI state, including silently mapping every signature outcome (verified AND failed) to the same 'Delivered' success pill — masking a real signature-verification failure from the operator who most needs to see it. grep -ril \"signatureStatus\\|could not be verified\" templates/L2/blocks practices-react/rules returns 0 hits. Was blocked ONLY by the hand-rolled webhook_signature_status_ux_guard.sh. Expiry trigger: Add a practices-react rule or ax/* ESLint rule requiring a webhook-delivery status component to render a distinct visual state (not the success pill) when signatureStatus indicates a verification failure; extend templates/L2/blocks/status-badge.tsx or templates/L4/webhook's delivery list with the failed-verification state."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S2.AUDIT-PII.XB/, templates/L2/blocks/status-badge.tsx, templates/L4/webhook/"

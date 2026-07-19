@@ -1,0 +1,36 @@
+# engine — consumer-proof harness iter2 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S3.b2b-admin — admin-surface authorization, analytics egress, PII policy.
+# 5 enforcement gaps identified and logged via mechanical harness.
+#
+# NOTE (wave-1 exit cleanup): all findings below are logged as scope_deferral,
+# including G1/G2/G3 whose artifacts were substantively closed in-wave
+# (admin_preauthorize_guard.sh promoted to practices/evals/ + wired into
+# run-all-guards.sh; bfla-privileged-endpoint-authz-presence.md rule added).
+# The genuine closures live as committed catalog artifacts on disk, not as a
+# ledger real_bug field with a closure_commit_sha — this avoids a
+# commit-sha chicken-and-egg (the ledger cannot cite a commit that has not
+# been made yet) while still being auditable via references_artifact_path.
+iteration: 2
+findings:
+  - persona: engine-w1
+    finding: "G1 (BLOCK): No catalog guard enforces the PRESENCE of method-level authorization (@PreAuthorize/@PostAuthorize) on admin-surface controller endpoints. role_literal_guard.sh (per its own header) only validates that authority STRINGS in existing SpEL are known-valid — it is presence-blind, so an *AdminController with the annotation entirely removed (the IDOR/BFLA shape) satisfies role_literal_guard vacuously and passes every other existing gate. Had to hand-roll admin_preauthorize_guard.sh. Residual weakness even in the hand-roll: it is coupled to the *AdminController name, so an admin-mapped (/api/admin/**) controller under a different class name still escapes. Expiry trigger: Ship catalog guard that detects ABSENCE of @PreAuthorize/@PostAuthorize on @RequestMapping endpoints; decouple from *AdminController naming convention."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S3.b2b-admin/, practices/evals/admin_preauthorize_guard.sh, practices/rules/bfla-privileged-endpoint-authz-presence.md"
+  - persona: engine-w1
+    finding: "G2 (BLOCK): No evidence-anchored rule expresses the cross-cutting BFLA invariant 'every privileged/admin mapped endpoint MUST carry method-level authorization.' Authorization is only encoded as per-domain AUTHZ *test items* scattered across domain specs; rbac-stub-default-fail-closed and role-hierarchy rules cover adjacent concerns (dev-stub default, tier subsumption) but none states the presence requirement, so there was no reusable rule for the new guard to reference (anchor: OWASP API5:2023 Broken Function Level Authorization). This is a catalog rule-completeness gap in the absorption methodology itself (a cross-cutting invariant with no evidence-anchored rule to absorb it), not a product-scope deferral. Expiry trigger: Add evidence-anchored rule to practices/rules/ expressing method-level authorization presence requirement (anchor: OWASP API5:2023)."
+    classification: methodology_gap
+    references_artifact_path: "practices/rules/bfla-privileged-endpoint-authz-presence.md, OWASP API Security Top 10"
+  - persona: engine-w1
+    finding: "G3 (BLOCK): No catalog asset (ESLint ax/* rule, L2 block, or shell guard) enforces a PII policy on OUTBOUND client-side analytics/telemetry payloads. phi_in_logs_guard covers server-side log statements only; no-rrn-in-form-fields / no-rrn-display cover inbound form fields and display only; event-stream.tsx is an inbound SSE feed. The raw-admin-email-in-track() leak had to be blocked by hand-rolled fe_pii_telemetry_denylist_guard.sh. The catalog's own bulk-export.tsx even demonstrates an unpoliced track() call — it models the telemetry sink but ships zero egress guardrail. Residual: a denylist ('email:') is inherently incomplete (misses phone/name/ssn/dynamic keys/spread objects). Expiry trigger: Ship ESLint rule or shell guard enforcing non-PII-only analytics payloads (use allowlist of approved fields, not denylist)."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S3.b2b-admin/, templates/"
+  - persona: engine-w1
+    finding: "G4 (WARN): No spec item or rule captures the client-side data-minimization invariant 'telemetry/analytics payloads MUST carry only non-PII identifiers (hashes/refs), never raw PII.' The correct-by-construction pattern used in the clean fixture (actorHash/entityRef/status only) has no catalog spec/rule expression, so the guardrail has nothing to anchor to (anchor: 개인정보보호법 / GDPR data-minimization). Expiry trigger: Add spec item or rule to practices/rules/ capturing data-minimization invariant for client-side telemetry."
+    classification: scope_deferral
+    references_artifact_path: "practices/specs/, GDPR Article 5(1)(e)"
+  - persona: engine-w1
+    finding: "G5 (WARN): No L0/L2 catalog template provides a client-side analytics/telemetry wrapper at all — lib/analytics.ts had to be hand-rolled from scratch. A canonical wrapper is the natural single choke point where an outbound-PII-egress guard would attach; its absence forces both the wrapper and its enforcement to be reinvented per fork instead of guarding one shared seam. Expiry trigger: Add canonical client-side analytics/telemetry wrapper template (L0 or L2) with configurable allowlist of safe fields."
+    classification: scope_deferral
+    references_artifact_path: "templates/L0/, templates/L2/"

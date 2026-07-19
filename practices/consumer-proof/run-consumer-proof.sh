@@ -179,10 +179,35 @@ fixtures/clean/functional-setstate.tsx
 fixtures/clean/server-state.tsx
 fixtures/clean/src/app/dashboard/page.tsx"
 
-# lint_json <eslint-args...>  → JSON to $LINT_OUT, stderr to $LINT_ERR, sets $LINT_RC.
+# lint_json <relpath-under-REACT_DIR-or-absolute...>  → JSON to $LINT_OUT,
+# stderr to $LINT_ERR, sets $LINT_RC.
+#
+# --config IS PINNED EXPLICITLY, and cwd IS PINNED TO $REPO_ROOT (do not
+# remove either — confirmed reliability gap). ESLint 9's flat config computes
+# its "base path" from cwd (NOT from the config file's own directory), and
+# silently exits 0 with "File ignored because outside of base path." for any
+# target outside that base path — EVEN WITH --config pointing elsewhere.
+# `cd $REACT_DIR && npx eslint <relpath>` therefore silently false-cleans any
+# fixture that lives outside $REACT_DIR (e.g. a scenario's own fixture tree
+# under practices/consumer-proof/scenarios/**) — a SILENT false-clean that
+# would credit an unblocked violating variant as "passing" with zero
+# indication anything was skipped.
+#
+# Fix: run with cwd = $REPO_ROOT (an ancestor of every fixture tree in this
+# repo, in-tree or out-of-tree) and resolve each arg to an absolute path
+# before invoking eslint, so the base-path check always succeeds regardless
+# of where the target actually lives. Proven RED-able by
+# practices/consumer-proof/engine/fixtures/harness-config-pin/prove-config-pin.sh
 lint_json() {
     LINT_RC=0
-    ( cd "$REACT_DIR" && npx eslint --format json "$@" ) >"$LINT_OUT" 2>"$LINT_ERR" || LINT_RC=$?
+    local abs_args=() a
+    for a in "$@"; do
+        case "$a" in
+            /*) abs_args+=("$a") ;;
+            *)  abs_args+=("$REACT_DIR/$a") ;;
+        esac
+    done
+    ( cd "$REPO_ROOT" && npx --prefix "$REACT_DIR" eslint --format json --config "$REACT_DIR/eslint.config.mjs" "${abs_args[@]}" ) >"$LINT_OUT" 2>"$LINT_ERR" || LINT_RC=$?
 }
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then

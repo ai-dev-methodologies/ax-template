@@ -11,7 +11,7 @@ evidence:
     citation: "OWASP API Security Top 10 (2023) — API3:2023 Broken Object Property Level Authorization"
     url: "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
   - source_type: internal
-    rationale: "R53 fork-receiver-kit consolidation — every L4 had its own parse-error.ts with the same RFC 9457 unwrap logic plus a Korean enterprise PII deny-list. R55 added FavoritesError (code preservation); R51/scheduled-task added sanitizeStoredError (render-layer scrub). All three converge into one canonical helper here. CodedError replaces FavoritesError — code semantics are domain-neutral, the catalog refuses to claim ownership of any specific code namespace."
+    rationale: "R53 fork-receiver-kit consolidation — every L4 had its own parse-error.ts with the same RFC 9457 unwrap logic plus a Korean enterprise PII deny-list. R55 added FavoritesError (code preservation); R51/scheduled-task added sanitizeStoredError (render-layer scrub). All three converge into one canonical helper here. CodedError replaces FavoritesError — code semantics are domain-neutral, the catalog refuses to claim ownership of any specific code namespace. S2.AUDIT-PII.FE dogfood (2026-07-20) found the deny-list wired to the text/html fallback branch only — the JSON body.detail/body.message branch (the one every RFC 9457 ProblemDetail actually takes) skipped it entirely, so a backend echoing a submitted RRN/email/phone into detail leaked it verbatim. Closed by routing that branch through sanitizeStoredError() too; see frontend/tests/parse-error-denylist.vitest.ts."
 imports_from: []
 imports_forbidden: [L1, L2, L3, L4, app/, lib/]
 ---
@@ -92,10 +92,15 @@ export async function parseError(res: Response, fallback: string): Promise<Error
   const cloned = res.clone()
   try {
     const body = await res.json()
-    const message =
+    const rawMessage =
       (body?.detail && String(body.detail)) ||
       (body?.message && String(body.message)) ||
       ''
+    // Same deny-list as the text/html fallback below and sanitizeStoredError
+    // — a ProblemDetail's `detail`/`message` is server-authored free text and
+    // can echo back a submitted RRN/email/phone (e.g. a validation error),
+    // so it MUST pass through the same scrub before reaching the UI.
+    const message = sanitizeStoredError(rawMessage)
     const code = typeof body?.code === 'string' ? body.code : ''
     if (code) {
       return new CodedError(message || fallback, code)

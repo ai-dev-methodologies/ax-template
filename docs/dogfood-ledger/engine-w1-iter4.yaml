@@ -1,0 +1,27 @@
+# engine — consumer-proof harness iter4 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S2.AUTHZ.FE — FE admin-action self-gating (component-granularity
+# BFLA) + SSRF allowlist re-validation at server-side test-delivery (use)
+# time, distinct from the registration-time gap CANARY-005 already names.
+#
+# BACKFILL NOTE (wave-1 exit cleanup, 2026-07-20): this iteration ran during
+# wave-1 but was never logged to docs/dogfood-ledger/, .ax-ledger/events.jsonl,
+# or docs/coverage-map/BACKLOG-CANDIDATES.md — a gap-logging hole surfaced by
+# fable5 xhigh wave-exit verification. Backfilled from
+# practices/consumer-proof/scenarios/S2.AUTHZ.FE/README.md and its fixtures,
+# which are the disk record of what the scenario actually surfaced.
+iteration: 4
+findings:
+  - persona: engine-w1
+    finding: "G1 (BLOCK): No ax/* ESLint rule or practices/evals shell guard enforces that a marked admin-only action region (`ax:admin-action`) in a FE component is gated by a caller-role check before rendering. The catalog's existing admin-authz assets (impersonation-banner-required-when-acting-as-other-user.md, no-impersonation-bypass-via-helper-rename.md) and templates/L4/webhook's admin page gate the PAGE, not the individual action component — a standalone admin-only action (e.g. 'Send test delivery', which triggers a real server-side fetch) naturally inherits the assumption that the enclosing page's gate is enough and ships with no gate of its own; if ever reused outside the gated page (a shared toolbar, a future refactor), the privileged action fires for any caller. OWASP API5:2023 BFLA at component, not page, granularity. Was blocked ONLY by the hand-rolled fe_admin_action_missing_role_gate_guard.sh. Expiry trigger: Ship ax/* ESLint rule OR practices/evals shell guard enforcing that every `ax:admin-action` marker in a .tsx file is preceded, in source order, by a useCallerRole import AND a role === 'admin' / role !== 'admin' comparison."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S2.AUTHZ.FE/"
+  - persona: engine-w1
+    finding: "G2 (BLOCK): SSRF use-time allowlist re-validation is a capability void at three layers, not just a missing guard. (a) No spec item anywhere in specs/ captures a URL-allowlist / SSRF-prevention invariant at all (grep -rli ssrf specs/ practices/rules practices-react/rules returns 0 hits) — the SSRF domain has zero presence in the catalog's spec layer. (b) No reusable SPI/primitive exists for allowlist validation — UrlAllowlistValidator (scheme must be https, resolved host must not be loopback/link-local/site-local/any-local) had to be hand-rolled in-scenario with no catalog seam to attach to. (c) Even the one EXISTING canary, canary-gaps.yaml CANARY-005, only covers registration-time storage of a webhook target URL — it says nothing about re-validating at USE time. This scenario reproduces the SAME defect class at test-delivery time: an admin clicking 'Send test delivery' causes the backend to re-fetch the ALREADY-STORED target URL on demand; a URL benign at registration can be repointed at an internal host (169.254.169.254 / 127.0.0.1 / RFC 1918) by the time this later fetch runs (DNS rebinding, or a since-edited endpoint) — a textbook TOCTOU. OWASP API7:2023 SSRF. Was blocked ONLY by the hand-rolled ssrf_missing_allowlist_check_guard.sh. Expiry trigger: Add a spec item (e.g. a new ssrf-prevention-l0.yaml or an addition to webhook-l0) capturing the use-time-revalidation invariant; ship a common/UrlAllowlistValidator SPI; wire a practices/evals shell guard requiring every restTemplate.<fetch-method>(<var>, ...) call in a *Service.java to be preceded, in the same file, by an AllowlistValidator.assertAllowed(...)/.validate(...) call."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S2.AUTHZ.FE/, practices/consumer-proof/engine/canary-gaps.yaml"
+  - persona: engine-w1
+    finding: "G3 (WARN): templates/L0/fork-receiver-kit/use-caller-id.ts (the useCallerRole primitive this scenario, S3.b2b-admin, and other scenarios all reuse) has ZERO unit test coverage anywhere in the repo — confirmed absent: no frontend/tests/*.vitest.ts or any other test file references it (grep for 'caller' across frontend/tests returns 0 hits). A capability gap in the catalog's OWN test-coverage methodology for a widely-reused L0 primitive, parallel in shape to the parse-error.ts gap iter5-G4 found and closed this wave. Expiry trigger: Add vitest unit tests for use-caller-id.ts covering role resolution and the caller-role-absent fallback path; add to the main R25 frontend test-coverage gate so future changes to this primitive remain tested."
+    classification: scope_deferral
+    references_artifact_path: "templates/L0/fork-receiver-kit/use-caller-id.ts, practices/consumer-proof/scenarios/S2.AUTHZ.FE/"

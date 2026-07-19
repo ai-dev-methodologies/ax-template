@@ -9,10 +9,10 @@ ax = **AI transformation**. This repo is the source of the Claude Code skill
 **`/ax-transform`** and a composition kit you fork to start a new
 project. Every layer of the stack ships with rule-enforcement wired in:
 
-- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (14 ESLint rules) + 99-rule
+- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (14 ESLint rules) + 100-rule
   evidence-anchored catalog (`practices-react/rules/`).
 - **Spring Boot side** — `@Tag`-based JUnit + RestAssured tests
-  (`./gradlew test{Domain}`) + 232-rule Java/Spring catalog
+  (`./gradlew test{Domain}`) + 233-rule Java/Spring catalog
   (`practices/rules/`).
 - **Spec-first contract** — every domain has a Spec Trio
   (`specs/X.yaml` + `contracts/X-openapi.yaml` + `blueprints/X-manifest.yaml`).
@@ -42,7 +42,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-25 L4 domains + 11 active recipes · 232 Java rules · 99 React rules · 14 ESLint rules · 92 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+25 L4 domains + 11 active recipes · 233 Java rules · 100 React rules · 14 ESLint rules · 94 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -73,8 +73,8 @@ loop.
 |-------|-------|-----------|
 | Backend reference workload | `backend/` — Spring Boot 3 + Java 21, 14 auth endpoints (signup/login/OAuth Google·Naver·Kakao/password reset/RBAC ADMIN·MANAGER·MEMBER), 5 CRUD endpoints, 1 rate-limit endpoint | TDD-built; per-domain `./gradlew test{Domain}` is binary pass/fail (status matrix in CLAUDE.md Build & Test) |
 | Frontend reference workload | `frontend/` — React 19 + Next.js 15, OAuth UI, login pages, e2e Playwright tests | self-tests the ESLint plugin |
-| Java/Spring rule catalog | `practices/` — 232 rules / 22+ categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
-| React/Next.js rule catalog | `practices-react/` — 99 rules / 9 families, citing canonical React 19 / Next.js 16 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
+| Java/Spring rule catalog | `practices/` — 233 rules / 22+ categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
+| React/Next.js rule catalog | `practices-react/` — 100 rules / 9 families, citing canonical React 19 / Next.js 16 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
 | ESLint plugin (React enforcement) | `practices-react/eslint-plugin-ax/` — 14 custom rules (incl. 3 frontend-decomposition: cross-feature / layer-direction / published-API-barrel) | RuleTester suites; install in any downstream project |
 | Spec Trio (per domain) | `specs/<domain>.yaml` + `contracts/<domain>-openapi.yaml` + `blueprints/<domain>-manifest.yaml` | enforced by `spec_ref_guard.sh` — every rule must point to a spec item |
 | 4 hard gates | `practices/evals/{spec_ref,substance,time_decay,evidence}_guard.sh` (Java) + `practices-react/evals/run.sh` (React) | block commits / pushes via `.githooks/{pre-commit,pre-push}` when catalog quality degrades |
@@ -106,13 +106,13 @@ cat recipes/_MANIFEST.yaml | head -40
 cat recipes/saas-subscription/RECIPE.md     # example
 
 # 4. Run the full catalog verification (proves the bundle is intact)
-bash practices/evals/run-all-guards.sh       # 91 hard guards (all PASS expected; 92nd = pre-push recency guard)
+bash practices/evals/run-all-guards.sh       # 94 hard guards (all PASS expected; 95th = pre-push recency guard)
 
 # Per-domain catalog tasks — the "binary pass/fail" surface (R64+ baseline)
 cd backend
 ./gradlew testAsvs              # GREEN — 26 ASVS items
 ./gradlew testCrud              # GREEN — 7 CRUD security tests
-./gradlew testPractices         # GREEN — 232 rules
+./gradlew testPractices         # GREEN — 233 rules
 ./gradlew testPayment           # GREEN — 29 PAYMENT items
 ./gradlew testRateLimit         # GREEN
 ./gradlew testNotification      # GREEN
@@ -182,7 +182,7 @@ reference workload ships `mock` provider only; the redirect-style hook
 
 ## Rules currently enforced
 
-### Spring/Java (testPractices — 232 rules / 22+ categories)
+### Spring/Java (testPractices — 233 rules / 22+ categories)
 
 `lang-`, `core-`, `config-`, `web-`, `http-`, `persistence-`, `transaction-`,
 `migration-`, `security-`, `validation-`, `error-`, `api-`, `async-`,
@@ -235,9 +235,9 @@ ax-template/
 │   └── ratelimit-manifest.yaml
 │
 ├── practices/                      # Java/Spring catalog
-│   ├── rules/                      # 232 rule.md files
+│   ├── rules/                      # 233 rule.md files
 │   ├── upstream/                   # External doc snapshots
-│   ├── evals/                      # 4 hard gates + 92 hard guards
+│   ├── evals/                      # 4 hard gates + 94 hard guards
 │   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)
 │   ├── SKILL.md                    # subsystem skill
 │   ├── MAINTAINER.md               # catalog maintainer guide

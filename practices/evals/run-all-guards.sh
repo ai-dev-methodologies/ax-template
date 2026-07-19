@@ -1238,6 +1238,26 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/full_trio_artifact_completeness_guard.sh" --root "$SCRIPT_DIR/fixtures/full_trio_artifact_completeness/fail_missing_artifacts"
 fi
 
+echo "[90] admin_preauthorize_guard.sh (wave-1 exit cleanup — promoted from practices/consumer-proof/scenarios/S3.b2b-admin/scenario-guards/; iter2-G1 BFLA closure; binds practices/rules/bfla-privileged-endpoint-authz-presence.md's verification.guard)"
+run_guard "admin_preauthorize/live" 0 \
+    bash "$SCRIPT_DIR/admin_preauthorize_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "admin_preauthorize/fixture_pass" 0 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/pass"
+    run_guard "admin_preauthorize/fixture_fail_missing_preauthorize" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_missing_preauthorize"
+fi
+
+echo "[91] locale_aware_format_guard.sh (wave-1 exit cleanup — was shipped alongside practices-react/rules/locale-aware-number-date-format.md but never wired into run-all-guards.sh; iter1-G2 / CANARY-001 closure)"
+run_guard "locale_aware_format/live" 0 \
+    bash "$SCRIPT_DIR/locale_aware_format_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "locale_aware_format/fixture_pass" 0 \
+        bash "$SCRIPT_DIR/locale_aware_format_guard.sh" --root "$SCRIPT_DIR/fixtures/locale-aware-format/pass_intl_format"
+    run_guard "locale_aware_format/fixture_fail" 1 \
+        bash "$SCRIPT_DIR/locale_aware_format_guard.sh" --root "$SCRIPT_DIR/fixtures/locale-aware-format/fail_manual_format"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

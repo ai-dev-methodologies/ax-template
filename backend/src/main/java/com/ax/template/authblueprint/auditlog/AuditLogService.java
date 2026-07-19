@@ -41,9 +41,11 @@ public class AuditLogService {
     public static final int MAX_PAGE_SIZE = 200;
 
     private final AuditLogRepository repository;
+    private final AuditLogPiiRedactor piiRedactor;
 
-    public AuditLogService(AuditLogRepository repository) {
+    public AuditLogService(AuditLogRepository repository, AuditLogPiiRedactor piiRedactor) {
         this.repository = repository;
+        this.piiRedactor = piiRedactor;
     }
 
     /**
@@ -65,13 +67,16 @@ public class AuditLogService {
      * directly — it must NOT delegate to {@link #record(AuditLog)}, because a self-invocation
      * bypasses the Spring proxy and would lose the isolated-transaction semantics.
      * <p>
-     * Trace: AUDIT-RECORD-001 / AUDIT-RECORD-003.
+     * Trace: AUDIT-RECORD-001 / AUDIT-RECORD-003 / AUDIT-PII-001 — {@code actorIp} is
+     * redacted through the SAME {@link AuditLogPiiRedactor} the {@code @Audited}
+     * aspect uses, so cross-feature callers using this published port get the
+     * identical PII posture as the aspect-driven write path (S2.AUDIT-PII.XB closure).
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AuditLog record(AuditLogDto dto) {
         AuditLog.Builder b = AuditLog.builder()
             .actorUserId(dto.actorUserId())
-            .actorIp(dto.actorIp())
+            .actorIp(piiRedactor.redactIp(dto.actorIp()))
             .action(dto.action())
             .resourceType(dto.resourceType())
             .resourceId(dto.resourceId())

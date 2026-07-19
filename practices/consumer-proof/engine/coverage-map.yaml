@@ -1618,31 +1618,46 @@ cells:
   concern: AUDIT-PII
   layer: FE
   weight: 2
-  status: partial
+  status: covered
   covered_by:
   - templates/L0/fork-receiver-kit/parse-error.ts
   - practices-react/rules/no-rrn-display-without-legal-basis-gate.md
   - practices-react/rules/no-rrn-in-form-fields.md
   enforced_by: []
-  nonvacuity: []
+  nonvacuity:
+  - frontend/tests/parse-error-denylist.vitest.ts
   backlog_ref: null
   na_reason: null
-  notes: parse-error.ts documents a PII deny-list on ProblemDetail unwrap and is used in 21 FE files across
-    9 domains (grep-verified), but no frontend/tests/*.vitest.ts* unit-tests it directly. Nonvacuity missing
-    — partial.
+  notes: 'wave-1 exit cleanup (2026-07-20): the prior "no frontend/tests/*.vitest.ts* unit-tests it"
+    note is now false — frontend/tests/parse-error-denylist.vitest.ts exists (10 vitest cases covering
+    both the text/html and RFC 9457 JSON branches; RED-on-revert is mechanical: reverting the JSON-branch
+    deny-list fix flips 3/10 cases to failing). parse-error.ts is used in 21 FE files across 9 domains
+    (grep-verified). The other two covered_by rules (no-rrn-display-without-legal-basis-gate.md,
+    no-rrn-in-form-fields.md) are intentionally verification.type: review (manual tier, no automated
+    test expected) — not a gap in this flip.'
 - id: S2.AUDIT-PII.XB
   tier: S2
   concern: AUDIT-PII
   layer: XB
   weight: 2
-  status: gap
-  covered_by: []
-  enforced_by: []
-  nonvacuity: []
+  status: partial
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/auditlog/AuditLogService.java
+  enforced_by:
+  - ./gradlew testAuditLog
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/auditlog/AuditLogDtoPiiTest.java
   backlog_ref: null
   na_reason: null
-  notes: No cross-boundary test proves a PII-bearing BE error/response is actually redacted by the time
-    it reaches FE state/render.
+  notes: 'Closed the live write-port leak: AuditLogService.record(AuditLogDto) — the
+    published cross-feature audit-write port other domains call — built the AuditLog
+    entity straight from the caller-supplied raw actorIp with no redaction, unlike
+    the @Audited aspect path which already redacts via AuditLogPiiRedactor. Any
+    domain writing through this port stored (and AuditLogResponse.from() would
+    then serve to the FE) an unmasked IP. Fixed by routing dto.actorIp() through
+    the same AuditLogPiiRedactor; AuditLogDtoPiiTest proves it (RED on revert).
+    Still partial: no FE-side/E2E assertion that AuditLogResponse redaction
+    survives into FE render — that slice of the original XB gap remains open.'
 - id: S2.ERROR-CONTRACT.BE
   tier: S2
   concern: ERROR-CONTRACT
@@ -1817,15 +1832,22 @@ cells:
   concern: TIME-LOCALE
   layer: FE
   weight: 1
-  status: gap
-  covered_by: []
-  enforced_by: []
+  status: partial
+  covered_by:
+  - practices-react/rules/locale-aware-number-date-format.md
+  - practices/evals/locale_aware_format_guard.sh
+  enforced_by:
+  - practices/evals/locale_aware_format_guard.sh
   nonvacuity: []
   backlog_ref: null
   na_reason: null
-  notes: 'CONFIRMED absent: no practices-react rule and no frontend test governs locale-aware number/date
-    formatting (grep across practices-react/rules/*.md for locale/Intl/toLocaleString returned no genuine
-    hit). Same underlying absence used as CANARY-001.'
+  notes: 'wave-1 exit cleanup (2026-07-20): the prior "CONFIRMED absent" note is now false — a
+    practices-react rule + a wired practices/evals shell guard exist (guard runs live scan of
+    frontend/src, 24 *.tsx clean, and has its own fail_manual_format/pass_intl_format fixture
+    pair proving the GUARD itself is non-vacuous). Left at partial, not covered: there is no
+    frontend/tests/*.vitest.ts application-level test exercising a real component against this
+    invariant — the guard fixtures prove the guard works, not that shipped application code is
+    RED-tested for it, so nonvacuity stays empty pending that test.'
 - id: S2.TIME-LOCALE.XB
   tier: S2
   concern: TIME-LOCALE
@@ -1966,19 +1988,34 @@ cells:
   covered_by:
   - recipes/e-commerce/RECIPE.md
   - skills/_tests/sealed-verdict/e-commerce-verdict.md
+  - practices-react/rules/locale-aware-number-date-format.md
   enforced_by:
   - skills/_tests/sealed-verdict/e-commerce-verdict.md (must_score/must_total + should_score/should_total,
     threshold-gated PASS)
   - ./gradlew testEcommerce
+  - practices/evals/locale_aware_format_guard.sh
   nonvacuity:
   - skills/_tests/sealed-verdict/e-commerce-verdict.md
   - backend/src/test/java/com/ax/template/authblueprint/ecommerce/EcommerceE2ETest.java
+  - practices/evals/fixtures/locale-aware-format/fail_manual_format/
+  - practices/evals/fixtures/locale-aware-format/pass_intl_format/
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
     not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable BE capstone E2E test
-    (EcommerceE2ETest, composes crud+payment+notification+audit-log+search).
+    (EcommerceE2ETest, composes crud+payment+notification+audit-log+search). 2026-07-20 closure — the
+    consumer-proof S3.e-commerce scenario (practices/consumer-proof/scenarios/S3.e-commerce/) had surfaced
+    a confirmed catalog gap via a hand-rolled scenario-local guard (canary-gaps.yaml CANARY-001, FE
+    locale-aware number/date formatting had no rule/ESLint-rule/guard anywhere). That gap is now closed at
+    the catalog level — practices-react/rules/locale-aware-number-date-format.md (evidence-anchored to
+    ECMA-402/MDN) + practices/evals/locale_aware_format_guard.sh (spec_ref_guard + evidence_guard +
+    substance_guard + time_decay_guard all pass) + a fail/pass fixture pair proving the guard is RED-able
+    (fail_manual_format exits 1 with signature LOCALE_FORMAT_VIOLATION; pass_intl_format exits 0,
+    non-vacuously scanned). The guard also runs clean against the real frontend/src (24 *.tsx files, 0
+    hits) but is NOT YET wired into practices/evals/run-all-guards.sh — that wiring is a separate decision
+    left for a future change, out of scope here. The scenario-local
+    scenario-guards/locale_format_guard.sh is unchanged and still proves the scenario's own composition.
 - id: S3.crm
   tier: S3
   recipe: crm

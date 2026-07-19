@@ -1,0 +1,24 @@
+# engine — consumer-proof harness iter1 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S3.e-commerce — receipt, currency display, order history.
+# 4 enforcement gaps identified and logged via mechanical harness.
+#
+iteration: 1
+findings:
+  - persona: engine-w1
+    finding: "G1 (WARN): No standalone --root-parameterized shell guard for the unbounded-repository-read invariant. A *Repository method named findAll returning List/Collection/Set/Iterable/Stream WITHOUT a Pageable parameter violates PAGE-LIMIT-001. Specified in practices/rules/api-pagination-pageable.md and enforced via ArchitectureUnboundedRepositoryListTest (ArchUnit), which requires full ./gradlew test compile. Consumer-proof shell harness lacks text-scanning guard for this shape — portable shell-guard enforcement layer capability gap. Expiry trigger: Shell guard for unbounded-repository-read shape (grep for @Repository method + findAll + absence of Pageable param)."
+    classification: scope_deferral
+    references_artifact_path: "practices/rules/api-pagination-pageable.md, practices/evals/architecture_unbounded_repository_list_test.java"
+  - persona: engine-w1
+    finding: "G2 (BLOCK): No FE locale-aware date/time formatting enforcement anywhere in catalog. Receipt feature's manual getMonth()/getDate()/getFullYear() string concatenation and raw toLocaleString() instead of Intl.DateTimeFormat/Intl.NumberFormat have NO practices-react rule, NO shipped ax/* ESLint rule (14 rules enumerated, none locale-related), NO guard, NO template. Full-stack coverage void matching existing absence CANARY-001 / cell S2.TIME-LOCALE.FE. Expiry trigger: Ship practices-react rule for locale-aware date formatting OR ax/* ESLint rule OR update currency-formatter.tsx template to cover dates."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S3.e-commerce/, templates/L1/components/"
+  - persona: engine-w1
+    finding: "G3 (WARN): FE currency-amount display has no executable enforcement — only review-tier. currency-amount-no-raw-jsx-render.md explicitly documents ax/no-raw-billing-amount NOT shipped in eslint-plugin-ax (14 rules listed, none cover currency display). Canonical template templates/L1/components/currency-formatter.tsx exists but no mechanical block of raw-number / .toLocaleString() bypass. Dogfood violation catchable only via hand-rolled scenario-guard. Expiry trigger: Ship ax/no-raw-billing-amount ESLint rule OR add executable guard to practices/evals/."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/scenarios/S3.e-commerce/, practices-react/docs/currency-amount-no-raw-jsx-render.md, templates/L1/components/currency-formatter.tsx"
+  - persona: engine-w1
+    finding: "G4 (WARN): Existing shipped guard practices/evals/money_boundary_seam_guard.sh does not strip comments before pattern-matching (raw grep -rnE over *.java), unlike practices/evals/controller_repository_shell_guard.sh which does. Clean file whose comment/javadoc merely quotes the forbidden BigDecimal.valueOf(...getTotalAmount()) pattern is false-positive BLOCKED (over-blocking / vacuity-inverse). Real robustness defect and cross-guard inconsistency in shipped enforcement asset — this is a defect in the catalog's OWN guard-writing methodology (inconsistent comment-stripping discipline across guards), not a product-scope deferral. Expiry trigger: Harden money_boundary_seam_guard.sh to strip /* */ / // comments before pattern matching (match controller_repository_shell_guard.sh behavior)."
+    classification: methodology_gap
+    references_artifact_path: "practices/evals/money_boundary_seam_guard.sh, practices/evals/controller_repository_shell_guard.sh"
