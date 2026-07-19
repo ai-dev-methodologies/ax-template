@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -35,6 +36,7 @@ public class AuthServiceImpl {
     private final VerificationTokenRepository verificationTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final OAuthService oAuthService;
+    private final DevTokenSink devTokenSink;
     private final long graceWindowSeconds;
     private final boolean autoVerifyOnSignup;
     private final boolean allowRoleOverride;
@@ -45,6 +47,7 @@ public class AuthServiceImpl {
                            VerificationTokenRepository verificationTokenRepository,
                            RefreshTokenRepository refreshTokenRepository,
                            OAuthService oAuthService,
+                           DevTokenSink devTokenSink,
                            @Value("${auth.refresh.grace-window-seconds:30}") long graceWindowSeconds,
                            @Value("${auth.signup.auto-verify:false}") boolean autoVerifyOnSignup,
                            @Value("${auth.signup.allow-role-override:true}") boolean allowRoleOverride) {
@@ -54,6 +57,7 @@ public class AuthServiceImpl {
         this.verificationTokenRepository = verificationTokenRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.oAuthService = oAuthService;
+        this.devTokenSink = devTokenSink;
         this.graceWindowSeconds = graceWindowSeconds;
         this.autoVerifyOnSignup = autoVerifyOnSignup;
         this.allowRoleOverride = allowRoleOverride;
@@ -97,21 +101,25 @@ public class AuthServiceImpl {
             vt.setTokenType("VERIFY");
             verificationTokenRepository.save(vt);
 
-            System.out.println("[AUTH-TOKEN] type=VERIFY email=" + request.getEmail() + " token=" + verificationToken);
+            devTokenSink.emit("VERIFY", request.getEmail(), verificationToken);
 
             return new SignupResponse(saved.id().toString(), "Signup successful. Check your email for verification.");
         }
 
-        System.out.println("[AUTH-TOKEN] type=VERIFY email=" + request.getEmail() + " token=" + verificationToken);
+        // Decoy dump on the already-registered branch keeps the two paths log-symmetric
+        // (user-enumeration resistance); the token here is the never-persisted throwaway UUID.
+        devTokenSink.emit("VERIFY", request.getEmail(), verificationToken);
         return new SignupResponse(UUID.randomUUID().toString(), "Signup successful. Check your email for verification.");
     }
 
-    private UserRole resolveRole(String requested) {
+    // package-private (not private) so AuthRoleLocaleTest can exercise the locale-safe fold
+    // directly without booting a Spring context.
+    UserRole resolveRole(String requested) {
         if (!allowRoleOverride || requested == null || requested.isBlank()) {
             return UserRole.MEMBER;
         }
         try {
-            return UserRole.valueOf(requested.toUpperCase());
+            return UserRole.valueOf(requested.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException unknownRole) {
             // IMW2-C (IDW2 dogfood): do NOT silently downgrade an UNKNOWN role to
             // MEMBER — that hides the deviation as confusing later 403s. Surface it
@@ -244,7 +252,7 @@ public class AuthServiceImpl {
             newToken.setTokenType("VERIFY");
             verificationTokenRepository.save(newToken);
 
-            System.out.println("[AUTH-TOKEN] type=VERIFY email=" + email + " token=" + newToken.getToken());
+            devTokenSink.emit("VERIFY", email, newToken.getToken());
         }
         return new ResendVerificationResponse("If the email exists and is unverified, a new verification email has been sent.");
     }
@@ -260,7 +268,7 @@ public class AuthServiceImpl {
             vt.setUsed(false);
             vt.setTokenType("RESET");
             verificationTokenRepository.save(vt);
-            System.out.println("[AUTH-TOKEN] type=RESET email=" + email + " token=" + resetToken);
+            devTokenSink.emit("RESET", email, resetToken);
         }
         return new PasswordResetRequestResponse("If the email exists, a reset link has been sent.");
     }

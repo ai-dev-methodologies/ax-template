@@ -87,7 +87,7 @@ public class OAuthService {
         String providerUserId = extractProviderUserId(provider, userInfo);
         String email = extractEmail(provider, userInfo);
 
-        OAuthProvider oauthProvider = OAuthProvider.valueOf(provider.toUpperCase());
+        OAuthProvider oauthProvider = OAuthProvider.valueOf(provider.toUpperCase(Locale.ROOT));
         UserAccountDto user = findOrCreateUser(oauthProvider, providerUserId, email);
 
         String jwt = jwtTokenService.generateAccessToken(user.id().toString(), user.email(), user.role().name());
@@ -103,7 +103,7 @@ public class OAuthService {
             throw new InvalidOAuthStateException("Invalid or missing OAuth state parameter");
         }
 
-        OAuthProvider oauthProvider = OAuthProvider.valueOf(request.provider().toUpperCase());
+        OAuthProvider oauthProvider = OAuthProvider.valueOf(request.provider().toUpperCase(Locale.ROOT));
         UserAccountDto user = accounts.findById(UUID.fromString(userId))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -121,7 +121,7 @@ public class OAuthService {
 
     @Transactional
     public void unlinkProvider(String userId, String provider) {
-        OAuthProvider oauthProvider = OAuthProvider.valueOf(provider.toUpperCase());
+        OAuthProvider oauthProvider = OAuthProvider.valueOf(provider.toUpperCase(Locale.ROOT));
         UserAccountDto user = accounts.findById(UUID.fromString(userId))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -144,7 +144,7 @@ public class OAuthService {
     }
 
     private ClientRegistration getRegistration(String provider) {
-        ClientRegistration registration = clientRegistrationRepository.findByRegistrationId(provider.toLowerCase());
+        ClientRegistration registration = clientRegistrationRepository.findByRegistrationId(provider.toLowerCase(Locale.ROOT));
         if (registration == null) {
             throw new IllegalArgumentException("Unknown OAuth provider: " + provider);
         }
@@ -192,7 +192,7 @@ public class OAuthService {
 
     @SuppressWarnings("unchecked")
     private String extractProviderUserId(String provider, Map<String, Object> userInfo) {
-        return switch (provider.toLowerCase()) {
+        return switch (provider.toLowerCase(Locale.ROOT)) {
             case "google" -> (String) userInfo.get("sub");
             case "naver" -> {
                 Map<String, Object> response = (Map<String, Object>) userInfo.get("response");
@@ -205,7 +205,7 @@ public class OAuthService {
 
     @SuppressWarnings("unchecked")
     private String extractEmail(String provider, Map<String, Object> userInfo) {
-        return switch (provider.toLowerCase()) {
+        return switch (provider.toLowerCase(Locale.ROOT)) {
             case "google" -> (String) userInfo.get("email");
             case "naver" -> {
                 Map<String, Object> response = (Map<String, Object>) userInfo.get("response");
