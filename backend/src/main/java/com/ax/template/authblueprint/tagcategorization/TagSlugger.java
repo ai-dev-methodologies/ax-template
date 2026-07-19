@@ -1,6 +1,7 @@
 package com.ax.template.authblueprint.tagcategorization;
 
 import java.text.Normalizer;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -36,7 +37,7 @@ public final class TagSlugger {
         }
         String normalized = Normalizer.normalize(name, Normalizer.Form.NFKD);
         String stripped = COMBINING_MARKS.matcher(normalized).replaceAll("");
-        String lower = stripped.toLowerCase();
+        String lower = stripped.toLowerCase(Locale.ROOT);
         String hyphenated = NON_ALNUM.matcher(lower).replaceAll("-");
         String trimmed = trimHyphens(hyphenated);
         if (trimmed.isEmpty()) {

@@ -4,6 +4,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
+
 /**
  * VERSION-OBSERVABILITY-001 — EXACTLY 3 canonical Micrometer metrics with bounded-cardinality labels:
  * <ul>
@@ -41,7 +43,7 @@ public class ApiVersioningMetrics {
     public void requestServed(String version, ApiVersionCatalog.Status status) {
         Counter.builder(REQUESTS_BY_VERSION)
                 .tag(TAG_VERSION, version)
-                .tag(TAG_STATUS, status.name().toLowerCase())
+                .tag(TAG_STATUS, status.name().toLowerCase(Locale.ROOT))
                 .register(registry).increment();
     }
 

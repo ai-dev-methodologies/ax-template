@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -217,7 +218,7 @@ public class QuorumService {
             yesWeight, noWeight, abstainWeight,
             castEligibleWeight, totalEligibleWeight, Instant.now(clock)));
 
-        metrics.recordResolution(outcome.name().toLowerCase());
+        metrics.recordResolution(outcome.name().toLowerCase(Locale.ROOT));
         return resolution;
     }
 

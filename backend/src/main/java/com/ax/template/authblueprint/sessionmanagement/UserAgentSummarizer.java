@@ -1,5 +1,7 @@
 package com.ax.template.authblueprint.sessionmanagement;
 
+import java.util.Locale;
+
 /**
  * Trivial UA summarizer — extracts a coarse browser / OS family from the raw header.
  *
@@ -17,7 +19,7 @@ public final class UserAgentSummarizer {
         if (ua == null || ua.isBlank()) {
             return "unknown";
         }
-        String lower = ua.toLowerCase();
+        String lower = ua.toLowerCase(Locale.ROOT);
         String browser = detectBrowser(lower);
         String os = detectOs(lower);
         return browser + " on " + os;

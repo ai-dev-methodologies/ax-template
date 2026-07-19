@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -161,6 +162,6 @@ public class NotificationController {
         if (status == null || status.isBlank() || status.equalsIgnoreCase("ALL")) {
             return null;
         }
-        return NotificationStatus.valueOf(status.toUpperCase());
+        return NotificationStatus.valueOf(status.toUpperCase(Locale.ROOT));
     }
 }

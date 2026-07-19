@@ -10,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -94,7 +95,7 @@ public class CircuitBreakerPolicy {
                 .resourceType("webhook_endpoint")
                 .resourceId(endpointId.toString())
                 .outcome(AuditOutcome.SUCCESS)
-                .metadataJson(String.format(
+                .metadataJson(String.format(Locale.ROOT,
                     "{\"failure_rate\":%.2f,\"window_size\":%d,\"failed\":%d}",
                     rate, totalTerminal, totalFailed))
                 .build());

@@ -5,6 +5,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.http.CacheControl;
@@ -40,7 +41,7 @@ public class ApiVersionDiscoveryController {
         for (ApiVersionCatalog.Version v : catalog.all()) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("version", v.label());
-            entry.put("status", v.status().name().toLowerCase());
+            entry.put("status", v.status().name().toLowerCase(Locale.ROOT));
             if (v.isDeprecated()) {
                 entry.put("deprecationDate", RFC_3339.format(v.deprecatedAt()));
                 entry.put("sunsetDate", RFC_3339.format(v.sunsetAt()));

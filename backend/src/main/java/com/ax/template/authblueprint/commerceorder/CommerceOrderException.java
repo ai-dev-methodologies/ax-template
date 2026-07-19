@@ -3,6 +3,7 @@ package com.ax.template.authblueprint.commerceorder;
 import org.springframework.http.HttpStatus;
 
 import java.net.URI;
+import java.util.Locale;
 
 /**
  * Domain exception for commerceorder — carries a stable {@code code} for client branching.
@@ -32,6 +33,6 @@ public class CommerceOrderException extends RuntimeException {
     public HttpStatus getHttpStatus() { return httpStatus; }
 
     public URI type() {
-        return URI.create("urn:problem:commerce-order:" + code.toLowerCase().replace('_', '-'));
+        return URI.create("urn:problem:commerce-order:" + code.toLowerCase(Locale.ROOT).replace('_', '-'));
     }
 }

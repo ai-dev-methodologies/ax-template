@@ -1,6 +1,7 @@
 package com.ax.template.authblueprint.apiversioning;
 
 import java.net.URI;
+import java.util.Locale;
 
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -28,7 +29,7 @@ public class ApiVersioningAdvice {
     public ResponseEntity<ProblemDetail> handle(ApiVersioningException ex) {
         ApiVersioningException.Kind kind = ex.kind();
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(kind.status, ex.getMessage());
-        pd.setType(URI.create("https://errors.example.com/api-version-" + kind.code.toLowerCase().replace('_', '-')));
+        pd.setType(URI.create("https://errors.example.com/api-version-" + kind.code.toLowerCase(Locale.ROOT).replace('_', '-')));
         pd.setTitle(kind.code);
         pd.setProperty("code", kind.code);
         return ResponseEntity.status(kind.status)

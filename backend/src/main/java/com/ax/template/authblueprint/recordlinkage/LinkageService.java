@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -185,7 +186,7 @@ public class LinkageService {
     }
 
     private static String normalize(String v) {
-        return v == null ? null : v.strip().toLowerCase().replaceAll("\\s+", " ");
+        return v == null ? null : v.strip().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
     }
 
     private static String valueOf(LinkageRecord r, String field) {
