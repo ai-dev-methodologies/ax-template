@@ -1350,12 +1350,18 @@ cells:
   - ./gradlew testAuthzParity
   - ./gradlew testAccessGrant
   - practices/evals/role_literal_guard.sh
+  - practices/evals/admin_preauthorize_guard.sh
   nonvacuity:
   - backend/src/test/java/com/ax/template/authblueprint/authzparity/AuthzParityViolationProofTest.java
   - backend/src/test/java/com/ax/template/authblueprint/accessgrant/AccessGrantViolationProofTest.java
   backlog_ref: null
   na_reason: null
-  notes: ''
+  notes: 'The non-vacuity proofs for this cell are the two ViolationProofTests + the per-domain AUTHZ
+    integration items (they assert HTTP 403 for a non-admin caller). admin_preauthorize_guard.sh is a
+    SUPPLEMENTARY best-effort static backstop for the BFLA-presence shape (annotation dropped / matcher
+    mis-scoped); it models the common SecurityConfig matcher + method-@PreAuthorize cases with verb +
+    declared-order awareness and FAILS CLOSED on anything it cannot prove. It is NOT the authoritative
+    Spring-authz verifier and NOT this cell''s primary non-vacuity proof.'
 - id: S2.AUTHZ.FE
   tier: S2
   concern: AUTHZ

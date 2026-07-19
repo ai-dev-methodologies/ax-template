@@ -116,4 +116,30 @@ whose required authority is admin (`ROLE_ADMIN`). It complements, rather than re
 `role_literal_guard.sh` (which validates that an `@PreAuthorize` authority STRING is a known-valid
 role — a different invariant: it never checks whether the annotation is present at all).
 
+### Guard scope — best-effort STATIC backstop, fail-closed, NOT authoritative
+
+`admin_preauthorize_guard.sh` is a **best-effort static heuristic**, not an exhaustive Spring-Security
+authorization verifier. It models the two common coverage shapes — method-/class-level `@PreAuthorize`
+and the `SecurityConfig` `requestMatchers(...)` chain — and it models the chain the way Spring evaluates
+it: in **declared order**, honoring the optional leading `HttpMethod` (a verb-specific matcher matches
+only that verb; a verb-agnostic matcher matches every verb), crediting an endpoint as admin-covered
+**only if the first matcher that matches its (verb, path) requires admin authority**. This is what
+closed the round-2 verb bypass — a verb-scoped `hasAuthority('ROLE_ADMIN')` GET matcher declared before
+a verb-agnostic `.authenticated()` fallback does **not** protect a POST/PUT/PATCH/DELETE, because
+Spring's first match for those verbs is the `.authenticated()` rule.
+
+Because it is static, it **FAILS CLOSED**: whenever it cannot *prove* admin coverage for every verb an
+endpoint answers — SecurityConfig absent, more than one filter chain, a `securityMatcher`-scoped chain,
+a rule it does not model (`.access(...)`, a custom `AuthorizationManager`), a non-literal/variable path
+argument, or a wildcard shape it cannot evaluate precisely — it does **not** credit coverage and demands
+an explicit effective method-level `@PreAuthorize`, else it BLOCKS. A security guard must never credit on
+uncertainty. The trade-off is that an unusual-but-safe config may be asked to add a defense-in-depth
+annotation; that is acceptable for a supplementary backstop.
+
+The guard is **not the authoritative BFLA control and not the primary non-vacuity proof**. The
+authoritative control is `SecurityConfig.java` itself **plus the per-domain integration tests that assert
+HTTP 403 for a non-admin caller** (e.g. `AuthzParityViolationProofTest` / `AccessGrantViolationProofTest`
+and the `./gradlew test{Domain}` `AUTHZ` items). This guard is a cheap early-warning regression net for
+the "annotation dropped / matcher mis-scoped" shape; it complements those tests, it does not replace them.
+
 Reference: [OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/)

@@ -1258,6 +1258,13 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_unprotected_patch"
     run_guard "admin_preauthorize/fixture_fail_permitall" 1 \
         bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_permitall"
+    # codex round-2 HIGH verb-bypass closure: a verb-scoped ROLE_ADMIN GET
+    # matcher declared before a verb-agnostic .authenticated() fallback FALSELY
+    # passed the pre-hardening guard for a POST (it credited the GET matcher's
+    # ROLE_ADMIN for all verbs). The hardened guard models verb + declared-order
+    # + first-match authority → the unannotated POST is BLOCKED.
+    run_guard "admin_preauthorize/fixture_fail_verb_scoped_matcher" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_verb_scoped_matcher"
 fi
 
 echo "[91] locale_aware_format_guard.sh (wave-1 exit cleanup — was shipped alongside practices-react/rules/locale-aware-number-date-format.md but never wired into run-all-guards.sh; iter1-G2 / CANARY-001 closure)"
