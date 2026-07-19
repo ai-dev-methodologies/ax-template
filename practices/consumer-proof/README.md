@@ -19,22 +19,43 @@ names the failing case.
 ## What this PROVES
 
 For each rule under test there is a **violating** fixture (realistic AI output)
-and a **clean** fixture (the correct rewrite). The proof is falsifiable and
-binary:
+and a **clean** fixture (the correct rewrite). The proof is falsifiable, binary,
+and **non-vacuous** — `exit 0` is reachable only when EVERY expected case
+genuinely ran and each half held on its own terms, not by accident:
 
-- every **violating** fixture MUST drive its gate to a **non-zero** exit (blocked)
-- every **clean** fixture MUST drive its gate to **zero** (passes)
+- every **violating** fixture MUST be blocked **by its intended defect**: its
+  gate exits the **EXPECTED-BLOCK code** (ESLint lint-failure = exit `1`; shell
+  guards = exit `1`) — explicitly **NOT** exit `2` (env/config/usage) and not any
+  other code — **AND** the captured output carries the intended signature (React:
+  the exact `ax/<rule-id>` with no fatal parse/crash message; Java: the guard's
+  own violation signature). A non-zero exit alone is **not** credited.
+- every **clean** fixture MUST (a) **exist** on disk, (b) be **actually scanned**
+  (a positive scan count > 0 — a zero-file / "nothing to check → 0" run is
+  rejected), and (c) drive its gate to **zero** with no violation.
+- every **expected case MUST run** — a dropped case, an empty fixture list, or an
+  un-started lane fails a **cardinality gate** (a partial run is not a full proof).
 
-If either half breaks, the thesis "the catalog mechanically enforces" is false,
-and `run-consumer-proof.sh` fails loudly.
+If any half breaks, the thesis "the catalog mechanically enforces" is false, and
+`run-consumer-proof.sh` fails loudly naming the case.
 
-### Lane A — React / ESLint (convention-free — the flagship)
+### Lane A — React / ESLint
 
-`@ax/eslint-plugin-ax` has **zero path coupling**. A consumer installs the
-plugin, registers it in a flat config, and the rules fire on **arbitrary
-React/TSX anywhere**. The integration is the entire `react/eslint.config.mjs` —
-nothing about the consumer's directory layout, package name, or build system
-matters.
+`@ax/eslint-plugin-ax` is installed as a plugin and its rules run in a flat
+config — the entire integration is `react/eslint.config.mjs`. Path coupling is
+**per-rule**, so state it honestly:
+
+- **Path-agnostic (AST-shape) rules** — `ax/no-array-mutate-on-state`,
+  `ax/prefer-functional-setstate`, `ax/no-server-state-in-local-state` — fire on
+  React/TSX **anywhere**. The consumer's directory layout, package name, and
+  build system are irrelevant to these three.
+- **Route/layer rules** — `ax/no-god-route` (and its siblings) require the
+  Next.js **App-Router path convention** `src/app/**/(page|layout).*`. They do
+  **not** fire on arbitrary React placed outside that path shape. `no-god-route`
+  additionally needs a `"use client"` directive **plus** the line threshold, so
+  its fixture must live under a real `src/app/dashboard/` route path.
+
+So "just install the plugin and every rule fires anywhere" is **true only for the
+AST-shape rules**, not for the route/layer rules — do not overstate it.
 
 | Rule | Violating fixture | Clean fixture |
 |------|-------------------|---------------|
@@ -106,8 +127,13 @@ was skipped for coupling reasons.
   and `ax/prefer-functional-setstate` — the proof still targets the one named
   signature). They are evidence that the intended gate *fires on that shape*,
   not a measurement of real-world AI output frequency.
-- Lane A is the genuinely convention-free result. Lane B is honest about its
-  package-path coupling — that asymmetry is the point, not a defect.
+- Within Lane A the coupling is **per-rule**: the AST-shape rules
+  (`no-array-mutate-on-state`, `prefer-functional-setstate`,
+  `no-server-state-in-local-state`) are genuinely path-agnostic, but the
+  route/layer rules (`no-god-route`, …) require the App-Router path convention —
+  so Lane A is convention-free **only for the AST-shape rules**, not wholesale.
+  Lane B is honest about its whole-package-path coupling — that asymmetry is the
+  point, not a defect.
 
 ---
 
