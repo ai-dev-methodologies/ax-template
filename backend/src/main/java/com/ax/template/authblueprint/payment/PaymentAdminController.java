@@ -3,6 +3,7 @@ package com.ax.template.authblueprint.payment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,7 +23,10 @@ import java.util.UUID;
  * Admin-only endpoints for the Payment blueprint.
  *
  * <p>{@code /api/admin/**} is restricted to ROLE_ADMIN by SecurityConfig
- * (PAYMENT-AUTHZ-004). Force-void records an ADMIN_OVERRIDE ledger event for
+ * (PAYMENT-AUTHZ-004); this controller ALSO carries a class-level
+ * {@code @PreAuthorize("hasAuthority('ROLE_ADMIN')")} as defense-in-depth (method
+ * security is the primary, locally-verifiable gate; the matcher is complementary).
+ * Force-void records an ADMIN_OVERRIDE ledger event for
  * non-repudiation under PCI-DSS audit scope. {@code /reconciliation/run} drives
  * a synchronous drift scan used by the observability test suite.
  *
@@ -32,6 +36,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/admin")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
 public class PaymentAdminController {
 
     private final PaymentService paymentService;

@@ -2,115 +2,71 @@
 # practices/evals/admin_preauthorize_guard.sh
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# HONEST SCOPE (read this first)
+# WHAT IT ENFORCES (purely LOCAL check — no cross-file config parsing)
 # ─────────────────────────────────────────────────────────────────────────────
-# This is a BEST-EFFORT STATIC HEURISTIC backstop for the BFLA-presence
-# invariant. It models the COMMON SecurityConfig matcher-chain shape
-# (`requestMatchers([HttpMethod.X,] "pat")` + a terminal authorization rule, in
-# declared order) plus method-level `@PreAuthorize`/`@PostAuthorize`, and it
-# FAILS CLOSED on anything it cannot prove (see FAIL-CLOSED below). It is NOT an
-# exhaustive Spring-Security authorization verifier: it does not evaluate custom
-# `RequestMatcher` beans, `.access(...)` authorization managers, SpEL beyond the
-# `has*`/`permitAll`/`anonymous` literals, `securityMatcher`-scoped multi-chain
-# setups, or programmatic/variable path construction. When it meets any of those
-# it BLOCKS (demands an explicit method-level `@PreAuthorize`) rather than guess.
-#
-# The AUTHORITATIVE BFLA control for this repo is SecurityConfig.java itself PLUS
-# the per-domain integration tests that assert HTTP 403 for a non-admin caller
-# (e.g. AuthzParityViolationProofTest / AccessGrantViolationProofTest and the
-# `./gradlew test{Domain}` AUTHZ items). This guard is SUPPLEMENTARY: it catches
-# the "someone dropped the annotation / mis-scoped the matcher" regression shape
-# early and cheaply; it is not the primary non-vacuity proof for S2.AUTHZ.BE.
-# ─────────────────────────────────────────────────────────────────────────────
-#
-# Promoted (wave-1 exit cleanup) from
-# practices/consumer-proof/scenarios/S3.b2b-admin/scenario-guards/admin_preauthorize_guard.sh
-# — iter2-G1 dogfood finding (docs/dogfood-ledger/engine-w1-iter2.yaml): no
-# catalog guard enforced the PRESENCE of authorization on admin-surface
-# controller endpoints; role_literal_guard.sh only validates that authority
-# STRINGS in existing @PreAuthorize are known-valid, it is presence-blind.
-# This is the accepted runnable mechanism bound by
-# practices/rules/bfla-privileged-endpoint-authz-presence.md
-# (verification.guard: admin_preauthorize_guard.sh).
-#
-# WHAT IT ENFORCES
-# Every *AdminController.java under
+# For every ADMIN-SURFACE controller under
 #   <root>/backend/src/main/java/com/ax/template/authblueprint/**
-# must be unreachable without an EFFECTIVE authorization check. A mapped
-# method (every @GetMapping/@PostMapping/@PutMapping/@DeleteMapping/
-# @PatchMapping/@RequestMapping) is COVERED if EITHER:
-#   (a) a class-level @PreAuthorize/@PostAuthorize whose SpEL REQUIRES an
-#       authority/role (hasAuthority/hasRole/hasAnyAuthority/hasAnyRole/
-#       hasPermission/denyAll) covers the method (and the method does not
-#       override it with a weaker method-level annotation), OR
-#   (b) the method itself carries its own @PreAuthorize/@PostAuthorize whose
-#       SpEL REQUIRES an authority/role, OR
-#   (c) for EVERY HTTP verb the endpoint answers (from @GetMapping/@PostMapping/
-#       @PutMapping/@DeleteMapping/@PatchMapping, or @RequestMapping(method=…);
-#       a method-less @RequestMapping answers all verbs), the FIRST matcher in
-#       SecurityConfig.java's declared-order authorization chain that matches
-#       BOTH that verb AND the endpoint's resolved path requires an ADMIN
-#       authority (normalized ROLE_ADMIN).
+# — identified as a class whose NAME ends with `AdminController` AND/OR whose
+# class-level `@RequestMapping` path contains `/admin` (path=/value= aliases and
+# the `{...}` array form handled) — EVERY *mutating* mapped endpoint
+# (`@PostMapping`/`@PutMapping`/`@PatchMapping`/`@DeleteMapping`, or
+# `@RequestMapping(method = POST|PUT|PATCH|DELETE...)`, or a method-less
+# `@RequestMapping` which answers every verb) MUST carry an EFFECTIVE admin
+# authorization annotation: a method-level OR class-level
+# `@PreAuthorize`/`@PostAuthorize` whose SpEL REQUIRES an admin authority —
+#   hasAuthority('ROLE_ADMIN') · hasRole('ADMIN') · hasAnyAuthority(all ROLE_ADMIN)
+#   · hasAnyRole(all ADMIN) · denyAll()
+# A method-level annotation OVERRIDES the class-level one (Spring method-security
+# precedence). REJECTED as ineffective (→ BLOCK): permitAll(), anonymous(),
+# isAnonymous(), authenticated()/isAuthenticated()/fullyAuthenticated()/rememberMe()
+# alone, a non-admin authority (e.g. hasAuthority('ROLE_USER')), a hasAny*(...) that
+# mixes in any non-admin alternative, an empty expression, a non-literal SpEL
+# argument (a named constant — we cannot prove it is admin), or NO annotation.
 #
-# FOUR HARDENINGS (wave-1 + codex round-2 bypass closure):
-#   1. Route (c) parses each matcher's REQUIRED AUTHORITY and only credits
-#      coverage when it is admin (ROLE_ADMIN / hasRole('ADMIN')). A matcher
-#      that grants /api/admin/** to ROLE_USER no longer counts as protection.
-#   2. Route (c) uses boundary-aware Ant matching, NOT raw startswith:
-#      "/api/admin/**" covers "/api/admin" and "/api/admin/<anything>" but
-#      NOT "/api/administrator..." (a different path segment).
-#   3. An @PreAuthorize/@PostAuthorize is EFFECTIVE only if its SpEL requires
-#      an authority/role. permitAll()/anonymous()/isAnonymous()/empty/true are
-#      NON-authz and do not cover a method — and a method-level annotation
-#      OVERRIDES the class-level one (Spring method-security precedence).
-#   4. Route (c) models the matcher chain the way Spring evaluates it: in
-#      DECLARED ORDER, honoring the optional leading HttpMethod (a
-#      verb-specific matcher matches ONLY that verb; a verb-agnostic matcher
-#      matches every verb), and crediting an endpoint as admin-covered ONLY IF
-#      the FIRST matcher that matches its (verb, path) requires admin. This
-#      closes the codex round-2 HIGH: a verb-scoped ROLE_ADMIN GET matcher
-#      declared before a verb-agnostic `.authenticated()` fallback does NOT
-#      protect a POST/PUT/PATCH/DELETE — Spring's first match for those verbs
-#      is the `.authenticated()` rule, which admits any authenticated non-admin.
+# ─────────────────────────────────────────────────────────────────────────────
+# WHY THIS SHAPE — the SecurityConfig-parsing bypass class is now MOOT
+# ─────────────────────────────────────────────────────────────────────────────
+# A prior revision of this guard tried to CREDIT admin coverage by statically
+# parsing the Spring `SecurityConfig.java` `authorizeHttpRequests` matcher chain
+# (path Ant-matching + declared-order + verb scoping). A cross-family reviewer
+# then found FOUR distinct static-analysis bypasses across three rounds
+# (verb-scoped matcher; multiple / unscoped filter chains; a
+# `@RequestMapping(path = ...)` alias resolving to the wrong matcher; …), because
+# exhaustively modelling Spring Security's authorization from source is not
+# statically decidable — every hardening left another shape to exploit.
 #
-# FAIL-CLOSED (a security guard must never credit on uncertainty)
-# Route (c) credits admin coverage ONLY when it can PROVE, for every verb the
-# endpoint answers, that the first-matching declared matcher requires admin. It
-# credits NOTHING (→ the endpoint then needs an effective method @PreAuthorize,
-# else BLOCK) whenever it cannot prove that, including:
-#   - SecurityConfig.java absent at the expected path (route (c) inactive; the
-#     original (a)/(b)-only behavior for minimal fixture roots);
-#   - the authorization chain is not fully modelable — not exactly one
-#     authorizeHttpRequests/authorizeRequests block, a chain-level
-#     securityMatcher, a selector followed by a rule we do not model
-#     (.access(...), .hasIpAddress(...), a custom AuthorizationManager, …);
-#   - a matcher whose path argument is not a plain string literal (a variable,
-#     a custom RequestMatcher, a builder) — opaque, cannot be ruled in or out;
-#   - a matcher whose wildcard shape we cannot evaluate precisely (mid-path '*',
-#     '?', '{var}', mid-path '**') AND whose literal prefix does not rule the
-#     endpoint out — treated as a possible match of unknown authority.
-# In every one of those cases the endpoint is NOT credited and must carry an
-# effective method-level @PreAuthorize, or it is BLOCKED.
+# This guard STOPS that whack-a-mole by REMOVING SecurityConfig crediting
+# ENTIRELY. It reads only the controller file. There is no config chain to model,
+# so there is nothing to bypass: the three remaining codex bypasses
+# (verb-scoped matcher · multiple/unscoped chain · @RequestMapping(path=) alias →
+# wrong matcher) are ALL MOOT because the guard no longer credits SecurityConfig
+# at all. The required control is now method-/class-level `@PreAuthorize`
+# (defense-in-depth) — a purely local, decidable property.
 #
-# Route (c) matters because it is the REAL, documented mechanism this repo's
-# own admin controllers already use — e.g. FeatureFlagAdminController's Javadoc
-# ("...so this controller does not re-declare @PreAuthorize") relies on
-# SecurityConfig's `.requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")`
-# (PAYMENT-AUTHZ-004) and `.requestMatchers("/api/v1/admin/feature-flags/**")
-# .hasAuthority("ROLE_ADMIN")`. Both are VERB-AGNOSTIC ROLE_ADMIN matchers that
-# are the first match for every verb of those paths → legitimately covered.
+# The SecurityConfig path-matchers in the real repo STAY (belt + suspenders); the
+# guard simply does not TRUST them for coverage. `@EnableMethodSecurity` is active
+# in SecurityConfig, so the class-level `@PreAuthorize` we require is enforced at
+# runtime as a second, independent gate in front of every matcher.
 #
-# A mapped method covered by NONE of the above is the IDOR/BFLA shape: any
-# caller who reaches the route reaches the handler, no role check in between.
+# Relationship to the authoritative control: this guard is a cheap, precise LOCAL
+# regression net for the "admin mutating endpoint lost its authorization
+# annotation" shape. The authoritative BFLA control remains `SecurityConfig.java`
+# PLUS the per-domain integration tests that assert HTTP 403 for a non-admin
+# caller (AuthzParityViolationProofTest / AccessGrantViolationProofTest and the
+# `./gradlew test{Domain}` AUTHZ items) — those stay the primary non-vacuity proof
+# for S2.AUTHZ.BE.
 #
-# ZERO_SCAN safety: the package dir must exist AND contain at least one
-# *AdminController.java with at least one mapped method, or this is an
-# environment/usage problem (exit 2), not a silent pass.
+# Bound by practices/rules/bfla-privileged-endpoint-authz-presence.md
+# (verification.guard: admin_preauthorize_guard.sh). Origin: iter2-G1 dogfood
+# (docs/dogfood-ledger/engine-w1-iter2.yaml), whose stated expiry trigger was
+# "decouple from *AdminController naming convention" — satisfied here by the
+# class-level `@RequestMapping` path-based admin-surface detection.
 #
 # Exit codes:
-#   0 — every mapped method in every *AdminController.java is covered
-#   1 — at least one mapped method is reachable with no authz check
-#       (signature: ADMIN_ENDPOINT_MISSING_PREAUTHORIZE)
+#   0 — every mutating mapped endpoint in every admin-surface controller carries
+#       an effective admin @PreAuthorize/@PostAuthorize
+#   1 — at least one mutating admin endpoint has no effective admin authorization
+#       annotation (signature: ADMIN_ENDPOINT_MISSING_PREAUTHORIZE)
 #   2 — usage / environment error (root missing, python3 missing, zero-scan)
 #
 # Usage:
@@ -133,7 +89,6 @@ done
 
 TARGET_ROOT="${ROOT_OVERRIDE:-$REPO_ROOT}"
 PKG_DIR="$TARGET_ROOT/backend/src/main/java/com/ax/template/authblueprint"
-SECURITY_CONFIG="$TARGET_ROOT/backend/src/main/java/com/ax/template/authblueprint/security/SecurityConfig.java"
 
 if [ ! -d "$PKG_DIR" ]; then
     echo "admin_preauthorize_guard: no backend source tree at $PKG_DIR" >&2
@@ -145,498 +100,331 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 2
 fi
 
-PKG_DIR="$PKG_DIR" SECURITY_CONFIG="$SECURITY_CONFIG" python3 - <<'PY'
+PKG_DIR="$PKG_DIR" python3 - <<'PY'
 import os
 import re
 import sys
 
 pkg_dir = os.environ["PKG_DIR"]
-security_config_path = os.environ["SECURITY_CONFIG"]
 
+# ── Mapping annotations ──────────────────────────────────────────────────────
 MAPPING_RE = re.compile(
     r"^\s*@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\b"
 )
-AUTHZ_RE = re.compile(r"^\s*@(PreAuthorize|PostAuthorize)\b")
-OTHER_ANN_RE = re.compile(r"^\s*@\w")
-CLASS_DECL_RE = re.compile(r"^\s*(?:public\s+)?(?:final\s+)?class\s+\w+")
-METHOD_DECL_RE = re.compile(r"^\s*(?:public|protected|private).*\(.*")
-CLASS_REQUEST_MAPPING_RE = re.compile(r'^\s*@RequestMapping\s*\(\s*"([^"]*)"')
+CLASS_DECL_RE = re.compile(r"^\s*(?:public\s+|final\s+|abstract\s+)*class\s+\w+")
+METHOD_DECL_RE = re.compile(r"^\s*(?:public|protected|private)\b.*\(")
 QUOTED_RE = re.compile(r'"([^"]*)"')
-
-# ── Verb model (route (c) hardening 4) ──────────────────────────────────────
-VERB_BY_ANNOT = {
-    "GetMapping": ["GET"],
-    "PostMapping": ["POST"],
-    "PutMapping": ["PUT"],
-    "DeleteMapping": ["DELETE"],
-    "PatchMapping": ["PATCH"],
-}
-# A @RequestMapping with no explicit method answers every verb; we require admin
-# coverage for each of the standard mapped verbs (fail-closed for a verb-scoped
-# admin matcher that would leave some of them open).
-ALL_VERBS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 REQUEST_METHOD_RE = re.compile(r"RequestMethod\.([A-Za-z]+)")
 
-# SpEL that REQUIRES an authority/role (an effective authorization check).
-AUTHZ_PREDICATE_RE = re.compile(
-    r"\b(hasAuthority|hasAnyAuthority|hasRole|hasAnyRole|hasPermission|denyAll)\b",
-    re.IGNORECASE,
+MUTATING_ANNOT = {"PostMapping", "PutMapping", "PatchMapping", "DeleteMapping"}
+MUTATING_VERBS = {"POST", "PUT", "PATCH", "DELETE"}
+
+# ── Effective-admin SpEL model ───────────────────────────────────────────────
+# A @Pre/@PostAuthorize is EFFECTIVE (admin-requiring) iff its SpEL:
+#   - contains no broad/weak grant (permitAll / anonymous / *authenticated /
+#     rememberMe / hasIpAddress), AND
+#   - contains >=1 admin predicate (hasAuthority / hasAnyAuthority / hasRole /
+#     hasAnyRole), AND every authority argument of every such predicate
+#     normalizes to ROLE_ADMIN,
+#   OR the whole expression is denyAll() (denies everyone → certainly no BFLA).
+# A non-literal SpEL argument (e.g. a named constant) is treated as NOT proven
+# admin (fail-closed): a security guard must never credit on uncertainty.
+BROAD_TOKENS = (
+    "permitall", "anonymous", "isanonymous",
+    "authenticated", "isauthenticated", "fullyauthenticated",
+    "rememberme", "isrememberme", "hasip",
 )
-# SpEL that is a permit-all / anonymous equivalent (NON-authz — never covers).
-PERMIT_ALL_RE = re.compile(
-    r"^(permitall\(\)|permitall|true|anonymous\(\)|anonymous|isanonymous\(\)|isanonymous)$"
+ADMIN_PRED_RE = re.compile(
+    r"\b(hasAuthority|hasAnyAuthority|hasRole|hasAnyRole)\s*\(([^)]*)\)"
 )
-# Extract the double-quoted SpEL argument of a @PreAuthorize/@PostAuthorize.
+SINGLE_QUOTED_RE = re.compile(r"'([^']*)'")
+DENYALL_RE = re.compile(r"^denyall(\(\))?$")
+
+# Extract the double-quoted SpEL literal of a @Pre/@PostAuthorize annotation.
 PREAUTH_SPEL_RE = re.compile(
-    r'@(?:PreAuthorize|PostAuthorize)\s*\(\s*"((?:[^"\\]|\\.)*)"'
+    r"@(?:Pre|Post)Authorize\s*\(\s*\"((?:[^\"\\]|\\.)*)\""
 )
+PREAUTH_ANY_RE = re.compile(r"@(?:Pre|Post)Authorize\b")
 
 
-def extract_authz_spel(lines_, k: int):
-    """Return the SpEL string literal of the @Pre/@PostAuthorize starting at
-    line k (joining a few following lines to tolerate a wrapped annotation),
-    or None when the argument is not a plain string literal (e.g. a constant
-    reference) — in which case the caller treats it conservatively as present."""
-    joined = "".join(lines_[k:k + 4])
-    m = PREAUTH_SPEL_RE.search(joined)
-    return m.group(1) if m else None
-
-
-def spel_requires_authority(spel) -> bool:
-    """True iff the @Pre/@PostAuthorize SpEL is an EFFECTIVE authz check.
-    None (non-literal arg, e.g. a named constant) is treated as present/effective
-    to avoid false positives against legitimate constant-based annotations —
-    the codex bypass is a *literal* permitAll(), which is caught below."""
-    if spel is None:
-        return True
-    s = spel.strip()
-    if s == "":
-        return False
-    norm = re.sub(r"\s+", "", s).lower()
-    if PERMIT_ALL_RE.match(norm):
-        return False
-    return bool(AUTHZ_PREDICATE_RE.search(s))
-
-
-# ── Route (c): SecurityConfig authorization-chain model ─────────────────────
-# We parse the single authorizeHttpRequests/authorizeRequests block into an
-# ORDERED list of authorization entries, each carrying: the optional HttpMethod
-# verb, the path pattern(s) (or None when opaque), and the required authority
-# ('admin' | 'other'). Coverage for an endpoint is then the FIRST entry (in
-# declared order) that matches its (verb, path) — Spring's first-match rule —
-# and the endpoint is credited ONLY when that first match requires admin. See
-# the FAIL-CLOSED block in the header for every case that credits nothing.
-
-# Authorization terminal rules we can classify. A selector followed by anything
-# NOT in this set makes the chain "not fully modelable" (fail-closed).
-RULE_NAMES = (
-    "permitAll", "denyAll", "authenticated", "anonymous",
-    "rememberMe", "fullyAuthenticated",
-    "hasAuthority", "hasAnyAuthority", "hasRole", "hasAnyRole",
-)
-ADMIN_RULE_NAMES = ("hasAuthority", "hasAnyAuthority", "hasRole", "hasAnyRole")
-
-ENTRY_RE = re.compile(
-    r"\.\s*(requestMatchers|anyRequest)\s*\(([^)]*)\)\s*"
-    r"\.\s*(" + "|".join(RULE_NAMES) + r")\s*\(([^)]*)\)"
-)
-SELECTOR_COUNT_RE = re.compile(r"\.\s*(?:requestMatchers|anyRequest)\s*\(")
-HTTP_METHOD_RE = re.compile(
-    r"^\s*(?:org\.springframework\.http\.)?HttpMethod\.([A-Za-z]+)\s*(?:,(.*))?$",
-    re.DOTALL,
-)
-ONLY_QUOTED_RE = re.compile(r'^\s*("[^"]*"\s*,\s*)*"[^"]*"\s*$', re.DOTALL)
-WILDCARD_CHARS = "*?{"
-
-
-def _strip_comments(s: str) -> str:
-    """Remove // and /* */ comments WITHOUT touching string literals. A naive
-    regex would treat the '/*' inside an Ant path literal ("/api/x/**", "/a/*/b")
-    as a block-comment start and eat everything up to the next '*/' (which also
-    occurs inside path literals) — corrupting the matcher chain. So walk the
-    text char by char, tracking whether we are inside a double-quoted string."""
+def strip_comments_preserve_lines(s):
+    """Remove // and /* */ comments while (a) NOT touching string/char literals
+    (so a path literal "/api/admin/**" or "http://x" is never mistaken for a
+    comment) and (b) preserving the line COUNT (block-comment newlines are kept)
+    so reported line numbers stay accurate."""
     out = []
     i, n = 0, len(s)
-    in_str = False
+    in_str = None  # None | '"' | "'"
     while i < n:
         c = s[i]
-        if in_str:
+        if in_str is not None:
             out.append(c)
             if c == "\\" and i + 1 < n:
-                out.append(s[i + 1])
-                i += 2
-                continue
-            if c == '"':
-                in_str = False
-            i += 1
-            continue
-        if c == '"':
-            in_str = True
-            out.append(c)
-            i += 1
-            continue
+                out.append(s[i + 1]); i += 2; continue
+            if c == in_str:
+                in_str = None
+            i += 1; continue
+        if c == '"' or c == "'":
+            in_str = c; out.append(c); i += 1; continue
         if c == "/" and i + 1 < n and s[i + 1] == "/":
             while i < n and s[i] != "\n":
                 i += 1
-            out.append(" ")
-            continue
+            continue  # leave the newline for the next iteration
         if c == "/" and i + 1 < n and s[i + 1] == "*":
             i += 2
             while i + 1 < n and not (s[i] == "*" and s[i + 1] == "/"):
+                if s[i] == "\n":
+                    out.append("\n")
                 i += 1
-            i += 2
-            out.append(" ")
+            i += 2  # skip closing */
             continue
-        out.append(c)
-        i += 1
+        out.append(c); i += 1
     return "".join(out)
 
 
-def _extract_authz_block(text: str):
-    """Return (block_text, modelable). modelable=False forces route (c) to
-    credit nothing (fail-closed) when the chain is ambiguous to a static reader:
-    not exactly one authorizeHttpRequests/authorizeRequests block, or a
-    chain-level securityMatcher scopes the filter chain (we do not model which
-    chain wins)."""
-    n_blocks = len(re.findall(r"\bauthorize(?:HttpRequests|Requests)\s*\(", text))
-    if n_blocks != 1:
-        return "", False
-    if re.search(r"\.\s*securityMatcher\s*\(", text):
-        return "", False
-    m = re.search(r"\bauthorize(?:HttpRequests|Requests)\s*\(", text)
-    p = m.end() - 1  # index of the '(' that opens the block
+def balanced_args(text, open_idx):
+    """Given text[open_idx] == '(', return the substring inside the balanced
+    parens, honoring quotes so a ')' inside a literal does not close early."""
     depth = 0
-    i = p
-    while i < len(text):
+    i, n = open_idx, len(text)
+    in_str = None
+    while i < n:
         c = text[i]
+        if in_str is not None:
+            if c == "\\" and i + 1 < n:
+                i += 2; continue
+            if c == in_str:
+                in_str = None
+            i += 1; continue
+        if c == '"' or c == "'":
+            in_str = c; i += 1; continue
         if c == "(":
             depth += 1
         elif c == ")":
             depth -= 1
             if depth == 0:
-                return text[p + 1:i], True
+                return text[open_idx + 1:i]
         i += 1
-    return "", False
+    return text[open_idx + 1:]
 
 
-def _parse_matcher_args(raw: str):
-    """(verb_or_None, paths_list_or_None). paths=None => opaque (unparseable
-    argument: a variable, a custom RequestMatcher, a builder) => fail-closed."""
-    verb = None
-    rest = raw
-    m = HTTP_METHOD_RE.match(raw)
-    if m:
-        verb = m.group(1).upper()
-        rest = m.group(2) if m.group(2) is not None else ""
-    if rest.strip() == "":
-        # requestMatchers(HttpMethod.X) with no path = every path for that verb.
-        if verb is not None:
-            return verb, ["/**"]
-        return None, None  # requestMatchers() with nothing meaningful — opaque
-    if not ONLY_QUOTED_RE.match(rest):
-        return verb, None  # a non-string token is present => opaque
-    paths = QUOTED_RE.findall(rest)
-    return (verb, paths) if paths else (verb, None)
-
-
-def _matcher_is_admin(auth_method: str, auth_args: str) -> bool:
-    toks = QUOTED_RE.findall(auth_args)
-    if not toks:
+def spel_requires_admin(spel):
+    """True iff the @Pre/@PostAuthorize SpEL is an EFFECTIVE admin gate."""
+    if spel is None:
+        return False  # non-literal argument → cannot prove admin → fail-closed
+    raw = spel.strip()
+    if raw == "":
         return False
-    is_role = auth_method.lower() in ("hasrole", "hasanyrole")
-    normed = []
-    for t in toks:
-        if is_role:
-            normed.append(t if t.startswith("ROLE_") else "ROLE_" + t)
-        else:
-            normed.append(t)
-    # For an *Any* predicate every alternative must be admin, else a non-admin
-    # alternative could reach the surface.
-    return all(x == "ROLE_ADMIN" for x in normed)
-
-
-sec_entries = []
-chain_modelable = True
-security_config_present = os.path.isfile(security_config_path)
-
-if security_config_present:
-    with open(security_config_path, encoding="utf-8") as fh:
-        sc_text = fh.read()
-    block, modelable = _extract_authz_block(sc_text)
-    if not modelable:
-        chain_modelable = False
-    else:
-        block_nc = _strip_comments(block)
-        n_selectors = len(SELECTOR_COUNT_RE.findall(block_nc))
-        matches = list(ENTRY_RE.finditer(block_nc))
-        if len(matches) != n_selectors:
-            # A selector is followed by a rule we do not model (e.g. .access(...),
-            # .hasIpAddress(...)) or an unparseable shape — fail-closed.
-            chain_modelable = False
-        for mm in matches:
-            selector, sel_args, rule, rule_args = (
-                mm.group(1), mm.group(2), mm.group(3), mm.group(4)
-            )
-            if selector == "anyRequest":
-                verb, paths, any_path = None, ["/**"], True
-            else:
-                verb, paths = _parse_matcher_args(sel_args)
-                any_path = False
-            if rule in ADMIN_RULE_NAMES and _matcher_is_admin(rule, rule_args):
-                authority = "admin"
-            else:
-                authority = "other"
-            sec_entries.append({
-                "verb": verb,
-                "paths": paths,
-                "any_path": any_path,
-                "authority": authority,
-            })
-
-
-def _is_simple_pattern(pattern: str) -> bool:
-    """True when we can evaluate the pattern precisely: a literal path, or a
-    literal followed by a single trailing '/**' or '/*' (no other wildcards)."""
-    body = pattern
-    if body.endswith("/**"):
-        body = body[:-3]
-    elif body.endswith("/*"):
-        body = body[:-2]
-    return not any(c in body for c in WILDCARD_CHARS)
-
-
-def _covers_simple(pattern: str, path: str) -> bool:
-    """Boundary-aware Ant match for the precisely-supported forms. `/api/admin/**`
-    covers `/api/admin` and `/api/admin/<anything>` but NOT `/api/administrator`.
-    `/api/admin/*` covers exactly one further segment. Exact patterns match
-    exactly."""
-    if pattern.endswith("/**"):
-        base = pattern[:-3]
-        return path == base or path.startswith(base + "/")
-    if pattern.endswith("/*"):
-        base = pattern[:-2]
-        if not path.startswith(base + "/"):
+    # Scan for broad/weak grants with authority literals blanked out (so
+    # hasAuthority('ROLE_AUTHENTICATED') is not misread as authenticated()).
+    scan = SINGLE_QUOTED_RE.sub("''", raw)
+    scan = re.sub(r'"[^"]*"', '""', scan)
+    low = re.sub(r"\s+", "", scan).lower()
+    if DENYALL_RE.match(low):
+        return True  # denyAll() — nobody reaches it, certainly no BFLA
+    for tok in BROAD_TOKENS:
+        if tok in low:
             return False
-        rest = path[len(base) + 1:]
-        return rest != "" and "/" not in rest
-    return path == pattern
-
-
-def _literal_prefix(pattern: str) -> str:
-    for i, c in enumerate(pattern):
-        if c in WILDCARD_CHARS:
-            return pattern[:i]
-    return pattern
-
-
-def _ant_match(pattern: str, path: str) -> str:
-    """'yes' | 'no' | 'maybe'. 'maybe' only for wildcard shapes we cannot
-    evaluate precisely AND whose literal prefix does not rule the path out —
-    the caller treats 'maybe' as indeterminate (fail-closed)."""
-    if not pattern or not path:
-        return "no"
-    if _is_simple_pattern(pattern):
-        return "yes" if _covers_simple(pattern, path) else "no"
-    # Unsupported wildcard shape (mid '*', '?', '{var}', mid '**').
-    if not path.startswith(_literal_prefix(pattern)):
-        return "no"
-    return "maybe"
-
-
-def _first_matcher_authority(verb: str, full_path: str) -> str:
-    """'admin' | 'other' | 'indeterminate' for the FIRST declared matcher that
-    matches (verb, full_path). Fail-closed: a non-modelable chain, an opaque
-    matcher, or an unresolvable wildcard ('maybe') => 'indeterminate'."""
-    if not chain_modelable:
-        return "indeterminate"
-    if not full_path:
-        return "indeterminate"
-    for e in sec_entries:
-        # Verb gate: a verb-specific matcher only matches its own verb; a
-        # verb-agnostic matcher (verb is None) matches any verb.
-        if e["verb"] is not None and e["verb"] != verb:
-            continue
-        if e["any_path"]:
-            return "admin" if e["authority"] == "admin" else "other"
-        if e["paths"] is None:
-            # Opaque path we could not parse — cannot rule out a match here.
-            return "indeterminate"
-        verdicts = [_ant_match(p, full_path) for p in e["paths"]]
-        if "yes" in verdicts:
-            return "admin" if e["authority"] == "admin" else "other"
-        if "maybe" in verdicts:
-            return "indeterminate"
-        # all 'no' => this entry does not match; continue to the next entry.
-    return "other"
-
-
-def covered_by_security_config(verbs, full_path: str) -> bool:
-    """Route (c) credit: EVERY verb the endpoint answers must resolve, by
-    first-match in declared order, to an admin-authority matcher."""
-    if not sec_entries:
-        return False
-    for v in verbs:
-        if _first_matcher_authority(v, full_path) != "admin":
-            return False
+    preds = ADMIN_PRED_RE.findall(raw)
+    if not preds:
+        return False  # no authority predicate at all
+    for name, args in preds:
+        toks = SINGLE_QUOTED_RE.findall(args)
+        if not toks:
+            return False  # e.g. hasAuthority(SOME_CONST) — non-literal → fail-closed
+        is_role = name.lower() in ("hasrole", "hasanyrole")
+        for t in toks:
+            norm = t if (not is_role or t.startswith("ROLE_")) else "ROLE_" + t
+            if norm != "ROLE_ADMIN":
+                return False
     return True
 
 
-def join_path(base: str, suffix: str) -> str:
-    if not suffix:
-        result = base or ""
-    else:
-        result = (base.rstrip("/") + "/" + suffix.lstrip("/")) if base else suffix
-    if result and not result.startswith("/"):
-        result = "/" + result
-    return result
+def class_level_facts(stripped_text):
+    """(class_name, class_paths, class_authz_effective, class_decl_line0).
+    class_paths = literal paths of the class-level @RequestMapping (path=/value=/
+    array aliases handled). class_authz_effective = the class-level
+    @Pre/@PostAuthorize is an effective admin gate. Operates on the FIRST
+    top-level class."""
+    class_off = None
+    class_line0 = None
+    class_name = None
+    for m in re.finditer(r"(?m)^\s*(?:public\s+|final\s+|abstract\s+)*class\s+(\w+)", stripped_text):
+        class_off = m.start()
+        class_name = m.group(1)
+        class_line0 = stripped_text.count("\n", 0, m.start())
+        break
+    if class_off is None:
+        return None, [], False, None
+
+    before = stripped_text[:class_off]
+
+    # class-level @RequestMapping — LAST occurrence before the class decl.
+    class_paths = []
+    rm_iters = list(re.finditer(r"@RequestMapping\s*\(", before))
+    if rm_iters:
+        last = rm_iters[-1]
+        args = balanced_args(before, last.end() - 1)
+        class_paths = QUOTED_RE.findall(args)
+
+    # class-level @Pre/@PostAuthorize — LAST occurrence before the class decl.
+    class_authz_effective = False
+    au_iters = list(re.finditer(r"@(?:Pre|Post)Authorize\s*\(", before))
+    if au_iters:
+        last = au_iters[-1]
+        joined = before[last.start():]
+        mm = PREAUTH_SPEL_RE.search(joined)
+        spel = mm.group(1) if mm else None
+        class_authz_effective = spel_requires_admin(spel)
+
+    return class_name, class_paths, class_authz_effective, class_line0
 
 
-files_scanned = 0
-mapped_method_count = 0
+admin_controllers = 0
+mutating_endpoints = 0
 violations = []
 
-admin_controllers = []
+java_files = []
 for root, _dirs, files in os.walk(pkg_dir):
     for fn in sorted(files):
-        if fn.endswith("AdminController.java"):
-            admin_controllers.append(os.path.join(root, fn))
-admin_controllers.sort()
+        if fn.endswith(".java"):
+            java_files.append(os.path.join(root, fn))
+java_files.sort()
 
-for path in admin_controllers:
+for path in java_files:
     with open(path, encoding="utf-8") as fh:
-        lines = fh.readlines()
-    files_scanned += 1
+        raw_text = fh.read()
+    stripped = strip_comments_preserve_lines(raw_text)
+    class_name, class_paths, class_authz_eff, class_line0 = class_level_facts(stripped)
+    if class_name is None:
+        continue
 
-    # Class-level authz + class-level @RequestMapping base path, both found by
-    # scanning the annotation block directly above the `class Foo` decl.
-    class_level_authz = False
-    class_base_path = ""
-    for idx, line in enumerate(lines):
-        if CLASS_DECL_RE.match(line):
-            j = idx - 1
-            while j >= 0:
-                prev = lines[j]
-                is_authz = bool(AUTHZ_RE.match(prev))
-                m = CLASS_REQUEST_MAPPING_RE.match(prev)
-                if is_authz and spel_requires_authority(extract_authz_spel(lines, j)):
-                    class_level_authz = True
-                if m:
-                    class_base_path = m.group(1)
-                if is_authz or m or OTHER_ANN_RE.match(prev) or prev.strip() == "":
-                    j -= 1
-                    continue
-                break
-            break
+    admin_surface = class_name.endswith("AdminController") or any(
+        "/admin" in p for p in class_paths
+    )
+    if not admin_surface:
+        continue
 
-    idx = 0
+    admin_controllers += 1
+    lines = stripped.split("\n")
     n = len(lines)
+
+    idx = class_line0 + 1  # method mappings live below the class declaration
     while idx < n:
         line = lines[idx]
-        mapmatch = MAPPING_RE.match(line)
-        if not mapmatch:
+        mm = MAPPING_RE.match(line)
+        if not mm:
             idx += 1
             continue
-
-        # Skip the class-level mapping annotation itself (its next non-blank,
-        # non-annotation line is a `class` decl, not a method) — otherwise it
-        # would be double-counted as a "mapped method" with no method body.
-        look = idx + 1
-        while look < n and (lines[look].strip() == "" or OTHER_ANN_RE.match(lines[look])):
-            look += 1
-        if look < n and CLASS_DECL_RE.match(lines[look]):
-            idx += 1
-            continue
-
+        annot = mm.group(1)
         mapping_lineno = idx + 1
-        mapped_method_count += 1
 
-        # The verb(s) this endpoint answers (route (c) hardening 4).
-        annot = mapmatch.group(1)
+        # Resolve verbs / mutating.
         if annot == "RequestMapping":
-            joined_ann = "".join(lines[idx:idx + 5])
-            methods = REQUEST_METHOD_RE.findall(joined_ann)
-            verbs = [x.upper() for x in methods] if methods else list(ALL_VERBS)
-        else:
-            verbs = VERB_BY_ANNOT[annot]
+            joined_ann = "\n".join(lines[idx:idx + 6])
+            methods = [x.upper() for x in REQUEST_METHOD_RE.findall(joined_ann)]
+            if methods:
+                is_mutating = any(v in MUTATING_VERBS for v in methods)
+                verbs = methods
+            else:
+                is_mutating = True  # method-less @RequestMapping answers ALL verbs
+                verbs = ["ALL"]
+        elif annot in MUTATING_ANNOT:
+            is_mutating = True
+            verbs = [annot.replace("Mapping", "").upper()]
+        else:  # GetMapping
+            is_mutating = False
+            verbs = ["GET"]
 
-        method_suffix = ""
-        mq = QUOTED_RE.search(line)
-        if mq:
-            method_suffix = mq.group(1)
+        # Path suffix (for the message).
+        suffix_m = QUOTED_RE.search(line)
+        suffix = suffix_m.group(1) if suffix_m else ""
 
-        # A method-level @Pre/@PostAuthorize OVERRIDES the class-level one
-        # (Spring method-security precedence). So when the method carries its
-        # own annotation, its effectiveness is decided SOLELY by that
-        # annotation — a method-level permitAll() defeats a class-level
-        # ROLE_ADMIN. Only when the method has no own annotation does it
-        # inherit the class-level effective coverage.
-        method_has_own_annotation = False
-        method_authz_effective = False
+        # Gather this method's contiguous annotation block: @-lines above the
+        # mapping annotation + lines down to the method signature.
+        start = idx
+        k = idx - 1
+        while k > class_line0 and lines[k].lstrip().startswith("@"):
+            start = k
+            k -= 1
         j = idx
+        sig = None
         while j < n:
-            l2 = lines[j]
-            if AUTHZ_RE.match(l2):
-                method_has_own_annotation = True
-                if spel_requires_authority(extract_authz_spel(lines, j)):
-                    method_authz_effective = True
-            if METHOD_DECL_RE.match(l2) and not l2.strip().startswith("@"):
+            lj = lines[j]
+            if not lj.lstrip().startswith("@") and METHOD_DECL_RE.match(lj):
+                sig = j
                 break
             j += 1
+        end = sig if sig is not None else idx
+        block = "\n".join(lines[start:end + 1])
 
-        has_authz = method_authz_effective if method_has_own_annotation else class_level_authz
+        method_has_own = bool(PREAUTH_ANY_RE.search(block))
+        method_authz_eff = False
+        if method_has_own:
+            for am in re.finditer(r"@(?:Pre|Post)Authorize\s*\(", block):
+                sm = PREAUTH_SPEL_RE.search(block[am.start():])
+                spel = sm.group(1) if sm else None
+                if spel_requires_admin(spel):
+                    method_authz_eff = True
+                    break
 
-        if not has_authz:
-            full_path = join_path(class_base_path, method_suffix)
-            if not covered_by_security_config(verbs, full_path):
+        effective = method_authz_eff if method_has_own else class_authz_eff
+
+        if is_mutating:
+            mutating_endpoints += 1
+            if not effective:
                 vlabel = "|".join(verbs)
                 violations.append(
-                    f"{path}:{mapping_lineno}: mapped method [{vlabel} {full_path}] "
-                    f"has no effective @PreAuthorize/@PostAuthorize, and no admin-authority "
-                    f"SecurityConfig matcher is the FIRST (declared-order, verb-aware) match "
-                    f"for every verb it answers"
+                    f"{path}:{mapping_lineno}: mutating admin endpoint "
+                    f"[{vlabel} {suffix or '/'}] on {class_name} has no EFFECTIVE "
+                    f"admin @PreAuthorize/@PostAuthorize (method- or class-level SpEL "
+                    f"requiring ROLE_ADMIN)"
                 )
-        idx = j + 1
+        idx = (end if sig is not None else idx) + 1
 
-if files_scanned == 0 or mapped_method_count == 0:
+if admin_controllers == 0:
     print(
-        "admin_preauthorize_guard: ZERO_SCAN — no *AdminController.java with a "
-        "mapped method found under " + pkg_dir,
+        "admin_preauthorize_guard: ZERO_SCAN — no admin-surface controller "
+        "(*AdminController name OR class-level @RequestMapping path containing "
+        "'/admin') found under " + pkg_dir,
         file=sys.stderr,
     )
     sys.exit(2)
 
-if security_config_present and chain_modelable:
-    cfg_note = (f"{len(sec_entries)} SecurityConfig authorization entr(ies) modeled "
-                f"(verb + declared-order aware)")
-elif security_config_present and not chain_modelable:
-    cfg_note = ("SecurityConfig present but NOT fully modelable — route (c) fail-closed "
-                "(credits nothing; every admin endpoint must carry an effective @PreAuthorize)")
-else:
-    cfg_note = "no SecurityConfig.java at expected path — route (c) inactive (annotation routes only)"
-
-print(f"admin_preauthorize_guard: scanned {files_scanned} *AdminController.java "
-      f"file(s), {mapped_method_count} mapped method(s); {cfg_note}")
+print(
+    f"admin_preauthorize_guard: scanned {admin_controllers} admin-surface "
+    f"controller(s), {mutating_endpoints} mutating endpoint(s); purely-local "
+    f"method/class @PreAuthorize check (SecurityConfig NOT parsed)"
+)
 
 if violations:
-    print("VIOLATION: admin endpoint reachable with no authorization check (IDOR shape):", file=sys.stderr)
+    print("VIOLATION: mutating admin endpoint reachable with no effective admin authorization (BFLA shape):", file=sys.stderr)
     for v in violations:
         print(f"  {v}", file=sys.stderr)
     print("", file=sys.stderr)
     print(
-        "Every *AdminController mapped method must be covered by a class-level "
-        "or method-level @PreAuthorize/@PostAuthorize, OR — for EVERY verb it "
-        "answers — by a declared-order SecurityConfig matcher whose FIRST match "
-        "requires admin authority (ROLE_ADMIN). A verb-scoped admin matcher does "
-        "NOT protect the verbs it omits (they fall through to the next matcher). "
-        "See LedgerAdminController (annotation route) or FeatureFlagAdminController "
-        "(verb-agnostic SecurityConfig route) for the clean shapes.",
+        "Every mutating mapped endpoint (@PostMapping/@PutMapping/@PatchMapping/"
+        "@DeleteMapping, or @RequestMapping with a mutating/absent method) on an "
+        "admin-surface controller MUST carry an EFFECTIVE admin authorization "
+        "annotation — a method-level or class-level @PreAuthorize/@PostAuthorize "
+        "whose SpEL requires ROLE_ADMIN (hasAuthority('ROLE_ADMIN') / hasRole('ADMIN') "
+        "/ hasAnyAuthority(all ROLE_ADMIN) / denyAll()). permitAll(), anonymous(), "
+        "authenticated() alone, a non-admin authority, or NO annotation do NOT count. "
+        "A method-level annotation overrides the class-level one. This guard does NOT "
+        "read SecurityConfig — add the annotation (defense-in-depth); the path matcher "
+        "stays as a complementary layer.",
         file=sys.stderr,
     )
-    print(f"admin_preauthorize_guard: {len(violations)} violation(s) — "
-          f"ADMIN_ENDPOINT_MISSING_PREAUTHORIZE — BLOCKED", file=sys.stderr)
+    print(
+        f"admin_preauthorize_guard: {len(violations)} violation(s) — "
+        f"ADMIN_ENDPOINT_MISSING_PREAUTHORIZE — BLOCKED",
+        file=sys.stderr,
+    )
     sys.exit(1)
 
-print("admin_preauthorize_guard: every admin endpoint is covered by "
-      "@PreAuthorize/@PostAuthorize or a verb-aware admin-authority SecurityConfig matcher")
+print(
+    "admin_preauthorize_guard: every mutating admin endpoint carries an effective "
+    "admin @PreAuthorize/@PostAuthorize (method- or class-level)"
+)
 sys.exit(0)
 PY

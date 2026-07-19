@@ -1358,9 +1358,12 @@ cells:
   na_reason: null
   notes: 'The non-vacuity proofs for this cell are the two ViolationProofTests + the per-domain AUTHZ
     integration items (they assert HTTP 403 for a non-admin caller). admin_preauthorize_guard.sh is a
-    SUPPLEMENTARY best-effort static backstop for the BFLA-presence shape (annotation dropped / matcher
-    mis-scoped); it models the common SecurityConfig matcher + method-@PreAuthorize cases with verb +
-    declared-order awareness and FAILS CLOSED on anything it cannot prove. It is NOT the authoritative
+    SUPPLEMENTARY, purely-LOCAL static check for the BFLA-presence shape: every mutating endpoint on an
+    admin-surface controller (name *AdminController OR class-level @RequestMapping path containing
+    /admin) MUST carry an effective method-/class-level @PreAuthorize requiring ROLE_ADMIN. It does NOT
+    parse SecurityConfig (that crediting was removed after a cross-family reviewer found 4 static-analysis
+    bypasses of the matcher-chain model; a purely-local annotation check has nothing to bypass). The
+    SecurityConfig path-matchers stay as a complementary layer. This guard is NOT the authoritative
     Spring-authz verifier and NOT this cell''s primary non-vacuity proof.'
 - id: S2.AUTHZ.FE
   tier: S2

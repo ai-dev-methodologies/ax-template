@@ -1238,33 +1238,28 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/full_trio_artifact_completeness_guard.sh" --root "$SCRIPT_DIR/fixtures/full_trio_artifact_completeness/fail_missing_artifacts"
 fi
 
-echo "[90] admin_preauthorize_guard.sh (wave-1 exit cleanup — promoted from practices/consumer-proof/scenarios/S3.b2b-admin/scenario-guards/; iter2-G1 BFLA closure; binds practices/rules/bfla-privileged-endpoint-authz-presence.md's verification.guard)"
+echo "[90] admin_preauthorize_guard.sh (iter2-G1 BFLA closure; binds practices/rules/bfla-privileged-endpoint-authz-presence.md's verification.guard). PURELY-LOCAL check: every mutating admin endpoint MUST carry an effective method-/class-level @PreAuthorize requiring ROLE_ADMIN. SecurityConfig is NOT parsed — the 4 codex static-analysis bypasses (verb-scoped matcher · multiple/unscoped chain · @RequestMapping(path=) alias→wrong matcher) are all MOOT because there is no config chain to model.)"
 run_guard "admin_preauthorize/live" 0 \
     bash "$SCRIPT_DIR/admin_preauthorize_guard.sh"
 if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    # Method-@PreAuthorize-based falsification set (no SecurityConfig fixtures —
+    # the guard no longer reads config). pass exits 0; every fail_* exits 1.
     run_guard "admin_preauthorize/fixture_pass" 0 \
         bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/pass"
+    # No @PreAuthorize anywhere on a mutating admin endpoint → BLOCK.
     run_guard "admin_preauthorize/fixture_fail_missing_preauthorize" 1 \
         bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_missing_preauthorize"
-    # wave-1 codex bypass closures (each fixture PASSES under the pre-hardening
-    # guard and is BLOCKED after the fix — per-bypass falsification):
-    run_guard "admin_preauthorize/fixture_pass_securityconfig" 0 \
-        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/pass_securityconfig"
-    run_guard "admin_preauthorize/fixture_fail_role_user_matcher" 1 \
-        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_role_user_matcher"
-    run_guard "admin_preauthorize/fixture_fail_administrator_path" 1 \
-        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_administrator_path"
-    run_guard "admin_preauthorize/fixture_fail_unprotected_patch" 1 \
-        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_unprotected_patch"
+    # Method-level permitAll() overrides the class-level ROLE_ADMIN → BLOCK.
     run_guard "admin_preauthorize/fixture_fail_permitall" 1 \
         bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_permitall"
-    # codex round-2 HIGH verb-bypass closure: a verb-scoped ROLE_ADMIN GET
-    # matcher declared before a verb-agnostic .authenticated() fallback FALSELY
-    # passed the pre-hardening guard for a POST (it credited the GET matcher's
-    # ROLE_ADMIN for all verbs). The hardened guard models verb + declared-order
-    # + first-match authority → the unannotated POST is BLOCKED.
-    run_guard "admin_preauthorize/fixture_fail_verb_scoped_matcher" 1 \
-        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_verb_scoped_matcher"
+    # @PreAuthorize("isAuthenticated()") is present but not admin-requiring → BLOCK.
+    run_guard "admin_preauthorize/fixture_fail_authenticated_only" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_authenticated_only"
+    # @PatchMapping (mutating) with no authz, on a class detected as admin-surface
+    # via its @RequestMapping(path = "/api/admin/...") ALIAS (NOT *AdminController
+    # name) → BLOCK. Proves PATCH-verb coverage + path-based detection at once.
+    run_guard "admin_preauthorize/fixture_fail_patch_missing" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_patch_missing"
 fi
 
 echo "[91] locale_aware_format_guard.sh (wave-1 exit cleanup — was shipped alongside practices-react/rules/locale-aware-number-date-format.md but never wired into run-all-guards.sh; iter1-G2 / CANARY-001 closure)"

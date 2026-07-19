@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,7 +25,10 @@ import java.util.UUID;
  * Admin REST surface for the webhook domain.
  * <p>
  * All endpoints sit under {@code /api/admin/**} — the global SecurityConfig
- * already enforces {@code ROLE_ADMIN} for that prefix.
+ * already enforces {@code ROLE_ADMIN} for that prefix. This controller ALSO
+ * declares a class-level {@code @PreAuthorize("hasAuthority('ROLE_ADMIN')")} as
+ * defense-in-depth (method security is the primary, locally-verifiable gate; the
+ * path matcher stays as a complementary layer).
  * <p>
  * Trace:
  * <ul>
@@ -35,6 +39,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/admin")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
 public class WebhookAdminController {
 
     public static final String NOT_FOUND_TYPE = "https://ax-template.dev/problems/webhook-not-found";

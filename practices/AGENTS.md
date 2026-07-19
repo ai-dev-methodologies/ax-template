@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "e11008257b6bbecaa51c16cfb54003f09f550137dcd96ed550ca35b8de45a205"
+  source_concat_sha256: "48fa7330d69c265ab9df18edaa10c314addeaeb075c9865afad5e2b3e9fe0d37"
   rule_count: 233
   generated_by: "practices/generate_agents.sh"
 ---
@@ -1644,7 +1644,7 @@ verification:
   type: static_analysis
   guard: admin_preauthorize_guard.sh
   source: "practices/evals/admin_preauthorize_guard.sh (promoted wave-1 exit cleanup from practices/consumer-proof/scenarios/S3.b2b-admin/scenario-guards/admin_preauthorize_guard.sh — wired live+fixtures in run-all-guards.sh)"
-  pattern: "every @GetMapping/@PostMapping/@PutMapping/@DeleteMapping/@RequestMapping method inside a *AdminController (or any privileged controller) is covered by an @PreAuthorize/@PostAuthorize annotation (class- or method-level) OR a matching SecurityConfig.java requestMatchers(...).hasAuthority(...)/.hasRole(...) rule"
+  pattern: "every MUTATING mapped endpoint (@PostMapping/@PutMapping/@PatchMapping/@DeleteMapping, or @RequestMapping with a mutating/absent method) inside an admin-surface controller (class name *AdminController, OR a class-level @RequestMapping whose path contains '/admin') carries an EFFECTIVE admin @PreAuthorize/@PostAuthorize (class- or method-level SpEL requiring ROLE_ADMIN). The guard is purely LOCAL — it does NOT parse SecurityConfig; the path-matchers are a complementary layer, not a substitute for the annotation."
 upstream:
   - "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
 evidence:
@@ -1677,23 +1677,27 @@ is fragile: a matcher change, a new controller nested under a different base pat
 controller that drops the class-level annotation all reopen the gap, and none of them fail a
 compile or a happy-path test written against an already-authenticated admin session.
 
-The fix is mechanical, not judgment-based: every mapped method in a privileged controller (in this
-catalog's convention, any `*AdminController`) must resolve to an **effective** authorization check by
-one of three routes — a single class-level `@PreAuthorize`/`@PostAuthorize` that covers every method,
-an individual annotation on every `@GetMapping`/`@PostMapping`/`@PutMapping`/`@DeleteMapping`/
-`@PatchMapping`/`@RequestMapping` method, or a `SecurityConfig` `requestMatchers(...)` rule whose path
-pattern covers the endpoint **and whose required authority is admin** (`hasAuthority('ROLE_ADMIN')` /
-`hasRole('ADMIN')`). A handler covered by none is the BFLA shape: any caller who reaches the route
-reaches the handler, no role check in between.
+The fix is mechanical, not judgment-based: every **mutating** mapped endpoint
+(`@PostMapping`/`@PutMapping`/`@PatchMapping`/`@DeleteMapping`, or a `@RequestMapping` with a mutating or
+absent HTTP method) in an admin-surface controller — a class whose name ends `AdminController`, **or**
+whose class-level `@RequestMapping` path contains `/admin` (so the control is decoupled from the naming
+convention) — must carry an **effective** admin authorization annotation: a class-level
+`@PreAuthorize`/`@PostAuthorize` that covers every method, or an individual annotation on the endpoint,
+whose SpEL requires admin authority (`hasAuthority('ROLE_ADMIN')` / `hasRole('ADMIN')` / an all-admin
+`hasAnyAuthority(...)` / `denyAll()`). A mutating handler covered by none is the BFLA shape: any caller
+who reaches the route reaches the handler, no role check in between. The `SecurityConfig` path-matcher is
+a complementary defense layer, but it is **not** accepted as a substitute — see "Guard scope" below for
+why.
 
 Two subtleties make the check non-obvious — and are exactly where a naive "does an `@PreAuthorize`
 exist?" review passes an endpoint that is in fact open:
 
-1. **An `@PreAuthorize`/`@PostAuthorize` is only effective if its SpEL actually requires an
-   authority/role.** `@PreAuthorize("permitAll()")`, `"anonymous()"`, `"isAnonymous()"`, or an empty
-   expression are *not* authorization checks — they admit any (or every) caller. Presence of the
-   annotation is not coverage; the SpEL must contain `hasAuthority`/`hasRole`/`hasAnyAuthority`/
-   `hasAnyRole`/`hasPermission`.
+1. **An `@PreAuthorize`/`@PostAuthorize` is only effective if its SpEL actually requires the ADMIN
+   authority.** `@PreAuthorize("permitAll()")`, `"anonymous()"`, `"isAnonymous()"`,
+   `"isAuthenticated()"`/`"authenticated()"` alone, `hasAuthority('ROLE_USER')`, or an empty expression
+   are *not* admin checks — they admit some non-admin (or every) caller. Presence of the annotation is
+   not coverage; the SpEL must require `ROLE_ADMIN` (`hasAuthority('ROLE_ADMIN')` / `hasRole('ADMIN')` /
+   an all-admin `hasAnyAuthority(...)`/`hasAnyRole(...)` / `denyAll()`).
 2. **A method-level annotation overrides the class-level one** (Spring method-security precedence).
    A class-level `hasAuthority('ROLE_ADMIN')` does *not* rescue a method that re-declares
    `@PreAuthorize("permitAll()")` — the method-level `permitAll()` wins.
@@ -1736,42 +1740,46 @@ public class LedgerAdminController {
 }
 ```
 
-Verification: static-analysis-tier. `admin_preauthorize_guard.sh` walks every `*AdminController.java`
-under the backend package tree and fails (`ADMIN_ENDPOINT_MISSING_PREAUTHORIZE`) the moment any
-mapped method (every `@GetMapping`/`@PostMapping`/`@PutMapping`/`@DeleteMapping`/`@PatchMapping`/
-`@RequestMapping`) resolves to neither an **effective** class-level nor method-level
-`@PreAuthorize`/`@PostAuthorize` (a SpEL that requires an authority/role — `permitAll()`/`anonymous()`
-do not count, and a method-level annotation overrides the class-level one), NOR a `SecurityConfig`
-`requestMatchers(...)` rule whose path pattern covers the endpoint by boundary-aware Ant semantics and
-whose required authority is admin (`ROLE_ADMIN`). It complements, rather than replaces,
+Verification: static-analysis-tier, purely LOCAL. `admin_preauthorize_guard.sh` walks every
+admin-surface controller (class name `*AdminController`, **or** a class-level `@RequestMapping` whose
+path contains `/admin`) under the backend package tree and fails (`ADMIN_ENDPOINT_MISSING_PREAUTHORIZE`)
+the moment any **mutating** mapped endpoint (`@PostMapping`/`@PutMapping`/`@PatchMapping`/`@DeleteMapping`,
+or a `@RequestMapping` with a mutating or absent method) resolves to neither an **effective** class-level
+nor method-level `@PreAuthorize`/`@PostAuthorize` — a SpEL requiring `ROLE_ADMIN`; `permitAll()`,
+`anonymous()`, `authenticated()`/`isAuthenticated()` alone, a non-admin authority, an empty/non-literal
+expression, or no annotation all fail, and a method-level annotation overrides the class-level one. The
+guard does **not** read `SecurityConfig.java` at all. It complements, rather than replaces,
 `role_literal_guard.sh` (which validates that an `@PreAuthorize` authority STRING is a known-valid
 role — a different invariant: it never checks whether the annotation is present at all).
 
-### Guard scope — best-effort STATIC backstop, fail-closed, NOT authoritative
+### Guard scope — a purely-LOCAL static check, fail-closed, complementary (NOT authoritative)
 
-`admin_preauthorize_guard.sh` is a **best-effort static heuristic**, not an exhaustive Spring-Security
-authorization verifier. It models the two common coverage shapes — method-/class-level `@PreAuthorize`
-and the `SecurityConfig` `requestMatchers(...)` chain — and it models the chain the way Spring evaluates
-it: in **declared order**, honoring the optional leading `HttpMethod` (a verb-specific matcher matches
-only that verb; a verb-agnostic matcher matches every verb), crediting an endpoint as admin-covered
-**only if the first matcher that matches its (verb, path) requires admin authority**. This is what
-closed the round-2 verb bypass — a verb-scoped `hasAuthority('ROLE_ADMIN')` GET matcher declared before
-a verb-agnostic `.authenticated()` fallback does **not** protect a POST/PUT/PATCH/DELETE, because
-Spring's first match for those verbs is the `.authenticated()` rule.
+`admin_preauthorize_guard.sh` reads **only the controller file**. It does **not** parse
+`SecurityConfig.java` and does **not** credit the `authorizeHttpRequests` matcher chain for coverage.
+That is a deliberate design choice. An earlier revision tried to statically model the Spring Security
+matcher chain (path Ant-matching, declared order, verb scoping) so it could credit a path-matcher as
+coverage, and a cross-family reviewer then found **four distinct static-analysis bypasses across three
+rounds** (a verb-scoped matcher; multiple / unscoped filter chains; a `@RequestMapping(path = ...)`
+alias resolving to the wrong matcher; …). Exhaustively deciding Spring's authorization from source is
+not statically decidable — every hardening left another shape to exploit. Removing SecurityConfig
+crediting **entirely** ends that whack-a-mole class: with no config chain to model, there is nothing to
+bypass. The required control is a purely-local, decidable property — a method-/class-level
+`@PreAuthorize` requiring `ROLE_ADMIN`.
 
-Because it is static, it **FAILS CLOSED**: whenever it cannot *prove* admin coverage for every verb an
-endpoint answers — SecurityConfig absent, more than one filter chain, a `securityMatcher`-scoped chain,
-a rule it does not model (`.access(...)`, a custom `AuthorizationManager`), a non-literal/variable path
-argument, or a wildcard shape it cannot evaluate precisely — it does **not** credit coverage and demands
-an explicit effective method-level `@PreAuthorize`, else it BLOCKS. A security guard must never credit on
-uncertainty. The trade-off is that an unusual-but-safe config may be asked to add a defense-in-depth
-annotation; that is acceptable for a supplementary backstop.
+Because it inspects only the SpEL, it **FAILS CLOSED**: an empty expression, a non-literal SpEL argument
+(a named constant we cannot resolve to an authority), `permitAll()`/`anonymous()`/`authenticated()`, or a
+`hasAny*(...)` that mixes in any non-admin alternative are all treated as NOT admin and BLOCK. A security
+guard must never credit on uncertainty; the trade-off is that a legitimate constant-based annotation may
+be asked to inline a literal SpEL — acceptable for a defense-in-depth backstop.
 
-The guard is **not the authoritative BFLA control and not the primary non-vacuity proof**. The
-authoritative control is `SecurityConfig.java` itself **plus the per-domain integration tests that assert
-HTTP 403 for a non-admin caller** (e.g. `AuthzParityViolationProofTest` / `AccessGrantViolationProofTest`
-and the `./gradlew test{Domain}` `AUTHZ` items). This guard is a cheap early-warning regression net for
-the "annotation dropped / matcher mis-scoped" shape; it complements those tests, it does not replace them.
+The `SecurityConfig` path-matchers stay in the real repo as a **complementary** layer (belt +
+suspenders), and `@EnableMethodSecurity` is active so the annotation this guard requires is a genuine
+second runtime gate. The guard is **not the authoritative BFLA control and not the primary non-vacuity
+proof**. The authoritative control is `SecurityConfig.java` **plus the per-domain integration tests that
+assert HTTP 403 for a non-admin caller** (e.g. `AuthzParityViolationProofTest` /
+`AccessGrantViolationProofTest` and the `./gradlew test{Domain}` `AUTHZ` items). This guard is a cheap,
+precise local regression net for the "annotation dropped from a mutating admin endpoint" shape; it
+complements those tests, it does not replace them.
 
 Reference: [OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/)
 

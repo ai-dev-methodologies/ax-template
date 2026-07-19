@@ -8,6 +8,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -28,7 +29,10 @@ import java.util.stream.Collectors;
  * Admin CRUD surface for feature flags.
  * <p>
  * SecurityConfig pins {@code /api/v1/admin/**} to {@code ROLE_ADMIN}
- * (FF-AUTHZ-001/002), so this controller does not re-declare {@code @PreAuthorize}.
+ * (FF-AUTHZ-001/002); this controller ALSO declares a class-level
+ * {@code @PreAuthorize("hasAuthority('ROLE_ADMIN')")} as defense-in-depth (method
+ * security is the primary, locally-verifiable gate; the path matcher stays as a
+ * complementary layer).
  * <p>
  * Trace:
  * <ul>
@@ -41,6 +45,7 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/v1/admin/feature-flags")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
 public class FeatureFlagAdminController {
 
     public static final String NOT_FOUND_TYPE     = "https://ax-template.dev/problems/feature-flag-not-found";

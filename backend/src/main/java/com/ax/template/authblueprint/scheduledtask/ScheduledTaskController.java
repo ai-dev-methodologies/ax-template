@@ -5,6 +5,7 @@ import com.ax.template.authblueprint.auditlog.Audited;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,13 +25,18 @@ import java.util.UUID;
  * <ul>
  *   <li>blueprints/scheduled-task-manifest.yaml#admin_api — endpoints + ROLE_ADMIN gate</li>
  *   <li>blueprints/scheduled-task-manifest.yaml#authz — {@code /api/admin/**}
- *       is locked to ROLE_ADMIN by the global SecurityConfig.</li>
+ *       is locked to ROLE_ADMIN by the global SecurityConfig; this controller
+ *       ALSO declares a class-level
+ *       {@code @PreAuthorize("hasAuthority('ROLE_ADMIN')")} as defense-in-depth
+ *       (method security is the primary, locally-verifiable gate; the path
+ *       matcher stays as a complementary layer).</li>
  *   <li>SCHED-IDEMPOTENT-001 — POST /{id}/trigger uses the same lock as the
  *       in-process scheduler, so simultaneous admin triggers are idempotent.</li>
  * </ul>
  */
 @RestController
 @RequestMapping("/api/admin/scheduled-tasks")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
 public class ScheduledTaskController {
 
     public static final String NOT_FOUND_TYPE = "https://ax-template.dev/problems/scheduled-task-not-found";

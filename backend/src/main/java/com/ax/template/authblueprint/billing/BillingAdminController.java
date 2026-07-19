@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,12 +23,16 @@ import java.util.stream.Collectors;
 
 /**
  * R21 admin billing endpoints.
- * <p>SecurityConfig pins {@code /api/admin/**} to ROLE_ADMIN, so this
- * controller relies on that path-based guard (BILLING-AUTHZ-003). No
- * {@code @PreAuthorize} re-declaration.
+ * <p>SecurityConfig pins {@code /api/admin/**} to ROLE_ADMIN (BILLING-AUTHZ-003).
+ * This controller ALSO declares a class-level
+ * {@code @PreAuthorize("hasAuthority('ROLE_ADMIN')")} as defense-in-depth: method
+ * security is the primary, locally-verifiable gate (see
+ * {@code admin_preauthorize_guard.sh}), and the path matcher stays as a
+ * complementary layer.
  */
 @RestController
 @RequestMapping("/api/admin/billing")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
 public class BillingAdminController {
 
     public static final String VALIDATION_TYPE = "https://ax-template.dev/problems/billing-validation";
