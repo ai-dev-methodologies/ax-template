@@ -1,0 +1,99 @@
+# practices/consumer-proof/engine/canary-gaps.yaml
+#
+# Part 3.6 of the gap-convergence engine design — planted, KNOWN-ABSENT needs
+# used to test the (separately-implemented, wave-orchestrator) loop's
+# falsifiability: "a known uncovered need must produce a logged gap" is a
+# TESTED property, not a hope.
+#
+# Every entry below was verified absent AT PLANT TIME (2026-07-19) by actually
+# running the stored grep/find command against this repo's HEAD and confirming
+# it returns zero matches. If a future catalog change closes one of these
+# (the grep starts matching), the canary is stale and must be re-verified or
+# replaced before the next wave — a canary that has silently become "covered"
+# can no longer prove the loop's gap-detection reflex.
+#
+# canary: true on every entry — these are NOT real BACKLOG candidates. They
+# are excluded from BACKLOG registration by construction (Part 3.6: "Canary
+# rows are tagged canary: true and excluded from real BACKLOG registration").
+#
+# Some canaries happen to describe the SAME underlying absence as a real
+# coverage-map.yaml cell (e.g. CANARY-001 <-> S2.TIME-LOCALE.FE, CANARY-003 <->
+# S2.QUERY-BOUNDS.XB, CANARY-006 <-> S1.multi-tenant.BE). That is intentional
+# and harmless: coverage-map.yaml already carries the honest gap/partial status
+# for those cells; canary-gaps.yaml is a SEPARATE staging file whose only job
+# is to feed the wave orchestrator's STEP-1 injection + STEP-5 falsifiability
+# check (Part 3.6), never the scored map itself.
+schema_version: 1
+generated_at: "2026-07-19"
+canaries:
+  - id: CANARY-001
+    canary: true
+    need: "FE rule/enforcement requiring locale-aware number and date formatting (Intl.NumberFormat / Intl.DateTimeFormat) in L4 pages, instead of raw toLocaleString()/string concatenation."
+    layer: FE
+    related_cell: S2.TIME-LOCALE.FE
+    absence_proof:
+      command: 'grep -rlE "locale.{0,20}(number|date).{0,25}format|toLocaleString.{0,100}(require|enforce|must|MUST)" practices-react/rules/*.md'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-19"
+      false_positive_note: "A broader keyword sweep (toLocaleString|Intl\\.) hits js-cache-function-results.md (uses Intl.NumberFormat only as a caching-cost EXAMPLE) and rendering-hydration-suppress-warning.md (lists 'locale formatting' only as an example of an ACCEPTABLE suppressHydrationWarning mismatch, not a correctness rule). Both inspected and confirmed irrelevant to a locale-formatting-correctness rule."
+    excluded_from_backlog: true
+
+  - id: CANARY-002
+    canary: true
+    need: "FE component/hook that verifies or surfaces webhook-signature status to a user (e.g. a 'this delivery's signature could not be verified' UX), mirroring the BE WEBHOOK-SIGN-001/002 scheme."
+    layer: FE
+    related_cell: S1.webhook.FE
+    absence_proof:
+      command: 'grep -rliE "webhook.*(signature|hmac|verify)|verify.*webhook" practices-react/rules/*.md templates/L2/blocks/*.tsx templates/L4/webhook/app'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-19"
+      false_positive_note: "Widening the search to the whole templates/L4/webhook/ tree (including README.md) hits backend signing-scheme documentation (WEBHOOK-SIGN-001/002, HmacSigner) — that is BE doc, not FE UX, and was excluded from the scoped command above."
+    excluded_from_backlog: true
+
+  - id: CANARY-003
+    canary: true
+    need: "A cross-boundary test that validates FE pagination-state parsing against the BE PageEnvelope/contract schema in one integrated run (contract-parity for the pagination envelope specifically)."
+    layer: XB
+    related_cell: S2.QUERY-BOUNDS.XB
+    absence_proof:
+      command: 'grep -rliE "pagination.?envelope.*(parity|contract)|contract.*pagination.?envelope" backend/src/test frontend/tests frontend/src contracts/*.yaml'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-19"
+      false_positive_note: "backend/src/test/java/.../common/PageEnvelopeTest.java exists but is a BE-only structural test; frontend/tests/fmw4-primitives.vitest.ts tests listStateToQuery in isolation. Neither crosses the boundary against the other."
+    excluded_from_backlog: true
+
+  - id: CANARY-004
+    canary: true
+    need: "A rollback/undo action in the chunked-CSV-import FE UI after a partial-failure import (distinct from the BE's per-row DB-transaction rollback, which already exists)."
+    layer: FE
+    related_cell: null
+    absence_proof:
+      command: 'grep -rliE "import.{0,60}(rollback|undo)|rollback.{0,60}import" templates/L2/blocks/*.tsx practices-react/rules/*.md'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-19"
+      false_positive_note: "templates/L2/blocks/ImportProgressBar.tsx (real, exists) has pending/running/completed/failed states + an onDismiss callback, but NO rollback/undo action. practices/rules/chunked-import-required-when-rowcount-gt-1000.md mentions 'rollback' only in the BE-transactional sense ('blocking rollback of earlier valid rows on late failures') — a different concern than a user-facing FE rollback action, and was excluded from the scoped command above."
+    excluded_from_backlog: true
+
+  - id: CANARY-005
+    canary: true
+    need: "A rule or guard requiring an SSRF allowlist check on webhook subscription target URLs at registration time (prevent registering http://169.254.169.254/... or internal hosts as a webhook target)."
+    layer: BE
+    related_cell: null
+    absence_proof:
+      command: 'grep -rliE "ssrf|url.?allowlist|allowlist.?url" practices/rules/*.md practices/evals/*.sh'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-19"
+      false_positive_note: null
+    excluded_from_backlog: true
+
+  - id: CANARY-006
+    canary: true
+    need: "The multi-tenant backend runtime primitives (TenantContext / TenantContextHolder / TenantContextFilter / Hibernate @Filter wiring) that templates/L4/multi-tenant/README.md promises 'ship in a follow-up commit' — today only the AOP guard-skeleton completeness check + spec/blueprint exist."
+    layer: BE
+    related_cell: S1.multi-tenant.BE
+    absence_proof:
+      command: 'find backend/src/main -ipath "*tenancy*" -o -ipath "*TenantContext*"'
+      result: "(empty — 0 matches, exit 0)"
+      verified_at: "2026-07-19"
+      false_positive_note: "backend/src/main/java/.../orgscope/ IS real and IS the enforcement for S2.TENANCY-SCOPE.BE (covered) — but orgscope is a per-request authorization-scope primitive, not the common.tenancy runtime (TenantContext/Filter/Hibernate @Filter) the multi-tenant README specifically names as future work. The two are related but distinct; this canary targets the latter, confirmed absent."
+    excluded_from_backlog: true

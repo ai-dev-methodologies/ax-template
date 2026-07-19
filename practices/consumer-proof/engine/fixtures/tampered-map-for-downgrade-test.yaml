@@ -1,0 +1,76 @@
+# practices/consumer-proof/engine/fixtures/tampered-map-for-downgrade-test.yaml
+#
+# NOT the real coverage map. A deliberately-tampered 4-cell fixture proving
+# coverage-report.sh's honesty-downgrade logic (Part 2.2) actually fires —
+# "the yaml's self-report never outranks disk." Run:
+#
+#   bash practices/consumer-proof/engine/coverage-report.sh \
+#       --map practices/consumer-proof/engine/fixtures/tampered-map-for-downgrade-test.yaml
+#
+# Expected: 3 downgrades printed (TEST-1 covered->partial, TEST-2 covered->gap,
+# TEST-3 partial->gap), TEST-4 unaffected (honest partial with real evidence,
+# no backlog_ref).
+schema_version: 1
+frozen_wave: 1
+generated_at: "TEST-FIXTURE-NOT-REAL"
+generated_by: "coverage_report.py downgrade self-test fixture"
+cells:
+  - id: TEST-1.covered-but-nonvacuity-missing
+    tier: S1
+    domain: TEST
+    layer: BE
+    weight: 1
+    status: covered
+    covered_by:
+      - README.md
+    enforced_by:
+      - "echo fake"
+    nonvacuity:
+      - this/path/does/not/exist/on/disk/AnythingProofTest.java
+    backlog_ref: null
+    na_reason: null
+    notes: "Lies about covered — real covered_by, but nonvacuity path is fabricated. Must downgrade to partial."
+
+  - id: TEST-2.covered-but-covered-by-missing
+    tier: S1
+    domain: TEST
+    layer: FE
+    weight: 1
+    status: covered
+    covered_by:
+      - this/path/also/does/not/exist/anywhere.ts
+    enforced_by:
+      - "echo fake"
+    nonvacuity:
+      - README.md
+    backlog_ref: null
+    na_reason: null
+    notes: "Lies about covered — covered_by path is fabricated. Must downgrade to gap (covered_by missing outranks a real nonvacuity)."
+
+  - id: TEST-3.partial-with-unchecked-backlog-ref
+    tier: S2
+    concern: TEST
+    layer: BE
+    weight: 1
+    status: partial
+    covered_by:
+      - README.md
+    enforced_by: []
+    nonvacuity: []
+    backlog_ref: "P9-9999-DOES-NOT-EXIST"
+    na_reason: null
+    notes: "Cites a backlog_ref that will never be [x]-checked in docs/BACKLOG.md (fabricated id). Must downgrade partial -> gap."
+
+  - id: TEST-4.honest-partial-unaffected
+    tier: S1
+    domain: TEST
+    layer: XB
+    weight: 1
+    status: partial
+    covered_by:
+      - README.md
+    enforced_by: []
+    nonvacuity: []
+    backlog_ref: null
+    na_reason: null
+    notes: "Honestly self-reported partial (no nonvacuity claimed, no backlog_ref). Must remain partial — no downgrade."
