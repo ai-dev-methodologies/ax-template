@@ -2,29 +2,49 @@
 # practices/evals/admin_preauthorize_guard.sh
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# WHAT IT ENFORCES (purely LOCAL check — no cross-file config parsing)
+# WHAT THIS IS — a static LINT (NOT an authoritative authorization proof)
 # ─────────────────────────────────────────────────────────────────────────────
-# For every ADMIN-SURFACE controller under
-#   <root>/backend/src/main/java/com/ax/template/authblueprint/**
-# — identified as a class whose NAME ends with `AdminController` AND/OR whose
-# class-level `@RequestMapping` path contains `/admin` (path=/value= aliases and
-# the `{...}` array form handled) — EVERY *mutating* mapped endpoint
-# (`@PostMapping`/`@PutMapping`/`@PatchMapping`/`@DeleteMapping`, or
-# `@RequestMapping(method = POST|PUT|PATCH|DELETE...)`, or a method-less
-# `@RequestMapping` which answers every verb) MUST carry an EFFECTIVE admin
-# authorization annotation: a method-level OR class-level
-# `@PreAuthorize`/`@PostAuthorize` whose SpEL REQUIRES an admin authority —
-#   hasAuthority('ROLE_ADMIN') · hasRole('ADMIN') · hasAnyAuthority(all ROLE_ADMIN)
-#   · hasAnyRole(all ADMIN) · denyAll()
-# A method-level annotation OVERRIDES the class-level one (Spring method-security
-# precedence). REJECTED as ineffective (→ BLOCK): permitAll(), anonymous(),
-# isAnonymous(), authenticated()/isAuthenticated()/fullyAuthenticated()/rememberMe()
-# alone, a non-admin authority (e.g. hasAuthority('ROLE_USER')), a hasAny*(...) that
-# mixes in any non-admin alternative, an empty expression, a non-literal SpEL
-# argument (a named constant — we cannot prove it is admin), or NO annotation.
+# This guard is a cheap, purely-LOCAL static lint over the controller source. It
+# reads ONLY the controller file — it does NOT parse SecurityConfig and it does
+# NOT perform adversarial SpEL evaluation. It catches exactly two shapes on a
+# *mutating* admin endpoint:
+#
+#   (a) MISSING authorization — no effective admin @PreAuthorize at all; and
+#   (b) OBVIOUSLY-ineffective authorization that is cheaply decidable by
+#       inspection — specifically:
+#         • permitAll() / anonymous() / isAnonymous()
+#         • authenticated() / isAuthenticated() / fullyAuthenticated() / rememberMe() alone
+#         • a non-admin authority (e.g. hasAuthority('ROLE_USER'))
+#         • a hasAny*(...) that mixes in any non-admin alternative
+#         • @PostAuthorize used to "protect" a MUTATION (authorization runs AFTER
+#           the side effect — too late; only @PreAuthorize gates a mutation)
+#         • a leading NEGATION of the admin predicate (!hasAuthority('ROLE_ADMIN'))
+#         • a trivial always-true disjunction (... or true / ... || true /
+#           ... or isAnonymous() / ... or permitAll())
+#         • an empty or non-literal (named-constant) SpEL argument
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# WHY THIS SHAPE — the SecurityConfig-parsing bypass class is now MOOT
+# WHAT THIS IS **NOT** — adversarial SpEL is OUT OF LINT SCOPE (documented)
+# ─────────────────────────────────────────────────────────────────────────────
+# A bash/regex lint cannot decide arbitrary Spring SpEL. A DELIBERATELY-crafted
+# weakening expression that is not one of the cheap shapes above — e.g.
+#   @PreAuthorize("hasAuthority('ROLE_ADMIN') or someComplexAlwaysTrue()")
+# where `someComplexAlwaysTrue()` is an opaque bean method that always returns
+# true — will PASS this lint. That is a CODE-REVIEW / malicious-insider concern,
+# NOT what a static presence-lint defends. The AUTHORITATIVE BFLA control is:
+#   1. the per-domain integration tests that assert HTTP 403 for a non-admin
+#      caller (AuthzParityViolationProofTest / AccessGrantViolationProofTest and
+#      the `./gradlew test{Domain}` AUTHZ items — these stay the S2.AUTHZ.BE
+#      non-vacuity proof), and
+#   2. SecurityConfig.java's `authorizeHttpRequests` matcher chain
+#      (`/api/admin/**` → hasAuthority("ROLE_ADMIN")), enforced at runtime with
+#      @EnableMethodSecurity active.
+# This lint is a SUPPLEMENTARY defense-in-depth regression net for the "admin
+# mutating endpoint lost / never had its @PreAuthorize annotation" shape; it
+# complements those controls, it does not replace them.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# WHY PURELY LOCAL — the SecurityConfig-parsing bypass class is MOOT
 # ─────────────────────────────────────────────────────────────────────────────
 # A prior revision of this guard tried to CREDIT admin coverage by statically
 # parsing the Spring `SecurityConfig.java` `authorizeHttpRequests` matcher chain
@@ -33,40 +53,60 @@
 # (verb-scoped matcher; multiple / unscoped filter chains; a
 # `@RequestMapping(path = ...)` alias resolving to the wrong matcher; …), because
 # exhaustively modelling Spring Security's authorization from source is not
-# statically decidable — every hardening left another shape to exploit.
+# statically decidable — every hardening left another shape to exploit. Removing
+# SecurityConfig crediting ENTIRELY ends that whack-a-mole: with no config chain
+# to model there is nothing to bypass. The required control is now a purely-local,
+# decidable property — a method-/class-level `@PreAuthorize` requiring ROLE_ADMIN.
 #
-# This guard STOPS that whack-a-mole by REMOVING SecurityConfig crediting
-# ENTIRELY. It reads only the controller file. There is no config chain to model,
-# so there is nothing to bypass: the three remaining codex bypasses
-# (verb-scoped matcher · multiple/unscoped chain · @RequestMapping(path=) alias →
-# wrong matcher) are ALL MOOT because the guard no longer credits SecurityConfig
-# at all. The required control is now method-/class-level `@PreAuthorize`
-# (defense-in-depth) — a purely local, decidable property.
+# ─────────────────────────────────────────────────────────────────────────────
+# ADMIN-SURFACE DETECTION (WIDENED — round-4 codex detection-scope gap)
+# ─────────────────────────────────────────────────────────────────────────────
+# A controller under
+#   <root>/backend/src/main/java/com/ax/template/authblueprint/**
+# is treated as an ADMIN SURFACE if ANY of:
+#   • its class NAME ends `AdminController`, OR
+#   • its class-level `@RequestMapping` path contains `/admin`, OR
+#   • (WIDENED) ANY of its *mutating* handler methods carries a METHOD-LEVEL
+#     mapping whose path is under `/api/admin` (or `/api/v1/admin`) — this catches
+#     controllers like OfferEligibilityController / TaxApplicationController that
+#     mix a few `/api/admin/...` mutations into an otherwise non-admin class and
+#     are NOT named *AdminController and have NO class-level `/admin` mapping.
 #
-# The SecurityConfig path-matchers in the real repo STAY (belt + suspenders); the
-# guard simply does not TRUST them for coverage. `@EnableMethodSecurity` is active
-# in SecurityConfig, so the class-level `@PreAuthorize` we require is enforced at
-# runtime as a second, independent gate in front of every matcher.
+# Which endpoints must carry authz (PER-ENDPOINT, so a mixed controller's
+# non-admin mutations are NOT falsely flagged):
+#   • if the controller is admin-surface by NAME or by CLASS-LEVEL `/admin` path
+#     → EVERY mutating mapped endpoint must carry effective admin @PreAuthorize
+#     (the whole class is an admin surface); otherwise
+#   • only the mutating endpoints whose OWN method-level mapping path is under
+#     `/api/admin` (or `/api/v1/admin`) must carry it. A sibling mutation on a
+#     NON-admin path (e.g. POST /api/offers/{id}/evaluate) is intentionally left
+#     to SecurityConfig's authenticated() rule and is NOT required to be admin.
 #
-# Relationship to the authoritative control: this guard is a cheap, precise LOCAL
-# regression net for the "admin mutating endpoint lost its authorization
-# annotation" shape. The authoritative BFLA control remains `SecurityConfig.java`
-# PLUS the per-domain integration tests that assert HTTP 403 for a non-admin
-# caller (AuthzParityViolationProofTest / AccessGrantViolationProofTest and the
-# `./gradlew test{Domain}` AUTHZ items) — those stay the primary non-vacuity proof
-# for S2.AUTHZ.BE.
+# EFFECTIVE authz for a MUTATION = a method-level OR class-level `@PreAuthorize`
+# whose SpEL requires an admin authority
+#   hasAuthority('ROLE_ADMIN') · hasRole('ADMIN') · hasAnyAuthority(all ROLE_ADMIN)
+#   · hasAnyRole(all ADMIN) · denyAll()
+# A method-level `@PreAuthorize` OVERRIDES the class-level one (Spring
+# method-security precedence). `@PostAuthorize` NEVER counts for a mutation (Fix 1).
+#
+# Recognition completeness (Fix 2): fully-qualified annotations
+# (`@org.springframework.web.bind.annotation.PostMapping`), MULTILINE mapping
+# annotations, and NON-PUBLIC (package-private / protected) handler methods are
+# all scanned.
+#
+# The `SecurityConfig` path-matchers STAY in the real repo (belt + suspenders);
+# this guard simply does not TRUST them for coverage.
 #
 # Bound by practices/rules/bfla-privileged-endpoint-authz-presence.md
 # (verification.guard: admin_preauthorize_guard.sh). Origin: iter2-G1 dogfood
-# (docs/dogfood-ledger/engine-w1-iter2.yaml), whose stated expiry trigger was
-# "decouple from *AdminController naming convention" — satisfied here by the
-# class-level `@RequestMapping` path-based admin-surface detection.
+# (docs/dogfood-ledger/engine-w1-iter2.yaml); round-4 codex convergence closed the
+# @PostAuthorize/recognition/SpEL-weakener holes and the detection-scope gap.
 #
 # Exit codes:
-#   0 — every mutating mapped endpoint in every admin-surface controller carries
-#       an effective admin @PreAuthorize/@PostAuthorize
-#   1 — at least one mutating admin endpoint has no effective admin authorization
-#       annotation (signature: ADMIN_ENDPOINT_MISSING_PREAUTHORIZE)
+#   0 — every REQUIRED mutating admin endpoint carries an effective admin
+#       @PreAuthorize (method- or class-level)
+#   1 — at least one required mutating admin endpoint has no effective admin
+#       @PreAuthorize (signature: ADMIN_ENDPOINT_MISSING_PREAUTHORIZE)
 #   2 — usage / environment error (root missing, python3 missing, zero-scan)
 #
 # Usage:
@@ -107,28 +147,27 @@ import sys
 
 pkg_dir = os.environ["PKG_DIR"]
 
-# ── Mapping annotations ──────────────────────────────────────────────────────
-MAPPING_RE = re.compile(
-    r"^\s*@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\b"
+# ── Mapping annotations (Fix 2: optional fully-qualified prefix) ──────────────
+MAPPING_START_RE = re.compile(
+    r"@(?:[A-Za-z_][\w.]*\.)?(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\b"
 )
-CLASS_DECL_RE = re.compile(r"^\s*(?:public\s+|final\s+|abstract\s+)*class\s+\w+")
-METHOD_DECL_RE = re.compile(r"^\s*(?:public|protected|private)\b.*\(")
+# Fix 2: also recognise NON-PUBLIC (package-private / protected) handlers — the
+# access modifier is optional. A handler-signature line is "[modifiers] Type name(".
+METHOD_DECL_RE = re.compile(
+    r"^\s*(?:(?:public|protected|private|static|final|abstract|synchronized|native|default|strictfp)\s+)*"
+    r"[\w.$][\w.$<>\[\], ?&]*\s+\w+\s*\("
+)
 QUOTED_RE = re.compile(r'"([^"]*)"')
 REQUEST_METHOD_RE = re.compile(r"RequestMethod\.([A-Za-z]+)")
 
 MUTATING_ANNOT = {"PostMapping", "PutMapping", "PatchMapping", "DeleteMapping"}
 MUTATING_VERBS = {"POST", "PUT", "PATCH", "DELETE"}
 
+# A method endpoint path counts as an admin surface if it is under /api/admin or
+# /api/v1/admin (Fix 4 — widened detection).
+ADMIN_PATH_RE = re.compile(r"^/api/(?:v1/)?admin(?:/|$)")
+
 # ── Effective-admin SpEL model ───────────────────────────────────────────────
-# A @Pre/@PostAuthorize is EFFECTIVE (admin-requiring) iff its SpEL:
-#   - contains no broad/weak grant (permitAll / anonymous / *authenticated /
-#     rememberMe / hasIpAddress), AND
-#   - contains >=1 admin predicate (hasAuthority / hasAnyAuthority / hasRole /
-#     hasAnyRole), AND every authority argument of every such predicate
-#     normalizes to ROLE_ADMIN,
-#   OR the whole expression is denyAll() (denies everyone → certainly no BFLA).
-# A non-literal SpEL argument (e.g. a named constant) is treated as NOT proven
-# admin (fail-closed): a security guard must never credit on uncertainty.
 BROAD_TOKENS = (
     "permitall", "anonymous", "isanonymous",
     "authenticated", "isauthenticated", "fullyauthenticated",
@@ -137,14 +176,20 @@ BROAD_TOKENS = (
 ADMIN_PRED_RE = re.compile(
     r"\b(hasAuthority|hasAnyAuthority|hasRole|hasAnyRole)\s*\(([^)]*)\)"
 )
+# Fix 3: a NEGATED admin predicate — `!hasAuthority(...)` or `not hasRole(...)` —
+# inverts the gate (admin required to be ABSENT). Cheaply detectable → reject.
+NEG_ADMIN_PRED_RE = re.compile(
+    r"(?:!|(?<![\w'])not\s+)\s*has(?:authority|anyauthority|role|anyrole)\b"
+)
 SINGLE_QUOTED_RE = re.compile(r"'([^']*)'")
 DENYALL_RE = re.compile(r"^denyall(\(\))?$")
 
-# Extract the double-quoted SpEL literal of a @Pre/@PostAuthorize annotation.
+# @PreAuthorize ONLY (Fix 1: @PostAuthorize never gates a mutation). Optional FQN
+# prefix for symmetry with the mapping recogniser.
 PREAUTH_SPEL_RE = re.compile(
-    r"@(?:Pre|Post)Authorize\s*\(\s*\"((?:[^\"\\]|\\.)*)\""
+    r"@(?:[\w.]+\.)?PreAuthorize\s*\(\s*\"((?:[^\"\\]|\\.)*)\""
 )
-PREAUTH_ANY_RE = re.compile(r"@(?:Pre|Post)Authorize\b")
+PREAUTH_ANY_RE = re.compile(r"@(?:[\w.]+\.)?PreAuthorize\b")
 
 
 def strip_comments_preserve_lines(s):
@@ -208,20 +253,51 @@ def balanced_args(text, open_idx):
     return text[open_idx + 1:]
 
 
+def annotation_args(text, name_end):
+    """Return the parenthesized argument string of an annotation whose name ends
+    at offset `name_end`, skipping whitespace/newlines up to the '('. Handles
+    MULTILINE annotations (Fix 2). Empty string when the annotation has no
+    parens (e.g. a bare @PostMapping)."""
+    i, n = name_end, len(text)
+    while i < n and text[i] in " \t\r\n":
+        i += 1
+    if i < n and text[i] == "(":
+        return balanced_args(text, i)
+    return ""
+
+
 def spel_requires_admin(spel):
-    """True iff the @Pre/@PostAuthorize SpEL is an EFFECTIVE admin gate."""
+    """True iff the @PreAuthorize SpEL is an EFFECTIVE admin gate.
+
+    This is a cheap lint, not a SpEL evaluator: it rejects the obviously-broken
+    shapes (empty / non-literal / permitAll / anonymous / *authenticated /
+    non-admin authority / mixed hasAny* / @PostAuthorize-for-mutation handled by
+    the caller / NEGATED admin predicate / trivial always-true disjunct) and
+    credits only a positive, required ROLE_ADMIN term (or denyAll)."""
     if spel is None:
         return False  # non-literal argument → cannot prove admin → fail-closed
     raw = spel.strip()
     if raw == "":
         return False
-    # Scan for broad/weak grants with authority literals blanked out (so
-    # hasAuthority('ROLE_AUTHENTICATED') is not misread as authenticated()).
+    # Blank authority string literals so hasAuthority('ROLE_AUTHENTICATED') is not
+    # misread as authenticated(), and so a literal containing "true"/"!" cannot
+    # trip the weakener detectors below.
     scan = SINGLE_QUOTED_RE.sub("''", raw)
     scan = re.sub(r'"[^"]*"', '""', scan)
-    low = re.sub(r"\s+", "", scan).lower()
+    low = re.sub(r"\s+", "", scan).lower()             # no-space form
+    low_sp = re.sub(r"\s+", " ", scan).strip().lower()  # single-spaced form
+
     if DENYALL_RE.match(low):
         return True  # denyAll() — nobody reaches it, certainly no BFLA
+
+    # (Fix 3a) Negated admin predicate → the admin authority is required ABSENT.
+    if NEG_ADMIN_PRED_RE.search(low_sp):
+        return False
+    # (Fix 3b) Trivial always-true disjunct: "... or true" / "... || true".
+    if re.search(r"\btrue\b", low_sp):
+        return False
+
+    # Broad/weak grants — also covers "... or permitAll()" / "... or isAnonymous()".
     for tok in BROAD_TOKENS:
         if tok in low:
             return False
@@ -241,11 +317,10 @@ def spel_requires_admin(spel):
 
 
 def class_level_facts(stripped_text):
-    """(class_name, class_paths, class_authz_effective, class_decl_line0).
+    """(class_name, class_paths, class_authz_effective, class_decl_line0, class_off).
     class_paths = literal paths of the class-level @RequestMapping (path=/value=/
-    array aliases handled). class_authz_effective = the class-level
-    @Pre/@PostAuthorize is an effective admin gate. Operates on the FIRST
-    top-level class."""
+    array aliases handled). class_authz_effective = the class-level @PreAuthorize
+    is an effective admin gate. Operates on the FIRST top-level class."""
     class_off = None
     class_line0 = None
     class_name = None
@@ -255,7 +330,7 @@ def class_level_facts(stripped_text):
         class_line0 = stripped_text.count("\n", 0, m.start())
         break
     if class_off is None:
-        return None, [], False, None
+        return None, [], False, None, None
 
     before = stripped_text[:class_off]
 
@@ -267,9 +342,9 @@ def class_level_facts(stripped_text):
         args = balanced_args(before, last.end() - 1)
         class_paths = QUOTED_RE.findall(args)
 
-    # class-level @Pre/@PostAuthorize — LAST occurrence before the class decl.
+    # class-level @PreAuthorize — LAST occurrence before the class decl.
     class_authz_effective = False
-    au_iters = list(re.finditer(r"@(?:Pre|Post)Authorize\s*\(", before))
+    au_iters = list(re.finditer(r"@(?:[\w.]+\.)?PreAuthorize\s*\(", before))
     if au_iters:
         last = au_iters[-1]
         joined = before[last.start():]
@@ -277,12 +352,13 @@ def class_level_facts(stripped_text):
         spel = mm.group(1) if mm else None
         class_authz_effective = spel_requires_admin(spel)
 
-    return class_name, class_paths, class_authz_effective, class_line0
+    return class_name, class_paths, class_authz_effective, class_line0, class_off
 
 
 admin_controllers = 0
 mutating_endpoints = 0
 violations = []
+detected = []  # (class_name, detection_reason) for the human-readable summary
 
 java_files = []
 for root, _dirs, files in os.walk(pkg_dir):
@@ -295,34 +371,24 @@ for path in java_files:
     with open(path, encoding="utf-8") as fh:
         raw_text = fh.read()
     stripped = strip_comments_preserve_lines(raw_text)
-    class_name, class_paths, class_authz_eff, class_line0 = class_level_facts(stripped)
+    class_name, class_paths, class_authz_eff, class_line0, class_off = class_level_facts(stripped)
     if class_name is None:
         continue
 
-    admin_surface = class_name.endswith("AdminController") or any(
-        "/admin" in p for p in class_paths
-    )
-    if not admin_surface:
-        continue
-
-    admin_controllers += 1
     lines = stripped.split("\n")
     n = len(lines)
 
-    idx = class_line0 + 1  # method mappings live below the class declaration
-    while idx < n:
-        line = lines[idx]
-        mm = MAPPING_RE.match(line)
-        if not mm:
-            idx += 1
-            continue
-        annot = mm.group(1)
-        mapping_lineno = idx + 1
-
-        # Resolve verbs / mutating.
+    # ── First pass: collect every mapped endpoint below the class decl ─────────
+    endpoints = []
+    for m in MAPPING_START_RE.finditer(stripped):
+        off = m.start()
+        if class_off is not None and off <= class_off:
+            continue  # class-level @RequestMapping, not a method mapping
+        annot = m.group(1)
+        args = annotation_args(stripped, m.end())
+        # Verb / mutating resolution.
         if annot == "RequestMapping":
-            joined_ann = "\n".join(lines[idx:idx + 6])
-            methods = [x.upper() for x in REQUEST_METHOD_RE.findall(joined_ann)]
+            methods = [x.upper() for x in REQUEST_METHOD_RE.findall(args)]
             if methods:
                 is_mutating = any(v in MUTATING_VERBS for v in methods)
                 verbs = methods
@@ -336,18 +402,20 @@ for path in java_files:
             is_mutating = False
             verbs = ["GET"]
 
-        # Path suffix (for the message).
-        suffix_m = QUOTED_RE.search(line)
-        suffix = suffix_m.group(1) if suffix_m else ""
+        path_m = QUOTED_RE.search(args)
+        ep_path = path_m.group(1) if path_m else ""
+        lineno = stripped.count("\n", 0, off) + 1
+        li = lineno - 1  # 0-based line index of the mapping annotation start
 
-        # Gather this method's contiguous annotation block: @-lines above the
-        # mapping annotation + lines down to the method signature.
-        start = idx
-        k = idx - 1
+        # Contiguous annotation block: @-lines above the mapping + lines down to
+        # the handler signature (so a method-level @PreAuthorize above OR below
+        # the mapping annotation, and a MULTILINE mapping, are both captured).
+        start = li
+        k = li - 1
         while k > class_line0 and lines[k].lstrip().startswith("@"):
             start = k
             k -= 1
-        j = idx
+        j = li
         sig = None
         while j < n:
             lj = lines[j]
@@ -355,47 +423,80 @@ for path in java_files:
                 sig = j
                 break
             j += 1
-        end = sig if sig is not None else idx
+        end = sig if sig is not None else li
         block = "\n".join(lines[start:end + 1])
 
         method_has_own = bool(PREAUTH_ANY_RE.search(block))
         method_authz_eff = False
         if method_has_own:
-            for am in re.finditer(r"@(?:Pre|Post)Authorize\s*\(", block):
+            for am in re.finditer(r"@(?:[\w.]+\.)?PreAuthorize\s*\(", block):
                 sm = PREAUTH_SPEL_RE.search(block[am.start():])
                 spel = sm.group(1) if sm else None
                 if spel_requires_admin(spel):
                     method_authz_eff = True
                     break
 
-        effective = method_authz_eff if method_has_own else class_authz_eff
+        endpoints.append({
+            "annot": annot, "verbs": verbs, "is_mutating": is_mutating,
+            "path": ep_path, "lineno": lineno,
+            "method_has_own": method_has_own, "method_authz_eff": method_authz_eff,
+        })
 
-        if is_mutating:
-            mutating_endpoints += 1
-            if not effective:
-                vlabel = "|".join(verbs)
-                violations.append(
-                    f"{path}:{mapping_lineno}: mutating admin endpoint "
-                    f"[{vlabel} {suffix or '/'}] on {class_name} has no EFFECTIVE "
-                    f"admin @PreAuthorize/@PostAuthorize (method- or class-level SpEL "
-                    f"requiring ROLE_ADMIN)"
-                )
-        idx = (end if sig is not None else idx) + 1
+    # ── Admin-surface detection (name OR class-path OR method-path) ────────────
+    admin_by_class = class_name.endswith("AdminController") or any(
+        "/admin" in p for p in class_paths
+    )
+    admin_by_method = any(
+        ep["is_mutating"] and ADMIN_PATH_RE.match(ep["path"] or "") for ep in endpoints
+    )
+    if not (admin_by_class or admin_by_method):
+        continue
+
+    if admin_by_class:
+        reason = ("name *AdminController" if class_name.endswith("AdminController")
+                  else "class-level @RequestMapping '/admin'")
+    else:
+        reason = "method-level /api/admin mapping (WIDENED detection)"
+    admin_controllers += 1
+    detected.append((class_name, reason))
+
+    # ── Per-endpoint requirement ──────────────────────────────────────────────
+    for ep in endpoints:
+        if not ep["is_mutating"]:
+            continue
+        # An endpoint must carry admin authz if the whole controller is an admin
+        # surface (by name/class-path) OR the endpoint's own path is under /admin.
+        requires = admin_by_class or bool(ADMIN_PATH_RE.match(ep["path"] or ""))
+        if not requires:
+            continue
+        mutating_endpoints += 1
+        effective = ep["method_authz_eff"] if ep["method_has_own"] else class_authz_eff
+        if not effective:
+            vlabel = "|".join(ep["verbs"])
+            violations.append(
+                f"{path}:{ep['lineno']}: mutating admin endpoint "
+                f"[{vlabel} {ep['path'] or '/'}] on {class_name} has no EFFECTIVE "
+                f"admin @PreAuthorize (method- or class-level SpEL requiring "
+                f"ROLE_ADMIN; @PostAuthorize does NOT gate a mutation)"
+            )
 
 if admin_controllers == 0:
     print(
         "admin_preauthorize_guard: ZERO_SCAN — no admin-surface controller "
-        "(*AdminController name OR class-level @RequestMapping path containing "
-        "'/admin') found under " + pkg_dir,
+        "(*AdminController name, class-level @RequestMapping '/admin' path, OR a "
+        "method-level /api/admin mutating mapping) found under " + pkg_dir,
         file=sys.stderr,
     )
     sys.exit(2)
 
 print(
     f"admin_preauthorize_guard: scanned {admin_controllers} admin-surface "
-    f"controller(s), {mutating_endpoints} mutating endpoint(s); purely-local "
-    f"method/class @PreAuthorize check (SecurityConfig NOT parsed)"
+    f"controller(s), {mutating_endpoints} required mutating endpoint(s); "
+    f"purely-local method/class @PreAuthorize LINT (SecurityConfig NOT parsed, "
+    f"adversarial SpEL OUT OF SCOPE)"
 )
+for cn, reason in detected:
+    print(f"  detected admin-surface: {cn} ({reason})")
 
 if violations:
     print("VIOLATION: mutating admin endpoint reachable with no effective admin authorization (BFLA shape):", file=sys.stderr)
@@ -403,15 +504,16 @@ if violations:
         print(f"  {v}", file=sys.stderr)
     print("", file=sys.stderr)
     print(
-        "Every mutating mapped endpoint (@PostMapping/@PutMapping/@PatchMapping/"
+        "Every REQUIRED mutating mapped endpoint (@PostMapping/@PutMapping/@PatchMapping/"
         "@DeleteMapping, or @RequestMapping with a mutating/absent method) on an "
-        "admin-surface controller MUST carry an EFFECTIVE admin authorization "
-        "annotation — a method-level or class-level @PreAuthorize/@PostAuthorize "
-        "whose SpEL requires ROLE_ADMIN (hasAuthority('ROLE_ADMIN') / hasRole('ADMIN') "
-        "/ hasAnyAuthority(all ROLE_ADMIN) / denyAll()). permitAll(), anonymous(), "
-        "authenticated() alone, a non-admin authority, or NO annotation do NOT count. "
-        "A method-level annotation overrides the class-level one. This guard does NOT "
-        "read SecurityConfig — add the annotation (defense-in-depth); the path matcher "
+        "admin surface MUST carry an EFFECTIVE admin authorization annotation — a "
+        "method-level or class-level @PreAuthorize whose SpEL requires ROLE_ADMIN "
+        "(hasAuthority('ROLE_ADMIN') / hasRole('ADMIN') / hasAnyAuthority(all ROLE_ADMIN) "
+        "/ denyAll()). permitAll(), anonymous(), authenticated() alone, a non-admin "
+        "authority, a negated admin predicate, a trivial always-true disjunction, a "
+        "@PostAuthorize on a mutation, or NO annotation do NOT count. A method-level "
+        "annotation overrides the class-level one. This guard does NOT read "
+        "SecurityConfig — add the @PreAuthorize (defense-in-depth); the path matcher "
         "stays as a complementary layer.",
         file=sys.stderr,
     )
@@ -423,8 +525,8 @@ if violations:
     sys.exit(1)
 
 print(
-    "admin_preauthorize_guard: every mutating admin endpoint carries an effective "
-    "admin @PreAuthorize/@PostAuthorize (method- or class-level)"
+    "admin_preauthorize_guard: every required mutating admin endpoint carries an "
+    "effective admin @PreAuthorize (method- or class-level)"
 )
 sys.exit(0)
 PY

@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -45,6 +46,7 @@ public class CostShareController {
     }
 
     @PostMapping("/api/admin/cost-share/accumulators")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")   // defense-in-depth backstop (SecurityConfig /api/admin/** also gates)
     public ResponseEntity<AccumulatorDto> create(@Valid @RequestBody CreateRequest req) {
         BigDecimal initial = req.initialUsed() == null ? BigDecimal.ZERO : req.initialUsed();
         return ResponseEntity.status(HttpStatus.CREATED)

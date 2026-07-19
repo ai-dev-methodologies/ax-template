@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -52,17 +53,20 @@ public class AnnouncementController {
     }
 
     @PostMapping("/api/admin/announcements")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")   // defense-in-depth backstop (SecurityConfig /api/admin/** also gates)
     public ResponseEntity<AnnouncementDto> create(@Valid @RequestBody CreateRequest req, Authentication auth) {
         Announcement a = service.create(auth.getName(), req.title(), req.body(), req.startsAt(), req.endsAt());
         return ResponseEntity.status(HttpStatus.CREATED).body(AnnouncementDto.of(a));
     }
 
     @PostMapping("/api/admin/announcements/{id}/publish")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")   // defense-in-depth backstop (SecurityConfig /api/admin/** also gates)
     public ResponseEntity<AnnouncementDto> publish(@PathVariable UUID id) {
         return ResponseEntity.ok(AnnouncementDto.of(service.publish(id)));
     }
 
     @PostMapping("/api/admin/announcements/{id}/archive")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")   // defense-in-depth backstop (SecurityConfig /api/admin/** also gates)
     public ResponseEntity<AnnouncementDto> archive(@PathVariable UUID id) {
         return ResponseEntity.ok(AnnouncementDto.of(service.archive(id)));
     }

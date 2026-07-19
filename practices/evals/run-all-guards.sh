@@ -1238,7 +1238,7 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/full_trio_artifact_completeness_guard.sh" --root "$SCRIPT_DIR/fixtures/full_trio_artifact_completeness/fail_missing_artifacts"
 fi
 
-echo "[90] admin_preauthorize_guard.sh (iter2-G1 BFLA closure; binds practices/rules/bfla-privileged-endpoint-authz-presence.md's verification.guard). PURELY-LOCAL check: every mutating admin endpoint MUST carry an effective method-/class-level @PreAuthorize requiring ROLE_ADMIN. SecurityConfig is NOT parsed — the 4 codex static-analysis bypasses (verb-scoped matcher · multiple/unscoped chain · @RequestMapping(path=) alias→wrong matcher) are all MOOT because there is no config chain to model.)"
+echo "[90] admin_preauthorize_guard.sh (iter2-G1 BFLA closure; binds practices/rules/bfla-privileged-endpoint-authz-presence.md's verification.guard). PURELY-LOCAL static LINT: every REQUIRED mutating admin endpoint MUST carry an effective method-/class-level @PreAuthorize requiring ROLE_ADMIN. SecurityConfig is NOT parsed (that bypass class is MOOT — no config chain to model) and adversarial SpEL evaluation is OUT OF LINT SCOPE (authoritative = domain 403 integration tests + SecurityConfig). Round-4 codex convergence: @PostAuthorize does NOT gate a mutation (Fix 1); FQN/multiline mappings + non-public handlers are scanned (Fix 2); obviously-ineffective SpEL (negation · trivial always-true disjunction) is rejected (Fix 3); admin-surface detection WIDENED to method-level /api/admin mappings (Fix 4).)"
 run_guard "admin_preauthorize/live" 0 \
     bash "$SCRIPT_DIR/admin_preauthorize_guard.sh"
 if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
@@ -1260,6 +1260,22 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     # name) → BLOCK. Proves PATCH-verb coverage + path-based detection at once.
     run_guard "admin_preauthorize/fixture_fail_patch_missing" 1 \
         bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_patch_missing"
+    # Round-4 codex convergence falsifiers.
+    # Fix 1 — @PostAuthorize runs AFTER the mutation's side effect; it does NOT
+    # gate a mutation. A POST protected only by @PostAuthorize → BLOCK.
+    run_guard "admin_preauthorize/fixture_fail_postauthorize_only" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_postauthorize_only"
+    # Fix 2 — a FULLY-QUALIFIED @org...PostMapping must be scanned, not invisible.
+    run_guard "admin_preauthorize/fixture_fail_fully_qualified_mapping" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_fully_qualified_mapping"
+    # Fix 3a — a leading negation of the admin predicate (!hasAuthority('ROLE_ADMIN'))
+    # inverts the gate → BLOCK.
+    run_guard "admin_preauthorize/fixture_fail_negated_spel" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_negated_spel"
+    # Fix 3b — a trivial always-true disjunction ("hasAuthority('ROLE_ADMIN') or true")
+    # short-circuits to always-true → BLOCK.
+    run_guard "admin_preauthorize/fixture_fail_disjunction_true" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_disjunction_true"
 fi
 
 echo "[91] locale_aware_format_guard.sh (wave-1 exit cleanup — was shipped alongside practices-react/rules/locale-aware-number-date-format.md but never wired into run-all-guards.sh; iter1-G2 / CANARY-001 closure)"

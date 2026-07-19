@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -65,11 +66,13 @@ public class DispatchController {
 
     // ── dispatcher surface (/api/admin/dispatch/** → ROLE_ADMIN) ────────────────
     @PostMapping("/api/admin/dispatch/providers")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")   // defense-in-depth backstop (SecurityConfig /api/admin/** also gates)
     public ResponseEntity<ProviderDto> register(@Valid @RequestBody RegisterProviderRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ProviderDto.of(service.registerProvider(req.handle())));
     }
 
     @PostMapping("/api/admin/dispatch/offers")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")   // defense-in-depth backstop (SecurityConfig /api/admin/** also gates)
     public ResponseEntity<OfferDto> offer(@Valid @RequestBody OfferRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(OfferDto.of(service.offer(req.requestId(), req.providerId())));
     }
