@@ -22,13 +22,15 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 
 ## 현재 수렴률
 
+> 2026-07-19 completeness 적대감사 — SB4 major·Jackson3·169백로그 완결 확인 후 잔여 6건(bearer-token 누출·의존성 freshness·전수 locale) 발견·전량 봉합, codex gpt-5.6-sol APPROVE, 수렴 175/175.
+
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 29 | 29 | **100%** |
 | P1 (generic signature backlog) | 67 | 67 | **100%** |
-| P2 (verification escapes) | 23 | 23 | **100%** |
-| P3 (industry-niche deferrals) | 50 | 50 | **100%** |
-| **P0–P3 합계 (수렴 분모)** | **169** | **169** | **100%** |
+| P2 (verification escapes) | 26 | 26 | **100%** |
+| P3 (industry-niche deferrals) | 53 | 53 | **100%** |
+| **P0–P3 합계 (수렴 분모)** | **175** | **175** | **100%** |
 
 > 2026-06-27 Broadleaf 전면 재감사가 P1 +6·P2 +1 등재(75%→72%). 2026-06-28 `feat/commerce-invariant-closure`가 잔여 5 Broadleaf gap(P1-56~60: offer-eligibility·tax-application·currency-arithmetic·password-reset token-family·checkout saga doc)을 generic 도메인+외부표준 anchor로 전부 closed → P1 60/60, 수렴 **76%**. Broadleaf 재감사 8 confirmed gap 전수 종결.
 > 2026-07-07 STO-arc 파생 잔여 6건(P1-61~62·P2-14~15·P3-32~33) 등재 → P1 60/62·P2 13/15·P3 0/33, 수렴 **~73%**.
@@ -269,6 +271,11 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [x] P2-22 31 specs declare domain_mode: full_trio with zero contract AND zero blueprint, and no guard checks the domain_mode-vs-artifact axis — METHODOLOGY.md:504-511 defines full_trio as Backend Trio + Frontend Trio REQUIRED; of 58 full_trio specs, 31 have no templates/L4 dir, no contracts/<name>-*.yaml, no blueprints/<name>-*.yaml (root cause: a blanket retrofit of the field). None of domain_spec_trio_guard.sh / full_trio_spec_backend_or_exempt_guard.sh / spec_item_verification_binding_guard.sh check this. Fix: add a guard asserting every full_trio spec has a matching contract AND blueprint, or reclassify the 31 specs to a mode matching reality. 출처: 2026-07-17 adversarial audit. — **closed**: 29 backend-only specs reclassified full_trio→backend_only (verified zero frontend artifacts, no coverage dropped) + new full_trio_artifact_completeness_guard.sh (contract+blueprint+L4 required per full_trio spec, pass/fail fixtures) wired into run-all-guards; allowlist emptied (stricter). guard count 91→92.
 - [x] P2-23 templates/L4 (137 .tsx composition-kit files across 25 domains — the layer fork-receivers actually copy) are structurally excluded from all 14 ax/* ESLint rules AND from tsc; R25 frontend-lint never sees them — Surface practices-react/evals/lint_own_blocks_guard.sh:47-48 (scopes only templates/L2/blocks + L0), frontend/eslint.config.mjs files globs (src/packages/apps only — templates/ is an unreachable sibling), frontend/tsconfig.json include. rich-text-editor-client.tsx already imports @templates/L1 behind a @ts-expect-error admitting tsc can't resolve it. Fix: extend lint_own_blocks_guard.sh to copy+lint templates/L4 (and L1) against the ax/* ruleset and add a tsc pass over the templates tree. 출처: 2026-07-17 adversarial audit. — **closed (lint enforcement)**: lint_own_blocks_guard extended to templates/L1+L4 (335 blocks) against ax/* rules — surfaced+fixed 2 real no-array-mutate violations. tsc-over-templates left unwired by-design (templates are copy-targets referencing unvendored deps/path-aliases that only resolve in a fork-receiver's project; full typecheck here is not meaningful — documented, not a gate).
 
+**completeness 적대감사 잔여 (2026-07-19)**
+- [x] P2-24 auth reference workload leaked single-use VERIFY/RESET bearer tokens to stdout with no prod gate (3+1 System.out.println sites) — **closed**: new DevTokenSink routes all 4 emit sites through a prod-gated dev-only SLF4J sink; enable = !isProd && (isDev || opt-in) via exact Environment.getActiveProfiles() — production is an ABSOLUTE veto the ax.auth.expose-dev-tokens opt-in cannot override (empty/default profile = no-op = fork-receiver prod-safety). ViolationProofTest asserts prod+opt-in→no-op + zero raw System.out/err in auth/. codex gpt-5.6-sol caught the initial opt-in-override-prod leak; sealed to absolute veto. Closes the promoted credentials-in-logs gotcha.
+- [x] P2-25 SB4 migration test-classpath shims (Jackson-2 test databind + hardcoded Groovy-4 substitution) were retained as end-state, leaving the Jackson 2→3 migration incomplete on the test classpath — **closed**: rest-assured 5.5.7→6.0.1 (ships Jackson 3 + Groovy 5 + Spring 7) let both shims be deleted; the last Jackson-2 artifact anywhere in the build is gone, so the Jackson migration is now complete including test scope. 5→6 DSL source-compatible (zero test changes), aggregate 1875 tests green.
+- [x] P2-26 Apache POI pinned 5.2.5, inside CVE-2025-31672 range (fixed 5.4.0) — **closed**: bumped to 5.5.1; SXSSF write API stable, testReportExport 23/23. Exploit path was unreachable (write-only) but a public fork-base must not ship a CVE-flagged pin.
+
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
 > 2026-07-07 인라인화 시 세션기록 대조로 재집계. P3-1~21 확정 요지 인라인. P3-22~40은 IDW13-17
@@ -327,6 +334,11 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [x] P3-48 AuditPiiHelper.sanitizeReason redacts only hyphenated KR RRN (\d{6}-\d{7}); a 13-digit un-hyphenated 주민등록번호 leaks into stored-error/audit columns — Surface common/AuditPiiHelper.java:85. The mobile pattern one line below (:86) correctly makes hyphens optional; the RRN pattern does not, leaving 고유식별정보 (개인정보보호법 §24) unredacted when un-hyphenated (e.g. a KYC adapter error 'extraction failed for 9012311234567' persisted via sanitizeReason). Fix: change the RRN pattern to \d{6}-?\d{7} (mirror the file's own optional-hyphen mobile pattern) + add an un-hyphenated fixture to AuditPiiHelperTest. 출처: 2026-07-17 adversarial audit. — **closed**: AuditPiiHelper RRN pattern \d{6}-\d{7}→\d{6}-?\d{7} (optional hyphen, mirrors mobile pattern); un-hyphenated 13-digit fixture added.
 - [x] P3-49 practices/rules count stale at '228' in 7 CLAUDE.md locations while disk truth is 232 (ls practices/rules/*.md), and CLAUDE.md already says 232 elsewhere — a self-contradiction — Surface CLAUDE.md:228,239,263,334,391,426,457 (incl the testPractices row '228 rules PASS'). Fix: replace 228→232 at those 7 locations and add practices/rules/*.md to a doc-headline count guard's scan set. 출처: 2026-07-17 adversarial audit. — **closed**: 7 CLAUDE.md '228' rule-count refs synced to disk truth 232 (also README/SKILL verified).
 - [x] P3-50 hard-guard count stale + internally inconsistent across enforcement docs vs disk truth (91) — verification-checklist.yaml titles the step '85 mechanical hard guards' (:461) and comments '36' (:459); CLAUDE.md says '91' (:171,428), '90' (:496), and a breakdown '87+2+1' (:501) whose arithmetic totals 90 not 91. Disk: practices/evals/*_guard.sh = 89 + practices-react/evals/*_guard.sh = 2 = 91 wired into run-all-guards.sh. Regression of the earlier guard-count-drift closure, plus verification-checklist.yaml was never in any count-guard's scan set. Fix: re-sync all labels to disk truth from one mechanized census and extend doc_headline_count_guard.sh to also assert verification-checklist.yaml's count. 출처: 2026-07-17 adversarial audit. — **closed**: all guard-count labels synced to disk truth 92 across CLAUDE.md/README/SKILL.md/verification-checklist.yaml; doc_headline_count_guard PASS live.
+
+**completeness 적대감사 잔여 (2026-07-19)**
+- [x] P3-51 prior locale sweeps were changed-files-scoped and kept leaving un-Locale'd format folds — **closed**: repo-wide sweep pinned 14 toUpperCase/toLowerCase folds to Locale.ROOT across 12 files (auth/AuthServiceImpl resolveRole, OAuthService 6, LoginRateLimiter 3 email, recordlinkage, notification, quorumresolution, secretsmanagement, commerceorder, apiversioning ×3, webhooksigning, sessionmanagement, tagcategorization) + CircuitBreakerPolicy String.format %.2f (German/French locale JSON-audit-metadata corruption). Turkish-locale tests added; grep now zero. Root-cause closed (whole-repo, not changed-files).
+- [x] P3-52 testcontainers dependency (bom+junit+postgresql) declared but unused (dead dep) — **closed**: verified zero usages (no @Container/PostgreSQLContainer/@ServiceConnection) and removed; full suite still green.
+- [x] P3-53 frontend engines.node floor >=26 (Current/non-LTS) inconsistent with the repo's Korean-enterprise LTS-only target — **closed**: lowered to >=24 (active LTS, EOL 2028); no Node-26 API in use, JSON valid.
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
 
