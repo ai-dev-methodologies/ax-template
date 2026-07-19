@@ -1628,13 +1628,18 @@ cells:
   - frontend/tests/parse-error-denylist.vitest.ts
   backlog_ref: null
   na_reason: null
-  notes: 'wave-1 exit cleanup (2026-07-20): the prior "no frontend/tests/*.vitest.ts* unit-tests it"
-    note is now false — frontend/tests/parse-error-denylist.vitest.ts exists (10 vitest cases covering
-    both the text/html and RFC 9457 JSON branches; RED-on-revert is mechanical: reverting the JSON-branch
-    deny-list fix flips 3/10 cases to failing). parse-error.ts is used in 21 FE files across 9 domains
-    (grep-verified). The other two covered_by rules (no-rrn-display-without-legal-basis-gate.md,
-    no-rrn-in-form-fields.md) are intentionally verification.type: review (manual tier, no automated
-    test expected) — not a gap in this flip.'
+  notes: 'wave-1 exit cleanup (2026-07-20, codex nonvacuity closure): frontend/tests/parse-error-denylist.vitest.ts
+    (15 vitest cases) now covers BOTH branches of parseError() with genuine RED-on-revert proofs.
+    (a) RFC 9457 JSON branch (body.detail/body.message): reverting the JSON-branch deny-list fix flips
+    3 cases to failing. (b) text/html fallback branch (parse-error.ts `looksSensitive` screen, ~line 123):
+    5 new cases exercise it — reverting the `!looksSensitive` protection flips the 4 PII cases (RRN/email/
+    JWT/hostname+IP) to failing while the benign-text case stays green (proving the branch is genuinely
+    reached, not always-fallback). Each PII text body is < 120 chars stripped, so it is the PII screen —
+    not the length cap — under falsification. This closes the codex finding that the text/html branch was
+    UNTESTED (covered claim was vacuous for that branch). parse-error.ts is used in 21 FE files across 9
+    domains (grep-verified). The other two covered_by rules (no-rrn-display-without-legal-basis-gate.md,
+    no-rrn-in-form-fields.md) are intentionally verification.type: review (manual tier, no automated test
+    expected) — not a gap in this flip.'
 - id: S2.AUDIT-PII.XB
   tier: S2
   concern: AUDIT-PII
@@ -1842,10 +1847,11 @@ cells:
   backlog_ref: null
   na_reason: null
   notes: 'wave-1 exit cleanup (2026-07-20): the prior "CONFIRMED absent" note is now false — a
-    practices-react rule + a wired practices/evals shell guard exist (guard runs live scan of
-    frontend/src, 24 *.tsx clean, and has its own fail_manual_format/pass_intl_format fixture
-    pair proving the GUARD itself is non-vacuous). Left at partial, not covered: there is no
-    frontend/tests/*.vitest.ts application-level test exercising a real component against this
+    practices-react rule + a wired practices/evals shell guard exist (guard [91] runs a live scan of
+    frontend/src, 35 *.ts/*.tsx clean, and has a pass fixture plus four per-detector fail fixtures —
+    fail_manual_format/fail_bare_tolocale/fail_money_tofixed/fail_currency_concat — each isolating one
+    detector, proving the GUARD itself is non-vacuous per-detector). Left at partial, not covered: there
+    is no frontend/tests/*.vitest.ts application-level test exercising a real component against this
     invariant — the guard fixtures prove the guard works, not that shipped application code is
     RED-tested for it, so nonvacuity stays empty pending that test.'
 - id: S2.TIME-LOCALE.XB
@@ -2010,11 +2016,12 @@ cells:
     locale-aware number/date formatting had no rule/ESLint-rule/guard anywhere). That gap is now closed at
     the catalog level — practices-react/rules/locale-aware-number-date-format.md (evidence-anchored to
     ECMA-402/MDN) + practices/evals/locale_aware_format_guard.sh (spec_ref_guard + evidence_guard +
-    substance_guard + time_decay_guard all pass) + a fail/pass fixture pair proving the guard is RED-able
-    (fail_manual_format exits 1 with signature LOCALE_FORMAT_VIOLATION; pass_intl_format exits 0,
-    non-vacuously scanned). The guard also runs clean against the real frontend/src (24 *.tsx files, 0
-    hits) but is NOT YET wired into practices/evals/run-all-guards.sh — that wiring is a separate decision
-    left for a future change, out of scope here. The scenario-local
+    substance_guard + time_decay_guard all pass) + per-detector fail fixtures proving the guard is RED-able
+    (fail_manual_format/fail_bare_tolocale/fail_money_tofixed/fail_currency_concat each exit 1 with
+    signature LOCALE_FORMAT_VIOLATION, one detector apiece; pass_intl_format exits 0, non-vacuously
+    scanned). The guard is WIRED live into practices/evals/run-all-guards.sh as guard [91]
+    (locale_aware_format/live + the pass/per-detector-fail fixtures) and runs clean against the real
+    frontend/src (35 *.ts/*.tsx files, 0 hits). The scenario-local
     scenario-guards/locale_format_guard.sh is unchanged and still proves the scenario's own composition.
 - id: S3.crm
   tier: S3

@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "8ab9158d9fbe9692cb7b785f93eaa8956c8a47e9107e9d10d3916125e68b0c17"
+  source_concat_sha256: "21b01aa0ccbfed16206743e74a90809a444604c261926881bc837069cc9a7a4b"
   rule_count: 233
   generated_by: "practices/generate_agents.sh"
 ---
@@ -1678,26 +1678,42 @@ controller that drops the class-level annotation all reopen the gap, and none of
 compile or a happy-path test written against an already-authenticated admin session.
 
 The fix is mechanical, not judgment-based: every mapped method in a privileged controller (in this
-catalog's convention, any `*AdminController`) must resolve to an authorization check by one of two
-routes — a single class-level `@PreAuthorize`/`@PostAuthorize` that covers every method, or an
-individual annotation on every `@GetMapping`/`@PostMapping`/`@PutMapping`/`@DeleteMapping`/
-`@RequestMapping` method. A handler covered by neither is the BFLA shape: any caller who reaches the
-route reaches the handler, no role check in between.
+catalog's convention, any `*AdminController`) must resolve to an **effective** authorization check by
+one of three routes — a single class-level `@PreAuthorize`/`@PostAuthorize` that covers every method,
+an individual annotation on every `@GetMapping`/`@PostMapping`/`@PutMapping`/`@DeleteMapping`/
+`@PatchMapping`/`@RequestMapping` method, or a `SecurityConfig` `requestMatchers(...)` rule whose path
+pattern covers the endpoint **and whose required authority is admin** (`hasAuthority('ROLE_ADMIN')` /
+`hasRole('ADMIN')`). A handler covered by none is the BFLA shape: any caller who reaches the route
+reaches the handler, no role check in between.
 
-**Incorrect — one method in an otherwise-guarded admin controller has no authorization check:**
+Two subtleties make the check non-obvious — and are exactly where a naive "does an `@PreAuthorize`
+exist?" review passes an endpoint that is in fact open:
+
+1. **An `@PreAuthorize`/`@PostAuthorize` is only effective if its SpEL actually requires an
+   authority/role.** `@PreAuthorize("permitAll()")`, `"anonymous()"`, `"isAnonymous()"`, or an empty
+   expression are *not* authorization checks — they admit any (or every) caller. Presence of the
+   annotation is not coverage; the SpEL must contain `hasAuthority`/`hasRole`/`hasAnyAuthority`/
+   `hasAnyRole`/`hasPermission`.
+2. **A method-level annotation overrides the class-level one** (Spring method-security precedence).
+   A class-level `hasAuthority('ROLE_ADMIN')` does *not* rescue a method that re-declares
+   `@PreAuthorize("permitAll()")` — the method-level `permitAll()` wins.
+
+**Incorrect — a method-level `permitAll()` overrides the class-level gate, so `export()` is open (the class-level ROLE_ADMIN does NOT rescue it):**
 
 ```java
 @RestController
 @RequestMapping("/api/admin/ledger")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")   // covers list()/get(), but...
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")   // covers list() below, but...
 public class LedgerAdminController {
 
     @GetMapping
     public List<LedgerEntryDto> list() { ... }   // ✅ covered by class-level annotation
 
     @PostMapping("/export")
-    @PreAuthorize("permitAll()")                  // ❌ someone "temporarily" loosened this for a
-    public ExportJobDto export() { ... }          //    local test and it shipped — reachable by ANY caller
+    @PreAuthorize("permitAll()")                  // ❌ VIOLATION: method-level permitAll() is NON-authz
+    public ExportJobDto export() { ... }          //    and OVERRIDES the class-level ROLE_ADMIN —
+                                                  //    reachable by ANY caller. `admin_preauthorize_guard.sh`
+                                                  //    flags this (it is not rescued by mere annotation presence).
 }
 ```
 
@@ -1722,10 +1738,14 @@ public class LedgerAdminController {
 
 Verification: static-analysis-tier. `admin_preauthorize_guard.sh` walks every `*AdminController.java`
 under the backend package tree and fails (`ADMIN_ENDPOINT_MISSING_PREAUTHORIZE`) the moment any
-mapped method resolves to neither a class-level nor a method-level `@PreAuthorize`/`@PostAuthorize`.
-It complements, rather than replaces, `role_literal_guard.sh` (which validates that an
-`@PreAuthorize` authority STRING is a known-valid role — a different invariant: it never checks
-whether the annotation is present at all).
+mapped method (every `@GetMapping`/`@PostMapping`/`@PutMapping`/`@DeleteMapping`/`@PatchMapping`/
+`@RequestMapping`) resolves to neither an **effective** class-level nor method-level
+`@PreAuthorize`/`@PostAuthorize` (a SpEL that requires an authority/role — `permitAll()`/`anonymous()`
+do not count, and a method-level annotation overrides the class-level one), NOR a `SecurityConfig`
+`requestMatchers(...)` rule whose path pattern covers the endpoint by boundary-aware Ant semantics and
+whose required authority is admin (`ROLE_ADMIN`). It complements, rather than replaces,
+`role_literal_guard.sh` (which validates that an `@PreAuthorize` authority STRING is a known-valid
+role — a different invariant: it never checks whether the annotation is present at all).
 
 Reference: [OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/)
 

@@ -19,7 +19,7 @@ failing_fixture_path: practices/evals/fixtures/locale-aware-format/fail_manual_f
 verification:
   type: guard
   status: automated
-  notes: "practices/evals/locale_aware_format_guard.sh scans *.tsx (default root frontend/src, or --root DIR) for bare .toLocaleString() and getMonth()/getDate()/getFullYear() '+'-concatenation. Exit 1 (signature LOCALE_FORMAT_VIOLATION) on a hit; exit 0 when the tree is clean; exit 0 (SKIP) when there are 0 *.tsx files to scan. Not yet wired into practices/evals/run-all-guards.sh (real frontend/src currently has 0 hits, so wiring is safe but is a separate decision, out of scope for this rule addition)."
+  notes: "practices/evals/locale_aware_format_guard.sh scans *.ts AND *.tsx (default root frontend/src, or --root DIR; comments stripped so a descriptive comment can't trigger a match) for four locale-blind shapes: bare .toLocaleString() with no argument; manual getMonth()/getDate()/getFullYear() '+'-concatenation (single-line OR multiline); .toFixed() on a money-named value; and string-concatenated currency symbols (\"$\" + amount). Exit 1 (signature LOCALE_FORMAT_VIOLATION) on a hit; exit 0 when the tree is clean; exit 0 (SKIP) when there are 0 *.ts/*.tsx files to scan. WIRED live into practices/evals/run-all-guards.sh as guard [91] (locale_aware_format/live), plus a pass fixture and four per-detector fail fixtures (each isolates one detector so deleting it greens exactly that fixture). Real frontend/src is 0 hits (exit 0)."
 evidence:
   - source_type: external
     citation: "ECMA-402 (ECMAScript Internationalization API Specification) — Intl.NumberFormat and Intl.DateTimeFormat exist precisely so number/date display honors the BCP 47 locale tag, instead of a hard-coded format."
@@ -79,9 +79,14 @@ const dateDisplay = new Intl.DateTimeFormat(locale, {
 
 ### Enforcement
 
-`practices/evals/locale_aware_format_guard.sh` — see `failing_fixture_path` above for the violating
-fixture and `practices/evals/fixtures/locale-aware-format/pass_intl_format/` for the corrected rewrite.
-Both fixtures are the same receipt display, scanned identically by the guard.
+`practices/evals/locale_aware_format_guard.sh` (wired into `run-all-guards.sh` as guard `[91]`) scans
+`*.ts`/`*.tsx` for four locale-blind shapes — bare `.toLocaleString()`, manual `getMonth()/getDate()/
+getFullYear()` `+`-concatenation (single-line or multiline), `.toFixed()` on a money-named value, and
+string-concatenated currency symbols. `practices/evals/fixtures/locale-aware-format/pass_intl_format/`
+is the corrected Intl-based rewrite (exit 0); four per-detector fail fixtures each isolate one detector
+(`fail_manual_format` — multiline date concat; `fail_bare_tolocale`; `fail_money_tofixed` — a `.ts`
+formatter util; `fail_currency_concat` — a `.ts` formatter util) so deleting any single detector greens
+exactly that fixture (proper per-detector falsification).
 
 ### Gap this rule closes
 

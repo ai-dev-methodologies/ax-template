@@ -12,23 +12,32 @@
 # guard is the FE-side symmetric enforcement via Intl.NumberFormat /
 # Intl.DateTimeFormat).
 #
-# Forbidden shapes in *.tsx:
-#   1. bare `.toLocaleString()` with no locale/options argument (locale-blind
-#      — silently follows the server/runtime default locale, not the caller's).
-#   2. manual date-part string concatenation via getMonth()/getDate()/
-#      getFullYear() joined with `+` — the classic hand-rolled non-Intl date
-#      formatter that also hard-codes a display order (Korean uses
-#      yyyy.MM.dd, US uses MM/dd/yyyy — a `+`-concatenated string can't
-#      switch order per locale).
-# This guard only forbids the anti-pattern above (mirrors the shape of
-# money_boundary_seam_guard.sh — a repo-wide scan cannot require every *.tsx
-# file to contain Intl.* formatting, since most components format neither
-# a number nor a date). A directory with zero *.tsx files is a SKIP, not a
-# silent pass.
+# WHAT IT FORBIDS (money/date display that does NOT go through the Intl API).
+# Broadened in wave-1 (codex gpt-5.6-sol finding: the prior denylist let
+# `"$" + total.toFixed(2)`, multiline manual date assembly, and .ts formatter
+# utilities slip through — it was too narrow and .tsx-only):
+#   D1  bare `.toLocaleString()` with NO locale/options argument (locale-blind:
+#       silently follows the server/runtime default locale, not the caller's).
+#   D2  manual date-part assembly — getMonth()/getDate()/getFullYear() joined
+#       with `+` (single-line OR multiline). Hard-codes a display order that
+#       cannot switch per locale (ko-KR yyyy.MM.dd vs en-US MM/dd/yyyy).
+#   D3  `.toFixed(` on a money-named value (total/price/amount/fee/...) — emits
+#       a raw fixed-decimal string with no locale grouping/currency symbol.
+#   D4  string-concatenated currency symbol (`"$" + amount`) — hard-codes the
+#       symbol and its position instead of Intl currency style.
+# Correct code routes money through Intl.NumberFormat and dates through
+# Intl.DateTimeFormat.
 #
-# Exit codes: 0 — no forbidden pattern AND Intl.* present (or nothing to scan)
+# This guard forbids the anti-patterns above (a repo-wide scan cannot REQUIRE
+# every file to contain Intl.* formatting, since most files format neither a
+# number nor a date). Comments are stripped before scanning so a descriptive
+# comment cannot trigger a match (matches are on real code only). It scans
+# BOTH *.tsx AND *.ts (formatter utilities commonly live in .ts). A directory
+# with zero *.ts/*.tsx files is a SKIP, not a silent pass.
+#
+# Exit codes: 0 — no forbidden pattern (or nothing to scan)
 #             1 — violation (signature: LOCALE_FORMAT_VIOLATION)
-#             2 — usage/env error.
+#             2 — usage/env error (python3 missing).
 #
 # Usage:
 #   bash practices/evals/locale_aware_format_guard.sh                # default root=frontend/src
@@ -55,31 +64,92 @@ if [ ! -d "$SRC" ]; then
     exit 0
 fi
 
-files="$(find "$SRC" -name '*.tsx' 2>/dev/null || true)"
-count=0
-if [ -n "$files" ]; then
-    count="$(printf '%s\n' "$files" | grep -c . || true)"
-fi
-if [ "$count" -eq 0 ]; then
-    echo "locale_aware_format_guard: 0 *.tsx files under $SRC — nothing to check"
-    exit 0
-fi
-echo "locale_aware_format_guard: scanned $count *.tsx file(s) under $SRC"
-
-# Forbidden shape 1: bare toLocaleString() call with no argument (locale-blind).
-FORBIDDEN_TOLOCALE='\.toLocaleString\(\)'
-# Forbidden shape 2: manual date-part string concatenation (getMonth()/getDate()/
-# getFullYear() joined with `+`), the classic hand-rolled non-Intl date formatter.
-FORBIDDEN_DATECONCAT='get(Month|Date|FullYear)\(\).*\+.*get(Month|Date|FullYear)\(\)'
-
-hits="$(grep -rnE "$FORBIDDEN_TOLOCALE|$FORBIDDEN_DATECONCAT" "$SRC" --include='*.tsx' 2>/dev/null || true)"
-
-if [ -n "$hits" ]; then
-    echo "VIOLATION: locale-blind formatting — raw toLocaleString()/manual date-string concat instead of Intl.NumberFormat/Intl.DateTimeFormat:" >&2
-    echo "$hits" | sed 's/^/  /' >&2
-    echo "locale_aware_format_guard: LOCALE_FORMAT_VIOLATION — BLOCKED" >&2
-    exit 1
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "locale_aware_format_guard: python3 not in PATH (required for multiline scan)" >&2
+    exit 2
 fi
 
-echo "locale_aware_format_guard: no locale-blind formatting found"
-exit 0
+SRC="$SRC" python3 - <<'PY'
+import os
+import re
+import sys
+
+src = os.environ["SRC"]
+
+# ── comment strip (so a descriptive comment can't trigger a match) ─────────
+BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+LINE_COMMENT = re.compile(r"(?<!:)//.*$", re.MULTILINE)  # keep https:// intact
+
+
+def strip_comments(text: str) -> str:
+    # replace block comments with equal newline count to preserve line numbers
+    text = BLOCK_COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+    text = LINE_COMMENT.sub("", text)
+    return text
+
+
+# ── detectors ──────────────────────────────────────────────────────────────
+# Each is independently falsifiable: deleting one entry greens exactly the
+# fixture that isolates it (see practices/evals/fixtures/locale-aware-format/).
+D_TOLOCALE = ("bare_toLocaleString",
+              re.compile(r"\.toLocaleString\(\s*\)"))
+D_MONEY_TOFIXED = ("money_toFixed", re.compile(
+    r"\b(?:total|subtotal|grand_?total|price|amount|amt|cost|fee|balance|"
+    r"charge|payment|due|paid|money|sum|revenue|refund)\w*\s*\.\s*toFixed\s*\(",
+    re.IGNORECASE))
+D_CURRENCY_CONCAT = ("currency_symbol_concat", re.compile(
+    r"""["'][^"']*[$€£¥₩][^"']*["']\s*\+"""
+    r"""|\+\s*["'][^"']*[$€£¥₩]"""))
+
+SINGLE_LINE_DETECTORS = [D_TOLOCALE, D_MONEY_TOFIXED, D_CURRENCY_CONCAT]
+
+# Multiline-aware: getMonth()/getDate()/getFullYear() joined by `+`, across
+# lines. `[^;{}]` (which includes newlines) bounds the span to a single
+# statement so unrelated getX() calls in different statements don't match.
+D_DATE_CONCAT_NAME = "manual_date_concat"
+D_DATE_CONCAT = re.compile(
+    r"get(?:Month|Date|FullYear)\(\)[^;{}]{0,160}\+[^;{}]{0,160}"
+    r"get(?:Month|Date|FullYear)\(\)")
+
+files = []
+for root, _dirs, fns in os.walk(src):
+    for fn in sorted(fns):
+        if fn.endswith(".ts") or fn.endswith(".tsx"):
+            files.append(os.path.join(root, fn))
+files.sort()
+
+if not files:
+    print(f"locale_aware_format_guard: 0 *.ts/*.tsx files under {src} — nothing to check")
+    sys.exit(0)
+
+print(f"locale_aware_format_guard: scanned {len(files)} *.ts/*.tsx file(s) under {src}")
+
+hits = []
+for path in files:
+    with open(path, encoding="utf-8") as fh:
+        raw = fh.read()
+    code = strip_comments(raw)
+
+    for lineno, line in enumerate(code.splitlines(), start=1):
+        for name, rx in SINGLE_LINE_DETECTORS:
+            if rx.search(line):
+                hits.append(f"{path}:{lineno}: [{name}] {line.strip()[:100]}")
+
+    # multiline date concat — report the line of the first getX() in the match
+    m = D_DATE_CONCAT.search(code)
+    if m:
+        lineno = code.count("\n", 0, m.start()) + 1
+        snippet = re.sub(r"\s+", " ", m.group(0))[:100]
+        hits.append(f"{path}:{lineno}: [{D_DATE_CONCAT_NAME}] {snippet}")
+
+if hits:
+    print("VIOLATION: locale-blind money/date formatting — not routed through "
+          "Intl.NumberFormat/Intl.DateTimeFormat:", file=sys.stderr)
+    for h in sorted(hits):
+        print(f"  {h}", file=sys.stderr)
+    print("locale_aware_format_guard: LOCALE_FORMAT_VIOLATION — BLOCKED", file=sys.stderr)
+    sys.exit(1)
+
+print("locale_aware_format_guard: no locale-blind formatting found")
+sys.exit(0)
+PY

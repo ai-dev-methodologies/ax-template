@@ -1,25 +1,17 @@
-// fail_manual_format/receipt.tsx — deliberately violates
-// locale-aware-number-date-format (practices-react/rules/).
-// VIOLATION: raw .toLocaleString() (locale-blind — no locale/options
-// argument, silently follows the runtime default locale) AND manual
-// date-part string concatenation instead of Intl.DateTimeFormat.
-export default function ReceiptPage({ order }: { order: { total: number; paidAt: string } }) {
+// fail_manual_format/receipt.tsx — isolates ONE detector: D2 manual_date_concat
+// (multiline). getFullYear()/getMonth()/getDate() joined with '+' across lines —
+// hard-codes a field order that cannot switch per locale, and the MULTILINE
+// shape is exactly what the pre-broadening single-line grep missed.
+// Deleting the D2 detector greens THIS fixture and no other.
+export default function ReceiptPage({ order }: { order: { paidAt: string } }) {
   const paidAt = new Date(order.paidAt)
 
-  // VIOLATION: bare toLocaleString() — no locale/options, not reproducible
-  // across server + client, and ignores the caller's actual locale.
-  const totalDisplay = order.total.toLocaleString()
-
-  // VIOLATION: manual getMonth()/getDate()/getFullYear() concatenation —
-  // hard-codes US month/day/year order; breaks for ko-KR (yyyy.MM.dd) and
-  // any other locale with a different field order.
   const dateDisplay =
-    (paidAt.getMonth() + 1) + '/' + paidAt.getDate() + '/' + paidAt.getFullYear()
+    paidAt.getFullYear() +
+    '.' +
+    (paidAt.getMonth() + 1) +
+    '.' +
+    paidAt.getDate()
 
-  return (
-    <div>
-      <p>Total: {totalDisplay}</p>
-      <p>Paid at: {dateDisplay}</p>
-    </div>
-  )
+  return <p>Paid at: {dateDisplay}</p>
 }

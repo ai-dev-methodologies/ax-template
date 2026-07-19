@@ -16,6 +16,16 @@ function jsonResponse(body: unknown, status = 400): Response {
   })
 }
 
+// A non-JSON (text/html) body: res.json() throws, so parseError() takes the
+// text/html fallback branch (parse-error.ts ~line 112+), which strips tags,
+// screens for PII via `looksSensitive`, and caps length at 120 chars.
+function textResponse(body: string, status = 500): Response {
+  return new Response(body, {
+    status,
+    headers: { 'content-type': 'text/html' },
+  })
+}
+
 describe('sanitizeStoredError — deny-list redacts each PII shape', () => {
   it('redacts a KR resident registration number (RRN)', () => {
     expect(sanitizeStoredError('rrn 900101-1234567 on file')).toBe('rrn [REDACTED] on file')
@@ -68,5 +78,48 @@ describe('parseError — JSON ProblemDetail branch (the untested seam)', () => {
     const res = jsonResponse({ detail: 'quota exceeded, try again later' })
     const err = await parseError(res, 'Request failed')
     expect(err.message).toBe('quota exceeded, try again later')
+  })
+})
+
+// The text/html fallback branch (parse-error.ts's `looksSensitive` screen).
+// This is the branch codex flagged as UNTESTED — the JSON tests above never
+// reach it. These cases make the branch RED-able: reverting the looksSensitive
+// protection (so short stripped text is returned unconditionally) leaks the PII
+// bodies below verbatim → these assertions FAIL. Each PII body is kept < 120
+// chars stripped, so it is the PII screen — not the length cap — that blocks it.
+describe('parseError — text/html fallback branch (the previously-untested seam)', () => {
+  it('does NOT leak an RRN from a non-JSON (text/html) error body', async () => {
+    const res = textResponse('<p>invalid rrn 900101-1234567</p>')
+    const err = await parseError(res, 'Request failed')
+    expect(err.message).not.toMatch(/\d{6}-\d{7}/)
+    expect(err.message).toBe('Request failed (HTTP 500)')
+  })
+
+  it('does NOT leak an email from a non-JSON (text/html) error body', async () => {
+    const res = textResponse('<div>duplicate for user@example.com</div>')
+    const err = await parseError(res, 'Request failed')
+    expect(err.message).not.toMatch(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/)
+    expect(err.message).toBe('Request failed (HTTP 500)')
+  })
+
+  it('does NOT leak a Bearer/JWT token from a non-JSON (text/html) error body', async () => {
+    const res = textResponse('<pre>token eyJhbGciOiJIUzI1NiJ9.payloadpayload.sigsig</pre>')
+    const err = await parseError(res, 'Request failed')
+    expect(err.message).not.toMatch(/eyJ[A-Za-z0-9._-]{20,}/)
+    expect(err.message).toBe('Request failed (HTTP 500)')
+  })
+
+  it('does NOT leak an internal hostname/IP from a non-JSON (text/html) error body', async () => {
+    const res = textResponse('<p>connect failed db-01.internal 10.2.3.4</p>')
+    const err = await parseError(res, 'Request failed')
+    expect(err.message).not.toMatch(/\.internal\b/)
+    expect(err.message).not.toMatch(/\b(?:\d{1,3}\.){3}\d{1,3}\b/)
+    expect(err.message).toBe('Request failed (HTTP 500)')
+  })
+
+  it('surfaces a short, non-PII text/html body (branch genuinely reached, not always-fallback)', async () => {
+    const res = textResponse('<p>Service temporarily unavailable</p>', 503)
+    const err = await parseError(res, 'Request failed')
+    expect(err.message).toBe('Service temporarily unavailable')
   })
 })

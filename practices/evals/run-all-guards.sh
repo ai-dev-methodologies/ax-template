@@ -1246,6 +1246,18 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/pass"
     run_guard "admin_preauthorize/fixture_fail_missing_preauthorize" 1 \
         bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_missing_preauthorize"
+    # wave-1 codex bypass closures (each fixture PASSES under the pre-hardening
+    # guard and is BLOCKED after the fix — per-bypass falsification):
+    run_guard "admin_preauthorize/fixture_pass_securityconfig" 0 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/pass_securityconfig"
+    run_guard "admin_preauthorize/fixture_fail_role_user_matcher" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_role_user_matcher"
+    run_guard "admin_preauthorize/fixture_fail_administrator_path" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_administrator_path"
+    run_guard "admin_preauthorize/fixture_fail_unprotected_patch" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_unprotected_patch"
+    run_guard "admin_preauthorize/fixture_fail_permitall" 1 \
+        bash "$SCRIPT_DIR/admin_preauthorize_guard.sh" --root "$SCRIPT_DIR/fixtures/admin-preauthorize/fail_permitall"
 fi
 
 echo "[91] locale_aware_format_guard.sh (wave-1 exit cleanup — was shipped alongside practices-react/rules/locale-aware-number-date-format.md but never wired into run-all-guards.sh; iter1-G2 / CANARY-001 closure)"
@@ -1254,8 +1266,17 @@ run_guard "locale_aware_format/live" 0 \
 if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     run_guard "locale_aware_format/fixture_pass" 0 \
         bash "$SCRIPT_DIR/locale_aware_format_guard.sh" --root "$SCRIPT_DIR/fixtures/locale-aware-format/pass_intl_format"
-    run_guard "locale_aware_format/fixture_fail" 1 \
+    # Per-detector fixtures: each isolates ONE forbidden pattern in its own
+    # file so deleting any single detector greens exactly that fixture
+    # (proper per-detector falsification — wave-1 codex broadening).
+    run_guard "locale_aware_format/fixture_fail_manual_date" 1 \
         bash "$SCRIPT_DIR/locale_aware_format_guard.sh" --root "$SCRIPT_DIR/fixtures/locale-aware-format/fail_manual_format"
+    run_guard "locale_aware_format/fixture_fail_bare_tolocale" 1 \
+        bash "$SCRIPT_DIR/locale_aware_format_guard.sh" --root "$SCRIPT_DIR/fixtures/locale-aware-format/fail_bare_tolocale"
+    run_guard "locale_aware_format/fixture_fail_money_tofixed" 1 \
+        bash "$SCRIPT_DIR/locale_aware_format_guard.sh" --root "$SCRIPT_DIR/fixtures/locale-aware-format/fail_money_tofixed"
+    run_guard "locale_aware_format/fixture_fail_currency_concat" 1 \
+        bash "$SCRIPT_DIR/locale_aware_format_guard.sh" --root "$SCRIPT_DIR/fixtures/locale-aware-format/fail_currency_concat"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
