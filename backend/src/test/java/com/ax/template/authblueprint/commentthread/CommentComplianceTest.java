@@ -15,7 +15,10 @@ import java.util.UUID;
 import static io.restassured.RestAssured.given;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+// BEFORE_CLASS (not AFTER_CLASS): forces a fresh context boot before this class so it
+// cannot inherit an evicted (dead) Tomcat instance under the heavy per-domain aggregate
+// (R22 ContextCache eviction flake — same mitigation as RateLimit/Billing/FeatureFlag).
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Tag("COMMENT")
 class CommentComplianceTest {
 
