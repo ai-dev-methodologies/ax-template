@@ -1,0 +1,3 @@
+CREATE TABLE widget (
+    id BIGINT PRIMARY KEY
+);

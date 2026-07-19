@@ -1,0 +1,17 @@
+{
+  "name": "ax-consumer-proof-react",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Convention-free proof: installing @ax/eslint-plugin-ax mechanically blocks rule-violating React code in a consumer context.",
+  "scripts": {
+    "proof:violating": "eslint fixtures/violating",
+    "proof:clean": "eslint fixtures/clean"
+  },
+  "devDependencies": {
+    "@ax/eslint-plugin-ax": "file:../../../practices-react/eslint-plugin-ax",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0"
+  }
+}
