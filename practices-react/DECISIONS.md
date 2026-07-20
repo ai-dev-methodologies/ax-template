@@ -71,14 +71,16 @@ The 99 rules cluster into evidence-anchored families. Counts are disk-true at th
   (preferred-API selections, L2 block conventions, virtualization, a UX rule, trace-id
   propagation) + the namespace rules that mirror the ESLint plugin (see below).
 
-## ESLint plugin — `eslint-plugin-ax` (14 rules)
+## ESLint plugin — `eslint-plugin-ax` (15 rules)
 
-The 14 mechanical rules under `practices-react/eslint-plugin-ax/rules/*.js` are the
+The 15 mechanical rules under `practices-react/eslint-plugin-ax/rules/*.js` are the
 machine-enforced subset (a rule that can be a lint check IS one, rather than review-tier):
 `no-app-local-ui-primitives`, `no-array-includes-in-loop`, `no-array-mutate-on-state`,
 `no-broad-barrel-imports`, `no-cross-feature-deep-import`, `no-falsy-numeric-render`,
 `no-feature-internal-import`, `no-god-route`, `no-inline-component-definition`,
-`no-route-client-data-fetching`, and the remainder. Promotion of two of these from `warn`
+`no-route-client-data-fetching`, `no-caller-identity-from-props` (15th rule, shipped
+2026-07-20 consumer-proof wave-2 Cell 4 — see `practices/DECISIONS.md` for its full
+provenance entry), and the remainder. Promotion of two of these from `warn`
 to `error` is tracked as **BACKLOG P2-2** (measurement-gated) — until promoted they are
 `warn`, which is honest about their current enforcement strength.
 

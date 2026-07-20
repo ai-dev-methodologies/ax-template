@@ -1,0 +1,24 @@
+# engine — consumer-proof harness wave-2 iter1 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S2.QUERY-BOUNDS.XB — cross-boundary pagination-envelope
+# schema parity (CANARY-003). Single-writer INTEGRATION lane: this file
+# records the closure that landed this wave, not a fresh discovery pass.
+#
+# NOTE (wave-2 convention, mirrors wave-1 iter2/iter3/iter5 header notes):
+# genuine in-wave closures are logged as scope_deferral/methodology_gap
+# (never real_bug + closure_commit_sha) to avoid a pre-commit chicken-and-egg
+# — the ledger cannot cite a commit that has not been made yet. The closure
+# itself lives as committed catalog artifacts on disk (referenced below), not
+# as a ledger closure field.
+iteration: 1
+closed_cell: S2.QUERY-BOUNDS.XB
+findings:
+  - persona: engine-w2
+    finding: "F1 (CLOSED, methodology_gap): no cross-boundary test validated FE pagination-state parsing against the BE PageEnvelope/contract schema in one integrated run (CANARY-003 — verified absent at plant time 2026-07-19). Closed this wave: backend/src/test/java/com/ax/template/authblueprint/common/PageEnvelopeContractParityTest.java (BE, @Tag(\"PAGINATION\") -> ./gradlew testPagination) and frontend/tests/page-envelope-parity.vitest.ts (FE) both read the SAME committed golden fixture (frontend/tests/_fixtures/page-envelope.golden.json) built via the real PageEnvelope#of factory shape. Mutation-lock evidence (by construction, not yet gradle-verified this session per the INTEGRATION-lane no-gradle rule): a drift in either PageEnvelope's field names or the FE parser trips exactly one of the two tests, since neither side hand-derives the golden from the other. A canonical L0 parser (templates/L0/fork-receiver-kit/parse-page-envelope.ts) shipped alongside it. Closes CANARY-003 (see canary-gaps.yaml staleness_note); CANARY-003 is superseded by newly-planted CANARY-013 (no automated schema-parity test for the ERROR half of the envelope — ProblemDetail body vs parse-error.ts, related_cell S2.ERROR-CONTRACT.XB), which fills the vacated slot with a distinct, still-genuinely-absent need for the next wave. Flips coverage-map.yaml S2.QUERY-BOUNDS.XB gap->covered."
+    classification: methodology_gap
+    references_artifact_path: "backend/src/test/java/com/ax/template/authblueprint/common/PageEnvelopeContractParityTest.java, frontend/tests/page-envelope-parity.vitest.ts, frontend/tests/_fixtures/page-envelope.golden.json, templates/L0/fork-receiver-kit/parse-page-envelope.ts"
+  - persona: engine-w2
+    finding: "F2 (OPEN, scope_deferral): the new parity pair closes ONE domain's envelope binding, not a catalog-wide guarantee — pagination-envelope parity enforcement remains scenario/domain-local (this one committed golden + test pair), not a guard that automatically checks every domain's list endpoint against the canonical PageEnvelope shape. Tracked docs/BACKLOG.md P3-54 (pagination envelope catalog gaps, residual). Expiry trigger: re-opens before the fork-receiver adds a second list endpoint relying on ad-hoc pagination-envelope parity checks, or when P3-54 is picked up to ship a catalog-wide guard."
+    classification: scope_deferral
+    references_artifact_path: "docs/BACKLOG.md, practices/consumer-proof/engine/coverage-map.yaml"

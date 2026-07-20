@@ -1,0 +1,18 @@
+# engine — consumer-proof harness wave-2 iter5 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S2.TIME-LOCALE.FE — application-level test coverage for
+# locale-aware number/date formatting (CANARY-007, superseding CANARY-001
+# from wave-1). Single-writer INTEGRATION lane: this file records the
+# closure that landed this wave, not a fresh discovery pass.
+iteration: 5
+closed_cell: S2.TIME-LOCALE.FE
+findings:
+  - persona: engine-w2
+    finding: "F1 (CLOSED, methodology_gap): the wave-1 rule + shell guard (practices-react/rules/locale-aware-number-date-format.md + practices/evals/locale_aware_format_guard.sh) had no frontend/tests/*.vitest.ts application-level test exercising a real component against the invariant — only the guard's own fail_*/pass_* fixtures existed (CANARY-007 — verified absent at plant time 2026-07-20). Closed this wave: frontend/tests/locale-format.vitest.tsx — a real component exercised against Intl.NumberFormat/Intl.DateTimeFormat usage (verified this session: passes, part of the frontend `npm run test -- --run` 395/395 green). Note the stored absence_proof glob (`frontend/tests/*.vitest.ts`) needed an honest widening to `*.vitest.tsx` to actually match the closing file — recorded in canary-gaps.yaml's staleness_note for CANARY-007 rather than silently glossed over. Closes CANARY-007 and flips coverage-map.yaml S2.TIME-LOCALE.FE partial->covered."
+    classification: methodology_gap
+    references_artifact_path: "frontend/tests/locale-format.vitest.tsx, practices-react/rules/locale-aware-number-date-format.md, practices/evals/locale_aware_format_guard.sh"
+  - persona: engine-w2
+    finding: "F2 (OPEN, scope_deferral): the new test exercises Intl.NumberFormat/Intl.DateTimeFormat call-shape compliance but does not specifically pin a UTC-instant -> local-timezone-string conversion (confirmed: grep for timezone/UTC-related terms across frontend/tests/locale-format.vitest.tsx returns 0 hits). A distinct, narrower correctness claim — whether a BE-emitted UTC timestamp actually renders converted to the viewer's local timezone, not just formatted with the right separators/locale — remains untested. Planted as CANARY-014 (related_cell S2.TIME-LOCALE.FE) for the next wave. Expiry trigger: re-opens when wave-3 picks up CANARY-014, or before the fork-receiver ships a feature that renders a BE-emitted UTC timestamp and depends on correct local-timezone conversion."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/engine/canary-gaps.yaml, frontend/tests/locale-format.vitest.tsx"

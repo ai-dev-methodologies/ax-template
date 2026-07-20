@@ -1,0 +1,18 @@
+# engine — consumer-proof harness wave-2 iter3 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S2.AUDIT-PII.XB — cross-boundary audit-log PII redaction
+# survival into FE render (CANARY-009). Single-writer INTEGRATION lane:
+# this file records the closure that landed this wave, not a fresh
+# discovery pass.
+iteration: 3
+closed_cell: S2.AUDIT-PII.XB
+findings:
+  - persona: engine-w2
+    finding: "F1 (CLOSED, methodology_gap): no frontend test asserted that a masked/redacted PII field (e.g. actorIp) survives from the BE AuditLogResponse into rendered FE output — wave-1 closed the BE write-port leak (AuditLogDtoPiiTest) but nothing proved redaction survives the crossing (CANARY-009 — verified absent at plant time 2026-07-20). Closed this wave: backend/src/test/java/com/ax/template/authblueprint/auditlog/AuditLogResponseRedactionGoldenTest.java (BE, @Tag(\"AUDIT_LOG\") -> ./gradlew testAuditLog) and frontend/tests/audit-log-redaction-render.vitest.tsx (FE) both read the SAME committed golden fixture (frontend/tests/_fixtures/audit-log-response.golden.json) pinning the masked AuditLogResponse JSON shape. Mutation-lock evidence (by construction, not yet gradle-verified this session per the INTEGRATION-lane no-gradle rule): a raw-present variant of the golden is RED-able on both sides. Closes CANARY-009 (see canary-gaps.yaml staleness_note) and flips coverage-map.yaml S2.AUDIT-PII.XB partial->covered."
+    classification: methodology_gap
+    references_artifact_path: "backend/src/test/java/com/ax/template/authblueprint/auditlog/AuditLogResponseRedactionGoldenTest.java, frontend/tests/audit-log-redaction-render.vitest.tsx, frontend/tests/_fixtures/audit-log-response.golden.json"
+  - persona: engine-w2
+    finding: "F2 (OPEN, scope_deferral): to exercise the FE render leg at all, this wave had to extract a new pure presentational component (templates/L4/audit-log/app/(audit-log)/[id]/audit-log-detail-view.tsx) from the existing page.tsx — templates/L4/<domain>/app pages import @ax/blocks bare specifiers and invoke useQuery, both unresolvable/failing under vitest run from outside frontend/, so there was no extractable component to test against BEFORE this extraction. This same shape blocks an application-level test for every OTHER L4 vertical (20 domains) that has not had an equivalent extraction done. Registered docs/BACKLOG.md P2-28 (L4 pages untestable-as-shipped); audit-log's audit-log-detail-view.tsx is now the pattern for closing the others. Expiry trigger: re-opens before the fork-receiver needs an application-level FE test for a second L4 vertical — at that point P2-28 blocks it and the audit-log-detail-view.tsx extraction pattern must be repeated."
+    classification: scope_deferral
+    references_artifact_path: "templates/L4/audit-log/app/(audit-log)/[id]/audit-log-detail-view.tsx, docs/BACKLOG.md"

@@ -20,6 +20,7 @@ import noFeatureInternalImport from './rules/no-feature-internal-import.js'
 import noRouteClientDataFetching from './rules/no-route-client-data-fetching.js'
 import noServerStateInLocalState from './rules/no-server-state-in-local-state.js'
 import noGodRoute from './rules/no-god-route.js'
+import noCallerIdentityFromProps from './rules/no-caller-identity-from-props.js'
 
 const plugin = {
   meta: {
@@ -41,6 +42,7 @@ const plugin = {
     'no-route-client-data-fetching': noRouteClientDataFetching,
     'no-server-state-in-local-state': noServerStateInLocalState,
     'no-god-route': noGodRoute,
+    'no-caller-identity-from-props': noCallerIdentityFromProps,
   },
   configs: {},
 }
@@ -65,6 +67,26 @@ plugin.configs.recommended = {
     // wave proved 0 violations across all 6 reference apps under --max-warnings 0.
     'ax/no-server-state-in-local-state': 'error',
     'ax/no-god-route': 'error',
+    // Shipped at error (not warn→promote). The detector's soundness boundary is PROVABLE
+    // IMMUTABILITY + PROVENANCE (codex round-6): a binding's static value is trusted as a
+    // source ONLY when the binding is provably immutable (a PARAMETER never reassigned; a
+    // CONST OBJECT never property-mutated — `const` freezes the binding, not the object),
+    // decided from ESLint scope references, not flow analysis. IN scope = provably-immutable
+    // parameter sources + provably-immutable const variable/projection resolution +
+    // ROUTER-IMPORTED source hooks; OUT of scope (documented) = mutable let/var flows, any
+    // reassigned parameter or property-mutated const object (dropped conservatively → a
+    // documented false-negative, never a false positive), mutation via a separate alias or
+    // an arbitrary called helper, interprocedural helper-indirection, spread-into-object
+    // projection, non-router-imported / locally-defined hooks, and identity-named-filter
+    // callbacks. The client is untrusted, so the AUTHORITATIVE BFLA control is the BACKEND
+    // authz + the sibling BE rule caller-authentication-only-no-userid-param; this FE lint is
+    // defense-in-depth. A standalone NON-VACUOUS Linter-API sweep (TS parser + non-vacuity
+    // canary) across the 6 apps + frontend/src + frontend/packages + templates/L1 +
+    // templates/L4 is false-positive-free: a local `const props = auth()`, a `let`-mutated
+    // alias, a reassigned param, a property-mutated const object, and a locally-defined
+    // `useParams` are all correctly NOT flagged. (The `cd frontend && npm run lint` gate is
+    // scoped to frontend/; templates/L1+L4 are swept out-of-band by the standalone sweep.)
+    'ax/no-caller-identity-from-props': 'error',
   },
 }
 

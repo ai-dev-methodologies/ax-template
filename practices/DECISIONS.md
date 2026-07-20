@@ -452,3 +452,50 @@ the trigger event, do not relitigate.
   seam. 8 per-domain tasks + testPractices GREEN.
 - Follow-ups: none for P0 — this closes the LAST P0 item (P0 26/26, 100%).
 - Commits: (this commit)
+
+## no-caller-identity-from-props — 15th ax/* ESLint rule (practices-react/eslint-plugin-ax)
+- Status: ACCEPT
+- Date: 2026-07-20
+- Drivers: consumer-proof gap-convergence engine wave-2, Cell 4 (coverage-map.yaml `S2.AUTHZ.FE`).
+  Three practices-react rule docs (`audit-log-frontend-viewer-rbac-virtualized.md`,
+  `impersonation-banner-required-when-acting-as-other-user.md`,
+  `no-impersonation-bypass-via-helper-rename.md`) already documented the caller-identity/impersonation
+  concern, but all three are `verification.type: review` (human-only) — none of the 14 shipped ax/*
+  ESLint rules mechanized it. Planted + closed as `canary-gaps.yaml` CANARY-010 this wave (the
+  absence_proof grep against `practices-react/eslint-plugin-ax/rules/*.js` returned 0 hits at plant
+  time; now matches this rule).
+- Evidence: CWE-639 (Authorization Bypass Through User-Controlled Key) + OWASP API Security Top 10
+  (2023) API1:2023 Broken Object Level Authorization — both quoted verbatim in the rule's `evidence:`
+  block (`practices-react/rules/no-caller-identity-from-props.md`). This is the FE mirror of the
+  already-accepted backend rule `caller-authentication-only-no-userid-param` (never accept `userId`
+  via path/query server-side; derive from `Authentication`) — same structural fix, one layer up the
+  call stack: derive identity from `useCallerId()` inside the function that makes the call, never from
+  a prop/param/searchParams value a caller handed in.
+- Alternatives considered:
+  - **Leave it review-tier (do nothing)** — REJECTED: this is precisely the "verification escape" the
+    gap-convergence engine exists to surface and close (CANARY-010's whole purpose); a mechanically
+    enforceable shape with no mechanical enforcement is an honest gap, not an acceptable resting state.
+  - **A generic "no-prop-named-userId" rule** — REJECTED: too broad (a display-only `userId` prop used
+    only for a label, never fed into a data call, is not the vulnerability) — would false-positive on
+    harmless display props and erode trust in the rule.
+  - **Snake_case / arbitrary-identity-name coverage in v1** — DEFERRED, not rejected: scoped this
+    rule to 4 identity names (`userId`/`currentUserId`/`actorId`/`memberId`) and 3 source names
+    (`props`/`params`/`searchParams`) matching the originating task; recorded as an explicit
+    `audit.completeness.amendments` entry in the rule's own frontmatter rather than silently narrowing
+    scope.
+- Why chosen: flags the 4 identity names sourced from (a) a function's own parameter destructuring,
+  (b) destructuring FROM an identifier literally named `props`/`params`/`searchParams`, or (c) member
+  access (including a computed key) or `searchParams.get(...)` on those same three names — when that
+  value flows into an authz-relevant data call (fetch/get/load/query/find/list/search/filter/where, or
+  a known query hook: useSWR family/useQuery/useMutation/useInfiniteQuery/useSuspenseQuery). Shipped at
+  `error` directly (not `warn`→promote): a standalone Linter-API sweep across all 6 reference apps +
+  `frontend/src` + `frontend/packages` + `templates/L1` + `templates/L4` (572 files) found 0 real
+  violations before shipping. Wired into both `practices-react/eslint-plugin-ax/index.js`
+  `configs.recommended` and `frontend/eslint.config.mjs` `sharedRules`.
+- Consequences: `practices-react/eslint-plugin-ax` rule count 14 → 15; `frontend/eslint.config.mjs`
+  gains one more error-tier rule with 0 violations across all reference apps (verified:
+  `cd frontend && npm run lint` green). Closes `canary-gaps.yaml` CANARY-010 and flips
+  `coverage-map.yaml` `S2.AUTHZ.FE` partial → covered.
+- Follow-ups: snake_case / broader identity-name conventions (BACKLOG candidate, not yet registered —
+  low priority given 0 live violations found).
+- Commits: (this commit — not yet pushed; wave-2 INTEGRATION lane)

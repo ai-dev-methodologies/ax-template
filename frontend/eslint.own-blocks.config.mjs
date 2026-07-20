@@ -43,6 +43,7 @@ export default [
       'ax/no-route-client-data-fetching': 'error',
       'ax/no-server-state-in-local-state': 'warn',
       'ax/no-god-route': 'warn',
+      'ax/no-caller-identity-from-props': 'error',
     },
   },
 ]

@@ -168,7 +168,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 100 React rules + 14 ESLint rules + 94 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 101 React rules + 15 ESLint rules + 94 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -236,7 +236,7 @@ catalog 시스템.**
 - **Deployment / release** — 어떻게 배포하든 catalog 품질과 무관
 - **Code review** — 1인 maintainer, 팀 review, AI review 어떤 방식이든 OK
 - **CI 정책** — sentinel CI는 catalog quality probe로만 제공. merge gate 여부는 fork받는 팀이 결정
-- **언어/프레임워크 확장** — Java/Spring 카탈로그(233 rules) + React/Next.js 카탈로그(100 rules + 14 ESLint rules) 둘 다 active. 다른 stack(Kotlin/Go/Python 등) 추가는 동일 패턴 (spec → rule → evidence → test) 따라 확장.
+- **언어/프레임워크 확장** — Java/Spring 카탈로그(233 rules) + React/Next.js 카탈로그(101 rules + 15 ESLint rules) 둘 다 active. 다른 stack(Kotlin/Go/Python 등) 추가는 동일 패턴 (spec → rule → evidence → test) 따라 확장.
 
 → 한 줄: **catalog 품질**은 skill이 보장, **인간 협업 정책**은 fork받은 팀 자율.
 

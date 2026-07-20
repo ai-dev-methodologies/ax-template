@@ -152,15 +152,22 @@ cells:
   domain: approval-workflow
   layer: XB
   weight: 1
-  status: gap
-  covered_by: []
+  status: partial
+  covered_by:
+  - backend/src/test/java/com/ax/template/authblueprint/approvalworkflow/ApprovalFlowIT.java
   enforced_by: []
   nonvacuity: []
   backlog_ref: null
   na_reason: null
-  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
-    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
-    it. Genuine gap, not conservatism.'
+  notes: 'Wave-2 Cell 6 closure (2026-07-20): ApprovalFlowIT.java lands a genuine black-box RestAssured
+    HTTP-surface IT for this domain (./gradlew testApprovalWorkflow, @Tag("WORKFLOW")) — the prior "gap"
+    verdict came from a filename census (find -iname *E2E* -o -iname *IT.java) that missed
+    ApprovalComplianceTest (already a real @SpringBootTest RANDOM_PORT black-box test named
+    *ComplianceTest, not *IT/*E2E*). Per Part 1.2, XB requires ALL FOUR legs (contract-parity +
+    ProblemDetail-unwrap + pagination-envelope + e2e-flow); only the e2e-flow leg is now disk-verified.
+    3 of 4 XB legs remain open (no automated schema-contract-parity test, no dedicated ProblemDetail-shape
+    assertion beyond the custom code property, no pagination-envelope conformance test against the
+    inbox endpoint). partial, not covered.'
 - id: S1.audit-log.BE
   tier: S1
   domain: audit-log
@@ -1370,19 +1377,29 @@ cells:
   concern: AUTHZ
   layer: FE
   weight: 2
-  status: partial
+  status: covered
   covered_by:
   - practices-react/rules/audit-log-frontend-viewer-rbac-virtualized.md
   - practices-react/rules/impersonation-banner-required-when-acting-as-other-user.md
   - practices-react/rules/no-impersonation-bypass-via-helper-rename.md
+  - practices-react/rules/no-caller-identity-from-props.md
   - templates/L0/fork-receiver-kit/use-caller-id.ts
-  enforced_by: []
-  nonvacuity: []
+  enforced_by:
+  - cd frontend && npm run lint
+  nonvacuity:
+  - practices-react/eslint-plugin-ax/tests/no-caller-identity-from-props.test.js
+  - frontend/tests/use-caller-id.vitest.ts
   backlog_ref: null
   na_reason: null
-  notes: 'Markdown rule docs + a real L0 primitive exist, but none of the 14 ax/* ESLint rules (checked:
-    practices-react/eslint-plugin-ax/rules/*.js) mechanically enforce impersonation/RBAC-in-render, and
-    no frontend/tests/*.vitest.ts* covers use-caller-id.ts. Nonvacuity missing — partial, not covered.'
+  notes: 'Wave-2 Cell 4 closure (2026-07-20): a new 15th ax/* ESLint rule (no-caller-identity-from-props.js)
+    now mechanically enforces the caller-identity-source shape — authz-relevant identity must come from
+    use-caller-id.ts, not props/params. Shipped at error directly (Linter-API sweep across all 6 apps +
+    src + packages + templates/L1 + templates/L4 = 572 files found 0 real violations pre-ship, wired into
+    frontend/eslint.config.mjs sharedRules). no-caller-identity-from-props.test.js RED-proves the rule
+    fires on the impersonation-prop shape; use-caller-id.vitest.ts covers the hook itself. Closes
+    CANARY-010 (see canary-gaps.yaml). The remaining two rule docs
+    (audit-log-frontend-viewer-rbac-virtualized.md, impersonation-banner-required-when-acting-as-other-user.md)
+    stay verification.type: review by design — not a gap in this flip.'
 - id: S2.AUTHZ.XB
   tier: S2
   concern: AUTHZ
@@ -1501,12 +1518,24 @@ cells:
   covered_by:
   - contracts/payment-openapi.yaml
   - contracts/billing-openapi.yaml
-  enforced_by: []
-  nonvacuity: []
+  - backend/src/main/java/com/ax/template/authblueprint/payment/PaymentBodyMapper.java
+  enforced_by:
+  - ./gradlew testPayment
+  - cd frontend && npm run test
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/payment/MoneyContractParityTest.java
+  - frontend/tests/money-contract-parity.vitest.ts
   backlog_ref: null
   na_reason: null
-  notes: No test validates FE money.ts minor-unit parsing against the actual BE-emitted JSON contract
-    in an integrated run.
+  notes: 'Reverted covered→partial (wave-2 codex finding-3+4, 2026-07-20). MoneyContractParityTest
+    was repointed off the DEAD PaymentResponse class (emitted by no endpoint) onto the REAL wire
+    emitter PaymentBodyMapper.toBody (extracted from PaymentController; RED-on-revert proven on
+    amount-key rename + canonicalize neuter; testPayment 70/0). The cross-boundary parity test is
+    now genuine, but the money contract carries TWO open defects — P1-68 (response emits MAJOR-unit
+    decimals, violating MoneyAmount schema + money.ts parseMinor) and P1-69 (request-path
+    integer-minor 100x overcharge, pinned by @Disabled PaymentAmountMinorUnitCharacterizationTest).
+    covered is deferred to wave-3 money reconciliation (request + response + money.ts unified to
+    one per-domain unit convention). Closes CANARY-008.'
 - id: S2.IDEMPOTENCY-CONCURRENCY.BE
   tier: S2
   concern: IDEMPOTENCY-CONCURRENCY
@@ -1654,13 +1683,17 @@ cells:
   concern: AUDIT-PII
   layer: XB
   weight: 2
-  status: partial
+  status: covered
   covered_by:
   - backend/src/main/java/com/ax/template/authblueprint/auditlog/AuditLogService.java
+  - templates/L4/audit-log/app/**/audit-log-detail-view.tsx
   enforced_by:
   - ./gradlew testAuditLog
+  - cd frontend && npm run test
   nonvacuity:
   - backend/src/test/java/com/ax/template/authblueprint/auditlog/AuditLogDtoPiiTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/auditlog/AuditLogResponseRedactionGoldenTest.java
+  - frontend/tests/audit-log-redaction-render.vitest.tsx
   backlog_ref: null
   na_reason: null
   notes: 'Closed the live write-port leak: AuditLogService.record(AuditLogDto) — the
@@ -1670,8 +1703,13 @@ cells:
     domain writing through this port stored (and AuditLogResponse.from() would
     then serve to the FE) an unmasked IP. Fixed by routing dto.actorIp() through
     the same AuditLogPiiRedactor; AuditLogDtoPiiTest proves it (RED on revert).
-    Still partial: no FE-side/E2E assertion that AuditLogResponse redaction
-    survives into FE render — that slice of the original XB gap remains open.'
+    Wave-2 Cell 3 closure (2026-07-20) closes the remaining slice: a shared golden
+    fixture (frontend/tests/_fixtures/audit-log-response.golden.json) pins the
+    masked AuditLogResponse JSON shape; AuditLogResponseRedactionGoldenTest.java
+    (BE) and audit-log-redaction-render.vitest.tsx (FE, exercising the new
+    audit-log-detail-view.tsx presentational component) both assert the masked
+    form survives — the raw-present variant is RED-able on both sides. Closes
+    CANARY-009 (see canary-gaps.yaml).'
 - id: S2.ERROR-CONTRACT.BE
   tier: S2
   concern: ERROR-CONTRACT
@@ -1764,15 +1802,23 @@ cells:
   concern: QUERY-BOUNDS
   layer: XB
   weight: 1
-  status: gap
-  covered_by: []
-  enforced_by: []
-  nonvacuity: []
+  status: covered
+  covered_by:
+  - templates/L0/fork-receiver-kit/parse-page-envelope.ts
+  enforced_by:
+  - ./gradlew testPagination
+  - cd frontend && npm run test
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/common/PageEnvelopeContractParityTest.java
+  - frontend/tests/page-envelope-parity.vitest.ts
   backlog_ref: null
   na_reason: null
-  notes: 'CONFIRMED absent: no test cross-validates FE pagination parsing against the BE PageEnvelope/contract
-    schema (grep across frontend/src, frontend/tests, contracts/*.yaml returned no genuine hit). Same
-    underlying absence used as CANARY-003.'
+  notes: 'Wave-2 Cell 1 closure (2026-07-20): PageEnvelopeContractParityTest.java (BE, @Tag("PAGINATION"))
+    + page-envelope-parity.vitest.ts (FE) now cross-validate FE pagination-envelope parsing against the
+    BE PageEnvelope JSON shape via a shared golden fixture (frontend/tests/_fixtures/page-envelope.golden.json)
+    — a drift in either the record''s field names or the FE parser trips exactly one side, RED-on-revert.
+    A canonical L0 parser (parse-page-envelope.ts) ships alongside it. Closes CANARY-003 (see
+    canary-gaps.yaml) and the "no L0 canonical parser" residual noted in docs/BACKLOG.md.'
 - id: S2.INPUT-VALIDATION.BE
   tier: S2
   concern: INPUT-VALIDATION
@@ -1846,23 +1892,25 @@ cells:
   concern: TIME-LOCALE
   layer: FE
   weight: 1
-  status: partial
+  status: covered
   covered_by:
   - practices-react/rules/locale-aware-number-date-format.md
   - practices/evals/locale_aware_format_guard.sh
   enforced_by:
   - practices/evals/locale_aware_format_guard.sh
-  nonvacuity: []
+  - cd frontend && npm run test
+  nonvacuity:
+  - frontend/tests/locale-format.vitest.tsx
   backlog_ref: null
   na_reason: null
   notes: 'wave-1 exit cleanup (2026-07-20): the prior "CONFIRMED absent" note is now false — a
     practices-react rule + a wired practices/evals shell guard exist (guard [91] runs a live scan of
     frontend/src, 35 *.ts/*.tsx clean, and has a pass fixture plus four per-detector fail fixtures —
     fail_manual_format/fail_bare_tolocale/fail_money_tofixed/fail_currency_concat — each isolating one
-    detector, proving the GUARD itself is non-vacuous per-detector). Left at partial, not covered: there
-    is no frontend/tests/*.vitest.ts application-level test exercising a real component against this
-    invariant — the guard fixtures prove the guard works, not that shipped application code is
-    RED-tested for it, so nonvacuity stays empty pending that test.'
+    detector, proving the GUARD itself is non-vacuous per-detector). Wave-2 Cell 5 closure (2026-07-20):
+    frontend/tests/locale-format.vitest.tsx now adds the missing application-level leg — a real component
+    exercised against Intl.NumberFormat/Intl.DateTimeFormat usage, RED-on-revert. Closes CANARY-007 (see
+    canary-gaps.yaml).'
 - id: S2.TIME-LOCALE.XB
   tier: S2
   concern: TIME-LOCALE
@@ -1981,19 +2029,32 @@ cells:
   covered_by:
   - recipes/saas-subscription/RECIPE.md
   - skills/_tests/sealed-verdict/saas-subscription-verdict.md
+  - practices/consumer-proof/scenarios/S3.saas-subscription/
   enforced_by:
   - skills/_tests/sealed-verdict/saas-subscription-verdict.md (must_score/must_total + should_score/should_total,
     threshold-gated PASS)
   nonvacuity: []
   backlog_ref: null
   na_reason: null
-  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+  notes: 'Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
     not a live re-executable CI gate. No live re-executable compose spec found for this recipe (checked
     frontend/tests/recipes/) — sealed verdict is the sole nonvacuity evidence. DOWNGRADED covered->partial —
-    the sealed-verdict markdown is a static quiz record that can never go RED, so per the engine's own
+    the sealed-verdict markdown is a static quiz record that can never go RED, so per the engine''s own
     nonvacuity definition (a RED-able proof) it does not qualify — composition-behavioral proof absent;
     only structural/verdict evidence remains.
+
+    Wave-2 Cell 7 (2026-07-20): proposed re-flip to covered, REJECTED by opus adversarial review.
+    practices/consumer-proof/scenarios/S3.saas-subscription/ (clean+violating fixtures + run-scenario-proof.sh)
+    is an ENFORCEMENT-PROBE — it proves guard-blocking on scenario-local fixtures, not composition-behavioral
+    rendering (multiple domains actually interacting at runtime), so it does not close the gap either.
+    Root cause stays open: the S3 (COMPOSITION) tier''s nonvacuity bar itself is undefined —
+    coverage_map_guard.sh check 4 only asserts a nonvacuity path RESOLVES on disk, not that the resolved
+    artifact is genuinely composition-behavioral (an ESLint-probe or text-scan resolves + is RED-able yet
+    only proves per-fixture rule-firing). Tracked docs/BACKLOG.md P2-29 (done-when: bar defined in
+    engine/README.md + coverage_map_guard.sh extended to assert S3-covered nonvacuity cites a live
+    multi-domain test, not a sealed verdict markdown or bare file-existence). CANARY-012 stays LIVE (not
+    stale). Status UNCHANGED at partial.'
 - id: S3.e-commerce
   tier: S3
   recipe: e-commerce

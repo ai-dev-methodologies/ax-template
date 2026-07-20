@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -65,7 +64,7 @@ public class PaymentController {
         PaymentService.PaymentOutcome outcome = paymentService.createPayment(
             userId, idempotencyKey, request, failureMode, overrideCapturedAt);
 
-        Map<String, Object> body = paymentBody(outcome.payment());
+        Map<String, Object> body = PaymentBodyMapper.toBody(outcome.payment());
         HttpStatus status = chooseStatus(outcome);
         return ResponseEntity.status(status).body(body);
     }
@@ -80,7 +79,7 @@ public class PaymentController {
         Page<Payment> result = paymentService.list(userId,
             PageRequest.of(page, safeSize, Sort.by(Sort.Direction.DESC, "createdAt")));
         return Map.of(
-            "content", result.getContent().stream().map(PaymentController::paymentBody).toList(),
+            "content", result.getContent().stream().map(PaymentBodyMapper::toBody).toList(),
             "page", result.getNumber(),
             "size", result.getSize(),
             "totalElements", result.getTotalElements(),
@@ -92,19 +91,19 @@ public class PaymentController {
     public Map<String, Object> get(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
         Payment payment = paymentService.getPayment(id, userId);
-        return paymentBody(payment);
+        return PaymentBodyMapper.toBody(payment);
     }
 
     @PostMapping("/{id}/authorize")
     public Map<String, Object> authorize(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        return paymentBody(paymentService.authorize(id, userId));
+        return PaymentBodyMapper.toBody(paymentService.authorize(id, userId));
     }
 
     @PostMapping("/{id}/capture")
     public Map<String, Object> capture(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        return paymentBody(paymentService.capture(id, userId));
+        return PaymentBodyMapper.toBody(paymentService.capture(id, userId));
     }
 
     @PostMapping("/{id}/void")
@@ -116,7 +115,7 @@ public class PaymentController {
             throw new PaymentValidationException("Idempotency-Key header is required");
         }
         UUID userId = UUID.fromString(jwt.getSubject());
-        return paymentBody(paymentService.voidPayment(id, userId));
+        return PaymentBodyMapper.toBody(paymentService.voidPayment(id, userId));
     }
 
     @PostMapping("/{id}/refund")
@@ -172,34 +171,6 @@ public class PaymentController {
         @Size(max = 200) String orderId,
         @Size(max = 3) String currency,
         java.math.BigDecimal orderTotal) {}
-
-    private static Map<String, Object> paymentBody(Payment p) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("id", p.getId() == null ? null : p.getId().toString());
-        body.put("paymentId", p.getId() == null ? null : p.getId().toString());
-        body.put("orderId", p.getOrderId());
-        body.put("amount", canonicalize(p.getAmount()));
-        body.put("capturedAmount", canonicalize(p.getCapturedAmount()));
-        body.put("balance", canonicalize(p.getBalance()));
-        body.put("currency", p.getCurrency());
-        body.put("status", p.getState().name());
-        body.put("state", p.getState().name());
-        body.put("declineReason", p.getDeclineReason());
-        body.put("createdAt", p.getCreatedAt());
-        body.put("updatedAt", p.getUpdatedAt());
-        return body;
-    }
-
-    /**
-     * Strip trailing zeros so JSON serialization yields a clean canonical form
-     * (e.g., {@code 7000} not {@code 7000.00000000}). Refund balance assertions
-     * compare against the canonical form via {@code path("balance").toString()}.
-     */
-    private static BigDecimal canonicalize(BigDecimal v) {
-        if (v == null) return null;
-        BigDecimal stripped = v.stripTrailingZeros();
-        return stripped.scale() < 0 ? stripped.setScale(0) : stripped;
-    }
 
     private static HttpStatus chooseStatus(PaymentService.PaymentOutcome outcome) {
         if (outcome.replay()) {

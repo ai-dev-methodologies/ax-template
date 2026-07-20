@@ -9,7 +9,7 @@ ax = **AI transformation**. This repo is the source of the Claude Code skill
 **`/ax-transform`** and a composition kit you fork to start a new
 project. Every layer of the stack ships with rule-enforcement wired in:
 
-- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (14 ESLint rules) + 100-rule
+- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (15 ESLint rules) + 101-rule
   evidence-anchored catalog (`practices-react/rules/`).
 - **Spring Boot side** — `@Tag`-based JUnit + RestAssured tests
   (`./gradlew test{Domain}`) + 233-rule Java/Spring catalog
@@ -42,7 +42,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-25 L4 domains + 11 active recipes · 233 Java rules · 100 React rules · 14 ESLint rules · 94 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+25 L4 domains + 11 active recipes · 233 Java rules · 101 React rules · 15 ESLint rules · 94 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -191,7 +191,7 @@ reference workload ships `mock` provider only; the redirect-style hook
 source (Spring Docs, OWASP ASVS, RFC, JEP). Full catalog:
 [`practices/AGENTS.md`](./practices/AGENTS.md).
 
-### React/Next.js (`@ax/eslint-plugin-ax` + 99-rule catalog)
+### React/Next.js (`@ax/eslint-plugin-ax` + 101-rule catalog)
 
 | Rule | Default | Catches |
 |------|---------|---------|
@@ -246,7 +246,7 @@ ax-template/
 ├── practices-react/                # React/Next.js catalog
 │   ├── rules/                      # 99 rule.md files
 │   ├── upstream/                   # External doc snapshots
-│   ├── eslint-plugin-ax/           # @ax/eslint-plugin-ax — 14 ESLint rules
+│   ├── eslint-plugin-ax/           # @ax/eslint-plugin-ax — 15 ESLint rules
 │   ├── evals/                      # 3 hard gates
 │   ├── AGENTS.md                   # AI agent entry point (sha sentinel, auto-regen)
 │   ├── SKILL.md                    # subsystem skill

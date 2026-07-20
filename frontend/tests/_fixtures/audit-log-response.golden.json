@@ -1,0 +1,12 @@
+{
+  "id": "11111111-1111-1111-1111-111111111111",
+  "actorId": "user-42",
+  "actorIp": "203.0.113.xxx",
+  "action": "LOGIN",
+  "resourceType": "session",
+  "resourceId": "sess-99",
+  "outcome": "SUCCESS",
+  "timestamp": "2026-01-01T00:00:00Z",
+  "correlationId": "corr-123",
+  "userAgent": "Mozilla/5.0 TestAgent/1.0"
+}

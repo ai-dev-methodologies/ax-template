@@ -1011,9 +1011,16 @@ run_guard "money_boundary_seam/live" 0 \
     bash "$SCRIPT_DIR/money_boundary_seam_guard.sh"
 
 echo ""
-echo "[62] randomport_contextcache_dirtiescontext_guard.sh (R22 lever — any backend test that NAMES the Spring TestContext ContextCache cap-32 eviction hazard MUST carry @DirtiesContext, else the aggregate flakes return in a sibling class)"
+echo "[62] randomport_contextcache_dirtiescontext_guard.sh (R22 lever — any @SpringBootTest that NAMES the Spring TestContext ContextCache cap-32 eviction hazard MUST carry @DirtiesContext, else the aggregate flakes return in a sibling class; narrowed to require an actual @SpringBootTest — a plain Jackson test documenting the hazard in a comment is not a candidate)"
 run_guard "randomport_contextcache_dirtiescontext/live" 0 \
     bash "$SCRIPT_DIR/randomport_contextcache_dirtiescontext_guard.sh"
+
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    echo ""
+    echo "[62f] randomport_contextcache_dirtiescontext_guard.sh --fixtures (pass=plain-Jackson-test-naming-hazard→0, fail=RANDOM_PORT-no-DirtiesContext→1, pass_fqn=FQN-@SpringBootTest+FQN-@DirtiesContext→0, fail_fqn=FQN-@SpringBootTest-no-DirtiesContext-escape→1)"
+    run_guard "randomport_contextcache_dirtiescontext/fixtures" 0 \
+        bash "$SCRIPT_DIR/randomport_contextcache_dirtiescontext_guard.sh" --fixtures
+fi
 
 echo ""
 echo "[63] liveness_probe_no_downstream_guard.sh (health-check-l0 HEALTH-LIVENESS-001 — a liveness health group that gates on a downstream dependency (db/redis/kafka/…) restart-loops the fleet on a dependency blip; dependencies belong in readiness)"

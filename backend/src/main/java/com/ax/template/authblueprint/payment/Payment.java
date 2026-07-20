@@ -79,8 +79,8 @@ public class Payment {
      *
      * <p>P5 security-review (US-014 MEDIUM, defense-in-depth): {@code @JsonIgnore}
      * prevents accidental serialization if the entity is ever returned directly from
-     * a controller. The current {@code PaymentController#paymentBody} already excludes
-     * the field; this annotation guards against future regressions.
+     * a controller. The current {@code PaymentBodyMapper#toBody} (the controller's wire
+     * mapper) already excludes the field; this annotation guards against future regressions.
      */
     @JsonIgnore
     @Column(name = "payment_method_token", length = 512)

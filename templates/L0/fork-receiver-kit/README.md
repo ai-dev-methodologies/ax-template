@@ -18,6 +18,7 @@ with the JSON wire-type + inverse-serializer halves.
 | `use-idempotency-key.ts` | `useIdempotencyKey()` → `{ key, regenerate }` — domain-neutral `Idempotency-Key` lifecycle (stable across retries; regenerate after success). Pairs with backend `common/IdempotencyKeyStore`. | FMW2 (FDW1 r3) |
 | `money.ts` | `toMinorUnits` / `toMajorUnits` (string-based, round-half-up, bigint-safe, **no float**) + `parseMinor` (JSON number\|string → bigint) / `serializeMinor` (bigint → safe number-or-string wire form) / `fractionDigitsFor` (ISO 4217 zero-decimal: KRW/JPY = 0). Documents the wire type (number on the wire, bigint in math, string at the edge). Pairs with `currency-amount-precision-explicit`. | FMW2 + FMW4d |
 | `use-conflict-resolution.ts` | `useConflictResolution({ refetch })` → `{ conflict, resolveFromResponse, dismiss }` + pure `classifyConflict(status, body)` / `parseConflict(res)` — detect a 428/412/409 optimistic-lock conflict (backend `common/OptimisticLockingSupport` + `current_etag`), refetch the fresh server value, and hand the L2 `conflict-banner` a `ConflictState<T>` (your-value vs server-value vs validator). | FMW4c (FDW2) |
+| `parse-page-envelope.ts` | `parsePageEnvelope<T>(raw)` — parses a raw list response into the canonical `common/PageEnvelope` shape (`{ data, pagination:{ page, pageSize, totalElements, totalPages, hasMore } }`), throwing a `TypeError` the moment a required member is missing or mistyped instead of leaking a silent `undefined` into the page. Every L4 list page previously hand-typed its own `PageEnvelope`-shaped interface with no runtime check. | S2.QUERY-BOUNDS.XB |
 
 ## Why L0?
 
@@ -40,6 +41,7 @@ import { useUrlListState, listStateToQuery } from 'templates/L0/fork-receiver-ki
 import { useIdempotencyKey } from 'templates/L0/fork-receiver-kit/use-idempotency-key'
 import { toMinorUnits, toMajorUnits, parseMinor, serializeMinor, fractionDigitsFor } from 'templates/L0/fork-receiver-kit/money'
 import { useConflictResolution, parseConflict, classifyConflict } from 'templates/L0/fork-receiver-kit/use-conflict-resolution'
+import { parsePageEnvelope } from 'templates/L0/fork-receiver-kit/parse-page-envelope'
 ```
 
 This mirrors the L2 blocks convention (`templates/L2/blocks/confirm-dialog`)
@@ -71,7 +73,11 @@ carry kit-local unit tests: `frontend/tests/fmw2-primitives.vitest.ts` covers
 `frontend/tests/fmw4-primitives.vitest.ts` (FMW4) covers `parseMinor` /
 `serializeMinor` / `fractionDigitsFor` (wire type + KRW 0-decimal),
 `listStateToQuery` (inverse serializer), and `classifyConflict` (428/412/409 →
-ConflictSignal). The hook wrappers (`use-caller-id`, `use-url-list-state`,
+ConflictSignal). `frontend/tests/page-envelope-parity.vitest.ts` (S2.QUERY-BOUNDS.XB)
+covers `parsePageEnvelope` against `frontend/tests/_fixtures/page-envelope.golden.json`
+— the SAME golden fixture `backend/src/test/java/.../common/PageEnvelopeContractParityTest.java`
+parses on the backend side, so a field-name drift on either leg trips exactly
+one of the two tests. The hook wrappers (`use-caller-id`, `use-url-list-state`,
 `use-idempotency-key`, `use-conflict-resolution`) remain exercised by
 consuming-component tests. Every shipped block is additionally gated by
 `lint_own_blocks_guard.sh` (run-all-guards [56]) so the kit satisfies every

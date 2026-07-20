@@ -61,6 +61,8 @@ canaries:
 
   - id: CANARY-003
     canary: true
+    stale: true
+    superseded_by: CANARY-013
     need: "A cross-boundary test that validates FE pagination-state parsing against the BE PageEnvelope/contract schema in one integrated run (contract-parity for the pagination envelope specifically)."
     layer: XB
     related_cell: S2.QUERY-BOUNDS.XB
@@ -70,6 +72,15 @@ canaries:
       verified_at: "2026-07-19"
       false_positive_note: "backend/src/test/java/.../common/PageEnvelopeTest.java exists but is a BE-only structural test; frontend/tests/fmw4-primitives.vitest.ts tests listStateToQuery in isolation. Neither crosses the boundary against the other."
     excluded_from_backlog: true
+    staleness_note: "STALE as of 2026-07-20 (Wave-2 Cell 1 closure): the absence_proof command now MATCHES —
+      re-run: `grep -rliE \"pagination.?envelope.*(parity|contract)|contract.*pagination.?envelope\"
+      backend/src/test frontend/tests frontend/src contracts/*.yaml` returns
+      frontend/tests/page-envelope-parity.vitest.ts (exit 0). PageEnvelopeContractParityTest.java (BE) +
+      page-envelope-parity.vitest.ts (FE) now cross-validate FE pagination-state parsing against the BE
+      PageEnvelope schema via a shared golden fixture. Per this file's own staleness protocol this canary
+      can no longer prove the loop's gap-detection reflex and is superseded by CANARY-013 below for the
+      next wave. Kept on disk (not deleted) as an honest historical record that CANARY-003 was surfaced
+      and closed in wave-2."
 
   - id: CANARY-004
     canary: true
@@ -109,6 +120,8 @@ canaries:
 
   - id: CANARY-007
     canary: true
+    stale: true
+    superseded_by: CANARY-014
     need: "A frontend/tests/*.vitest.ts application-level unit test that exercises Intl.NumberFormat/Intl.DateTimeFormat usage in a real component against practices-react/rules/locale-aware-number-date-format.md — the rule + shell guard shipped in wave-1 (S2.TIME-LOCALE.FE), but the cell was deliberately left at 'partial' rather than 'covered' in coverage-map.yaml because no such test exists yet (only the guard's own self-test fixtures do)."
     layer: FE
     related_cell: S2.TIME-LOCALE.FE
@@ -119,3 +132,137 @@ canaries:
       false_positive_note: null
     excluded_from_backlog: true
     supersedes: CANARY-001
+    staleness_note: "STALE as of 2026-07-20 (Wave-2 Cell 5 closure). Honest correction to the stored
+      absence_proof glob: `frontend/tests/*.vitest.ts` alone still returns 0 matches (exit 1) because the
+      new test file is a .tsx (it renders a component, so it needs JSX) — the original glob only covered
+      .ts and would silently miss any .tsx closure. Widening the glob one file-extension segment to match
+      what the need actually asks for (`frontend/tests/*.vitest.ts frontend/tests/*.vitest.tsx`) DOES match:
+      frontend/tests/locale-format.vitest.tsx (exit 0). That new application-level test exercises a real
+      component against Intl.NumberFormat/Intl.DateTimeFormat usage, closing the exact gap this canary
+      tracked. Per this file's own staleness protocol this canary can no longer prove the loop's
+      gap-detection reflex and is superseded by CANARY-014 below for the next wave (CANARY-014's own
+      absence_proof glob covers both extensions from the start). Kept on disk (not deleted) as an honest
+      historical record that CANARY-007 was surfaced and closed in wave-2."
+
+  - id: CANARY-008
+    canary: true
+    stale: true
+    need: "A test anywhere that binds FE money.ts (fractionDigitsFor/parseMinor/serializeMinor) to a BE-emitted payment JSON fixture (minor-unit contract parity across the boundary). money.ts is vitest-covered in isolation and BE Money.java is unit-tested, but nothing pins the two to one shared golden."
+    layer: XB
+    related_cell: S2.MONEY-QUANTITY.XB
+    absence_proof:
+      command: 'grep -rliE "money.?contract.?(parity|golden)|parseMinor.{0,80}golden" frontend/tests backend/src/test contracts'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-20"
+      false_positive_note: "fmw2/fmw4 vitests cover money.ts in isolation; testPayment/testCurrencyArithmetic cover BE money in isolation. Neither binds a shared BE-emitted golden across the boundary — confirmed absent."
+    excluded_from_backlog: true
+    staleness_note: "STALE as of 2026-07-20 (Wave-2 Cell 2 closure): the absence_proof command now MATCHES —
+      re-run: `grep -rliE \"money.?contract.?(parity|golden)|parseMinor.{0,80}golden\" frontend/tests
+      backend/src/test contracts` returns backend/src/test/java/com/ax/template/authblueprint/payment/MoneyContractParityTest.java
+      + frontend/tests/money-contract-parity.vitest.ts (exit 0). Those two tests now bind FE money.ts to a
+      shared BE-emitted golden (frontend/tests/_fixtures/money-contract.golden.json), closing the gap this
+      canary tracked (and additionally documenting a live P1 wire-unit mismatch, see docs/BACKLOG.md P1-68).
+      Kept on disk (not deleted) as an honest historical record that CANARY-008 was surfaced and closed in
+      wave-2."
+
+  - id: CANARY-009
+    canary: true
+    stale: true
+    need: "A frontend/tests/*.vitest.* that asserts a masked/redacted form of a PII field (e.g. actorIp) survives into rendered audit-log output, with a RED-able raw-present variant. Wave-1 closed the BE write-port leak (AuditLogDtoPiiTest) but nothing proves redaction survives into the FE DOM."
+    layer: XB
+    related_cell: S2.AUDIT-PII.XB
+    absence_proof:
+      command: 'grep -rliE "audit.{0,30}(redact|mask)|mask.{0,30}(ip|actor)" frontend/tests'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-20"
+      false_positive_note: null
+    excluded_from_backlog: true
+    staleness_note: "STALE as of 2026-07-20 (Wave-2 Cell 3 closure): the absence_proof command now MATCHES —
+      re-run: `grep -rliE \"audit.{0,30}(redact|mask)|mask.{0,30}(ip|actor)\" frontend/tests` returns
+      frontend/tests/audit-log-redaction-render.vitest.tsx (exit 0). That new test (exercising the new
+      audit-log-detail-view.tsx presentational component against a shared golden fixture,
+      frontend/tests/_fixtures/audit-log-response.golden.json) asserts the masked AuditLogResponse form
+      survives into rendered FE output, closing the gap this canary tracked. Kept on disk (not deleted) as
+      an honest historical record that CANARY-009 was surfaced and closed in wave-2."
+
+  - id: CANARY-010
+    canary: true
+    stale: true
+    need: "An ax/* ESLint rule that mechanizes caller-identity/impersonation enforcement on the FE (authz-relevant fetch/filter identity must come from the session/caller-id hook, not props/params). Three practices-react rule docs are verification.type: review (human-only); no ESLint rule fires on this shape."
+    layer: FE
+    related_cell: S2.AUTHZ.FE
+    absence_proof:
+      command: 'grep -rliE "caller.?identity|no-caller-identity|impersonat.{0,40}prop" practices-react/eslint-plugin-ax/rules/*.js'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-20"
+      false_positive_note: "A broad grep for caller.?id|impersonat over the eslint rules/*.js returns 0 — no existing rule mechanizes caller-identity-source enforcement; the concern lives only in human-review rule docs."
+    excluded_from_backlog: true
+    staleness_note: "STALE as of 2026-07-20 (Wave-2 Cell 4 closure): the absence_proof command now MATCHES —
+      re-run: `grep -rliE \"caller.?identity|no-caller-identity|impersonat.{0,40}prop\"
+      practices-react/eslint-plugin-ax/rules/*.js` returns
+      practices-react/eslint-plugin-ax/rules/no-caller-identity-from-props.js (exit 0). A new 15th ax/*
+      ESLint rule now mechanizes caller-identity/impersonation-source enforcement, wired into
+      frontend/eslint.config.mjs at error with 0 real violations across all 6 reference apps, closing the
+      gap this canary tracked. Kept on disk (not deleted) as an honest historical record that CANARY-010
+      was surfaced and closed in wave-2."
+
+  - id: CANARY-011
+    canary: true
+    stale: true
+    need: "A black-box E2E/IT (RestAssured) exercising the approval-workflow (전자결재/결재선) HTTP surface. testApprovalWorkflow is GREEN (26/26) but entirely service/unit-level; a controller-wiring or SecurityConfig regression that breaks the flow would stay green."
+    layer: XB
+    related_cell: S1.approval-workflow.XB
+    absence_proof:
+      command: 'find backend/src/test -iname "*Approval*IT*" -o -iname "*Approval*E2E*" -o -iname "*ApprovalFlow*"'
+      result: "(empty — 0 matches, exit 0)"
+      verified_at: "2026-07-20"
+      false_positive_note: null
+    excluded_from_backlog: true
+    staleness_note: "STALE as of 2026-07-20 (Wave-2 Cell 6 closure): the absence_proof command now MATCHES —
+      re-run: `find backend/src/test -iname \"*Approval*IT*\" -o -iname \"*Approval*E2E*\" -o -iname
+      \"*ApprovalFlow*\"` returns backend/src/test/java/com/ax/template/authblueprint/approvalworkflow/ApprovalFlowIT.java.
+      That new black-box RestAssured IT now exercises the approval-workflow HTTP surface end-to-end
+      (./gradlew testApprovalWorkflow), closing the gap this canary tracked. Note per coverage-map.yaml
+      S1.approval-workflow.XB: still only 1 of the 4 XB legs (e2e-flow) — left at partial, not covered.
+      Kept on disk (not deleted) as an honest historical record that CANARY-011 was surfaced and closed in
+      wave-2."
+
+  - id: CANARY-012
+    canary: true
+    need: "A re-executable, RED-able composition-behavioral gate for the saas-subscription recipe under frontend/tests/recipes/ (proving multi-domain composition behavior, not just per-fixture guard firing). The S3 axis holds 10.0 numerator behind this one undefined nonvacuity pattern."
+    layer: FE
+    related_cell: S3.saas-subscription
+    absence_proof:
+      command: 'find frontend/tests/recipes -iname "*saas*"'
+      result: "(empty — 0 matches, exit 0; frontend/tests/recipes/ exists but contains no saas-subscription behavioral gate)"
+      verified_at: "2026-07-20"
+      false_positive_note: "scenarios/S3.saas-subscription/ has clean+violating fixtures + run-scenario-proof.sh, but that proves guard-blocking on scenario-local fixtures, not composition-behavioral rendering — the open question this canary tracks."
+    excluded_from_backlog: true
+    # 2026-07-20 Wave-2 note: this gap is STILL LIVE — the opus adversarial reviewer REJECTed flipping
+    # S3.saas-subscription to covered on exactly this undefined-nonvacuity-pattern basis (see
+    # coverage-map.yaml S3.saas-subscription notes + docs/BACKLOG.md P2-29). No staleness_note — the
+    # absence_proof command still returns 0 matches as of 2026-07-20.
+
+  - id: CANARY-013
+    canary: true
+    need: "An automated schema-parity test for the ERROR half of the pagination/API envelope — nothing cross-validates the BE ProblemDetail response body shape (type/title/status/detail/invalid-params) against what FE parse-error.ts expects to find, in one integrated run. S2.QUERY-BOUNDS.XB (the data-envelope half) closed in Wave-2 Cell 1; the error-envelope half is untouched."
+    layer: XB
+    related_cell: S2.ERROR-CONTRACT.XB
+    absence_proof:
+      command: 'grep -rliE "problem.?detail.{0,40}parity|parity.{0,40}problem.?detail|error.?contract.{0,30}(parity|schema)" backend/src/test frontend/tests contracts/*.yaml'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-20"
+      false_positive_note: "backend/src/test/.../problemdetails/ tests the BE ProblemDetail shape in isolation; frontend/tests/fmw2-primitives.vitest.ts tests parse-error.ts's RFC 9457 reading in isolation (against hand-built fixture objects, not a BE-emitted golden). Neither binds the two together the way PageEnvelopeContractParityTest.java/page-envelope-parity.vitest.ts now do for the data envelope."
+    excluded_from_backlog: true
+
+  - id: CANARY-014
+    canary: true
+    need: "A test that asserts timezone-correct rendering of a BE-emitted UTC timestamp in FE local time — i.e. a component fed an ISO-8601 UTC instant renders it converted to the viewer's local timezone (not a raw re-print of the UTC string). locale-format.vitest.tsx (Wave-2 Cell 5) covers Intl.NumberFormat/Intl.DateTimeFormat *usage* against the locale-aware-number-date-format rule, but does not specifically assert a UTC->local timezone conversion is correct."
+    layer: FE
+    related_cell: S2.TIME-LOCALE.FE
+    absence_proof:
+      command: 'grep -rliE "timezone.{0,60}(render|correct)|render.{0,60}(utc|timezone)" frontend/tests'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-20"
+      false_positive_note: "frontend/tests/locale-format.vitest.tsx exercises Intl.DateTimeFormat call-shape (locale-aware-number-date-format.md compliance) but does not pin a specific UTC-instant -> local-timezone-string conversion assertion — a distinct, narrower correctness claim this canary targets."
+    excluded_from_backlog: true

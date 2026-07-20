@@ -39,10 +39,20 @@ const sharedRules = {
   'ax/no-route-client-data-fetching': 'error',
   'ax/no-server-state-in-local-state': 'error',
   'ax/no-god-route': 'error',
+  // Wave-2 Cell 4 (2026-07-20): mechanizes caller-identity/impersonation enforcement
+  // on the FE — authz-relevant identity must come from the session/caller-id hook
+  // (use-caller-id.ts), not props/params. Shipped at error directly (not warn→promote):
+  // a standalone Linter-API sweep across all 6 apps + src + packages + templates/L1 +
+  // templates/L4 (572 files) found 0 real violations before this rule shipped.
+  'ax/no-caller-identity-from-props': 'error',
 }
 
 // Per-persona apps must reuse the shared catalog — enforced only under apps/**.
-// (The rule is also internally scoped to apps/ paths, so this is belt-and-braces.)
+// (ax/no-app-local-ui-primitives is also internally scoped to apps/ paths via its
+// own isAppFile() check, so wiring it here too is belt-and-braces.)
+// NOTE: ax/no-caller-identity-from-props (added to sharedRules above) has NO
+// filename/path logic of its own — it applies uniformly wherever sharedRules is
+// spread (src, packages, AND apps), not scoped to apps/ specifically.
 const appRules = {
   ...sharedRules,
   'ax/no-app-local-ui-primitives': 'error',

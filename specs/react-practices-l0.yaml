@@ -659,3 +659,12 @@ items:
     applicable: true
     applicable_to: [react, nextjs]
     notes: "ESLint-enforced (ax/no-app-local-ui-primitives in @ax/eslint-plugin-ax). Rule body + evidence: practices-react/rules/no-app-local-ui-primitives.md. Surfaced during the per-persona apps pivot — dogfood found apps defining bespoke components instead of importing @ax/ui."
+
+  - id: "REACT-PRACTICES-SECURITY-AUTHZ-001"
+    chapter: "Security / Authorization"
+    requirement: "For an authz-relevant data fetch/filter/query call, the caller's own identity (userId / currentUserId / actorId / memberId) MUST be derived from the caller-id hook (useCallerId() / a session source) inside the function that makes the call. It MUST NOT be sourced from component props, Next.js route params, searchParams, or a destructured function argument and then passed into the call — that pattern trusts an externally-supplied identity value instead of deriving it, the same structural Broken Object Level Authorization risk as accepting userId via a request path/query parameter on the backend, one layer up the call stack."
+    test_method: "react_practices_SECURITY_AUTHZ_001_callerIdentityFromSessionNotProps"
+    verification_type: "static_analysis"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "ESLint-enforced (ax/no-caller-identity-from-props in @ax/eslint-plugin-ax). Rule body + evidence: practices-react/rules/no-caller-identity-from-props.md. Backend mirror: practices/rules/caller-authentication-only-no-userid-param.md (never accept userId via path/query — derive from Authentication)."

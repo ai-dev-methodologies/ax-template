@@ -1,0 +1,18 @@
+# engine — consumer-proof harness wave-2 iter6 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S1.approval-workflow.XB — black-box HTTP-surface IT for the
+# approval-workflow (전자결재/결재선) domain (CANARY-011). Single-writer
+# INTEGRATION lane: this file records the closure that landed this wave,
+# not a fresh discovery pass.
+iteration: 6
+closed_cell: S1.approval-workflow.XB
+findings:
+  - persona: engine-w2
+    finding: "F1 (CLOSED, methodology_gap): the prior 'gap' verdict for this cell came from a filename census (find backend/src/test -iname '*E2E*' -o -iname '*IT.java') that undercounted — it missed ApprovalComplianceTest, already a genuine @SpringBootTest(RANDOM_PORT) black-box RestAssured test, simply named *ComplianceTest instead of *IT/*E2E* (CANARY-011 — verified absent at plant time 2026-07-20, using that same naming-pattern find command, which is itself the artifact of the undercounting bug). Closed this wave: backend/src/test/java/com/ax/template/authblueprint/approvalworkflow/ApprovalFlowIT.java is an ADDITIVE black-box RestAssured IT (@Tag(\"WORKFLOW\") -> ./gradlew testApprovalWorkflow) covering reachability-matrix rows the existing suite did not: a truly unrelated non-participant actor, the ProblemDetail response envelope SHAPE (not just the custom code property) on the out-of-order 409, a comprehensive 팀장 -> 본부장 결재선 walk with GET-read-back final-state assertions, and a PageEnvelope-conformance probe on the inbox endpoint. Closes CANARY-011 (see canary-gaps.yaml staleness_note)."
+    classification: methodology_gap
+    references_artifact_path: "backend/src/test/java/com/ax/template/authblueprint/approvalworkflow/ApprovalFlowIT.java, backend/src/test/java/com/ax/template/authblueprint/approvalworkflow/ApprovalComplianceTest.java"
+  - persona: engine-w2
+    finding: "F2 (OPEN, scope_deferral): per Part 1.2 of the gap-convergence engine design, an XB cell requires ALL FOUR legs (contract-parity + ProblemDetail-unwrap + pagination-envelope + e2e-flow); ApprovalFlowIT.java only disk-verifies the e2e-flow leg. 3 of 4 legs remain open: no automated schema-contract-parity test against contracts/approval-workflow-openapi.yaml, no dedicated ProblemDetail-shape assertion generalized beyond this one endpoint, no pagination-envelope conformance test wired as a reusable guard. coverage-map.yaml S1.approval-workflow.XB flips gap->partial this wave, deliberately NOT ->covered. Expiry trigger: re-opens when wave-3 closes the remaining 3 legs (contract-parity, generalized ProblemDetail-shape assertion, reusable pagination-envelope conformance guard) — before the cap on this cell flips from partial to covered."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/engine/coverage-map.yaml, contracts/approval-workflow-openapi.yaml"

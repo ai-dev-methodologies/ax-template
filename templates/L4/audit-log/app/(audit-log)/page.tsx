@@ -181,8 +181,21 @@ export default function AuditLogListPage() {
   }
 
   // ─── data fetching ─────────────────────────────────────────────────────────
+  // `filters.actorId` (derived from `searchParams` above) is an ADMIN SEARCH FILTER —
+  // it narrows the audit-log list BY actor, a role-gated admin capability — not the
+  // caller's OWN authz identity. The heuristic `ax/no-caller-identity-from-props` rule
+  // matches on the identity-shaped key name (`actorId`) and cannot statically
+  // distinguish a filter facet from a caller-identity value; the backend enforces
+  // role-gating server-side (the authoritative BFLA control here, mirroring
+  // `caller-authentication-only-no-userid-param`). See docs/BACKLOG.md P3-55.
+  // eslint-disable-next-line ax/no-caller-identity-from-props -- admin audit-log search filter BY actorId (role-gated server-side), not the caller's own identity — see docs/BACKLOG.md P3-55
   const { data, isLoading, error } = useQuery({
     queryKey: ['audit-logs', filters],
+    // (round-11 sink narrowing: the local wrapper `fetchAuditLogs(filters)` is no longer
+    // a lint sink — positional identity into a local data-wrapper is documented out of
+    // scope — so the former second disable directive here would be unused and is removed.
+    // The useQuery config above still needs its directive: `filters.actorId` is a
+    // role-gated admin search facet, not the caller's own identity. See P3-55.)
     queryFn: () => fetchAuditLogs(filters),
     placeholderData: (prev) => prev,
   })

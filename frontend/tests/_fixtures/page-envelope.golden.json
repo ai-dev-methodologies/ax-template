@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "id": "3f9a2b8e-6b7a-4e1a-9c3d-1a2b3c4d5e6f",
+      "title": "Quarterly report draft",
+      "createdBy": "alice@example.com",
+      "createdAt": "2026-03-01T09:15:00Z"
+    },
+    {
+      "id": "7c1d4e2f-9a8b-4c6d-8e2f-5b6c7d8e9f0a",
+      "title": "Vendor onboarding checklist",
+      "createdBy": "bob@example.com",
+      "createdAt": "2026-03-03T11:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "totalElements": 137,
+    "totalPages": 7,
+    "hasMore": true
+  }
+}

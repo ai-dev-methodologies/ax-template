@@ -1,0 +1,13 @@
+# engine — consumer-proof harness wave-2 iter7 dogfood
+# Persona: engine (automated harness discovering enforcement gaps)
+#
+# Scope: cell S3.saas-subscription (CANARY-012) — REJECTED flip. Single-writer
+# INTEGRATION lane: this file records an adversarial-review rejection, not a
+# closure. Unlike iter1-6, this cell stays partial.
+iteration: 7
+closed_cell: null
+findings:
+  - persona: engine-w2
+    finding: "F1 (REJECTED — cell stays partial, scope_deferral): the wave-2 plan proposed flipping S3.saas-subscription from partial to covered, citing the wave-1 saas-subscription scenario (scenarios/S3.saas-subscription/ clean+violating fixtures + run-scenario-proof.sh) as an enforcement-probe. The opus adversarial reviewer REJECTed this flip: those fixtures prove guard-BLOCKING on scenario-local fixtures, not composition-behavioral rendering (multiple domains actually interacting) — the exact open question CANARY-012 tracks. Root cause: the S3 (COMPOSITION) tier's own nonvacuity bar is undefined. coverage_map_guard.sh check 4 only asserts a nonvacuity path RESOLVES on disk; it does not (and structurally cannot, without a bar) assert the resolved artifact is genuinely composition-behavioral — an ESLint-probe or a static text-scan resolves + is RED-able yet only proves per-fixture rule-firing, not multi-domain interaction. CANARY-012 remains LIVE (not stale — the absence_proof `find frontend/tests/recipes -iname \"*saas*\"` still returns 0 matches as of 2026-07-20). Registered docs/BACKLOG.md P2-29 (verification escape: S3 nonvacuity pattern undefined + coverage_map_guard composition-escape). coverage-map.yaml S3.saas-subscription notes/covered_by enriched to cite this rejection explicitly; status UNCHANGED at partial. Expiry trigger: re-opens when P2-29 defines the S3 composition-behavioral nonvacuity bar, or before the fork-receiver adds a second S3-tier composition scenario relying on the undefined bar."
+    classification: scope_deferral
+    references_artifact_path: "practices/consumer-proof/engine/coverage-map.yaml, practices/consumer-proof/engine/canary-gaps.yaml, practices/consumer-proof/engine/coverage_map_guard.sh, docs/BACKLOG.md"
