@@ -20,7 +20,7 @@ a11y_criteria:
   - "Input has aria-label including currency symbol"
   - "Formatted display value includes currency for screen readers"
 dependencies: []
-imports_from: []
+imports_from: [L0]
 imports_forbidden: [L2, L3, L4, app/, lib/auth/]
 ---
 */
@@ -28,6 +28,7 @@ imports_forbidden: [L2, L3, L4, app/, lib/auth/]
 'use client'
 
 import * as React from 'react'
+import { fractionDigitsFor, toMajorUnits } from 'templates/L0/fork-receiver-kit/money'
 
 export interface CurrencyInputProps {
   /** Controlled value in integer minor currency units (KRW: won, USD: cents). */
@@ -125,22 +126,32 @@ export function CurrencyInput({
 
 /**
  * Formats an integer minor-unit amount as a currency string.
- * KRW: ₩9,900 (0 decimals). USD: $9.99 (2 decimals).
+ * KRW: ₩9,900 (0 decimals). USD: $9.99 (2 decimals). BHD: BHD 1.234 (3 decimals).
+ *
+ * The minor→major scale is `10 ** fractionDigitsFor(currency)` — the currency's real
+ * ISO 4217 exponent, read from ICU by the L0 money kit. A literal `/ 100` (with only
+ * KRW/JPY special-cased) is wrong twice over: it renders every 3-decimal dinar
+ * currency (BHD/KWD/OMR/JOD/TND) 10x too large — 1234 BHD as "BHD 12.34" instead of
+ * "BHD 1.234" — and it misses the other zero-decimal currencies (VND/ISK/CLP/…),
+ * which matters because this is a GENERIC component that accepts any ISO code.
  */
 export function formatCurrencyAmount(
   amount: number,
   currency = 'KRW',
   locale = 'ko-KR',
 ): string {
-  const isZeroDecimal = currency === 'KRW' || currency === 'JPY'
-  // `amount` is integer MINOR units (e.g. 999 = $9.99). Convert to major units before
-  // formatting: zero-decimal currencies (KRW/JPY) are already major; others divide by 100.
-  const major = isZeroDecimal ? amount : amount / 100
+  const digits = fractionDigitsFor(currency)
+  // `amount` is integer MINOR units (e.g. 999 = $9.99, 1234 = BHD 1.234).
+  // Scale via the L0 kit's BigInt string conversion, NOT `amount / 10 ** digits`:
+  // binary float division loses the last minor unit at the documented safe-integer
+  // boundary (MAX_SAFE_INTEGER BHD → …740.990 instead of …740.991). Intl.format
+  // accepts a decimal string and parses it exactly, so the digits survive.
+  const major = toMajorUnits(amount, digits)
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
-    minimumFractionDigits: isZeroDecimal ? 0 : 2,
-    maximumFractionDigits: isZeroDecimal ? 0 : 2,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   }).format(major)
 }
 

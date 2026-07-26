@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
@@ -30,6 +31,16 @@ import com.ax.template.authblueprint.common.AggregateRoot;
     indexes = {
         @Index(name = "ix_refunds_payment_id", columnList = "payment_id"),
         @Index(name = "ix_refunds_idempotency_key", columnList = "idempotency_key")
+    },
+    // PAYMENT-IDEMP-004 (P1-70) — DB backstop for exactly-once refund semantics: at most one
+    // refund per (payment, Idempotency-Key). RefundService's lookup short-circuits the normal
+    // retry into a replay; this constraint closes the residual concurrent-miss window.
+    // NULL keys stay multiply-allowed (SQL NULLs are distinct in a unique constraint).
+    // Mirrored by db/migration/V116__refund_idempotency_unique.sql.
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "ux_refunds_payment_id_idempotency_key",
+            columnNames = {"payment_id", "idempotency_key"})
     }
 )
 public class Refund {

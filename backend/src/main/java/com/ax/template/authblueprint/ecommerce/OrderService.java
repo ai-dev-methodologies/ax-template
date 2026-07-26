@@ -4,6 +4,7 @@ import com.ax.template.authblueprint.auditlog.Audited;
 import com.ax.template.authblueprint.auditlog.ResourceId;
 import com.ax.template.authblueprint.notification.NotificationService;
 import com.ax.template.authblueprint.payment.CreatePaymentRequest;
+import com.ax.template.authblueprint.payment.MoneyWire;
 import com.ax.template.authblueprint.payment.Payment;
 import com.ax.template.authblueprint.payment.PaymentProvider;
 import com.ax.template.authblueprint.payment.PaymentService;
@@ -130,7 +131,9 @@ public class OrderService {
             // a MAJOR-units BigDecimal scaled to the currency. Money.toMajorUnits places
             // the decimal point (1099 USD → 10.99) — a raw BigDecimal.valueOf(minor) here
             // is a 100x over-charge for every 2-decimal currency (the seam bug this fixes).
-            Money.toMajorUnits(order.getTotalAmount(), order.getCurrency()),
+            // MoneyWire.ofMajor tags the already-converted value as the MAJOR-unit branch, so
+            // PaymentService does not re-interpret it as minor units (P1-69). Behavior identical.
+            MoneyWire.ofMajor(Money.toMajorUnits(order.getTotalAmount(), order.getCurrency())),
             order.getCurrency(),
             order.getId(),
             token == null ? "tok_default" : token,

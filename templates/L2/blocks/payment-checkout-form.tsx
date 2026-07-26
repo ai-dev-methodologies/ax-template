@@ -10,11 +10,12 @@ evidence:
   - source_type: internal
     rationale: "L2 payment block per PRD §4.11 — accepts onSubmit prop; no concrete payment provider SDK import."
 dependencies: [button, input, label]
-imports_from: [L1]
+imports_from: [L0, L1]
 imports_forbidden: [L4, app/, lib/payment/]
 ---
 */
 import * as React from 'react'
+import { fractionDigitsFor, parseMinor, toMajorUnits } from 'templates/L0/fork-receiver-kit/money'
 
 export interface PaymentCheckoutFormValues {
   cardNumber: string
@@ -37,15 +38,35 @@ export interface PaymentCheckoutFormProps {
 }
 
 /** Format amount for display (e.g. 1099 USD → "$10.99") */
-function formatAmount(amount: number, currency: string): string {
+/**
+ * Format a wire amount for display. `amount` is integer MINOR units — the sole response encoding of
+ * contracts/payment-openapi.yaml#MoneyAmount — so the major-unit value MUST be derived at the
+ * currency's own ISO 4217 minor-unit width through the L0 money kit. A hard-coded `/ 100` renders
+ * every zero-decimal currency 100x too small (canonical KRW 12900 → "₩129" instead of "₩12,900"),
+ * and a hard-coded 2 fraction digits prints ₩ amounts with cents (BACKLOG P2-27, same defect class).
+ */
+function formatAmount(amount: number | string, currency: string): string {
+  const digits = fractionDigitsFor(currency)
+  let major: string
   try {
+    major = toMajorUnits(parseMinor(amount), digits)
+  } catch {
+    // parseMinor throws on a non-integer wire value (major units leaked onto the wire). Show the
+    // raw value rather than silently rendering a wrong number.
+    return `${currency} ${String(amount)}`
+  }
+  try {
+    // `major` is an exact decimal string; Number() is the display-edge conversion. A fork-receiver
+    // on an ES2023 lib can pass `major` straight to format() (Intl.NumberFormat V3 string input).
     return new Intl.NumberFormat(undefined, {
       style: 'currency',
       currency,
-      minimumFractionDigits: 2,
-    }).format(amount / 100)
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(Number(major))
   } catch {
-    return `${currency} ${(amount / 100).toFixed(2)}`
+    // Unknown ISO code — Intl throws; `major` is still the correct major-unit value.
+    return `${currency} ${major}`
   }
 }
 

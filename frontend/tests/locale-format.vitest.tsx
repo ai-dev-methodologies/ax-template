@@ -60,11 +60,17 @@ describe('payment-checkout-form: shipped Intl-based amount formatting is correct
       <PaymentCheckoutForm amount={109900} currency="KRW" onSubmit={() => {}} />,
     )
 
+    // `amount` is integer MINOR units and KRW is a ZERO-decimal currency, so 109900 minor units
+    // ARE ₩109,900 — no division, no fraction digits. The pre-fix reference here mirrored the
+    // block's own `/ 100` + `minimumFractionDigits: 2` and therefore asserted ₩1,099.00: it
+    // recomputed the same wrong formula, so it could never fail on the 100x KRW defect
+    // (BACKLOG P2-27). The reference is now derived from the currency's ISO 4217 minor-unit width.
     const reference = new RealNumberFormat('ko-KR', {
       style: 'currency',
       currency: 'KRW',
-      minimumFractionDigits: 2,
-    }).format(109900 / 100)
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(109900)
 
     expect(renderedAmountText(container)).toBe(reference)
   })

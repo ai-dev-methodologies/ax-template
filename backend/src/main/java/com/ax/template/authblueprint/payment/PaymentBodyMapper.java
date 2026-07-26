@@ -1,5 +1,7 @@
 package com.ax.template.authblueprint.payment;
 
+import com.ax.template.authblueprint.common.Money;
+
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -17,9 +19,19 @@ import java.util.Map;
  * to the dead record made the money-quantity contract cell VACUOUSLY "covered": the
  * assertions could never observe the amount the endpoint actually serializes.
  *
- * <p>Behavior-preserving lift: the map key set, insertion order, and {@link #canonicalize}
- * amount handling are byte-identical to the controller's former body. The controller now
- * delegates every {@code paymentBody(...)} call to {@link #toBody(Payment)}.
+ * <p>Behavior-preserving lift: the map key set and insertion order are byte-identical to the
+ * controller's former body. The controller now delegates every {@code paymentBody(...)} call to
+ * {@link #toBody(Payment)}.
+ *
+ * <h2>Money on the wire (P1-68 closure)</h2>
+ * Monetary fields are emitted as integer MINOR units via {@link #minorOrNull} — the sole response
+ * encoding, matching {@code contracts/payment-openapi.yaml#MoneyAmount}'s integer branch, the
+ * request encoding accepted by {@link MoneyDeserializer}, and {@code money.ts}'s {@code parseMinor}
+ * on the client. Previously these were MAJOR-unit {@code BigDecimal}s, so USD emitted
+ * {@code "amount":10.99} — a JSON float token that is neither branch of the schema's {@code oneOf}
+ * and that the contract's own description says must be REJECTED as input, while {@code parseMinor}
+ * silently misread whole-dollar values by 100×. This also subsumes the former {@code canonicalize}
+ * trailing-zero strip: {@code 10.90} now emits as {@code 1090}, not {@code 10.9}.
  */
 final class PaymentBodyMapper {
 
@@ -31,9 +43,9 @@ final class PaymentBodyMapper {
         body.put("id", p.getId() == null ? null : p.getId().toString());
         body.put("paymentId", p.getId() == null ? null : p.getId().toString());
         body.put("orderId", p.getOrderId());
-        body.put("amount", canonicalize(p.getAmount()));
-        body.put("capturedAmount", canonicalize(p.getCapturedAmount()));
-        body.put("balance", canonicalize(p.getBalance()));
+        body.put("amount", minorOrNull(p.getAmount(), p.getCurrency()));
+        body.put("capturedAmount", minorOrNull(p.getCapturedAmount(), p.getCurrency()));
+        body.put("balance", minorOrNull(p.getBalance(), p.getCurrency()));
         body.put("currency", p.getCurrency());
         body.put("status", p.getState().name());
         body.put("state", p.getState().name());
@@ -44,13 +56,17 @@ final class PaymentBodyMapper {
     }
 
     /**
-     * Strip trailing zeros so JSON serialization yields a clean canonical form
-     * (e.g., {@code 7000} not {@code 7000.00000000}). Refund balance assertions
-     * compare against the canonical form via {@code path("balance").toString()}.
+     * Convert a stored MAJOR-unit {@link BigDecimal} to the integer MINOR units the wire carries,
+     * through the canonical {@code common/Money} seam. {@code null} in, {@code null} out
+     * (capturedAmount/balance are null before capture).
+     *
+     * <p>Jackson serializes the returned {@link Long} as a bare JSON integer — the
+     * {@code MoneyAmount} integer branch. Trailing zeros disappear by construction
+     * ({@code 7000.00000000} → {@code 7000}, USD {@code 10.90} → {@code 1090}), which is why the
+     * former {@code canonicalize} strip is gone rather than merely relocated.
      */
-    static BigDecimal canonicalize(BigDecimal v) {
+    static Long minorOrNull(BigDecimal v, String currency) {
         if (v == null) return null;
-        BigDecimal stripped = v.stripTrailingZeros();
-        return stripped.scale() < 0 ? stripped.setScale(0) : stripped;
+        return Money.toMinorUnits(v, currency);
     }
 }

@@ -101,6 +101,96 @@ class PaymentMoneyTest {
             .isEqualTo(201);
     }
 
+    // ─── PAYMENT-MONEY-002 (P1-68 + P1-69 — integer-minor E2E, both directions) ──
+
+    /**
+     * P1-69 (request path) + P1-68 (response path), end-to-end over real HTTP for a NON-zero-decimal
+     * currency — the case KRW-only tests structurally cannot cover.
+     *
+     * <p>A contract-compliant USD request of {@code "amount":1099} means $10.99 (minor units), and the
+     * response echoes the same encoding: {@code 1099}. Before wave-3 the request was charged $1099.00
+     * (100× overcharge) and the response emitted the JSON float {@code 1099.00}.
+     */
+    @Test
+    @Tag("PAYMENT")
+    @Tag("PAYMENT-MONEY-002")
+    void usdIntegerMinorUnits_chargedAtContractValue_andEchoedAsMinorUnits() {
+        String authToken = obtainToken("money002e@test.test", "MEMBER");
+
+        Response response =
+            given()
+                .header("Authorization", "Bearer " + authToken)
+                .header("Content-Type", "application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .body("{\"amount\":1099,\"currency\":\"USD\",\"orderId\":\"order-money002e\"}")
+            .when().post("/api/payments");
+
+        assertThat(response.statusCode()).isEqualTo(201);
+        assertThat(((Number) response.path("amount")).longValue())
+            .as("USD integer 1099 == $10.99; the response echoes the SAME minor-unit encoding, not 1099.00")
+            .isEqualTo(1099L);
+    }
+
+    /**
+     * Round-trip convergence: the two accepted request encodings for the same money value produce the
+     * SAME response. {@code 1099} (integer minor) and {@code "10.99"} (decimal-string major) both
+     * denote $10.99 and both come back as {@code 1099}.
+     */
+    @Test
+    @Tag("PAYMENT")
+    @Tag("PAYMENT-MONEY-002")
+    void decimalStringAndIntegerMinorRequests_convergeOnTheSameWireAmount() {
+        String authToken = obtainToken("money002f@test.test", "MEMBER");
+
+        Response decimalString =
+            given()
+                .header("Authorization", "Bearer " + authToken)
+                .header("Content-Type", "application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .body("{\"amount\":\"10.99\",\"currency\":\"USD\",\"orderId\":\"order-money002f-str\"}")
+            .when().post("/api/payments");
+
+        Response integerMinor =
+            given()
+                .header("Authorization", "Bearer " + authToken)
+                .header("Content-Type", "application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .body("{\"amount\":1099,\"currency\":\"USD\",\"orderId\":\"order-money002f-int\"}")
+            .when().post("/api/payments");
+
+        assertThat(decimalString.statusCode()).isEqualTo(201);
+        assertThat(integerMinor.statusCode()).isEqualTo(201);
+        assertThat(((Number) decimalString.path("amount")).longValue())
+            .as("both accepted request encodings denote $10.99 and emit the same minor-unit wire value")
+            .isEqualTo(1099L)
+            .isEqualTo(((Number) integerMinor.path("amount")).longValue());
+    }
+
+    /**
+     * Zero-decimal boundary control: KRW's minor unit IS its major unit, so 1000 in must be 1000 out.
+     * This is the leg that stayed green over the whole P1-68/P1-69 defect — keeping it explicit
+     * documents WHY the defect hid (every pre-existing payment IT used KRW).
+     */
+    @Test
+    @Tag("PAYMENT")
+    @Tag("PAYMENT-MONEY-002")
+    void krwIntegerMinorUnits_areUnchangedAcrossTheWire_scale0Control() {
+        String authToken = obtainToken("money002g@test.test", "MEMBER");
+
+        Response response =
+            given()
+                .header("Authorization", "Bearer " + authToken)
+                .header("Content-Type", "application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .body("{\"amount\":1000,\"currency\":\"KRW\",\"orderId\":\"order-money002g\"}")
+            .when().post("/api/payments");
+
+        assertThat(response.statusCode()).isEqualTo(201);
+        assertThat(((Number) response.path("amount")).longValue())
+            .as("KRW is scale-0: 1000 minor units == ₩1000, unchanged in both directions")
+            .isEqualTo(1000L);
+    }
+
     // ─── PAYMENT-MONEY-002 (positive — decimal string) ───────────────────────
 
     /**

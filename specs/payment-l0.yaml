@@ -57,7 +57,7 @@ items:
       Provides non-repudiation for disputed admin actions in PCI-DSS audit scope.
     policy_ref: "blueprints/payment-manifest.yaml#pci_dss"
 
-  # ─── IDEMP family (3 items) ───────────────────────────────────────────────
+  # ─── IDEMP family (4 items) ───────────────────────────────────────────────
   - id: "PAYMENT-IDEMP-001"
     chapter: "IDEMP"
     requirement: "POST /api/payments requires an Idempotency-Key request header; requests without it are rejected with HTTP 400."
@@ -100,6 +100,33 @@ items:
       when Caffeine store is the primary guard and TTL covers the 24h window.
     policy_ref: "blueprints/payment-manifest.yaml#idempotency"
 
+  - id: "PAYMENT-IDEMP-004"
+    chapter: "IDEMP"
+    requirement: "A retried POST /api/payments/{id}/refund carrying an already-used (payment, Idempotency-Key) pair returns the ORIGINAL refund row with HTTP 200 and creates no second refund; this holds for full refunds too (the retry must not be answered with the refund-of-refund 409)."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive, partial): capture 10000 KRW, refund 3000 with key K → 201. Repeat with key K → 200 with the
+      SAME refund id; payment balance stays 7000; exactly 1 refund row exists.
+      Test (positive, full): full refund with key F → 201 (payment now REFUNDED). Repeat with key F → 200 with the
+      same row — NOT 409 urn:ax:payment:refund-of-refund.
+      Test (negative / non-vacuity): a DIFFERENT key on the same payment still creates a second refund and the
+      PAYMENT-REFUND-002 sum invariant still governs.
+      Implementation: RefundService.refund() performs findByPaymentIdAndIdempotencyKey(paymentId, key) immediately
+      after the ownership load and BEFORE the state/window/sum guards — the ordering is load-bearing, since a retried
+      full refund has already moved the payment to REFUNDED. The replay executes zero side effects (no state
+      transition, no ledger append, no counter) and returns RefundOutcome(refund, replay=true), which the controller
+      maps to 200 OK vs 201 CREATED. Ownership is already enforced upstream by findByIdAndUserId (IDOR → 404), so the
+      key is (payment_id, idempotency_key). No request-body comparison on replay — deliberate parity with
+      PAYMENT-IDEMP-002's key-only replay. Concurrency: two same-key requests can both miss the lookup; both then
+      mutate the @Version-locked parent Payment, so the loser gets 409 urn:ax:payment:concurrent-modification and its
+      retry replays. DB backstop: UNIQUE (payment_id, idempotency_key) — Refund.java @Table uniqueConstraints +
+      db/migration/V116__refund_idempotency_unique.sql (NULL keys stay multiply-allowed).
+      History (P1-70): the idempotency key was stored on the refund row but never consulted, so any client/proxy
+      retry produced a SECOND refund — a real double-refund of the customer.
+    policy_ref: "blueprints/payment-manifest.yaml#idempotency"
+
   # ─── MONEY family (3 items) ───────────────────────────────────────────────
   - id: "PAYMENT-MONEY-001"
     chapter: "MONEY"
@@ -122,9 +149,23 @@ items:
     verification_type: "both"
     applicable: true
     notes: >
-      Test (positive): {"amount": 1000, "currency": "KRW"} → deserialized as BigDecimal(1000). {"amount": "10.99", "currency": "USD"} → BigDecimal("10.99").
+      Test (positive): {"amount": 1099, "currency": "USD"} → MINOR units → charged $10.99 (NOT $1099.00).
+      {"amount": "10.99", "currency": "USD"} → already MAJOR units → $10.99. Both encodings converge, and
+      the response echoes the integer minor-unit form (1099) for both.
       Test (negative): {"amount": 10.99, "currency": "USD"} (JSON float token) → 400 + RFC 7807 with detail "float JSON number not supported; use integer minor units or decimal string".
-      Implementation: Custom Jackson StdDeserializer for MoneyAmount that checks JsonToken. If token == VALUE_NUMBER_FLOAT → throw InvalidFormatException. If token == VALUE_NUMBER_INT → return BigDecimal(longValue). If token == VALUE_STRING → return new BigDecimal(text). This aligns with Codex Critic mandate C9 from plan.md.
+      Implementation: MoneyDeserializer (a Jackson ValueDeserializer) preserves the arriving SHAPE as a MoneyWire —
+      VALUE_NUMBER_INT → MoneyWire.ofMinor(long), VALUE_STRING → MoneyWire.ofMajor(new BigDecimal(text)),
+      VALUE_NUMBER_FLOAT → reject. The deserializer cannot resolve minor→major itself (it has no access to the
+      sibling currency field), so PaymentService/RefundService validate the currency FIRST and then call
+      MoneyWire.resolveMajor(currency), which converts through the common/Money seam (Money.toMajorUnits).
+      Responses convert back with Money.toMinorUnits (PaymentBodyMapper.minorOrNull / RefundResponse.from), so the
+      integer minor-unit branch of contracts/payment-openapi.yaml#MoneyAmount is the SOLE response encoding.
+      Aligns with Codex Critic mandate C9 from plan.md.
+      History (P1-68/P1-69, wave-3 2026-07-26): the deserializer previously mapped the integer token straight to
+      BigDecimal.valueOf(long) — reading MINOR units as MAJOR — so a contract-compliant USD request for $10.99 was
+      charged $1099.00 (100x), while responses emitted the MAJOR-unit decimal 10.99, a JSON float token that is
+      neither branch of the MoneyAmount oneOf. Zero-decimal currencies (KRW/JPY) coincidentally agreed, which is
+      why KRW-only integration tests never saw it.
     policy_ref: "blueprints/payment-manifest.yaml#amounts"
 
   - id: "PAYMENT-MONEY-003"
@@ -186,7 +227,7 @@ items:
       RFC 7807 reference: blueprints/payment-manifest.yaml#state_machine.
     policy_ref: "blueprints/payment-manifest.yaml#state_machine"
 
-  # ─── REFUND family (3 items) ──────────────────────────────────────────────
+  # ─── REFUND family (5 items) ──────────────────────────────────────────────
   - id: "PAYMENT-REFUND-001"
     chapter: "REFUND"
     requirement: "Refund requests are accepted only within the window_hours configured in the manifest (default 720h = 30 days); requests outside the window are rejected with HTTP 409."
@@ -227,6 +268,61 @@ items:
       Implementation: PaymentStateMachine rejects transition from REFUNDED or PARTIAL_REFUNDED via REFUND when
       sum(refunds) == capturedAmount (fully refunded). The state machine is the single authority: no special-case
       logic in the service layer. Manifest key refund.refund_of_refund: forbidden documents the policy.
+    policy_ref: "blueprints/payment-manifest.yaml#refund"
+
+  - id: "PAYMENT-REFUND-004"
+    chapter: "REFUND"
+    requirement: "A requested refund amount must be POSITIVE and exactly representable in the payment currency's ISO 4217 minor units; an inadmissible amount is rejected with HTTP 400 BEFORE any state, money or ledger mutation."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (negative, money creation): capture USD 1000 minor ($10.00), POST refund {"amount":-1} → 400; balance
+      stays 1000; zero refund rows; zero REFUNDED ledger events. Before the guard this resolved to -0.01 USD,
+      passed the PAYMENT-REFUND-002 sum invariant (which bounds the amount only from ABOVE), and persisted a
+      NEGATIVE refund that raised the balance to 1001 — the refund endpoint CREATED money.
+      Test (negative, sub-minor unit): POST refund {"amount":"0.001"} → 400 with no row / no balance change / no
+      ledger event. The decimal-string branch's regex admits three fraction digits, so before the guard $0.001
+      was persisted and the transaction COMMITTED; only afterwards did RefundResponse.from throw
+      ArithmeticException("Rounding necessary") inside Money.toMinorUnits, which escaped unmapped and reached the
+      client as an empty-bodied 403 from the Spring Security /error dispatch — on top of a completed mutation.
+      Test (negative, zero): POST refund {"amount":0} → 400 (a no-op state/ledger mutation plus a 0.00 row).
+      Test (positive / non-vacuity): POST refund {"amount":"2.50"} on the same payment → 201, response amount 250
+      (integer minor units), balance 750. Without this leg a "reject every refund" implementation would pass.
+      Implementation: RefundService.admissibleAmount(resolvedMajor, payment.currency) runs immediately after the
+      PAYMENT-IDEMP-004 replay lookup and BEFORE the state/window/sum guards and the implicit authorize+capture of
+      a CREATED payment. It rejects signum() <= 0, then calls Money.toMinorUnits inside a try/catch mapping
+      ArithmeticException → PaymentValidationException (400), and returns the value normalised back through
+      Money.toMajorUnits so the persisted amount is exactly representable by construction. This mirrors the
+      create-payment path's validateAmountAndCurrency, whose equivalent positivity + representability checks the
+      refund path never had.
+    policy_ref: "blueprints/payment-manifest.yaml#refund"
+
+  - id: "PAYMENT-REFUND-005"
+    chapter: "REFUND"
+    requirement: "A refund request that OMITS the amount refunds the REMAINING refundable balance (capturedAmount - sum(prior refunds)), not the original capturedAmount; when nothing remains it is rejected with HTTP 409 urn:ax:payment:refund-of-refund."
+    test_method: "RestAssured integration test"
+    verification_type: "both"
+    applicable: true
+    notes: >
+      Test (positive, the defect): capture 10000 KRW, refund 3000 (201, PARTIAL_REFUNDED, balance 7000), then POST
+      refund with NO amount → 201 refunding exactly 7000; balance 0; state REFUNDED. Before the fix the service
+      substituted the ORIGINAL capturedAmount (10000) for the omitted amount, so the PAYMENT-REFUND-002 invariant
+      saw 3000 + 10000 = 13000 > 10000 and answered 400 — leaving the remaining 7000 unrefundable through the
+      omitted-amount path, which is the path the operator UI actually uses (the refund action in
+      frontend/apps/pay/src/features/payments/components/transactions-screen.tsx posts {"reason": …} with no amount).
+      Test (negative, terminal): a further refund after the omitted-full one → 409 urn:ax:payment:refund-of-refund
+      (the payment is REFUNDED), and no second refund row / no extra REFUNDED ledger event.
+      Test (replay): the omitted-full refund retried with the SAME Idempotency-Key → 200 with the ORIGINAL refund id
+      (PAYMENT-IDEMP-004 parity for the omitted-amount shape); exactly one refund row; balance still 0.
+      Test (non-vacuity): an omitted-amount refund with NO prior refund still refunds the whole captured amount
+      (remaining == capturedAmount), so the fix is not "always partial".
+      Implementation: RefundService.remainingRefundable(capturedAmount, existingSum, currency) resolves the null
+      amount AFTER the prior-refund sum is loaded; remaining <= 0 throws RefundException(409,
+      "urn:ax:payment:refund-of-refund") — a state conflict, matching the explicit REFUNDED guard's type and status,
+      not the 400 PaymentValidationException branch which is reserved for inadmissible INPUT (an omitted amount is
+      not input). The remainder is normalised through the same admissibleAmount minor-unit round-trip the
+      explicit-amount path uses, so both paths persist an exactly-representable, currency-scaled value.
     policy_ref: "blueprints/payment-manifest.yaml#refund"
 
   # ─── PROVIDER family (6 items) ────────────────────────────────────────────

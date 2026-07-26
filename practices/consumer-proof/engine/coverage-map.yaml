@@ -1514,7 +1514,7 @@ cells:
   concern: MONEY-QUANTITY
   layer: XB
   weight: 2
-  status: partial
+  status: covered
   covered_by:
   - contracts/payment-openapi.yaml
   - contracts/billing-openapi.yaml
@@ -1523,19 +1523,27 @@ cells:
   - ./gradlew testPayment
   - cd frontend && npm run test
   nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/payment/PaymentAmountMinorUnitCharacterizationTest.java
   - backend/src/test/java/com/ax/template/authblueprint/payment/MoneyContractParityTest.java
   - frontend/tests/money-contract-parity.vitest.ts
   backlog_ref: null
   na_reason: null
-  notes: 'Reverted covered→partial (wave-2 codex finding-3+4, 2026-07-20). MoneyContractParityTest
-    was repointed off the DEAD PaymentResponse class (emitted by no endpoint) onto the REAL wire
-    emitter PaymentBodyMapper.toBody (extracted from PaymentController; RED-on-revert proven on
-    amount-key rename + canonicalize neuter; testPayment 70/0). The cross-boundary parity test is
-    now genuine, but the money contract carries TWO open defects — P1-68 (response emits MAJOR-unit
-    decimals, violating MoneyAmount schema + money.ts parseMinor) and P1-69 (request-path
-    integer-minor 100x overcharge, pinned by @Disabled PaymentAmountMinorUnitCharacterizationTest).
-    covered is deferred to wave-3 money reconciliation (request + response + money.ts unified to
-    one per-domain unit convention). Closes CANARY-008.'
+  notes: 'Wave-3 money reconciliation closure (2026-07-26): partial→covered. The two demotion
+    reasons are both closed. (1) The contract is no longer self-contradictory — decision (design-gated,
+    fable5): integer-MINOR wire is canonical for BOTH request and response (decimal-string retained as a
+    request-only input branch); MoneyWire carries the wire shape, MoneyDeserializer maps a JSON integer to
+    minor units, PaymentService resolves after currency validation, PaymentBodyMapper.minorOrNull +
+    RefundResponse(long) emit the integer branch, so request/response/openapi/spec/money.ts all agree
+    (money.ts needed ZERO change — it already implements parseMinor/serializeMinor). Closes BACKLOG
+    P1-68 (response float vs MoneyAmount) and P1-69 (integer-minor 100x overcharge; its formerly-@Disabled
+    PaymentAmountMinorUnitCharacterizationTest is now a standing green). (2) Parity is bound to the REAL
+    emitter (PaymentBodyMapper.toBody) with RED-on-revert proven on both legs (BE: breaking minorOrNull
+    fails the 3 USD legs while the 4 KRW legs stay green — the USD legs observe the conversion, not the key
+    name; FE: golden round-trip through parseMinor). Also closes P1-70 (duplicate refund) via V116
+    UNIQUE(payment_id, idempotency_key) + a replay short-circuit placed immediately after the ownership
+    load (falsifiable: relocating it after the state guards fails exactly the full-refund-retry test).
+    Evidence: testPayment 80/80, testEcommerce 11/11, testCommonPrimitives 116/116, FE 399/399,
+    run-all-guards 209/0, money_boundary_seam_guard 0. Closes CANARY-008.'
 - id: S2.IDEMPOTENCY-CONCURRENCY.BE
   tier: S2
   concern: IDEMPOTENCY-CONCURRENCY

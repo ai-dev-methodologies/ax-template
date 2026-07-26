@@ -81,7 +81,9 @@ public class PaymentService {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new PaymentValidationException("Idempotency-Key header is required");
         }
-        validateAmountAndCurrency(request.amount(), request.currency());
+        // Resolves the wire SHAPE (integer MINOR vs decimal-string MAJOR) to a MAJOR-unit amount
+        // AFTER the currency has been validated — see validateAmountAndCurrency's ordering note.
+        BigDecimal amountMajor = validateAmountAndCurrency(request.amount(), request.currency());
 
         UUID existingId = idempotencyStore.get(userId, idempotencyKey);
         if (existingId != null) {
@@ -93,7 +95,7 @@ public class PaymentService {
         meterRegistry.counter("payment_attempted_total").increment();
 
         UUID resolvedId = idempotencyStore.findOrCreate(userId, idempotencyKey,
-            () -> performCreate(userId, idempotencyKey, request, failureMode, overrideCapturedAt));
+            () -> performCreate(userId, idempotencyKey, request, amountMajor, failureMode, overrideCapturedAt));
 
         Payment payment = paymentRepository.findByIdAndUserId(resolvedId, userId)
             .orElseThrow(() -> new PaymentValidationException("created payment vanished"));
@@ -101,8 +103,9 @@ public class PaymentService {
     }
 
     private UUID performCreate(UUID userId, String idempotencyKey, CreatePaymentRequest request,
+                               BigDecimal amountMajor,
                                PaymentProvider.FailureMode failureMode, Instant overrideCapturedAt) {
-        BigDecimal scaledAmount = scale(request.amount(), request.currency());
+        BigDecimal scaledAmount = scale(amountMajor, request.currency());
         Payment payment = new Payment();
         payment.setUserId(userId);
         payment.setOrderId(request.orderId() == null ? "order-" + UUID.randomUUID() : request.orderId());
@@ -270,12 +273,21 @@ public class PaymentService {
             .orElseThrow(() -> new PaymentNotFoundException("payment not found: " + paymentId));
     }
 
-    private void validateAmountAndCurrency(BigDecimal amount, String currency) {
+    /**
+     * Validates the request's currency, then resolves the wire amount SHAPE against it and
+     * validates the resulting MAJOR-unit value.
+     *
+     * <p><b>Order is load-bearing</b> (P1-69): null-amount → currency checks → resolve → positive →
+     * scale. {@code MoneyWire.resolveMajor} calls {@code Currency.getInstance} through
+     * {@code common/Money}, which throws {@link IllegalArgumentException} (an unmapped 500) for a
+     * non-ISO code — so every currency check MUST run before resolution, leaving the pinned 400
+     * ProblemDetail messages for bad currencies exactly as they were.
+     *
+     * @return the resolved MAJOR-unit amount (the value the payment/PG edge charges)
+     */
+    private BigDecimal validateAmountAndCurrency(MoneyWire amount, String currency) {
         if (amount == null) {
             throw new PaymentValidationException("amount is required");
-        }
-        if (amount.signum() <= 0) {
-            throw new PaymentValidationException("amount must be positive");
         }
         if (currency == null || currency.isBlank()) {
             throw new PaymentValidationException("currency is required");
@@ -288,11 +300,22 @@ public class PaymentService {
         } catch (IllegalArgumentException e) {
             throw new PaymentValidationException("invalid ISO 4217 currency code: " + capCurrency(currency));
         }
+        BigDecimal major;
+        try {
+            major = amount.resolveMajor(currency);
+        } catch (ArithmeticException e) {
+            throw new PaymentValidationException("amount is not representable in "
+                + capCurrency(currency) + " minor units");
+        }
+        if (major.signum() <= 0) {
+            throw new PaymentValidationException("amount must be positive");
+        }
         Integer maxScale = CURRENCY_SCALES.get(currency);
-        if (maxScale != null && amount.scale() > maxScale) {
-            throw new PaymentValidationException("amount scale " + amount.scale()
+        if (maxScale != null && major.scale() > maxScale) {
+            throw new PaymentValidationException("amount scale " + major.scale()
                 + " exceeds " + capCurrency(currency) + " minor-unit scale " + maxScale);
         }
+        return major;
     }
 
     /**

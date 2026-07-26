@@ -136,11 +136,54 @@ const ZERO_DECIMAL_CURRENCIES: ReadonlySet<string> = new Set([
 ])
 
 /**
- * fractionDigitsFor — the conventional minor-unit width for an ISO 4217 code:
- * 0 for zero-decimal currencies (KRW 원, JPY 円, …), 2 otherwise. Use this to
- * size {@link toMinorUnits} / {@link toMajorUnits} so a KRW '1500' becomes
- * `1500n` (not `150000n`) — the bug a hard-coded `2` would cause for 원/円.
+ * ISO 4217 currencies with 3 minor-unit decimal places (1 dinar = 1000 fils).
+ * Fallback only — {@link fractionDigitsFor} asks Intl/ICU first.
+ */
+const THREE_DECIMAL_CURRENCIES: ReadonlySet<string> = new Set([
+  'BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND',
+])
+
+/** Memo for the Intl probe — `fractionDigitsFor` is called per row/keystroke. */
+const FRACTION_DIGITS_CACHE = new Map<string, number>()
+
+/**
+ * fractionDigitsFor — the ISO 4217 minor-unit width (the currency's "exponent")
+ * for a currency code. Use this to size {@link toMinorUnits} / {@link toMajorUnits}
+ * so a KRW '1500' becomes `1500n` (not `150000n`) — the bug a hard-coded `2`
+ * would cause for 원/円 — and so 1234 BHD renders `1.234`, not `12.34`.
+ *
+ * The exponent is READ FROM ICU (`Intl.NumberFormat(...).resolvedOptions()
+ * .maximumFractionDigits`), which carries the full ISO 4217 table, rather than
+ * from a hand-maintained list: the previous zero-vs-two split silently rounded
+ * every 3-decimal dinar currency (BHD/KWD/OMR/JOD/TND/IQD/LYD) by a factor of
+ * 10, and these are GENERIC components that accept any ISO code even where one
+ * API contract happens to restrict the set. The explicit tables below are the
+ * fallback for runtimes built without currency data (and for codes ICU does not
+ * know, which default to 2 — the ISO default).
  */
 export function fractionDigitsFor(currency: string): number {
-  return ZERO_DECIMAL_CURRENCIES.has(currency.trim().toUpperCase()) ? 0 : 2
+  const code = currency.trim().toUpperCase()
+  const cached = FRACTION_DIGITS_CACHE.get(code)
+  if (cached !== undefined) return cached
+
+  let digits: number | undefined
+  try {
+    const resolved = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: code,
+    }).resolvedOptions().maximumFractionDigits
+    if (Number.isInteger(resolved) && resolved >= 0) digits = resolved
+  } catch {
+    // Invalid/unsupported code, or a runtime without currency data — fall back.
+  }
+  if (digits === undefined) {
+    digits = ZERO_DECIMAL_CURRENCIES.has(code)
+      ? 0
+      : THREE_DECIMAL_CURRENCIES.has(code)
+        ? 3
+        : 2
+  }
+
+  FRACTION_DIGITS_CACHE.set(code, digits)
+  return digits
 }

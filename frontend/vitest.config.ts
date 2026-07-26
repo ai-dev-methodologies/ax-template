@@ -18,6 +18,11 @@ export default defineConfig({
       // file outside the project root. Point it at an inert stub. Component
       // tests that exercise the hooks vi.mock('next/navigation') over this.
       { find: /^next\/navigation$/, replacement: path.resolve(__dirname, './tests/_stubs/next-navigation.ts') },
+      // Shipped catalog blocks import the L0 kit by the repo-root specifier
+      // `templates/L0/...` (see templates/L2/blocks/crud-*-form.tsx and
+      // payment-checkout-form.tsx) — the path a fork-receiver aliases in its own
+      // tsconfig. Map it here so a test that renders such a block can resolve it.
+      { find: /^templates\/(.*)$/, replacement: path.resolve(__dirname, '../templates') + '/$1' },
     ],
   },
   test: {

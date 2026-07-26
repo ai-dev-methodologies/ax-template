@@ -10,12 +10,19 @@ import { MetricTile } from '@/components/metric-tile';
 import { ScreenError, ScreenLoading } from '@/components/screen-states';
 import { usePayments } from '@/features/payments/hooks';
 import { useSubscriptions } from '@/features/billing/hooks';
-import { formatMajor } from '@/lib/money';
+import { summarizeByCurrency, type CurrencyTotals } from '@/features/overview/totals';
+import { formatMinor } from '@/lib/money';
 
 /**
  * Overview — revenue / volume metric tiles (tabular money) + the catalog
  * CategoryBarChart, derived from the live payment ledger. The numbers are the
  * persona's signature surface: tabular figures so columns align with no jitter.
+ *
+ * Money is aggregated PER CURRENCY (see features/overview/totals.ts). The tiles
+ * show the primary (most rows) currency and every other currency is listed in an
+ * explicit breakdown — the screen never adds two currencies together and never
+ * invents an FX rate. The wire values are integer MINOR units, so they render
+ * through formatMinor.
  */
 export function OverviewScreen() {
   const payments = usePayments(0, 100);
@@ -25,19 +32,21 @@ export function OverviewScreen() {
   if (payments.error) return <ScreenError error={payments.error as Error} />;
 
   const rows = payments.data?.content ?? [];
-  // The reference currency is whatever the ledger is denominated in (KRW here).
-  const currency = rows[0]?.currency ?? 'KRW';
+  // One independent total per currency; [0] is the currency with the most rows.
+  // Summing across currencies would render a number that means nothing (₩12,900 +
+  // $10.99 is not 13,999 of anything).
+  const totals = summarizeByCurrency(rows);
+  const primary: CurrencyTotals = totals[0] ?? {
+    currency: 'KRW',
+    gross: 0,
+    captured: 0,
+    refunded: 0,
+    count: 0,
+  };
+  const others = totals.slice(1);
+  const currency = primary.currency;
+  const currencyNote = others.length > 0 ? ` · ${currency} 기준` : '';
 
-  // Captured balance = realized revenue (amount actually held after any refund).
-  const capturedTotal = rows
-    .filter((p) => p.state === 'CAPTURED' || p.state === 'PARTIAL_REFUNDED')
-    .reduce((sum, p) => sum + (p.balance ?? 0), 0);
-
-  const refundedTotal = rows
-    .filter((p) => p.state === 'REFUNDED' || p.state === 'PARTIAL_REFUNDED')
-    .reduce((sum, p) => sum + ((p.capturedAmount ?? 0) - (p.balance ?? 0)), 0);
-
-  const grossTotal = rows.reduce((sum, p) => sum + (p.amount ?? 0), 0);
   const activeSubs = (subs.data?.items ?? []).filter(
     (s) => s.status === 'ACTIVE' || s.status === 'TRIAL',
   ).length;
@@ -62,20 +71,20 @@ export function OverviewScreen() {
       >
         <MetricTile
           label="순 매출 (정산 잔액)"
-          value={formatMajor(capturedTotal, currency)}
-          sublabel={`매입 완료 + 부분 환불 반영`}
+          value={formatMinor(primary.captured, currency)}
+          sublabel={`매입 완료 + 부분 환불 반영${currencyNote}`}
           icon={<Wallet className="h-4 w-4" />}
         />
         <MetricTile
           label="총 결제 금액"
-          value={formatMajor(grossTotal, currency)}
-          sublabel={`거래 ${rows.length.toLocaleString('ko-KR')}건`}
+          value={formatMinor(primary.gross, currency)}
+          sublabel={`거래 ${primary.count.toLocaleString('ko-KR')}건${currencyNote}`}
           icon={<BadgeDollarSign className="h-4 w-4" />}
         />
         <MetricTile
           label="환불 금액"
-          value={formatMajor(refundedTotal, currency)}
-          sublabel="전체/부분 환불 합계"
+          value={formatMinor(primary.refunded, currency)}
+          sublabel={`전체/부분 환불 합계${currencyNote}`}
           icon={<RotateCcw className="h-4 w-4" />}
         />
         <MetricTile
@@ -85,6 +94,8 @@ export function OverviewScreen() {
           icon={<ReceiptText className="h-4 w-4" />}
         />
       </section>
+
+      {others.length > 0 ? <CurrencyBreakdown totals={totals} /> : null}
 
       <section aria-label="매출 채널 분포" className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -96,12 +107,65 @@ export function OverviewScreen() {
           rows={rows.slice(0, 6).map((p) => ({
             id: p.id,
             label: p.orderId,
-            value: formatMajor(p.amount, p.currency),
+            value: formatMinor(p.amount, p.currency),
             state: p.state,
           }))}
         />
       </section>
     </div>
+  );
+}
+
+/**
+ * Per-currency breakdown — rendered only when the ledger holds more than one
+ * currency. The tiles above show the primary currency; this makes the others
+ * visible instead of folding them into a meaningless combined figure.
+ */
+function CurrencyBreakdown({ totals }: { totals: CurrencyTotals[] }) {
+  return (
+    <section aria-label="통화별 합계">
+      <Card className="flex flex-col">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2 className="text-sm font-medium text-muted-foreground">통화별 합계</h2>
+          <span className="text-xs text-muted-foreground">환율 환산 없음</span>
+        </div>
+        <ul className="divide-y divide-border">
+          {totals.map((t) => (
+            <li
+              key={t.currency}
+              className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-2.5"
+            >
+              <span className="text-sm font-medium text-foreground">
+                {t.currency}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {t.count.toLocaleString('ko-KR')}건
+                </span>
+              </span>
+              <span className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
+                <span>
+                  총 결제{' '}
+                  <span className="ax-money font-medium tabular-nums text-foreground">
+                    {formatMinor(t.gross, t.currency)}
+                  </span>
+                </span>
+                <span>
+                  순 매출{' '}
+                  <span className="ax-money font-medium tabular-nums text-foreground">
+                    {formatMinor(t.captured, t.currency)}
+                  </span>
+                </span>
+                <span>
+                  환불{' '}
+                  <span className="ax-money font-medium tabular-nums text-foreground">
+                    {formatMinor(t.refunded, t.currency)}
+                  </span>
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </section>
   );
 }
 

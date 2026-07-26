@@ -14,10 +14,14 @@ import java.util.regex.Pattern;
  * PAYMENT-MONEY-002: Jackson deserializer that accepts integer minor units or
  * decimal-string amounts but REJECTS JSON float tokens with a clear error.
  *
- * <p>Accepted JSON shapes:
+ * <p>Accepted JSON shapes — both are preserved as the {@link MoneyWire} SHAPE they arrived in,
+ * because the two encodings denote different numbers and this deserializer cannot see the sibling
+ * {@code currency} field needed to reconcile them (see {@link MoneyWire}):
  * <ul>
- *   <li>Integer: {@code "amount": 1000} → {@code BigDecimal.valueOf(1000)}.</li>
- *   <li>Decimal string: {@code "amount": "10.99"} → {@code new BigDecimal("10.99")}.</li>
+ *   <li>Integer: {@code "amount": 1099} → {@code MoneyWire.ofMinor(1099)} — MINOR units
+ *       (USD $10.99), resolved against the currency by {@code MoneyWire.resolveMajor}.</li>
+ *   <li>Decimal string: {@code "amount": "10.99"} → {@code MoneyWire.ofMajor(new BigDecimal("10.99"))}
+ *       — already MAJOR units.</li>
  * </ul>
  *
  * <p>Rejected:
@@ -36,7 +40,7 @@ import java.util.regex.Pattern;
  * (response-amplification guard). A NUMERIC(19,8) amount is at most ~21 chars; {@link #MAX_AMOUNT_LEN}
  * is generous. The global 20M string pin (application.yml) is the outer defense-in-depth layer.
  */
-public class MoneyDeserializer extends ValueDeserializer<BigDecimal> {
+public class MoneyDeserializer extends ValueDeserializer<MoneyWire> {
 
     private static final Pattern DECIMAL = Pattern.compile("^[0-9]+(\\.[0-9]{1,8})?$");
 
@@ -44,10 +48,12 @@ public class MoneyDeserializer extends ValueDeserializer<BigDecimal> {
     static final int MAX_AMOUNT_LEN = 32;
 
     @Override
-    public BigDecimal deserialize(JsonParser p, DeserializationContext ctx) throws JacksonException {
+    public MoneyWire deserialize(JsonParser p, DeserializationContext ctx) throws JacksonException {
         JsonToken token = p.currentToken();
         if (token == JsonToken.VALUE_NUMBER_INT) {
-            return BigDecimal.valueOf(p.getLongValue());
+            // MINOR units per contracts/payment-openapi.yaml#MoneyAmount. Jackson raises
+            // InputCoercionException for a value beyond long range, keeping the existing 400 path.
+            return MoneyWire.ofMinor(p.getLongValue());
         }
         if (token == JsonToken.VALUE_STRING) {
             String text = p.getValueAsString();
@@ -58,7 +64,7 @@ public class MoneyDeserializer extends ValueDeserializer<BigDecimal> {
                     "amount string too long (" + text.length() + " chars; max " + MAX_AMOUNT_LEN + ")");
             }
             if (text != null && DECIMAL.matcher(text).matches()) {
-                return new BigDecimal(text);
+                return MoneyWire.ofMajor(new BigDecimal(text));
             }
             throw DatabindException.from(p,
                 "invalid amount '" + cap(text) + "'; expected integer minor units or decimal string "

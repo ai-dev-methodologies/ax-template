@@ -130,9 +130,13 @@ public class PaymentController {
         UUID userId = UUID.fromString(jwt.getSubject());
         RefundRequest req = request == null ? new RefundRequest() : request;
         // RefundRequest is a record with an explicit no-arg constructor that yields
-        // (amount=null, reason=null) — semantics: "refund full captured amount".
-        Refund refund = refundService.refund(id, userId, req, idempotencyKey);
-        return ResponseEntity.status(HttpStatus.CREATED).body(RefundResponse.from(refund));
+        // (amount=null, reason=null) — semantics: "refund the REMAINING refundable balance"
+        // (PAYMENT-REFUND-005; capturedAmount - Σ prior refunds, not the original capturedAmount).
+        RefundService.RefundOutcome outcome = refundService.refund(id, userId, req, idempotencyKey);
+        // PAYMENT-IDEMP-004: an Idempotency-Key replay returns the ORIGINAL refund with 200 OK
+        // (nothing was created); a fresh refund returns 201 CREATED. Same body either way.
+        HttpStatus status = outcome.replay() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(RefundResponse.from(outcome.refund()));
     }
 
     /**

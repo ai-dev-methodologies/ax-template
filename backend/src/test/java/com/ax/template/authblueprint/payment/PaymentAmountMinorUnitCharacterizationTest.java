@@ -1,9 +1,7 @@
 package com.ax.template.authblueprint.payment;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -11,50 +9,73 @@ import tools.jackson.databind.ObjectMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * CHARACTERIZATION of the request-path money defect (wave-2 finding-4 — the mirror image of P1-68's
- * response-path mismatch). Both {@code contracts/payment-openapi.yaml}'s {@code MoneyAmount} and
- * {@code specs/payment-l0.yaml#PAYMENT-MONEY-002} declare that a JSON <em>integer</em> amount is
- * <b>minor units</b> ("1099 for USD $10.99"). But {@link MoneyDeserializer} maps the integer {@code 1099}
- * to {@code BigDecimal.valueOf(1099)} with NO divide-by-100, and {@code PaymentService#scale} then
- * applies the USD minor-unit scale to yield {@code 1099.00} — a MAJOR-unit value. Net effect: a
- * contract-compliant USD integer-minor request for $10.99 is charged {@code $1099.00} — a silent 100×
- * overcharge.
+ * P1-69 closure — the request-path money defect, now a STANDING GREEN regression lock.
  *
- * <p>This is the request-side twin of {@code MoneyContractParityTest} (which pins the response side).
- * It is left {@link Disabled} on purpose: enabling it flips RED and hands wave-3's money reconciliation
- * a precise target. Do NOT "fix" it by asserting the buggy {@code 1099.00} — the assertion below encodes
- * the CONTRACT-CORRECT expectation ($10.99), which is exactly what wave-3 must make pass.
+ * <p>History: this class was written in wave-2 (finding-4) as a {@code @Disabled} RED target. Both
+ * {@code contracts/payment-openapi.yaml}'s {@code MoneyAmount} and
+ * {@code specs/payment-l0.yaml#PAYMENT-MONEY-002} declare that a JSON <em>integer</em> amount is
+ * <b>minor units</b> ("1099 for USD $10.99"), but {@link MoneyDeserializer} mapped {@code 1099} to
+ * {@code BigDecimal.valueOf(1099)} with no scaling and {@code PaymentService#scale} then produced
+ * {@code 1099.00} — a MAJOR-unit value, i.e. a contract-compliant USD request for $10.99 was
+ * charged $1099.00, a silent 100× overcharge. Zero-decimal currencies (KRW/JPY) coincidentally
+ * agreed, which is why every KRW integration test stayed green over the defect.
+ *
+ * <p>Wave-3 reconciled the wire on integer minor units: {@link MoneyDeserializer} now preserves the
+ * arriving SHAPE as a {@link MoneyWire}, and {@code MoneyWire.resolveMajor(currency)} converts
+ * through the {@code common/Money} seam once the currency is known and validated. The assertion
+ * below is the same CONTRACT-CORRECT expectation the disabled version encoded; it now passes.
+ *
+ * <p>Mutation lock: reverting {@code MoneyWire.resolveMajor} to return the raw minor value (or
+ * swapping {@code Money.toMajorUnits} for a single-arg {@code BigDecimal.valueOf}) makes the USD leg
+ * RED. The KRW leg is the scale-0 control that proves the USD leg is not passing vacuously — it must
+ * stay 1000 → 1000.
  */
 @Tag("PAYMENT")
-@Disabled("wave-3 money reconciliation RED target — request-path integer-minor 100x overcharge "
-        + "(finding-4). Enable when MoneyDeserializer interprets JSON integers as minor units per "
-        + "contracts/payment-openapi.yaml#MoneyAmount + specs/payment-l0.yaml#PAYMENT-MONEY-002, OR the "
-        + "contract drops integer-minor for fraction-digit currencies. Keep DISABLED until then so R25 stays green.")
+@Tag("PAYMENT-MONEY-002")
 class PaymentAmountMinorUnitCharacterizationTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** Replicates {@code PaymentService#scale} (private) for USD: setScale(2, UNNECESSARY). */
-    private static BigDecimal scaleUsd(BigDecimal raw) {
-        return raw.setScale(2, RoundingMode.UNNECESSARY);
-    }
-
     @Test
     void usdIntegerMinorAmount_isChargedAtContractValue_not100xToLarge() {
-        // Exercises the REAL request path: MoneyDeserializer (via @JsonDeserialize on CreatePaymentRequest.amount).
-        // contracts/payment-openapi.yaml: integer 1099 for USD == minor units == $10.99.
+        // Exercises the REAL request path: MoneyDeserializer (via @JsonDeserialize on
+        // CreatePaymentRequest.amount). contracts/payment-openapi.yaml: integer 1099 for USD ==
+        // minor units == $10.99.
         CreatePaymentRequest req = MAPPER.readValue(
                 "{\"amount\":1099,\"currency\":\"USD\",\"orderId\":\"o\"}", CreatePaymentRequest.class);
 
-        BigDecimal effectiveMajorCharge = scaleUsd(req.amount());
+        BigDecimal effectiveMajorCharge = req.amount().resolveMajor("USD");
 
-        // CONTRACT-CORRECT expectation. Currently effectiveMajorCharge == 1099.00 (a $1099.00 charge,
-        // 100x the intended $10.99), so this assertion FAILS today — hence @Disabled. Reproduction:
-        //   POST /api/payments {"amount":1099,"currency":"USD",...}  →  Payment.amount persisted as 1099.00.
         assertThat(effectiveMajorCharge)
-                .as("integer 1099 for USD is minor units ($10.99) per the contract, but the deserializer "
-                        + "treats it as major units and PaymentService#scale yields 1099.00 = $1099.00 (100x). "
-                        + "Reconcile MoneyDeserializer/contract/money.ts in wave-3.")
+                .as("integer 1099 for USD is MINOR units ($10.99) per contracts/payment-openapi.yaml"
+                        + "#MoneyAmount + specs/payment-l0.yaml#PAYMENT-MONEY-002 — NOT $1099.00")
                 .isEqualByComparingTo(new BigDecimal("10.99"));
+    }
+
+    @Test
+    void krwIntegerMinorAmount_isUnchanged_scale0CurrencyControl() {
+        // Scale-0 control: KRW's minor unit IS its major unit, so the same integer must survive the
+        // conversion untouched. If this ever changed, the USD fix would have moved a decimal point
+        // for a currency that has none.
+        CreatePaymentRequest req = MAPPER.readValue(
+                "{\"amount\":1000,\"currency\":\"KRW\",\"orderId\":\"o\"}", CreatePaymentRequest.class);
+
+        assertThat(req.amount().resolveMajor("KRW"))
+                .as("KRW is a 0-decimal currency: 1000 minor units == ₩1000")
+                .isEqualByComparingTo(new BigDecimal("1000"));
+    }
+
+    @Test
+    void decimalStringAmount_staysMajorUnits_bothBranchesConverge() {
+        // The other accepted request encoding: a decimal STRING is already major units, so it must
+        // NOT be scaled again. Both branches denote the same charge — the round-trip law.
+        CreatePaymentRequest stringBranch = MAPPER.readValue(
+                "{\"amount\":\"10.99\",\"currency\":\"USD\",\"orderId\":\"o\"}", CreatePaymentRequest.class);
+        CreatePaymentRequest integerBranch = MAPPER.readValue(
+                "{\"amount\":1099,\"currency\":\"USD\",\"orderId\":\"o\"}", CreatePaymentRequest.class);
+
+        assertThat(stringBranch.amount().resolveMajor("USD"))
+                .isEqualByComparingTo(new BigDecimal("10.99"))
+                .isEqualByComparingTo(integerBranch.amount().resolveMajor("USD"));
     }
 }

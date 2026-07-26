@@ -1,9 +1,12 @@
 /**
  * Payment client. Backend: PaymentController (/api/payments).
  *
- * Money: `amount` / `capturedAmount` / `balance` are MAJOR currency units
- * (already ISO-4217-scaled decimals on the wire — KRW scale 0, USD scale 2).
- * Render with formatMajor (lib/money.ts); never divide/multiply.
+ * Money: `amount` / `capturedAmount` / `balance` are integer MINOR currency units
+ * on the wire (PaymentBodyMapper.toBody -> common/Money.toMinorUnits; a $10.99 USD
+ * payment arrives as 1099, a ₩12,900 payment as 12900 because KRW's minor unit IS
+ * its major unit). Render with formatMinor (lib/money.ts) — formatMajor would show
+ * US$1,099.00 for that $10.99 payment. Locked by the committed wire golden
+ * frontend/tests/_fixtures/money-contract.golden.json (#paymentUsd).
  *
  * Mutations (create / void / refund) REQUIRE an `Idempotency-Key` header — a
  * double-submit REPLAYS (200 + same payment) instead of double-charging
@@ -37,7 +40,7 @@ export interface Payment {
   id: string;
   paymentId: string;
   orderId: string;
-  /** MAJOR currency units (already scaled). */
+  /** Integer MINOR currency units (USD 1099 == $10.99; KRW 12900 == ₩12,900). */
   amount: number;
   capturedAmount: number | null;
   balance: number | null;

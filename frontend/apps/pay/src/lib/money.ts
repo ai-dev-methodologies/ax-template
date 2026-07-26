@@ -1,18 +1,20 @@
 /**
  * Money formatting for the fintech-trust app.
  *
- * The backend uses TWO money representations and this app must render both
- * correctly — getting either wrong is the one unforgivable bug in a payments UI:
+ * The app handles two kinds of value and must render both correctly — getting
+ * either wrong is the one unforgivable bug in a payments UI:
  *
- *   1. PAYMENT domain  — `amount` is in MAJOR currency units, encoded as a JSON
- *      number that the backend scaled per ISO 4217 (KRW scale 0 -> 12900 means
- *      ₩12,900; USD scale 2 -> 70.00 means $70.00). The wire value is already a
- *      proper decimal; we must NOT multiply or divide it.
+ *   1. WIRE values (PAYMENT + BILLING domains) — MINOR units, encoded as a JSON
+ *      integer (`long`). Since the P1-68 unification BOTH domains emit this:
+ *      PaymentBodyMapper.toBody runs every amount through common/Money.toMinorUnits,
+ *      so a $10.99 USD payment arrives as 1099 and a ₩12,900 payment as 12900 (KRW
+ *      has 0 minor digits, so minor == major — which is exactly why the earlier
+ *      MAJOR-unit assumption survived KRW-only screens). Render with formatMinor;
+ *      it divides by 10^fractionDigits via integer string surgery.
  *
- *   2. BILLING domain  — `amount` is in MINOR units, encoded as a JSON integer
- *      (`long`). 29000 with currency KRW means ₩29,000 (KRW has 0 minor digits,
- *      so minor == major); 2999 with currency USD means $29.99 (2 minor digits).
- *      We must divide by 10^fractionDigits to reach the major value.
+ *   2. LOCALLY TYPED values — a MAJOR-unit decimal the user just entered in a form
+ *      (the checkout amount field), not yet sent anywhere. Render with formatMajor,
+ *      which hands the value to Intl untouched.
  *
  * Both paths converge on Intl.NumberFormat with the correct fraction digits and
  * grouping, then the rendered string is shown in a tabular-nums context (see
@@ -64,9 +66,10 @@ function minorToMajorString(minor: string, currency: string): string {
 }
 
 /**
- * Format a PAYMENT-domain amount (MAJOR units, already-scaled decimal). Accepts
- * the raw wire value (number | string). Returns a localized currency string,
- * e.g. 12900/"KRW" -> "₩12,900", 70/"USD" -> "$70.00".
+ * Format an already-MAJOR amount (a decimal the user typed, or any value known to
+ * be in major units). Accepts number | string. e.g. 12900/"KRW" -> "₩12,900",
+ * 70/"USD" -> "$70.00". Do NOT use this on a wire value — those are minor units
+ * (formatMajor(1099, "USD") renders US$1,099.00 for a $10.99 payment).
  */
 export function formatMajor(amount: number | string | null | undefined, currency: string): string {
   if (amount === null || amount === undefined) return '—';
@@ -76,9 +79,10 @@ export function formatMajor(amount: number | string | null | undefined, currency
 }
 
 /**
- * Format a BILLING-domain amount (MINOR units, integer long). Accepts the raw
- * wire value (number | string). The minor->major step is integer-string based,
- * so e.g. 2999/"USD" -> "$29.99" with no float drift, 29000/"KRW" -> "₩29,000".
+ * Format a WIRE amount (MINOR units, integer long) — the encoding BOTH the payment
+ * and billing domains emit. Accepts the raw wire value (number | string). The
+ * minor->major step is integer-string based, so e.g. 1099/"USD" -> "$10.99" and
+ * 2999/"USD" -> "$29.99" with no float drift, 29000/"KRW" -> "₩29,000".
  */
 export function formatMinor(amount: number | string | null | undefined, currency: string): string {
   if (amount === null || amount === undefined) return '—';

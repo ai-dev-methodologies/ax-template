@@ -9,7 +9,7 @@ import { PaymentStatus } from '@/components/status';
 import { ScreenEmpty, ScreenError, ScreenLoading } from '@/components/screen-states';
 import { usePayments, useRefundPayment } from '@/features/payments/hooks';
 import type { Payment } from '@/lib/api/paymentClient';
-import { formatMajor } from '@/lib/money';
+import { formatMinor } from '@/lib/money';
 import { formatDateTime, shortId } from '@/lib/format';
 
 type Col = 'order' | 'amount' | 'captured' | 'balance' | 'status' | 'created' | 'action';
@@ -64,9 +64,9 @@ export function TransactionsScreen() {
 
   const gridRows = rows.map((p) => ({
     order: <span className="truncate">{p.orderId}</span>,
-    amount: <span className="ax-money">{formatMajor(p.amount, p.currency)}</span>,
-    captured: <span className="ax-money">{formatMajor(p.capturedAmount, p.currency)}</span>,
-    balance: <span className="ax-money">{formatMajor(p.balance, p.currency)}</span>,
+    amount: <span className="ax-money">{formatMinor(p.amount, p.currency)}</span>,
+    captured: <span className="ax-money">{formatMinor(p.capturedAmount, p.currency)}</span>,
+    balance: <span className="ax-money">{formatMinor(p.balance, p.currency)}</span>,
     status: <PaymentStatus state={p.state} />,
     created: <span className="text-muted-foreground">{formatDateTime(p.createdAt)}</span>,
     action: isRefundable(p) ? (
@@ -138,7 +138,7 @@ export function TransactionsScreen() {
         title="환불하시겠습니까?"
         description={
           target
-            ? `주문 ${target.orderId}의 잔액 ${formatMajor(target.balance, target.currency)}을(를) 전액 환불합니다. 되돌릴 수 없습니다.`
+            ? `주문 ${target.orderId}의 잔액 ${formatMinor(target.balance, target.currency)}을(를) 전액 환불합니다. 되돌릴 수 없습니다.`
             : undefined
         }
         confirmLabel="환불 실행"

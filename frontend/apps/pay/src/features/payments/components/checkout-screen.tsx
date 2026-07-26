@@ -17,7 +17,7 @@ import { PaymentStatus } from '@/components/status';
 import { useCreatePayment } from '@/features/payments/hooks';
 import { newIdempotencyKey } from '@/lib/api/payFetch';
 import type { Payment } from '@/lib/api/paymentClient';
-import { formatMajor } from '@/lib/money';
+import { formatMajor, formatMinor } from '@/lib/money';
 import { formatDateTime, shortId } from '@/lib/format';
 
 const CURRENCIES = ['KRW', 'USD'] as const;
@@ -188,7 +188,7 @@ export function CheckoutScreen() {
                     label="결제금액"
                     value={
                       <span className="ax-money font-medium tabular-nums">
-                        {formatMajor(result.amount, result.currency)}
+                        {formatMinor(result.amount, result.currency)}
                       </span>
                     }
                   />
@@ -196,7 +196,7 @@ export function CheckoutScreen() {
                     label="매입금액"
                     value={
                       <span className="ax-money tabular-nums">
-                        {formatMajor(result.capturedAmount, result.currency)}
+                        {formatMinor(result.capturedAmount, result.currency)}
                       </span>
                     }
                   />
@@ -204,7 +204,7 @@ export function CheckoutScreen() {
                     label="잔액"
                     value={
                       <span className="ax-money tabular-nums">
-                        {formatMajor(result.balance, result.currency)}
+                        {formatMinor(result.balance, result.currency)}
                       </span>
                     }
                   />

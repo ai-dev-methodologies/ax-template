@@ -9,6 +9,7 @@ info:
     `amount` fields accept integer minor units (e.g., 1000 for KRW 1000원; 1099 for USD $10.99)
     or decimal strings (e.g., "10.99"). JSON `number` with a decimal point (float) is REJECTED with
     HTTP 400 + RFC 7807 ProblemDetail because BigDecimal precision cannot survive an IEEE 754 round-trip.
+    **Responses always emit integer minor units** — the decimal string is a request-only input branch.
 
     **IDOR policy**: GET /api/payments/{id} for a payment not owned by the caller returns 404 (not 403)
     to prevent enumeration of existing payment IDs. See PAYMENT-AUTHZ-003.
@@ -182,6 +183,8 @@ paths:
         - Refund must be within the 30-day window (PAYMENT-REFUND-001).
         - sum(all refunds) must not exceed payment.capturedAmount (PAYMENT-REFUND-002).
         - Refund of a fully-refunded payment is denied with 409 (PAYMENT-REFUND-003).
+        - `amount` must be positive and exactly representable in the payment currency's
+          ISO-4217 minor units; otherwise 400 (PAYMENT-REFUND-004).
       parameters:
         - in: path
           name: id
@@ -211,10 +214,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RefundResponse'
+        '200':
+          description: |
+            Idempotent replay (PAYMENT-IDEMP-004). The same `Idempotency-Key` was already used for a
+            refund of this payment, so the ORIGINAL refund is returned verbatim and NO second refund
+            is created. Applies to full refunds too — a retried full refund replays with 200 rather
+            than failing the refund-of-refund 409. Backstopped by a UNIQUE (payment_id,
+            idempotency_key) constraint.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
         '400':
           description: |
             Validation error. Causes: refund amount exceeds remaining capturable amount,
-            invalid amount encoding (float JSON), scale mismatch for currency.
+            invalid amount encoding (float JSON), scale mismatch for currency,
+            non-positive amount, or an amount finer than the currency's minor unit
+            (PAYMENT-REFUND-004 — rejected before any state/money/ledger mutation).
           content:
             application/json:
               schema:
@@ -243,6 +259,8 @@ paths:
             - Refund-of-refund: payment is already fully refunded (type: urn:ax:payment:refund-of-refund).
             - Outside refund window: 30-day window expired (type: urn:ax:payment:refund-window-expired).
             - Optimistic lock conflict: concurrent refund race; caller should retry (type: urn:ax:payment:concurrent-modification).
+            - Concurrent same-`Idempotency-Key` refund that lost the UNIQUE (payment_id, idempotency_key)
+              race; caller should retry, which replays the winner with 200 (type: urn:ax:payment:concurrent-modification).
           content:
             application/json:
               schema:
@@ -399,9 +417,16 @@ components:
         RFC 7807 ProblemDetail because BigDecimal precision cannot survive an IEEE 754 round-trip.
         Example: `0.1 + 0.2 = 0.30000000000000004` in IEEE 754 — unacceptable for financial values.
 
-        Server-side: deserialized via custom Jackson StdDeserializer that checks JsonToken type.
-        VALUE_NUMBER_FLOAT → 400 immediately. VALUE_NUMBER_INT → BigDecimal(longValue).
-        VALUE_STRING → new BigDecimal(text) (rejected if not a valid decimal).
+        Server responses ALWAYS emit the integer minor-unit branch; the decimal string is accepted
+        on REQUESTS only. Both request encodings converge on the same charge (`1099` and `"10.99"`
+        are the same USD amount), so the round-trip is closed: what a client POSTs as minor units is
+        what it reads back.
+
+        Server-side: deserialized via a custom Jackson ValueDeserializer that checks JsonToken type.
+        VALUE_NUMBER_FLOAT → 400 immediately. VALUE_NUMBER_INT → the value is MINOR units, converted
+        to the internal major-unit BigDecimal at the currency's ISO-4217 scale (`1099` USD → 10.99)
+        once the currency is validated. VALUE_STRING → new BigDecimal(text), already MAJOR units
+        (rejected if not a valid decimal). Responses convert back to minor units at the wire boundary.
       oneOf:
         - type: integer
           minimum: 0
@@ -482,7 +507,7 @@ components:
       properties:
         amount:
           $ref: '#/components/schemas/MoneyAmount'
-          description: "Amount to refund. If omitted, full refund is requested. Must not cause sum(all refunds) > capturedAmount."
+          description: "Amount to refund. If omitted, the REMAINING refundable balance (capturedAmount - sum(prior refunds)) is refunded — so an omitted amount after a partial refund settles the rest, it does not re-request the original capturedAmount. Must not cause sum(all refunds) > capturedAmount."
         reason:
           type: string
           minLength: 1

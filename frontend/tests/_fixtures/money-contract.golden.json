@@ -1,5 +1,5 @@
 {
-  "_provenance": "S2.MONEY-QUANTITY.XB (2026-07-20, wave-2 finding-3 repoint). Values below are what the REAL payment HTTP wire emits — backend/src/main/java/com/ax/template/authblueprint/payment/PaymentBodyMapper.toBody(Payment) (the Map<String,Object> body PaymentController actually returns; formerly the private paymentBody), derived from Payment.java (BigDecimal amount, precision=19 scale=8) + PaymentService.scale()/CURRENCY_SCALES (KRW=0, USD=2) + PaymentBodyMapper.canonicalize() (strips trailing zeros). refundUsd is the LIVE RefundResponse body PaymentController#refund returns. Locked byte-equal by backend/src/test/java/com/ax/template/authblueprint/payment/MoneyContractParityTest.java (BE leg) and frontend/tests/money-contract-parity.vitest.ts (FE leg). NOTE the earlier golden was derived from PaymentResponse, a DEAD record no endpoint returns — the payment legs are now bound to the real emitter. CONFIRMED P1-68: this is MAJOR-unit BigDecimal, not integer minor units — templates/L0/fork-receiver-kit/money.ts's parseMinor() assumes minor units and disagrees with the USD/refundUsd shapes below for any non-zero-decimal currency. The request-path mirror (integer 1099 charged 100x) is the separate wave-3 P1 candidate. See docs/BACKLOG.md + the session report.",
+  "_provenance": "S2.MONEY-QUANTITY.XB (2026-07-26, wave-3 money reconciliation — P1-68/P1-69 closure). Values below are what the REAL payment HTTP wire emits — backend/src/main/java/com/ax/template/authblueprint/payment/PaymentBodyMapper.toBody(Payment) (the Map<String,Object> body PaymentController actually returns), derived from Payment.java (BigDecimal amount, precision=19 scale=8) + PaymentService.scale()/CURRENCY_SCALES (KRW=0, USD=2) + PaymentBodyMapper.minorOrNull() (common/Money.toMinorUnits — the MAJOR→MINOR wire conversion). refundUsd is the LIVE RefundResponse body PaymentController#refund returns (RefundResponse.amount is a long of minor units). UNIFIED CONTRACT: every monetary value below is INTEGER MINOR UNITS — the same encoding contracts/payment-openapi.yaml#MoneyAmount declares (integer branch), MoneyDeserializer accepts on requests, and templates/L0/fork-receiver-kit/money.ts's parseMinor() consumes. The previous golden carried MAJOR-unit decimals (USD 10.99), which was neither branch of MoneyAmount's oneOf (P1-68) and made parseMinor silently misread whole-dollar amounts by 100x. Locked byte-equal by backend/src/test/java/com/ax/template/authblueprint/payment/MoneyContractParityTest.java (BE leg) and frontend/tests/money-contract-parity.vitest.ts (FE leg). See docs/BACKLOG.md P1-68/P1-69.",
   "paymentKrw": {
     "currency": "KRW",
     "amount": 12900,
@@ -7,17 +7,18 @@
     "balance": 12900
   },
   "paymentUsd": {
+    "_note": "a $10.99 USD payment. Stored as BigDecimal 10.99 (major); emitted as 1099 (minor) — the P1-68 closure. KRW legs are unchanged by the fix because KRW's minor unit IS its major unit (scale 0), which is exactly why the defect hid behind KRW-only integration tests.",
     "currency": "USD",
-    "amount": 10.99,
-    "capturedAmount": 10.99,
-    "balance": 10.99
+    "amount": 1099,
+    "capturedAmount": 1099,
+    "balance": 1099
   },
   "paymentUsdTrailingZero": {
-    "_note": "boundary: PaymentBodyMapper.canonicalize() strips trailing zeros — a USD 10.90 (scale-2) amount emits as the JSON number 10.9, NOT 10.90. Pins canonicalize as load-bearing on the real wire (removing it would emit 10.90 and flip MoneyContractParityTest#paymentBody_usdTrailingZero_canonicalizesToStrippedForm RED). Only-BE golden entry; the FE leg does not consume it.",
+    "_note": "boundary: a USD 10.90 (scale-2) amount emits as 1090 minor units. The minor-unit conversion SUBSUMES the former PaymentBodyMapper.canonicalize() trailing-zero strip (which produced 10.9) — there is no trailing-zero question once the wire is an integer. RED-on-revert leg for common/Money.toMinorUnits in MoneyContractParityTest#paymentBody_usdTrailingZero_emitsMinorUnitsNotStrippedDecimal. BE-only golden entry; the FE leg does not consume it.",
     "currency": "USD",
-    "amount": 10.9,
-    "capturedAmount": 10.9,
-    "balance": 10.9
+    "amount": 1090,
+    "capturedAmount": 1090,
+    "balance": 1090
   },
   "paymentKrwFullyRefunded": {
     "_note": "boundary: zero balance after a full refund (PAYMENT-RECON scenario)",
@@ -34,12 +35,12 @@
     "balance": 12345678900
   },
   "refundUsd": {
-    "_note": "RefundResponse.amount is ALWAYS positive per Refund.java (refunds are their own entity, never a negative delta on Payment.amount). This is the LIVE refund wire body (PaymentController#refund).",
+    "_note": "RefundResponse.amount is ALWAYS positive per Refund.java (refunds are their own entity, never a negative delta on Payment.amount). This is the LIVE refund wire body (PaymentController#refund). $4.99 → 499 minor units.",
     "currency": "USD",
-    "amount": 4.99
+    "amount": 499
   },
   "syntheticBillingMinorNegative": {
-    "_note": "NOT a payment-domain BE emission. Synthetic BILLING-domain-style integer minor-unit value (money.ts's own documented native shape) used only to exercise parseMinor's negative-sign handling in isolation, per templates/L0/fork-receiver-kit/money.ts's own doc comment distinguishing the BILLING (minor, integer) domain from the PAYMENT (major, decimal) domain.",
+    "_note": "NOT a payment-domain BE emission. Synthetic BILLING-domain-style integer minor-unit value used only to exercise parseMinor's negative-sign handling in isolation. Retained after the wave-3 unification because no payment amount is ever negative (a refund is its own positive row), so the negative branch has no payment-domain fixture.",
     "currency": "USD",
     "minorAmount": -500
   }
