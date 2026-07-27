@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * Shared cross-cutting RFC 9457 {@code application/problem+json} fallback for the
@@ -72,6 +73,15 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  *       → 400 with the shared {@code errors[]} extension array
  *       (aligns with {@code problem-details-l0} PROBLEM-VALIDATION-001 +
  *       {@code request-validation-l0} VALIDATION-ERROR-001);</li>
+ *   <li>{@link MethodArgumentTypeMismatchException} → 400 (code {@code TYPE_MISMATCH}) —
+ *       an {@code @RequestParam}/{@code @PathVariable} value that cannot be converted to
+ *       its declared Java type (e.g. an invalid enum constant such as
+ *       {@code ?status=SUCCESS} against {@code WebhookDeliveryStatus}). Spring raises this
+ *       DURING argument resolution, before any controller body or local
+ *       {@code @ExceptionHandler} runs; left unmapped it falls through to the servlet
+ *       {@code /error} dispatch, which the reference {@code SecurityConfig}'s
+ *       {@code anyRequest().denyAll()} rejects as a misleading EMPTY {@code 403} — the
+ *       same 403-trap class documented below for {@link ResourceNotFoundException};</li>
  *   <li>{@link HttpMessageNotReadableException} → 400 (unreadable / malformed body);</li>
  *   <li>{@link HttpMediaTypeNotSupportedException} → 415;</li>
  *   <li>{@link HttpRequestMethodNotSupportedException} → 405;</li>
@@ -104,6 +114,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 public class GlobalProblemDetailAdvice {
 
     private static final URI VALIDATION_TYPE = URI.create("https://errors.example.com/validation");
+    private static final URI TYPE_MISMATCH_TYPE = URI.create("https://errors.example.com/type-mismatch");
     private static final URI MALFORMED_BODY_TYPE = URI.create("https://errors.example.com/malformed-request-body");
     private static final URI UNSUPPORTED_MEDIA_TYPE = URI.create("https://errors.example.com/unsupported-media-type");
     private static final URI METHOD_NOT_ALLOWED_TYPE = URI.create("https://errors.example.com/method-not-allowed");
@@ -176,6 +187,35 @@ public class GlobalProblemDetailAdvice {
             }
         }
         return validationProblem(errors, total > errors.size());
+    }
+
+    /**
+     * COMMON unmapped-argument-binding trap → {@code 400 Bad Request} (code
+     * {@code TYPE_MISMATCH}). Raised DURING {@code @RequestParam}/{@code @PathVariable}
+     * argument resolution — before any controller method body or local
+     * {@code @ExceptionHandler} runs — when the raw value cannot be converted to the
+     * declared Java type (e.g. {@code ?status=SUCCESS} against the
+     * {@code WebhookDeliveryStatus} enum, which has no {@code SUCCESS} constant). Left
+     * unmapped, this previously fell through to the servlet {@code /error} dispatch,
+     * which the reference {@code SecurityConfig}'s {@code anyRequest().denyAll()} then
+     * rejected as a misleading, EMPTY {@code 403} even though authentication/authorization
+     * were never actually the problem (BACKLOG systemic finding — same 403-trap class as
+     * {@link ResourceNotFoundException} / {@link InvalidPageRequestException} above).
+     * Returns the response DIRECTLY (no {@code /error} re-dispatch) to close that trap.
+     *
+     * <p>Response-amplification defense: the offending raw value is client-controlled and
+     * is deliberately NEVER echoed — only the parameter NAME (server-declared, not
+     * attacker input) and the expected type's simple name are reported.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ProblemDetail> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String expectedType = ex.getRequiredType() != null
+                ? ex.getRequiredType().getSimpleName()
+                : "the expected type";
+        String detail = "Parameter '" + defaultMessage(ex.getName()) + "' must be a valid " + expectedType + ".";
+        ProblemDetail pd = problem(HttpStatus.BAD_REQUEST, TYPE_MISMATCH_TYPE, "Type Mismatch",
+                "TYPE_MISMATCH", detail);
+        return entity(HttpStatus.BAD_REQUEST, pd);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
