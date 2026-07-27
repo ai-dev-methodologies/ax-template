@@ -23,7 +23,7 @@ A starter / transformation skill for projects that want AI agents (Claude Code e
 | **4 hard gates** (spec_ref / substance / time_decay / evidence) | Binary checks that block AI output if it diverges from external facts. |
 | **Reference workloads** (`backend/` Spring Boot auth + CRUD + practices fixtures, `frontend/` React) | Worked examples — the skill applies itself to itself. |
 | **Frontend Spec Trio** (`specs/<domain>-frontend-l0.yaml` + `contracts/<domain>-ui.yaml` + `blueprints/<domain>-ui-manifest.yaml`) | Mirrors backend Spec Trio for UI routes. Anchors frontend AI output to external specs. |
-| **`practices-react/` catalog** (101 rules, 9 families) | Evidence-anchored rules for React 19 / Next.js 16. Mirrors Java catalog discipline. |
+| **`practices-react/` catalog** (102 rules, 9 families) | Evidence-anchored rules for React 19 / Next.js 16. Mirrors Java catalog discipline. |
 | **`templates/` layer library** (L1 primitives, L2 feature blocks, L3 page templates, L4 domain workloads) | Composition kit layers. Each artifact carries `evidence:` frontmatter. |
 | **3-tier skill topology** | 3 Tier-1 commands, 8 Tier-2 path-triggered skills, 6 Tier-3 core evidence gates (within the 92-guard suite). Agents navigate via skill invocation graph. |
 
@@ -68,7 +68,7 @@ bash practices/scripts/install-hooks.sh
 | `specs/auth-asvs-l1.yaml` | OWASP ASVS L1 spec (26 items) |
 | `specs/spring-practices-l0.yaml` | Java/Spring rules spec (64 items) |
 | `specs/crud-security.yaml` | CRUD reference domain spec |
-| `practices-react/AGENTS.md` | 101 React rules in AI-consumable form |
+| `practices-react/AGENTS.md` | 102 React rules in AI-consumable form |
 | `practices-react/SKILL.md` | React practices subsystem entry point |
 | `templates/AGENTS.md` | Layer library AI-consumable index (sha256 sentinel) |
 | `templates/DECISIONS.md` | ADR registry TD-2026-05-17-001..010 — provenance trail |

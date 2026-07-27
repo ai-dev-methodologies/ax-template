@@ -1,0 +1,84 @@
+{
+  "_provenance": "S2.AUTHZ.XB (2026-07-27, cross-boundary authz-action-set parity). Domain: approval-workflow (전자결재), specs/approval-workflow-l0.yaml (WF-AUTHZ-001..003, WF-STEP-001, WF-LIFECYCLE-001..004). GENUINE CATALOG GAP this fixture exists to document: ApprovalRequestResponse / ApprovalStepResponse (backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalRequestResponse.java, ApprovalStepResponse.java) carry NO computed action-set / permissions field anywhere in the wire body — the BE NEVER tells the caller which of {submit, cancel, approve, reject, view} it may invoke for a given response. A real FE has to re-derive that set itself from status + requesterUserId + steps[].approverUserId, guessing at rules it cannot see. The 'expectedActions' column below is therefore NOT read off any BE-emitted field; it is hand-derived per row from the enforced guards cited in each row's _note (ApprovalController's SecurityConfig matcher + ApprovalService's ownership/ordering guards + ApprovalRequestRepository#findVisibleTo + the two REAL state machines' ALLOWED-transition maps). backend/src/test/java/com/ax/template/authblueprint/common/AuthorizedActionSetParityTest.java re-derives the same set by calling the REAL ApprovalRequestStateMachine/ApprovalStepStateMachine transition checks (not a hand-rolled copy of their private ALLOWED maps) plus a faithful reimplementation of the visibility/ownership/ordering conditions it cites by file:line. Because ApprovalService/ApprovalController are out of this lane's file set and expose no queryable decision function, that reimplementation is NOT automatically kept in sync with a change to those guards — see the coverage-map recommendation (partial, not covered) for exactly this residual risk.",
+  "rows": [
+    {
+      "label": "requester_draft_own_request",
+      "_note": "Requester viewing/acting on their own DRAFT request. view: requester branch of findVisibleTo is unconditional on status (ApprovalRequestRepository.java:39-42, first OR-arm). submit/cancel: ApprovalService.loadOwn requires requesterUserId==caller (ApprovalService.java:245-251) AND the REAL ApprovalRequestStateMachine allows DRAFT->SUBMITTED and DRAFT->CANCELLED (ApprovalRequestStateMachine.java:25-26). approve/reject absent: alice is not an approver on any step here.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "DRAFT",
+        "steps": [
+          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "PENDING" }
+        ]
+      },
+      "callerId": "alice",
+      "expectedActions": ["cancel", "submit", "view"]
+    },
+    {
+      "label": "approver_first_step_pending_submitted",
+      "_note": "The assigned approver on the (only, first) PENDING step of a SUBMITTED request. view: approver branch of findVisibleTo requires status==SUBMITTED, which holds (ApprovalRequestRepository.java:39-42, second OR-arm). approve/reject: request is exactly SUBMITTED (ApprovalService.java:195-202), carol matches the step's approverUserId (ApprovalService.java:209-217), no earlier step exists so the ordering guard is vacuously satisfied (ApprovalService.java:219-227), and the REAL ApprovalStepStateMachine allows PENDING->APPROVED and PENDING->REJECTED (ApprovalStepStateMachine.java:26-27). submit/cancel absent: carol is not the requester, so loadOwn 404s (ApprovalService.java:245-251).",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "SUBMITTED",
+        "steps": [
+          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "PENDING" }
+        ]
+      },
+      "callerId": "carol",
+      "expectedActions": ["approve", "reject", "view"]
+    },
+    {
+      "label": "non_participant_submitted",
+      "_note": "A caller who is neither requester nor any step's approver. Deny-by-default across the board: findVisibleTo has no matching OR-arm (ApprovalRequestRepository.java:39-42) so the request is not even visible (IDOR-safe 404), and the step loop in ApprovalService.actOnStep never matches an approverUserId (ApprovalService.java:204-217) so approve/reject are unreachable regardless of request status.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "SUBMITTED",
+        "steps": [
+          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "PENDING" }
+        ]
+      },
+      "callerId": "dave",
+      "expectedActions": []
+    },
+    {
+      "label": "second_step_approver_visible_but_out_of_order",
+      "_note": "THE key FE/BE-parity trap this fixture exists to pin: erin is the assigned approver of the SECOND step (orderIndex 1) of a SUBMITTED request, so she IS visible per findVisibleTo's approver OR-arm (ApprovalRequestRepository.java:39-42 does not check ordering, only status==SUBMITTED) -- a naive FE that renders an approve/reject button merely because the caller's id appears among steps[].approverUserId would show one here. But the first step (orderIndex 0, carol, still PENDING) is not APPROVED yet, so ApprovalService's strict-ordering guard rejects any action on erin's step with 409 STEP_OUT_OF_ORDER (ApprovalService.java:219-227) before the step's own state machine is ever consulted. Expected: view only.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "SUBMITTED",
+        "steps": [
+          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "PENDING" },
+          { "id": "2b3c4d5e-0000-4000-8000-000000000002", "orderIndex": 1, "approverUserId": "erin", "status": "PENDING" }
+        ]
+      },
+      "callerId": "erin",
+      "expectedActions": ["view"]
+    },
+    {
+      "label": "approver_loses_visibility_after_request_terminal",
+      "_note": "A second, non-obvious BE behavior this fixture pins: carol APPROVED her step, and the request went terminal (APPROVED). findVisibleTo's approver OR-arm requires r.status==SUBMITTED (ApprovalRequestRepository.java:39-42) -- once the request leaves SUBMITTED, carol's approver-branch visibility silently evaporates even though she is the one who approved it and is not the requester. Expected: no actions at all, not even view. This is a REAL, currently-enforced product-shape finding worth a BACKLOG entry (see this lane's final report) -- an approver who acted on a request loses the ability to see its outcome once it resolves.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "APPROVED",
+        "steps": [
+          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "APPROVED" }
+        ]
+      },
+      "callerId": "carol",
+      "expectedActions": []
+    },
+    {
+      "label": "requester_own_request_after_terminal_approval",
+      "_note": "The requester viewing their own now-terminal (APPROVED) request. view: requester branch is unconditional on status (ApprovalRequestRepository.java:39-42, first OR-arm) so alice keeps visibility. submit/cancel absent: the REAL ApprovalRequestStateMachine's ALLOWED map has an empty transition set for APPROVED (ApprovalRequestStateMachine.java:29 -- terminal), so both the real markSubmitted and markCancelled calls throw IllegalStateException.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "APPROVED",
+        "steps": [
+          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "APPROVED" }
+        ]
+      },
+      "callerId": "alice",
+      "expectedActions": ["view"]
+    }
+  ]
+}

@@ -1939,21 +1939,36 @@ cells:
   recipe: saas-subscription
   layer: null
   weight: 2
-  status: covered
+  status: partial
   covered_by:
   - recipes/saas-subscription/RECIPE.md
   - skills/_tests/sealed-verdict/saas-subscription-verdict.md
+  - practices/consumer-proof/scenarios/S3.saas-subscription/
   enforced_by:
   - skills/_tests/sealed-verdict/saas-subscription-verdict.md (must_score/must_total + should_score/should_total,
     threshold-gated PASS)
-  nonvacuity:
-  - skills/_tests/sealed-verdict/saas-subscription-verdict.md
+  nonvacuity: []
   backlog_ref: null
   na_reason: null
-  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+  notes: 'Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
     not a live re-executable CI gate. No live re-executable compose spec found for this recipe (checked
-    frontend/tests/recipes/) — sealed verdict is the sole nonvacuity evidence.
+    frontend/tests/recipes/) — sealed verdict is the sole nonvacuity evidence. DOWNGRADED covered->partial —
+    the sealed-verdict markdown is a static quiz record that can never go RED, so per the engine''s own
+    nonvacuity definition (a RED-able proof) it does not qualify — composition-behavioral proof absent;
+    only structural/verdict evidence remains.
+
+    Wave-2 Cell 7 (2026-07-20): proposed re-flip to covered, REJECTED by opus adversarial review.
+    practices/consumer-proof/scenarios/S3.saas-subscription/ (clean+violating fixtures + run-scenario-proof.sh)
+    is an ENFORCEMENT-PROBE — it proves guard-blocking on scenario-local fixtures, not composition-behavioral
+    rendering (multiple domains actually interacting at runtime), so it does not close the gap either.
+    Root cause stays open: the S3 (COMPOSITION) tier''s nonvacuity bar itself is undefined —
+    coverage_map_guard.sh check 4 only asserts a nonvacuity path RESOLVES on disk, not that the resolved
+    artifact is genuinely composition-behavioral (an ESLint-probe or text-scan resolves + is RED-able yet
+    only proves per-fixture rule-firing). Tracked docs/BACKLOG.md P2-29 (done-when: bar defined in
+    engine/README.md + coverage_map_guard.sh extended to assert S3-covered nonvacuity cites a live
+    multi-domain test, not a sealed verdict markdown or bare file-existence). CANARY-012 stays LIVE (not
+    stale). Status UNCHANGED at partial.'
 - id: S3.e-commerce
   tier: S3
   recipe: e-commerce
@@ -1963,212 +1978,254 @@ cells:
   covered_by:
   - recipes/e-commerce/RECIPE.md
   - skills/_tests/sealed-verdict/e-commerce-verdict.md
+  - practices-react/rules/locale-aware-number-date-format.md
   enforced_by:
   - skills/_tests/sealed-verdict/e-commerce-verdict.md (must_score/must_total + should_score/should_total,
     threshold-gated PASS)
   - ./gradlew testEcommerce
+  - practices/evals/locale_aware_format_guard.sh
   nonvacuity:
   - skills/_tests/sealed-verdict/e-commerce-verdict.md
   - backend/src/test/java/com/ax/template/authblueprint/ecommerce/EcommerceE2ETest.java
+  - practices/evals/fixtures/locale-aware-format/fail_manual_format/
+  - practices/evals/fixtures/locale-aware-format/pass_intl_format/
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
     not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable BE capstone E2E test
-    (EcommerceE2ETest, composes crud+payment+notification+audit-log+search).
+    (EcommerceE2ETest, composes crud+payment+notification+audit-log+search). 2026-07-20 closure — the
+    consumer-proof S3.e-commerce scenario (practices/consumer-proof/scenarios/S3.e-commerce/) had surfaced
+    a confirmed catalog gap via a hand-rolled scenario-local guard (canary-gaps.yaml CANARY-001, FE
+    locale-aware number/date formatting had no rule/ESLint-rule/guard anywhere). That gap is now closed at
+    the catalog level — practices-react/rules/locale-aware-number-date-format.md (evidence-anchored to
+    ECMA-402/MDN) + practices/evals/locale_aware_format_guard.sh (spec_ref_guard + evidence_guard +
+    substance_guard + time_decay_guard all pass) + per-detector fail fixtures proving the guard is RED-able
+    (fail_manual_format/fail_bare_tolocale/fail_money_tofixed/fail_currency_concat each exit 1 with
+    signature LOCALE_FORMAT_VIOLATION, one detector apiece; pass_intl_format exits 0, non-vacuously
+    scanned). The guard is WIRED live into practices/evals/run-all-guards.sh as guard [91]
+    (locale_aware_format/live + the pass/per-detector-fail fixtures) and runs clean against the real
+    frontend/src (35 *.ts/*.tsx files, 0 hits). The scenario-local
+    scenario-guards/locale_format_guard.sh is unchanged and still proves the scenario's own composition.
 - id: S3.crm
   tier: S3
   recipe: crm
   layer: null
   weight: 2
-  status: covered
+  status: partial
   covered_by:
   - recipes/crm/RECIPE.md
   - skills/_tests/sealed-verdict/crm-verdict.md
   enforced_by:
   - skills/_tests/sealed-verdict/crm-verdict.md (must_score/must_total + should_score/should_total, threshold-gated
     PASS)
-  nonvacuity:
-  - skills/_tests/sealed-verdict/crm-verdict.md
+  nonvacuity: []
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
     not a live re-executable CI gate. No live re-executable compose spec found for this recipe (checked
-    frontend/tests/recipes/) — sealed verdict is the sole nonvacuity evidence.
+    frontend/tests/recipes/) — sealed verdict is the sole nonvacuity evidence. DOWNGRADED covered->partial —
+    the sealed-verdict markdown is a static quiz record that can never go RED, so per the engine's own
+    nonvacuity definition (a RED-able proof) it does not qualify — composition-behavioral proof absent;
+    only structural/verdict evidence remains.
 - id: S3.booking
   tier: S3
   recipe: booking
   layer: null
   weight: 2
-  status: covered
+  status: partial
   covered_by:
   - recipes/booking/RECIPE.md
   - skills/_tests/sealed-verdict/booking-verdict.md
+  - frontend/tests/recipes/booking-compose.spec.ts
   enforced_by:
   - skills/_tests/sealed-verdict/booking-verdict.md (must_score/must_total + should_score/should_total,
     threshold-gated PASS)
   - frontend/tests/recipes/booking-compose.spec.ts
-  nonvacuity:
-  - skills/_tests/sealed-verdict/booking-verdict.md
-  - frontend/tests/recipes/booking-compose.spec.ts
+  nonvacuity: []
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
-    not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable Playwright compose spec
-    (frontend/tests/recipes/booking-compose.spec.ts).
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec
+    (frontend/tests/recipes/booking-compose.spec.ts). DOWNGRADED covered->partial — on inspection the compose
+    spec only asserts file-existence/frontmatter, not that the composed feature actually works with
+    enforcement intact, and the sealed-verdict markdown can never go RED — neither qualifies as a RED-able
+    composition-behavioral proof per the engine's own nonvacuity definition. Composition-behavioral proof
+    absent; only structural/verdict evidence remains.
 - id: S3.marketplace
   tier: S3
   recipe: marketplace
   layer: null
   weight: 2
-  status: covered
+  status: partial
   covered_by:
   - recipes/marketplace/RECIPE.md
   - skills/_tests/sealed-verdict/marketplace-verdict.md
+  - frontend/tests/recipes/marketplace-compose.spec.ts
   enforced_by:
   - skills/_tests/sealed-verdict/marketplace-verdict.md (must_score/must_total + should_score/should_total,
     threshold-gated PASS)
   - frontend/tests/recipes/marketplace-compose.spec.ts
-  nonvacuity:
-  - skills/_tests/sealed-verdict/marketplace-verdict.md
-  - frontend/tests/recipes/marketplace-compose.spec.ts
+  nonvacuity: []
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
-    not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable Playwright compose spec
-    (frontend/tests/recipes/marketplace-compose.spec.ts).
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec
+    (frontend/tests/recipes/marketplace-compose.spec.ts). DOWNGRADED covered->partial — on inspection the
+    compose spec only asserts file-existence/frontmatter, not that the composed feature actually works with
+    enforcement intact, and the sealed-verdict markdown can never go RED — neither qualifies as a RED-able
+    composition-behavioral proof per the engine's own nonvacuity definition. Composition-behavioral proof
+    absent; only structural/verdict evidence remains.
 - id: S3.b2b-admin
   tier: S3
   recipe: b2b-admin
   layer: null
   weight: 2
-  status: covered
+  status: partial
   covered_by:
   - recipes/b2b-admin/RECIPE.md
   - skills/_tests/sealed-verdict/b2b-admin-verdict.md
+  - frontend/tests/recipes/b2b-admin-compose.spec.ts
   enforced_by:
   - skills/_tests/sealed-verdict/b2b-admin-verdict.md (must_score/must_total + should_score/should_total,
     threshold-gated PASS)
   - frontend/tests/recipes/b2b-admin-compose.spec.ts
-  nonvacuity:
-  - skills/_tests/sealed-verdict/b2b-admin-verdict.md
-  - frontend/tests/recipes/b2b-admin-compose.spec.ts
+  nonvacuity: []
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
-    not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable Playwright compose spec
-    (frontend/tests/recipes/b2b-admin-compose.spec.ts).
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec
+    (frontend/tests/recipes/b2b-admin-compose.spec.ts). DOWNGRADED covered->partial — on inspection the
+    compose spec only asserts file-existence/frontmatter, not that the composed feature actually works with
+    enforcement intact, and the sealed-verdict markdown can never go RED — neither qualifies as a RED-able
+    composition-behavioral proof per the engine's own nonvacuity definition. Composition-behavioral proof
+    absent; only structural/verdict evidence remains.
 - id: S3.community
   tier: S3
   recipe: community
   layer: null
   weight: 2
-  status: covered
+  status: partial
   covered_by:
   - recipes/community/RECIPE.md
   - skills/_tests/sealed-verdict/community-verdict.md
+  - frontend/tests/recipes/community-compose.spec.ts
   enforced_by:
   - skills/_tests/sealed-verdict/community-verdict.md (must_score/must_total + should_score/should_total,
     threshold-gated PASS)
   - frontend/tests/recipes/community-compose.spec.ts
-  nonvacuity:
-  - skills/_tests/sealed-verdict/community-verdict.md
-  - frontend/tests/recipes/community-compose.spec.ts
+  nonvacuity: []
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
-    not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable Playwright compose spec
-    (frontend/tests/recipes/community-compose.spec.ts).
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec
+    (frontend/tests/recipes/community-compose.spec.ts). DOWNGRADED covered->partial — on inspection the
+    compose spec only asserts file-existence/frontmatter, not that the composed feature actually works with
+    enforcement intact, and the sealed-verdict markdown can never go RED — neither qualifies as a RED-able
+    composition-behavioral proof per the engine's own nonvacuity definition. Composition-behavioral proof
+    absent; only structural/verdict evidence remains.
 - id: S3.lms
   tier: S3
   recipe: lms
   layer: null
   weight: 2
-  status: covered
+  status: partial
   covered_by:
   - recipes/lms/RECIPE.md
   - skills/_tests/sealed-verdict/lms-verdict.md
+  - frontend/tests/recipes/lms-compose.spec.ts
   enforced_by:
   - skills/_tests/sealed-verdict/lms-verdict.md (must_score/must_total + should_score/should_total, threshold-gated
     PASS)
   - frontend/tests/recipes/lms-compose.spec.ts
-  nonvacuity:
-  - skills/_tests/sealed-verdict/lms-verdict.md
-  - frontend/tests/recipes/lms-compose.spec.ts
+  nonvacuity: []
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
-    not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable Playwright compose spec
-    (frontend/tests/recipes/lms-compose.spec.ts).
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec
+    (frontend/tests/recipes/lms-compose.spec.ts). DOWNGRADED covered->partial — on inspection the compose
+    spec only asserts file-existence/frontmatter, not that the composed feature actually works with
+    enforcement intact, and the sealed-verdict markdown can never go RED — neither qualifies as a RED-able
+    composition-behavioral proof per the engine's own nonvacuity definition. Composition-behavioral proof
+    absent; only structural/verdict evidence remains.
 - id: S3.cms
   tier: S3
   recipe: cms
   layer: null
   weight: 2
-  status: covered
+  status: partial
   covered_by:
   - recipes/cms/RECIPE.md
   - skills/_tests/sealed-verdict/cms-verdict.md
+  - frontend/tests/recipes/cms-compose.spec.ts
   enforced_by:
   - skills/_tests/sealed-verdict/cms-verdict.md (must_score/must_total + should_score/should_total, threshold-gated
     PASS)
   - frontend/tests/recipes/cms-compose.spec.ts
-  nonvacuity:
-  - skills/_tests/sealed-verdict/cms-verdict.md
-  - frontend/tests/recipes/cms-compose.spec.ts
+  nonvacuity: []
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
-    not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable Playwright compose spec
-    (frontend/tests/recipes/cms-compose.spec.ts).
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec
+    (frontend/tests/recipes/cms-compose.spec.ts). DOWNGRADED covered->partial — on inspection the compose
+    spec only asserts file-existence/frontmatter, not that the composed feature actually works with
+    enforcement intact, and the sealed-verdict markdown can never go RED — neither qualifies as a RED-able
+    composition-behavioral proof per the engine's own nonvacuity definition. Composition-behavioral proof
+    absent; only structural/verdict evidence remains.
 - id: S3.internal-it
   tier: S3
   recipe: internal-it
   layer: null
   weight: 2
-  status: covered
+  status: partial
   covered_by:
   - recipes/internal-it/RECIPE.md
   - skills/_tests/sealed-verdict/internal-it-verdict.md
+  - frontend/tests/recipes/internal-it-compose.spec.ts
   enforced_by:
   - skills/_tests/sealed-verdict/internal-it-verdict.md (must_score/must_total + should_score/should_total,
     threshold-gated PASS)
   - frontend/tests/recipes/internal-it-compose.spec.ts
-  nonvacuity:
-  - skills/_tests/sealed-verdict/internal-it-verdict.md
-  - frontend/tests/recipes/internal-it-compose.spec.ts
+  nonvacuity: []
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
-    not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable Playwright compose spec
-    (frontend/tests/recipes/internal-it-compose.spec.ts).
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec
+    (frontend/tests/recipes/internal-it-compose.spec.ts). DOWNGRADED covered->partial — on inspection the
+    compose spec only asserts file-existence/frontmatter, not that the composed feature actually works with
+    enforcement intact, and the sealed-verdict markdown can never go RED — neither qualifies as a RED-able
+    composition-behavioral proof per the engine's own nonvacuity definition. Composition-behavioral proof
+    absent; only structural/verdict evidence remains.
 - id: S3.api-gateway-relay
   tier: S3
   recipe: api-gateway-relay
   layer: null
   weight: 2
-  status: covered
+  status: partial
   covered_by:
   - recipes/api-gateway-relay/RECIPE.md
   - skills/_tests/sealed-verdict/api-gateway-relay-verdict.md
+  - frontend/tests/recipes/api-gateway-relay-compose.spec.ts
   enforced_by:
   - skills/_tests/sealed-verdict/api-gateway-relay-verdict.md (must_score/must_total + should_score/should_total,
     threshold-gated PASS)
   - frontend/tests/recipes/api-gateway-relay-compose.spec.ts
-  nonvacuity:
-  - skills/_tests/sealed-verdict/api-gateway-relay-verdict.md
-  - frontend/tests/recipes/api-gateway-relay-compose.spec.ts
+  nonvacuity: []
   backlog_ref: null
   na_reason: null
   notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
-    not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable Playwright compose spec
-    (frontend/tests/recipes/api-gateway-relay-compose.spec.ts).
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec
+    (frontend/tests/recipes/api-gateway-relay-compose.spec.ts). DOWNGRADED covered->partial — on inspection
+    the compose spec only asserts file-existence/frontmatter, not that the composed feature actually works
+    with enforcement intact, and the sealed-verdict markdown can never go RED — neither qualifies as a
+    RED-able composition-behavioral proof per the engine's own nonvacuity definition. Composition-behavioral
+    proof absent; only structural/verdict evidence remains.

@@ -1080,6 +1080,7 @@ cells:
   - ./gradlew testWebhook
   nonvacuity:
   - backend/src/test/java/com/ax/template/authblueprint/webhook/WebhookSignTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/webhook/WebhookAdminListStatusTest.java
   backlog_ref: null
   na_reason: null
   notes: No *ViolationProofTest; WebhookSignTest WEBHOOK-SIGN-002 asserts the verify helper rejects (isFalse())
@@ -1105,7 +1106,8 @@ cells:
     fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
     templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
     material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
-    (S2 FE) concern.'
+    (S2 FE) concern. Also NOT covered (2026-07-27): the L4 copy-target material''s delivery-status vocabulary
+    has drifted from the reconciled contract — see docs/BACKLOG.md (P2-34).'
 - id: S1.webhook.XB
   tier: S1
   domain: webhook
@@ -1408,15 +1410,29 @@ cells:
   status: partial
   covered_by:
   - practices/rules/authorization-parity-executed-matches-authorized-four-eyes-positive-gates.md
+  - frontend/tests/_fixtures/authorized-actions.golden.json
   enforced_by:
   - ./gradlew testAuthzParity
+  - ./gradlew testApprovalWorkflow
+  - cd frontend && npm run test
   nonvacuity:
   - backend/src/test/java/com/ax/template/authblueprint/authzparity/AuthzParityViolationProofTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/common/AuthorizedActionSetParityTest.java
+  - frontend/tests/authz-action-parity.vitest.ts
   backlog_ref: null
   na_reason: null
-  notes: BE-side authorization-parity proof exists (AuthzParityViolationProofTest) but it is not a cross-boundary
-    FE-BE test — no test confirms the FE actually renders/blocks in parity with the BE-authorized action
-    set.
+  notes: 'Wave-3 partial (2026-07-27): a FE↔BE authorized-action-set harness now exists for
+    approval-workflow over a shared golden (frontend/tests/_fixtures/authorized-actions.golden.json),
+    all 6 rows evidence-anchored by file:line and independently re-derived against production source.
+    Still `partial` for three reasons: (1) the BE leg calls the REAL ApprovalRequestStateMachine /
+    ApprovalStepStateMachine for lifecycle-transition legality but REIMPLEMENTS the visibility/
+    ownership/ordering guards (ApprovalRequestRepository#findVisibleTo, ApprovalService.java:195-227,
+    245-251) — a change there does NOT auto-flip the test; (2) the FE leg''s selector is defined inside
+    the vitest file and exercises NO shipped FE code — the real consumer is `describeChain` at
+    templates/L4/approval-workflow/app/(approvals)/[id]/page.tsx:123-149, an independent reimplementation
+    verified to agree with the golden today but mechanically unlinked; (3) ApprovalRequestResponse /
+    ApprovalStepResponse emit no action-set field at all, so there is no BE-emitted contract to assert
+    against. See docs/BACKLOG.md (P2-38) and (P2-39).'
 - id: S2.AUTHN-SESSION.BE
   tier: S2
   concern: AUTHN-SESSION
@@ -1759,16 +1775,28 @@ cells:
   concern: ERROR-CONTRACT
   layer: XB
   weight: 1
-  status: partial
+  status: covered
   covered_by:
   - contracts/crud-openapi.yaml
-  enforced_by: []
-  nonvacuity: []
+  - templates/L0/fork-receiver-kit/parse-error.ts
+  enforced_by:
+  - ./gradlew testCommonAdvice
+  - cd frontend && npm run test
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/common/ProblemDetailContractParityTest.java
+  - frontend/tests/problem-detail-parity.vitest.ts
   backlog_ref: null
   na_reason: null
-  notes: contracts/crud-openapi.yaml cited as a representative ProblemDetail response-shape contract;
-    no automated contract-schema-validation test cross-checks the BE ProblemDetail body shape against
-    what parse-error.ts expects, end-to-end.
+  notes: 'Wave-3 closure (2026-07-27): one committed golden (frontend/tests/_fixtures/problem-detail.golden.json)
+    bound to two independent consumers — a plain-Jackson BE test that registers Spring''s own
+    ProblemDetailJacksonMixin (bytecode-verified against the resolved spring-boot-jackson-4.1.0 /
+    spring-web-7.0.8 jars, so it reproduces the real production wire shape rather than an assumed one)
+    and an FE vitest that feeds the same golden through templates/L0/fork-receiver-kit/parse-error.ts.
+    Mutation-lock proven on the FE leg (rename `code`→`errorCode` ⇒ RED; reverted ⇒ green). No real
+    BE/FE field mismatch found — parse-error.ts''s detail→message→text/html order and its `code` read
+    match every advice''s emission. SCOPE: pins the six scalar RFC 9457 members of the NOT_FOUND body.
+    The validation body''s `errors[]` extension array (consumed by parse-field-errors.ts) is NOT
+    golden-bound by this harness — see CANARY-015 and docs/BACKLOG.md (P2-36). Closes CANARY-013.'
 - id: S2.QUERY-BOUNDS.BE
   tier: S2
   concern: QUERY-BOUNDS
@@ -1954,15 +1982,25 @@ cells:
   concern: OBSERVABILITY-LIMITS
   layer: FE
   weight: 1
-  status: partial
+  status: covered
   covered_by:
   - templates/L2/blocks/rate-limit-banner.tsx
-  enforced_by: []
-  nonvacuity: []
+  - practices-react/rules/rate-limit-must-surface-to-user.md
+  enforced_by:
+  - cd frontend && npm run test
+  nonvacuity:
+  - frontend/tests/rate-limit-banner.vitest.tsx
   backlog_ref: null
   na_reason: null
-  notes: rate-limit-banner.tsx (R56) exists as a real component but no practices-react rule mandates its
-    adoption and no frontend test exercises it. Nonvacuity missing — partial.
+  notes: 'Wave-3 closure (2026-07-27): R56 rate-limit-banner.tsx now has an evidence-anchored review-tier
+    rule (rate-limit-must-surface-to-user.md, spec_ref REACT-PRACTICES-UX-002; RFC 6585 §4 + RFC 9110
+    §10.2.3 + WCAG 2.2 SC 4.1.3) mandating adoption on 429, and rate-limit-banner.vitest.tsx exercises
+    the REAL component (429+Retry-After delta-seconds, 429 without Retry-After → unknownDurationSec
+    fallback, countdown→"you can retry now"→auto-dismiss, Dismiss) — RED-on-revert executed against the
+    real component file and reverted byte-identical. HONEST SCOPE: the rule is review-tier by design (no
+    AST rule — a 429 branch''s destination is a control-flow question, not a shape match); the non-429
+    case asserts only that no spurious banner renders, it does NOT prove the call-site gate, which stays
+    unenforced. parseRetryAfter''s HTTP-date branch is untested — see docs/BACKLOG.md (P3-62).'
 - id: S2.OBSERVABILITY-LIMITS.XB
   tier: S2
   concern: OBSERVABILITY-LIMITS

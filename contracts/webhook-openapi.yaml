@@ -145,8 +145,13 @@ paths:
           in: query
           schema:
             type: string
-            enum: [PENDING, PENDING_RETRY, SUCCESS, FAILED_PERMANENT, ALL]
-            default: ALL
+            enum: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+            default: FAILED_PERMANENT
+          description: |
+            Filters the admin delivery list to a single WebhookDeliveryStatus.
+            Defaults to FAILED_PERMANENT (dead-letter listing —
+            WEBHOOK-DEAD-LETTER-001). There is no "list all statuses" value;
+            callers who need another status pass it explicitly.
         - name: page
           in: query
           schema:
@@ -316,7 +321,7 @@ components:
           type: string
         status:
           type: string
-          enum: [PENDING, PENDING_RETRY, SUCCESS, FAILED_PERMANENT]
+          enum: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
         attemptCount:
           type: integer
         nextAttemptAt:

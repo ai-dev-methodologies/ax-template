@@ -3,7 +3,7 @@
 practices/consumer-proof/engine/lib/coverage_map_guard.py
 
 Implements Part 1.5 of the gap-convergence engine design — the MECE/schema/
-disk-truth guard for coverage-map.yaml. Six checks, ALL must pass:
+disk-truth guard for coverage-map.yaml. Seven checks, ALL must pass:
 
   1. every axis value is a member of its closed enum (D/C/L/R) — free text = FAIL
   2. the cell id set == the exact expected cross-product minus masked cells
@@ -20,8 +20,19 @@ disk-truth guard for coverage-map.yaml. Six checks, ALL must pass:
      weight low passes every other check yet silently inflates C_total).
      not-applicable (masked) cells are excluded — they carry no scoring weight
      convention to pin.
+  7. every S3 (COMPOSITION) cell with status=covered must have at least one
+     nonvacuity entry that is a live, re-executable test path (matches
+     *Test.java / *IT.java / *.vitest.* / *.spec.*) — and NOT a bare
+     *-compose.spec.* file-existence artifact and NOT a .md sealed-verdict
+     record. Closes the S3 composition-escape (docs/BACKLOG.md P2-29): check 4
+     only asserted a nonvacuity path RESOLVES on disk, so a sealed-verdict
+     markdown or a bare compose-spec (which only asserts RECIPE.md/frontmatter
+     file-existence, never runtime composition) silently qualified a cell for
+     `covered`. See README.md "The S3 (COMPOSITION) nonvacuity bar" for the
+     full bar (this check enforces criterion (a) only — liveness/path-shape;
+     (b)/(c)/(d) are content properties left to human/adversarial review).
 
-Exit 0 = all six checks pass. Exit 1 = at least one check failed (findings
+Exit 0 = all seven checks pass. Exit 1 = at least one check failed (findings
 printed). Exit 2 = usage/toolchain error.
 
 This guard is intentionally standalone in wave 1 (NOT registered into
@@ -302,6 +313,55 @@ def check_weight_schedule(cells):
     return findings
 
 
+
+# Part 1.5 / P2-29 — the S3 (COMPOSITION) nonvacuity bar. A path counts as a
+# "live, re-executable test path" only by its file-path SHAPE (this is a
+# structural/schema guard, not a content-semantics verifier — see README.md
+# for the full four-part bar and why (b)/(c)/(d) stay a review judgment call).
+_LIVE_TEST_PATH_RE = re.compile(r"(Test|IT)\.java$|\.vitest\.\w+$|\.spec\.\w+$")
+# Explicit denylist: this catalog's established naming convention for a
+# Playwright spec that ONLY asserts RECIPE.md/frontmatter file-existence
+# (e.g. frontend/tests/recipes/booking-compose.spec.ts) — confirmed by
+# inspection (see the notes field on every non-e-commerce S3 cell). Such a
+# file matches the *.spec.* shape above yet proves zero runtime composition,
+# so it is excluded even though its filename would otherwise qualify.
+_BARE_COMPOSE_SPEC_RE = re.compile(r"-compose\.spec\.\w+$")
+
+
+def _is_live_s3_nonvacuity_path(p):
+    """True iff `p` is a live/re-executable test-shaped path per the S3
+    nonvacuity bar (README.md) — used only for check 7."""
+    if not p or p.endswith("/"):
+        return False  # a bare directory path is never itself a test file
+    basename = p.rstrip("/").rsplit("/", 1)[-1]
+    if basename.endswith(".md"):
+        return False  # sealed-verdict / any markdown record — never RED-able
+    if _BARE_COMPOSE_SPEC_RE.search(basename):
+        return False  # bare file-existence compose-spec — explicitly denylisted
+    return bool(_LIVE_TEST_PATH_RE.search(basename))
+
+
+def check_s3_covered_nonvacuity_is_live(cells):
+    """Check 7: every S3 cell with status=covered must have >=1 nonvacuity
+    entry that is a live, re-executable, composition-behavioral-shaped test
+    path — not solely a sealed-verdict .md and not solely a bare
+    file-existence compose-spec. Closes docs/BACKLOG.md P2-29."""
+    findings = []
+    for cell in cells:
+        if cell.get("tier") != "S3" or cell.get("status") != "covered":
+            continue
+        nonvac = cell.get("nonvacuity") or []
+        if not any(_is_live_s3_nonvacuity_path(p) for p in nonvac):
+            findings.append(
+                f"{cell.get('id')}: status=covered but no nonvacuity entry is a live "
+                f"re-executable test path (*Test.java / *IT.java / *.vitest.* / *.spec.*, "
+                f"excluding bare *-compose.spec.* file-existence artifacts and .md "
+                f"sealed-verdict records) — S3 composition nonvacuity bar violation "
+                f"(README.md, P2-29): {nonvac!r}"
+            )
+    return findings
+
+
 def run_all_checks(map_path, repo_root):
     doc = load_map(map_path)
     cells = doc.get("cells", [])
@@ -312,6 +372,7 @@ def run_all_checks(map_path, repo_root):
     findings += check_paths_resolve(cells, repo_root)
     findings += check_covered_requires_nonvacuity(cells)
     findings += check_weight_schedule(cells)
+    findings += check_s3_covered_nonvacuity_is_live(cells)
     return findings
 
 
@@ -341,7 +402,8 @@ def main(argv):
     print(f"[coverage_map_guard] PASS — {map_path}")
     print(f"  cardinality: {EXPECTED_TOTAL} scored cells (S1={EXPECTED_S1} S2={EXPECTED_S2} S3={EXPECTED_S3}) "
           f"+ masked rows, all axes closed-enum, all D/R present, all covered_by/nonvacuity resolve, "
-          f"no covered-without-nonvacuity, all weights match the canonical tier/concern schedule.")
+          f"no covered-without-nonvacuity, all weights match the canonical tier/concern schedule, "
+          f"all S3-covered cells cite a live composition-behavioral-shaped nonvacuity path.")
     return 0
 
 

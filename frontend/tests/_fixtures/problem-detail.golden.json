@@ -1,0 +1,8 @@
+{
+  "type": "https://errors.example.com/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "probe resource not found",
+  "instance": "/api/items/probe/not-found",
+  "code": "NOT_FOUND"
+}

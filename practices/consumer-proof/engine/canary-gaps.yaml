@@ -242,9 +242,15 @@ canaries:
     # S3.saas-subscription to covered on exactly this undefined-nonvacuity-pattern basis (see
     # coverage-map.yaml S3.saas-subscription notes + docs/BACKLOG.md P2-29). No staleness_note — the
     # absence_proof command still returns 0 matches as of 2026-07-20.
+    # 2026-07-27 Wave-3 note: the BAR is now defined (P2-29 closed — engine/README.md "The S3 (COMPOSITION)
+    # nonvacuity bar" + coverage_map_guard.py check 7), but this canary is STILL LIVE: no saas-subscription
+    # composition-behavioral gate exists under frontend/tests/recipes/ and the cell stays partial.
+    # absence_proof re-verified 2026-07-27, still 0 matches.
 
   - id: CANARY-013
     canary: true
+    stale: true
+    superseded_by: CANARY-015
     need: "An automated schema-parity test for the ERROR half of the pagination/API envelope — nothing cross-validates the BE ProblemDetail response body shape (type/title/status/detail/invalid-params) against what FE parse-error.ts expects to find, in one integrated run. S2.QUERY-BOUNDS.XB (the data-envelope half) closed in Wave-2 Cell 1; the error-envelope half is untouched."
     layer: XB
     related_cell: S2.ERROR-CONTRACT.XB
@@ -254,6 +260,13 @@ canaries:
       verified_at: "2026-07-20"
       false_positive_note: "backend/src/test/.../problemdetails/ tests the BE ProblemDetail shape in isolation; frontend/tests/fmw2-primitives.vitest.ts tests parse-error.ts's RFC 9457 reading in isolation (against hand-built fixture objects, not a BE-emitted golden). Neither binds the two together the way PageEnvelopeContractParityTest.java/page-envelope-parity.vitest.ts now do for the data envelope."
     excluded_from_backlog: true
+    staleness_note: "STALE as of 2026-07-27 (Wave-3 error-contract closure): the absence_proof command now
+      MATCHES — re-run returns ProblemDetailContractParityTest.java + problem-detail-parity.vitest.ts
+      (exit 0). A shared golden (frontend/tests/_fixtures/problem-detail.golden.json) now binds the BE
+      ProblemDetail wire shape (serialized through Spring's own ProblemDetailJacksonMixin) to
+      parse-error.ts. Per this file's staleness protocol it can no longer prove the loop's gap-detection
+      reflex. NOTE the closure is PARTIAL against this canary's own `need` string: the
+      'invalid-params'/errors[] half is NOT bound — superseded by CANARY-015."
 
   - id: CANARY-014
     canary: true
@@ -265,4 +278,22 @@ canaries:
       result: "(empty — 0 matches, exit 1)"
       verified_at: "2026-07-20"
       false_positive_note: "frontend/tests/locale-format.vitest.tsx exercises Intl.DateTimeFormat call-shape (locale-aware-number-date-format.md compliance) but does not pin a specific UTC-instant -> local-timezone-string conversion assertion — a distinct, narrower correctness claim this canary targets."
+    excluded_from_backlog: true
+
+  - id: CANARY-015
+    canary: true
+    need: "A golden-bound parity test for the ERROR-ENVELOPE's extension array: nothing binds the BE
+      validation ProblemDetail's `errors[]` ({field,name,pointer,code,message,detail}, emitted by
+      GlobalProblemDetailAdvice.java:361-370,412-421) to templates/L0/fork-receiver-kit/parse-field-errors.ts.
+      Wave-3 closed only the six scalar RFC 9457 members (S2.ERROR-CONTRACT.XB); this is the other half of
+      CANARY-013's original need string."
+    layer: XB
+    related_cell: S2.ERROR-CONTRACT.XB
+    absence_proof:
+      command: 'grep -rliE "(invalid.?params|field.?errors?|errors\[\]).{0,40}(parity|golden)|(parity|golden).{0,40}(invalid.?params|field.?errors?)" backend/src/test frontend/tests contracts/*.yaml'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-27"
+      false_positive_note: "frontend/tests/fmw2-primitives.vitest.ts:63-80 exercises extractFieldErrors only
+        against hand-built {field, defaultMessage} objects — a shape the BE never emits; it passes by
+        shape-tolerance, not by parity. problem-detail-parity.vitest.ts pins the NOT_FOUND body only."
     excluded_from_backlog: true

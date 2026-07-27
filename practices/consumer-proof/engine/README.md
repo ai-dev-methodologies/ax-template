@@ -16,7 +16,7 @@ tooling plus one MECE map.
 |---|---|
 | `coverage-map.yaml` | The canonical 107-cell MECE map (frozen per wave). Every cell's `status` is grounded in disk truth by census — never optimistically marked. |
 | `coverage-report.sh` + `lib/coverage_report.py` | Computes the weighted coverage metric, applies **honesty downgrades** (disk truth outranks the yaml's self-report), prints per-tier scores + the top-N uncovered cells, and (with `--write`) regenerates `docs/coverage-map/COVERAGE.md` + appends to `docs/coverage-map/coverage-history.jsonl`. |
-| `coverage_map_guard.sh` + `lib/coverage_map_guard.py` + `fixtures/coverage_map_guard/` | The MECE/schema/disk-truth **guard**: closed-enum axes, exact cardinality (107 scored + masked-with-reason), D/R drift checks against `docs/IMPLEMENTATION-STATUS.md` / `recipes/_MANIFEST.yaml`, path resolution, and the honesty floor (`status: covered` with empty `nonvacuity` = FAIL). |
+| `coverage_map_guard.sh` + `lib/coverage_map_guard.py` + `fixtures/coverage_map_guard/` | The MECE/schema/disk-truth **guard**: closed-enum axes, exact cardinality (107 scored + masked-with-reason), D/R drift checks against `docs/IMPLEMENTATION-STATUS.md` / `recipes/_MANIFEST.yaml`, path resolution, the honesty floor (`status: covered` with empty `nonvacuity` = FAIL), the weight-tamper guard, and (P2-29) the S3 composition-behavioral nonvacuity bar — see below. |
 | `canary-gaps.yaml` | ≥6 planted, **verified-absent** needs (each with a stored grep/find absence-proof run at plant time) used by the wave orchestrator to test its own gap-detection reflex — falsifiability, not aspiration. |
 | `fixtures/tampered-map-for-downgrade-test.yaml` | A 4-cell tampered fixture proving `coverage-report.sh`'s honesty-downgrade logic actually fires (not just declared). |
 
@@ -70,6 +70,58 @@ disk truth from the start (see `notes` field per cell for the specific
 grep/find evidence and the reasoning behind every `partial`/`gap` call). The
 downgrade *mechanism* itself is separately proven live by
 `fixtures/tampered-map-for-downgrade-test.yaml` (3/3 expected downgrades fire).
+
+## The S3 (COMPOSITION) nonvacuity bar (P2-29)
+
+Wave-2 surfaced a composition-escape: `coverage_map_guard.sh` check 4 only asserted that a
+cell's `nonvacuity` path(s) **resolve on disk** — it never required the resolved artifact to
+actually be a live, behavioral, cross-domain proof. A sealed-verdict `.md` record (a static,
+scored quiz that can never go RED again) and a bare Playwright compose-spec that only asserts
+`RECIPE.md`/frontmatter file-existence both resolve-on-disk and therefore both silently
+qualified an S3 cell for `status: covered`. 9 of the 11 `S3` recipe cells were briefly marked
+`covered` this way before being disk-truth downgraded back to `partial` — only `S3.e-commerce`
+survived review as genuinely covered.
+
+An S3 cell may carry **`status: covered` only if at least one of its `nonvacuity` entries is a
+proof that is**:
+
+1. **live and re-executable** — a real test file, never a markdown verdict record and never a
+   bare existence-check artifact. In file-path shape: matches `*Test.java`, `*IT.java`,
+   `*.vitest.*`, or `*.spec.*` — and explicitly does **not** match a bare `*-compose.spec.*`
+   file (this catalog's established naming convention for a Playwright spec that only checks
+   `fs.existsSync(...)` on `RECIPE.md`/frontmatter/spec-trio files, e.g.
+   `frontend/tests/recipes/booking-compose.spec.ts` — see the `notes` field on every
+   non-e-commerce S3 cell for the disk-verified reasoning behind that exclusion);
+2. **drives >= 2 of the recipe's enabled L4 domains through ONE runtime flow** — a single test
+   run that composes multiple domain services/controllers in sequence, not N independent
+   per-domain unit tests merely bundled under one file/class;
+3. **asserts an invariant at the cross-domain seam** — the assertion is about the
+   *interaction* between domains (e.g. "payment captured ⇒ order transitions to PAID, in the
+   same transaction"), not merely that each domain's own local invariant holds in isolation;
+4. **RED-able when that seam invariant is reverted** — breaking the cross-domain wiring (not a
+   single domain's internal logic) must flip the test from green to red.
+
+The model instance is
+`backend/src/test/java/com/ax/template/authblueprint/ecommerce/EcommerceE2ETest.java`
+(`@Tag("ECOMMERCE")`), backing `S3.e-commerce`: it composes crud + payment + notification +
+audit-log + search through one HTTP-driven checkout flow, and `ECOM-INV-002` asserts
+`payment captured ⇒ order.status == PAID` (with `paymentId` set) atomically, in the same
+response — reverting the atomic write flips that assertion RED. Any future S3 cell claiming
+`covered` should point to an equivalent capstone-style test for its own recipe.
+
+**Mechanical enforcement vs. review**: `coverage_map_guard.sh` check 7 enforces criterion (1)
+only — a path-pattern match plus the explicit `*-compose.spec.*` denylist and `.md` exclusion.
+Criteria (2)/(3)/(4) are properties of the cited test's *content*, which a schema/path guard
+cannot verify by construction; they remain a human/adversarial-review judgment call recorded in
+the cell's `notes` field, the same posture the engine already takes for every other disk-truth
+judgment call (see "Reading a cell" below). Check 7 is therefore a **necessary, not
+sufficient**, mechanical floor: it closes the "any resolvable path passes" escape, but citing a
+genuinely-live, genuinely-RED-able test that turns out to be a shallow per-fixture rule-firing
+probe (not a real cross-domain runtime flow) still requires a `notes` justification and is still
+subject to downgrade on review — exactly as `S3.saas-subscription`'s
+`practices/consumer-proof/scenarios/S3.saas-subscription/` enforcement-probe (live, RED-able,
+yet only proving guard-blocking on scenario-local fixtures, not multi-domain runtime
+interaction) was rejected in wave-2 despite passing a naive liveness check.
 
 ## How to run
 

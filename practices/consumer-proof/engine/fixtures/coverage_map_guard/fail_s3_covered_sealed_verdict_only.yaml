@@ -1987,12 +1987,11 @@ cells:
   - practices/evals/locale_aware_format_guard.sh
   nonvacuity:
   - skills/_tests/sealed-verdict/e-commerce-verdict.md
-  - backend/src/test/java/com/ax/template/authblueprint/ecommerce/EcommerceE2ETest.java
-  - practices/evals/fixtures/locale-aware-format/fail_manual_format/
-  - practices/evals/fixtures/locale-aware-format/pass_intl_format/
   backlog_ref: null
   na_reason: null
-  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+  notes: FIXTURE (fail_s3_covered_sealed_verdict_only) — nonvacuity deliberately reduced to the
+    sealed-verdict markdown only, to prove check 7 blocks an S3-covered cell whose sole nonvacuity
+    evidence is a non-RED-able verdict record. Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
     falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
     not a live re-executable CI gate. ADDITIONALLY backed by a live re-executable BE capstone E2E test
     (EcommerceE2ETest, composes crud+payment+notification+audit-log+search). 2026-07-20 closure — the
@@ -2230,20 +2229,3 @@ cells:
     with enforcement intact, and the sealed-verdict markdown can never go RED — neither qualifies as a
     RED-able composition-behavioral proof per the engine's own nonvacuity definition. Composition-behavioral
     proof absent; only structural/verdict evidence remains.
-- id: S1.auth.BE
-  tier: S1
-  domain: auth
-  layer: BE
-  weight: 1
-  status: covered
-  covered_by:
-  - backend/src/main/java/com/ax/template/authblueprint/auth/
-  - specs/auth-asvs-l1.yaml
-  - specs/auth-frontend-l0.yaml
-  enforced_by:
-  - ./gradlew testAsvs
-  nonvacuity:
-  - backend/src/test/java/com/ax/template/authblueprint/auth/AuthTokenLeakViolationProofTest.java
-  backlog_ref: null
-  na_reason: null
-  notes: ''
