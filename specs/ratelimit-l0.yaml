@@ -1,6 +1,16 @@
 version: "1.0.0"
 scope: "api-rate-limiting"
-domain_mode: full_trio
+domain_mode: backend_only   # protective cross-cutting concern; no first-class UI.
+# 2026-07-28 correction: this line read `full_trio`, contradicting every other
+# authority on this domain — templates/L4/ratelimit/README.md ("Status: backend-only",
+# "Frontend trio deliberately skipped — registered backend_only"),
+# practices/evals/trio_integrity_allowlist.yaml ("ratelimit: backend_only") and
+# CLAUDE.md (ratelimit listed among the backend-only verticals). The client-facing
+# surface is the 429 + Retry-After response, shipped presentationally as the L2 block
+# templates/L2/blocks/rate-limit-banner.tsx, not as an L4 vertical.
+# The stale declaration survived because full_trio_artifact_completeness_guard used a
+# bare os.path.isdir() check, which the README-only directory satisfied. Caught the
+# moment that check was strengthened to require a real non-empty .tsx (P1-2).
 stack: "Spring Boot 3.2.x + Caffeine cache"
 standard: "RFC 6585 §4 (HTTP 429) + IETF draft-ietf-httpapi-ratelimit-headers"
 items:

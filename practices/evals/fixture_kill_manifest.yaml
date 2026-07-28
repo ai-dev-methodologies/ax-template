@@ -159,6 +159,53 @@ items:
     anchor: 'key not in claimed'
     neuter: 'False'
 
+  # ── contract_enum_parity/fail_wire_only_no_source: P0-2 hole closure ────────
+  # fixture: the `note` block's entry is CLASSIFICATION-ONLY — a wire_only reason and
+  #          nothing else, which is exactly what the pre-fix guard accepted (it checked
+  #          the reason was non-empty, then `continue`d). The sibling `label` entry keeps
+  #          a real wire_source, so the ZERO_WIRE_SOURCE_EXTRACTION floor stays quiet and
+  #          the fixture fails on ONE axis → exit 1.
+  # anchor:  the wire_source kind membership test — the gate that turns "no producer
+  #          declared" into a violation instead of a silent skip.
+  # neuter:  condition-constant False → every wire_only entry falls through the tolerant
+  #          extractor lookup and is skipped unchecked (the pre-fix behaviour) → exit 0.
+  - id: contract_enum_parity/fail_wire_only_no_source
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_wire_only_no_source
+    fixture_arg: '--root'
+    anchor: 'skind not in WIRE_SOURCE_KINDS'
+    neuter: 'False'
+
+  # ── contract_enum_parity/fail_wire_only_drift: producer↔contract set equality ─
+  # fixture: the declared producer (WidgetNotes, literal_pattern) emits "note-healthy"
+  #          while the contract still promises [note-a] — the miniature of the reviewer's
+  #          reproduction (ratelimit "ok" → "healthy") → exit 1.
+  # anchor:  the single undeclared-difference test. Shared with fail_drift by design:
+  #          the java_enum path and the wire_source path deliberately compare through the
+  #          SAME helper, so an allowance means the same thing on both. The two fixtures
+  #          prove the two entry kinds reach it.
+  # neuter:  condition-constant False → drift is never reported → exit 0.
+  - id: contract_enum_parity/fail_wire_only_drift
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_wire_only_drift
+    fixture_arg: '--root'
+    anchor: 'undeclared_extra or undeclared_missing'
+    neuter: 'False'
+
+  # ── contract_enum_parity/fail_wire_only_unproduced_producer_exists ──────────
+  # fixture: the `origin` entry is exempted as `unproduced`, but WidgetOriginResolver.java
+  #          now matches its absence probe — the exemption has rotted into a lie → exit 1.
+  #          This is the check that keeps the ONLY escape from set equality honest.
+  # anchor:  the probe-hit test inside the absence proof.
+  # neuter:  condition-constant False → a matching probe is ignored, so the exemption
+  #          survives its own producer → exit 0.
+  - id: contract_enum_parity/fail_wire_only_unproduced_producer_exists
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_wire_only_unproduced_producer_exists
+    fixture_arg: '--root'
+    anchor: 'len(probe_hits) > 0'
+    neuter: 'False'
+
   # NOTE — contract_enum_parity/fail_vocab_scan is deliberately NOT registered here.
   # That fixture restores the skeleton's real P2-34 drift token SUCCESS, which trips
   # BOTH vocab_scan axes at once (forbidden token present AND require_all missing
@@ -167,3 +214,20 @@ items:
   # double-axis property is the point (per the P2-33 spec), so the fixture keeps it
   # and its non-vacuity is recorded as an observed manual 1→0 flip in the closure
   # note instead of being weakened to fit this manifest's vocabulary.
+
+  # ── full_trio_artifact_completeness/fail_l4_empty_directory: P1-2 fix ───────
+  # (cross-family review, xhigh) — the pre-fix guard used os.path.isdir() alone
+  # to check the L4 frontend leg, so an empty/.gitkeep-only templates/L4/<stem>/
+  # dir satisfied a full_trio spec's frontend-Trio claim. The fixture reproduces
+  # exactly that: specs/contracts/blueprints all present, but
+  # templates/L4/widget/ holds only a .gitkeep (no non-empty .tsx) → exit 1.
+  # anchor:  the condition that turns "no non-empty .tsx found" into a reported gap.
+  # neuter:  condition-constant False → the gap is never reported → exit 0 (this
+  #          is exactly the reverted-to-vacuous isdir()-only behavior the P1-2
+  #          fix closed).
+  - id: full_trio_artifact_completeness/fail_l4_empty_directory
+    guard: practices/evals/full_trio_artifact_completeness_guard.sh
+    fixture: practices/evals/fixtures/full_trio_artifact_completeness/fail_l4_empty_directory
+    fixture_arg: '--root'
+    anchor: 'not has_nonempty_tsx'
+    neuter: 'False'

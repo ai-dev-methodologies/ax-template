@@ -7,7 +7,11 @@
 # frontend-side artifacts that make the claim true:
 #   - contracts/<stem>-*.yaml        (a UI/API contract for the domain)
 #   - blueprints/<stem>-*.yaml       (a policy manifest for the domain)
-#   - templates/L4/<stem>/           (the L4 vertical fork-receivers copy)
+#   - templates/L4/<stem>/           (the L4 vertical fork-receivers copy, MUST
+#                                     contain a real, non-empty .tsx route/page —
+#                                     P1-2 fix: os.path.isdir() alone is vacuous,
+#                                     an empty or .gitkeep-only directory is not a
+#                                     frontend Trio and must not satisfy this axis)
 #
 # Before this guard NO surface checked the axis: a spec could sit on
 # `domain_mode: full_trio` while owning zero contract, zero blueprint, and no L4
@@ -56,6 +60,36 @@ def stem(fn):
 def has(glb):
     return bool(glob.glob(os.path.join(repo, glb)))
 
+# P1-2 (cross-family review, xhigh) — os.path.isdir() alone is vacuous: a
+# fork-copy vertical reduced to an empty directory (or one holding only a
+# .gitkeep) still satisfies isdir() and the domain_mode: full_trio claim would
+# pass while shipping ZERO frontend artifact. A full_trio spec promises a real
+# Frontend Trio (a route/page a fork-receiver can actually copy), so the L4 leg
+# must contain at least one non-empty .tsx file — matching what every healthy
+# full_trio vertical on disk actually ships (min observed: 2 .tsx files, e.g.
+# search/, feature-flags/; see docs/BROADLEAF-ABSORPTION.md sibling verticals).
+def l4_frontend_gap(st):
+    base = os.path.join(repo, f'templates/L4/{st}')
+    if not os.path.isdir(base):
+        return f'templates/L4/{st}/ (directory missing)'
+    tsx_files = []
+    for root, _dirs, files in os.walk(base):
+        for fn in files:
+            if fn.endswith('.tsx'):
+                tsx_files.append(os.path.join(root, fn))
+    has_nonempty_tsx = False
+    for fp in tsx_files:
+        try:
+            if open(fp, encoding='utf-8', errors='ignore').read().strip():
+                has_nonempty_tsx = True
+                break
+        except OSError:
+            continue
+    if not has_nonempty_tsx:
+        return (f'templates/L4/{st}/**/*.tsx (directory exists but has no '
+                f'non-empty .tsx — an empty/placeholder dir is not a frontend Trio)')
+    return None
+
 # collect full_trio specs, grouped by stem (frontend + backend spec share a stem)
 stems = {}  # stem -> [spec basenames]
 for s in sorted(glob.glob(os.path.join(repo, 'specs/*.yaml'))):
@@ -72,8 +106,9 @@ for st in sorted(stems):
         missing.append(f'contracts/{st}-*.yaml')
     if not has(f'blueprints/{st}-*.yaml') and not has(f'blueprints/{st}.yaml'):
         missing.append(f'blueprints/{st}-*.yaml')
-    if not os.path.isdir(os.path.join(repo, f'templates/L4/{st}')):
-        missing.append(f'templates/L4/{st}/')
+    l4_gap = l4_frontend_gap(st)
+    if l4_gap:
+        missing.append(l4_gap)
     if missing:
         specs = ', '.join(stems[st])
         violations.append(

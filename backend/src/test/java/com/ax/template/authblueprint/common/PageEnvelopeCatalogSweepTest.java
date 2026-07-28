@@ -9,12 +9,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.annotation.DirtiesContext;
+import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,29 +47,38 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code items/page/size/totalElements} — this is per-contract parity, not
  * one fixed shape).
  *
- * <h2>Binding table (disk-verified 2026-07-28, docs/PRD-remaining-work.md §W10)</h2>
+ * <p><b>The expected member set is READ FROM THE CONTRACT, not hard-coded
+ * (2026-07-29 correction).</b> The first closure discovered the declaring
+ * universe from disk but then compared each live response against a member set
+ * literal-ised in the test body. That is not contract parity: it pins the
+ * response against the shape the PRODUCTION CODE happened to emit on the day
+ * the test was written, so {@code contracts/*.yaml} could drift arbitrarily
+ * (rename {@code totalPages} -> {@code pageCount} in
+ * {@code audit-log-openapi.yaml} and change no production code) and the sweep
+ * stayed green — the contract half of "contract parity" was never read. Both
+ * halves of each binding are now DERIVED from the contract document on disk
+ * (see {@link #envelopeFromContract}): the URL the endpoint is driven at is
+ * {@code servers[0].url + <path>}, and the expected member set is the
+ * {@code required} list of the schema that {@code <path>.<method>.responses.200
+ * .content.application/json.schema.$ref} resolves to. Only the routing
+ * coordinates (contract stem, path, method) are declared in {@link #BINDINGS};
+ * every member name comes from the yaml. Parsing is snakeyaml against the
+ * checked-in file — deterministic and offline, no network and no generated
+ * artifact.
+ *
+ * <h2>Binding table (routing coordinates only — members are derived)</h2>
  * <ul>
- *   <li>GET /api/audit-logs — audit-log-openapi.yaml#listAuditLogs —
- *       content,totalElements,totalPages,page,size — testAuditLog</li>
- *   <li>GET /api/notifications — notification-openapi.yaml#listNotifications —
- *       content,totalElements,totalPages,page,size — testNotification</li>
- *   <li>GET /api/sessions — session-management-openapi.yaml#listSessions —
- *       items,totalElements — testSessionManagement</li>
- *   <li>GET /api/favorites — favorites-bookmarks-openapi.yaml#listFavorites —
- *       items,totalElements — testFavorites</li>
- *   <li>GET /api/activities — activity-feed-openapi.yaml#listActivities —
- *       items,page,size,totalElements — testActivityFeed</li>
- *   <li>GET /api/api-keys — api-key-openapi.yaml#listApiKeys —
- *       items,totalElements — testApiKey</li>
- *   <li>GET /api/approvals — approval-workflow-openapi.yaml#listMyApprovalRequests —
- *       items,totalElements — testApprovalWorkflow</li>
- *   <li>GET /api/approvals/inbox — approval-workflow-openapi.yaml#listApprovalInbox —
- *       items,totalElements — testApprovalWorkflow</li>
- *   <li>GET /api/admin/identity-verification —
- *       identity-verification-openapi.yaml#listVerifiedIdentities —
- *       content,page,size,totalElements,totalPages — testIdentityVerification</li>
- *   <li>POST /api/v1/search — search-openapi.yaml#search —
- *       hits,totalHits,page,size,processingTimeMs — testSearch</li>
+ *   <li>GET {@code /audit-logs} — audit-log-openapi.yaml — testAuditLog</li>
+ *   <li>GET {@code /notifications} — notification-openapi.yaml — testNotification</li>
+ *   <li>GET {@code /sessions} — session-management-openapi.yaml — testSessionManagement</li>
+ *   <li>GET {@code /favorites} — favorites-bookmarks-openapi.yaml — testFavorites</li>
+ *   <li>GET {@code /activities} — activity-feed-openapi.yaml — testActivityFeed</li>
+ *   <li>GET {@code /api-keys} — api-key-openapi.yaml — testApiKey</li>
+ *   <li>GET {@code /approvals} — approval-workflow-openapi.yaml — testApprovalWorkflow</li>
+ *   <li>GET {@code /approvals/inbox} — approval-workflow-openapi.yaml — testApprovalWorkflow</li>
+ *   <li>GET {@code /admin/identity-verification} —
+ *       identity-verification-openapi.yaml — testIdentityVerification</li>
+ *   <li>POST {@code /search} — search-openapi.yaml — testSearch</li>
  * </ul>
  * 9 domains / 10 endpoints swept out of the 21 contracts that declare a
  * page/list envelope on disk (ratio 9/21). GREEN is confirmed by the wave's
@@ -181,15 +193,45 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PageEnvelopeCatalogSweepTest {
 
     /**
-     * Domains actually swept by this class — one entry per endpoint-owning
-     * contract stem in the class javadoc's binding table (10 endpoints, 9
-     * contracts: the two approval endpoints share
-     * {@code approval-workflow-openapi.yaml}).
+     * Routing coordinates of one swept endpoint — WHERE to look the contract up,
+     * never WHAT it declares. {@code contractPath} is the key as it appears under
+     * {@code paths:} in the yaml (i.e. WITHOUT the {@code servers[0].url} prefix),
+     * so a path that no longer exists in the contract fails the lookup loudly
+     * instead of silently degrading to a weaker assertion.
      */
-    static final Set<String> SWEPT = Set.of(
-            "audit-log", "notification", "session-management", "favorites-bookmarks",
-            "activity-feed", "api-key", "approval-workflow", "identity-verification",
-            "search");
+    record EnvelopeBinding(String contractStem, String contractPath, String httpMethod) {}
+
+    /**
+     * The swept endpoints, keyed by a stable id the test methods below name.
+     * 10 endpoints across 9 contract stems — the two approval endpoints share
+     * {@code approval-workflow-openapi.yaml}.
+     */
+    static final Map<String, EnvelopeBinding> BINDINGS;
+    static {
+        Map<String, EnvelopeBinding> bindings = new LinkedHashMap<>();
+        bindings.put("audit-log-list", new EnvelopeBinding("audit-log", "/audit-logs", "get"));
+        bindings.put("notification-list", new EnvelopeBinding("notification", "/notifications", "get"));
+        bindings.put("session-list", new EnvelopeBinding("session-management", "/sessions", "get"));
+        bindings.put("favorite-list", new EnvelopeBinding("favorites-bookmarks", "/favorites", "get"));
+        bindings.put("activity-feed-list", new EnvelopeBinding("activity-feed", "/activities", "get"));
+        bindings.put("api-key-list", new EnvelopeBinding("api-key", "/api-keys", "get"));
+        bindings.put("approval-own-list", new EnvelopeBinding("approval-workflow", "/approvals", "get"));
+        bindings.put("approval-inbox", new EnvelopeBinding("approval-workflow", "/approvals/inbox", "get"));
+        bindings.put("identity-verification-admin-list",
+                new EnvelopeBinding("identity-verification", "/admin/identity-verification", "get"));
+        bindings.put("search-result-page", new EnvelopeBinding("search", "/search", "post"));
+        BINDINGS = Collections.unmodifiableMap(bindings);
+    }
+
+    /**
+     * Domains actually swept by this class — DERIVED from {@link #BINDINGS} so the
+     * partition below cannot claim a domain is swept unless a binding drives it.
+     * (10 endpoints, 9 contracts: the two approval endpoints share
+     * {@code approval-workflow-openapi.yaml}.)
+     */
+    static final Set<String> SWEPT = BINDINGS.values().stream()
+            .map(EnvelopeBinding::contractStem)
+            .collect(Collectors.toUnmodifiableSet());
 
     /** Allowlist A — see class javadoc. */
     static final Set<String> NOT_REACHABLE = Set.of("email-outbox", "scheduled-task");
@@ -251,6 +293,116 @@ class PageEnvelopeCatalogSweepTest {
                     .map(p -> p.getFileName().toString().replace("-openapi.yaml", ""))
                     .collect(Collectors.toUnmodifiableSet());
         }
+    }
+
+    /**
+     * One binding's contract-declared envelope: the URL the endpoint is published
+     * at and the top-level member set its 200 response schema declares. BOTH
+     * halves are read from {@code contracts/<stem>-openapi.yaml} on disk.
+     */
+    record ContractEnvelope(String url, Set<String> members) {}
+
+    private static final String SCHEMA_REF_PREFIX = "#/components/schemas/";
+
+    /**
+     * Resolves a binding against the checked-in contract document, offline and
+     * deterministically:
+     * <ol>
+     *   <li>{@code servers[0].url + contractPath} — the URL to drive;</li>
+     *   <li>{@code paths.<contractPath>.<method>.responses.200.content
+     *       .application/json.schema.$ref} — the response schema reference;</li>
+     *   <li>that schema's {@code required} list — the expected member set.</li>
+     * </ol>
+     * Every step is asserted rather than defaulted: a contract that no longer
+     * declares the path, the 200, the json media type, a {@code $ref} to a
+     * component schema, or a {@code required} list fails HERE, so a drifted
+     * contract can never degrade the parity check into a weaker one.
+     */
+    static ContractEnvelope envelopeFromContract(EnvelopeBinding binding) throws IOException {
+        String where = binding.contractStem() + "-openapi.yaml";
+        Path file = Path.of("..", "contracts", where);
+        assertThat(Files.isRegularFile(file))
+                .as("contract must exist on disk: %s (user.dir=%s)", file, System.getProperty("user.dir"))
+                .isTrue();
+        Object doc;
+        try (Reader reader = Files.newBufferedReader(file)) {
+            doc = new Yaml().load(reader);
+        }
+
+        Object servers = descend(doc, where, "servers");
+        assertThat(servers).as("%s: servers must be a list", where).isInstanceOf(List.class);
+        List<?> serverList = (List<?>) servers;
+        assertThat(serverList).as("%s: servers must not be empty", where).isNotEmpty();
+        String base = String.valueOf(descend(serverList.get(0), where + "#servers[0]", "url"));
+
+        Object schemaRef = descend(doc, where,
+                "paths", binding.contractPath(), binding.httpMethod(),
+                "responses", "200", "content", "application/json", "schema", "$ref");
+        String ref = String.valueOf(schemaRef);
+        assertThat(ref)
+                .as("%s: %s %s must answer 200 with a component schema reference",
+                        where, binding.httpMethod(), binding.contractPath())
+                .startsWith(SCHEMA_REF_PREFIX);
+        String schemaName = ref.substring(SCHEMA_REF_PREFIX.length());
+
+        Object envelope = descend(doc, where, "components", "schemas", schemaName);
+        String at = where + "#" + schemaName;
+
+        Object requiredNode = descend(envelope, at, "required");
+        assertThat(requiredNode).as("%s: required must be a list", at).isInstanceOf(List.class);
+        Set<String> required = ((List<?>) requiredNode).stream()
+                .map(String::valueOf)
+                .collect(Collectors.toCollection(TreeSet::new));
+        assertThat(required).as("%s: a page envelope must declare its members", at).isNotEmpty();
+
+        Set<String> properties = asMap(descend(envelope, at, "properties"), at + ".properties")
+                .keySet().stream()
+                .map(String::valueOf)
+                .collect(Collectors.toCollection(TreeSet::new));
+        // An OPTIONAL envelope member would be an escape hatch: the response could
+        // omit it and still "match the contract". Page envelopes declare every
+        // member, so required and properties must coincide — and a mutation that
+        // renames only one of the two halves is caught right here.
+        assertThat(required)
+                .as("%s: every declared envelope member must be required", at)
+                .isEqualTo(properties);
+
+        return new ContractEnvelope(base + binding.contractPath(), required);
+    }
+
+    /**
+     * Walks {@code keys} down a parsed yaml document, failing with the exact
+     * location and the keys that ARE present when a step is missing. Keys are
+     * compared by {@link String#valueOf} so an unquoted yaml scalar key (notably
+     * {@code 200:}, which snakeyaml parses as an Integer) resolves the same as a
+     * quoted one.
+     */
+    private static Object descend(Object root, String where, String... keys) {
+        Object node = root;
+        StringBuilder at = new StringBuilder(where);
+        for (String key : keys) {
+            Map<?, ?> map = asMap(node, at.toString());
+            Object next = null;
+            boolean found = false;
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (String.valueOf(entry.getKey()).equals(key)) {
+                    next = entry.getValue();
+                    found = true;
+                    break;
+                }
+            }
+            assertThat(found)
+                    .as("%s: missing key '%s' (present: %s)", at, key, map.keySet())
+                    .isTrue();
+            node = next;
+            at.append('.').append(key);
+        }
+        return node;
+    }
+
+    private static Map<?, ?> asMap(Object node, String at) {
+        assertThat(node).as("%s: expected a yaml mapping", at).isInstanceOf(Map.class);
+        return (Map<?, ?>) node;
     }
 
     /**
@@ -328,105 +480,94 @@ class PageEnvelopeCatalogSweepTest {
         return root.keySet();
     }
 
-    @Test
-    void auditLogList_envelopeMemberSet_matchesContract() {
-        String token = obtainToken(freshEmail("sweep-audit"), "MEMBER");
-        Response response = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/audit-logs")
-            .then().statusCode(200).extract().response();
+    private static EnvelopeBinding binding(String id) {
+        EnvelopeBinding binding = BINDINGS.get(id);
+        assertThat(binding).as("unknown binding id '%s' (known: %s)", id, BINDINGS.keySet()).isNotNull();
+        return binding;
+    }
+
+    private static void assertMatchesContract(ContractEnvelope expected, Response response) {
         assertThat(membersOf(response))
-            .isEqualTo(Set.of("content", "totalElements", "totalPages", "page", "size"));
+            .as("%s must emit exactly the member set its contract declares", expected.url())
+            .containsExactlyInAnyOrderElementsOf(expected.members());
+    }
+
+    /**
+     * Drives one GET binding at the URL its contract publishes it at, as a real
+     * authorized principal, and compares the emitted member set against the
+     * contract-declared one. Nothing about the expected shape is written here.
+     */
+    private void assertGetEnvelopeMatchesContract(String bindingId, String emailPrefix, String role)
+            throws IOException {
+        ContractEnvelope expected = envelopeFromContract(binding(bindingId));
+        String token = obtainToken(freshEmail(emailPrefix), role);
+        Response response = given().header("Authorization", "Bearer " + token)
+            .when().get(expected.url())
+            .then().statusCode(200).extract().response();
+        assertMatchesContract(expected, response);
     }
 
     @Test
-    void notificationList_envelopeMemberSet_matchesContract() {
-        String token = obtainToken(freshEmail("sweep-notif"), "MEMBER");
-        Response response = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/notifications")
-            .then().statusCode(200).extract().response();
-        assertThat(membersOf(response))
-            .isEqualTo(Set.of("content", "totalElements", "totalPages", "page", "size"));
+    void auditLogList_envelopeMemberSet_matchesContract() throws IOException {
+        assertGetEnvelopeMatchesContract("audit-log-list", "sweep-audit", "MEMBER");
     }
 
     @Test
-    void sessionList_envelopeMemberSet_matchesContract() {
-        String token = obtainToken(freshEmail("sweep-session"), "MEMBER");
-        Response response = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/sessions")
-            .then().statusCode(200).extract().response();
-        assertThat(membersOf(response)).isEqualTo(Set.of("items", "totalElements"));
+    void notificationList_envelopeMemberSet_matchesContract() throws IOException {
+        assertGetEnvelopeMatchesContract("notification-list", "sweep-notif", "MEMBER");
     }
 
     @Test
-    void favoriteList_envelopeMemberSet_matchesContract() {
-        String token = obtainToken(freshEmail("sweep-fav"), "MEMBER");
-        Response response = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/favorites")
-            .then().statusCode(200).extract().response();
-        assertThat(membersOf(response)).isEqualTo(Set.of("items", "totalElements"));
+    void sessionList_envelopeMemberSet_matchesContract() throws IOException {
+        assertGetEnvelopeMatchesContract("session-list", "sweep-session", "MEMBER");
     }
 
     @Test
-    void activityFeedList_envelopeMemberSet_matchesContract() {
-        String token = obtainToken(freshEmail("sweep-activity"), "MEMBER");
-        Response response = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/activities")
-            .then().statusCode(200).extract().response();
-        assertThat(membersOf(response)).isEqualTo(Set.of("items", "page", "size", "totalElements"));
+    void favoriteList_envelopeMemberSet_matchesContract() throws IOException {
+        assertGetEnvelopeMatchesContract("favorite-list", "sweep-fav", "MEMBER");
     }
 
     @Test
-    void apiKeyList_envelopeMemberSet_matchesContract() {
-        String token = obtainToken(freshEmail("sweep-apikey"), "MEMBER");
-        Response response = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/api-keys")
-            .then().statusCode(200).extract().response();
-        assertThat(membersOf(response)).isEqualTo(Set.of("items", "totalElements"));
+    void activityFeedList_envelopeMemberSet_matchesContract() throws IOException {
+        assertGetEnvelopeMatchesContract("activity-feed-list", "sweep-activity", "MEMBER");
     }
 
     @Test
-    void approvalOwnList_envelopeMemberSet_matchesContract() {
-        String token = obtainToken(freshEmail("sweep-approval-own"), "MEMBER");
-        Response response = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/approvals")
-            .then().statusCode(200).extract().response();
-        assertThat(membersOf(response)).isEqualTo(Set.of("items", "totalElements"));
+    void apiKeyList_envelopeMemberSet_matchesContract() throws IOException {
+        assertGetEnvelopeMatchesContract("api-key-list", "sweep-apikey", "MEMBER");
     }
 
     @Test
-    void approvalInbox_envelopeMemberSet_matchesContract() {
-        String token = obtainToken(freshEmail("sweep-approval-inbox"), "MEMBER");
-        Response response = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/approvals/inbox")
-            .then().statusCode(200).extract().response();
-        assertThat(membersOf(response)).isEqualTo(Set.of("items", "totalElements"));
+    void approvalOwnList_envelopeMemberSet_matchesContract() throws IOException {
+        assertGetEnvelopeMatchesContract("approval-own-list", "sweep-approval-own", "MEMBER");
+    }
+
+    @Test
+    void approvalInbox_envelopeMemberSet_matchesContract() throws IOException {
+        assertGetEnvelopeMatchesContract("approval-inbox", "sweep-approval-inbox", "MEMBER");
     }
 
     /**
      * The 21st declaring contract — see the class javadoc. Two reasons the old
      * sweep never reached it: the total member is spelled {@code totalHits},
      * and the endpoint is a POST (the query lives in the body). Both are
-     * legitimate; neither makes the envelope any less of a page envelope.
+     * legitimate; neither makes the envelope any less of a page envelope. The
+     * POST body is the only thing this method states that the GET helper cannot.
      */
     @Test
-    void searchResultPage_envelopeMemberSet_matchesContract() {
+    void searchResultPage_envelopeMemberSet_matchesContract() throws IOException {
+        ContractEnvelope expected = envelopeFromContract(binding("search-result-page"));
         String token = obtainToken(freshEmail("sweep-search"), "MEMBER");
         Response response = given().header("Authorization", "Bearer " + token)
             .header("Content-Type", "application/json")
             .body("{\"query\":\"page-envelope-sweep\"}")
-            .when().post("/api/v1/search")
+            .when().post(expected.url())
             .then().statusCode(200).extract().response();
-        assertThat(membersOf(response))
-            .isEqualTo(Set.of("hits", "totalHits", "page", "size", "processingTimeMs"));
+        assertMatchesContract(expected, response);
     }
 
     @Test
-    void identityVerificationAdminList_envelopeMemberSet_matchesContract() {
-        String token = obtainToken(freshEmail("sweep-idv-admin"), "ADMIN");
-        Response response = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/admin/identity-verification")
-            .then().statusCode(200).extract().response();
-        assertThat(membersOf(response))
-            .isEqualTo(Set.of("content", "page", "size", "totalElements", "totalPages"));
+    void identityVerificationAdminList_envelopeMemberSet_matchesContract() throws IOException {
+        assertGetEnvelopeMatchesContract("identity-verification-admin-list", "sweep-idv-admin", "ADMIN");
     }
 }

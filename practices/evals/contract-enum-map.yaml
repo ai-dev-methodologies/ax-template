@@ -8,8 +8,29 @@
 #
 # contract_enum entry — exactly ONE of:
 #   java_enum: <FQCN>    the block is bound to a Java enum; constant sets must match
-#   wire_only: <reason>  no Java enum backs the block (the code side is a String)
-# Modifiers (java_enum only, each requires `reason:`):
+#   wire_only: <reason>  no Java ENUM backs the block (the code side is a String).
+#                        A reason is NOT sufficient (P0-2): the entry MUST also carry a
+#                        `wire_source:` block naming WHERE the literals are produced, and
+#                        the guard compares the EXTRACTED literal set to the block by
+#                        exact set equality — the same treatment a java_enum entry gets.
+#
+# wire_source kinds (full contract in contract_enum_parity_guard.sh's header):
+#   java_field_literals   file: X.java [symbol: NAME]   the literals of that field's
+#                         initializer, or of every `static final String` in the file
+#   java_enum_decl        file: X.java  name: E         `enum E { … }` — for a producer
+#                         that lives in a templates/ copy-target skeleton
+#   java_method_returns   files: <glob>  method: m      every `return "…";` in m()'s body
+#                         across the glob (the SPI shape; an abstract decl adds nothing)
+#   literal_pattern       file:|files:  pattern: <regex with ONE group>   inline literals;
+#                         comments are stripped first for .java/.ts/.tsx
+#   unproduced            NOTHING in this tree produces the block. The ONLY escape from
+#                         set equality, and it is checked: `absence_probes: [{pattern,
+#                         globs}]` must match ZERO files over a NON-EMPTY file set, so the
+#                         exemption self-destructs as soon as a producer appears.
+# An extraction that yields the EMPTY set FAILS — a pattern that matches nothing must
+# never read as "no drift".
+#
+# Modifiers (java_enum or an EXTRACTING wire_source; each requires `reason:`):
 #   wire_extra:   [T…]   tokens on the wire that are not Java constants (filter sentinels)
 #   wire_missing: [T…]   Java constants deliberately absent from THIS block
 #   wire_case: lower     the wire spells the constants lower-case
@@ -68,6 +89,9 @@ contract_enums:
       enum: `allowedActions` is an OPEN, additive vocabulary — clients are told to ignore
       tokens they do not recognize — so a fork-receiver can advertise a domain-specific
       action without a breaking enum change in the public catalog (R26).
+    wire_source:
+      kind: java_field_literals
+      file: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalActionEvaluator.java
   - kind: contract_enum
     contract: contracts/approval-workflow-openapi.yaml
     pointer: /components/schemas/ApprovalInboxEntry/properties/status
@@ -136,30 +160,47 @@ contract_enums:
     java_enum: com.ax.template.authblueprint.auth.OAuthProvider
     wire_case: lower
     reason: Same lower-case provider segment as the authorize endpoint.
+  # P0-2 RECLASSIFIED (was wire_only): the SHAPE drift (AuthState vs the shipped
+  # UserProfileResponse) is real and stays a registered finding, but the VOCABULARY of
+  # this block is the domain's own role enum spelled lower-case — so it binds, and a new
+  # Java role now forces a decision here instead of drifting silently.
   - kind: contract_enum
     contract: contracts/auth-openapi.yaml
     pointer: /components/schemas/UserRole
-    wire_only: >-
-      AuthState is a UI-state schema. The shipped GET /api/auth/me
-      (AuthSessionController:29) returns UserProfileResponse — a single upper-case
-      `role` string from UserRole.name(), not a lower-case `roles[]` array — so no
-      Java enum serializes THIS block. The AuthState-vs-UserProfileResponse shape
-      drift is a registered finding (see the closure note for this guard's birth
-      census); binding it here would fabricate a relationship that does not exist.
+    java_enum: com.ax.template.authblueprint.user.UserRole
+    wire_case: lower
+    wire_missing: [AUDITOR]
+    reason: >-
+      The schema lower-cases the role vocabulary for the UI-state contract. AUDITOR
+      (R14 audit-log export role) postdates this schema and is absent from it; the
+      block is not served by any shipped operation today — GET /api/auth/me returns
+      UserProfileResponse with a single upper-case `role` (AuthSessionController:29) —
+      so no client is affected. The AuthState-vs-UserProfileResponse shape drift
+      remains a registered finding; when it is closed, AUDITOR must be added here or
+      the omission re-justified.
   - kind: contract_enum
     contract: contracts/auth-openapi.yaml
     pointer: /components/schemas/VerificationState
-    wire_only: >-
-      Same AuthState UI-state schema: the shipped /api/auth/me response carries a
-      boolean `emailVerified`, not a tri-state `verificationState` string. No Java
-      enum serializes this block (user.VerificationState is persistence-side only).
+    java_enum: com.ax.template.authblueprint.user.VerificationState
+    wire_case: lower
+    reason: >-
+      Exact vocabulary of user.VerificationState spelled lower-case for the UI-state
+      contract. (The shipped /api/auth/me carries a boolean `emailVerified` instead —
+      the same registered shape drift as UserRole — but the tri-state vocabulary this
+      block promises IS that enum's, so it is bound rather than exempted.)
   - kind: contract_enum
     contract: contracts/auth-openapi.yaml
     pointer: /components/schemas/ProviderLink/properties/provider
     wire_only: >-
       Same AuthState UI-state schema. The shipped response exposes
-      `linkedProviders: string[]`; the ProviderLink entity's provider column is an
-      OAuthProvider, which cannot be `email`. No Java enum serializes this block.
+      `linkedProviders: string[]` from OAuthService.getLinkedProviders; the ProviderLink
+      entity's provider column is an OAuthProvider, which cannot be `email`. The only
+      producer of THIS block's vocabulary in the tree is the MSW reference handler that
+      implements the AuthState contract for the frontend.
+    wire_source:
+      kind: literal_pattern
+      file: frontend/src/mocks/handlers.ts
+      pattern: "provider: '([a-z]+)'"
 
   # ── auth-ui ───────────────────────────────────────────────────────────────
   - kind: contract_enum
@@ -185,8 +226,14 @@ contract_enums:
     pointer: /components/schemas/InvoiceStatus
     wire_only: >-
       The reference workload has no invoice aggregate — there is no Java
-      InvoiceStatus. The block documents the vocabulary a fork-receiver's invoicing
-      module is expected to speak.
+      InvoiceStatus in backend/src. The block documents the vocabulary a fork-receiver's
+      invoicing module is expected to speak, and that vocabulary IS declared on disk: the
+      copy-target skeleton templates/backend/billing/Invoice.java. Binding the contract to
+      the skeleton keeps the two from drifting apart while the aggregate is unbuilt here.
+    wire_source:
+      kind: java_enum_decl
+      file: templates/backend/billing/Invoice.java
+      name: InvoiceStatus
   - kind: contract_enum
     contract: contracts/billing-openapi.yaml
     pointer: /components/schemas/BillingEventType
@@ -204,7 +251,13 @@ contract_enums:
     pointer: /paths/~1me~1dsr~1portability/post/parameters/0/schema
     wire_only: >-
       DsrService.producePortableCopy takes a raw String format and validates it
-      against a lookup (DSR_PORTABILITY_FORMAT_INVALID); no Java enum exists.
+      against a lookup (DSR_PORTABILITY_FORMAT_INVALID); no Java enum exists. The
+      accepted set is the `fmt.equals("…")` chain in that method — adding a format there
+      (or dropping one) without editing the contract now FAILS.
+    wire_source:
+      kind: literal_pattern
+      file: backend/src/main/java/com/ax/template/authblueprint/dsr/DsrService.java
+      pattern: 'fmt\.equals\("([a-z]+)"\)'
   - kind: contract_enum
     contract: contracts/data-subject-rights-openapi.yaml
     pointer: /components/schemas/DsrRequestResponse/properties/type
@@ -242,21 +295,33 @@ contract_enums:
       Provider names come from the IdentityVerificationProvider SPI
       (PassAdapter.providerName() = "pass", KcbAdapter = "kcb") — deliberately
       Strings so a fork-receiver can register another provider without editing an
-      enum in the public catalog (R26).
+      enum in the public catalog (R26). The SHIPPED adapter set is still exhaustively
+      checkable: it is the return literal of every providerName() body in the domain.
+    wire_source: &idv_provider_spi
+      kind: java_method_returns
+      files: backend/src/main/java/com/ax/template/authblueprint/identityverification/*.java
+      method: providerName
   - kind: contract_enum
     contract: contracts/identity-verification-openapi.yaml
     pointer: /paths/~1admin~1identity-verification/get/parameters/0/schema
     wire_only: >-
       Same SPI-provided provider Strings, plus the family's ALL no-filter sentinel
       (P2-35a). No Java enum backs either.
+    wire_source: *idv_provider_spi
+    wire_extra: [ALL]
+    reason: >-
+      Family no-filter sentinel — a filter token, not a provider name, so no adapter
+      returns it (notification-openapi is the reference implementation of the family).
   - kind: contract_enum
     contract: contracts/identity-verification-openapi.yaml
     pointer: /components/schemas/IdentityVerificationCallbackResponse/properties/providerName
     wire_only: Same SPI-provided provider Strings (see the callback parameter entry).
+    wire_source: *idv_provider_spi
   - kind: contract_enum
     contract: contracts/identity-verification-openapi.yaml
     pointer: /components/schemas/VerifiedIdentityDto/properties/providerName
     wire_only: Same SPI-provided provider Strings (see the callback parameter entry).
+    wire_source: *idv_provider_spi
 
   # ── notification ──────────────────────────────────────────────────────────
   - kind: contract_enum
@@ -271,8 +336,15 @@ contract_enums:
     contract: contracts/notification-openapi.yaml
     pointer: /components/schemas/NotificationType
     wire_only: >-
-      Notification.type is a String column (length 64) — the taxonomy is
-      fork-receiver-extensible by design, so no Java enum constrains it.
+      Notification.type is a String column (length 64) in the reference workload — the
+      taxonomy is fork-receiver-extensible by design, so no Java enum constrains it
+      there. The vocabulary the contract advertises is nevertheless DECLARED on disk, in
+      the copy-target skeleton templates/backend/notification/Notification.java, and the
+      two must not drift apart.
+    wire_source:
+      kind: java_enum_decl
+      file: templates/backend/notification/Notification.java
+      name: NotificationType
   - kind: contract_enum
     contract: contracts/notification-openapi.yaml
     pointer: /components/schemas/NotificationStatus
@@ -282,20 +354,47 @@ contract_enums:
   - kind: contract_enum
     contract: contracts/payment-openapi.yaml
     pointer: /paths/~1payments/get/parameters/2/schema
-    wire_only: Sort field names (property paths), not a domain vocabulary.
+    wire_only: >-
+      Sort field names (property paths), not a domain vocabulary — AND, as of P0-2's
+      producer census, NOTHING consumes them: PaymentController.list declares only
+      page/size and hard-codes Sort.by(DESC, "createdAt"), so the advertised `sortBy`
+      parameter is UNBOUND (registered as a drift finding). There is therefore no
+      producer to bind; the exemption is carried by an absence proof that self-destructs
+      the moment the parameter is wired up.
+    wire_source:
+      kind: unproduced
+      absence_probes:
+        - pattern: '\bsortBy\b'
+          globs: ['backend/src/main/java/**/*.java']
   - kind: contract_enum
     contract: contracts/payment-openapi.yaml
     pointer: /paths/~1payments~1callback~1{provider}/post/parameters/0/schema
     wire_only: >-
-      PaymentCallbackController binds `provider` as a String and resolves the
-      PaymentProvider SPI bean by qualifier; `mock` is the reference adapter.
+      PaymentCallbackController binds `provider` as a String and routes it through the
+      PaymentCallbackVerifier SPI registry. The public catalog ships ZERO verifier
+      implementations by design (R26 — a fork-receiver registers its own PG); the only
+      implementation in the tree is a test-local stub deliberately named `stubpg` so it
+      cannot collide with one. So no main-source producer emits this slug — the exemption
+      is an absence proof, and registering a verifier flips this entry RED until it is
+      bound to that verifier's providerName().
+    wire_source:
+      kind: unproduced
+      absence_probes:
+        - pattern: '(implements|extends|new)\s+PaymentCallbackVerifier\b'
+          globs: ['backend/src/main/java/**/*.java']
   - kind: contract_enum
     contract: contracts/payment-openapi.yaml
     pointer: /components/schemas/Currency
     wire_only: >-
       ISO 4217 alphabetic codes are handled as Strings by common/Money (which
       derives minor-unit scale from java.util.Currency); the two listed codes are
-      the reference workload's configured set, not a closed Java enum.
+      the reference workload's configured set, not a closed Java enum. That configured
+      set is PaymentService.ALLOWED_CURRENCIES — the gate the money path actually
+      enforces — so contract and enforcement can no longer diverge.
+    wire_source:
+      kind: java_field_literals
+      file: backend/src/main/java/com/ax/template/authblueprint/payment/PaymentService.java
+      symbol: ALLOWED_CURRENCIES
   - kind: contract_enum
     contract: contracts/payment-openapi.yaml
     pointer: /components/schemas/PaymentState
@@ -309,7 +408,15 @@ contract_enums:
   - kind: contract_enum
     contract: contracts/ratelimit-openapi.yaml
     pointer: /paths/~1ratelimit~1ping/get/responses/200/content/application~1json/schema/properties/status
-    wire_only: Literal probe payload ({"status":"ok"}), not a domain vocabulary.
+    wire_only: >-
+      Literal probe payload ({"status":"ok"}), not a domain vocabulary. Emitted inline by
+      RateLimitPingController (both the authenticated and the anonymous probe), so the
+      literal itself is the producer — this is the block the P0-2 reviewer mutated
+      ("ok" → "healthy") to show that a classification-only wire_only entry drifts freely.
+    wire_source:
+      kind: literal_pattern
+      file: backend/src/main/java/com/ax/template/authblueprint/ratelimit/RateLimitPingController.java
+      pattern: 'Map\.of\("status",\s*"([^"]+)"\)'
 
   # ── report-export ─────────────────────────────────────────────────────────
   - kind: contract_enum

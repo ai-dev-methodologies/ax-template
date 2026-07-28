@@ -1,0 +1,79 @@
+# fixture manifest
+contract_enums:
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /paths/~1widgets/get/parameters/0/schema
+    java_enum: com.demo.WidgetStatus
+    wire_extra: [ALL]
+    reason: family no-filter sentinel
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/status
+    java_enum: com.demo.WidgetStatus
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/format
+    java_enum: com.demo.WidgetFormat
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/kind
+    java_enum: com.demo.WidgetHolder.Kind
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/label
+    wire_only: free-form label vocabulary; no java enum backs it
+    wire_source:
+      kind: java_field_literals
+      file: backend/src/main/java/com/demo/WidgetLabels.java
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/note
+    wire_only: >-
+      inline probe literal; no java enum backs it. CLASSIFICATION-ONLY — this entry
+      carries a reason and NOTHING else, which is exactly the P0-2 hole: before the fix
+      the guard checked the reason was non-empty and moved on, so the literal could drift
+      freely. The `label` entry keeps a real wire_source, so the ZERO_WIRE_SOURCE_
+      EXTRACTION non-vacuity floor is satisfied and this fixture fails on ONE axis only.
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/channel
+    wire_only: SPI-provided channel slugs; fork-receivers register their own
+    wire_source:
+      kind: java_method_returns
+      files: backend/src/main/java/com/demo/*Channel.java
+      method: channelName
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/flavor
+    wire_only: no aggregate in the reference workload; the copy-target skeleton declares it
+    wire_source:
+      kind: java_enum_decl
+      file: templates/demo/Flavors.java.skeleton
+      name: Flavor
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/origin
+    wire_only: nothing in this tree produces the block; carried by an absence proof
+    wire_source:
+      kind: unproduced
+      absence_probes:
+        - pattern: '\bWidgetOriginResolver\b'
+          globs: ['backend/src/main/java/**/*.java']
+
+vocab_scans:
+  - kind: vocab_scan
+    file: templates/demo/page.tsx
+    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    declaration:
+      kind: ts_union
+      name: S
+    require_all: true
+    forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS, FAILED]
+  - kind: vocab_scan
+    file: templates/demo/Delivery.java.skeleton
+    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    declaration:
+      kind: java_enum_decl
+      name: Status
+    require_all: true
+    forbidden: [SUCCESS, IN_FLIGHT, DEAD_LETTER]

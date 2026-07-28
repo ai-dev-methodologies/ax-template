@@ -382,18 +382,27 @@ BillingFlowIT + FeatureFlagFlowIT 두 클래스에 `@DirtiesContext(BEFORE_CLASS
 
 **R22-blanket (2026-07-28) — per-class 완화책을 root-cause fix 로 대체.** 위
 per-class 레버는 *증상이 어느 클래스에 떨어졌는지* 를 따라다니는 방식이라
-근본이 아니었다. 트리가 커지면서 실측이 이를 확정했다: `@SpringBootTest`
-클래스 **191개**, 그 중 cache key 를 forking 하는 어노테이션 보유가 **57개**
-(`properties=` 19 · `@TestPropertySource` 9 · `@AutoConfigureMockMvc` 14 ·
-`@Import` 8 · `@TestConfiguration` 5 · `@MockitoBean` 2) — 즉 **고유 키 수가
-기본 상한 32 를 상시 초과**하므로 aggregate run 은 영구 LRU thrash 상태였고,
-flake 는 그때그때 운 나쁜 클래스로 이동했을 뿐이다 (BillingFlowIT →
-FeatureFlagFlowIT → PageEnvelopeCatalogSweepTest → GlobalProblemDetailAdviceTest).
+근본이 아니었다. flake 가 그때그때 운 나쁜 클래스로 이동했을 뿐이다
+(BillingFlowIT → FeatureFlagFlowIT → PageEnvelopeCatalogSweepTest →
+GlobalProblemDetailAdviceTest).
+
+**증명된 것**: eviction 이 실제로 일어나고 있었다. 증상은 이미 닫힌 Tomcat 의
+`@LocalServerPort` 를 든 클래스가 전건 uniform 실패(격리 실행은 통과)이며,
+eviction 은 live 고유 키 수가 상한을 넘어야만 발생하므로 **이 트리의 고유 키
+수 > 32** 다. 상한을 올릴 근거는 이 부등식이지 특정 숫자가 아니다.
+
+**측정되지 않은 것**: 정확한 고유 키 수. 아래 센서스는 *키를 forking 하는
+어노테이션을 보유한 클래스 수*이지 키 수 자체가 아니다(여러 클래스가 한 키를
+공유할 수도, 한 클래스가 중복 계수될 수도 있다) — `@SpringBootTest` **191개**
+중 보유 **57개** (`properties=` 19 · `@TestPropertySource` 9 ·
+`@AutoConfigureMockMvc` 14 · `@Import` 8 · `@TestConfiguration` 5 ·
+`@MockitoBean` 2). 상한의 크기를 정하는 동기이지 측정치가 아니다.
 
 fix 는 `backend/build.gradle.kts` 의 `tasks.withType<Test>` 에서
 `spring.test.context.cache.maxSize = 128` 을 지정하는 것 (+ heap 2g → 4g).
 `maxSize` 는 **eviction 상한이지 preallocation 이 아니다** — 128 로 올려도
-컨텍스트는 실제 고유 키 수(~50–57)만큼만 생성되며, 191개 클래스에
+컨텍스트는 run 이 실제로 필요로 하는 만큼만 생성되며(`DefaultContextCache` 의
+내부 map 크기는 설정된 상한과 무관), 191개 클래스에
 `@DirtiesContext` 를 다는 대안(=191 회 cold boot, 캐싱 무력화)보다 엄격히
 싸다. 기존 4개 클래스의 `@DirtiesContext(BEFORE_CLASS)` 는 belt-and-braces 로
 남겨둔다.

@@ -99,20 +99,30 @@ tasks.withType<Test> {
 
     // ---- R22 ContextCache: ROOT-CAUSE fix (blanket), replacing per-class @DirtiesContext ----
     //
-    // Spring's TestContext ContextCache defaults to maxSize = 32. This tree has 191
-    // @SpringBootTest classes, and 57 of them carry an annotation that FORKS the cache key
-    // (properties= 19, @TestPropertySource 9, @AutoConfigureMockMvc 14, @Import 8,
-    // @TestConfiguration 5, @MockitoBean 2). The distinct-key count therefore exceeds 32, so
-    // the aggregate run is in permanent LRU thrash: a context is evicted while a later class
-    // still holds the @LocalServerPort of its now-dead Tomcat, and every request in that class
-    // fails uniformly (IllegalStateException / NoHttpResponseException). That is the "R22
-    // flake" — it moves between classes as cache pressure shifts, which is exactly why it kept
-    // reappearing on whichever class was unlucky that run (BillingFlowIT, FeatureFlagFlowIT,
+    // Spring's TestContext ContextCache defaults to maxSize = 32.
+    //
+    // What is PROVEN: eviction was actually occurring. The observed failure mode is a class
+    // whose @LocalServerPort points at an already-closed Tomcat, so every request in it fails
+    // uniformly (IllegalStateException / NoHttpResponseException) while the same class passes
+    // in isolation. Eviction can only happen once live distinct cache keys exceed the ceiling,
+    // therefore this tree's distinct-key count is > 32. That inequality — not any particular
+    // number — is what justifies raising the ceiling. The flake moved between classes as cache
+    // pressure shifted, which is why per-class @DirtiesContext kept "fixing" it and it kept
+    // coming back somewhere else (BillingFlowIT, FeatureFlagFlowIT,
     // PageEnvelopeCatalogSweepTest, GlobalProblemDetailAdviceTest).
     //
+    // What is NOT measured: the exact distinct-key count. The census below counts CLASSES
+    // BEARING key-forking annotations, which is an indicator of key diversity, not the key
+    // count itself (several classes can share one key; one class can be counted twice):
+    //   191 @SpringBootTest classes; 57 carry a key-forking annotation
+    //   (properties= 19, @TestPropertySource 9, @AutoConfigureMockMvc 14, @Import 8,
+    //    @TestConfiguration 5, @MockitoBean 2).
+    // Treat it as motivation for the ceiling's magnitude, not as a measurement.
+    //
     // maxSize is an eviction CEILING, not a preallocation: raising it to 128 does not create
-    // 128 contexts, it only stops eviction below the tree's real distinct-key count (~50-57).
-    // Cost is bounded by the contexts that genuinely exist (hence the 2g -> 4g heap); it is
+    // 128 contexts (DefaultContextCache sizes its maps independently of the configured
+    // ceiling), it only stops eviction below the number of contexts the run genuinely needs.
+    // Cost is bounded by the contexts that actually get built (hence the 2g -> 4g heap); it is
     // strictly cheaper than the alternative of annotating all 191 classes @DirtiesContext,
     // which would force 191 cold context boots and disable caching outright.
     //

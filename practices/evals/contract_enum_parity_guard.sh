@@ -16,9 +16,12 @@
 #                           RFC-6901 JSON pointer. EXACTLY ONE of:
 #                             java_enum: <FQCN>   — the block is bound to a Java
 #                                                   enum; constant sets must match.
-#                             wire_only: <reason> — no Java enum backs the block
-#                                                   (free-form string on the code
-#                                                   side); reason is mandatory.
+#                             wire_only: <reason> — no Java ENUM backs the block
+#                                                   (the code side is a String).
+#                                                   The reason is mandatory AND a
+#                                                   `wire_source:` block is mandatory
+#                                                   (see below) — a reason alone is
+#                                                   NOT sufficient.
 #                           Modifiers on a `java_enum` entry (each needs `reason`):
 #                             wire_extra:   [T…]  — tokens on the wire that are NOT
 #                                                   Java constants (e.g. the `ALL`
@@ -32,6 +35,47 @@
 #                           Both modifier lists are checked for NON-REDUNDANCY: a
 #                           listed token that is not actually in the corresponding
 #                           difference FAILS. A stale allowance cannot rot silently.
+#
+# WIRE_ONLY IS NOT AN EXEMPTION (P0-2, cross-family review). A `wire_only` entry used
+# to be CLASSIFICATION-ONLY: the guard checked that a non-empty `reason` existed and
+# moved on, so the literal vocabulary of ~a quarter of the contract's enum blocks could
+# drift freely (the reviewer's reproduction: flip the ratelimit probe's `"ok"` to
+# `"healthy"` — contract, guard and the domain task all stayed green). Every wire_only
+# entry now MUST carry a `wire_source:` block naming WHERE the wire literals are
+# produced; the guard EXTRACTS the literal set from that source and asserts EXACT SET
+# EQUALITY with the contract block (wire_extra / wire_missing allowances apply, with the
+# same non-redundancy check as a java_enum entry).
+#
+#   wire_source kinds — four EXTRACTING kinds (set equality) + one ABSENCE kind:
+#     java_field_literals  file: X.java [symbol: NAME]
+#                          With `symbol`: every string literal in THAT field's
+#                          initializer (`Set.of("KRW","USD")` → {KRW, USD}).
+#                          Without: the value of every `static final String` constant
+#                          declared in the file — exhaustive over the constant block.
+#     java_enum_decl       file: X.java  name: E
+#                          `enum E { A, B }` → {A, B}. For a producer that lives in a
+#                          templates/ skeleton (the fork-receiver's copy target) rather
+#                          than in the reference workload's own source tree.
+#     java_method_returns  files: <glob>  method: m
+#                          Every `return "lit";` inside `m()`'s body across the matched
+#                          files — the SPI shape (each adapter's providerName()).
+#                          An abstract declaration (`String m();`) has no body and is
+#                          skipped, so the interface never contributes.
+#     literal_pattern      file:|files: <path|glob>  pattern: <regex with ONE group>
+#                          Every capture of the regex across the matched files. The
+#                          escape hatch for a literal produced inline (a probe payload,
+#                          an `equals("json")` chain). Comments are stripped first for
+#                          .java/.ts/.tsx, so a javadoc example cannot fake a producer.
+#     unproduced           NOTHING in this tree produces the block (the operation is
+#                          unimplemented / the SPI ships zero implementations). This is
+#                          the ONLY escape from set equality and it is NOT free: it
+#                          requires `absence_probes:` — [{pattern, globs}] — and the
+#                          guard FAILS if any probe MATCHES, or if a probe's globs match
+#                          no file at all (a probe over an empty file set proves
+#                          nothing). The exemption therefore SELF-DESTRUCTS the moment a
+#                          producer appears, forcing a real binding then.
+#   An extraction that yields the EMPTY set FAILS: a pattern that matches nothing, or a
+#   symbol/method/glob that resolves to nothing, must never read as "no drift".
 #
 #   kind: vocab_scan      — surfaces the contract_enum schema cannot express (an L4
 #                           fork-copy's TS union, a java skeleton, a README table).
@@ -84,9 +128,10 @@
 # stale entry.
 #
 # NON-VACUITY: zero discovered blocks, zero contract_enum entries, zero vocab_scan
-# entries, or zero STRUCTURALLY-exhaustive declaration scans (ts_union /
-# java_enum_decl) all FAIL — the gate cannot be emptied into a silent pass, and it
-# cannot be degraded into region-markers-only either.
+# entries, zero STRUCTURALLY-exhaustive declaration scans (ts_union /
+# java_enum_decl), or zero EXTRACTING wire_source entries all FAIL — the gate cannot
+# be emptied into a silent pass, it cannot be degraded into region-markers-only, and
+# the wire_only population cannot be degraded into all-`unproduced` either.
 #
 # Exit: 0 PASS · 1 violation · 2 usage/parse error.
 #
@@ -225,6 +270,169 @@ def scan_java(root):
 
 java_enums = scan_java(repo)
 
+# ── 2b. wire_source extraction (P0-2) ────────────────────────────────────────
+# A wire_only block is NOT exempt from parity: it declares a producer and the guard
+# pulls the literal set out of that producer. Every helper returns (set|None, err).
+
+WIRE_SOURCE_KINDS = ('java_field_literals', 'java_enum_decl', 'java_method_returns',
+                     'literal_pattern', 'unproduced')
+_STRIPPED_EXT = ('.java', '.ts', '.tsx', '.skeleton')
+
+def read_source(path):
+    body = open(path, encoding='utf-8', errors='ignore').read()
+    if path.endswith(_STRIPPED_EXT):
+        # comments stripped so a javadoc/JSDoc example cannot masquerade as a producer
+        return strip_comments(body)
+    return body
+
+def resolve_files(spec, single):
+    """[abs paths], err — `single` forbids a multi-file match (file: vs files:)."""
+    if not spec:
+        return None, "no file/files declared"
+    pat = os.path.join(repo, str(spec))
+    hits = sorted(p for p in glob.glob(pat, recursive=True) if os.path.isfile(p))
+    if not hits:
+        return None, f"no file matches {spec!r}"
+    if single and len(hits) > 1:
+        return None, f"{spec!r} matches {len(hits)} files; `file:` must address exactly one"
+    return hits, None
+
+def src_java_field_literals(src):
+    """String literals of a named field's initializer, or of every String constant."""
+    files, err = resolve_files(src.get('file'), True)
+    if err:
+        return None, err
+    body = read_source(files[0])
+    symbol = src.get('symbol')
+    if symbol:
+        m = re.search(r'\b' + re.escape(str(symbol)) + r'\s*=', body)
+        if not m:
+            return None, f"no field named {symbol!r} in {src.get('file')}"
+        j = body.find(';', m.end())
+        if j < 0:
+            return None, f"initializer of {symbol!r} is unterminated"
+        init = body[m.end():j]
+        toks = set(re.findall(r'"([^"]*)"', init))
+        if not toks:
+            return None, f"initializer of {symbol!r} holds no string literal"
+        return toks, None
+    toks = set(re.findall(r'static\s+final\s+String\s+\w+\s*=\s*"([^"]*)"\s*;', body))
+    if not toks:
+        return None, (f"{src.get('file')} declares no `static final String … = \"…\";` "
+                      f"constant; declare `symbol:` to address a collection field instead")
+    return toks, None
+
+def src_java_enum_decl(src):
+    files, err = resolve_files(src.get('file'), True)
+    if err:
+        return None, err
+    name = str(src.get('name') or '')
+    if not name:
+        return None, "java_enum_decl requires `name:`"
+    found = [c for (n, c) in enums_in_source(open(files[0], encoding='utf-8',
+                                                 errors='ignore').read()) if n == name]
+    if not found:
+        return None, f"no `enum {name} {{ … }}` in {src.get('file')}"
+    if len(found) > 1:
+        return None, f"more than one `enum {name}` in {src.get('file')} — ambiguous"
+    return set(found[0]), None
+
+def src_java_method_returns(src):
+    files, err = resolve_files(src.get('files') or src.get('file'), False)
+    if err:
+        return None, err
+    method = str(src.get('method') or '')
+    if not method:
+        return None, "java_method_returns requires `method:`"
+    toks = set()
+    bodies = 0
+    for f in files:
+        body = read_source(f)
+        for m in re.finditer(r'\b' + re.escape(method) + r'\s*\(\s*\)\s*\{', body):
+            i = body.index('{', m.end() - 1)
+            depth = 0
+            j = i
+            for j in range(i, len(body)):
+                if body[j] == '{':
+                    depth += 1
+                elif body[j] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        break
+            bodies += 1
+            toks |= set(re.findall(r'\breturn\s+"([^"]*)"\s*;', body[i:j]))
+    if bodies == 0:
+        return None, (f"no `{method}()` body in the {len(files)} matched file(s) — an "
+                      f"abstract declaration alone produces nothing")
+    if not toks:
+        return None, f"`{method}()` returns no string literal in the matched file(s)"
+    return toks, None
+
+def src_literal_pattern(src):
+    files, err = resolve_files(src.get('files') or src.get('file'), 'files' not in src)
+    if err:
+        return None, err
+    pat = src.get('pattern')
+    if not pat:
+        return None, "literal_pattern requires `pattern:`"
+    try:
+        rx = re.compile(str(pat))
+    except re.error as ex:
+        return None, f"pattern is not a valid regex: {ex}"
+    if rx.groups != 1:
+        return None, f"pattern must have EXACTLY one capture group (has {rx.groups})"
+    toks = set()
+    for f in files:
+        toks |= set(rx.findall(read_source(f)))
+    if not toks:
+        return None, (f"pattern {pat!r} matched nothing in the {len(files)} matched "
+                      f"file(s) — an unmatched pattern proves no producer")
+    return toks, None
+
+def src_unproduced(src):
+    """Absence proof: every probe must match ZERO lines over a NON-EMPTY file set."""
+    probes = src.get('absence_probes')
+    if not isinstance(probes, list) or not probes:
+        return None, ("unproduced requires a non-empty `absence_probes:` list "
+                      "[{pattern, globs}] — an unchecked exemption is the hole itself")
+    for n, p in enumerate(probes):
+        if not isinstance(p, dict):
+            return None, f"absence_probes[{n}] is not a mapping"
+        pat = p.get('pattern')
+        globs = p.get('globs')
+        if not pat:
+            return None, f"absence_probes[{n}] has no `pattern:`"
+        if not isinstance(globs, list) or not globs:
+            return None, f"absence_probes[{n}] has no `globs:` list"
+        try:
+            rx = re.compile(str(pat))
+        except re.error as ex:
+            return None, f"absence_probes[{n}] pattern is not a valid regex: {ex}"
+        files = []
+        for g in globs:
+            files.extend(p2 for p2 in glob.glob(os.path.join(repo, str(g)), recursive=True)
+                         if os.path.isfile(p2))
+        if not files:
+            return None, (f"absence_probes[{n}] globs {globs} match NO file — a probe over "
+                          f"an empty file set proves nothing")
+        probe_hits = []
+        for f in sorted(set(files)):
+            text = open(f, encoding='utf-8', errors='ignore').read()
+            if rx.search(text):
+                probe_hits.append(os.path.relpath(f, repo))
+        if len(probe_hits) > 0:
+            return None, (f"absence_probes[{n}] pattern {pat!r} MATCHES {probe_hits[:4]} — a "
+                          f"producer now exists, so this block must be bound to it "
+                          f"(java_enum / an extracting wire_source) instead of exempted")
+    return set(), None
+
+WIRE_SOURCE_EXTRACTORS = {
+    'java_field_literals': src_java_field_literals,
+    'java_enum_decl': src_java_enum_decl,
+    'java_method_returns': src_java_method_returns,
+    'literal_pattern': src_literal_pattern,
+}
+
 # ── 3. manifest ──────────────────────────────────────────────────────────────
 if not os.path.exists(MANIFEST):
     print(f"FAIL: manifest not found: {os.path.relpath(MANIFEST, repo)}")
@@ -260,6 +468,43 @@ for key in sorted(claimed):
 def as_list(v):
     return list(v) if isinstance(v, list) else []
 
+def compare_sets(where, wire_set, code_set, e, label):
+    """Exact set equality modulo declared wire_extra / wire_missing allowances.
+
+    Shared by the java_enum path and the wire_source path so an allowance means the
+    same thing (and is non-redundancy-checked the same way) on both.
+    """
+    extra = set(as_list(e.get('wire_extra')))
+    missing = set(as_list(e.get('wire_missing')))
+    if (extra or missing) and not str(e.get('reason') or '').strip():
+        violations.append(f"{where}: wire_extra / wire_missing require a `reason:`")
+    real_extra = wire_set - code_set
+    real_missing = code_set - wire_set
+    stale_extra = extra - real_extra
+    stale_missing = missing - real_missing
+    if stale_extra:
+        violations.append(
+            f"{where}: wire_extra lists {sorted(stale_extra)} which {label} DOES produce — "
+            f"stale allowance, delete it")
+    if stale_missing:
+        violations.append(
+            f"{where}: wire_missing lists {sorted(stale_missing)} which ARE on the wire — "
+            f"stale allowance, delete it")
+    undeclared_extra = real_extra - extra
+    undeclared_missing = real_missing - missing
+    if undeclared_extra or undeclared_missing:
+        parts = []
+        if undeclared_extra:
+            parts.append(f"wire declares {sorted(undeclared_extra)} which {label} cannot emit")
+        if undeclared_missing:
+            parts.append(f"{label} produces {sorted(undeclared_missing)} which the wire forbids")
+        violations.append(
+            f"{where}: ENUM DRIFT vs {label} — " + "; ".join(parts) +
+            " — fix the contract, fix the producer, or declare wire_extra/wire_missing + reason")
+
+wire_source_extracted = 0
+wire_source_unproduced = 0
+
 for key in sorted(claimed):
     if key not in discovered:
         continue
@@ -277,11 +522,51 @@ for key in sorted(claimed):
             f"(java_enum={has_java}, wire_only={has_wire_only})")
         continue
     if has_wire_only:
+        # P0-2: classification is NOT enough. The entry must name a producer and the
+        # extracted literal set must EQUAL the block, exactly as a java_enum entry does.
         if not str(e.get('wire_only') or '').strip():
             violations.append(f"{where}: wire_only requires a non-empty reason")
-        for mod in ('wire_extra', 'wire_missing', 'wire_case'):
-            if mod in e:
-                violations.append(f"{where}: {mod} is only valid on a java_enum entry")
+        if 'wire_case' in e:
+            violations.append(f"{where}: wire_case is only valid on a java_enum entry "
+                              f"(a wire_source is compared to the wire VERBATIM)")
+        src = e.get('wire_source')
+        skind = src.get('kind') if isinstance(src, dict) else None
+        if skind not in WIRE_SOURCE_KINDS:
+            if isinstance(src, dict) and src:
+                violations.append(
+                    f"{where}: wire_source kind {skind!r} is not one of {list(WIRE_SOURCE_KINDS)}")
+            else:
+                violations.append(
+                    f"{where}: MISSING `wire_source:` — a wire_only entry must declare WHERE its "
+                    f"literals are produced (kind: {' | '.join(WIRE_SOURCE_KINDS)}); a `wire_only:` "
+                    f"reason alone is CLASSIFICATION-ONLY and lets the vocabulary drift freely")
+            continue
+        if skind == 'unproduced':
+            for mod in ('wire_extra', 'wire_missing'):
+                if mod in e:
+                    violations.append(
+                        f"{where}: {mod} is meaningless on an `unproduced` wire_source "
+                        f"(no set is extracted to allow a difference against)")
+            _, err = src_unproduced(src)
+            if err:
+                violations.append(f"{where}: wire_source (unproduced) — {err}")
+            else:
+                wire_source_unproduced += 1
+            continue
+        extractor = WIRE_SOURCE_EXTRACTORS.get(skind)
+        if extractor is None:
+            # Unreachable in normal operation — the membership test above already pinned
+            # skind to a known kind. The tolerant .get() exists so that a build with that
+            # test NEUTERED degrades to "unchecked" rather than crashing, which is what
+            # makes the kill-proof flip (exit 1 → 0) meaningful instead of accidental.
+            continue
+        produced, err = extractor(src)
+        if err:
+            violations.append(f"{where}: wire_source ({skind}) not resolvable — {err}")
+            continue
+        wire_source_extracted += 1
+        compare_sets(where, set(discovered[key]), produced, e,
+                     f"wire_source {skind} {src.get('file') or src.get('files')}")
         continue
 
     fq = e['java_enum']
@@ -306,34 +591,9 @@ for key in sorted(claimed):
                 f"as name(); declare `wire_case: lower` + reason if the wire really folds case")
         wire_set = set(wire_raw)
 
-    extra = set(as_list(e.get('wire_extra')))
-    missing = set(as_list(e.get('wire_missing')))
-    if (extra or missing or 'wire_case' in e) and not str(e.get('reason') or '').strip():
-        violations.append(f"{where}: wire_extra / wire_missing / wire_case require a `reason:`")
-
-    real_extra = wire_set - java_set
-    real_missing = java_set - wire_set
-    stale_extra = extra - real_extra
-    stale_missing = missing - real_missing
-    if stale_extra:
-        violations.append(
-            f"{where}: wire_extra lists {sorted(stale_extra)} which ARE Java constants — "
-            f"stale allowance, delete it")
-    if stale_missing:
-        violations.append(
-            f"{where}: wire_missing lists {sorted(stale_missing)} which ARE on the wire — "
-            f"stale allowance, delete it")
-    undeclared_extra = real_extra - extra
-    undeclared_missing = real_missing - missing
-    if undeclared_extra or undeclared_missing:
-        parts = []
-        if undeclared_extra:
-            parts.append(f"wire declares {sorted(undeclared_extra)} which {fq} cannot emit")
-        if undeclared_missing:
-            parts.append(f"{fq} can emit {sorted(undeclared_missing)} which the wire forbids")
-        violations.append(
-            f"{where}: ENUM DRIFT vs {fq} — " + "; ".join(parts) +
-            " — fix the contract, fix the enum, or declare wire_extra/wire_missing + reason")
+    if 'wire_case' in e and not str(e.get('reason') or '').strip():
+        violations.append(f"{where}: wire_case requires a `reason:`")
+    compare_sets(where, wire_set, java_set, e, fq)
 
 # ── 6. vocab_scan ────────────────────────────────────────────────────────────
 # EXHAUSTIVE path: parse the DECLARED token set out of the file and compare it to
@@ -467,6 +727,11 @@ if not [e for e in entries if 'java_enum' in e]:
     violations.append("ZERO_BINDING — no contract_enum entry binds a java_enum; the gate would be vacuous")
 if not scans:
     violations.append("ZERO_VOCAB_SCAN — no vocab_scan entry; the L4 vocabulary axis would be unguarded")
+if [e for e in entries if 'wire_only' in e] and not wire_source_extracted:
+    violations.append(
+        "ZERO_WIRE_SOURCE_EXTRACTION — wire_only entries exist but NONE resolves an "
+        "extracting wire_source (all degraded to `unproduced`); the wire_only population "
+        "would be exempt from set equality again")
 if not structural_scans:
     violations.append(
         "ZERO_EXHAUSTIVE_DECL — no vocab_scan resolves a structural declaration "
@@ -476,7 +741,8 @@ if not structural_scans:
 print(f"[contract_enum_parity] {len(discovered)} enum block(s) across "
       f"{len({k[0] for k in discovered})} contract file(s); "
       f"{len([e for e in entries if 'java_enum' in e])} java-bound, "
-      f"{len([e for e in entries if 'wire_only' in e])} wire-only; "
+      f"{len([e for e in entries if 'wire_only' in e])} wire-only "
+      f"({wire_source_extracted} producer-bound, {wire_source_unproduced} absence-proven); "
       f"{len(scans)} vocab_scan surface(s) ({structural_scans} structurally exhaustive, "
       f"{len(scans) - structural_scans} region-scoped or unresolved); "
       f"{len(java_enums)} java enum(s) indexed")
@@ -488,7 +754,9 @@ if violations:
     sys.exit(1)
 
 print("PASS — every contract enum block is classified, every bound block matches its Java enum, "
-      "and every vocab_scan's declared token set equals its canonical vocabulary")
+      "every wire_only block matches the literal set of its declared producer (or carries a "
+      "verified absence proof), and every vocab_scan's declared token set equals its canonical "
+      "vocabulary")
 PY
 rc=$?
 exit $rc

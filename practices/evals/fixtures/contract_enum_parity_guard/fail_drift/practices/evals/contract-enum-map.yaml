@@ -22,6 +22,9 @@ contract_enums:
     contract: contracts/demo-openapi.yaml
     pointer: /components/schemas/Widget/properties/label
     wire_only: free-form label vocabulary; no java enum backs it
+    wire_source:
+      kind: java_field_literals
+      file: backend/src/main/java/com/demo/WidgetLabels.java
 
 vocab_scans:
   - kind: vocab_scan
