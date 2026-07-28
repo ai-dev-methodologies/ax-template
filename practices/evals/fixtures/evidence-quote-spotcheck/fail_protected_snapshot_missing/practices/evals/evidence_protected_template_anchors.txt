@@ -1,0 +1,8 @@
+# Round-3 same-pass closure — the protected anchor's SNAPSHOT BODY does not exist on disk.
+# Previously this produced a TEMPLATE_SNAPSHOT_FILE_MISSING *finding*, fatal only when
+# --strict-templates happened to be passed; deleting the snapshot was therefore a cheaper
+# bypass than falsifying the quote. A protected anchor with no snapshot verifies nothing:
+# PROTECTED_LEDGER_SNAPSHOT_MISSING ⇒ exit 2 regardless of flags.
+# require: templates/L1/components/sample-widget.tsx::sample-src
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::sample-src

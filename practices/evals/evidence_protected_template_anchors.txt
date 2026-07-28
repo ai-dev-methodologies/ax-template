@@ -33,10 +33,27 @@
 #
 # NON-VACUITY (enforced by the guard, exit 2 on each)
 # ---------------------------------------------------
-# missing file · zero entries · missing `min_entries` directive · fewer entries than
-# min_entries · min_entries below the guard-pinned live floor · an entry whose file does
+# missing file · zero entries · missing `min_entries` directive · fewer UNIQUE entries than
+# min_entries · min_entries below the guard-pinned live floor · a duplicated identity · an
+# unsafe/non-repo-relative path · a required identity absent · an entry whose file does
 # not exist · an entry whose file carries no upstream_id evidence · an entry whose declared
-# upstream_id is not actually cited by that file · zero anchors scanned.
+# upstream_id is not actually cited by that file · a protected `quote`/`section` that is
+# missing, not a string (int/null/list/dict — never coerced), blank, or (quote) shorter than
+# the guard's substance floor · a protected anchor whose snapshot body is absent from disk ·
+# zero anchors scanned.
+#
+# IDENTITY, NOT ROW COUNT
+# -----------------------
+# A count is not an identity. `min_entries: 2` was once satisfiable by DELETING the
+# currency-input row and DUPLICATING the clean currency-formatter row: the guard then
+# checked the formatter twice, exited 0, and currency-input — the anchor this whole gate
+# exists for — became free to fabricate. So the ledger is now read as a SET: duplicates are
+# rejected, min_entries counts unique identities, and each `# require:` directive below
+# names an identity that MUST be present regardless of how many rows the file has. The same
+# two identities are additionally pinned as LIVE_REQUIRED_PROTECTED_IDENTITIES inside
+# evidence_quote_spotcheck_guard.sh, so dropping one takes two coordinated edits.
+# require: templates/L1/components/currency-input.tsx::stripe-billing-2026-05
+# require: templates/L1/components/currency-formatter.tsx::stripe-billing-2026-05
 #
 # min_entries — the protected set MAY NOT BE REDUCED below this count. The guard
 # additionally pins LIVE_MIN_PROTECTED_ENTRIES=2 in evidence_quote_spotcheck_guard.sh for

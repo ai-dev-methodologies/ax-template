@@ -1,0 +1,8 @@
+# Codex round-3 (a) — TYPE COERCION. The protected anchor's `quote` is the UNQUOTED YAML
+# scalar `0`, i.e. an int. The pre-round-3 guard ran `str(entry.get("quote",""))` first, so
+# it became "0" — a literal substring of the real Stripe snapshot body — and the substring
+# check passed, exiting 0 while the protected anchor carried no evidence at all. Type is now
+# checked before value: PROTECTED_LEDGER_NON_STRING_QUOTE ⇒ exit 2.
+# require: templates/L1/components/sample-widget.tsx::sample-src
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::sample-src

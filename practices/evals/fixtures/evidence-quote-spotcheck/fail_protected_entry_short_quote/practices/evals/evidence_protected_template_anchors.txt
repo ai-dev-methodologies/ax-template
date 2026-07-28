@@ -1,0 +1,7 @@
+# Codex round-3 (a), residual variant — a LEGALLY TYPED but substanceless quote. "the" is a
+# genuine non-empty string, so the isinstance + blank checks both pass, yet it is a
+# substring of essentially every snapshot body: the empty-quote bypass wearing a valid type.
+# PROTECTED_LEDGER_QUOTE_TOO_SHORT ⇒ exit 2.
+# require: templates/L1/components/sample-widget.tsx::sample-src
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::sample-src

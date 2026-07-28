@@ -1,0 +1,7 @@
+# Codex round-3 (a) — TYPE COERCION, null variant. `section: null` parses to None; the
+# pre-round-3 guard ran `str(None)` → "None", which is not blank, so the blank-section check
+# never fired and the anchor kept its protected status with no declared section.
+# PROTECTED_LEDGER_NON_STRING_SECTION ⇒ exit 2.
+# require: templates/L1/components/sample-widget.tsx::sample-src
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::sample-src

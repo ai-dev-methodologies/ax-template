@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * BACKLOG P3-54 — page-envelope parity beyond scenario-local.
  * <p>
  * {@link PageEnvelopeContractParityTest} pins ONE hand-built envelope's wire
- * shape (S2.QUERY-BOUNDS.XB). It says nothing about the OTHER 20 real list
+ * shape (S2.QUERY-BOUNDS.XB). It says nothing about the OTHER 21 real list
  * endpoints across the catalog whose contracts also declare a page/list
  * envelope. This test closes that scenario-local gap for the subset of those
  * endpoints that are actually LIVE-HTTP reachable today (an existing
@@ -65,15 +65,42 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>GET /api/admin/identity-verification —
  *       identity-verification-openapi.yaml#listVerifiedIdentities —
  *       content,page,size,totalElements,totalPages — testIdentityVerification</li>
+ *   <li>POST /api/v1/search — search-openapi.yaml#search —
+ *       hits,totalHits,page,size,processingTimeMs — testSearch</li>
  * </ul>
- * 8 domains / 9 endpoints swept out of the 20 contracts that declare a
- * page/list envelope on disk (ratio 8/20; disk truth =
- * `grep -lE '^ *(totalElements|totalPages):' contracts/*.yaml` -> 20 files.
- * The PRD's "21" counted an items-only edge case a mechanical grep cannot
- * reproduce). GREEN is confirmed by the wave's R25 run, not asserted here.
- * The remaining 12 are FULLY partitioned across the three pinned sets below:
- * NOT_REACHABLE (2) + REACHABLE_BUT_PREEXISTING_DRIFT (2) +
- * DECLARING_NOT_IN_SCOPE (8).
+ * 9 domains / 10 endpoints swept out of the 21 contracts that declare a
+ * page/list envelope on disk (ratio 9/21). GREEN is confirmed by the wave's
+ * R25 run, not asserted here. The remaining 12 are FULLY partitioned across
+ * the three pinned sets below: NOT_REACHABLE (2) +
+ * REACHABLE_BUT_PREEXISTING_DRIFT (2) + DECLARING_NOT_IN_SCOPE (8).
+ *
+ * <h2>The 21st declaring contract (2026-07-28 correction)</h2>
+ * The first closure derived the universe with
+ * {@code grep -lE '^ *(totalElements|totalPages):' contracts/*.yaml} -> 20
+ * files, and explained the PRD's "21 contracts carry page-envelope fields"
+ * away as "an items-only edge case a mechanical grep cannot reproduce". That
+ * explanation was WRONG, and the PRD was right. The missing contract is
+ * {@code search-openapi.yaml}: {@code SearchResultPage}
+ * ({@code contracts/search-openapi.yaml:104-121}) is a genuine page envelope —
+ * {@code hits} (array) + {@code page} + {@code size} + a total — but it spells
+ * its total {@code totalHits}, not {@code totalElements}/{@code totalPages},
+ * and its endpoint is a POST ({@code POST /api/v1/search},
+ * {@code SearchController.java:51}) rather than a GET, so both halves of the
+ * old derivation looked past it.
+ * <p>
+ * The derivation is therefore broadened from a two-NAME allowlist to the
+ * member-name CLASS the catalog actually uses for a total count —
+ * {@code ^ *total[A-Z][A-Za-z]*:} — which yields exactly the previous 20 plus
+ * {@code search}. Disclosed non-tightness: {@code tokenized-securities} also
+ * matches on {@code totalUnits} (a domain quantity, not a page count), but it
+ * is independently a declaring contract via {@code GrantPage.pagination}'s
+ * {@code totalElements}, so its membership is unchanged and the broadening
+ * introduces no false member. And {@code search} is not merely documented as
+ * excluded: it is live-HTTP reachable (an existing {@code @SpringBootTest} +
+ * RestAssured harness, {@code SearchTestSupport}) and its DTO
+ * ({@code SearchDto.SearchResultPage}) matches the contract exactly, so it is
+ * SWEPT rather than allowlisted — the partition grows by a swept member, not
+ * by an excuse.
  *
  * <p><b>How "fully partitioned" is proven (2026-07-28 correction).</b> The
  * original assertion summed one int and three set sizes — arithmetic only. It
@@ -155,13 +182,14 @@ class PageEnvelopeCatalogSweepTest {
 
     /**
      * Domains actually swept by this class — one entry per endpoint-owning
-     * contract stem in the class javadoc's binding table (9 endpoints, 8
+     * contract stem in the class javadoc's binding table (10 endpoints, 9
      * contracts: the two approval endpoints share
      * {@code approval-workflow-openapi.yaml}).
      */
     static final Set<String> SWEPT = Set.of(
             "audit-log", "notification", "session-management", "favorites-bookmarks",
-            "activity-feed", "api-key", "approval-workflow", "identity-verification");
+            "activity-feed", "api-key", "approval-workflow", "identity-verification",
+            "search");
 
     /** Allowlist A — see class javadoc. */
     static final Set<String> NOT_REACHABLE = Set.of("email-outbox", "scheduled-task");
@@ -183,15 +211,21 @@ class PageEnvelopeCatalogSweepTest {
             "billing", "comment-thread", "crud", "file-storage",
             "payment", "report-export", "tag-categorization", "tokenized-securities");
 
-    /** Disk truth: contracts/*.yaml files declaring totalElements|totalPages. */
-    static final int DECLARING_CONTRACTS = 20;
+    /** Disk truth: contracts/*.yaml files declaring a {@code total*} count member. */
+    static final int DECLARING_CONTRACTS = 21;
 
     /**
      * The declaring universe, DERIVED FROM DISK — the Java equivalent of
-     * {@code grep -lE '^ *(totalElements|totalPages):' contracts/*.yaml},
-     * reduced to contract stems. Derived rather than pinned so a new list
-     * contract cannot join the catalog without landing in exactly one of the
-     * four sets below.
+     * {@code grep -lE '^ *total[A-Z][A-Za-z]*:' contracts/*.yaml}, reduced to
+     * contract stems. Derived rather than pinned so a new list contract cannot
+     * join the catalog without landing in exactly one of the four sets below.
+     *
+     * <p>The predicate is a member-name CLASS, not a two-name allowlist: the
+     * earlier {@code (totalElements|totalPages)} form silently missed
+     * {@code search-openapi.yaml}'s {@code totalHits} and made the universe 20
+     * instead of 21 (see the class javadoc's "21st declaring contract"
+     * section). A name allowlist is exactly the shape that goes stale when a
+     * new contract picks a different-but-equivalent member name.
      *
      * <p>Path convention follows the existing precedent in this test tree
      * ({@code WebhookIdempotentTest}: {@code Path.of("..", "templates", …)}) —
@@ -203,7 +237,7 @@ class PageEnvelopeCatalogSweepTest {
                 .as("contracts/ must be reachable from the backend module (user.dir=%s)",
                         System.getProperty("user.dir"))
                 .isTrue();
-        Pattern declares = Pattern.compile("(?m)^ *(totalElements|totalPages):");
+        Pattern declares = Pattern.compile("(?m)^ *total[A-Z][A-Za-z]*:");
         try (Stream<Path> yamls = Files.list(contracts)) {
             return yamls
                     .filter(p -> p.getFileName().toString().endsWith("-openapi.yaml"))
@@ -258,7 +292,7 @@ class PageEnvelopeCatalogSweepTest {
                 .isEqualTo(new TreeSet<>(universe));
 
         // (3) the documented counts stay pinned (a shrunk lane is a visible edit).
-        assertThat(SWEPT).hasSize(8);
+        assertThat(SWEPT).hasSize(9);
         assertThat(NOT_REACHABLE).hasSize(2);
         assertThat(REACHABLE_BUT_PREEXISTING_DRIFT).hasSize(2);
         assertThat(DECLARING_NOT_IN_SCOPE).hasSize(8);
@@ -366,6 +400,24 @@ class PageEnvelopeCatalogSweepTest {
             .when().get("/api/approvals/inbox")
             .then().statusCode(200).extract().response();
         assertThat(membersOf(response)).isEqualTo(Set.of("items", "totalElements"));
+    }
+
+    /**
+     * The 21st declaring contract — see the class javadoc. Two reasons the old
+     * sweep never reached it: the total member is spelled {@code totalHits},
+     * and the endpoint is a POST (the query lives in the body). Both are
+     * legitimate; neither makes the envelope any less of a page envelope.
+     */
+    @Test
+    void searchResultPage_envelopeMemberSet_matchesContract() {
+        String token = obtainToken(freshEmail("sweep-search"), "MEMBER");
+        Response response = given().header("Authorization", "Bearer " + token)
+            .header("Content-Type", "application/json")
+            .body("{\"query\":\"page-envelope-sweep\"}")
+            .when().post("/api/v1/search")
+            .then().statusCode(200).extract().response();
+        assertThat(membersOf(response))
+            .isEqualTo(Set.of("hits", "totalHits", "page", "size", "processingTimeMs"));
     }
 
     @Test

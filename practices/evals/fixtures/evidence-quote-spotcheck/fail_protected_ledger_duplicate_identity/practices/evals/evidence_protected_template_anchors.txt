@@ -1,0 +1,14 @@
+# Codex round-3 (b) — IDENTITY SUBSTITUTION BY DUPLICATION, the exact live trick:
+# delete the row that matters (sample-widget.tsx, the analogue of currency-input.tsx),
+# DUPLICATE the clean row (sample-widget-b.tsx, the analogue of currency-formatter.tsx),
+# and keep `min_entries: 2`. The pre-round-3 guard counted ROWS, so 2 rows satisfied the
+# floor, the clean anchor was verified twice, the gate exited 0 — and the deleted anchor
+# became free to fabricate or blank. min_entries now counts UNIQUE identities and a repeated
+# identity is rejected outright: PROTECTED_LEDGER_DUPLICATE_IDENTITY ⇒ exit 2.
+# (Belt and braces: even if the duplicate were silently de-duplicated, the `# require:`
+# directive for sample-widget.tsx below would fire REQUIRED_IDENTITY_MISSING.)
+# require: templates/L1/components/sample-widget.tsx::sample-src
+# require: templates/L1/components/sample-widget-b.tsx::sample-src
+# min_entries: 2
+templates/L1/components/sample-widget-b.tsx::sample-src
+templates/L1/components/sample-widget-b.tsx::sample-src

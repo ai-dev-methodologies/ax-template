@@ -1,0 +1,11 @@
+# Codex round-3 (b) — IDENTITY DROPPED, count irrelevant. Here the ledger is perfectly
+# well-formed by every pre-round-3 rule: one unique, disk-clean, fully-verified anchor and a
+# min_entries that matches it. What is missing is an IDENTITY the gate exists to protect
+# (sample-widget.tsx — the analogue of currency-input.tsx, the anchor P2-40 found
+# fabricated). A required identity is pinned in two places — `# require:` here and
+# LIVE_REQUIRED_PROTECTED_IDENTITIES in the guard for the real repo tree — and its absence is
+# PROTECTED_LEDGER_REQUIRED_IDENTITY_MISSING ⇒ exit 2, however many rows the ledger has.
+# require: templates/L1/components/sample-widget.tsx::sample-src
+# require: templates/L1/components/sample-widget-b.tsx::sample-src
+# min_entries: 1
+templates/L1/components/sample-widget-b.tsx::sample-src

@@ -1137,7 +1137,8 @@ run_guard "evidence_quote_spotcheck/fixture_template_pass" 0 \
 # instead: evidence_protected_template_anchors.txt. Those anchors ARE fatal here, and the
 # ledger cannot be emptied into a silent pass (missing/empty/no-min_entries/shrunk/dangling
 # path/no-upstream_id-evidence/uncited-anchor/empty-quote/empty-section each exit 2 —
-# fixtures below prove all nine). empty-quote and empty-section close a codex round-2
+# fixtures below prove all nine, plus the eight round-3 identity/type fixtures registered
+# after them). empty-quote and empty-section close a codex round-2
 # finding: `quote` defaulted to "" when absent, and "" is a substring of every snapshot, so
 # blanking/deleting the protected quote used to pass vacuously (0 findings, exit 0) instead
 # of failing — the fabricated-anchor defense was bypassed by REMOVING the quote rather than
@@ -1166,6 +1167,45 @@ run_guard "evidence_quote_spotcheck/fixture_protected_entry_empty_quote" 2 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_entry_empty_quote"
 run_guard "evidence_quote_spotcheck/fixture_protected_entry_empty_section" 2 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_entry_empty_section"
+# ── codex round-3 (2026-07-28): the SAME gate was bypassed a third time, with a third trick,
+# because rounds 1-2 validated the SHAPE of a ledger entry and never pinned the IDENTITY of
+# what must be protected nor the TYPE of the scalars compared. Both closed by construction;
+# each fixture below reproduces one bypass and is non-vacuous (the HEAD~ guard exits 0 on
+# seven of the eight — the eighth, snapshot_missing, exited 0 whenever --strict-templates was
+# not passed and is now a flag-independent exit 2).
+#   (a) TYPE COERCION — `quote: 0` became "0", a literal substring of the Stripe snapshot;
+#       `section: null` became "None", which is not blank so the blank check never fired.
+#       Protected scalars are no longer str()-coerced; a legally-typed but substanceless
+#       quote ("the") is rejected by a length floor as the same attack in valid clothing.
+#   (b) IDENTITY vs ROW COUNT — delete the currency-input row, duplicate the clean
+#       currency-formatter row, keep min_entries: 2 ⇒ the formatter was checked twice, the
+#       gate exited 0, and the anchor the gate exists for was free to fabricate. The ledger
+#       is now a SET: duplicates rejected, min_entries counts unique identities, and required
+#       identities (guard-pinned + `# require:` directives) must each be present.
+#   (c) same-pass closures — a protected anchor whose snapshot body is absent is structural
+#       (deleting the snapshot must not be cheaper than falsifying the quote), a ledger path
+#       must be safe/single-spelled (an identity has one spelling), and the declared
+#       `section` must itself occur in the snapshot (it used to be unverified free text).
+run_guard "evidence_quote_spotcheck/fixture_protected_entry_int_quote" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_entry_int_quote"
+run_guard "evidence_quote_spotcheck/fixture_protected_entry_null_section" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_entry_null_section"
+run_guard "evidence_quote_spotcheck/fixture_protected_entry_short_quote" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_entry_short_quote"
+run_guard "evidence_quote_spotcheck/fixture_protected_ledger_duplicate_identity" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_ledger_duplicate_identity"
+run_guard "evidence_quote_spotcheck/fixture_protected_required_identity_missing" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_required_identity_missing"
+run_guard "evidence_quote_spotcheck/fixture_protected_snapshot_missing" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_snapshot_missing"
+# flag-independence proof for the same fixture: structural (exit 2) even WITHOUT
+# --strict/--strict-templates, where the pre-round-3 guard exited 0.
+run_guard "evidence_quote_spotcheck/fixture_protected_snapshot_missing_unflagged" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_snapshot_missing"
+run_guard "evidence_quote_spotcheck/fixture_protected_unsafe_path" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_unsafe_path"
+run_guard "evidence_quote_spotcheck/fixture_protected_fabricated_section" 1 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_fabricated_section"
 
 echo ""
 echo "[75] catalog_example_symbol_guard.sh (catalog-example/impl-drift — a rule java fence that names a class with no backing .java teaches an agent a broken shape; iterations 2-3 fixed two such drifts by hand with no mechanical backstop. Scans ONLY java fences: a seed-deny fabricated store call (idempotencyStore.computeIfAbsent) and any *StateMachine/*Store symbol must resolve to a real backend/src/main/java symbol OR be named in a catalog-example-ok annotation. Live exits 0; fixtures prove non-vacuity.)"

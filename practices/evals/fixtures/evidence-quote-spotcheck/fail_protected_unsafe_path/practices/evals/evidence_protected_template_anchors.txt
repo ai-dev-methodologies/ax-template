@@ -1,0 +1,6 @@
+# Round-3 same-pass closure — a ledger path is an IDENTITY component, so it must have
+# exactly one spelling and must stay inside the scanned root. `..` traversal both escapes
+# the root and lets the SAME anchor be written two ways, which would defeat the
+# required-identity set comparison. PROTECTED_LEDGER_UNSAFE_PATH ⇒ exit 2.
+# min_entries: 1
+templates/L1/components/../components/sample-widget.tsx::sample-src

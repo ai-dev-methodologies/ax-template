@@ -1,0 +1,8 @@
+# Round-3 same-pass closure — the quote is honest but the declared `section` is FABRICATED.
+# `section` used to be checked for blankness and then never compared against anything, so it
+# was unverified free text sitting inside a gate whose whole purpose is verified provenance.
+# TEMPLATE_SECTION_NOT_IN_SNAPSHOT is a falsified-evidence FINDING (same family as a
+# fabricated quote) ⇒ exit 1 under --strict --strict-templates, not a structural exit 2.
+# require: templates/L1/components/sample-widget.tsx::sample-src
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::sample-src
