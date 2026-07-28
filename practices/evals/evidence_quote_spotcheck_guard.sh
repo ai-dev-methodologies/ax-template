@@ -172,10 +172,17 @@ while [ $# -gt 0 ]; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
-# LIVE_ROOT=1 ⇔ scanning the real repo tree (no --root fixture override). The guard-pinned
-# protected-ledger floor applies only there; fixture roots declare their own min_entries.
-LIVE_ROOT=0; [ -z "$ROOT_OVERRIDE" ] && LIVE_ROOT=1
+SELF_REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+REPO_ROOT="${ROOT_OVERRIDE:-$SELF_REPO_ROOT}"
+# LIVE_ROOT=1 ⇔ the RESOLVED scan root IS this repository, however it was supplied. The
+# guard-pinned protected-identity floor applies only there; fixture roots declare their own
+# min_entries. Reviewer finding (round 4): keying this on "was --root passed?" let an explicit
+# `--root <the actual repo>` resolve to the identical physical tree while silently DROPPING the
+# pinned identities — a protected anchor could then be substituted away and its fabricated quote
+# would land only in the advisory pool. Compare canonicalized physical paths (pwd -P, so symlink
+# and `.`/`..` spellings cannot alias past the check) instead of arg presence.
+RESOLVED_ROOT="$(cd "$REPO_ROOT" 2>/dev/null && pwd -P)" || RESOLVED_ROOT=""
+LIVE_ROOT=0; [ -n "$RESOLVED_ROOT" ] && [ "$RESOLVED_ROOT" = "$SELF_REPO_ROOT" ] && LIVE_ROOT=1
 
 STRICT="$STRICT" ALLOW_MISSING="$ALLOW_MISSING" INCLUDE_TEMPLATES="$INCLUDE_TEMPLATES" \
 STRICT_TEMPLATES="$STRICT_TEMPLATES" TEMPLATES_ONLY_PROTECTED="$TEMPLATES_ONLY_PROTECTED" \
