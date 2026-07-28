@@ -26,7 +26,12 @@ import static io.restassured.RestAssured.given;
  * 403) with the shared {@code errors[]} array.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+// R22 ContextCache lever: BEFORE_CLASS, not AFTER_CLASS. AFTER_CLASS only evicts on
+// exit, so it cannot stop this class from *inheriting* a context that the cap-32 LRU
+// already evicted -- the dead-Tomcat symptom is a uniform IllegalStateException on the
+// first @LocalServerPort request. BEFORE_CLASS forces a fresh boot on entry. Same lever
+// already applied to BillingFlowIT / FeatureFlagFlowIT / PageEnvelopeCatalogSweepTest.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Tag("COMMON_ADVICE")
 class GlobalProblemDetailAdviceTest {
 
