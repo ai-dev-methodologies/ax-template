@@ -376,11 +376,31 @@ GREEN.** R20–R21 에서 표면화됐던 aggregate-only failure (FeatureFlagFlo
 `auth.signup.auto-verify=true` 라는 동일한 properties cache key 를 공유하던
 BillingFlowIT context 가 후속 IT 들 사이에서 evict 되었고, FF 가 stale
 cache miss 로 재진입할 때 `@LocalServerPort` 의 port 값이 죽은 Tomcat 의
-포트를 가리키게 되어 모든 요청이 401 로 응답되었다. **R22 fix**:
+포트를 가리키게 되어 모든 요청이 401 로 응답되었다. **R22 fix (당시)**:
 BillingFlowIT + FeatureFlagFlowIT 두 클래스에 `@DirtiesContext(BEFORE_CLASS)`
-를 적용해 매 클래스 시작 전 fresh context boot 을 강제 — 가장 surgical 한
-선택. catalog scope 안 의 root-cause closure 이고 fork-receiver 가 자신의 CI
-에서 강제할 의무가 없는 ApplicationContext 캐시 정책에는 손대지 않는다.
+를 적용해 매 클래스 시작 전 fresh context boot 을 강제.
+
+**R22-blanket (2026-07-28) — per-class 완화책을 root-cause fix 로 대체.** 위
+per-class 레버는 *증상이 어느 클래스에 떨어졌는지* 를 따라다니는 방식이라
+근본이 아니었다. 트리가 커지면서 실측이 이를 확정했다: `@SpringBootTest`
+클래스 **191개**, 그 중 cache key 를 forking 하는 어노테이션 보유가 **57개**
+(`properties=` 19 · `@TestPropertySource` 9 · `@AutoConfigureMockMvc` 14 ·
+`@Import` 8 · `@TestConfiguration` 5 · `@MockitoBean` 2) — 즉 **고유 키 수가
+기본 상한 32 를 상시 초과**하므로 aggregate run 은 영구 LRU thrash 상태였고,
+flake 는 그때그때 운 나쁜 클래스로 이동했을 뿐이다 (BillingFlowIT →
+FeatureFlagFlowIT → PageEnvelopeCatalogSweepTest → GlobalProblemDetailAdviceTest).
+
+fix 는 `backend/build.gradle.kts` 의 `tasks.withType<Test>` 에서
+`spring.test.context.cache.maxSize = 128` 을 지정하는 것 (+ heap 2g → 4g).
+`maxSize` 는 **eviction 상한이지 preallocation 이 아니다** — 128 로 올려도
+컨텍스트는 실제 고유 키 수(~50–57)만큼만 생성되며, 191개 클래스에
+`@DirtiesContext` 를 다는 대안(=191 회 cold boot, 캐싱 무력화)보다 엄격히
+싸다. 기존 4개 클래스의 `@DirtiesContext(BEFORE_CLASS)` 는 belt-and-braces 로
+남겨둔다.
+
+이 설정은 **ax-template 자신의 test harness 설정**이다. fork-receiver 의 CI
+정책(merge gate·branch protection)에는 아무것도 강제하지 않는다 — 그 경계는
+"우리 스위트가 결정론적인가" 와 무관하다.
 
 ```bash
 # Backend

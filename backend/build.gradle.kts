@@ -92,9 +92,34 @@ tasks.withType<Test> {
     // The PRACTICES suite runs many @SpringBootTest/@DataJpaTest contexts alongside several
     // whole-tree ArchUnit imports (layering, no-cycle, DDD decomposition). The default test
     // fork heap is too small for that combined footprint under machine load and OOMs
-    // non-deterministically (favoriteRepository/Persistence* "Java heap space"). Pin a 2g fork
-    // heap so the suite is deterministic.
-    maxHeapSize = "2g"
+    // non-deterministically (favoriteRepository/Persistence* "Java heap space"). Pin a fork
+    // heap so the suite is deterministic. Raised 2g -> 4g together with the ContextCache
+    // sizing below: removing the LRU thrash means more contexts stay resident at once.
+    maxHeapSize = "4g"
+
+    // ---- R22 ContextCache: ROOT-CAUSE fix (blanket), replacing per-class @DirtiesContext ----
+    //
+    // Spring's TestContext ContextCache defaults to maxSize = 32. This tree has 191
+    // @SpringBootTest classes, and 57 of them carry an annotation that FORKS the cache key
+    // (properties= 19, @TestPropertySource 9, @AutoConfigureMockMvc 14, @Import 8,
+    // @TestConfiguration 5, @MockitoBean 2). The distinct-key count therefore exceeds 32, so
+    // the aggregate run is in permanent LRU thrash: a context is evicted while a later class
+    // still holds the @LocalServerPort of its now-dead Tomcat, and every request in that class
+    // fails uniformly (IllegalStateException / NoHttpResponseException). That is the "R22
+    // flake" — it moves between classes as cache pressure shifts, which is exactly why it kept
+    // reappearing on whichever class was unlucky that run (BillingFlowIT, FeatureFlagFlowIT,
+    // PageEnvelopeCatalogSweepTest, GlobalProblemDetailAdviceTest).
+    //
+    // maxSize is an eviction CEILING, not a preallocation: raising it to 128 does not create
+    // 128 contexts, it only stops eviction below the tree's real distinct-key count (~50-57).
+    // Cost is bounded by the contexts that genuinely exist (hence the 2g -> 4g heap); it is
+    // strictly cheaper than the alternative of annotating all 191 classes @DirtiesContext,
+    // which would force 191 cold context boots and disable caching outright.
+    //
+    // This is ax-template's OWN test-harness setting. It imposes nothing on fork-receivers'
+    // CI policy — that boundary (CLAUDE.md) is about merge gates, not about whether our own
+    // suite is deterministic.
+    systemProperty("spring.test.context.cache.maxSize", "128")
 }
 
 // PIT mutation testing — the mechanical backstop for non-vacuity. A scoped run mutates a
