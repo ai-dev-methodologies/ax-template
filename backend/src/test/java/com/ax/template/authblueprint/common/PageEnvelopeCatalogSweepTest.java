@@ -141,7 +141,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * fallback.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+// R22 ContextCache lever: BEFORE_CLASS (not AFTER_CLASS). Under the full
+// per-domain aggregate the Spring TestContext cache (default cap 32) evicts
+// this class's context, leaving @LocalServerPort pointing at a dead Tomcat —
+// every test in the class then fails uniformly with NoHttpResponseException.
+// AFTER_CLASS only dirties on exit, so it does NOT protect this class from
+// inheriting an already-evicted context; BEFORE_CLASS forces a fresh boot.
+// Precedent: BillingFlowIT, FeatureFlagFlowIT, CommentComplianceTest.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Tag("PAGINATION")
 @Tag("PAGE-OFFSET-001")
 class PageEnvelopeCatalogSweepTest {
