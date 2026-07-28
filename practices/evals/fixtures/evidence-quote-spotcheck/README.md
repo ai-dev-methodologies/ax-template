@@ -40,6 +40,11 @@ silent pass — **each exits 2**, and each is built so the declared defect is it
 - `fail_protected_entry_missing_file/` — anchor path that does not exist.
 - `fail_protected_entry_no_evidence/` — protected file carries zero `upstream_id` evidence.
 - `fail_protected_anchor_absent/` — declared `upstream_id` is not cited by that file.
+- `fail_protected_entry_empty_quote/` — matching entry's `quote` is `""`. Closes a codex
+  round-2 finding: an absent/blank quote is vacuously a substring of every snapshot body, so
+  blanking or deleting a protected quote used to pass instead of failing.
+- `fail_protected_entry_empty_section/` — matching entry's `section` is `""` (the analogous
+  structural bypass — a protected anchor with no declared section verifies nothing).
 
 Not fixture-covered by construction: `PROTECTED_LEDGER_FLOOR` (declared `min_entries` below
 the guard-pinned `LIVE_MIN_PROTECTED_ENTRIES`) only applies to the real repo tree, i.e. when

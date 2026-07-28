@@ -1,0 +1,5 @@
+# Ledger protects an anchor whose `section` is blank — a protected anchor with no
+# declared section verifies nothing about which part of the snapshot backs the
+# quote (analogous structural bypass to the empty-quote finding, codex round-2).
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::sample-src

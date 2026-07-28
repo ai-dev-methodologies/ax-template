@@ -90,7 +90,11 @@
 #                (LIVE_MIN_PROTECTED_ENTRIES, applies when scanning the real repo root,
 #                i.e. no --root) · an entry whose file does not exist · an entry whose file
 #                carries zero upstream_id evidence · an entry whose declared upstream_id is
-#                not actually cited by that file · zero anchors scanned overall.
+#                not actually cited by that file · a matching entry whose `quote` is missing
+#                or normalized-empty (codex round-2: "" is a substring of every snapshot, so
+#                blanking/deleting the quote used to pass vacuously instead of failing) ·
+#                a matching entry whose `section` is missing or blank (same-shape bypass) ·
+#                zero anchors scanned overall.
 #
 # Usage:
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh
@@ -324,7 +328,27 @@ if protected_only:
         template_scanned += 1
         for entry in matching:
             template_quotes += 1
-            check_template_anchor(rel, uid, str(entry.get("quote", "")))
+            # Codex round-2: `quote` defaults to "" when absent, and "" is a substring of
+            # EVERY snapshot body, so blanking or deleting the protected quote made
+            # check_template_anchor() vacuously pass (0 findings, exit 0) — the fabricated-
+            # anchor defense was bypassed by REMOVING the quote instead of falsifying it.
+            # Reject a missing/normalized-empty quote as a structural ledger defect (exit 2,
+            # same family as the other PROTECTED_LEDGER_* non-vacuity checks above) BEFORE
+            # check_template_anchor runs, so an empty quote can never reach the substring
+            # check. `section` is the analogous field (declares which part of the snapshot
+            # backs the quote) and gets the same treatment.
+            quote = str(entry.get("quote", ""))
+            section = str(entry.get("section", ""))
+            if not normalize(quote):
+                die_structural(f"PROTECTED_LEDGER_EMPTY_QUOTE — {rel}::{uid} carries a "
+                               "missing or blank `quote` — an empty quote is vacuously a "
+                               "substring of every snapshot body and would silently pass")
+            if not section.strip():
+                die_structural(f"PROTECTED_LEDGER_EMPTY_SECTION — {rel}::{uid} carries a "
+                               "missing or blank `section` — a protected anchor with no "
+                               "declared section verifies nothing about which part of the "
+                               "snapshot backs the quote")
+            check_template_anchor(rel, uid, quote)
     if template_quotes == 0:
         die_structural("ZERO_SCAN — protected ledger resolved but no upstream_id anchor was "
                        "actually checked")

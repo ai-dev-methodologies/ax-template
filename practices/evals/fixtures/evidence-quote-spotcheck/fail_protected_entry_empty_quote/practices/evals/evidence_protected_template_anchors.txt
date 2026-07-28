@@ -1,0 +1,5 @@
+# Ledger protects an anchor whose `quote` is blank — "" is a substring of every
+# snapshot body, so without the PROTECTED_LEDGER_EMPTY_QUOTE guard this would
+# vacuously pass instead of failing (codex round-2 finding).
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::sample-src

@@ -1136,7 +1136,12 @@ run_guard "evidence_quote_spotcheck/fixture_template_pass" 0 \
 # gate on out-of-scope work), so the fatal claim is earned on an explicitly listed subset
 # instead: evidence_protected_template_anchors.txt. Those anchors ARE fatal here, and the
 # ledger cannot be emptied into a silent pass (missing/empty/no-min_entries/shrunk/dangling
-# path/no-upstream_id-evidence/uncited-anchor each exit 2 — fixtures below prove all seven).
+# path/no-upstream_id-evidence/uncited-anchor/empty-quote/empty-section each exit 2 —
+# fixtures below prove all nine). empty-quote and empty-section close a codex round-2
+# finding: `quote` defaulted to "" when absent, and "" is a substring of every snapshot, so
+# blanking/deleting the protected quote used to pass vacuously (0 findings, exit 0) instead
+# of failing — the fabricated-anchor defense was bypassed by REMOVING the quote rather than
+# falsifying it.
 run_guard "evidence_quote_spotcheck/templates_protected_live" 0 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected
 run_guard "evidence_quote_spotcheck/fixture_protected_fail_quote" 1 \
@@ -1157,6 +1162,10 @@ run_guard "evidence_quote_spotcheck/fixture_protected_entry_no_evidence" 2 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_entry_no_evidence"
 run_guard "evidence_quote_spotcheck/fixture_protected_anchor_absent" 2 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_anchor_absent"
+run_guard "evidence_quote_spotcheck/fixture_protected_entry_empty_quote" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_entry_empty_quote"
+run_guard "evidence_quote_spotcheck/fixture_protected_entry_empty_section" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_entry_empty_section"
 
 echo ""
 echo "[75] catalog_example_symbol_guard.sh (catalog-example/impl-drift — a rule java fence that names a class with no backing .java teaches an agent a broken shape; iterations 2-3 fixed two such drifts by hand with no mechanical backstop. Scans ONLY java fences: a seed-deny fabricated store call (idempotencyStore.computeIfAbsent) and any *StateMachine/*Store symbol must resolve to a real backend/src/main/java symbol OR be named in a catalog-example-ok annotation. Live exits 0; fixtures prove non-vacuity.)"
