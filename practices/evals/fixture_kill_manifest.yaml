@@ -261,6 +261,66 @@ items:
     anchor: 'not registered'
     neuter: 'False'
 
+  # ── contract_enum_parity/fail_java_enum_foreign_domain: P0-2 round 3, CLASS A ─
+  # fixture: the `status` block is bound to com.demo.other.OtherStatus — an UNRELATED
+  #          domain's enum that happens to declare the same {OPEN, CLOSED} as the
+  #          com.demo.WidgetStatus that really serves it. Set equality HOLDS against the
+  #          wrong enum, so nothing else fires and the right enum is never examined again
+  #          (real-tree reproduction: repoint the SessionStatus entry at apikey
+  #          .ApiKeyStatus — both {ACTIVE, REVOKED} — then add EXPIRED to SessionStatus) →
+  #          exit 1.
+  # anchor:  the binding-coherence test — the single condition that stops a java_enum
+  #          FQCN from being an uncorroborated assertion by requiring the enum's on-disk
+  #          package leaf to be the contract file's own domain.
+  # neuter:  condition-constant False → any FQCN is accepted again, the constants match,
+  #          and the mis-binding passes → exit 0.
+  - id: contract_enum_parity/fail_java_enum_foreign_domain
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_java_enum_foreign_domain
+    fixture_arg: '--root'
+    anchor: 'pkg_leaf != domain_key and allow_key not in CROSS_DOMAIN_BINDINGS'
+    neuter: 'False'
+
+  # ── contract_enum_parity/fail_producer_construct_swap: P0-2 round 3, CLASS B ──
+  # fixture: WidgetNotes.note() — the method the block describes — builds its payload with
+  #          a DIFFERENT construct (`Collections.singletonMap("note", System.getProperty(
+  #          …))`), which matches neither `pattern:` nor the `Map.of("note",` residue_probe,
+  #          while the sibling altNote() still carries the contract's literal. Round 2's
+  #          FILE-wide residue is therefore empty and the extracted set still equals the
+  #          contract — a residue_probe proves occurrences of the ONE construct it names,
+  #          not the construct CLASS. Body-scoped residue sees an unconsumed return in the
+  #          declared producer → exit 1.
+  # anchor:  the return-completeness test inside the body-scoped residue sweep — active
+  #          exactly when the captured literal IS the returned value (derived from the
+  #          source, so an acceptance chain like `fmt.equals("csv")` is not held to it).
+  # neuter:  condition-constant False → a return holding any non-literal expression is no
+  #          longer residue, the sibling's literal reads as the whole vocabulary, and set
+  #          equality passes → exit 0.
+  - id: contract_enum_parity/fail_producer_construct_swap
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_producer_construct_swap
+    fixture_arg: '--root'
+    anchor: 'bool(ret_expr.strip())'
+    neuter: 'False'
+
+  # ── contract_enum_parity/fail_producer_scope_incomplete: P0-2 round 3, CLASS B' ─
+  # fixture: the entry declares `methods: [note]` while a SECOND request-mapped handler,
+  #          altNote(), serves the same block and emits "note-b" via a construct neither
+  #          `pattern:` nor `residue_probe:` names. Body-scoped residue is quiet (it only
+  #          looks inside note()) and the extracted set still equals the contract — so
+  #          simply OMITTING a method from the declaration restores the escape the scope
+  #          exists to close → exit 1.
+  # anchor:  the declaration-completeness test: the request-mapped handler set is a fact on
+  #          disk, so `methods:` must cover all of it.
+  # neuter:  condition-constant False → the undeclared handler is invisible again and the
+  #          declared sibling's literal reads as the whole vocabulary → exit 0.
+  - id: contract_enum_parity/fail_producer_scope_incomplete
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_producer_scope_incomplete
+    fixture_arg: '--root'
+    anchor: 'bool(mapped_methods - set(seen))'
+    neuter: 'False'
+
   # NOTE — contract_enum_parity/fail_vocab_scan is deliberately NOT registered here.
   # That fixture restores the skeleton's real P2-34 drift token SUCCESS, which trips
   # BOTH vocab_scan axes at once (forbidden token present AND require_all missing

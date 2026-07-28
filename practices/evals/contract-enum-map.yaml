@@ -7,7 +7,14 @@
 # exhaustiveness is what makes the gate non-heuristic.
 #
 # contract_enum entry — exactly ONE of:
-#   java_enum: <FQCN>    the block is bound to a Java enum; constant sets must match
+#   java_enum: <FQCN>    the block is bound to a Java enum; constant sets must match AND
+#                        the binding must be COHERENT (P0-2 round 3): the enum's package
+#                        leaf must be the contract file's own domain (session-management-
+#                        openapi.yaml ↔ …sessionmanagement.SessionStatus). A copy-pasted
+#                        FQCN pointing at an unrelated enum with the SAME constants used to
+#                        redirect the whole check and leave the real enum free to drift.
+#                        Genuine cross-domain reuse is allowlisted IN THE GUARD
+#                        (CROSS_DOMAIN_BINDINGS), not here, and is non-redundancy-checked.
 #   wire_only: <reason>  no Java ENUM backs the block (the code side is a String).
 #                        A reason is NOT sufficient (P0-2): the entry MUST also carry a
 #                        `wire_source:` block naming WHERE the literals are produced, and
@@ -24,6 +31,10 @@
 #   literal_pattern       file:|files:  pattern: <regex with ONE group>
 #                         residue_probe: <regex>   inline literals; comments are stripped
 #                         first for .java/.ts/.tsx
+#                         producer_scope: MANDATORY — {kind: method_bodies, methods: [m…]}
+#                         for a .java producer (extraction AND residue are scoped to those
+#                         bodies), or {kind: file_wide, reason: …} for a producer with no
+#                         brace-delimited method (REFUSED for .java)
 #   unproduced            NOTHING in this tree produces the block. The ONLY escape from
 #                         set equality, and it is checked twice: `absence_probes:
 #                         [{pattern, globs}]` must match ZERO files over a NON-EMPTY file
@@ -43,12 +54,21 @@
 #                         computed slug ERRORS instead of being skipped.
 #   literal_pattern       `residue_probe:` is MANDATORY. It matches the PRODUCING
 #                         CONSTRUCT (not the literal); the guard requires it to fire at
-#                         least once in the source AND zero times after every `pattern`
-#                         capture is deleted — so every occurrence of the construct was
-#                         consumed by a plain literal. The reviewer's reproduction
-#                         (`return Map.of("status", "healthy".toString());` in one method
-#                         while a sibling method still returns the contract's literal)
-#                         leaves residue and now ERRORS.
+#                         least once in the producer scope AND zero times after every
+#                         `pattern` capture is deleted — so every occurrence of the
+#                         construct was consumed by a plain literal. The reviewer's
+#                         reproduction (`return Map.of("status", "healthy".toString());` in
+#                         one method while a sibling method still returns the contract's
+#                         literal) leaves residue and now ERRORS.
+#                         ROUND 3: a probe proves ONE construct, not the construct CLASS —
+#                         `return Collections.singletonMap("status", System.getProperty(…))`
+#                         matched neither pattern nor probe while the sibling kept the
+#                         literal, so file-wide residue was empty and the guard passed on a
+#                         payload the endpoint no longer emits. `producer_scope:` moves the
+#                         scope to the producing METHOD BODY and adds return-completeness
+#                         (when the capture IS the returned value), so a foreign map
+#                         factory, a helper call, a ternary, a constant reference or a
+#                         multi-line build all land in the fail-closed branch.
 #   java_enum_decl        already structural — the declaration is parsed, not scraped.
 #
 # RUNTIME / BYTECODE TRUTH — `verified_by:` (MANDATORY on `unproduced`, optional and
@@ -242,6 +262,18 @@ contract_enums:
       # `provider: someVar` (or a spread) survives the deletion and ERRORS rather than
       # letting the remaining literal read as the whole vocabulary.
       residue_probe: '\bprovider:\s*'
+      producer_scope:
+        kind: file_wide
+        reason: >-
+          The producer is an object-literal property inside an MSW handler, not a java
+          method body — there is no brace-delimited producing METHOD the guard can scope
+          to, and TS/JS shapes (arrow handlers, spreads, factories) are not statically
+          delimitable by the same declaration scan. The construct class is instead proven
+          over the WHOLE file: every `provider:` key in handlers.ts must carry a plain
+          literal. Honest scope — a mock that emitted the value without a `provider:` key
+          at all (a spread of a helper's result) would not be seen; this is a reference
+          mock for a block no shipped operation serves, so the residual is accepted rather
+          than papered over. `file_wide` is REFUSED for any .java producer.
 
   # ── auth-ui ───────────────────────────────────────────────────────────────
   - kind: contract_enum
@@ -305,6 +337,15 @@ contract_enums:
       # which also FAILS (a vacuous probe proves nothing) — so the extraction cannot
       # quietly degrade in either direction.
       residue_probe: '\bfmt\s*\.\s*equals\s*\('
+      # P0-2 ROUND 3: scoped to the accepting method, so the chain cannot borrow
+      # credibility from an `equals` elsewhere in this 600-line service, and a NEW
+      # acceptance site outside producePortableCopy is residue rather than a silent
+      # widening. The captures sit in an `if` condition, not in a return, so the
+      # return-completeness rule (derived from the source) does NOT apply here — the
+      # method legitimately returns an AccessBundle, not a wire literal.
+      producer_scope:
+        kind: method_bodies
+        methods: [producePortableCopy]
   - kind: contract_enum
     contract: contracts/data-subject-rights-openapi.yaml
     pointer: /components/schemas/DsrRequestResponse/properties/type
@@ -504,6 +545,16 @@ contract_enums:
       # `pattern`, so it survives the deletion, the probe fires on the residue and the
       # guard ERRORS instead of reporting the sibling method's "ok" as the wire vocabulary.
       residue_probe: 'Map\.of\(\s*"status"\s*,'
+      # P0-2 ROUND 3: the probe above proves only the ONE construct it names, so the
+      # reviewer swapped the construct instead — `Collections.singletonMap("status",
+      # System.getProperty(…))` in ping() matched neither pattern nor probe, while
+      # anonPing() still carried "ok", and the file-wide residue was empty. The scope is
+      # now the PRODUCING METHOD BODIES: each must consume every probe occurrence AND
+      # (because the capture is the returned value) leave no return expression unconsumed,
+      # so ANY construct that produces the payload without a plain literal is residue.
+      producer_scope:
+        kind: method_bodies
+        methods: [ping, anonPing]
       # Runtime truth (the primary proof — a regex cannot know what an endpoint emits):
       # both probes are driven over live HTTP and the observed value set is compared to
       # THIS block, parsed from the contract on disk by the same JSON pointer.

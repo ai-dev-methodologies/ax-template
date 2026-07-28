@@ -34,6 +34,9 @@ contract_enums:
       file: backend/src/main/java/com/demo/WidgetNotes.java
       pattern: 'Map\.of\("note", "([^"]+)"\)'
       residue_probe: 'Map\.of\(\s*"note"\s*,'
+      producer_scope:
+        kind: method_bodies
+        methods: [note]
   - kind: contract_enum
     contract: contracts/demo-openapi.yaml
     pointer: /components/schemas/Widget/properties/channel

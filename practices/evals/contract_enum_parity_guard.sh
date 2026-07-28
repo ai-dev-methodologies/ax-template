@@ -15,7 +15,14 @@
 #   kind: contract_enum   — one `enum:` block, addressed by contract path +
 #                           RFC-6901 JSON pointer. EXACTLY ONE of:
 #                             java_enum: <FQCN>   — the block is bound to a Java
-#                                                   enum; constant sets must match.
+#                                                   enum; constant sets must match, AND
+#                                                   the binding must be COHERENT: the
+#                                                   enum's package leaf must be the
+#                                                   contract file's own domain (P0-2
+#                                                   round 3 — see §2a). A wrong FQCN
+#                                                   that happens to carry the same
+#                                                   constants would otherwise redirect
+#                                                   the whole check at an unrelated enum.
 #                             wire_only: <reason> — no Java ENUM backs the block
 #                                                   (the code side is a String).
 #                                                   The reason is mandatory AND a
@@ -71,11 +78,27 @@
 #                          being skipped while the other adapters' slugs are reported as
 #                          the complete set.
 #     literal_pattern      file:|files: <path|glob>  pattern: <regex with ONE group>
-#                          residue_probe: <regex>
-#                          Every capture of the regex across the matched files. The
-#                          escape hatch for a literal produced inline (a probe payload,
+#                          residue_probe: <regex>   producer_scope: {…}
+#                          Every capture of the regex inside the DECLARED PRODUCER SCOPE.
+#                          The escape hatch for a literal produced inline (a probe payload,
 #                          an `equals("json")` chain). Comments are stripped first for
 #                          .java/.ts/.tsx, so a javadoc example cannot fake a producer.
+#                          `producer_scope:` is MANDATORY (P0-2 round 3):
+#                            kind: method_bodies  methods: [m, …]
+#                              REQUIRED for a .java producer. Extraction and residue are
+#                              scoped to those method bodies, so a sibling method's literal
+#                              can no longer stand in for the producer's own; every probe
+#                              occurrence in each body must be consumed; when the captured
+#                              literal IS the returned value (derived from the source, not
+#                              declared) every return in every declared body must be fully
+#                              consumed too; and a producer-shaped occurrence OUTSIDE the
+#                              declared bodies is residue, so a new sibling producer must
+#                              be declared rather than silently widening the vocabulary.
+#                            kind: file_wide  reason: <why>
+#                              The WEAKER guarantee — the construct class is proven over
+#                              the whole file. REFUSED for any .java producer; it exists
+#                              for a producer with no brace-delimited method to scope to
+#                              (the MSW handler's object-literal property).
 #                          FAIL-CLOSED (P0-2 round 2): a regex over java source is NOT a
 #                          parser, so `pattern` can silently SKIP a producing expression
 #                          it does not recognise and still return a non-empty set scraped
@@ -83,16 +106,22 @@
 #                          that are not the ones on the wire. `residue_probe:` is
 #                          therefore MANDATORY: it names the PRODUCING CONSTRUCT (not the
 #                          literal), and the guard requires
-#                            (a) residue_probe matches the source at least ONCE  — a probe
-#                                that matches nothing is vacuous and FAILS; and
+#                            (a) residue_probe matches the producer scope at least ONCE —
+#                                a probe that matches nothing is vacuous and FAILS; and
 #                            (b) residue_probe matches ZERO times AFTER every `pattern`
-#                                match is deleted from the source.
+#                                match is deleted from that scope.
 #                          Together those mean EVERY occurrence of the producing construct
 #                          was consumed by a plain-literal capture. The moment one of them
 #                          holds a non-literal expression (a constant, a concatenation, a
 #                          method call) the residue survives and the guard ERRORS with
 #                          "cannot prove the literal set" instead of guessing. Blocking is
 #                          acceptable; silently extracting the wrong literals is not.
+#                          P0-2 round 3 closed the CONSTRUCT CLASS: a probe proves only the
+#                          construct it names, so ANOTHER construct in the same method
+#                          escaped it (`return Collections.singletonMap("status",
+#                          System.getProperty(…))` while a sibling method kept the
+#                          contract's literal). Hence `producer_scope:` above — the body,
+#                          not one construct, is what must be provable.
 #     unproduced           NOTHING in this tree produces the block (the operation is
 #                          unimplemented / the SPI ships zero implementations). This is
 #                          the ONLY escape from set equality and it is NOT free. It
@@ -300,6 +329,7 @@ def enums_in_source(text):
 
 def scan_java(root):
     enums = {}
+    pkgs = {}
     for f in glob.glob(os.path.join(root, 'backend/src/main/java/**/*.java'), recursive=True):
         text = open(f, encoding='utf-8', errors='ignore').read()
         pm = re.search(r'^\s*package\s+([\w.]+);', strip_comments(text), re.M)
@@ -308,9 +338,63 @@ def scan_java(root):
         for name, consts in enums_in_source(text):
             fq = f"{pkg}.{name}" if name == outer else f"{pkg}.{outer}.{name}"
             enums[fq] = consts
-    return enums
+            pkgs[fq] = pkg
+    return enums, pkgs
 
-java_enums = scan_java(repo)
+java_enums, java_enum_pkgs = scan_java(repo)
+
+# ── 2a. BINDING COHERENCE (round-3 review) ───────────────────────────────────
+# `java_enum:` used to be an UNCORROBORATED assertion: the guard resolved the FQCN and
+# compared constant sets, so a single copy-pasted wrong FQCN pointed the whole check at an
+# UNRELATED enum that happens to carry the same values — and the real enum then drifted
+# unobserved (reviewer's reproduction: repoint the SessionStatus entry at
+# apikey.ApiKeyStatus, both {ACTIVE, REVOKED}, then add EXPIRED to SessionStatus; the guard
+# stayed green because it never looked at SessionStatus again).
+#
+# The binding must therefore be corroborated by something the manifest author does not
+# write: the DOMAIN the enum lives in, on disk, must be the domain that owns the contract
+# file, also on disk. `contracts/session-management-openapi.yaml` → domain key
+# `sessionmanagement`; `…authblueprint.apikey.ApiKeyStatus` → package leaf `apikey`; the
+# author cannot make those two strings equal, so the copy-paste FAILS.
+#
+# Why this rule and not the alternatives: "each java enum bound by at most one block" is
+# false in this tree by design (ApiKeyScope backs 3 blocks, OAuthProvider 6) and domain
+# coherence already subsumes the useful part of it — an enum can only be bound from its own
+# domain's contract. "The DTO serving the path must reference the enum" is strictly
+# stronger but NOT universally applicable: many blocks are path/query parameters with no DTO,
+# and some (auth's AuthState schemas) are served by no shipped operation, so it would need
+# a per-entry escape hatch for ~a third of the entries — i.e. author assertion again,
+# exactly what this check exists to remove.
+#
+# Genuine cross-domain reuse is allowlisted HERE, in the guard — not in the manifest — so
+# adding one is a reviewed edit to the gate itself rather than one more line an errant
+# copy-paste could carry with it. Each pair is non-redundancy-checked below: an allowance
+# nobody uses (while its contract is still on disk) FAILS, so it cannot rot into a lie.
+CONTRACT_STEM_SUFFIXES = ('-openapi', '-ui')
+CROSS_DOMAIN_BINDINGS = {
+    ('contracts/auth-openapi.yaml', 'user'): (
+        "auth serves the identity aggregate's own vocabulary: UserRole / VerificationState "
+        "live in the `user` domain and are surfaced by the auth contract's session schemas."),
+    ('contracts/data-subject-rights-openapi.yaml', 'dsr'): (
+        "`dsr` is the package abbreviation of the data-subject-rights domain — one domain, "
+        "two spellings, not a cross-domain binding."),
+}
+
+def contract_domain_key(rel):
+    """contracts/session-management-openapi.yaml → 'sessionmanagement'.
+
+    `-openapi` / `-ui` are the two contract-file suffixes in this tree (auth-openapi.yaml
+    and auth-ui.yaml are both the `auth` domain); everything else is folded to lower-case
+    alphanumerics so the file name and the java package spell the domain the same way.
+    """
+    stem = re.sub(r'\.ya?ml$', '', os.path.basename(str(rel)))
+    for suf in CONTRACT_STEM_SUFFIXES:
+        if stem.endswith(suf):
+            stem = stem[:-len(suf)]
+            break
+    return re.sub(r'[^a-z0-9]', '', stem.lower())
+
+cross_domain_used = set()
 
 # ── 2b. wire_source extraction (P0-2) ────────────────────────────────────────
 # A wire_only block is NOT exempt from parity: it declares a producer and the guard
@@ -468,16 +552,70 @@ def src_java_method_returns(src):
         return None, f"`{method}()` returns no string literal in the matched file(s)"
     return toks, None
 
+PRODUCER_SCOPE_KINDS = ('method_bodies', 'file_wide')
+
+def java_method_bodies(text, name):
+    """[(start, end)] brace-span of every `name(…) { … }` DECLARATION in `text`.
+
+    A call site is `name(args);` — never followed by `{` — so requiring the closing paren
+    to be followed (modulo a `throws` clause) by an opening brace selects declarations.
+    Parameter lists in this tree carry no nested parens, and a shape this does not
+    recognise yields NO span, which the caller treats as a hard error rather than as an
+    empty producer.
+    """
+    spans = []
+    for m in re.finditer(r'(?<![\w.$])' + re.escape(str(name)) +
+                         r'\s*\([^;{)]*\)\s*(?:throws\s+[\w.,\s]+?)?\{', text):
+        i = text.index('{', m.end() - 1)
+        depth = 0
+        j = i
+        for j in range(i, len(text)):
+            if text[j] == '{':
+                depth += 1
+            elif text[j] == '}':
+                depth -= 1
+                if depth == 0:
+                    break
+        spans.append((i, j + 1))
+    return spans
+
 def src_literal_pattern(src):
-    """One-capture regex over the producer file(s), FAIL-CLOSED via `residue_probe`.
+    """One-capture regex over the PRODUCING METHOD BODIES, FAIL-CLOSED via residue.
 
     A regex is not a parser: `pattern` can silently skip a producing expression it does
     not recognise while still scraping a non-empty set from elsewhere in the file, and
     the guard would report PASS on literals nothing puts on the wire. `residue_probe`
-    names the PRODUCING CONSTRUCT; the guard requires it to match at least once in the
-    source (else the probe is vacuous) and ZERO times once every `pattern` match is
-    deleted — i.e. every occurrence of the construct was consumed by a plain-literal
-    capture. Anything else ERRORS ("cannot prove the literal set") instead of guessing.
+    names the PRODUCING CONSTRUCT and must match at least once (else the probe is vacuous)
+    and ZERO times once every `pattern` match is deleted — i.e. every occurrence of the
+    construct was consumed by a plain-literal capture.
+
+    ROUND 3 (cross-family review) — that closed one CONSTRUCT, not the construct CLASS.
+    `residue_probe` can only prove occurrences of the construct it names, so ANOTHER
+    construct in the same method escaped it: rewriting the producing method as
+    `return Collections.singletonMap("status", System.getProperty(…))` matched neither
+    `pattern` nor the `Map.of("status",` probe, while a SIBLING method still carried the
+    contract's literal — so the file-wide probe fired, the file-wide residue was empty,
+    and the guard reported PASS on a value the endpoint no longer emits.
+    The scope is therefore the PRODUCING METHOD BODY, declared per entry:
+
+      producer_scope: {kind: method_bodies, methods: [ping, anonPing]}
+
+    and inside each declared body the guard requires, all as residue:
+      · every occurrence of the author's residue_probe to be consumed by a capture; and
+      · when the captured literal IS the returned value anywhere in the entry (derived
+        from the source — a capture lying inside a `return …;`), EVERY return in EVERY
+        declared body to be fully consumed too. So a helper call, a ternary, a constant
+        reference, a foreign map factory or a multi-line build left in a return is
+        residue: "cannot prove the literal set", exactly like the `.toString()` case.
+    Extraction is scoped the same way, so literals from an unrelated sibling method can no
+    longer stand in for the producer's own. Producer-shaped occurrences OUTSIDE the
+    declared bodies are residue as well, which forces a NEW sibling producer to be
+    declared instead of silently widening the set.
+
+    HONEST SCOPE: this proves the DECLARED producers are literal-only and complete over the
+    producing construct; it does not prove the declared set is every method that serves the
+    block (path→handler mapping is not statically decidable here). That completeness is what
+    `verified_by:` — a live-HTTP assertion of the emitted vocabulary — backstops.
     """
     files, err = resolve_files(src.get('files') or src.get('file'), 'files' not in src)
     if err:
@@ -502,30 +640,130 @@ def src_literal_pattern(src):
         prx = re.compile(str(probe))
     except re.error as ex:
         return None, f"residue_probe is not a valid regex: {ex}"
+
+    scope = src.get('producer_scope')
+    pkind = scope.get('kind') if isinstance(scope, dict) else None
+    if pkind not in PRODUCER_SCOPE_KINDS:
+        return None, ("literal_pattern requires `producer_scope:` "
+                      "{kind: method_bodies, methods: [m, …]} — a residue_probe alone proves "
+                      "only the ONE construct it names, so another construct in the same "
+                      "method (a foreign map factory, a helper call, a ternary) escapes it "
+                      "while a sibling method's literal keeps the extracted set looking right")
+    java_files = [f for f in files if f.endswith('.java')]
+    if pkind == 'file_wide':
+        if java_files:
+            return None, (f"producer_scope: file_wide is NOT available for a java producer "
+                          f"({os.path.relpath(java_files[0], repo)}) — method bodies are "
+                          f"delimitable there, and file-wide residue is exactly the scope the "
+                          f"round-3 reviewer escaped; declare kind: method_bodies")
+        if not str(scope.get('reason') or '').strip():
+            return None, ("producer_scope: file_wide requires a `reason:` — it is the WEAKER "
+                          "guarantee (the construct class is proven over the whole file, not "
+                          "over a delimited producer), so it must be justified")
+        regions = [(f, read_source(f), None) for f in files]
+    else:
+        methods = scope.get('methods')
+        if not isinstance(methods, list) or not methods:
+            return None, ("producer_scope: method_bodies requires a non-empty `methods:` list "
+                          "naming the method(s) that produce this block's literals")
+        regions = []
+        seen = {str(m): 0 for m in methods}
+        for f in files:
+            body = read_source(f)
+            for name in seen:
+                for (a, b) in java_method_bodies(body, name):
+                    regions.append((f, body[a:b], name))
+                    seen[name] += 1
+        absent = sorted(n for n, c in seen.items() if c == 0)
+        if absent:
+            return None, (f"producer_scope names method(s) {absent} with no body in the "
+                          f"{len(files)} matched file(s) — a producer that is not there cannot "
+                          f"be the one on the wire (renamed? moved? a shape the declaration "
+                          f"scan does not recognise?)")
+        # `methods:` is itself an author assertion: OMITTING the real handler would restore
+        # exactly the escape this scope exists to close (the omitted method emits whatever
+        # it likes by a construct neither regex names, while the declared sibling keeps the
+        # contract's literal). Where the producer file registers its handlers by ANNOTATION
+        # — every HTTP surface in this tree — the handler set is a fact on disk, so the
+        # declaration must cover ALL of it. (A handler registered without an annotation, e.g.
+        # functional routing, is not visible here; that residual is what the live-HTTP
+        # `verified_by:` backstops.)
+        mapped_methods = set()
+        for f in files:
+            body = read_source(f)
+            for am in re.finditer(r'@(?:Get|Post|Put|Delete|Patch|Request)Mapping\b', body):
+                nm = re.search(r'(?<![\w.$])(\w+)\s*\([^;{)]*\)\s*(?:throws\s+[\w.,\s]+?)?\{',
+                               body[am.end():am.end() + 400])
+                if nm:
+                    mapped_methods.add(nm.group(1))
+        scope_incomplete = bool(mapped_methods - set(seen))
+        if scope_incomplete:
+            return None, (f"producer_scope is INCOMPLETE — request-mapped method(s) "
+                          f"{sorted(mapped_methods - set(seen))} in the producer file(s) are "
+                          f"not declared in `methods:`. An undeclared handler can emit any "
+                          f"value by any construct while the declared sibling keeps the "
+                          f"contract's literal, which is the escape this scope exists to "
+                          f"close; declare every mapped method or split the entry")
+
+    # Is the captured literal the RETURNED value? Derived from the source, not declared —
+    # for an acceptance chain (`fmt.equals("csv")` inside an `if`) the returns carry domain
+    # objects and must NOT be required to be literals.
+    return_produced = False
+    for (f, region, name) in regions:
+        rets = [(m.start(), m.end()) for m in re.finditer(r'\breturn\b[^;]*;', region)]
+        for m in rx.finditer(region):
+            if any(s <= m.start() and m.end() <= e for (s, e) in rets):
+                return_produced = True
+
     toks = set()
     pre_hits = 0
     residue_hits = []
-    for f in files:
-        body = read_source(f)
-        toks |= set(rx.findall(body))
-        pre_hits += len(prx.findall(body))
-        residue = rx.sub('', body)
+    for (f, region, name) in regions:
+        rel = os.path.relpath(f, repo)
+        scope_label = f"{rel}#{name}()" if name else rel
+        toks |= set(rx.findall(region))
+        pre_hits += len(prx.findall(region))
+        residue = rx.sub('', region)
         for m in prx.finditer(residue):
-            line = residue.count('\n', 0, m.start()) + 1
-            residue_hits.append(f"{os.path.relpath(f, repo)}:~{line} {m.group(0)!r}")
+            # a body-relative offset would be misleading, so only the whole-file scope
+            # reports a line number
+            at = '' if name else f":~{residue.count(chr(10), 0, m.start()) + 1}"
+            residue_hits.append(f"{scope_label}{at} {m.group(0)!r}")
+        if return_produced:
+            for m in re.finditer(r'\breturn\b\s*([^;]*);', residue):
+                ret_expr = m.group(1)
+                ret_unconsumed = bool(ret_expr.strip())
+                if ret_unconsumed:
+                    residue_hits.append(f"{scope_label} return {ret_expr.strip()!r}")
+    if pkind == 'method_bodies':
+        # Producer-shaped occurrences OUTSIDE every declared body: an undeclared sibling
+        # producer would otherwise widen the wire vocabulary unobserved.
+        for f in files:
+            body = read_source(f)
+            covered = []
+            for name in {n for (g, _r, n) in regions if g == f}:
+                covered.extend(java_method_bodies(body, name))
+            for m in list(rx.finditer(body)) + list(prx.finditer(body)):
+                if not any(a <= m.start() and m.end() <= b for (a, b) in covered):
+                    line = body.count('\n', 0, m.start()) + 1
+                    residue_hits.append(
+                        f"{os.path.relpath(f, repo)}:~{line} OUTSIDE any declared producer "
+                        f"method: {m.group(0)!r}")
     if pre_hits == 0:
-        return None, (f"residue_probe {probe!r} matches NOTHING in the {len(files)} matched "
-                      f"file(s) — a probe that never fires cannot prove the pattern consumed "
-                      f"every producer; point it at the producing construct")
+        return None, (f"residue_probe {probe!r} matches NOTHING in the declared producer "
+                      f"scope ({len(regions)} region(s)) — a probe that never fires cannot "
+                      f"prove the pattern consumed every producer; point it at the producing "
+                      f"construct")
     if len(residue_hits) > 0:
-        return None, (f"CANNOT PROVE THE LITERAL SET — residue_probe {probe!r} still matches "
-                      f"{residue_hits[:4]} after removing every `pattern` capture: that "
-                      f"occurrence of the producing construct does NOT hold a plain string "
-                      f"literal, so the extracted set is not the set on the wire. Make the "
-                      f"producer a plain literal, or bind this block to a java_enum")
+        return None, (f"CANNOT PROVE THE LITERAL SET — {residue_hits[:4]} survived after "
+                      f"removing every `pattern` capture from the declared producer scope: "
+                      f"that part of the producing method does NOT hold a plain string "
+                      f"literal the guard can extract, so the extracted set is not the set on "
+                      f"the wire. Make the producer a plain literal, or bind this block to a "
+                      f"java_enum")
     if not toks:
-        return None, (f"pattern {pat!r} matched nothing in the {len(files)} matched "
-                      f"file(s) — an unmatched pattern proves no producer")
+        return None, (f"pattern {pat!r} matched nothing in the declared producer scope "
+                      f"({len(regions)} region(s)) — an unmatched pattern proves no producer")
     return toks, None
 
 def src_unproduced(src):
@@ -801,6 +1039,23 @@ for key in sorted(claimed):
             f"{where}: java_enum {fq} not found in backend/src/main/java "
             f"(renamed/moved/deleted?)")
         continue
+    # BINDING COHERENCE — the FQCN must be corroborated by the on-disk domain, not just
+    # by the manifest author's assertion (see §2a). A wrong FQCN that happens to carry the
+    # same constants would otherwise redirect the entire check at an unrelated enum.
+    pkg_leaf = (java_enum_pkgs.get(fq, '') or '').rsplit('.', 1)[-1]
+    domain_key = contract_domain_key(key[0])
+    allow_key = (key[0], pkg_leaf)
+    if allow_key in CROSS_DOMAIN_BINDINGS:
+        cross_domain_used.add(allow_key)
+    if pkg_leaf != domain_key and allow_key not in CROSS_DOMAIN_BINDINGS:
+        violations.append(
+            f"{where}: INCOHERENT BINDING — {fq} lives in package leaf {pkg_leaf!r} but this "
+            f"block belongs to contract domain {domain_key!r}. A java_enum FQCN is otherwise "
+            f"an unchecked assertion: an unrelated enum with the SAME constants would be "
+            f"compared instead, and the enum that really serves this block could drift "
+            f"unobserved. Point the entry at {domain_key!r}'s enum, or — if this really is "
+            f"shared vocabulary — add the ({key[0]}, {pkg_leaf}) pair to CROSS_DOMAIN_BINDINGS "
+            f"in the guard with a reason")
     java_set = set(java_enums[fq])
     wire_raw = discovered[key]
     lower = str(e.get('wire_case', '')).lower() == 'lower'
@@ -820,6 +1075,15 @@ for key in sorted(claimed):
     if 'wire_case' in e and not str(e.get('reason') or '').strip():
         violations.append(f"{where}: wire_case requires a `reason:`")
     compare_sets(where, wire_set, java_set, e, fq)
+
+# NON-REDUNDANCY of the cross-domain allowlist, same discipline as wire_extra/wire_missing:
+# an allowance nobody exercises is a standing hole, so it FAILS. Only checked for pairs
+# whose contract file exists in THIS tree — a fixture root legitimately has none of them.
+for pair in sorted(CROSS_DOMAIN_BINDINGS):
+    if os.path.isfile(os.path.join(repo, pair[0])) and pair not in cross_domain_used:
+        violations.append(
+            f"cross-domain allowance {pair} is STALE — {pair[0]} exists but no entry binds a "
+            f"{pair[1]!r} enum any more; delete the pair from CROSS_DOMAIN_BINDINGS")
 
 # ── 6. vocab_scan ────────────────────────────────────────────────────────────
 # EXHAUSTIVE path: parse the DECLARED token set out of the file and compare it to
