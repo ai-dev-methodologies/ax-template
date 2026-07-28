@@ -314,6 +314,19 @@ components:
           type: string
           format: date-time
           nullable: true
+        allowedActions:
+          type: array
+          description: |
+            P2-38b — the actions THIS caller may invoke on this request, computed
+            server-side by ApprovalActionEvaluator from the same ApprovalActionGuards
+            predicates ApprovalService enforces on the action path. Clients MUST prefer
+            this over re-deriving authorization from status/requesterUserId/steps: only
+            the server can answer it, and a client-side re-derivation is free to drift.
+            Empty when the caller may do nothing. Consumers MUST ignore unrecognized
+            tokens so the vocabulary can grow without breaking older clients.
+          items:
+            type: string
+            enum: [view, submit, cancel, approve, reject]
 
     ApprovalListResponse:
       type: object

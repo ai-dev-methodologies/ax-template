@@ -148,7 +148,16 @@ class ProblemDetailContractParityTest {
 
     @Test
     void problemDetail_hasExactlyTheSixRfc9457MembersWithCorrectTypes() throws IOException {
-        JsonNode root = goldenTree();
+        // Subject is the LIVE emitted body (buildRepresentativeError()), not the
+        // committed golden fixture — asserting against goldenTree() here would
+        // only re-check the fixture file against itself and could never flip
+        // independently of the fixture, letting a member silently drop out of
+        // GlobalProblemDetailAdvice's real emission while this test stays green
+        // (see problemDetail_serializesFieldWiseEqualToTheGoldenFixture, whose
+        // whole-tree comparison against the SAME golden already covers the
+        // fixture-vs-golden leg; this test instead independently pins the
+        // emitted shape's member count/types/values).
+        JsonNode root = MAPPER.readTree(MAPPER.writeValueAsString(buildRepresentativeError()));
         assertThat(root.size()).as("no extra/missing ProblemDetail members").isEqualTo(6);
 
         assertThat(root.get("type").isTextual()).isTrue();

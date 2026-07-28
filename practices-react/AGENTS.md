@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "1a429c4bc2cf8ad2f34a66f20e851315496426763b9ea5007485633caf87de09"
+  source_concat_sha256: "a70be0aed1ea25498f8546a8201f3499d56ee5bb9345505439cf823805606e82"
   rule_count: 102
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -30,6 +30,7 @@ Full table + trade-offs: `templates/L0/fork-receiver-kit/README.md`.
 
 ### L0 — fork-receiver-kit
 
+- `authorized-actions` — (see templates/L0/fork-receiver-kit/README.md)
 - `entity-key` — assertSafeEntityRef — path-segment defense for polymorphic entity refs
 - `money` — toMinorUnits / toMajorUnits / parseMinor / serializeMinor / fractionDigitsFor — integer minor units, no float, JSON wire-type
 - `parse-error` — parseError (RFC 9457 unwrap + Korean PII deny-list) + CodedError + sanitizeStoredError
@@ -3903,7 +3904,10 @@ impactDescription: "Interleaving style writes with layout reads (offsetWidth, ge
 tags: [javascript, dom, css, performance, reflow, layout-thrashing]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-002"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks: (a) no style write is directly followed by a layout-forcing read (offsetWidth/offsetHeight/getBoundingClientRect/getComputedStyle) before the next write, (b) React components prefer state-driven `className` over imperative `ref.style` mutation outside genuinely imperative cases (raw rAF animation, native DOM integration, focus/scroll positioning)."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -4100,7 +4104,10 @@ impactDescription: "Reduces deep property lookups in hot loops when the path is 
 tags: [javascript, loops, optimization, caching]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-004"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks the hot loop for a stable property-access path (e.g. `obj.a.b.c`) re-read on every iteration; confirms it is cached into a local, and that profiling (not speculation) showed the lookup was a real cost."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -4182,7 +4189,10 @@ impactDescription: "localStorage / document.cookie reads are synchronous and not
 tags: [javascript, localStorage, storage, caching, performance]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-006"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks: (a) localStorage/document.cookie reads inside hot paths are cached in memory rather than re-read per call, (b) the cache is invalidated on local writes (the `storage` event does not fire on the writing tab), (c) a focus/visibility revalidation exists for cross-tab drift."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -4300,7 +4310,10 @@ impactDescription: "Three .filter() calls iterate three times and allocate three
 tags: [javascript, arrays, loops, performance]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-007"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that multiple sequential `.filter()`/`.map()` passes over the same array are combined into one loop only when the array is large or the path is hot — confirms it was not applied as a blanket rewrite that hurts readability for a small/cold array."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -4380,7 +4393,10 @@ impactDescription: "Skips unnecessary processing once the result is determined. 
 tags: [javascript, functions, optimization, early-return, control-flow]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-009"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that the loop/function returns as soon as the result is determined, and confirms the early exit does not silently drop cases the caller needs (e.g. form validation that must report every failing field, not just the first)."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -4468,7 +4484,10 @@ impactDescription: "One pass instead of two, no intermediate array. Also avoids 
 tags: [javascript, arrays, flatMap, filter, performance]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-013"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks: (a) `.map().filter(Boolean)` is replaced with `.flatMap()` only where the code does not rely on `.filter(Boolean)` intentionally removing falsy-but-valid values (0, '', false), (b) the flatMap wrapper-array allocation tradeoff was considered, not assumed strictly faster."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -4564,7 +4583,10 @@ impactDescription: "new RegExp() inside render allocates and recompiles. Hoist i
 tags: [javascript, regexp, optimization, memoization]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-010"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks: (a) a `new RegExp()` (or literal) with no per-render-dependent pattern is hoisted out of render/loop scope, (b) a pattern that DOES depend on props/state is memoized rather than hoisted, (c) any global (`/g`) or sticky (`/y`) regex reused across calls resets or isolates its mutable `lastIndex`."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -4654,7 +4676,10 @@ impactDescription: "Build a Map keyed by id once (O(n)); each lookup is then O(1
 tags: [javascript, map, indexing, optimization, performance]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-003"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that a join/lookup against another array by id builds a `Map` once (O(n)) rather than calling `.find()`/`.indexOf()` inside a loop (O(n²)) — confirms the Map is built outside the loop that queries it."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -4697,6 +4722,14 @@ const enriched = orders.map((o) => ({
 }))
 ```
 
+### Same fix, explicit loop (no array methods)
+
+```typescript
+const userById = new Map()
+for (const u of users) userById.set(u.id, u)
+for (const o of orders) o.user = userById.get(o.userId)
+```
+
 ### When it pays off
 
 Build cost is O(n). Only worth it when:
@@ -4729,7 +4762,10 @@ impactDescription: "O(1) length check filters out the vast majority of inequal c
 tags: [javascript, arrays, performance, comparison]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-008"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that an O(1) `.length` (or size) inequality check runs before the more expensive sort/deep-compare, so the common unequal case short-circuits without paying for the full comparison."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -4811,7 +4847,10 @@ impactDescription: "Sorting an entire array to find one element is O(n log n) pl
 tags: [javascript, arrays, performance, sorting, algorithms]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-011"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that finding a single min/max element uses one O(n) pass rather than sorting the full array, and — if `Math.min(...arr)`/`Math.max(...arr)` spread is used instead — that the array size stays well under the engine's argument-count ceiling (~125K-640K depending on engine)."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -6810,6 +6849,7 @@ Codex round-7 closed a narrower gap in the same mutation check: a write reached 
 - **A tainted parameter that is never used in a data call** (e.g. rendered as text, `<span>{userId}</span>`) is not reported — the rule gates on actual data-call usage, not merely on receiving the value.
 - **Non-canonical parameter names for props** (a fork renaming the conventional `props`/`params`/`searchParams` identifiers) are not recognized as source objects — a name-based provenance anchor, consistent with the rest of the catalog's static rules (no full type/scope-based caller-graph analysis).
 - **An ordinary collection/cache/store member call is not a sink** (codex round-12). `map.get(props.userId)`, `cache.get(props.userId)`, `set.delete(props.userId)` — and any other `.get`/`.post`/`.put`/`.patch`/`.delete` call whose receiver is not a proven HTTP-client object — are normal JS constructs, not HTTP boundaries. The receiver must be import-provenance-confirmed, a recognized client-factory result, or a conventional client name not provably a Map/Set/object/array literal (see item 8 above).
+- **An identity-shaped key used as an ADMIN SEARCH FILTER — narrowing a list BY someone else's identity, not deriving the caller's OWN identity — is a documented false positive the rule structurally cannot distinguish from a real taint** (BACKLOG P3-55). `searchParams.get('actorId')` feeding an audit-log list's filter (`useQuery({ queryKey: ['audit-logs', { actorId }] })`) matches the same shape as a genuine caller-identity leak: an identity-named key (here `actorId`) flowing from a source object into a data-boundary sink. The rule matches on key name + provenance, not on *semantic role* — "the value the caller is searching FOR" vs. "the value that IS the caller" are indistinguishable without knowing the endpoint is a role-gated admin search surface, which is outside a syntactic lint's reach. The accepted mitigation is an inline `eslint-disable-next-line ax/no-caller-identity-from-props` with a rationale comment naming the specific filter semantics and the BACKLOG row, backed by the **authoritative** control: the endpoint's own server-side role-gating (mirroring `caller-authentication-only-no-userid-param`). See `templates/L4/audit-log/app/(audit-log)/page.tsx` for the reference disable. This is a *documented* limit, not a silent gap — it does not weaken the rule's coverage of the actual caller-identity-leak shape (item 6 above) in any other file.
 
 Reference: [CWE-639: Authorization Bypass Through User-Controlled Key](https://cwe.mitre.org/data/definitions/639.html)
 
@@ -7050,6 +7090,17 @@ export default async function AdminLayout({ children }) {
       <main>{children}</main>
     </>
   )
+}
+```
+
+### Detection is also style-independent, not just name-independent
+
+```typescript
+// Same detected shape, using assignment instead of a spread — style is irrelevant too
+function returnSessionWithActingAs(userId: string) {
+  const next = Object.assign({}, currentSession)
+  next.actingAs = userId
+  return next
 }
 ```
 
@@ -7594,7 +7645,7 @@ useEffect(() => { charge(order); }, []);                    {/* VIOLATION: succe
 
 ```tsx
 const idemKey = useIdempotencyKey(orderId);                 // STABLE across retries (PAYMENT-FE-003)
-async function pay() { await paymentClient.charge({ ...form }, { 'Idempotency-Key': idemKey }); }
+async function pay() { await paymentClient.charge(form, { 'Idempotency-Key': idemKey }); }
 {inFlightMs > 3000 && <SlowProviderWarning />}              // PAYMENT-FE-004
 {result?.alreadyProcessed && <AlreadyProcessed />}          // idempotent replay recognized (PAYMENT-FE-011)
 // success page: READ the receipt by orderId (getPayment), never charge (PAYMENT-FE-005)
@@ -8175,6 +8226,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-001"
 verification:
   type: review
   status: manual
+  notes: "Reviewer checks that the animation targets a wrapper `<div>` (transform/opacity) only for whole-asset animations (e.g. spin the entire icon); animation of an internal path/shape stays on the SVG element itself."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -8382,6 +8434,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-002"
 verification:
   type: review
   status: manual
+  notes: "Reviewer checks that `content-visibility` is applied to off-screen sections to skip layout/paint, and confirms it is not used as a substitute for list virtualization — the DOM nodes still exist and still cost memory/event budget."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -8477,6 +8530,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-003"
 verification:
   type: review
   status: manual
+  notes: "Reviewer checks that static JSX with no per-render-dependent props is hoisted to module scope, or left to the React Compiler on React 19+ projects where automatic memoization already covers it (avoiding redundant manual hoisting)."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -9105,6 +9159,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-004"
 verification:
   type: review
   status: manual
+  notes: "Reviewer checks that any SVG `--precision` reduction is backed by a measured config (not a blanket low value) and is gated by a visual-regression check confirming icons/maps/charts don't visibly degrade."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -9190,6 +9245,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-009"
 verification:
   type: review
   status: manual
+  notes: "Reviewer checks that `useTransition`'s `isPending` is used to keep the prior UI responsive during a state-update transition, and that it is not substituted for explicit network/upload/mutation loading state, which needs its own pending signal."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"
@@ -9307,7 +9363,10 @@ impactDescription: "Reactive hooks (useSearchParams, useSyncExternalStore-derive
 tags: [rerender, searchParams, localStorage, optimization]
 applicable_to: [react, nextjs]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-002"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that a value read via a reactive hook (`useSearchParams`, `useSyncExternalStore`-derived) which is only consumed inside an event handler is instead read on-demand (`window.location.search`/`document.cookie`) rather than subscribed to, avoiding a re-render of every consumer on every change."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -9460,7 +9519,10 @@ impactDescription: "If a value can be computed from current props/state, compute
 tags: [rerender, derived-state, useEffect, state, you-might-not-need-an-effect]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-006"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that a value computable from current props/state is computed during render, not stored in state and synced via `useEffect` — the canonical 'You Might Not Need an Effect' anti-pattern that adds an extra render and risks drift bugs."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -9549,7 +9611,10 @@ impactDescription: "When the UI only cares about a threshold (mobile vs desktop)
 tags: [rerender, derived-state, media-query, optimization]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-005"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that a component subscribes to the derived boolean it actually needs (e.g. `useMediaQuery`) rather than the raw continuously-changing value (`useWindowWidth`), so it re-renders only on the relevant transition, not on every intermediate value."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -9621,6 +9686,7 @@ verification:
   type: lint
   rule_id: "ax/prefer-functional-setstate"
   status: shipped
+  notes: "Shipped: custom ESLint rule ax/prefer-functional-setstate is registered in the plugin and flags a setState call whose argument reads the closed-over state variable it is updating, instead of the updater-function form; reviewer confirms the rule is enabled (not just present) for the target lint config."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -9685,6 +9751,18 @@ function TodoList() {
 }
 ```
 
+### Functional update without array spread
+
+```tsx
+function useAppendOnlyList<T>(initial: T[]) {
+  const [items, setItems] = useState(initial)
+  const append = useCallback((next: T[]) => setItems((curr) => curr.concat(next)), [])
+  return { items, append }
+}
+```
+
+`.concat()` appends without a spread and stays a pure, non-mutating functional update.
+
 ### Why this is primarily correctness, not perf
 
 - **Stale closures** are real bugs: data loss, lost updates, wrong calculations.
@@ -9716,7 +9794,10 @@ impactDescription: "useState(expensive()) runs expensive() on every render even 
 tags: [react, hooks, useState, performance, initialization]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-008"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that an expensive initializer passed to `useState` is wrapped in a function (`useState(() => expensive())`) rather than called eagerly (`useState(expensive())`), and that the initializer is pure (StrictMode dev double-mounts may invoke it twice)."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -9766,7 +9847,7 @@ function UserProfile() {
 ```tsx
 function FilteredList({ items }: { items: Item[] }) {
   const [index, setIndex] = useState(() => buildSearchIndex(items))
-  // ...
+  return <SearchResults index={index} onRebuild={() => setIndex(buildSearchIndex(items))} />
 }
 
 function UserProfile() {
@@ -9774,7 +9855,7 @@ function UserProfile() {
     const stored = localStorage.getItem('settings')
     return stored ? JSON.parse(stored) : {}
   })
-  // ...
+  return <SettingsPanel value={settings} />
 }
 ```
 
@@ -9810,7 +9891,10 @@ impactDescription: "Default value expressions like `onClick = () => {}` or `item
 tags: [rerender, memo, optimization]
 applicable_to: [react, nextjs]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-003"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that default prop values like `() => {}` or `[]` are hoisted to a module-level constant rather than written inline, since an inline default creates a new reference every render and defeats `React.memo`'s shallow-equality check."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -9859,7 +9943,7 @@ const NOOP = () => {}
 const UserAvatar = memo(function UserAvatar({
   onClick = NOOP,            // ✅ stable reference
 }: { onClick?: () => void }) {
-  // ...
+  return <button onClick={onClick}>Avatar</button>
 })
 ```
 
@@ -10098,7 +10182,10 @@ impactDescription: "Canonical React docs pattern. Modeling 'user clicked submit'
 tags: [rerender, useEffect, events, side-effects, dependencies, you-might-not-need-an-effect]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-011"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that an action triggered by a specific user event (e.g. submit) runs directly in the event handler, not modeled as state that an `Effect` reacts to — the Effect form re-runs on unrelated dependency changes and can duplicate the action."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -10292,7 +10379,10 @@ impactDescription: "useMemo allocates a closure and a dependency array, runs sha
 tags: [rerender, useMemo, optimization, react-compiler]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-009"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that `useMemo` wraps only computations expensive enough to outweigh the closure/dependency-array/comparison overhead it introduces — a cheap expression like `a || b` or `a + b` should just be re-evaluated inline."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -10367,7 +10457,10 @@ impactDescription: "A combined hook reruns the entire body when any dependency c
 tags: [rerender, useMemo, useEffect, dependencies, optimization]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-010"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that independent pieces of logic combined into one hook are split when their dependencies differ (so each re-runs only on its own dependency change), while genuinely coupled logic stays combined rather than being split into noise."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -10460,7 +10553,10 @@ impactDescription: "startTransition marks a state update as non-urgent, letting 
 tags: [rerender, transitions, startTransition, performance, concurrent]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-012"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that `startTransition` wraps non-urgent state updates that should not block urgent input (typing, clicks), and that imperative/high-frequency work (scroll position tracking, mouse tracking) instead uses refs, `requestAnimationFrame`, or throttling rather than a transition."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -10569,7 +10665,10 @@ impactDescription: "Keeps the input snappy by letting the derived expensive rend
 tags: [rerender, useDeferredValue, optimization, concurrent]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-013"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that the expensive derived render driven by `useDeferredValue` is itself wrapped in `useMemo` with the deferred value as its dependency — without that memoization, the deferred value alone does not skip the expensive recomputation."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -10664,7 +10763,10 @@ impactDescription: "Updating a ref does not trigger a re-render. For mouse posit
 tags: [rerender, useref, state, performance]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-014"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that values which do not need to trigger a re-render on change (mouse position, interval handles, transient flags) are stored in a ref rather than state, and that state is reserved for values the UI actually renders from."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -11866,7 +11968,7 @@ Each of these returns a new reference even if the values are identical.
 import { useMemo } from 'react'
 
 export default function ClientList({ usernames }: { usernames: string[] }) {
-  const sorted = useMemo(() => [...usernames].sort(), [usernames])
+  const sorted = useMemo(() => usernames.slice().sort(), [usernames])
   // render
 }
 ```

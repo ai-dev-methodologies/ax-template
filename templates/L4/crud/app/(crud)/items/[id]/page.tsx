@@ -20,19 +20,7 @@ imports_forbidden: [other L4 domains]
 
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import DetailPage from 'templates/L3/pages/detail-page/[id]/page'
-
-// ─── types ──────────────────────────────────────────────────────────────────
-
-interface Item {
-  id: string
-  title: string
-  description?: string
-  createdBy: string
-  createdAt: string
-  updatedBy?: string
-  updatedAt?: string
-}
+import ItemDetailView, { type Item } from './item-detail-view'
 
 // ─── fetcher ────────────────────────────────────────────────────────────────
 
@@ -43,18 +31,6 @@ async function fetchItem(id: string): Promise<Item> {
   if (res.status === 404) throw new Error('Item not found')
   if (!res.ok) throw new Error(`Failed to fetch item: ${res.status}`)
   return res.json() as Promise<Item>
-}
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 // ─── component ──────────────────────────────────────────────────────────────
@@ -99,54 +75,5 @@ export default function ItemDetailPage({ params }: { params: { id: string } }) {
     )
   }
 
-  const sectionsSlot = (
-    <dl className="divide-y rounded-lg border bg-card">
-      <div className="grid grid-cols-3 gap-4 px-6 py-4">
-        <dt className="text-sm font-medium text-muted-foreground">Title</dt>
-        <dd className="col-span-2 text-sm">{item.title}</dd>
-      </div>
-      {item.description && (
-        <div className="grid grid-cols-3 gap-4 px-6 py-4">
-          <dt className="text-sm font-medium text-muted-foreground">Description</dt>
-          <dd className="col-span-2 text-sm whitespace-pre-line">{item.description}</dd>
-        </div>
-      )}
-      <div className="grid grid-cols-3 gap-4 px-6 py-4">
-        <dt className="text-sm font-medium text-muted-foreground">Created</dt>
-        <dd className="col-span-2 text-sm">
-          {formatDate(item.createdAt)} by <span className="font-medium">{item.createdBy}</span>
-        </dd>
-      </div>
-      {item.updatedAt && (
-        <div className="grid grid-cols-3 gap-4 px-6 py-4">
-          <dt className="text-sm font-medium text-muted-foreground">Last updated</dt>
-          <dd className="col-span-2 text-sm">
-            {formatDate(item.updatedAt)}
-            {item.updatedBy && (
-              <> by <span className="font-medium">{item.updatedBy}</span></>
-            )}
-          </dd>
-        </div>
-      )}
-    </dl>
-  )
-
-  const actionsSlot = (
-    <a
-      href={`/items/${id}/edit`}
-      className="inline-flex items-center rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
-    >
-      Edit
-    </a>
-  )
-
-  return (
-    <DetailPage
-      title={item.title}
-      backHref="/items"
-      backLabel="Back to items"
-      actionsSlot={actionsSlot}
-      sectionsSlot={sectionsSlot}
-    />
-  )
+  return <ItemDetailView item={item} />
 }

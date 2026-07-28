@@ -83,6 +83,40 @@ class GlobalProblemDetailProbeTest {
             .body("code", Matchers.equalTo("PAGE_SIZE_INVALID"));
     }
 
+    /**
+     * P2-41 — the still-open half of the unmapped-binding-exception family. An absent
+     * REQUIRED {@code @RequestParam} previously fell through to {@code /error} and was
+     * rejected by {@code anyRequest().denyAll()} as an EMPTY 403 — a missing query
+     * parameter reported as an authorization failure, with no body to say otherwise.
+     * Asserts the 403-trap is closed: 400, problem+json, MISSING_PARAMETER, and a
+     * detail naming the parameter (never echoing client input).
+     */
+    @Test
+    @Tag("COMMON-ADVICE-MISSING-PARAMETER")
+    void missingRequiredRequestParamReturnsProblemJson400NotEmpty403() {
+        given()
+            .header("Authorization", "Bearer " + token)
+        .when().get("/api/items/probe/required-param")
+        .then()
+            .statusCode(400)
+            .contentType("application/problem+json")
+            .body("status", Matchers.equalTo(400))
+            .body("code", Matchers.equalTo("MISSING_PARAMETER"))
+            .body("title", Matchers.equalTo("Missing Parameter"))
+            .body("detail", Matchers.containsString("'ref'"));
+    }
+
+    /** Control: the parameter PRESENT still succeeds (the handler did not break binding). */
+    @Test
+    @Tag("COMMON-ADVICE-MISSING-PARAMETER")
+    void presentRequiredRequestParamStillBinds() {
+        given()
+            .header("Authorization", "Bearer " + token)
+        .when().get("/api/items/probe/required-param?ref=ok")
+        .then()
+            .statusCode(200);
+    }
+
     @Test
     @Tag("COMMON-ADVICE-PRECONDITION-REQUIRED")
     void missingIfMatchReturnsProblemJson428() {

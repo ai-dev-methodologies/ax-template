@@ -32,7 +32,7 @@ interface ProvidersProps {
  * Webhook QueryClient settings:
  *   - staleTime: 15s for endpoints (mostly static after registration)
  *   - refetchInterval: deliveries page sets its own 10s poll since
- *     delivery status (PENDING / SUCCEEDED / FAILED / DEAD_LETTER)
+ *     delivery status (PENDING / PENDING_RETRY / SUCCEEDED / FAILED_PERMANENT)
  *     transitions during retry windows
  *   - retry: 1
  */

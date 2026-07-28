@@ -3,7 +3,7 @@
 practices/consumer-proof/engine/lib/coverage_map_guard.py
 
 Implements Part 1.5 of the gap-convergence engine design — the MECE/schema/
-disk-truth guard for coverage-map.yaml. Seven checks, ALL must pass:
+disk-truth guard for coverage-map.yaml. Eight checks, ALL must pass:
 
   1. every axis value is a member of its closed enum (D/C/L/R) — free text = FAIL
   2. the cell id set == the exact expected cross-product minus masked cells
@@ -31,8 +31,29 @@ disk-truth guard for coverage-map.yaml. Seven checks, ALL must pass:
      `covered`. See README.md "The S3 (COMPOSITION) nonvacuity bar" for the
      full bar (this check enforces criterion (a) only — liveness/path-shape;
      (b)/(c)/(d) are content properties left to human/adversarial review).
+     BACKLOG P3-58 strengthening: the filename-shape exclusion above is a
+     RENAME BYPASS — a bare compose-spec's exact assertion shape (every
+     `expect(...)` traces back to `fs.existsSync`/`fs.readFileSync`, never a
+     runtime/HTTP/browser call) still qualifies as "live" if the file is
+     merely renamed off the `*-compose.spec.*` convention. Check 7 therefore
+     also reads the content of every candidate path that survives the
+     filename filter: if the file imports/uses Node's `fs` module AND
+     contains none of a short list of runtime-interaction markers (Playwright
+     `page.`/`request.`, `fetch(`, `axios.`, `supertest`, RestAssured
+     `given()`, MockMvc `.perform(`), it is rejected as FS_EXISTENCE_ONLY
+     regardless of filename. This is still a necessary-not-sufficient floor
+     (PM-2): it cannot prove a file DOES exercise real composition, only rule
+     out the specific "only asserts on fs.* results" shape.
+  8. every S1 (CAPABILITY) / S2 (INVARIANT) cell with status=covered must have
+     at least one nonvacuity entry that is NOT a `.md` file. BACKLOG P3-60:
+     the S3 nonvacuity bar (check 7) explicitly bars `.md` sealed-verdict
+     records; S1/S2 never had the equivalent floor. Stated honestly per the
+     PRD: 0 of the 70 currently-`covered` S1/S2 cells are `.md`-only today —
+     this check gates a vector that has not yet been exploited on the live
+     map, not one that was found live. It is prophylactic, not a live-bug
+     closure, and the README says so explicitly.
 
-Exit 0 = all seven checks pass. Exit 1 = at least one check failed (findings
+Exit 0 = all eight checks pass. Exit 1 = at least one check failed (findings
 printed). Exit 2 = usage/toolchain error.
 
 This guard is intentionally standalone in wave 1 (NOT registered into
@@ -328,7 +349,51 @@ _LIVE_TEST_PATH_RE = re.compile(r"(Test|IT)\.java$|\.vitest\.\w+$|\.spec\.\w+$")
 _BARE_COMPOSE_SPEC_RE = re.compile(r"-compose\.spec\.\w+$")
 
 
-def _is_live_s3_nonvacuity_path(p):
+# BACKLOG P3-58 — the filename-shape exclusion above is a RENAME BYPASS: a bare
+# compose-spec's assertion shape (every `expect(...)` traces back to an `fs.existsSync`/
+# `fs.readFileSync` result — no runtime/HTTP/browser interaction at all) still matches
+# `_LIVE_TEST_PATH_RE` and survives `_BARE_COMPOSE_SPEC_RE` if the file is simply renamed
+# off the `-compose.spec.*` convention (e.g. `booking-flow.spec.ts`). This content
+# heuristic is a necessary-not-sufficient floor (PM-2, matches check 7's existing
+# posture): it can prove a file is FS-EXISTENCE-ONLY, it cannot prove a file that isn't
+# genuinely composes multiple domains at runtime — that stays a review judgment call.
+_FS_USAGE_RE = re.compile(r"\bfs\.(existsSync|readFileSync)\b")
+_RUNTIME_INTERACTION_RE = re.compile(
+    r"\bpage\.(goto|click|fill|waitFor)\b"
+    r"|\brequest\.(get|post|put|delete|patch|fetch)\b"
+    r"|\bfetch\("
+    r"|\baxios\."
+    r"|\bsupertest\b"
+    r"|\bgiven\(\)"
+    r"|\bMockMvc\b"
+    r"|\.perform\("
+)
+
+
+def _is_fs_existence_only_test(repo_root, p):
+    """True iff the file(s) matching path `p` under repo_root use Node's `fs`
+    module (existsSync/readFileSync) and contain NONE of the short list of
+    runtime-interaction markers above — i.e. every assertion plausibly derives
+    from file-existence/content-string checks, not real composition. False if
+    the path does not resolve, or resolves to a non-text/unreadable file, or
+    simply never uses `fs.*` at all (out of scope for this specific heuristic;
+    such a file is judged on its `_LIVE_TEST_PATH_RE` shape alone, as before)."""
+    if not p or p.endswith("/"):
+        return False
+    matches = glob.glob(os.path.join(repo_root, p), recursive=True)
+    if not matches:
+        return False
+    for m in matches:
+        try:
+            text = open(m, encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        if _FS_USAGE_RE.search(text) and not _RUNTIME_INTERACTION_RE.search(text):
+            return True
+    return False
+
+
+def _is_live_s3_nonvacuity_path(repo_root, p):
     """True iff `p` is a live/re-executable test-shaped path per the S3
     nonvacuity bar (README.md) — used only for check 7."""
     if not p or p.endswith("/"):
@@ -338,26 +403,53 @@ def _is_live_s3_nonvacuity_path(p):
         return False  # sealed-verdict / any markdown record — never RED-able
     if _BARE_COMPOSE_SPEC_RE.search(basename):
         return False  # bare file-existence compose-spec — explicitly denylisted
-    return bool(_LIVE_TEST_PATH_RE.search(basename))
+    if not _LIVE_TEST_PATH_RE.search(basename):
+        return False
+    if _is_fs_existence_only_test(repo_root, p):
+        return False  # P3-58 rename-bypass: fs.*-only content, regardless of filename
+    return True
 
 
-def check_s3_covered_nonvacuity_is_live(cells):
+def check_s3_covered_nonvacuity_is_live(cells, repo_root):
     """Check 7: every S3 cell with status=covered must have >=1 nonvacuity
     entry that is a live, re-executable, composition-behavioral-shaped test
-    path — not solely a sealed-verdict .md and not solely a bare
-    file-existence compose-spec. Closes docs/BACKLOG.md P2-29."""
+    path — not solely a sealed-verdict .md, not solely a bare file-existence
+    compose-spec, and not solely an fs.existsSync/readFileSync-only file under
+    any OTHER filename (P3-58 rename-bypass closure). Closes docs/BACKLOG.md
+    P2-29 and P3-58."""
     findings = []
     for cell in cells:
         if cell.get("tier") != "S3" or cell.get("status") != "covered":
             continue
         nonvac = cell.get("nonvacuity") or []
-        if not any(_is_live_s3_nonvacuity_path(p) for p in nonvac):
+        if not any(_is_live_s3_nonvacuity_path(repo_root, p) for p in nonvac):
             findings.append(
                 f"{cell.get('id')}: status=covered but no nonvacuity entry is a live "
                 f"re-executable test path (*Test.java / *IT.java / *.vitest.* / *.spec.*, "
-                f"excluding bare *-compose.spec.* file-existence artifacts and .md "
-                f"sealed-verdict records) — S3 composition nonvacuity bar violation "
-                f"(README.md, P2-29): {nonvac!r}"
+                f"excluding bare *-compose.spec.* file-existence artifacts, .md "
+                f"sealed-verdict records, and any fs.existsSync/readFileSync-only file "
+                f"regardless of filename) — S3 composition nonvacuity bar violation "
+                f"(README.md, P2-29/P3-58): {nonvac!r}"
+            )
+    return findings
+
+
+# BACKLOG P3-60 — S1/S2 `.md`-only nonvacuity floor. Prophylactic (see module
+# docstring check 8): 0 of the 70 currently-covered S1/S2 cells are `.md`-only today.
+def check_s1_s2_covered_nonvacuity_not_md_only(cells):
+    """Check 8: every S1/S2 cell with status=covered must have >=1 nonvacuity
+    entry that is NOT a `.md` file. BACKLOG P3-60."""
+    findings = []
+    for cell in cells:
+        if cell.get("tier") not in ("S1", "S2") or cell.get("status") != "covered":
+            continue
+        nonvac = cell.get("nonvacuity") or []
+        non_md = [p for p in nonvac if p and not p.rstrip("/").endswith(".md")]
+        if not non_md:
+            findings.append(
+                f"{cell.get('id')}: status=covered but every nonvacuity entry is a "
+                f".md file (or empty) — S1/S2 .md-only nonvacuity floor violation "
+                f"(README.md, P3-60): {nonvac!r}"
             )
     return findings
 
@@ -372,7 +464,8 @@ def run_all_checks(map_path, repo_root):
     findings += check_paths_resolve(cells, repo_root)
     findings += check_covered_requires_nonvacuity(cells)
     findings += check_weight_schedule(cells)
-    findings += check_s3_covered_nonvacuity_is_live(cells)
+    findings += check_s3_covered_nonvacuity_is_live(cells, repo_root)
+    findings += check_s1_s2_covered_nonvacuity_not_md_only(cells)
     return findings
 
 
@@ -403,7 +496,8 @@ def main(argv):
     print(f"  cardinality: {EXPECTED_TOTAL} scored cells (S1={EXPECTED_S1} S2={EXPECTED_S2} S3={EXPECTED_S3}) "
           f"+ masked rows, all axes closed-enum, all D/R present, all covered_by/nonvacuity resolve, "
           f"no covered-without-nonvacuity, all weights match the canonical tier/concern schedule, "
-          f"all S3-covered cells cite a live composition-behavioral-shaped nonvacuity path.")
+          f"all S3-covered cells cite a live composition-behavioral-shaped (non-rename-bypassed) "
+          f"nonvacuity path, all S1/S2-covered cells cite >=1 non-.md nonvacuity entry.")
     return 0
 
 

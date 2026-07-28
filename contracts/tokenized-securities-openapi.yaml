@@ -347,7 +347,11 @@ components:
           maxLength: 200
         securityType:
           type: string
-          enum: [TRUST_BENEFICIARY, EQUITY, BOND]
+          enum: [TRUST_BENEFICIARY, INVESTMENT_CONTRACT]
+          description: |
+            자본시장법상 토큰화 대상 증권 유형 (조각투자 두 갈래) — mirrors the Java
+            SecurityType. TRUST_BENEFICIARY = 비금전신탁 수익증권,
+            INVESTMENT_CONTRACT = 투자계약증권.
         totalUnits:
           type: integer
           format: int64

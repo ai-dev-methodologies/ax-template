@@ -5,7 +5,10 @@ impactDescription: "startTransition marks a state update as non-urgent, letting 
 tags: [rerender, transitions, startTransition, performance, concurrent]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-012"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that `startTransition` wraps non-urgent state updates that should not block urgent input (typing, clicks), and that imperative/high-frequency work (scroll position tracking, mouse tracking) instead uses refs, `requestAnimationFrame`, or throttling rather than a transition."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

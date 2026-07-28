@@ -116,6 +116,71 @@ function minorToMajorString(minor: string, currency: string): string {
 }
 
 /**
+ * Group an unsigned decimal-digit string into locale-style 3-digit chunks
+ * (e.g. "1234567" -> "1,234,567"), without ever passing the value through a
+ * `Number`. This is the standard grouping `Intl.NumberFormat` itself applies —
+ * used here only to reproduce it for magnitudes bigger than
+ * `Number.MAX_SAFE_INTEGER`, where the value can no longer make that round
+ * trip losslessly.
+ */
+function groupDigits(intPart: string, separator: string): string {
+  const chunks: string[] = [];
+  let i = intPart.length;
+  while (i > 3) {
+    chunks.unshift(intPart.slice(i - 3, i));
+    i -= 3;
+  }
+  chunks.unshift(intPart.slice(0, i));
+  return chunks.join(separator);
+}
+
+/**
+ * Render an exact major-unit decimal STRING (as produced by
+ * {@link minorToMajorString}) through `Intl.NumberFormat`, without ever
+ * converting it to a `Number` first — `Number("90071992547409.91")` cannot
+ * represent that value exactly (it rounds to `…409.9`), which is precisely the
+ * float-precision bug this file's top-of-file doc comment says money.ts
+ * "deliberately avoids". `Intl.NumberFormat#format` does accept a decimal
+ * string on runtimes with the ES2023 string-argument overload, but apps/pay's
+ * tsconfig ("lib": ["ES2020", ...]) predates it and widening `lib` is outside
+ * this fix's scope — so instead we source every LITERAL part (currency
+ * symbol/sign/spacing/group separator/decimal separator) from
+ * `formatToParts` on a small representative value, and splice in our own
+ * exact digits for the digit-bearing parts (`integer`/`group`/`decimal`/
+ * `fraction`). No arithmetic touches the amount at any point.
+ */
+function formatExactMajorString(major: string, currency: string): string {
+  const negative = major.startsWith('-');
+  const unsigned = negative ? major.slice(1) : major;
+  const dot = unsigned.indexOf('.');
+  const intPart = dot === -1 ? unsigned : unsigned.slice(0, dot);
+  const fracPart = dot === -1 ? '' : unsigned.slice(dot + 1);
+
+  // A representative value with the correct sign carries every literal in the
+  // right position (sign, currency symbol, spacing) for this locale/currency —
+  // its digits are discarded, only its structure and separators are used.
+  const reference = formatter(currency).formatToParts(negative ? -1 : 1);
+  const groupSeparator = reference.find((part) => part.type === 'group')?.value ?? ',';
+  const decimalSeparator = reference.find((part) => part.type === 'decimal')?.value ?? '.';
+  const groupedInt = groupDigits(intPart, groupSeparator);
+  const numberText = fracPart.length > 0 ? `${groupedInt}${decimalSeparator}${fracPart}` : groupedInt;
+
+  let out = '';
+  let numberSpliced = false;
+  for (const part of reference) {
+    if (part.type === 'integer' || part.type === 'group' || part.type === 'decimal' || part.type === 'fraction') {
+      if (!numberSpliced) {
+        out += numberText;
+        numberSpliced = true;
+      }
+      continue;
+    }
+    out += part.value;
+  }
+  return out;
+}
+
+/**
  * Format an already-MAJOR amount (a decimal the user typed, or any value known to
  * be in major units). Accepts number | string. e.g. 12900/"KRW" -> "₩12,900",
  * 70/"USD" -> "$70.00". Do NOT use this on a wire value — those are minor units
@@ -132,7 +197,9 @@ export function formatMajor(amount: number | string | null | undefined, currency
  * Format a WIRE amount (MINOR units, integer long) — the encoding BOTH the payment
  * and billing domains emit. Accepts the raw wire value (number | string). The
  * minor->major step is integer-string based, so e.g. 1099/"USD" -> "$10.99" and
- * 2999/"USD" -> "$29.99" with no float drift, 29000/"KRW" -> "₩29,000".
+ * 2999/"USD" -> "$29.99" with no float drift, 29000/"KRW" -> "₩29,000". The final
+ * render step (formatExactMajorString) never converts that exact string to a
+ * `Number` either, so precision holds even at the Number.MAX_SAFE_INTEGER boundary.
  */
 export function formatMinor(amount: number | string | null | undefined, currency: string): string {
   if (amount === null || amount === undefined) return '—';
@@ -141,7 +208,7 @@ export function formatMinor(amount: number | string | null | undefined, currency
     typeof amount === 'string' ? amount.trim() : String(Math.trunc(amount));
   if (!/^-?\d+$/.test(minorString)) return '—';
   const major = minorToMajorString(minorString, currency);
-  return formatter(currency).format(Number(major));
+  return formatExactMajorString(major, currency);
 }
 
 /**

@@ -5,7 +5,10 @@ impactDescription: "Skips unnecessary processing once the result is determined. 
 tags: [javascript, functions, optimization, early-return, control-flow]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-009"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that the loop/function returns as soon as the result is determined, and confirms the early exit does not silently drop cases the caller needs (e.g. form validation that must report every failing field, not just the first)."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

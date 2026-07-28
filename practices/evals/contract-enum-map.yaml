@@ -1,0 +1,408 @@
+# practices/evals/contract-enum-map.yaml
+# P2-33 — classification manifest for `contract_enum_parity_guard.sh`.
+#
+# EVERY `enum:` block under contracts/*.yaml must appear here exactly once.
+# An unclassified block FAILS the guard; a stale entry (pointing at a block that
+# no longer exists) also FAILS. There is no inference and no default — the
+# exhaustiveness is what makes the gate non-heuristic.
+#
+# contract_enum entry — exactly ONE of:
+#   java_enum: <FQCN>    the block is bound to a Java enum; constant sets must match
+#   wire_only: <reason>  no Java enum backs the block (the code side is a String)
+# Modifiers (java_enum only, each requires `reason:`):
+#   wire_extra:   [T…]   tokens on the wire that are not Java constants (filter sentinels)
+#   wire_missing: [T…]   Java constants deliberately absent from THIS block
+#   wire_case: lower     the wire spells the constants lower-case
+# Both modifier lists are non-redundancy-checked: listing a token that is not
+# actually in the difference FAILS, so an allowance cannot rot into a lie.
+#
+# vocab_scan entry — word-boundary token scan of a non-contract surface
+# (L4 fork copies, java skeletons, README tables). `SUCCESS` does not match
+# inside `SUCCEEDED`; `FAILED` does not match inside `FAILED_PERMANENT`.
+
+contract_enums:
+
+  # ── announcement ──────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/announcement-openapi.yaml
+    pointer: /components/schemas/Announcement/properties/state
+    java_enum: com.ax.template.authblueprint.announcement.AnnouncementState
+
+  # ── api-key ───────────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/api-key-openapi.yaml
+    pointer: /components/schemas/CreateApiKeyRequest/properties/scopes/items
+    java_enum: com.ax.template.authblueprint.apikey.ApiKeyScope
+  - kind: contract_enum
+    contract: contracts/api-key-openapi.yaml
+    pointer: /components/schemas/CreateApiKeyResponse/properties/scopes/items
+    java_enum: com.ax.template.authblueprint.apikey.ApiKeyScope
+  - kind: contract_enum
+    contract: contracts/api-key-openapi.yaml
+    pointer: /components/schemas/CreateApiKeyResponse/properties/status
+    java_enum: com.ax.template.authblueprint.apikey.ApiKeyStatus
+  - kind: contract_enum
+    contract: contracts/api-key-openapi.yaml
+    pointer: /components/schemas/ApiKeyResponse/properties/scopes/items
+    java_enum: com.ax.template.authblueprint.apikey.ApiKeyScope
+  - kind: contract_enum
+    contract: contracts/api-key-openapi.yaml
+    pointer: /components/schemas/ApiKeyResponse/properties/status
+    java_enum: com.ax.template.authblueprint.apikey.ApiKeyStatus
+
+  # ── approval-workflow ─────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/approval-workflow-openapi.yaml
+    pointer: /components/schemas/ApprovalStepResponse/properties/status
+    java_enum: com.ax.template.authblueprint.approvalworkflow.ApprovalStepStatus
+  - kind: contract_enum
+    contract: contracts/approval-workflow-openapi.yaml
+    pointer: /components/schemas/ApprovalRequestResponse/properties/status
+    java_enum: com.ax.template.authblueprint.approvalworkflow.ApprovalRequestStatus
+  - kind: contract_enum
+    contract: contracts/approval-workflow-openapi.yaml
+    pointer: /components/schemas/ApprovalRequestResponse/properties/allowedActions/items
+    wire_only: >-
+      P2-38b action vocabulary. The values are String constants on
+      ApprovalActionEvaluator (VIEW/SUBMIT/CANCEL/APPROVE/REJECT), deliberately not a Java
+      enum: `allowedActions` is an OPEN, additive vocabulary — clients are told to ignore
+      tokens they do not recognize — so a fork-receiver can advertise a domain-specific
+      action without a breaking enum change in the public catalog (R26).
+  - kind: contract_enum
+    contract: contracts/approval-workflow-openapi.yaml
+    pointer: /components/schemas/ApprovalInboxEntry/properties/status
+    java_enum: com.ax.template.authblueprint.approvalworkflow.ApprovalStepStatus
+    wire_missing: [APPROVED, REJECTED]
+    reason: >-
+      Inbox entries are PENDING steps by construction — ApprovalRequestRepository
+      .findInboxFor filters `step.status = PENDING`, so an acted step can never
+      appear in this projection.
+
+  # ── audit-log ─────────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/audit-log-openapi.yaml
+    pointer: /paths/~1audit-logs/get/parameters/6/schema
+    java_enum: com.ax.template.authblueprint.auditlog.AuditOutcome
+  - kind: contract_enum
+    contract: contracts/audit-log-openapi.yaml
+    pointer: /components/schemas/AuditLogSummary/properties/outcome
+    java_enum: com.ax.template.authblueprint.auditlog.AuditOutcome
+  - kind: contract_enum
+    contract: contracts/audit-log-openapi.yaml
+    pointer: /components/schemas/ExportRequest/properties/format
+    java_enum: com.ax.template.authblueprint.auditlog.AuditExportFormat
+  - kind: contract_enum
+    contract: contracts/audit-log-openapi.yaml
+    pointer: /components/schemas/ExportRequest/properties/outcome
+    java_enum: com.ax.template.authblueprint.auditlog.AuditOutcome
+  - kind: contract_enum
+    contract: contracts/audit-log-openapi.yaml
+    pointer: /components/schemas/ExportJobResponse/properties/status
+    java_enum: com.ax.template.authblueprint.auditlog.AuditExportStatus
+    wire_missing: [PROCESSING, COMPLETED, FAILED]
+    reason: >-
+      Creation acknowledgement: the export job is persisted PENDING and the worker
+      has not run yet, so this response can only carry PENDING. The full lifecycle
+      vocabulary is served by ExportJobStatus (polled separately).
+  - kind: contract_enum
+    contract: contracts/audit-log-openapi.yaml
+    pointer: /components/schemas/ExportJobStatus/properties/status
+    java_enum: com.ax.template.authblueprint.auditlog.AuditExportStatus
+
+  # ── auth ──────────────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/auth-openapi.yaml
+    pointer: /paths/~1auth~1oauth~1{provider}~1authorize/get/parameters/0/schema
+    java_enum: com.ax.template.authblueprint.auth.OAuthProvider
+    wire_case: lower
+    reason: >-
+      The provider path segment is lower-case in every OAuth vendor's own docs and
+      is folded to OAuthProvider.valueOf(upper) on binding.
+  - kind: contract_enum
+    contract: contracts/auth-openapi.yaml
+    pointer: /paths/~1auth~1oauth~1{provider}~1callback/get/parameters/0/schema
+    java_enum: com.ax.template.authblueprint.auth.OAuthProvider
+    wire_case: lower
+    reason: Same lower-case provider segment as the authorize endpoint.
+  - kind: contract_enum
+    contract: contracts/auth-openapi.yaml
+    pointer: /paths/~1auth~1oauth~1link/post/requestBody/content/application~1json/schema/properties/provider
+    java_enum: com.ax.template.authblueprint.auth.OAuthProvider
+    wire_case: lower
+    reason: Same lower-case provider vocabulary, carried in the link request body.
+  - kind: contract_enum
+    contract: contracts/auth-openapi.yaml
+    pointer: /paths/~1auth~1oauth~1unlink~1{provider}/delete/parameters/0/schema
+    java_enum: com.ax.template.authblueprint.auth.OAuthProvider
+    wire_case: lower
+    reason: Same lower-case provider segment as the authorize endpoint.
+  - kind: contract_enum
+    contract: contracts/auth-openapi.yaml
+    pointer: /components/schemas/UserRole
+    wire_only: >-
+      AuthState is a UI-state schema. The shipped GET /api/auth/me
+      (AuthSessionController:29) returns UserProfileResponse — a single upper-case
+      `role` string from UserRole.name(), not a lower-case `roles[]` array — so no
+      Java enum serializes THIS block. The AuthState-vs-UserProfileResponse shape
+      drift is a registered finding (see the closure note for this guard's birth
+      census); binding it here would fabricate a relationship that does not exist.
+  - kind: contract_enum
+    contract: contracts/auth-openapi.yaml
+    pointer: /components/schemas/VerificationState
+    wire_only: >-
+      Same AuthState UI-state schema: the shipped /api/auth/me response carries a
+      boolean `emailVerified`, not a tri-state `verificationState` string. No Java
+      enum serializes this block (user.VerificationState is persistence-side only).
+  - kind: contract_enum
+    contract: contracts/auth-openapi.yaml
+    pointer: /components/schemas/ProviderLink/properties/provider
+    wire_only: >-
+      Same AuthState UI-state schema. The shipped response exposes
+      `linkedProviders: string[]`; the ProviderLink entity's provider column is an
+      OAuthProvider, which cannot be `email`. No Java enum serializes this block.
+
+  # ── auth-ui ───────────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/auth-ui.yaml
+    pointer: /routes/9/params/provider
+    java_enum: com.ax.template.authblueprint.auth.OAuthProvider
+    wire_case: lower
+    reason: Route params mirror the lower-case OAuth path segment.
+  - kind: contract_enum
+    contract: contracts/auth-ui.yaml
+    pointer: /routes/11/params/provider
+    java_enum: com.ax.template.authblueprint.auth.OAuthProvider
+    wire_case: lower
+    reason: Route params mirror the lower-case OAuth path segment.
+
+  # ── billing ───────────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/billing-openapi.yaml
+    pointer: /components/schemas/SubscriptionStatus
+    java_enum: com.ax.template.authblueprint.billing.SubscriptionStatus
+  - kind: contract_enum
+    contract: contracts/billing-openapi.yaml
+    pointer: /components/schemas/InvoiceStatus
+    wire_only: >-
+      The reference workload has no invoice aggregate — there is no Java
+      InvoiceStatus. The block documents the vocabulary a fork-receiver's invoicing
+      module is expected to speak.
+  - kind: contract_enum
+    contract: contracts/billing-openapi.yaml
+    pointer: /components/schemas/BillingEventType
+    java_enum: com.ax.template.authblueprint.billing.BillingEventType
+
+  # ── comment-thread ────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/comment-thread-openapi.yaml
+    pointer: /components/schemas/CommentResponse/properties/status
+    java_enum: com.ax.template.authblueprint.commentthread.CommentStatus
+
+  # ── data-subject-rights ───────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/data-subject-rights-openapi.yaml
+    pointer: /paths/~1me~1dsr~1portability/post/parameters/0/schema
+    wire_only: >-
+      DsrService.producePortableCopy takes a raw String format and validates it
+      against a lookup (DSR_PORTABILITY_FORMAT_INVALID); no Java enum exists.
+  - kind: contract_enum
+    contract: contracts/data-subject-rights-openapi.yaml
+    pointer: /components/schemas/DsrRequestResponse/properties/type
+    java_enum: com.ax.template.authblueprint.dsr.DsrRequestType
+    wire_case: lower
+    reason: >-
+      DsrDtos.DsrRequestResponse.from emits DsrRequestType.metricType() — the
+      lower-case bounded label (DSR-OBSERVABILITY-001) — not name().
+
+  # ── email-outbox ──────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/email-outbox-openapi.yaml
+    pointer: /paths/~1email-outbox/get/parameters/0/schema
+    java_enum: com.ax.template.authblueprint.emailoutbox.EmailOutboxStatus
+    wire_extra: [ALL]
+    reason: >-
+      ALL is the family's no-filter sentinel (notification-openapi is the reference
+      implementation); EmailOutboxAdminController maps it to a null filter (P2-35b).
+  - kind: contract_enum
+    contract: contracts/email-outbox-openapi.yaml
+    pointer: /components/schemas/EmailOutboxEntry/properties/status
+    java_enum: com.ax.template.authblueprint.emailoutbox.EmailOutboxStatus
+
+  # ── file-storage ──────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/file-storage-openapi.yaml
+    pointer: /components/schemas/FileStatus
+    java_enum: com.ax.template.authblueprint.filestorage.FileStatus
+
+  # ── identity-verification ─────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/identity-verification-openapi.yaml
+    pointer: /paths/~1identity-verification~1callback~1{provider}/post/parameters/0/schema
+    wire_only: >-
+      Provider names come from the IdentityVerificationProvider SPI
+      (PassAdapter.providerName() = "pass", KcbAdapter = "kcb") — deliberately
+      Strings so a fork-receiver can register another provider without editing an
+      enum in the public catalog (R26).
+  - kind: contract_enum
+    contract: contracts/identity-verification-openapi.yaml
+    pointer: /paths/~1admin~1identity-verification/get/parameters/0/schema
+    wire_only: >-
+      Same SPI-provided provider Strings, plus the family's ALL no-filter sentinel
+      (P2-35a). No Java enum backs either.
+  - kind: contract_enum
+    contract: contracts/identity-verification-openapi.yaml
+    pointer: /components/schemas/IdentityVerificationCallbackResponse/properties/providerName
+    wire_only: Same SPI-provided provider Strings (see the callback parameter entry).
+  - kind: contract_enum
+    contract: contracts/identity-verification-openapi.yaml
+    pointer: /components/schemas/VerifiedIdentityDto/properties/providerName
+    wire_only: Same SPI-provided provider Strings (see the callback parameter entry).
+
+  # ── notification ──────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/notification-openapi.yaml
+    pointer: /paths/~1notifications/get/parameters/0/schema
+    java_enum: com.ax.template.authblueprint.notification.NotificationStatus
+    wire_extra: [ALL]
+    reason: >-
+      Reference implementation of the family's no-filter sentinel: the controller
+      maps "ALL" to a null status filter.
+  - kind: contract_enum
+    contract: contracts/notification-openapi.yaml
+    pointer: /components/schemas/NotificationType
+    wire_only: >-
+      Notification.type is a String column (length 64) — the taxonomy is
+      fork-receiver-extensible by design, so no Java enum constrains it.
+  - kind: contract_enum
+    contract: contracts/notification-openapi.yaml
+    pointer: /components/schemas/NotificationStatus
+    java_enum: com.ax.template.authblueprint.notification.NotificationStatus
+
+  # ── payment ───────────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/payment-openapi.yaml
+    pointer: /paths/~1payments/get/parameters/2/schema
+    wire_only: Sort field names (property paths), not a domain vocabulary.
+  - kind: contract_enum
+    contract: contracts/payment-openapi.yaml
+    pointer: /paths/~1payments~1callback~1{provider}/post/parameters/0/schema
+    wire_only: >-
+      PaymentCallbackController binds `provider` as a String and resolves the
+      PaymentProvider SPI bean by qualifier; `mock` is the reference adapter.
+  - kind: contract_enum
+    contract: contracts/payment-openapi.yaml
+    pointer: /components/schemas/Currency
+    wire_only: >-
+      ISO 4217 alphabetic codes are handled as Strings by common/Money (which
+      derives minor-unit scale from java.util.Currency); the two listed codes are
+      the reference workload's configured set, not a closed Java enum.
+  - kind: contract_enum
+    contract: contracts/payment-openapi.yaml
+    pointer: /components/schemas/PaymentState
+    java_enum: com.ax.template.authblueprint.payment.PaymentState
+  - kind: contract_enum
+    contract: contracts/payment-openapi.yaml
+    pointer: /components/schemas/RefundResponse/properties/status
+    java_enum: com.ax.template.authblueprint.payment.RefundState
+
+  # ── ratelimit ─────────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/ratelimit-openapi.yaml
+    pointer: /paths/~1ratelimit~1ping/get/responses/200/content/application~1json/schema/properties/status
+    wire_only: Literal probe payload ({"status":"ok"}), not a domain vocabulary.
+
+  # ── report-export ─────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/report-export-openapi.yaml
+    pointer: /components/schemas/CreateExportRequest/properties/format
+    java_enum: com.ax.template.authblueprint.reportexport.ExportFormat
+    wire_case: lower
+    reason: >-
+      Request side only: CreateExportRequest.format is a String parsed by
+      ExportFormat.parse, which upper-cases before valueOf — the contract documents
+      the canonical lower-case spelling clients send.
+  - kind: contract_enum
+    contract: contracts/report-export-openapi.yaml
+    pointer: /components/schemas/ExportJobResponse/properties/status
+    java_enum: com.ax.template.authblueprint.reportexport.ExportJobStatus
+  - kind: contract_enum
+    contract: contracts/report-export-openapi.yaml
+    pointer: /components/schemas/ExportJobResponse/properties/format
+    java_enum: com.ax.template.authblueprint.reportexport.ExportFormat
+
+  # ── scheduled-task ────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/scheduled-task-openapi.yaml
+    pointer: /paths/~1scheduled-tasks/get/parameters/0/schema
+    java_enum: com.ax.template.authblueprint.scheduledtask.ScheduledTaskStatus
+    wire_extra: [ALL]
+    reason: >-
+      Family no-filter sentinel, bound in ScheduledTaskController.list (P2-35c —
+      the parameter was declared but never bound before this wave).
+  - kind: contract_enum
+    contract: contracts/scheduled-task-openapi.yaml
+    pointer: /components/schemas/ScheduledTaskSummary/properties/status
+    java_enum: com.ax.template.authblueprint.scheduledtask.ScheduledTaskStatus
+  - kind: contract_enum
+    contract: contracts/scheduled-task-openapi.yaml
+    pointer: /components/schemas/JobHistorySummary/properties/outcome
+    java_enum: com.ax.template.authblueprint.scheduledtask.JobOutcome
+
+  # ── session-management ────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/session-management-openapi.yaml
+    pointer: /components/schemas/SessionResponse/properties/status
+    java_enum: com.ax.template.authblueprint.sessionmanagement.SessionStatus
+
+  # ── tokenized-securities ──────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/tokenized-securities-openapi.yaml
+    pointer: /components/schemas/CreateTokenRequest/properties/securityType
+    java_enum: com.ax.template.authblueprint.tokenizedsecurities.SecurityType
+  - kind: contract_enum
+    contract: contracts/tokenized-securities-openapi.yaml
+    pointer: /components/schemas/TokenDto/properties/issuanceStatus
+    java_enum: com.ax.template.authblueprint.tokenizedsecurities.IssuanceStatus
+
+  # ── webhook ───────────────────────────────────────────────────────────────
+  - kind: contract_enum
+    contract: contracts/webhook-openapi.yaml
+    pointer: /paths/~1webhook-deliveries/get/parameters/1/schema
+    java_enum: com.ax.template.authblueprint.webhook.WebhookDeliveryStatus
+  - kind: contract_enum
+    contract: contracts/webhook-openapi.yaml
+    pointer: /components/schemas/WebhookDeliverySummary/properties/status
+    java_enum: com.ax.template.authblueprint.webhook.WebhookDeliveryStatus
+
+# ── L4 / doc surfaces the contract_enum schema cannot express (P2-34) ────────
+# The L4 webhook fork-copy carried a NON-ISOMORPHIC 5-value vocabulary
+# (PENDING|IN_FLIGHT|SUCCEEDED|FAILED|DEAD_LETTER). Canonical←L4 mapping applied:
+#   PENDING     → PENDING
+#   IN_FLIGHT   → dropped (the reference model has no in-flight state)
+#   SUCCEEDED   → SUCCEEDED
+#   FAILED      → FAILED_PERMANENT
+#   DEAD_LETTER → FAILED_PERMANENT
+#   (new)       ← PENDING_RETRY, which the fork-copy had no word for
+# Replay gates on FAILED_PERMANENT only: PENDING_RETRY is auto-retried by the
+# scheduler, so a manual replay of it would double-send.
+vocab_scans:
+  - kind: vocab_scan
+    file: templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx
+    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    require_all: true
+    forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS, FAILED]
+  - kind: vocab_scan
+    file: templates/L4/webhook/backend/WebhookDelivery.java.skeleton
+    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    require_all: true
+    forbidden: [SUCCESS, IN_FLIGHT, DEAD_LETTER]
+  - kind: vocab_scan
+    file: templates/L4/webhook/app/providers.tsx
+    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    require_all: true
+    forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS]
+  - kind: vocab_scan
+    file: templates/L4/webhook/README.md
+    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    require_all: true
+    forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS]

@@ -65,6 +65,17 @@ public class ApprovalRequestStateMachine {
         request.setCompletedAt(Instant.now(clock));
     }
 
+    /**
+     * P2-38b — read-only probe of the SAME {@code ALLOWED} map {@link #assertTransition}
+     * enforces. {@link ApprovalActionEvaluator} needs to ask "would this transition be
+     * legal?" without performing it; exposing the map read (rather than letting the
+     * evaluator keep its own copy) is what makes an edit to the table above flip both the
+     * mutator and the advertised {@code allowedActions} together.
+     */
+    public boolean canTransition(ApprovalRequestStatus from, ApprovalRequestStatus to) {
+        return ALLOWED.getOrDefault(from, EnumSet.noneOf(ApprovalRequestStatus.class)).contains(to);
+    }
+
     private static void assertTransition(ApprovalRequestStatus from, ApprovalRequestStatus to) {
         Set<ApprovalRequestStatus> allowed = ALLOWED.getOrDefault(from, EnumSet.noneOf(ApprovalRequestStatus.class));
         if (!allowed.contains(to)) {

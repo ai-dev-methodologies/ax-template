@@ -219,6 +219,44 @@ not ~18 (it short-circuits the rest).
 
 ---
 
+## 7. FE render-testability — extract the render layer into a `*-view.tsx` (BACKLOG P2-28)
+
+> Applies to any NEW `templates/L4/<domain>/app/**/page.tsx` that fetches data
+> (`useQuery`/`useSWR`) and renders it. A routing/redirect shell with no data-rendering
+> render layer is exempt — note the exemption inline if it might look overlooked.
+
+**Why**: a vitest that imports `page.tsx` directly from outside `frontend/` (the only way to
+unit-render a `templates/L4/...` file without a shared-config `resolve.alias`) hits a hard
+dependency-resolution boundary — `@tanstack/react-query`'s (or `swr`'s) bare specifier does not
+resolve for a module living outside the `frontend/` project root. Extracting the resolved-data
+render layer into a pure, props-only, co-located `<domain>-<surface>-view.tsx` sidesteps this
+entirely: the view has zero data-fetching imports, so it renders in a plain
+`render(<XxxView data={fixture} />)` vitest.
+
+- [ ] `page.tsx` keeps: the data-fetching hook(s), mutation state, loading/error/not-found/role-gate
+      branches. On the resolved-data happy path, render `<XxxView ...props />` instead of inlining
+      the JSX.
+- [ ] `<domain>-<surface>-view.tsx` (co-located next to `page.tsx`) exports a plain
+      `function XxxView({ data, ...callbacks }) { return <JSX/> }` — props-only, no
+      `useQuery`/`useSWR`/`useMutation`/`useQueryClient`. Mutation triggers cross in as callback
+      props (`onRetry`, `onDelete`, …); `window.confirm(...)` before a destructive action stays IN
+      the view (interaction concern, not data-fetching).
+- [ ] Importing a `templates/L1/**` or `templates/L2/blocks/**` component into the view is fine
+      **only if that component itself has zero external-npm imports** (`grep '^import'
+      <component>.tsx` — React-only is safe; a package like `@tanstack/react-query` is not, for the
+      reason above).
+- [ ] Add the pair to [`practices/evals/l4_presentational_view_ledger.yaml`](../practices/evals/l4_presentational_view_ledger.yaml)
+      (append-only — the ledger's `min_entries` floor blocks a silent shrink) and confirm
+      `bash practices/evals/l4_presentational_view_guard.sh` PASSes.
+- [ ] Add ≥1 vitest under `frontend/tests/` that renders the view directly with fixture props
+      (mirror `frontend/tests/audit-log-redaction-render.vitest.tsx`).
+
+Reference exemplars: `(audit-log)/[id]/audit-log-detail-view.tsx` (original), `(payment)/success/
+[orderId]/payment-success-view.tsx`, `(admin)/email-outbox/email-outbox-view.tsx`, `(crud)/items/
+[id]/item-detail-view.tsx`. Full convention + rationale: [`templates/L4/README.md`](../templates/L4/README.md).
+
+---
+
 ## R25 toolchain prerequisites (before `verify-completion.sh`)
 
 The completion gate runs a fail-closed toolchain preflight (exit 2) if a required

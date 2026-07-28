@@ -35,7 +35,7 @@ import java.util.UUID;
 @Table(name = "webhook_delivery")
 public class WebhookDelivery {
 
-    public enum Status { PENDING, PENDING_RETRY, SUCCESS, FAILED_PERMANENT }
+    public enum Status { PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT }
 
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 36)
@@ -91,7 +91,7 @@ public class WebhookDelivery {
     /** Record a successful delivery attempt. */
     public void markSuccess(int responseCode) {
         this.attemptCount += 1;
-        this.status = Status.SUCCESS;
+        this.status = Status.SUCCEEDED;
         this.lastResponseCode = responseCode;
         this.lastAttemptAt = Instant.now();
         this.nextAttemptAt = null;

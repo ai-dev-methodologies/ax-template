@@ -8,6 +8,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-009"
 verification:
   type: review
   status: manual
+  notes: "Reviewer checks that `useTransition`'s `isPending` is used to keep the prior UI responsive during a state-update transition, and that it is not substituted for explicit network/upload/mutation loading state, which needs its own pending signal."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"

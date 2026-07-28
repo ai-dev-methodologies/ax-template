@@ -5,7 +5,10 @@ impactDescription: "Default value expressions like `onClick = () => {}` or `item
 tags: [rerender, memo, optimization]
 applicable_to: [react, nextjs]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-003"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that default prop values like `() => {}` or `[]` are hoisted to a module-level constant rather than written inline, since an inline default creates a new reference every render and defeats `React.memo`'s shallow-equality check."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -54,7 +57,7 @@ const NOOP = () => {}
 const UserAvatar = memo(function UserAvatar({
   onClick = NOOP,            // ✅ stable reference
 }: { onClick?: () => void }) {
-  // ...
+  return <button onClick={onClick}>Avatar</button>
 })
 ```
 

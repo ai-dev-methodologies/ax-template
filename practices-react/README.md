@@ -137,7 +137,7 @@ See `pilot/pilot-report.md` for the full pipeline trail and
 5. Add corresponding spec item to `specs/react-practices-l0.yaml`
 6. (optional) Add paired ESLint rule under `eslint-plugin-ax/rules/`
 7. Run `bash practices-react/generate_agents.sh` to refresh AGENTS.md + SKILL.md
-8. Run `bash practices-react/evals/run.sh` — all 3 gates must PASS
+8. Run `bash practices-react/evals/run.sh` — all 4 gates must PASS
 9. Commit atomically
 
 ## License

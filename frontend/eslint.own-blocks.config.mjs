@@ -44,6 +44,14 @@ export default [
       'ax/no-server-state-in-local-state': 'warn',
       'ax/no-god-route': 'warn',
       'ax/no-caller-identity-from-props': 'error',
+      // ax/no-app-local-ui-primitives is INTENTIONALLY excluded (P3-55) — it is
+      // scoped to files under an apps/ segment (flags an app re-implementing a
+      // catalog primitive locally). templates/L0-L4, what this config lints,
+      // ARE the shared catalog itself, not a consumer of it — the rule would
+      // flag the canonical primitives (Button/Input/Card/...) as if they were
+      // local reimplementations of themselves. Category mismatch, not a gap.
+      // lint_own_blocks_guard.sh mechanizes this exclusion as an explicit
+      // allowlist entry (diffed against practices-react/eslint-plugin-ax/rules/).
     },
   },
 ]

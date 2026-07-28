@@ -6,8 +6,8 @@ provenance_class: locked_constraint
 evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
-    section: "Amount encoding — minor units (integer)"
-    quote: "All amounts on the Stripe API are in the smallest unit of the currency (e.g. cents for USD, yen for JPY)."
+    section: "Zero-decimal currencies (amounts and currencies)"
+    quote: "For the following zero-decimal currencies, the charge and the amount are the same, without requiring multiplication."
   - source_type: external
     citation: "ISO 4217 — KRW has 0 decimal places; integer won; ₩ prefix"
     url: "https://www.iso.org/iso-4217-currency-codes.html"

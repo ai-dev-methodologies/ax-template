@@ -5,7 +5,10 @@ impactDescription: "Three .filter() calls iterate three times and allocate three
 tags: [javascript, arrays, loops, performance]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-007"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that multiple sequential `.filter()`/`.map()` passes over the same array are combined into one loop only when the array is large or the path is hot — confirms it was not applied as a blanket rewrite that hurts readability for a small/cold array."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

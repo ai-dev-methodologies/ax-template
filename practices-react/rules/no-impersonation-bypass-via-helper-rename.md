@@ -90,6 +90,17 @@ export default async function AdminLayout({ children }) {
 }
 ```
 
+### Detection is also style-independent, not just name-independent
+
+```typescript
+// Same detected shape, using assignment instead of a spread — style is irrelevant too
+function returnSessionWithActingAs(userId: string) {
+  const next = Object.assign({}, currentSession)
+  next.actingAs = userId
+  return next
+}
+```
+
 ### Relation to parent rule
 
 This rule (`no-impersonation-bypass-via-helper-rename`) is a named specialization of

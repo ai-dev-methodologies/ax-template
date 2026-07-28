@@ -77,8 +77,13 @@ items:
     applicable: true
     notes: >
       Test: UserA creates request. UserB (not approver, not requester) GET /api/approvals/{id}
-      → 404. UserB POST .../submit → 404. Implementation: ApprovalService.loadVisibleTo() filters
-      on requesterUserId = caller OR (caller in approver list AND request is SUBMITTED).
+      → 404. UserB POST .../submit → 404. Implementation (P2-38a): the rule is
+      ApprovalActionGuards.canView — requester (any status) OR assigned approver while
+      SUBMITTED OR (P3-63, narrow) an approver who ACTED, once the request is terminal, so
+      they can see the outcome of their own decision. The JPQL copy of this rule
+      (ApprovalRequestRepository.findVisibleTo) was DELETED; the single-GET now calls
+      findById + canView. Narrowness is enforced by three negatives: a DRAFT assignee, an
+      unacted later approver after an upstream rejection, and an unrelated user all get 404.
     policy_ref: "blueprints/approval-workflow-manifest.yaml#authz"
 
   - id: "WF-AUTHZ-003"

@@ -1,0 +1,2330 @@
+schema_version: 1
+frozen_wave: 1
+generated_at: '2026-07-19'
+generated_by: practices/consumer-proof/engine census (disk-truth grounded — see README.md Part 0)
+cells:
+- id: S1.activity-feed.BE
+  tier: S1
+  domain: activity-feed
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/activityfeed/
+  - specs/activity-feed-l0.yaml
+  enforced_by:
+  - ./gradlew testActivityFeed
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/activityfeed/ActivityViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S1.activity-feed.FE
+  tier: S1
+  domain: activity-feed
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/activity-feed/app/
+  - contracts/activity-feed-openapi.yaml
+  - blueprints/activity-feed-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.activity-feed.XB
+  tier: S1
+  domain: activity-feed
+  layer: XB
+  weight: 1
+  status: gap
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
+    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
+    it. Genuine gap, not conservatism.'
+- id: S1.api-key.BE
+  tier: S1
+  domain: api-key
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/apikey/
+  - specs/api-key-l0.yaml
+  enforced_by:
+  - ./gradlew testApiKey
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/apikey/ApiKeyEntityShapeTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: 'No file literally named *ViolationProofTest; ApiKeyEntityShapeTest is a reflective structural
+    proof (KEY-STORAGE-003: hashedValue column nullable=false+updatable=false) — same falsifiable shape
+    as the catalog''s other ViolationProofTests.'
+- id: S1.api-key.FE
+  tier: S1
+  domain: api-key
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/api-key/app/
+  - contracts/api-key-openapi.yaml
+  - blueprints/api-key-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.api-key.XB
+  tier: S1
+  domain: api-key
+  layer: XB
+  weight: 1
+  status: gap
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
+    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
+    it. Genuine gap, not conservatism.'
+- id: S1.approval-workflow.BE
+  tier: S1
+  domain: approval-workflow
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/
+  - specs/approval-workflow-l0.yaml
+  enforced_by:
+  - ./gradlew testApprovalWorkflow
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/approvalworkflow/ApprovalViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S1.approval-workflow.FE
+  tier: S1
+  domain: approval-workflow
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/approval-workflow/app/
+  - contracts/approval-workflow-openapi.yaml
+  - blueprints/approval-workflow-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.approval-workflow.XB
+  tier: S1
+  domain: approval-workflow
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - backend/src/test/java/com/ax/template/authblueprint/approvalworkflow/ApprovalFlowIT.java
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'Wave-2 Cell 6 closure (2026-07-20): ApprovalFlowIT.java lands a genuine black-box RestAssured
+    HTTP-surface IT for this domain (./gradlew testApprovalWorkflow, @Tag("WORKFLOW")) — the prior "gap"
+    verdict came from a filename census (find -iname *E2E* -o -iname *IT.java) that missed ApprovalComplianceTest
+    (already a real @SpringBootTest RANDOM_PORT black-box test named *ComplianceTest, not *IT/*E2E*).
+    Per Part 1.2, XB requires ALL FOUR legs (contract-parity + ProblemDetail-unwrap + pagination-envelope
+    + e2e-flow); only the e2e-flow leg is now disk-verified. 3 of 4 XB legs remain open (no automated
+    schema-contract-parity test, no dedicated ProblemDetail-shape assertion beyond the custom code property,
+    no pagination-envelope conformance test against the inbox endpoint). partial, not covered.'
+- id: S1.audit-log.BE
+  tier: S1
+  domain: audit-log
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/auditlog/
+  - specs/audit-log-l0.yaml
+  - specs/audit-log-frontend-l0.yaml
+  enforced_by:
+  - ./gradlew testAuditLog
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/auditlog/AuditLogPiiTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: No dedicated *ViolationProofTest for audit-log; AuditLogPiiTest is a falsifiable redaction proof
+    (masked vs store-full IP/email/username) used as nonvacuity instead.
+- id: S1.audit-log.FE
+  tier: S1
+  domain: audit-log
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/audit-log/app/
+  - contracts/audit-log-openapi.yaml
+  - contracts/audit-log-ui.yaml
+  - blueprints/audit-log-manifest.yaml
+  - blueprints/audit-log-ui-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.audit-log.XB
+  tier: S1
+  domain: audit-log
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/audit-log-openapi.yaml
+  - contracts/audit-log-ui.yaml
+  enforced_by: &id001
+  - backend/src/test/java/com/ax/template/authblueprint/ecommerce/EcommerceE2ETest.java
+  nonvacuity: *id001
+  backlog_ref: null
+  na_reason: null
+  notes: 'Partial: a BE-side E2E/IT test exercises this domain''s HTTP surface end-to-end, and an OpenAPI
+    contract exists, but XB per Part 1.2 means contract-parity + ProblemDetail-unwrap + pagination-envelope
+    + e2e-flow ALL FOUR; only the e2e-flow leg is disk-verified here (no automated schema-contract-parity
+    test, no FE-driven E2E).'
+- id: S1.auth.BE
+  tier: S1
+  domain: auth
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/auth/
+  - specs/auth-asvs-l1.yaml
+  - specs/auth-frontend-l0.yaml
+  enforced_by:
+  - ./gradlew testAsvs
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/auth/AuthTokenLeakViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S1.auth.FE
+  tier: S1
+  domain: auth
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/auth/app/
+  - contracts/auth-openapi.yaml
+  - contracts/auth-ui.yaml
+  - blueprints/auth-manifest.yaml
+  - blueprints/auth-ui-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.auth.XB
+  tier: S1
+  domain: auth
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/auth-openapi.yaml
+  - contracts/auth-ui.yaml
+  enforced_by: &id002
+  - backend/src/test/java/com/ax/template/authblueprint/E2ESmokeTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/OAuthE2ESmokeTest.java
+  nonvacuity: *id002
+  backlog_ref: null
+  na_reason: null
+  notes: 'Partial: a BE-side E2E/IT test exercises this domain''s HTTP surface end-to-end, and an OpenAPI
+    contract exists, but XB per Part 1.2 means contract-parity + ProblemDetail-unwrap + pagination-envelope
+    + e2e-flow ALL FOUR; only the e2e-flow leg is disk-verified here (no automated schema-contract-parity
+    test, no FE-driven E2E).'
+- id: S1.billing.BE
+  tier: S1
+  domain: billing
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/billing/
+  - specs/billing-l0.yaml
+  enforced_by:
+  - ./gradlew testBilling
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/billing/BillingArchitectureTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: No *ViolationProofTest; BillingArchitectureTest is an ArchUnit structural proof (BILLING-STATE-001
+    sole-mutator, BILLING-BOUNDARY-001 no cross-package import) — falsifiable, used as nonvacuity.
+- id: S1.billing.FE
+  tier: S1
+  domain: billing
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/billing/app/
+  - contracts/billing-openapi.yaml
+  - contracts/billing-ui.yaml
+  - blueprints/billing-manifest.yaml
+  - blueprints/billing-ui-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.billing.XB
+  tier: S1
+  domain: billing
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/billing-openapi.yaml
+  - contracts/billing-ui.yaml
+  enforced_by: &id003
+  - backend/src/test/java/com/ax/template/authblueprint/billing/BillingFlowIT.java
+  nonvacuity: *id003
+  backlog_ref: null
+  na_reason: null
+  notes: 'Partial: a BE-side E2E/IT test exercises this domain''s HTTP surface end-to-end, and an OpenAPI
+    contract exists, but XB per Part 1.2 means contract-parity + ProblemDetail-unwrap + pagination-envelope
+    + e2e-flow ALL FOUR; only the e2e-flow leg is disk-verified here (no automated schema-contract-parity
+    test, no FE-driven E2E).'
+- id: S1.comment-thread.BE
+  tier: S1
+  domain: comment-thread
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/commentthread/
+  - specs/comment-thread-l0.yaml
+  enforced_by:
+  - ./gradlew testCommentThread
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/commentthread/CommentViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S1.comment-thread.FE
+  tier: S1
+  domain: comment-thread
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/comment-thread/app/
+  - contracts/comment-thread-openapi.yaml
+  - blueprints/comment-thread-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.comment-thread.XB
+  tier: S1
+  domain: comment-thread
+  layer: XB
+  weight: 1
+  status: gap
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
+    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
+    it. Genuine gap, not conservatism.'
+- id: S1.crud.BE
+  tier: S1
+  domain: crud
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/crud/
+  - specs/crud-security.yaml
+  enforced_by:
+  - ./gradlew testCrud
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/crud/CrudSecurityTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: No *ViolationProofTest; the crud domain's whole spec (crud-security.yaml) is itself adversarial
+    — CrudSecurityTest asserts 404 on cross-user IDOR (get/update/delete) and soft-delete-then-404, used
+    as nonvacuity.
+- id: S1.crud.FE
+  tier: S1
+  domain: crud
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/crud/app/
+  - contracts/crud-openapi.yaml
+  - contracts/crud-ui.yaml
+  - blueprints/crud-manifest.yaml
+  - blueprints/crud-ui-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.crud.XB
+  tier: S1
+  domain: crud
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/crud-openapi.yaml
+  - contracts/crud-ui.yaml
+  enforced_by: &id004
+  - backend/src/test/java/com/ax/template/authblueprint/ecommerce/EcommerceE2ETest.java
+  nonvacuity: *id004
+  backlog_ref: null
+  na_reason: null
+  notes: 'Partial: a BE-side E2E/IT test exercises this domain''s HTTP surface end-to-end, and an OpenAPI
+    contract exists, but XB per Part 1.2 means contract-parity + ProblemDetail-unwrap + pagination-envelope
+    + e2e-flow ALL FOUR; only the e2e-flow leg is disk-verified here (no automated schema-contract-parity
+    test, no FE-driven E2E).'
+- id: S1.data-subject-rights.BE
+  tier: S1
+  domain: data-subject-rights
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/dsr/
+  - specs/data-subject-rights-l0.yaml
+  - specs/data-subject-rights-frontend-l0.yaml
+  enforced_by:
+  - ./gradlew testDsr
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/dsr/DataSubjectRightsViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: No plain data-subject-rights-manifest.yaml on disk (only the -ui variant); full_trio_artifact_completeness_guard.sh
+    nonetheless PASSES (verified) — the -ui manifest satisfies the guard's stem match for this domain.
+- id: S1.data-subject-rights.FE
+  tier: S1
+  domain: data-subject-rights
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/data-subject-rights/app/
+  - contracts/data-subject-rights-openapi.yaml
+  - contracts/data-subject-rights-ui.yaml
+  - blueprints/data-subject-rights-ui-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.data-subject-rights.XB
+  tier: S1
+  domain: data-subject-rights
+  layer: XB
+  weight: 1
+  status: gap
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
+    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
+    it. Genuine gap, not conservatism.'
+- id: S1.email-outbox.BE
+  tier: S1
+  domain: email-outbox
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/emailoutbox/
+  - specs/email-outbox-l0.yaml
+  enforced_by:
+  - ./gradlew testEmailOutbox
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/emailoutbox/EmailOutboxViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S1.email-outbox.FE
+  tier: S1
+  domain: email-outbox
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/email-outbox/app/
+  - contracts/email-outbox-openapi.yaml
+  - blueprints/email-outbox-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.email-outbox.XB
+  tier: S1
+  domain: email-outbox
+  layer: XB
+  weight: 1
+  status: gap
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
+    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
+    it. Genuine gap, not conservatism.'
+- id: S1.favorites-bookmarks.BE
+  tier: S1
+  domain: favorites-bookmarks
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/favoritesbookmarks/
+  - specs/favorites-bookmarks-l0.yaml
+  enforced_by:
+  - ./gradlew testFavorites
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/favoritesbookmarks/FavoriteViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S1.favorites-bookmarks.FE
+  tier: S1
+  domain: favorites-bookmarks
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/favorites-bookmarks/app/
+  - contracts/favorites-bookmarks-openapi.yaml
+  - blueprints/favorites-bookmarks-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.favorites-bookmarks.XB
+  tier: S1
+  domain: favorites-bookmarks
+  layer: XB
+  weight: 1
+  status: gap
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
+    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
+    it. Genuine gap, not conservatism.'
+- id: S1.feature-flags.BE
+  tier: S1
+  domain: feature-flags
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/featureflags/
+  - specs/feature-flags-l0.yaml
+  enforced_by:
+  - ./gradlew testFeatureFlags
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/featureflags/FeatureFlagFlowIT.java
+  backlog_ref: null
+  na_reason: null
+  notes: No *ViolationProofTest; FeatureFlagFlowIT FF-AUTHZ-002 asserts 403 for ROLE_MEMBER on the admin
+    endpoint — falsifiable, used as nonvacuity.
+- id: S1.feature-flags.FE
+  tier: S1
+  domain: feature-flags
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/feature-flags/app/
+  - contracts/feature-flags-openapi.yaml
+  - contracts/feature-flags-ui.yaml
+  - blueprints/feature-flags-manifest.yaml
+  - blueprints/feature-flags-ui-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.feature-flags.XB
+  tier: S1
+  domain: feature-flags
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/feature-flags-openapi.yaml
+  - contracts/feature-flags-ui.yaml
+  enforced_by: &id005
+  - backend/src/test/java/com/ax/template/authblueprint/featureflags/FeatureFlagFlowIT.java
+  nonvacuity: *id005
+  backlog_ref: null
+  na_reason: null
+  notes: 'Partial: a BE-side E2E/IT test exercises this domain''s HTTP surface end-to-end, and an OpenAPI
+    contract exists, but XB per Part 1.2 means contract-parity + ProblemDetail-unwrap + pagination-envelope
+    + e2e-flow ALL FOUR; only the e2e-flow leg is disk-verified here (no automated schema-contract-parity
+    test, no FE-driven E2E).'
+- id: S1.file-storage.BE
+  tier: S1
+  domain: file-storage
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/filestorage/
+  - specs/file-storage-l0.yaml
+  enforced_by:
+  - ./gradlew testFileStorage
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/filestorage/FileStorageAuthZTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: No *ViolationProofTest; FileStorageAuthZTest authz_002 asserts 404 on cross-user file read/download/delete
+    — falsifiable, used as nonvacuity.
+- id: S1.file-storage.FE
+  tier: S1
+  domain: file-storage
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/file-storage/app/
+  - contracts/file-storage-openapi.yaml
+  - contracts/file-storage-ui.yaml
+  - blueprints/file-storage-manifest.yaml
+  - blueprints/file-storage-ui-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.file-storage.XB
+  tier: S1
+  domain: file-storage
+  layer: XB
+  weight: 1
+  status: gap
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
+    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
+    it. Genuine gap, not conservatism.'
+- id: S1.notification.BE
+  tier: S1
+  domain: notification
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/notification/
+  - specs/notification-l0.yaml
+  enforced_by:
+  - ./gradlew testNotification
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/notification/NotificationAuthZTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: No *ViolationProofTest; NotificationAuthZTest authz_002 asserts 404 on cross-user notification
+    read/mark-read/delete — falsifiable, used as nonvacuity.
+- id: S1.notification.FE
+  tier: S1
+  domain: notification
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/notification/app/
+  - contracts/notification-openapi.yaml
+  - contracts/notification-ui.yaml
+  - blueprints/notification-manifest.yaml
+  - blueprints/notification-ui-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.notification.XB
+  tier: S1
+  domain: notification
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/notification-openapi.yaml
+  - contracts/notification-ui.yaml
+  enforced_by: &id006
+  - backend/src/test/java/com/ax/template/authblueprint/ecommerce/EcommerceE2ETest.java
+  nonvacuity: *id006
+  backlog_ref: null
+  na_reason: null
+  notes: 'Partial: a BE-side E2E/IT test exercises this domain''s HTTP surface end-to-end, and an OpenAPI
+    contract exists, but XB per Part 1.2 means contract-parity + ProblemDetail-unwrap + pagination-envelope
+    + e2e-flow ALL FOUR; only the e2e-flow leg is disk-verified here (no automated schema-contract-parity
+    test, no FE-driven E2E).'
+- id: S1.payment.BE
+  tier: S1
+  domain: payment
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/payment/
+  - specs/payment-l0.yaml
+  enforced_by:
+  - ./gradlew testPayment
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/payment/PaymentSplitTenderViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S1.payment.FE
+  tier: S1
+  domain: payment
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/payment/app/
+  - contracts/payment-openapi.yaml
+  - contracts/payment-ui.yaml
+  - blueprints/payment-manifest.yaml
+  - blueprints/payment-ui-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.payment.XB
+  tier: S1
+  domain: payment
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/payment-openapi.yaml
+  - contracts/payment-ui.yaml
+  enforced_by: &id007
+  - backend/src/test/java/com/ax/template/authblueprint/payment/PaymentCallbackSignatureFailIT.java
+  - backend/src/test/java/com/ax/template/authblueprint/ecommerce/EcommerceE2ETest.java
+  nonvacuity: *id007
+  backlog_ref: null
+  na_reason: null
+  notes: 'Partial: a BE-side E2E/IT test exercises this domain''s HTTP surface end-to-end, and an OpenAPI
+    contract exists, but XB per Part 1.2 means contract-parity + ProblemDetail-unwrap + pagination-envelope
+    + e2e-flow ALL FOUR; only the e2e-flow leg is disk-verified here (no automated schema-contract-parity
+    test, no FE-driven E2E).'
+- id: S1.scheduled-task.BE
+  tier: S1
+  domain: scheduled-task
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/scheduledtask/
+  - specs/scheduled-task-l0.yaml
+  enforced_by:
+  - ./gradlew testScheduledTask
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/scheduledtask/ScheduledTaskLockTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: No *ViolationProofTest; ScheduledTaskLockTest asserts mutual-exclusion (isFalse() on a second
+    concurrent lock acquisition) — falsifiable, used as nonvacuity.
+- id: S1.scheduled-task.FE
+  tier: S1
+  domain: scheduled-task
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/scheduled-task/app/
+  - contracts/scheduled-task-openapi.yaml
+  - blueprints/scheduled-task-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.scheduled-task.XB
+  tier: S1
+  domain: scheduled-task
+  layer: XB
+  weight: 1
+  status: gap
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
+    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
+    it. Genuine gap, not conservatism.'
+- id: S1.search.BE
+  tier: S1
+  domain: search
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/search/
+  - specs/search-l0.yaml
+  enforced_by:
+  - ./gradlew testSearch
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/search/SearchAuthZTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: No *ViolationProofTest; SearchAuthZTest asserts 401 for unauthenticated query access — falsifiable,
+    used as nonvacuity.
+- id: S1.search.FE
+  tier: S1
+  domain: search
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/search/app/
+  - contracts/search-openapi.yaml
+  - contracts/search-ui.yaml
+  - blueprints/search-manifest.yaml
+  - blueprints/search-ui-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.search.XB
+  tier: S1
+  domain: search
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/search-openapi.yaml
+  - contracts/search-ui.yaml
+  enforced_by: &id008
+  - backend/src/test/java/com/ax/template/authblueprint/ecommerce/EcommerceE2ETest.java
+  nonvacuity: *id008
+  backlog_ref: null
+  na_reason: null
+  notes: 'Partial: a BE-side E2E/IT test exercises this domain''s HTTP surface end-to-end, and an OpenAPI
+    contract exists, but XB per Part 1.2 means contract-parity + ProblemDetail-unwrap + pagination-envelope
+    + e2e-flow ALL FOUR; only the e2e-flow leg is disk-verified here (no automated schema-contract-parity
+    test, no FE-driven E2E).'
+- id: S1.session-management.BE
+  tier: S1
+  domain: session-management
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/sessionmanagement/
+  - specs/session-management-l0.yaml
+  enforced_by:
+  - ./gradlew testSessionManagement
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/sessionmanagement/SessionViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S1.session-management.FE
+  tier: S1
+  domain: session-management
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/session-management/app/
+  - contracts/session-management-openapi.yaml
+  - blueprints/session-management-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.session-management.XB
+  tier: S1
+  domain: session-management
+  layer: XB
+  weight: 1
+  status: gap
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
+    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
+    it. Genuine gap, not conservatism.'
+- id: S1.tag-categorization.BE
+  tier: S1
+  domain: tag-categorization
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/tagcategorization/
+  - specs/tag-categorization-l0.yaml
+  enforced_by:
+  - ./gradlew testTagCategorization
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/tagcategorization/TagViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S1.tag-categorization.FE
+  tier: S1
+  domain: tag-categorization
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/tag-categorization/app/
+  - contracts/tag-categorization-openapi.yaml
+  - blueprints/tag-categorization-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern.'
+- id: S1.tag-categorization.XB
+  tier: S1
+  domain: tag-categorization
+  layer: XB
+  weight: 1
+  status: gap
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'No BE E2E/IT test found touching this domain''s HTTP surface (checked: find backend/src/test
+    -iname ''*E2E*'' -o -iname ''*IT.java'') and no contract-parity/pagination-envelope test exists for
+    it. Genuine gap, not conservatism.'
+- id: S1.webhook.BE
+  tier: S1
+  domain: webhook
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/webhook/
+  - specs/webhook-l0.yaml
+  - specs/webhook-signing-l0.yaml
+  enforced_by:
+  - ./gradlew testWebhook
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/webhook/WebhookSignTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/webhook/WebhookAdminListStatusTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: No *ViolationProofTest; WebhookSignTest WEBHOOK-SIGN-002 asserts the verify helper rejects (isFalse())
+    a tampered body — falsifiable, used as nonvacuity.
+- id: S1.webhook.FE
+  tier: S1
+  domain: webhook
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L4/webhook/app/
+  - contracts/webhook-openapi.yaml
+  - blueprints/webhook-manifest.yaml
+  enforced_by:
+  - practices/evals/full_trio_artifact_completeness_guard.sh
+  - practices/evals/trio_integrity_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/full_trio_artifact_completeness/fail_missing_artifacts/
+  backlog_ref: null
+  na_reason: null
+  notes: 'Covered = trio structural completeness is mechanically guaranteed (contract+blueprint+L4 dir;
+    fail_missing_artifacts fixture proves the guard is RED-able). NOT covered: no CI job runs ESLint against
+    templates/L4/<domain>/app itself (the dir ships without package.json/tsconfig — it is copy-paste catalog
+    material, not a linted app) — ax/* rule-firing on this exact path is unverified; that is a separate
+    (S2 FE) concern. Also NOT covered (2026-07-27): the L4 copy-target material''s delivery-status vocabulary
+    has drifted from the reconciled contract — see docs/BACKLOG.md (P2-34).'
+- id: S1.webhook.XB
+  tier: S1
+  domain: webhook
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/webhook-openapi.yaml
+  enforced_by: &id009
+  - backend/src/test/java/com/ax/template/integration/WebhookReceiverIT.java
+  nonvacuity: *id009
+  backlog_ref: null
+  na_reason: null
+  notes: 'Partial: a BE-side E2E/IT test exercises this domain''s HTTP surface end-to-end, and an OpenAPI
+    contract exists, but XB per Part 1.2 means contract-parity + ProblemDetail-unwrap + pagination-envelope
+    + e2e-flow ALL FOUR; only the e2e-flow leg is disk-verified here (no automated schema-contract-parity
+    test, no FE-driven E2E).'
+- id: S1.i18n-policy.BE
+  tier: S1
+  domain: i18n-policy
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/i18n/
+  - specs/i18n-policy-l0.yaml
+  enforced_by:
+  - ./gradlew testI18n
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/i18n/I18nPolicyComplianceTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: I18nPolicyComplianceTest asserts 400 on a naive (non-UTC) timestamp — falsifiable, used as nonvacuity.
+- id: S1.i18n-policy.FE
+  tier: S1
+  domain: i18n-policy
+  layer: FE
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'domain_mode: backend_only per specs/i18n-policy-l0.yaml — no templates/L4/i18n-policy/app
+    by design (confirmed: no such dir on disk).'
+  notes: ''
+- id: S1.i18n-policy.XB
+  tier: S1
+  domain: i18n-policy
+  layer: XB
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'domain_mode: backend_only per specs/i18n-policy-l0.yaml — no templates/L4/i18n-policy/app
+    by design (confirmed: no such dir on disk).'
+  notes: ''
+- id: S1.multi-tenant.BE
+  tier: S1
+  domain: multi-tenant
+  layer: BE
+  weight: 1
+  status: partial
+  covered_by:
+  - specs/multi-tenant-l0.yaml
+  - templates/L4/multi-tenant/README.md
+  - blueprints/multi-tenant-manifest.yaml
+  enforced_by:
+  - practices/evals/multi_tenant_aop_guard_skeleton_guard.sh
+  nonvacuity:
+  - practices/evals/fixtures/multi-tenant-aop-guard-skeleton/failing
+  backlog_ref: null
+  na_reason: null
+  notes: 'DISK-VERIFIED GAP: no backend/src/main/java/.../common/tenancy/ package exists yet (confirmed
+    absent by `find backend/src/main -ipath ''*tenancy*'' -o -ipath ''*TenantContext*''` returning empty)
+    and no `./gradlew testMultiTenant` task exists. templates/L4/multi-tenant/README.md itself says ''Backend
+    runtime primitives ... ship in a follow-up commit; this stub is the namespace reservation.'' Only
+    the AOP guard-skeleton completeness check + spec/blueprint exist today. Marked partial, not covered
+    — this is the exact same underlying absence used as canary CANARY-006.'
+- id: S1.multi-tenant.FE
+  tier: S1
+  domain: multi-tenant
+  layer: FE
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'domain_mode: backend_only per specs/multi-tenant-l0.yaml; templates/L4/multi-tenant/README.md
+    states explicitly ''Multi-tenant has no first-class UI... Frontend deliberately skipped.'''
+  notes: ''
+- id: S1.multi-tenant.XB
+  tier: S1
+  domain: multi-tenant
+  layer: XB
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'domain_mode: backend_only per specs/multi-tenant-l0.yaml; templates/L4/multi-tenant/README.md
+    states explicitly ''Multi-tenant has no first-class UI... Frontend deliberately skipped.'''
+  notes: ''
+- id: S1.ratelimit.BE
+  tier: S1
+  domain: ratelimit
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/ratelimit/
+  - specs/ratelimit-l0.yaml
+  enforced_by:
+  - ./gradlew testRateLimit
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/ratelimit/RateLimitComplianceTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: RateLimitComplianceTest asserts 429 beyond max-per-window — falsifiable, used as nonvacuity.
+- id: S1.ratelimit.FE
+  tier: S1
+  domain: ratelimit
+  layer: FE
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'domain_mode: backend_only per specs/ratelimit-l0.yaml — no templates/L4/ratelimit/app by
+    design (confirmed: no such dir on disk).'
+  notes: ''
+- id: S1.ratelimit.XB
+  tier: S1
+  domain: ratelimit
+  layer: XB
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'domain_mode: backend_only per specs/ratelimit-l0.yaml — no templates/L4/ratelimit/app by
+    design (confirmed: no such dir on disk).'
+  notes: ''
+- id: S1.realtime-policy.BE
+  tier: S1
+  domain: realtime-policy
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/realtime/
+  - specs/realtime-policy-l0.yaml
+  enforced_by:
+  - ./gradlew testRealtime
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/realtime/RealtimePolicyComplianceTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: RealtimePolicyComplianceTest asserts 403 on tenant-scope mismatch subscribe and 404 on unknown-topic
+    — falsifiable, used as nonvacuity.
+- id: S1.realtime-policy.FE
+  tier: S1
+  domain: realtime-policy
+  layer: FE
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'domain_mode: backend_only per specs/realtime-policy-l0.yaml — no templates/L4/realtime-policy/app
+    by design (confirmed: no such dir on disk).'
+  notes: ''
+- id: S1.realtime-policy.XB
+  tier: S1
+  domain: realtime-policy
+  layer: XB
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'domain_mode: backend_only per specs/realtime-policy-l0.yaml — no templates/L4/realtime-policy/app
+    by design (confirmed: no such dir on disk).'
+  notes: ''
+- id: S1.identity-verification.BE
+  tier: S1
+  domain: identity-verification
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/identityverification/
+  - specs/identity-verification-l0.yaml
+  enforced_by:
+  - ./gradlew testIdentityVerification
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/identityverification/VerifiedIdentityViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: Main source package sits at backend/src/main/java/com/ax/template/authblueprint/identityverification/
+    (same authblueprint convention as other domains), but the TEST package is asymmetric — com.ax.template.identityverification,
+    top-level, NOT under authblueprint (verified on disk both sides).
+- id: S1.identity-verification.FE
+  tier: S1
+  domain: identity-verification
+  layer: FE
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'domain_mode: backend_only per specs/identity-verification-l0.yaml — no templates/L4/identity-verification/app
+    by design (confirmed: no such dir on disk).'
+  notes: ''
+- id: S1.identity-verification.XB
+  tier: S1
+  domain: identity-verification
+  layer: XB
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'domain_mode: backend_only per specs/identity-verification-l0.yaml — no templates/L4/identity-verification/app
+    by design (confirmed: no such dir on disk).'
+  notes: ''
+- id: S2.AUTHZ.BE
+  tier: S2
+  concern: AUTHZ
+  layer: BE
+  weight: 2
+  status: covered
+  covered_by:
+  - practices/rules/caller-authentication-only-no-userid-param.md
+  - practices/rules/containment-scope-authz-tree-derived-downward-cascade.md
+  - backend/src/main/java/com/ax/template/authblueprint/authzparity/
+  - backend/src/main/java/com/ax/template/authblueprint/accessgrant/
+  enforced_by:
+  - ./gradlew testAuthzParity
+  - ./gradlew testAccessGrant
+  - practices/evals/role_literal_guard.sh
+  - practices/evals/admin_preauthorize_guard.sh
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/authzparity/AuthzParityViolationProofTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/accessgrant/AccessGrantViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: 'The non-vacuity proofs for this cell are the two ViolationProofTests + the per-domain AUTHZ
+    integration items (they assert HTTP 403 for a non-admin caller). admin_preauthorize_guard.sh is a
+    SUPPLEMENTARY, purely-LOCAL static check for the BFLA-presence shape: every mutating endpoint on an
+    admin-surface controller (name *AdminController OR class-level @RequestMapping path containing /admin)
+    MUST carry an effective method-/class-level @PreAuthorize requiring ROLE_ADMIN. It does NOT parse
+    SecurityConfig (that crediting was removed after a cross-family reviewer found 4 static-analysis bypasses
+    of the matcher-chain model; a purely-local annotation check has nothing to bypass). The SecurityConfig
+    path-matchers stay as a complementary layer. This guard is NOT the authoritative Spring-authz verifier
+    and NOT this cell''s primary non-vacuity proof.'
+- id: S2.AUTHZ.FE
+  tier: S2
+  concern: AUTHZ
+  layer: FE
+  weight: 2
+  status: covered
+  covered_by:
+  - practices-react/rules/audit-log-frontend-viewer-rbac-virtualized.md
+  - practices-react/rules/impersonation-banner-required-when-acting-as-other-user.md
+  - practices-react/rules/no-impersonation-bypass-via-helper-rename.md
+  - practices-react/rules/no-caller-identity-from-props.md
+  - templates/L0/fork-receiver-kit/use-caller-id.ts
+  enforced_by:
+  - cd frontend && npm run lint
+  nonvacuity:
+  - practices-react/eslint-plugin-ax/tests/no-caller-identity-from-props.test.js
+  - frontend/tests/use-caller-id.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: 'Wave-2 Cell 4 closure (2026-07-20): a new 15th ax/* ESLint rule (no-caller-identity-from-props.js)
+    now mechanically enforces the caller-identity-source shape — authz-relevant identity must come from
+    use-caller-id.ts, not props/params. Shipped at error directly (Linter-API sweep across all 6 apps
+    + src + packages + templates/L1 + templates/L4 = 572 files found 0 real violations pre-ship, wired
+    into frontend/eslint.config.mjs sharedRules). no-caller-identity-from-props.test.js RED-proves the
+    rule fires on the impersonation-prop shape; use-caller-id.vitest.ts covers the hook itself. Closes
+    CANARY-010 (see canary-gaps.yaml). The remaining two rule docs (audit-log-frontend-viewer-rbac-virtualized.md,
+    impersonation-banner-required-when-acting-as-other-user.md) stay verification.type: review by design
+    — not a gap in this flip.'
+- id: S2.AUTHZ.XB
+  tier: S2
+  concern: AUTHZ
+  layer: XB
+  weight: 2
+  status: partial
+  covered_by:
+  - practices/rules/authorization-parity-executed-matches-authorized-four-eyes-positive-gates.md
+  - frontend/tests/_fixtures/authorized-actions.golden.json
+  enforced_by:
+  - ./gradlew testAuthzParity
+  - ./gradlew testApprovalWorkflow
+  - cd frontend && npm run test
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/authzparity/AuthzParityViolationProofTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/common/AuthorizedActionSetParityTest.java
+  - frontend/tests/authz-action-parity.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: 'Wave-3 partial (2026-07-27): a FE↔BE authorized-action-set harness now exists for approval-workflow
+    over a shared golden (frontend/tests/_fixtures/authorized-actions.golden.json), all 6 rows evidence-anchored
+    by file:line and independently re-derived against production source. Still `partial` for three reasons:
+    (1) the BE leg calls the REAL ApprovalRequestStateMachine / ApprovalStepStateMachine for lifecycle-transition
+    legality but REIMPLEMENTS the visibility/ ownership/ordering guards (ApprovalRequestRepository#findVisibleTo,
+    ApprovalService.java:195-227, 245-251) — a change there does NOT auto-flip the test; (2) the FE leg''s
+    selector is defined inside the vitest file and exercises NO shipped FE code — the real consumer is
+    `describeChain` at templates/L4/approval-workflow/app/(approvals)/[id]/page.tsx:123-149, an independent
+    reimplementation verified to agree with the golden today but mechanically unlinked; (3) ApprovalRequestResponse
+    / ApprovalStepResponse emit no action-set field at all, so there is no BE-emitted contract to assert
+    against. See docs/BACKLOG.md (P2-38) and (P2-39).'
+- id: S2.AUTHN-SESSION.BE
+  tier: S2
+  concern: AUTHN-SESSION
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - specs/auth-asvs-l1.yaml
+  - backend/src/main/java/com/ax/template/authblueprint/auth/
+  - backend/src/main/java/com/ax/template/authblueprint/sessionmanagement/
+  enforced_by:
+  - ./gradlew testAsvs
+  - ./gradlew testSessionManagement
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/auth/AuthTokenLeakViolationProofTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/sessionmanagement/SessionViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S2.AUTHN-SESSION.FE
+  tier: S2
+  concern: AUTHN-SESSION
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - frontend/tests/auth-state.vitest.ts
+  - frontend/tests/auth-store.vitest.ts
+  - templates/L4/auth/app/
+  - templates/L4/session-management/app/
+  enforced_by:
+  - cd frontend && npm run test
+  nonvacuity:
+  - frontend/tests/auth-state.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: auth-state.vitest.ts includes 'refresh-queue-serializes-concurrent-refresh' — a falsifiable concurrency-safety
+    assertion on session refresh.
+- id: S2.AUTHN-SESSION.XB
+  tier: S2
+  concern: AUTHN-SESSION
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/auth-openapi.yaml
+  - contracts/session-management-openapi.yaml
+  enforced_by:
+  - backend/src/test/java/com/ax/template/authblueprint/OAuthE2ESmokeTest.java
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/OAuthE2ESmokeTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: BE-only OAuth E2E smoke test exists; no FE-driven cross-boundary session E2E found.
+- id: S2.MONEY-QUANTITY.BE
+  tier: S2
+  concern: MONEY-QUANTITY
+  layer: BE
+  weight: 2
+  status: covered
+  covered_by:
+  - practices/rules/currency-amount-precision-explicit.md
+  - backend/src/main/java/com/ax/template/authblueprint/currencyarithmetic/
+  - backend/src/main/java/com/ax/template/authblueprint/common/Money.java
+  enforced_by:
+  - practices/evals/money_boundary_seam_guard.sh
+  - ./gradlew testCurrencyArithmetic
+  - ./gradlew testPayment
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/currencyarithmetic/CurrencyArithmeticViolationProofTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/payment/PaymentMoneyTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S2.MONEY-QUANTITY.FE
+  tier: S2
+  concern: MONEY-QUANTITY
+  layer: FE
+  weight: 2
+  status: covered
+  covered_by:
+  - templates/L0/fork-receiver-kit/money.ts
+  - practices-react/rules/currency-amount-no-raw-jsx-render.md
+  enforced_by:
+  - cd frontend && npm run test
+  nonvacuity:
+  - frontend/tests/fmw2-primitives.vitest.ts
+  - frontend/tests/fmw4-primitives.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: 'fmw2-primitives.vitest.ts: ''throws on a non-decimal amount rather than producing NaN''; fmw4-primitives.vitest.ts:
+    parseMinor/serializeMinor round-trip + fractionDigitsFor — both falsifiable.'
+- id: S2.MONEY-QUANTITY.XB
+  tier: S2
+  concern: MONEY-QUANTITY
+  layer: XB
+  weight: 2
+  status: covered
+  covered_by:
+  - contracts/payment-openapi.yaml
+  - contracts/billing-openapi.yaml
+  - backend/src/main/java/com/ax/template/authblueprint/payment/PaymentBodyMapper.java
+  enforced_by:
+  - ./gradlew testPayment
+  - cd frontend && npm run test
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/payment/PaymentAmountMinorUnitCharacterizationTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/payment/MoneyContractParityTest.java
+  - frontend/tests/money-contract-parity.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: 'Wave-3 money reconciliation closure (2026-07-26): partial→covered. The two demotion reasons
+    are both closed. (1) The contract is no longer self-contradictory — decision (design-gated, fable5):
+    integer-MINOR wire is canonical for BOTH request and response (decimal-string retained as a request-only
+    input branch); MoneyWire carries the wire shape, MoneyDeserializer maps a JSON integer to minor units,
+    PaymentService resolves after currency validation, PaymentBodyMapper.minorOrNull + RefundResponse(long)
+    emit the integer branch, so request/response/openapi/spec/money.ts all agree (money.ts needed ZERO
+    change — it already implements parseMinor/serializeMinor). Closes BACKLOG P1-68 (response float vs
+    MoneyAmount) and P1-69 (integer-minor 100x overcharge; its formerly-@Disabled PaymentAmountMinorUnitCharacterizationTest
+    is now a standing green). (2) Parity is bound to the REAL emitter (PaymentBodyMapper.toBody) with
+    RED-on-revert proven on both legs (BE: breaking minorOrNull fails the 3 USD legs while the 4 KRW legs
+    stay green — the USD legs observe the conversion, not the key name; FE: golden round-trip through
+    parseMinor). Also closes P1-70 (duplicate refund) via V116 UNIQUE(payment_id, idempotency_key) + a
+    replay short-circuit placed immediately after the ownership load (falsifiable: relocating it after
+    the state guards fails exactly the full-refund-retry test). Evidence: testPayment 80/80, testEcommerce
+    11/11, testCommonPrimitives 116/116, FE 399/399, run-all-guards 209/0, money_boundary_seam_guard 0.
+    Closes CANARY-008.'
+- id: S2.IDEMPOTENCY-CONCURRENCY.BE
+  tier: S2
+  concern: IDEMPOTENCY-CONCURRENCY
+  layer: BE
+  weight: 2
+  status: covered
+  covered_by:
+  - practices/rules/api-idempotency-key-required.md
+  - backend/src/main/java/com/ax/template/authblueprint/common/IdempotencyKeyStore.java
+  - backend/src/main/java/com/ax/template/authblueprint/idempotency/
+  - backend/src/main/java/com/ax/template/authblueprint/optlock/
+  enforced_by:
+  - ./gradlew testIdempotency
+  - ./gradlew testOptimisticLocking
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/optlock/OptlockResourceViolationProofTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/payment/PaymentIdempotencyTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S2.IDEMPOTENCY-CONCURRENCY.FE
+  tier: S2
+  concern: IDEMPOTENCY-CONCURRENCY
+  layer: FE
+  weight: 2
+  status: covered
+  covered_by:
+  - templates/L0/fork-receiver-kit/use-idempotency-key.ts
+  - templates/L0/fork-receiver-kit/use-conflict-resolution.ts
+  - practices-react/rules/payment-frontend-checkout-idempotent-states.md
+  enforced_by:
+  - cd frontend && npm run test
+  nonvacuity:
+  - frontend/tests/fmw4-primitives.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: 'fmw4-primitives.vitest.ts: ''classifyConflict — optimistic-lock 428/412/409 → ConflictSignal''
+    — falsifiable mapping test.'
+- id: S2.IDEMPOTENCY-CONCURRENCY.XB
+  tier: S2
+  concern: IDEMPOTENCY-CONCURRENCY
+  layer: XB
+  weight: 2
+  status: partial
+  covered_by:
+  - contracts/payment-openapi.yaml
+  enforced_by:
+  - backend/src/test/java/com/ax/template/authblueprint/payment/PaymentCallbackSignatureFailIT.java
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/payment/PaymentCallbackSignatureFailIT.java
+  backlog_ref: null
+  na_reason: null
+  notes: BE-only retried-callback IT; no FE-BE cross test of idempotent replay.
+- id: S2.LIFECYCLE-STATE.BE
+  tier: S2
+  concern: LIFECYCLE-STATE
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/statemutation/
+  - backend/src/main/java/com/ax/template/authblueprint/billing/SubscriptionStateMachine.java
+  enforced_by:
+  - ./gradlew testStateMutation
+  - ./gradlew testBilling
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/statemutation/StateMutationViolationProofTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/billing/BillingArchitectureTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S2.LIFECYCLE-STATE.XB
+  tier: S2
+  concern: LIFECYCLE-STATE
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/billing-openapi.yaml
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: No FE-BE cross test confirms rendered UI state matches the BE FSM's current status after a transition.
+- id: S2.LIFECYCLE-STATE.FE
+  tier: S2
+  concern: LIFECYCLE-STATE
+  layer: FE
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'Per Part 1.3 initial mask declaration: state transitions are server-authoritative; FE has
+    no independent state-machine enforcement surface distinct from BE-driven status rendering.'
+  notes: ''
+- id: S2.AUDIT-PII.BE
+  tier: S2
+  concern: AUDIT-PII
+  layer: BE
+  weight: 2
+  status: covered
+  covered_by:
+  - practices/rules/audit-log-pii-hash-required.md
+  - backend/src/main/java/com/ax/template/authblueprint/auditlog/
+  enforced_by:
+  - practices/evals/no_rrn_in_log_guard.sh
+  - practices/evals/phi_in_logs_guard.sh
+  - ./gradlew testAuditLog
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/auditlog/AuditLogPiiTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S2.AUDIT-PII.FE
+  tier: S2
+  concern: AUDIT-PII
+  layer: FE
+  weight: 2
+  status: covered
+  covered_by:
+  - templates/L0/fork-receiver-kit/parse-error.ts
+  - practices-react/rules/no-rrn-display-without-legal-basis-gate.md
+  - practices-react/rules/no-rrn-in-form-fields.md
+  enforced_by: []
+  nonvacuity:
+  - frontend/tests/parse-error-denylist.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: 'wave-1 exit cleanup (2026-07-20, codex nonvacuity closure): frontend/tests/parse-error-denylist.vitest.ts
+    (15 vitest cases) now covers BOTH branches of parseError() with genuine RED-on-revert proofs. (a)
+    RFC 9457 JSON branch (body.detail/body.message): reverting the JSON-branch deny-list fix flips 3 cases
+    to failing. (b) text/html fallback branch (parse-error.ts `looksSensitive` screen, ~line 123): 5 new
+    cases exercise it — reverting the `!looksSensitive` protection flips the 4 PII cases (RRN/email/ JWT/hostname+IP)
+    to failing while the benign-text case stays green (proving the branch is genuinely reached, not always-fallback).
+    Each PII text body is < 120 chars stripped, so it is the PII screen — not the length cap — under falsification.
+    This closes the codex finding that the text/html branch was UNTESTED (covered claim was vacuous for
+    that branch). parse-error.ts is used in 21 FE files across 9 domains (grep-verified). The other two
+    covered_by rules (no-rrn-display-without-legal-basis-gate.md, no-rrn-in-form-fields.md) are intentionally
+    verification.type: review (manual tier, no automated test expected) — not a gap in this flip.'
+- id: S2.AUDIT-PII.XB
+  tier: S2
+  concern: AUDIT-PII
+  layer: XB
+  weight: 2
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/auditlog/AuditLogService.java
+  - templates/L4/audit-log/app/**/audit-log-detail-view.tsx
+  enforced_by:
+  - ./gradlew testAuditLog
+  - cd frontend && npm run test
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/auditlog/AuditLogDtoPiiTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/auditlog/AuditLogResponseRedactionGoldenTest.java
+  - frontend/tests/audit-log-redaction-render.vitest.tsx
+  backlog_ref: null
+  na_reason: null
+  notes: 'Closed the live write-port leak: AuditLogService.record(AuditLogDto) — the published cross-feature
+    audit-write port other domains call — built the AuditLog entity straight from the caller-supplied
+    raw actorIp with no redaction, unlike the @Audited aspect path which already redacts via AuditLogPiiRedactor.
+    Any domain writing through this port stored (and AuditLogResponse.from() would then serve to the FE)
+    an unmasked IP. Fixed by routing dto.actorIp() through the same AuditLogPiiRedactor; AuditLogDtoPiiTest
+    proves it (RED on revert). Wave-2 Cell 3 closure (2026-07-20) closes the remaining slice: a shared
+    golden fixture (frontend/tests/_fixtures/audit-log-response.golden.json) pins the masked AuditLogResponse
+    JSON shape; AuditLogResponseRedactionGoldenTest.java (BE) and audit-log-redaction-render.vitest.tsx
+    (FE, exercising the new audit-log-detail-view.tsx presentational component) both assert the masked
+    form survives — the raw-present variant is RED-able on both sides. Closes CANARY-009 (see canary-gaps.yaml).'
+- id: S2.ERROR-CONTRACT.BE
+  tier: S2
+  concern: ERROR-CONTRACT
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/problemdetails/
+  - backend/src/main/java/com/ax/template/authblueprint/common/GlobalProblemDetailAdvice.java
+  enforced_by:
+  - practices/evals/controller_problemdetail_guard.sh
+  - ./gradlew testProblemDetails
+  nonvacuity:
+  - practices/consumer-proof/java/violating-root/
+  backlog_ref: null
+  na_reason: null
+  notes: 'nonvacuity = the consumer-proof Lane B violating-root fixture: controller_problemdetail_guard.sh
+    rejects its @ExceptionHandler returning Map<String,String> (RED) and accepts the clean-root ProblemDetail
+    rewrite (GREEN).'
+- id: S2.ERROR-CONTRACT.FE
+  tier: S2
+  concern: ERROR-CONTRACT
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L0/fork-receiver-kit/parse-error.ts
+  - templates/L0/fork-receiver-kit/parse-field-errors.ts
+  enforced_by:
+  - cd frontend && npm run test
+  nonvacuity:
+  - frontend/tests/fmw2-primitives.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: 'fmw2-primitives.vitest.ts: "reads RFC 9457 ''invalid-params'' ({ name, reason })" — direct falsifiable
+    RFC 9457 shape test.'
+- id: S2.ERROR-CONTRACT.XB
+  tier: S2
+  concern: ERROR-CONTRACT
+  layer: XB
+  weight: 1
+  status: covered
+  covered_by:
+  - contracts/crud-openapi.yaml
+  - templates/L0/fork-receiver-kit/parse-error.ts
+  enforced_by:
+  - ./gradlew testCommonAdvice
+  - cd frontend && npm run test
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/common/ProblemDetailContractParityTest.java
+  - frontend/tests/problem-detail-parity.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: 'Wave-3 closure (2026-07-27): one committed golden (frontend/tests/_fixtures/problem-detail.golden.json)
+    bound to two independent consumers — a plain-Jackson BE test that registers Spring''s own ProblemDetailJacksonMixin
+    (bytecode-verified against the resolved spring-boot-jackson-4.1.0 / spring-web-7.0.8 jars, so it reproduces
+    the real production wire shape rather than an assumed one) and an FE vitest that feeds the same golden
+    through templates/L0/fork-receiver-kit/parse-error.ts. Mutation-lock proven on the FE leg (rename
+    `code`→`errorCode` ⇒ RED; reverted ⇒ green). No real BE/FE field mismatch found — parse-error.ts''s
+    detail→message→text/html order and its `code` read match every advice''s emission. SCOPE: pins the
+    six scalar RFC 9457 members of the NOT_FOUND body. The validation body''s `errors[]` extension array
+    (consumed by parse-field-errors.ts) is NOT golden-bound by this harness — see CANARY-015 and docs/BACKLOG.md
+    (P2-36). Closes CANARY-013.'
+- id: S2.QUERY-BOUNDS.BE
+  tier: S2
+  concern: QUERY-BOUNDS
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - practices/rules/api-pagination-pageable.md
+  - backend/src/main/java/com/ax/template/authblueprint/queryguard/
+  - backend/src/main/java/com/ax/template/authblueprint/common/PageEnvelope.java
+  enforced_by:
+  - ./gradlew testQueryGuard
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/queryguard/QueryGuardViolationProofTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/common/PageEnvelopeTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S2.QUERY-BOUNDS.FE
+  tier: S2
+  concern: QUERY-BOUNDS
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L0/fork-receiver-kit/use-url-list-state.ts
+  - practices-react/rules/virtualized-table-when-rowcount-gt-1000.md
+  - practices-react/rules/saved-view-must-be-url-state-or-server-persisted.md
+  enforced_by:
+  - cd frontend && npm run test
+  nonvacuity:
+  - frontend/tests/fmw4-primitives.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: 'fmw4-primitives.vitest.ts: ''listStateToQuery — inverse serializer'' suite (page/pageSize/search/sort/filters
+    omission rules) — falsifiable.'
+- id: S2.QUERY-BOUNDS.XB
+  tier: S2
+  concern: QUERY-BOUNDS
+  layer: XB
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L0/fork-receiver-kit/parse-page-envelope.ts
+  enforced_by:
+  - ./gradlew testPagination
+  - cd frontend && npm run test
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/common/PageEnvelopeContractParityTest.java
+  - frontend/tests/page-envelope-parity.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: 'Wave-2 Cell 1 closure (2026-07-20): PageEnvelopeContractParityTest.java (BE, @Tag("PAGINATION"))
+    + page-envelope-parity.vitest.ts (FE) now cross-validate FE pagination-envelope parsing against the
+    BE PageEnvelope JSON shape via a shared golden fixture (frontend/tests/_fixtures/page-envelope.golden.json)
+    — a drift in either the record''s field names or the FE parser trips exactly one side, RED-on-revert.
+    A canonical L0 parser (parse-page-envelope.ts) ships alongside it. Closes CANARY-003 (see canary-gaps.yaml)
+    and the "no L0 canonical parser" residual noted in docs/BACKLOG.md.'
+- id: S2.INPUT-VALIDATION.BE
+  tier: S2
+  concern: INPUT-VALIDATION
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - practices/rules/config-validation-fail-fast-typed.md
+  - backend/src/main/java/com/ax/template/authblueprint/inputplausibility/
+  enforced_by:
+  - ./gradlew testInputPlausibility
+  - ./gradlew testRequestValidation
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/inputplausibility/PlausibilityViolationProofTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/inputplausibility/DatePlausibilityViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S2.INPUT-VALIDATION.FE
+  tier: S2
+  concern: INPUT-VALIDATION
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L0/fork-receiver-kit/parse-field-errors.ts
+  - practices-react/rules/combobox-respects-hangul-ime-composition.md
+  enforced_by:
+  - cd frontend && npm run test
+  nonvacuity:
+  - frontend/tests/fmw2-primitives.vitest.ts
+  backlog_ref: null
+  na_reason: null
+  notes: fmw2-primitives.vitest.ts covers Spring/Jakarta 'violations', RFC 9457 'invalid-params', and
+    Spring 'errors' shapes — falsifiable field-error extraction.
+- id: S2.INPUT-VALIDATION.XB
+  tier: S2
+  concern: INPUT-VALIDATION
+  layer: XB
+  weight: 1
+  status: partial
+  covered_by:
+  - contracts/crud-openapi.yaml
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: contracts/crud-openapi.yaml cited as a representative request-schema contract; OpenAPI request
+    schemas exist per domain but no automated schema-vs-runtime-payload contract test.
+- id: S2.TIME-LOCALE.BE
+  tier: S2
+  concern: TIME-LOCALE
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - specs/i18n-policy-l0.yaml
+  - backend/src/main/java/com/ax/template/authblueprint/i18n/
+  - practices/rules/business-day-deadline-arithmetic-calendar-vs-business-roll-and-versioned-holidays.md
+  enforced_by:
+  - ./gradlew testI18n
+  - ./gradlew testCalendarDeadline
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/i18n/I18nPolicyComplianceTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/calendardeadline/CalendarDeadlineViolationProofTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S2.TIME-LOCALE.FE
+  tier: S2
+  concern: TIME-LOCALE
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - practices-react/rules/locale-aware-number-date-format.md
+  - practices/evals/locale_aware_format_guard.sh
+  enforced_by:
+  - practices/evals/locale_aware_format_guard.sh
+  - cd frontend && npm run test
+  nonvacuity:
+  - frontend/tests/locale-format.vitest.tsx
+  backlog_ref: null
+  na_reason: null
+  notes: 'wave-1 exit cleanup (2026-07-20): the prior "CONFIRMED absent" note is now false — a practices-react
+    rule + a wired practices/evals shell guard exist (guard [91] runs a live scan of frontend/src, 35
+    *.ts/*.tsx clean, and has a pass fixture plus four per-detector fail fixtures — fail_manual_format/fail_bare_tolocale/fail_money_tofixed/fail_currency_concat
+    — each isolating one detector, proving the GUARD itself is non-vacuous per-detector). Wave-2 Cell
+    5 closure (2026-07-20): frontend/tests/locale-format.vitest.tsx now adds the missing application-level
+    leg — a real component exercised against Intl.NumberFormat/Intl.DateTimeFormat usage, RED-on-revert.
+    Closes CANARY-007 (see canary-gaps.yaml).'
+- id: S2.TIME-LOCALE.XB
+  tier: S2
+  concern: TIME-LOCALE
+  layer: XB
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'Per Part 1.3 initial mask declaration: TIME-LOCALE declares BE+FE only, no XB cell.'
+  notes: ''
+- id: S2.OBSERVABILITY-LIMITS.BE
+  tier: S2
+  concern: OBSERVABILITY-LIMITS
+  layer: BE
+  weight: 1
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/ratelimit/
+  - backend/src/main/java/com/ax/template/authblueprint/realtime/RealtimeMetrics.java
+  enforced_by:
+  - ./gradlew testRateLimit
+  - ./gradlew testRealtime
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/ratelimit/RateLimitComplianceTest.java
+  - backend/src/test/java/com/ax/template/authblueprint/realtime/RealtimePolicyComplianceTest.java
+  backlog_ref: null
+  na_reason: null
+  notes: ''
+- id: S2.OBSERVABILITY-LIMITS.FE
+  tier: S2
+  concern: OBSERVABILITY-LIMITS
+  layer: FE
+  weight: 1
+  status: covered
+  covered_by:
+  - templates/L2/blocks/rate-limit-banner.tsx
+  - practices-react/rules/rate-limit-must-surface-to-user.md
+  enforced_by:
+  - cd frontend && npm run test
+  nonvacuity:
+  - frontend/tests/rate-limit-banner.vitest.tsx
+  backlog_ref: null
+  na_reason: null
+  notes: 'Wave-3 closure (2026-07-27): R56 rate-limit-banner.tsx now has an evidence-anchored review-tier
+    rule (rate-limit-must-surface-to-user.md, spec_ref REACT-PRACTICES-UX-002; RFC 6585 §4 + RFC 9110
+    §10.2.3 + WCAG 2.2 SC 4.1.3) mandating adoption on 429, and rate-limit-banner.vitest.tsx exercises
+    the REAL component (429+Retry-After delta-seconds, 429 without Retry-After → unknownDurationSec fallback,
+    countdown→"you can retry now"→auto-dismiss, Dismiss) — RED-on-revert executed against the real component
+    file and reverted byte-identical. HONEST SCOPE: the rule is review-tier by design (no AST rule — a
+    429 branch''s destination is a control-flow question, not a shape match); the non-429 case asserts
+    only that no spurious banner renders, it does NOT prove the call-site gate, which stays unenforced.
+    parseRetryAfter''s HTTP-date branch is untested — see docs/BACKLOG.md (P3-62).'
+- id: S2.OBSERVABILITY-LIMITS.XB
+  tier: S2
+  concern: OBSERVABILITY-LIMITS
+  layer: XB
+  weight: 1
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'Per Part 1.3 initial mask declaration: OBSERVABILITY-LIMITS declares BE+FE only, no XB cell.'
+  notes: ''
+- id: S2.TENANCY-SCOPE.BE
+  tier: S2
+  concern: TENANCY-SCOPE
+  layer: BE
+  weight: 2
+  status: covered
+  covered_by:
+  - backend/src/main/java/com/ax/template/authblueprint/orgscope/
+  - templates/L4/multi-tenant/README.md
+  - blueprints/multi-tenant-manifest.yaml
+  enforced_by:
+  - ./gradlew testOrgScope
+  - practices/evals/kafka_consumer_tenant_scope_guard.sh
+  - practices/evals/broker_fanout_tenant_scope_guard.sh
+  - practices/evals/scheduled_task_tenant_scope_guard.sh
+  - practices/evals/realtime_connection_tenant_scope_guard.sh
+  - practices/evals/webclient_async_tenant_scope_guard.sh
+  - practices/evals/callback_tenant_resolution_guard.sh
+  - practices/evals/multi_tenant_aop_guard_skeleton_guard.sh
+  nonvacuity:
+  - backend/src/test/java/com/ax/template/authblueprint/orgscope/OrgScopeViolationProofTest.java
+  - practices/evals/fixtures/multi-tenant-aop-guard-skeleton/failing/
+  backlog_ref: null
+  na_reason: null
+  notes: 10+ tenant-scope hard guards (aop/callback/scheduled/realtime/broker/kafka*/webclient) enforce
+    this cross-cuttingly even though the multi-tenant L4 runtime package itself is still a stub (see S1.multi-tenant.BE
+    = partial).
+- id: S2.TENANCY-SCOPE.FE
+  tier: S2
+  concern: TENANCY-SCOPE
+  layer: FE
+  weight: 2
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'templates/L4/multi-tenant/README.md: ''Multi-tenant has no first-class UI... Frontend deliberately
+    skipped.'' Per Part 1.3 initial mask declaration, TENANCY-SCOPE declares BE only.'
+  notes: ''
+- id: S2.TENANCY-SCOPE.XB
+  tier: S2
+  concern: TENANCY-SCOPE
+  layer: XB
+  weight: 2
+  status: not-applicable
+  covered_by: []
+  enforced_by: []
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: 'Per Part 1.3 initial mask declaration: TENANCY-SCOPE declares BE only, no XB cell (no first-class
+    UI to cross-boundary with).'
+  notes: ''
+- id: S3.saas-subscription
+  tier: S3
+  recipe: saas-subscription
+  layer: null
+  weight: 2
+  status: partial
+  covered_by:
+  - recipes/saas-subscription/RECIPE.md
+  - skills/_tests/sealed-verdict/saas-subscription-verdict.md
+  - practices/consumer-proof/scenarios/S3.saas-subscription/
+  enforced_by:
+  - skills/_tests/sealed-verdict/saas-subscription-verdict.md (must_score/must_total + should_score/should_total,
+    threshold-gated PASS)
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: 'Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+    falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
+    not a live re-executable CI gate. No live re-executable compose spec found for this recipe (checked
+    frontend/tests/recipes/) — sealed verdict is the sole nonvacuity evidence. DOWNGRADED covered->partial
+    — the sealed-verdict markdown is a static quiz record that can never go RED, so per the engine''s
+    own nonvacuity definition (a RED-able proof) it does not qualify — composition-behavioral proof absent;
+    only structural/verdict evidence remains.
+
+    Wave-2 Cell 7 (2026-07-20): proposed re-flip to covered, REJECTED by opus adversarial review. practices/consumer-proof/scenarios/S3.saas-subscription/
+    (clean+violating fixtures + run-scenario-proof.sh) is an ENFORCEMENT-PROBE — it proves guard-blocking
+    on scenario-local fixtures, not composition-behavioral rendering (multiple domains actually interacting
+    at runtime), so it does not close the gap either. Root cause stays open: the S3 (COMPOSITION) tier''s
+    nonvacuity bar itself is undefined — coverage_map_guard.sh check 4 only asserts a nonvacuity path
+    RESOLVES on disk, not that the resolved artifact is genuinely composition-behavioral (an ESLint-probe
+    or text-scan resolves + is RED-able yet only proves per-fixture rule-firing). Tracked docs/BACKLOG.md
+    P2-29 (done-when: bar defined in engine/README.md + coverage_map_guard.sh extended to assert S3-covered
+    nonvacuity cites a live multi-domain test, not a sealed verdict markdown or bare file-existence).
+    CANARY-012 stays LIVE (not stale). Status UNCHANGED at partial.'
+- id: S3.e-commerce
+  tier: S3
+  recipe: e-commerce
+  layer: null
+  weight: 2
+  status: covered
+  covered_by:
+  - recipes/e-commerce/RECIPE.md
+  - skills/_tests/sealed-verdict/e-commerce-verdict.md
+  - practices-react/rules/locale-aware-number-date-format.md
+  enforced_by:
+  - skills/_tests/sealed-verdict/e-commerce-verdict.md (must_score/must_total + should_score/should_total,
+    threshold-gated PASS)
+  - ./gradlew testEcommerce
+  - practices/evals/locale_aware_format_guard.sh
+  nonvacuity:
+  - practices/consumer-proof/engine/fixtures/coverage_map_guard/fixture-assets/booking-flow.spec.ts
+  backlog_ref: null
+  na_reason: null
+  notes: P3-58 FIXTURE — deliberately mutated nonvacuity to cite ONLY a fs.existsSync/readFileSync-only
+    test file under a non -compose.spec. filename (the rename-bypass check 7's content heuristic must
+    catch). All other fields unchanged from the real map.
+- id: S3.crm
+  tier: S3
+  recipe: crm
+  layer: null
+  weight: 2
+  status: partial
+  covered_by:
+  - recipes/crm/RECIPE.md
+  - skills/_tests/sealed-verdict/crm-verdict.md
+  enforced_by:
+  - skills/_tests/sealed-verdict/crm-verdict.md (must_score/must_total + should_score/should_total, threshold-gated
+    PASS)
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+    falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
+    not a live re-executable CI gate. No live re-executable compose spec found for this recipe (checked
+    frontend/tests/recipes/) — sealed verdict is the sole nonvacuity evidence. DOWNGRADED covered->partial
+    — the sealed-verdict markdown is a static quiz record that can never go RED, so per the engine's own
+    nonvacuity definition (a RED-able proof) it does not qualify — composition-behavioral proof absent;
+    only structural/verdict evidence remains.
+- id: S3.booking
+  tier: S3
+  recipe: booking
+  layer: null
+  weight: 2
+  status: partial
+  covered_by:
+  - recipes/booking/RECIPE.md
+  - skills/_tests/sealed-verdict/booking-verdict.md
+  - frontend/tests/recipes/booking-compose.spec.ts
+  enforced_by:
+  - skills/_tests/sealed-verdict/booking-verdict.md (must_score/must_total + should_score/should_total,
+    threshold-gated PASS)
+  - frontend/tests/recipes/booking-compose.spec.ts
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+    falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec (frontend/tests/recipes/booking-compose.spec.ts).
+    DOWNGRADED covered->partial — on inspection the compose spec only asserts file-existence/frontmatter,
+    not that the composed feature actually works with enforcement intact, and the sealed-verdict markdown
+    can never go RED — neither qualifies as a RED-able composition-behavioral proof per the engine's own
+    nonvacuity definition. Composition-behavioral proof absent; only structural/verdict evidence remains.
+- id: S3.marketplace
+  tier: S3
+  recipe: marketplace
+  layer: null
+  weight: 2
+  status: partial
+  covered_by:
+  - recipes/marketplace/RECIPE.md
+  - skills/_tests/sealed-verdict/marketplace-verdict.md
+  - frontend/tests/recipes/marketplace-compose.spec.ts
+  enforced_by:
+  - skills/_tests/sealed-verdict/marketplace-verdict.md (must_score/must_total + should_score/should_total,
+    threshold-gated PASS)
+  - frontend/tests/recipes/marketplace-compose.spec.ts
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+    falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec (frontend/tests/recipes/marketplace-compose.spec.ts).
+    DOWNGRADED covered->partial — on inspection the compose spec only asserts file-existence/frontmatter,
+    not that the composed feature actually works with enforcement intact, and the sealed-verdict markdown
+    can never go RED — neither qualifies as a RED-able composition-behavioral proof per the engine's own
+    nonvacuity definition. Composition-behavioral proof absent; only structural/verdict evidence remains.
+- id: S3.b2b-admin
+  tier: S3
+  recipe: b2b-admin
+  layer: null
+  weight: 2
+  status: partial
+  covered_by:
+  - recipes/b2b-admin/RECIPE.md
+  - skills/_tests/sealed-verdict/b2b-admin-verdict.md
+  - frontend/tests/recipes/b2b-admin-compose.spec.ts
+  enforced_by:
+  - skills/_tests/sealed-verdict/b2b-admin-verdict.md (must_score/must_total + should_score/should_total,
+    threshold-gated PASS)
+  - frontend/tests/recipes/b2b-admin-compose.spec.ts
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+    falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec (frontend/tests/recipes/b2b-admin-compose.spec.ts).
+    DOWNGRADED covered->partial — on inspection the compose spec only asserts file-existence/frontmatter,
+    not that the composed feature actually works with enforcement intact, and the sealed-verdict markdown
+    can never go RED — neither qualifies as a RED-able composition-behavioral proof per the engine's own
+    nonvacuity definition. Composition-behavioral proof absent; only structural/verdict evidence remains.
+- id: S3.community
+  tier: S3
+  recipe: community
+  layer: null
+  weight: 2
+  status: partial
+  covered_by:
+  - recipes/community/RECIPE.md
+  - skills/_tests/sealed-verdict/community-verdict.md
+  - frontend/tests/recipes/community-compose.spec.ts
+  enforced_by:
+  - skills/_tests/sealed-verdict/community-verdict.md (must_score/must_total + should_score/should_total,
+    threshold-gated PASS)
+  - frontend/tests/recipes/community-compose.spec.ts
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+    falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec (frontend/tests/recipes/community-compose.spec.ts).
+    DOWNGRADED covered->partial — on inspection the compose spec only asserts file-existence/frontmatter,
+    not that the composed feature actually works with enforcement intact, and the sealed-verdict markdown
+    can never go RED — neither qualifies as a RED-able composition-behavioral proof per the engine's own
+    nonvacuity definition. Composition-behavioral proof absent; only structural/verdict evidence remains.
+- id: S3.lms
+  tier: S3
+  recipe: lms
+  layer: null
+  weight: 2
+  status: partial
+  covered_by:
+  - recipes/lms/RECIPE.md
+  - skills/_tests/sealed-verdict/lms-verdict.md
+  - frontend/tests/recipes/lms-compose.spec.ts
+  enforced_by:
+  - skills/_tests/sealed-verdict/lms-verdict.md (must_score/must_total + should_score/should_total, threshold-gated
+    PASS)
+  - frontend/tests/recipes/lms-compose.spec.ts
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+    falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec (frontend/tests/recipes/lms-compose.spec.ts).
+    DOWNGRADED covered->partial — on inspection the compose spec only asserts file-existence/frontmatter,
+    not that the composed feature actually works with enforcement intact, and the sealed-verdict markdown
+    can never go RED — neither qualifies as a RED-able composition-behavioral proof per the engine's own
+    nonvacuity definition. Composition-behavioral proof absent; only structural/verdict evidence remains.
+- id: S3.cms
+  tier: S3
+  recipe: cms
+  layer: null
+  weight: 2
+  status: partial
+  covered_by:
+  - recipes/cms/RECIPE.md
+  - skills/_tests/sealed-verdict/cms-verdict.md
+  - frontend/tests/recipes/cms-compose.spec.ts
+  enforced_by:
+  - skills/_tests/sealed-verdict/cms-verdict.md (must_score/must_total + should_score/should_total, threshold-gated
+    PASS)
+  - frontend/tests/recipes/cms-compose.spec.ts
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+    falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec (frontend/tests/recipes/cms-compose.spec.ts).
+    DOWNGRADED covered->partial — on inspection the compose spec only asserts file-existence/frontmatter,
+    not that the composed feature actually works with enforcement intact, and the sealed-verdict markdown
+    can never go RED — neither qualifies as a RED-able composition-behavioral proof per the engine's own
+    nonvacuity definition. Composition-behavioral proof absent; only structural/verdict evidence remains.
+- id: S3.internal-it
+  tier: S3
+  recipe: internal-it
+  layer: null
+  weight: 2
+  status: partial
+  covered_by:
+  - recipes/internal-it/RECIPE.md
+  - skills/_tests/sealed-verdict/internal-it-verdict.md
+  - frontend/tests/recipes/internal-it-compose.spec.ts
+  enforced_by:
+  - skills/_tests/sealed-verdict/internal-it-verdict.md (must_score/must_total + should_score/should_total,
+    threshold-gated PASS)
+  - frontend/tests/recipes/internal-it-compose.spec.ts
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+    falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec (frontend/tests/recipes/internal-it-compose.spec.ts).
+    DOWNGRADED covered->partial — on inspection the compose spec only asserts file-existence/frontmatter,
+    not that the composed feature actually works with enforcement intact, and the sealed-verdict markdown
+    can never go RED — neither qualifies as a RED-able composition-behavioral proof per the engine's own
+    nonvacuity definition. Composition-behavioral proof absent; only structural/verdict evidence remains.
+- id: S3.api-gateway-relay
+  tier: S3
+  recipe: api-gateway-relay
+  layer: null
+  weight: 2
+  status: partial
+  covered_by:
+  - recipes/api-gateway-relay/RECIPE.md
+  - skills/_tests/sealed-verdict/api-gateway-relay-verdict.md
+  - frontend/tests/recipes/api-gateway-relay-compose.spec.ts
+  enforced_by:
+  - skills/_tests/sealed-verdict/api-gateway-relay-verdict.md (must_score/must_total + should_score/should_total,
+    threshold-gated PASS)
+  - frontend/tests/recipes/api-gateway-relay-compose.spec.ts
+  nonvacuity: []
+  backlog_ref: null
+  na_reason: null
+  notes: Sealed verdict = a scored, thresholded (>=10/12 MUST + >=5/8 SHOULD, or recipe-specific equivalent),
+    falsifiable context-0 sub-agent proof — recorded PASS. This is a point-in-time sealed-context record,
+    not a live re-executable CI gate. ADDITIONALLY backed by a Playwright compose spec (frontend/tests/recipes/api-gateway-relay-compose.spec.ts).
+    DOWNGRADED covered->partial — on inspection the compose spec only asserts file-existence/frontmatter,
+    not that the composed feature actually works with enforcement intact, and the sealed-verdict markdown
+    can never go RED — neither qualifies as a RED-able composition-behavioral proof per the engine's own
+    nonvacuity definition. Composition-behavioral proof absent; only structural/verdict evidence remains.

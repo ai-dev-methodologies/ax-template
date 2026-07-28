@@ -158,6 +158,9 @@ public class IdentityVerificationService {
      * <p>This read lives in the service so the admin controller never touches
      * the repository directly (layer-boundary invariant; PRACTICES-TEST-002).
      */
+    /** IDV-ADMIN-001 no-filter sentinel — see {@link #listAdmin(int, int, String)}. */
+    static final String ALL_PROVIDERS = "ALL";
+
     @Transactional(readOnly = true)
     public PageResponse listAdmin(int page, int size, String provider) {
         int safePage = Math.max(0, page);
@@ -165,7 +168,16 @@ public class IdentityVerificationService {
         Pageable pageable = PageRequest.of(safePage, safeSize,
                 Sort.by(Sort.Direction.DESC, "verifiedAt"));
 
-        Page<VerifiedIdentity> result = (provider == null || provider.isBlank())
+        // P2-35(a) — the contract declares `provider` with `default: ALL`, so a client
+        // that follows it sends ?provider=ALL. Before this fix that reached
+        // findAllByProviderName("ALL"), which matches no adapter name and silently
+        // returned an EMPTY page — the contract's own default made the endpoint look
+        // like it had no data. ALL is the family's no-filter sentinel
+        // (notification-openapi is the reference implementation); case-insensitive
+        // for the same reason NotificationController.parseStatusFilter is.
+        boolean noFilter = provider == null || provider.isBlank()
+            || provider.equalsIgnoreCase(ALL_PROVIDERS);
+        Page<VerifiedIdentity> result = noFilter
             ? repository.findAll(pageable)
             : repository.findAllByProviderName(provider, pageable);
 

@@ -1,0 +1,50 @@
+# practices/evals/l4_presentational_view_ledger.yaml
+# BACKLOG P2-28 — L4 pages untestable-as-shipped, right-sized.
+#
+# Convention: templates/L4 README + docs/NEW-DOMAIN-CHECKLIST.md §7 document a
+# data-rendering page.tsx extracting its render layer into a co-located pure
+# <domain>-<surface>-view.tsx (props-only, no data-fetching hooks). This ledger
+# is the enforced record of which (page, view) pairs the catalog has actually
+# converted — l4_presentational_view_guard.sh checks every listed pair against
+# disk and REFUSES to shrink below min_entries (a ledger entry may be added,
+# never quietly removed while claiming the conversion still holds).
+#
+# Full conversion of all ~79 L4 page.tsx files is explicitly NOT the goal here
+# (see BACKLOG "L4 render-testability — remainder" row) — this ledger tracks
+# the right-sized exemplar set: audit-log's pre-existing exemplar
+# (audit-log-detail-view.tsx, S2.AUDIT-PII.XB) plus 3 newly-converted verticals
+# (payment, email-outbox, crud). webhook and approval-workflow are DEFERRED —
+# their page.tsx files are concurrently targeted by W1 (P2-34, webhook
+# vocabulary reconciliation, touches nearly every line of
+# webhook/app/page.tsx) and W7 (P2-39, approval-workflow's describeChain
+# replaced by an L0-imported selector) in the same wave's WS-W lane; extracting
+# their render layer in parallel would create a direct file collision with
+# those in-flight edits. Convert them in a follow-up pass once W1/W7 have
+# landed.
+
+min_entries: 4
+
+entries:
+  - domain: audit-log
+    surface: detail
+    page: "templates/L4/audit-log/app/(audit-log)/[id]/page.tsx"
+    view: "templates/L4/audit-log/app/(audit-log)/[id]/audit-log-detail-view.tsx"
+    note: "Pre-existing exemplar (S2.AUDIT-PII.XB closure) — the pattern this ledger generalizes."
+
+  - domain: payment
+    surface: success
+    page: "templates/L4/payment/app/(payment)/success/[orderId]/page.tsx"
+    view: "templates/L4/payment/app/(payment)/success/[orderId]/payment-success-view.tsx"
+    note: "New conversion (P2-28) — receipt render, formatAmount/formatDate via the L0 money kit."
+
+  - domain: email-outbox
+    surface: admin-monitor
+    page: "templates/L4/email-outbox/app/(admin)/email-outbox/page.tsx"
+    view: "templates/L4/email-outbox/app/(admin)/email-outbox/email-outbox-view.tsx"
+    note: "New conversion (P2-28) — mutation triggers (retry/delete) passed as callback props; confirm() stays in the view (interaction concern, not data-fetching)."
+
+  - domain: crud
+    surface: detail
+    page: "templates/L4/crud/app/(crud)/items/[id]/page.tsx"
+    view: "templates/L4/crud/app/(crud)/items/[id]/item-detail-view.tsx"
+    note: "New conversion (P2-28) — composes templates/L3/pages/detail-page (React-only, safe to import)."

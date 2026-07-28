@@ -2,7 +2,7 @@
 # practices/consumer-proof/engine/coverage_map_guard.sh
 #
 # Part 1.5 of the gap-convergence engine design — MECE/schema/disk-truth guard
-# for coverage-map.yaml. See lib/coverage_map_guard.py for the five checks.
+# for coverage-map.yaml. See lib/coverage_map_guard.py for the eight checks.
 #
 # STANDALONE in wave 1: this guard is intentionally NOT registered into
 # practices/evals/run-all-guards.sh (the engine stays isolated per the

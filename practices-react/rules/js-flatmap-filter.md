@@ -5,7 +5,10 @@ impactDescription: "One pass instead of two, no intermediate array. Also avoids 
 tags: [javascript, arrays, flatMap, filter, performance]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-013"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks: (a) `.map().filter(Boolean)` is replaced with `.flatMap()` only where the code does not rely on `.filter(Boolean)` intentionally removing falsy-but-valid values (0, '', false), (b) the flatMap wrapper-array allocation tradeoff was considered, not assumed strictly faster."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

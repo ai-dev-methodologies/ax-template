@@ -5,7 +5,10 @@ impactDescription: "Updating a ref does not trigger a re-render. For mouse posit
 tags: [rerender, useref, state, performance]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-014"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that values which do not need to trigger a re-render on change (mouse position, interval handles, transient flags) are stored in a ref rather than state, and that state is reserved for values the UI actually renders from."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

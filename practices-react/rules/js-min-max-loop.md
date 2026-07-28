@@ -5,7 +5,10 @@ impactDescription: "Sorting an entire array to find one element is O(n log n) pl
 tags: [javascript, arrays, performance, sorting, algorithms]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-011"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that finding a single min/max element uses one O(n) pass rather than sorting the full array, and — if `Math.min(...arr)`/`Math.max(...arr)` spread is used instead — that the array size stays well under the engine's argument-count ceiling (~125K-640K depending on engine)."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

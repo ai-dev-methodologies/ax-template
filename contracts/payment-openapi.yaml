@@ -443,12 +443,14 @@ components:
 
     PaymentState:
       type: string
-      enum: [CREATED, AUTHORIZED, CAPTURED, VOIDED, REFUNDED, PARTIAL_REFUNDED, UNKNOWN]
+      enum: [CREATED, AUTHORIZED, CAPTURED, VOIDED, REFUNDED, PARTIAL_REFUNDED, UNKNOWN, FAILED]
       description: |
         Payment state machine states. UNKNOWN is a terminal holding state entered when the provider
         times out or connection is reset — reconciliation job resolves UNKNOWN asynchronously.
         Legal transitions: CREATED→AUTHORIZED→CAPTURED|VOIDED→REFUNDED|PARTIAL_REFUNDED; UNKNOWN is
-        entered from AUTHORIZED on provider timeout/network reset.
+        entered from AUTHORIZED on provider timeout/network reset. FAILED is the terminal
+        state reached from CREATED on PROVIDER_DECLINE / PROVIDER_5XX_EXHAUSTED /
+        PROVIDER_MALFORMED (PaymentStateMachine:36-38).
 
     CreatePaymentRequest:
       type: object

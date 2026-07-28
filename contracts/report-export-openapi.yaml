@@ -203,7 +203,12 @@ components:
           enum: [PENDING, RUNNING, COMPLETED, FAILED, CANCELLED]
         format:
           type: string
-          enum: [csv, xlsx]
+          enum: [CSV, XLSX]
+          description: |
+            Response side is the serialized ExportFormat enum, so it is UPPER-case
+            (ExportJobResponse.format is a Java ExportFormat, emitted via name()).
+            The REQUEST side (CreateExportRequest.format) is a String parsed
+            case-insensitively by ExportFormat.parse and is documented lower-case.
         name:
           type: string
           nullable: true

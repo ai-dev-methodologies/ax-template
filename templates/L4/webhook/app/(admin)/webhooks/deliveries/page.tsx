@@ -30,7 +30,7 @@ import { parseError } from 'templates/L0/fork-receiver-kit/parse-error'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
-type DeliveryStatus = 'PENDING' | 'IN_FLIGHT' | 'SUCCEEDED' | 'FAILED' | 'DEAD_LETTER'
+type DeliveryStatus = 'PENDING' | 'PENDING_RETRY' | 'SUCCEEDED' | 'FAILED_PERMANENT'
 
 interface DeliveryResponse {
   id: string
@@ -69,12 +69,10 @@ function statusClass(s: DeliveryStatus): string {
   switch (s) {
     case 'SUCCEEDED':
       return 'bg-green-100 text-green-900'
-    case 'FAILED':
+    case 'PENDING_RETRY':
       return 'bg-amber-100 text-amber-900'
-    case 'DEAD_LETTER':
+    case 'FAILED_PERMANENT':
       return 'bg-red-100 text-red-900'
-    case 'IN_FLIGHT':
-      return 'bg-blue-100 text-blue-900'
     case 'PENDING':
     default:
       return 'bg-muted text-muted-foreground'
@@ -82,9 +80,10 @@ function statusClass(s: DeliveryStatus): string {
 }
 
 function canReplay(status: DeliveryStatus): boolean {
-  // Replay is meaningful only when the chain stopped — succeeded would be a no-op
-  // (or a duplicate), pending/in-flight is still happening.
-  return status === 'FAILED' || status === 'DEAD_LETTER'
+  // Replay is meaningful only when the retry chain stopped for good. SUCCEEDED
+  // would be a no-op (or a duplicate); PENDING / PENDING_RETRY are still being
+  // driven by the scheduler, so a manual replay would double-send.
+  return status === 'FAILED_PERMANENT'
 }
 
 // R48 iter2 (F4 medium): defense-in-depth sanitization of the
@@ -127,8 +126,8 @@ export default function WebhookDeliveriesPage() {
   const { data, error, isLoading, dataUpdatedAt, refetch } = useQuery({
     queryKey: ['webhook-deliveries', statusFilter],
     queryFn: () => fetchDeliveries(statusFilter || undefined),
-    // 10s background poll — delivery rows transition PENDING → IN_FLIGHT →
-    // SUCCEEDED / FAILED during the retry windows; SRE eyes-on-the-board.
+    // 10s background poll — delivery rows transition PENDING → PENDING_RETRY →
+    // SUCCEEDED / FAILED_PERMANENT during the retry windows; SRE eyes-on-the-board.
     //
     // R48 iter2 (F5 low): poll continues in background tabs so a
     // second-monitor incident-bridge view stays current. Without this
@@ -173,8 +172,9 @@ export default function WebhookDeliveriesPage() {
             <h1 className="text-lg font-semibold">Deliveries</h1>
             <p className="text-sm text-muted-foreground">
               Recent webhook delivery attempts. Refreshes every 10 seconds.
-              Replay re-enqueues a FAILED or DEAD_LETTER delivery — succeeded /
-              in-flight rows cannot be replayed.
+              Replay re-enqueues a FAILED_PERMANENT (dead-letter) delivery —
+              succeeded rows and rows still awaiting a scheduled retry cannot be
+              replayed.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -200,10 +200,9 @@ export default function WebhookDeliveriesPage() {
               >
                 <option value="">All</option>
                 <option value="PENDING">Pending</option>
-                <option value="IN_FLIGHT">In flight</option>
+                <option value="PENDING_RETRY">Pending retry</option>
                 <option value="SUCCEEDED">Succeeded</option>
-                <option value="FAILED">Failed</option>
-                <option value="DEAD_LETTER">Dead-letter</option>
+                <option value="FAILED_PERMANENT">Failed (dead-letter)</option>
               </select>
             </label>
           </div>
@@ -269,7 +268,7 @@ export default function WebhookDeliveriesPage() {
                         </>
                       )}
                       {d.lastResponseCode !== null && <> · HTTP {d.lastResponseCode}</>}
-                      {d.nextAttemptAt && d.status === 'PENDING' && (
+                      {d.nextAttemptAt && d.status === 'PENDING_RETRY' && (
                         <> · next retry at {new Date(d.nextAttemptAt).toLocaleString()}</>
                       )}
                     </div>
@@ -319,7 +318,7 @@ export default function WebhookDeliveriesPage() {
                       aria-label={
                         d.status === 'SUCCEEDED'
                           ? 'Replay not available — already succeeded'
-                          : 'Replay not available — still in flight'
+                          : 'Replay not available — retry chain still running'
                       }
                     >
                       no replay

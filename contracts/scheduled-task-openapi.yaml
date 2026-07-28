@@ -21,9 +21,12 @@ paths:
           in: query
           schema:
             type: string
-            enum: [REGISTERED, ACTIVE, PAUSED, ALL]
+            enum: [REGISTERED, ENABLED, DISABLED, ALL]
             default: ALL
-          description: Filter by task status
+          description: |
+            Filter by task status. ALL (the default) is the family's no-filter
+            sentinel — it returns every task, matching the notification-openapi
+            reference implementation.
         - name: page
           in: query
           schema:
@@ -154,7 +157,7 @@ components:
           type: string
         status:
           type: string
-          enum: [REGISTERED, ACTIVE, PAUSED]
+          enum: [REGISTERED, ENABLED, DISABLED]
         lastRunAt:
           type: string
           format: date-time
@@ -210,7 +213,7 @@ components:
 
     JobHistorySummary:
       type: object
-      required: [id, taskId, status, startedAt]
+      required: [id, taskName, outcome, startedAt]
       properties:
         id:
           type: string
@@ -220,9 +223,13 @@ components:
           format: uuid
         taskName:
           type: string
-        status:
+        outcome:
           type: string
-          enum: [RUNNING, SUCCESS, FAILED]
+          enum: [SUCCESS, FAILED, SKIPPED_LOCK]
+          description: |
+            Serialized JobOutcome. SKIPPED_LOCK is recorded when another node held
+            the scheduler lock (SCHED-IDEMPOTENT-001). There is no RUNNING value —
+            a history row is written only once the run has finished.
         startedAt:
           type: string
           format: date-time

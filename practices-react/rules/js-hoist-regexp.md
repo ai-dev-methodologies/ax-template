@@ -5,7 +5,10 @@ impactDescription: "new RegExp() inside render allocates and recompiles. Hoist i
 tags: [javascript, regexp, optimization, memoization]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-010"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks: (a) a `new RegExp()` (or literal) with no per-render-dependent pattern is hoisted out of render/loop scope, (b) a pattern that DOES depend on props/state is memoized rather than hoisted, (c) any global (`/g`) or sticky (`/y`) regex reused across calls resets or isolates its mutable `lastIndex`."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

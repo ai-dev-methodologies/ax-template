@@ -9,6 +9,7 @@ verification:
   type: lint
   rule_id: "ax/prefer-functional-setstate"
   status: shipped
+  notes: "Shipped: custom ESLint rule ax/prefer-functional-setstate is registered in the plugin and flags a setState call whose argument reads the closed-over state variable it is updating, instead of the updater-function form; reviewer confirms the rule is enabled (not just present) for the target lint config."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -72,6 +73,18 @@ function TodoList() {
   return <ItemsEditor items={items} onAdd={addItems} onRemove={removeItem} />
 }
 ```
+
+### Functional update without array spread
+
+```tsx
+function useAppendOnlyList<T>(initial: T[]) {
+  const [items, setItems] = useState(initial)
+  const append = useCallback((next: T[]) => setItems((curr) => curr.concat(next)), [])
+  return { items, append }
+}
+```
+
+`.concat()` appends without a spread and stays a pure, non-mutating functional update.
 
 ### Why this is primarily correctness, not perf
 

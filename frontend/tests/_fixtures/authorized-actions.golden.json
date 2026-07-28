@@ -1,5 +1,5 @@
 {
-  "_provenance": "S2.AUTHZ.XB (2026-07-27, cross-boundary authz-action-set parity). Domain: approval-workflow (전자결재), specs/approval-workflow-l0.yaml (WF-AUTHZ-001..003, WF-STEP-001, WF-LIFECYCLE-001..004). GENUINE CATALOG GAP this fixture exists to document: ApprovalRequestResponse / ApprovalStepResponse (backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalRequestResponse.java, ApprovalStepResponse.java) carry NO computed action-set / permissions field anywhere in the wire body — the BE NEVER tells the caller which of {submit, cancel, approve, reject, view} it may invoke for a given response. A real FE has to re-derive that set itself from status + requesterUserId + steps[].approverUserId, guessing at rules it cannot see. The 'expectedActions' column below is therefore NOT read off any BE-emitted field; it is hand-derived per row from the enforced guards cited in each row's _note (ApprovalController's SecurityConfig matcher + ApprovalService's ownership/ordering guards + ApprovalRequestRepository#findVisibleTo + the two REAL state machines' ALLOWED-transition maps). backend/src/test/java/com/ax/template/authblueprint/common/AuthorizedActionSetParityTest.java re-derives the same set by calling the REAL ApprovalRequestStateMachine/ApprovalStepStateMachine transition checks (not a hand-rolled copy of their private ALLOWED maps) plus a faithful reimplementation of the visibility/ownership/ordering conditions it cites by file:line. Because ApprovalService/ApprovalController are out of this lane's file set and expose no queryable decision function, that reimplementation is NOT automatically kept in sync with a change to those guards — see the coverage-map recommendation (partial, not covered) for exactly this residual risk.",
+  "_provenance": "S2.AUTHZ.XB (2026-07-27; rewritten 2026-07-28 for P2-38a/b + P3-63) — cross-boundary authz-action-set parity. Domain: approval-workflow (전자결재), specs/approval-workflow-l0.yaml (WF-AUTHZ-001..003, WF-STEP-001, WF-LIFECYCLE-001..004). THE GAP THIS FIXTURE ORIGINALLY DOCUMENTED IS NOW CLOSED: ApprovalRequestResponse carries a server-computed `allowedActions` field (P2-38b), produced by ApprovalActionEvaluator, which delegates every decision to ApprovalActionGuards — the SAME predicates ApprovalService enforces on the action path (P2-38a). So `expectedActions` is no longer hand-derived from cited guards: backend/src/test/java/.../common/AuthorizedActionSetParityTest.java now CALLS the production ApprovalActionEvaluator, and frontend/tests/authz-action-parity.vitest.ts calls the single shared selector at templates/L0/fork-receiver-kit/authorized-actions.ts, which the L4 detail page also imports (P2-39). Neutering a predicate in ApprovalActionGuards therefore flips BOTH the action-path test and this parity test — that is the mutation lock. P3-63 changed one behaviour deliberately: an approver who ACTED keeps `view` after the request goes terminal (they may see the outcome of their own decision); an assigned-but-UNACTED approver still gets nothing. The two rows below are the distinguishing pair.",
   "rows": [
     {
       "label": "requester_draft_own_request",
@@ -8,11 +8,20 @@
         "requesterUserId": "alice",
         "status": "DRAFT",
         "steps": [
-          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "PENDING" }
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "PENDING"
+          }
         ]
       },
       "callerId": "alice",
-      "expectedActions": ["cancel", "submit", "view"]
+      "expectedActions": [
+        "cancel",
+        "submit",
+        "view"
+      ]
     },
     {
       "label": "approver_first_step_pending_submitted",
@@ -21,11 +30,20 @@
         "requesterUserId": "alice",
         "status": "SUBMITTED",
         "steps": [
-          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "PENDING" }
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "PENDING"
+          }
         ]
       },
       "callerId": "carol",
-      "expectedActions": ["approve", "reject", "view"]
+      "expectedActions": [
+        "approve",
+        "reject",
+        "view"
+      ]
     },
     {
       "label": "non_participant_submitted",
@@ -34,7 +52,12 @@
         "requesterUserId": "alice",
         "status": "SUBMITTED",
         "steps": [
-          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "PENDING" }
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "PENDING"
+          }
         ]
       },
       "callerId": "dave",
@@ -47,21 +70,84 @@
         "requesterUserId": "alice",
         "status": "SUBMITTED",
         "steps": [
-          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "PENDING" },
-          { "id": "2b3c4d5e-0000-4000-8000-000000000002", "orderIndex": 1, "approverUserId": "erin", "status": "PENDING" }
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "PENDING"
+          },
+          {
+            "id": "2b3c4d5e-0000-4000-8000-000000000002",
+            "orderIndex": 1,
+            "approverUserId": "erin",
+            "status": "PENDING"
+          }
         ]
       },
       "callerId": "erin",
-      "expectedActions": ["view"]
+      "expectedActions": [
+        "view"
+      ]
     },
     {
-      "label": "approver_loses_visibility_after_request_terminal",
-      "_note": "A second, non-obvious BE behavior this fixture pins: carol APPROVED her step, and the request went terminal (APPROVED). findVisibleTo's approver OR-arm requires r.status==SUBMITTED (ApprovalRequestRepository.java:39-42) -- once the request leaves SUBMITTED, carol's approver-branch visibility silently evaporates even though she is the one who approved it and is not the requester. Expected: no actions at all, not even view. This is a REAL, currently-enforced product-shape finding worth a BACKLOG entry (see this lane's final report) -- an approver who acted on a request loses the ability to see its outcome once it resolves.",
+      "label": "acted_approver_keeps_view_after_terminal",
+      "_note": "P3-63 (narrow widening). carol APPROVED her step and the request went terminal (APPROVED). BEFORE: the visibility rule's approver arm required status==SUBMITTED, so the moment the chain completed carol lost all access — she could not see the outcome of her own decision. NOW ApprovalActionGuards.canView adds a THIRD arm: an approver whose own step carries actedByUserId == caller keeps `view` once the request is terminal. Still view-only: APPROVED is terminal in the request machine's ALLOWED map, and she is not the requester.",
       "request": {
         "requesterUserId": "alice",
         "status": "APPROVED",
         "steps": [
-          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "APPROVED" }
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "APPROVED",
+            "actedByUserId": "carol"
+          }
+        ]
+      },
+      "callerId": "carol",
+      "expectedActions": [
+        "view"
+      ]
+    },
+    {
+      "label": "unacted_approver_no_view_after_terminal",
+      "_note": "P3-63's other half — the qualifier that keeps the widening NARROW. carol REJECTED step 0, which sent the request terminal (REJECTED) before erin (step 1) was ever asked to decide. erin is an assigned approver but her step carries no actedByUserId, so canView's third arm does not fire and she gets nothing — a rejection upstream must not retroactively disclose the request to approvers who were never reached. Paired with acted_approver_keeps_view_after_terminal, this row is what makes the widening falsifiable: drop the acted-only qualifier and THIS row goes red.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "REJECTED",
+        "steps": [
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "REJECTED",
+            "actedByUserId": "carol"
+          },
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000002",
+            "orderIndex": 1,
+            "approverUserId": "erin",
+            "status": "PENDING"
+          }
+        ]
+      },
+      "callerId": "erin",
+      "expectedActions": []
+    },
+    {
+      "label": "assigned_approver_no_view_on_draft",
+      "_note": "P3-63 negative #2 — a DRAFT has not been sent to the 결재선 yet. carol is named on step 0 but the request is still the requester's private draft, so canView gives her nothing (neither the SUBMITTED arm nor the terminal-acted arm applies). Guards against a widening that leaks unsubmitted drafts.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "DRAFT",
+        "steps": [
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "PENDING"
+          }
         ]
       },
       "callerId": "carol",
@@ -74,11 +160,18 @@
         "requesterUserId": "alice",
         "status": "APPROVED",
         "steps": [
-          { "id": "1a2b3c4d-0000-4000-8000-000000000001", "orderIndex": 0, "approverUserId": "carol", "status": "APPROVED" }
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "APPROVED"
+          }
         ]
       },
       "callerId": "alice",
-      "expectedActions": ["view"]
+      "expectedActions": [
+        "view"
+      ]
     }
   ]
 }

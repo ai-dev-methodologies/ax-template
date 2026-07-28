@@ -99,9 +99,27 @@ authz:
   cross_user_response: 404_not_403
   step_action_response_on_wrong_actor: 403
   visibility_rule: >
-    A request is visible to (a) its requester always, (b) its approvers ONLY when the
-    request is in status SUBMITTED. DRAFT requests are hidden from approvers so that
-    work-in-progress isn't leaked.
+    A request is visible to (a) its requester always, (b) its approvers while the request
+    is in status SUBMITTED, and (c) — P3-63, narrow — an approver who ACTED
+    (step.actedByUserId = caller), once the request has reached a terminal state, so they
+    can see the outcome of their own decision. DRAFT requests stay hidden from approvers
+    so work-in-progress isn't leaked, and an assigned-but-UNACTED approver gets nothing
+    after the request terminates: an upstream rejection must not retroactively disclose the
+    request to approvers who were never reached.
+  shared_predicates: >
+    P2-38a — the rules above are NOT restated per call site. ApprovalActionGuards
+    (isActionable / isAssignedApprover / isNextActionableStep / isRequester / canView /
+    hasActed) is the single implementation; ApprovalService's action path, the single-GET
+    read path and ApprovalActionEvaluator all call it. The previous JPQL copy of the
+    visibility rule (ApprovalRequestRepository.findVisibleTo) has been DELETED — it served
+    exactly one caller and no other surface could consult it.
+  advertised_action_set: >
+    P2-38b — ApprovalRequestResponse.allowedActions carries the caller's permitted actions
+    on the wire, computed by ApprovalActionEvaluator (guards + the two state machines'
+    transition tables, zero local policy). Fork-receiver clients SHOULD consume it rather
+    than re-derive; templates/L0/fork-receiver-kit/authorized-actions.ts does exactly that
+    and is the single client-side selector (P2-39), imported by both the L4 detail page and
+    the cross-boundary parity test.
 
 # ─── query ─────────────────────────────────────────────────────────────────
 query:
@@ -127,6 +145,8 @@ verification_checkpoints:
   - "Illegal state transitions throw (WF-LIFECYCLE-004)"
   - "Cross-user IDOR returns 404 (WF-AUTHZ-002)"
   - "Wrong approver returns 403 (WF-AUTHZ-003)"
+  - "An approver who ACTED can still GET the request after it goes terminal; a DRAFT assignee, an unacted later approver after a rejection, and an unrelated user all get 404 (WF-AUTHZ-002, P3-63)"
+  - "allowedActions on the live response tracks caller and lifecycle stage; neutering any ApprovalActionGuards predicate turns BOTH the action-path test and the parity test red (P2-38a/b)"
   - "Out-of-order step action returns 409 (WF-STEP-001)"
   - "Comment + actor + timestamp persisted atomically with status (WF-STEP-002, WF-STEP-003)"
   - "Inbox returns oldest-first pending steps (WF-QUERY-001)"

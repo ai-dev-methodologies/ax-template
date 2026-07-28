@@ -5,7 +5,10 @@ impactDescription: "Canonical React docs pattern. Modeling 'user clicked submit'
 tags: [rerender, useEffect, events, side-effects, dependencies, you-might-not-need-an-effect]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-011"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that an action triggered by a specific user event (e.g. submit) runs directly in the event handler, not modeled as state that an `Effect` reacts to — the Effect form re-runs on unrelated dependency changes and can duplicate the action."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

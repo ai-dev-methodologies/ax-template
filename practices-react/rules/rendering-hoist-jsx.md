@@ -8,6 +8,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-003"
 verification:
   type: review
   status: manual
+  notes: "Reviewer checks that static JSX with no per-render-dependent props is hoisted to module scope, or left to the React Compiler on React 19+ projects where automatic memoization already covers it (avoiding redundant manual hoisting)."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"

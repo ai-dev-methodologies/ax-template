@@ -68,7 +68,7 @@ useEffect(() => { charge(order); }, []);                    {/* VIOLATION: succe
 
 ```tsx
 const idemKey = useIdempotencyKey(orderId);                 // STABLE across retries (PAYMENT-FE-003)
-async function pay() { await paymentClient.charge({ ...form }, { 'Idempotency-Key': idemKey }); }
+async function pay() { await paymentClient.charge(form, { 'Idempotency-Key': idemKey }); }
 {inFlightMs > 3000 && <SlowProviderWarning />}              // PAYMENT-FE-004
 {result?.alreadyProcessed && <AlreadyProcessed />}          // idempotent replay recognized (PAYMENT-FE-011)
 // success page: READ the receipt by orderId (getPayment), never charge (PAYMENT-FE-005)

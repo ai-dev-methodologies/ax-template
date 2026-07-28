@@ -5,7 +5,10 @@ impactDescription: "Interleaving style writes with layout reads (offsetWidth, ge
 tags: [javascript, dom, css, performance, reflow, layout-thrashing]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-002"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks: (a) no style write is directly followed by a layout-forcing read (offsetWidth/offsetHeight/getBoundingClientRect/getComputedStyle) before the next write, (b) React components prefer state-driven `className` over imperative `ref.style` mutation outside genuinely imperative cases (raw rAF animation, native DOM integration, focus/scroll positioning)."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

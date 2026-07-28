@@ -8,6 +8,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-004"
 verification:
   type: review
   status: manual
+  notes: "Reviewer checks that any SVG `--precision` reduction is backed by a measured config (not a blanket low value) and is gated by a visual-regression check confirming icons/maps/charts don't visibly degrade."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"

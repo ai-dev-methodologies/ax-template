@@ -5,7 +5,10 @@ impactDescription: "Build a Map keyed by id once (O(n)); each lookup is then O(1
 tags: [javascript, map, indexing, optimization, performance]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-003"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that a join/lookup against another array by id builds a `Map` once (O(n)) rather than calling `.find()`/`.indexOf()` inside a loop (O(n²)) — confirms the Map is built outside the loop that queries it."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -46,6 +49,14 @@ const enriched = orders.map((o) => ({
   ...o,
   user: userById.get(o.userId),
 }))
+```
+
+### Same fix, explicit loop (no array methods)
+
+```typescript
+const userById = new Map()
+for (const u of users) userById.set(u.id, u)
+for (const o of orders) o.user = userById.get(o.userId)
 ```
 
 ### When it pays off

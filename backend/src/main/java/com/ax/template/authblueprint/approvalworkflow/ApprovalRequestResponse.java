@@ -23,12 +23,32 @@ public record ApprovalRequestResponse(
     Instant completedAt,
     String category,
     BigDecimal amount,
-    List<String> resolvedChain
+    List<String> resolvedChain,
+    /**
+     * P2-38b — the actions THIS caller may invoke, computed server-side by
+     * {@link ApprovalActionEvaluator} from the very predicates {@link ApprovalService}
+     * enforces. Clients no longer re-derive authorization from raw fields.
+     *
+     * <p>Empty (never null) when the caller may do nothing. A caller-independent
+     * projection (e.g. an internal fan-out) passes {@code null} for the caller and gets
+     * an empty list — absence of a claim, not a claim of absence.
+     */
+    List<String> allowedActions
 ) {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
+    /**
+     * Caller-agnostic projection — {@code allowedActions} is empty. Retained so internal
+     * callers that have no principal keep compiling; every HTTP path uses the
+     * caller-aware overload below.
+     */
     public static ApprovalRequestResponse from(ApprovalRequest r, ObjectMapper objectMapper) {
+        return from(r, objectMapper, null, null);
+    }
+
+    public static ApprovalRequestResponse from(ApprovalRequest r, ObjectMapper objectMapper,
+                                               ApprovalActionEvaluator evaluator, String callerUserId) {
         Map<String, Object> payload = parse(r.getPayloadJson(), objectMapper);
         List<ApprovalStepResponse> steps = r.getSteps().stream()
             .map(ApprovalStepResponse::from)
@@ -46,7 +66,8 @@ public record ApprovalRequestResponse(
             r.getCompletedAt(),
             r.getCategory(),
             r.getAmount(),
-            RoutingRuleResponse.parseChain(r.getResolvedChainJson(), objectMapper)
+            RoutingRuleResponse.parseChain(r.getResolvedChainJson(), objectMapper),
+            evaluator == null ? List.of() : evaluator.allowedActions(r, callerUserId)
         );
     }
 

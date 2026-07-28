@@ -8,13 +8,16 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.TreeSet;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import com.ax.template.authblueprint.approvalworkflow.ApprovalActionEvaluator;
+import com.ax.template.authblueprint.approvalworkflow.ApprovalActionGuards;
+import com.ax.template.authblueprint.approvalworkflow.ApprovalAggregateFixtures;
 import com.ax.template.authblueprint.approvalworkflow.ApprovalRequest;
 import com.ax.template.authblueprint.approvalworkflow.ApprovalRequestStateMachine;
 import com.ax.template.authblueprint.approvalworkflow.ApprovalRequestStatus;
@@ -34,28 +37,28 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code frontend/tests/_fixtures/authorized-actions.golden.json}). Plain Jackson unit test — NO
  * {@code @SpringBootTest}, zero ContextCache pressure.
  *
- * <h2>Honest scope — there is no BE-emitted action-set to assert against</h2>
- * {@link com.ax.template.authblueprint.approvalworkflow.ApprovalRequestResponse} and
- * {@link com.ax.template.authblueprint.approvalworkflow.ApprovalStepResponse} carry NO computed
- * permissions/action-set field. The catalog's real BE never tells a caller which of
- * {@code submit}/{@code cancel}/{@code approve}/{@code reject}/{@code view} it may invoke — that is a
- * genuine gap (recommend a BACKLOG entry; see the golden fixture's {@code _provenance} and this lane's
- * final report). Absent a BE-exposed decision function, {@link #computeBeAuthorizedActions} is a
- * REIMPLEMENTATION of the enforced guards, evidence-anchored by file:line citation on every branch
- * below and in the golden's per-row {@code _note}. It is NOT a call into
- * {@code ApprovalController}/{@code ApprovalService} (out of this lane's file set, and those guards are
- * side-effecting, not a queryable predicate) — EXCEPT for the two lifecycle transition checks, which DO
- * call the real {@link ApprovalRequestStateMachine} / {@link ApprovalStepStateMachine} instances
- * (production classes, not reimplemented ALLOWED maps): a change to either machine's transition table
- * flips this test RED without any edit here. The visibility / ownership / step-ordering conditions are
- * NOT wired to the real guard in the same way — a change to {@code ApprovalService}'s ordering or
- * ownership check would NOT automatically flip this test. That residual is the reason this lane
- * recommends the coverage-map cell stay {@code partial} rather than {@code covered}.
+ * <h2>Scope — this now CALLS the production decision function</h2>
+ * When this test was written the BE emitted no action-set at all, so
+ * {@code computeBeAuthorizedActions} was an honest-but-fragile REIMPLEMENTATION of the
+ * enforced guards, anchored only by file:line comments. P2-38a/b closed that gap:
+ * {@link ApprovalActionEvaluator} computes the set server-side, delegating every branch to
+ * {@link ApprovalActionGuards} — the SAME predicates {@code ApprovalService} enforces on
+ * the action path — plus the two real state machines' transition tables.
  *
- * <p>Mutation lock: hand-flip any one row's {@code expectedActions} in the golden (e.g. drop
- * {@code "approve"} from {@code approver_first_step_pending_submitted}) and this test goes RED because
- * {@link #computeBeAuthorizedActions} still independently derives the un-flipped set from the real
- * state machines + the cited guard conditions — it does not echo the golden back at itself.
+ * <p>This test therefore no longer re-derives anything. It builds a probe aggregate from
+ * each golden row and asks the REAL evaluator. Consequences, and the reason the residual
+ * that kept the coverage cell {@code partial} is gone:
+ * <ul>
+ *   <li>neutering {@code isNextActionableStep} flips this test AND the action-path
+ *       STEP_OUT_OF_ORDER test — one edit, two independent surfaces;</li>
+ *   <li>same for {@code isRequester} (here + the ownership 404 + the requester-list
+ *       contract test) and {@code canView} (here + single-GET visibility);</li>
+ *   <li>a change to either state machine's ALLOWED map still flips this test, as before.</li>
+ * </ul>
+ *
+ * <p>Mutation lock: hand-flip any one row's {@code expectedActions} in the golden and this
+ * test goes RED, because the evaluator derives the set from production code and does not
+ * echo the golden back at itself.
  */
 // WORKFLOW is the approval-workflow domain's per-domain-task tag (matches every other
 // class in backend/src/test/java/.../approvalworkflow/*, e.g. ApprovalComplianceTest) —
@@ -80,119 +83,32 @@ class AuthorizedActionSetParityTest {
         return MAPPER.readTree(Files.readString(golden)).get("rows");
     }
 
-    /**
-     * REAL production call — {@link ApprovalRequestStateMachine#markSubmitted} /
-     * {@link ApprovalRequestStateMachine#markCancelled} on a freshly-built probe request whose ONLY
-     * populated field that matters is {@code status}. Mirrors {@code ApprovalRequestStateMachine.java:41-45}
-     * / {@code :62-66}; the ALLOWED-transition map itself (lines 24-32) is private, so this calls the
-     * public mutator and observes whether it throws — the actual runtime check, not a copy of it.
-     */
-    private static boolean canTransitionRequest(ApprovalRequestStatus from, ApprovalRequestStatus to) {
-        ApprovalRequest probe = ApprovalRequest.builder()
-                .requesterUserId("probe-requester")
-                .type("PROBE")
-                .status(from)
-                .build();
-        ApprovalRequestStateMachine machine = new ApprovalRequestStateMachine(FIXED_CLOCK);
-        try {
-            switch (to) {
-                case SUBMITTED -> machine.markSubmitted(probe);
-                case CANCELLED -> machine.markCancelled(probe);
-                default -> throw new IllegalArgumentException("unsupported probe target " + to);
-            }
-            return true;
-        } catch (IllegalStateException ex) {
-            return false;
-        }
-    }
+    private static final ApprovalActionGuards GUARDS = new ApprovalActionGuards();
+    private static final ApprovalActionEvaluator EVALUATOR = new ApprovalActionEvaluator(
+            GUARDS,
+            new ApprovalRequestStateMachine(FIXED_CLOCK),
+            new ApprovalStepStateMachine(FIXED_CLOCK));
 
     /**
-     * REAL production call — {@link ApprovalStepStateMachine#markApproved} /
-     * {@link ApprovalStepStateMachine#markRejected} on a freshly-built probe step. Mirrors
-     * {@code ApprovalStepStateMachine.java:38-43} / {@code :45-50}.
+     * Builds the golden row's aggregate and asks the PRODUCTION
+     * {@link ApprovalActionEvaluator}. No rule is expressed in this file.
      */
-    private static boolean canTransitionStep(ApprovalStepStatus from, ApprovalStepStatus to, String actorUserId) {
-        ApprovalStep probe = ApprovalStep.builder()
-                .orderIndex(0)
-                .approverUserId(actorUserId)
-                .status(from)
-                .build();
-        ApprovalStepStateMachine machine = new ApprovalStepStateMachine(FIXED_CLOCK);
-        try {
-            switch (to) {
-                case APPROVED -> machine.markApproved(probe, actorUserId, null);
-                case REJECTED -> machine.markRejected(probe, actorUserId, null);
-                default -> throw new IllegalArgumentException("unsupported probe target " + to);
-            }
-            return true;
-        } catch (IllegalStateException ex) {
-            return false;
-        }
-    }
-
-    /**
-     * The reference derivation of "which actions is {@code callerId} authorized to invoke on this
-     * request" — see class javadoc for the honest scoping of what is and is not a call into real
-     * production guard code.
-     */
-    private static List<String> computeBeAuthorizedActions(JsonNode requestNode, String callerId) {
-        String requesterUserId = requestNode.get("requesterUserId").asText();
-        ApprovalRequestStatus status = ApprovalRequestStatus.valueOf(requestNode.get("status").asText());
-        List<StepFixture> steps = new ArrayList<>();
+    private static List<String> beAuthorizedActions(JsonNode requestNode, String callerId) {
+        List<ApprovalAggregateFixtures.StepSpec> steps = new ArrayList<>();
         for (JsonNode s : requestNode.get("steps")) {
-            steps.add(new StepFixture(
+            JsonNode acted = s.get("actedByUserId");
+            steps.add(new ApprovalAggregateFixtures.StepSpec(
+                    UUID.fromString(s.get("id").asText()),
                     s.get("orderIndex").asInt(),
                     s.get("approverUserId").asText(),
-                    ApprovalStepStatus.valueOf(s.get("status").asText())));
+                    ApprovalStepStatus.valueOf(s.get("status").asText()),
+                    acted == null || acted.isNull() ? null : acted.asText()));
         }
-
-        TreeSet<String> actions = new TreeSet<>();
-
-        // ApprovalRequestRepository.java:39-42 — requester OR-arm is unconditional on status; the
-        // approver OR-arm additionally requires status == SUBMITTED.
-        boolean isRequester = callerId.equals(requesterUserId);
-        boolean isApproverOnSomeStep = steps.stream().anyMatch(s -> callerId.equals(s.approverUserId()));
-        boolean visible = isRequester || (isApproverOnSomeStep && status == ApprovalRequestStatus.SUBMITTED);
-        if (visible) {
-            actions.add("view");
-        }
-
-        // ApprovalService.java:245-251 (loadOwn) — submit/cancel are requester-only, then gated by the
-        // REAL request state machine's allowed-transition set.
-        if (isRequester) {
-            if (canTransitionRequest(status, ApprovalRequestStatus.SUBMITTED)) {
-                actions.add("submit");
-            }
-            if (canTransitionRequest(status, ApprovalRequestStatus.CANCELLED)) {
-                actions.add("cancel");
-            }
-        }
-
-        // ApprovalService.java:195-202 — request must be exactly SUBMITTED (isTerminal() OR
-        // status != SUBMITTED both throw). ApprovalService.java:209-217 — caller must be the target
-        // step's assigned approver. ApprovalService.java:219-227 — every earlier-orderIndex step must
-        // already be APPROVED. Only then is the REAL step state machine consulted.
-        if (status == ApprovalRequestStatus.SUBMITTED) {
-            for (StepFixture target : steps) {
-                if (!callerId.equals(target.approverUserId())) {
-                    continue;
-                }
-                boolean earlierStepsClear = steps.stream()
-                        .filter(s -> s.orderIndex() < target.orderIndex())
-                        .allMatch(s -> s.status() == ApprovalStepStatus.APPROVED);
-                if (!earlierStepsClear) {
-                    continue;
-                }
-                if (canTransitionStep(target.status(), ApprovalStepStatus.APPROVED, callerId)) {
-                    actions.add("approve");
-                }
-                if (canTransitionStep(target.status(), ApprovalStepStatus.REJECTED, callerId)) {
-                    actions.add("reject");
-                }
-            }
-        }
-
-        return new ArrayList<>(actions);
+        ApprovalRequest request = ApprovalAggregateFixtures.build(
+                requestNode.get("requesterUserId").asText(),
+                ApprovalRequestStatus.valueOf(requestNode.get("status").asText()),
+                steps);
+        return EVALUATOR.allowedActions(request, callerId);
     }
 
     private static List<String> expectedActionsOf(JsonNode row) {
@@ -210,7 +126,7 @@ class AuthorizedActionSetParityTest {
         for (JsonNode row : rows) {
             String label = row.get("label").asText();
             List<String> expected = expectedActionsOf(row);
-            List<String> actual = computeBeAuthorizedActions(row.get("request"), row.get("callerId").asText());
+            List<String> actual = beAuthorizedActions(row.get("request"), row.get("callerId").asText());
             assertThat(actual)
                     .as("row '%s' — BE-authorized action set must match the golden's expectedActions", label)
                     .isEqualTo(expected);
@@ -220,21 +136,21 @@ class AuthorizedActionSetParityTest {
     @Test
     void requesterOnDraftRequest_mayViewSubmitAndCancel_butNotApproveOrReject() throws IOException {
         JsonNode row = findRow(goldenRows(), "requester_draft_own_request");
-        List<String> actual = computeBeAuthorizedActions(row.get("request"), row.get("callerId").asText());
+        List<String> actual = beAuthorizedActions(row.get("request"), row.get("callerId").asText());
         assertThat(actual).containsExactly("cancel", "submit", "view");
     }
 
     @Test
     void assignedFirstStepApprover_onSubmittedRequest_mayApproveOrReject_butNotSubmitOrCancel() throws IOException {
         JsonNode row = findRow(goldenRows(), "approver_first_step_pending_submitted");
-        List<String> actual = computeBeAuthorizedActions(row.get("request"), row.get("callerId").asText());
+        List<String> actual = beAuthorizedActions(row.get("request"), row.get("callerId").asText());
         assertThat(actual).containsExactly("approve", "reject", "view");
     }
 
     @Test
     void nonParticipant_getsNoActionsAtAll_notEvenView() throws IOException {
         JsonNode row = findRow(goldenRows(), "non_participant_submitted");
-        List<String> actual = computeBeAuthorizedActions(row.get("request"), row.get("callerId").asText());
+        List<String> actual = beAuthorizedActions(row.get("request"), row.get("callerId").asText());
         assertThat(actual).isEmpty();
     }
 
@@ -248,26 +164,46 @@ class AuthorizedActionSetParityTest {
     @Test
     void secondStepApprover_isVisibleButNotActionable_whileEarlierStepIsStillPending() throws IOException {
         JsonNode row = findRow(goldenRows(), "second_step_approver_visible_but_out_of_order");
-        List<String> actual = computeBeAuthorizedActions(row.get("request"), row.get("callerId").asText());
+        List<String> actual = beAuthorizedActions(row.get("request"), row.get("callerId").asText());
         assertThat(actual).containsExactly("view");
     }
 
     /**
-     * The second non-obvious finding this fixture pins: an approver who already acted loses even
-     * VIEW visibility once the request leaves SUBMITTED, because findVisibleTo's approver OR-arm is
-     * conditioned on status == SUBMITTED (ApprovalRequestRepository.java:39-42).
+     * P3-63 positive — an approver who ACTED keeps view once the request goes terminal, so they
+     * can see the outcome of their own decision. Still view-only (terminal ⇒ no transitions, and
+     * they are not the requester).
      */
     @Test
-    void approverWhoActed_losesVisibility_onceRequestGoesTerminal() throws IOException {
-        JsonNode row = findRow(goldenRows(), "approver_loses_visibility_after_request_terminal");
-        List<String> actual = computeBeAuthorizedActions(row.get("request"), row.get("callerId").asText());
+    void actedApprover_keepsViewOnly_afterRequestGoesTerminal() throws IOException {
+        JsonNode row = findRow(goldenRows(), "acted_approver_keeps_view_after_terminal");
+        List<String> actual = beAuthorizedActions(row.get("request"), row.get("callerId").asText());
+        assertThat(actual).containsExactly("view");
+    }
+
+    /**
+     * P3-63 negative #1 — the qualifier that keeps the widening narrow. An assigned approver who
+     * was never reached (an upstream rejection ended the chain first) gets NOTHING: a rejection
+     * must not retroactively disclose the request to approvers who never decided.
+     */
+    @Test
+    void unactedApprover_getsNothing_afterRequestGoesTerminal() throws IOException {
+        JsonNode row = findRow(goldenRows(), "unacted_approver_no_view_after_terminal");
+        List<String> actual = beAuthorizedActions(row.get("request"), row.get("callerId").asText());
+        assertThat(actual).isEmpty();
+    }
+
+    /** P3-63 negative #2 — a DRAFT is not visible to its named approvers; it has not been sent. */
+    @Test
+    void assignedApprover_getsNothing_whileRequestIsDraft() throws IOException {
+        JsonNode row = findRow(goldenRows(), "assigned_approver_no_view_on_draft");
+        List<String> actual = beAuthorizedActions(row.get("request"), row.get("callerId").asText());
         assertThat(actual).isEmpty();
     }
 
     @Test
     void requester_keepsViewOnly_afterRequestGoesTerminal() throws IOException {
         JsonNode row = findRow(goldenRows(), "requester_own_request_after_terminal_approval");
-        List<String> actual = computeBeAuthorizedActions(row.get("request"), row.get("callerId").asText());
+        List<String> actual = beAuthorizedActions(row.get("request"), row.get("callerId").asText());
         assertThat(actual).containsExactly("view");
     }
 

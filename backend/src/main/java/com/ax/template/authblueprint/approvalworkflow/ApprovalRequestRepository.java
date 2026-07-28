@@ -6,7 +6,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -27,20 +26,4 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
         "ORDER BY r.createdAt ASC"
     )
     List<ApprovalStep> findInboxFor(@Param("approverUserId") String approverUserId);
-
-    /**
-     * Visibility-aware lookup: visible iff the caller is the requester OR an
-     * approver on the request (and request.status = SUBMITTED for approvers).
-     */
-    @Query(
-        "SELECT DISTINCT r FROM ApprovalRequest r " +
-        "LEFT JOIN r.steps s " +
-        "WHERE r.id = :id " +
-        "AND (" +
-        "  r.requesterUserId = :userId " +
-        "  OR (s.approverUserId = :userId " +
-        "      AND r.status = com.ax.template.authblueprint.approvalworkflow.ApprovalRequestStatus.SUBMITTED)" +
-        ")"
-    )
-    Optional<ApprovalRequest> findVisibleTo(@Param("id") UUID id, @Param("userId") String userId);
 }

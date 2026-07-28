@@ -8,6 +8,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-002"
 verification:
   type: review
   status: manual
+  notes: "Reviewer checks that `content-visibility` is applied to off-screen sections to skip layout/paint, and confirms it is not used as a substitute for list virtualization — the DOM nodes still exist and still cost memory/event budget."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"

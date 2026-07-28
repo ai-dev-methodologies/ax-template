@@ -28,6 +28,15 @@ import EmptyState from 'templates/L2/blocks/empty-state'
 import ErrorBoundary from 'templates/L2/blocks/error-boundary'
 import { useCallerId, sameUser } from 'templates/L0/fork-receiver-kit/use-caller-id'
 import { parseError } from 'templates/L0/fork-receiver-kit/parse-error'
+// P2-39 — the authz action set is ONE implementation, shared with
+// frontend/tests/authz-action-parity.vitest.ts (which asserts it against the committed
+// golden) and mirroring backend ApprovalActionGuards branch for branch. This page used to
+// carry a SECOND, untested copy of the same decision inside describeChain.
+import {
+  can,
+  actionableStepFor,
+  isRequester as callerIsRequester,
+} from 'templates/L0/fork-receiver-kit/authorized-actions'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -55,6 +64,13 @@ interface ApprovalRequest {
   createdAt: string
   submittedAt: string | null
   completedAt: string | null
+  /**
+   * P2-38b — the server's own action set for THIS caller, computed by
+   * ApprovalActionEvaluator from the predicates ApprovalService enforces. Optional so a
+   * fork-receiver on an older backend still type-checks; the shared selector falls back to
+   * local derivation when it is absent.
+   */
+  allowedActions?: string[] | null
 }
 
 // ─── data ─────────────────────────────────────────────────────────────────────
@@ -123,6 +139,7 @@ interface ChainState {
 function describeChain(req: ApprovalRequest, callerId: string): ChainState {
   const sorted = [...req.steps].sort((a, b) => a.orderIndex - b.orderIndex)
   const totalSteps = sorted.length
+  const actionable = actionableStepFor(req, callerId)
 
   if (req.status === 'DRAFT')      return { kind: 'draft', totalSteps, currentIndex: 0 }
   if (req.status === 'CANCELLED')  return { kind: 'cancelled', totalSteps, currentIndex: totalSteps }
@@ -135,10 +152,13 @@ function describeChain(req: ApprovalRequest, callerId: string): ChainState {
       return { kind: 'halted', haltedAt: step, totalSteps, currentIndex: i }
     }
     if (step.status === 'PENDING') {
-      // R43 iter3 (P2-iter2-N8): normalize caller-id comparison so a
-      // trailing space or case mismatch on the server side does not
-      // silently hide the action panel from the rightful approver.
-      if (sameUser(step.approverUserId, callerId)) {
+      // P2-39 — the "may this caller act on this step?" decision is NOT made here.
+      // It comes from the shared selector, which applies the same three guards the
+      // backend does (isActionable ∧ isAssignedApprover ∧ isNextActionableStep) and
+      // normalizes caller ids the same way (R43 iter3 P2-iter2-N8: a trailing space or
+      // case mismatch must not silently hide the panel from the rightful approver).
+      // Everything below is presentation: WHICH step, and what to say about it.
+      if (actionable && actionable.orderIndex === step.orderIndex) {
         return { kind: 'actionable', step, totalSteps, currentIndex: i }
       }
       return { kind: 'waiting', waitingOn: step, totalSteps, currentIndex: i }
@@ -429,7 +449,11 @@ export default function ApprovalDetailPage() {
     return <EmptyState title="Not found" description="This request does not exist or you do not have access." />
   }
 
-  const isRequester = sameUser(data.requesterUserId, callerId)
+  // P2-39 — identity and the two requester-only actions come from the shared selector,
+  // which prefers the server's allowedActions when present.
+  const isRequester = callerIsRequester(data, callerId)
+  const maySubmit = can(data, callerId, 'submit')
+  const mayCancel = can(data, callerId, 'cancel')
   const actionableStep = chain.kind === 'actionable' ? chain.step : null
 
   return (
@@ -547,7 +571,7 @@ export default function ApprovalDetailPage() {
 
         {/* ─── Action area ────────────────────────────────────────────── */}
 
-        {isRequester && data.status === 'DRAFT' && (
+        {maySubmit && (
           <section className="space-y-2 rounded border p-3">
             <p className="text-sm text-muted-foreground">
               This request is a draft. Submit to start the approval chain, or
@@ -601,7 +625,7 @@ export default function ApprovalDetailPage() {
           </section>
         )}
 
-        {isRequester && data.status === 'SUBMITTED' && (
+        {mayCancel && data.status === 'SUBMITTED' && (
           <section className="space-y-2 rounded border p-3">
             <p className="text-sm text-muted-foreground">
               Your request is in flight. You can cancel until the chain

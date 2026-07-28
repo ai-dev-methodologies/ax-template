@@ -46,6 +46,18 @@ public class ProblemDetailProbeController {
     }
 
     /**
+     * P2-41 — a REQUIRED {@code @RequestParam} with no default. Calling this endpoint
+     * WITHOUT {@code ?ref=} raises {@code MissingServletRequestParameterException}
+     * during argument resolution, which (before the handler was added) fell through
+     * to {@code /error} and surfaced as an EMPTY 403 behind the reference
+     * {@code SecurityConfig}. It must now surface as 400 MISSING_PARAMETER.
+     */
+    @GetMapping("/required-param")
+    public String requiredParam(@RequestParam String ref) {
+        return ref;
+    }
+
+    /**
      * Conditional write through {@link OptimisticLockingSupport#requireMatch(String, String, long)}.
      * Probes the three IMW4 global mappings the COMMON
      * {@link GlobalProblemDetailAdvice} now owns (no local {@code @ExceptionHandler}):

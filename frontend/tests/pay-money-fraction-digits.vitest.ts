@@ -73,34 +73,26 @@ describe('money.ts (apps/pay) — KRW/USD/EUR/JPY/GBP regression: byte-identical
 })
 
 describe('money.ts (apps/pay) — safe-integer-boundary case for the scaled path', () => {
-  // KNOWN PRE-EXISTING LIMITATION (not introduced or fixed by the P3-57(a) delegation
-  // fix; present identically before and after it): unlike currency-input.tsx's
-  // formatCurrencyAmount / currency-formatter.tsx's CurrencyFormatter (both of which
-  // hand Intl.NumberFormat#format the exact decimal STRING from toMajorUnits),
-  // money.ts's formatMinor converts that exact string through `Number(major)` before
-  // formatting (see formatMinor's final line). For amounts within everyday magnitude
-  // this is exact (see the KRW/USD regressions above and the BigInt-safe
-  // minorToMajorString step itself, which never touches a float). At the documented
-  // Number.MAX_SAFE_INTEGER boundary, though, the intermediate `Number(major)` step
-  // silently drops the final minor unit — the exact class of bug this file's own
-  // top-of-file doc comment says money.ts "deliberately avoids". Reported as a
-  // separate, out-of-scope finding (candidate BACKLOG item) rather than fixed here:
-  // fixing it exactly (matching toMajorUnits' string-passthrough approach) requires
-  // widening apps/pay's tsconfig "lib" to include the ES2023 Intl string-argument
-  // overload (`tsc --noEmit -p apps/pay/tsconfig.json` confirms `.format(<string>)`
-  // is a type error under the current "lib": ["ES2020", ...]), and tsconfig.json is
-  // outside this lane's file set.
-  it('USD at Number.MAX_SAFE_INTEGER: the last cent is lost (documents the limitation, does not claim it is fixed)', () => {
+  // BACKLOG P3-64 — formatMinor previously converted the exact minor->major decimal
+  // STRING through `Number(major)` before handing it to Intl (see the pre-fix final
+  // line of formatMinor), which is exact for everyday magnitudes but silently drops
+  // the final minor unit at the Number.MAX_SAFE_INTEGER boundary (…409.91 rounded to
+  // …409.90) — the exact class of float-precision bug this file's own top-of-file
+  // doc comment says money.ts "deliberately avoids". Fix: formatExactMajorString
+  // sources every literal (currency symbol, sign, group/decimal separators) from
+  // Intl.NumberFormat#formatToParts and splices in the exact digit string itself —
+  // no `Number()` conversion of the amount at any point. These are now correct-value
+  // assertions, not documented-limitation ones.
+  it('USD at Number.MAX_SAFE_INTEGER: the last cent is preserved (no longer lost to Number() rounding)', () => {
     const rendered = formatMinor(Number.MAX_SAFE_INTEGER, 'USD')
-    // Exact value would be …409.91; the Number() conversion rounds it to …409.90.
-    expect(rendered).toContain('409.90')
-    expect(rendered).not.toContain('409.91')
+    // Exact value is …409.91 (9,007,199,254,740,991 minor units / 100).
+    expect(rendered).toBe('US$90,071,992,547,409.91')
+    expect(rendered).not.toContain('409.90')
   })
 
-  it('BHD at Number.MAX_SAFE_INTEGER: same limitation at 3 decimals', () => {
+  it('BHD at Number.MAX_SAFE_INTEGER: exact to 3 decimals (no digit lost)', () => {
     const rendered = formatMinor(Number.MAX_SAFE_INTEGER, 'BHD')
-    // Exact value would be …740.991; verify fractionDigitsFor still resolves 3 decimals
-    // (the part of this fix that DOES hold at scale) even though the final digit is lost.
-    expect(rendered).toMatch(/740\.99\d/)
+    // Exact value is …740.991 (9,007,199,254,740,991 minor units / 1000).
+    expect(rendered).toBe('BHD 9,007,199,254,740.991')
   })
 })

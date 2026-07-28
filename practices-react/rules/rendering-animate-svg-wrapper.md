@@ -8,6 +8,7 @@ spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RENDERING-001"
 verification:
   type: review
   status: manual
+  notes: "Reviewer checks that the animation targets a wrapper `<div>` (transform/opacity) only for whole-asset animations (e.g. spin the entire icon); animation of an internal path/shape stays on the SVG element itself."
 provenance:
   pilot: true
   pipeline_version: "2026-05-16"

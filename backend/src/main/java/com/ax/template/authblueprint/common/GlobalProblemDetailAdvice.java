@@ -26,6 +26,7 @@ import org.springframework.validation.ObjectError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestAttributes;
@@ -115,6 +116,7 @@ public class GlobalProblemDetailAdvice {
 
     private static final URI VALIDATION_TYPE = URI.create("https://errors.example.com/validation");
     private static final URI TYPE_MISMATCH_TYPE = URI.create("https://errors.example.com/type-mismatch");
+    private static final URI MISSING_PARAMETER_TYPE = URI.create("https://errors.example.com/missing-parameter");
     private static final URI MALFORMED_BODY_TYPE = URI.create("https://errors.example.com/malformed-request-body");
     private static final URI UNSUPPORTED_MEDIA_TYPE = URI.create("https://errors.example.com/unsupported-media-type");
     private static final URI METHOD_NOT_ALLOWED_TYPE = URI.create("https://errors.example.com/method-not-allowed");
@@ -215,6 +217,32 @@ public class GlobalProblemDetailAdvice {
         String detail = "Parameter '" + defaultMessage(ex.getName()) + "' must be a valid " + expectedType + ".";
         ProblemDetail pd = problem(HttpStatus.BAD_REQUEST, TYPE_MISMATCH_TYPE, "Type Mismatch",
                 "TYPE_MISMATCH", detail);
+        return entity(HttpStatus.BAD_REQUEST, pd);
+    }
+
+    /**
+     * COMMON unmapped-argument-binding trap, second half → {@code 400 Bad Request}
+     * (code {@code MISSING_PARAMETER}). {@link #handleTypeMismatch} closed the case
+     * where a REQUIRED parameter is PRESENT but unconvertible; this closes the case
+     * where it is ABSENT ENTIRELY. Both are raised during {@code @RequestParam}
+     * argument resolution — before any controller body or controller-local
+     * {@code @ExceptionHandler} runs — so left unmapped they fell through to the
+     * servlet {@code /error} dispatch, which the reference {@code SecurityConfig}'s
+     * {@code anyRequest().denyAll()} rejected as a misleading, EMPTY {@code 403}. A
+     * caller who simply forgot a query parameter was told "forbidden" with no body,
+     * which reads as an authorization failure and sends debugging down the wrong path.
+     *
+     * <p>Response-amplification defense (same posture as {@link #handleTypeMismatch}):
+     * only the parameter NAME and expected type — both server-declared — are reported.
+     * Nothing client-controlled is echoed (an absent parameter has no value to echo,
+     * but the rule is stated so the symmetry is not lost in a later edit).
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ProblemDetail> handleMissingParameter(MissingServletRequestParameterException ex) {
+        String detail = "Required parameter '" + defaultMessage(ex.getParameterName())
+                + "' of type " + defaultMessage(ex.getParameterType()) + " is missing.";
+        ProblemDetail pd = problem(HttpStatus.BAD_REQUEST, MISSING_PARAMETER_TYPE, "Missing Parameter",
+                "MISSING_PARAMETER", detail);
         return entity(HttpStatus.BAD_REQUEST, pd);
     }
 

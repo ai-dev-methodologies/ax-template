@@ -37,19 +37,25 @@ public class ApprovalService {
     private final ApprovalWorkflowProperties properties;
     private final ObjectMapper objectMapper;
     private final RoutingRuleRepository routingRuleRepository;
+    private final ApprovalActionGuards guards;
+    private final ApprovalActionEvaluator evaluator;
 
     public ApprovalService(ApprovalRequestRepository requestRepository,
                            ApprovalRequestStateMachine requestStateMachine,
                            ApprovalStepStateMachine stepStateMachine,
                            ApprovalWorkflowProperties properties,
                            ObjectMapper objectMapper,
-                           RoutingRuleRepository routingRuleRepository) {
+                           RoutingRuleRepository routingRuleRepository,
+                           ApprovalActionGuards guards,
+                           ApprovalActionEvaluator evaluator) {
         this.requestRepository = requestRepository;
         this.requestStateMachine = requestStateMachine;
         this.stepStateMachine = stepStateMachine;
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.routingRuleRepository = routingRuleRepository;
+        this.guards = guards;
+        this.evaluator = evaluator;
     }
 
     /**
@@ -91,7 +97,7 @@ public class ApprovalService {
         // routed: steps stay empty until submit() resolves the routing rule.
 
         ApprovalRequest saved = requestRepository.save(request);
-        return ApprovalRequestResponse.from(saved, objectMapper);
+        return ApprovalRequestResponse.from(saved, objectMapper, evaluator, requesterUserId);
     }
 
     @Transactional
@@ -102,7 +108,7 @@ public class ApprovalService {
         }
         requestStateMachine.markSubmitted(request);
         ApprovalRequest saved = requestRepository.save(request);
-        return ApprovalRequestResponse.from(saved, objectMapper);
+        return ApprovalRequestResponse.from(saved, objectMapper, evaluator, requesterUserId);
     }
 
     /**
@@ -144,7 +150,7 @@ public class ApprovalService {
         ApprovalRequest request = loadOwn(requesterUserId, id);
         requestStateMachine.markCancelled(request);
         ApprovalRequest saved = requestRepository.save(request);
-        return ApprovalRequestResponse.from(saved, objectMapper);
+        return ApprovalRequestResponse.from(saved, objectMapper, evaluator, requesterUserId);
     }
 
     @Transactional
@@ -161,16 +167,30 @@ public class ApprovalService {
     public ApprovalListResponse listOwn(String requesterUserId) {
         List<ApprovalRequest> rows = requestRepository.findByRequesterUserIdOrderByCreatedAtDesc(requesterUserId);
         List<ApprovalRequestResponse> items = rows.stream()
-            .map(r -> ApprovalRequestResponse.from(r, objectMapper))
+            .map(r -> ApprovalRequestResponse.from(r, objectMapper, evaluator, requesterUserId))
             .toList();
         return new ApprovalListResponse(items, items.size());
     }
 
+    /**
+     * P2-38a — the visibility rule now comes from {@link ApprovalActionGuards#canView},
+     * the SAME predicate {@link ApprovalActionEvaluator} uses to compute
+     * {@code allowedActions}. It used to be a third, independently-written copy of the
+     * policy expressed as JPQL ({@code ApprovalRequestRepository.findVisibleTo}), which
+     * has been DELETED — a repository-level policy that only one caller used and that no
+     * other surface could consult was exactly the drift risk this item closes.
+     *
+     * <p>Invisible → 404, never 403: the existence of another user's request must not be
+     * disclosed (WF-AUTHZ-002, IDOR-safe).
+     */
     @Transactional(readOnly = true)
     public ApprovalRequestResponse getVisible(String userId, UUID id) {
-        ApprovalRequest req = requestRepository.findVisibleTo(id, userId)
+        ApprovalRequest req = requestRepository.findById(id)
             .orElseThrow(() -> new ApprovalRequestNotFoundException(id));
-        return ApprovalRequestResponse.from(req, objectMapper);
+        if (!guards.canView(req, userId)) {
+            throw new ApprovalRequestNotFoundException(id);
+        }
+        return ApprovalRequestResponse.from(req, objectMapper, evaluator, userId);
     }
 
     @Transactional(readOnly = true)
@@ -192,11 +212,14 @@ public class ApprovalService {
         ApprovalRequest request = requestRepository.findById(requestId)
             .orElseThrow(() -> new ApprovalRequestNotFoundException(requestId));
 
-        if (request.getStatus().isTerminal()) {
-            throw new RequestTerminalException(
-                "request " + requestId + " is already " + request.getStatus());
-        }
-        if (request.getStatus() != ApprovalRequestStatus.SUBMITTED) {
+        // P2-38a — one predicate (isActionable), two failure MESSAGES. The distinction
+        // between "already decided" and "never sent" is reporting, not policy; the policy
+        // itself is single-valued and is what ApprovalActionEvaluator consults.
+        if (!guards.isActionable(request)) {
+            if (request.getStatus().isTerminal()) {
+                throw new RequestTerminalException(
+                    "request " + requestId + " is already " + request.getStatus());
+            }
             throw new RequestTerminalException(
                 "request " + requestId + " is not SUBMITTED (current: " + request.getStatus() + ")");
         }
@@ -206,7 +229,7 @@ public class ApprovalService {
             .findFirst()
             .orElseThrow(() -> new ApprovalRequestNotFoundException(stepId));
 
-        if (!target.getApproverUserId().equals(actorUserId)) {
+        if (!guards.isAssignedApprover(target, actorUserId)) {
             // R83 iter1 F8 — the message MUST NOT name the assigned approver. A
             // non-approver who can already enumerate stepId would otherwise learn
             // WHO the rightful approver is, which is a cross-user PII leak in a
@@ -217,13 +240,18 @@ public class ApprovalService {
         }
 
         // Strict ordering: every step with orderIndex < target.orderIndex must be APPROVED.
-        for (ApprovalStep s : request.getSteps()) {
-            if (s.getOrderIndex() < target.getOrderIndex()
-                && s.getStatus() != ApprovalStepStatus.APPROVED) {
-                throw new StepOutOfOrderException(
-                    "earlier step (orderIndex=" + s.getOrderIndex()
-                    + ") is " + s.getStatus() + "; expected APPROVED before acting on this step");
-            }
+        // P2-38a — the DECISION is guards.isNextActionableStep; the loop below only
+        // recovers WHICH earlier step blocked, for the message.
+        if (!guards.isNextActionableStep(request, target)) {
+            ApprovalStep blocker = request.getSteps().stream()
+                .filter(s -> s.getOrderIndex() < target.getOrderIndex())
+                .filter(s -> s.getStatus() != ApprovalStepStatus.APPROVED)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                    "isNextActionableStep denied but no blocking step found"));
+            throw new StepOutOfOrderException(
+                "earlier step (orderIndex=" + blocker.getOrderIndex()
+                + ") is " + blocker.getStatus() + "; expected APPROVED before acting on this step");
         }
 
         if (approve) {
@@ -239,13 +267,13 @@ public class ApprovalService {
         }
 
         ApprovalRequest saved = requestRepository.save(request);
-        return ApprovalRequestResponse.from(saved, objectMapper);
+        return ApprovalRequestResponse.from(saved, objectMapper, evaluator, actorUserId);
     }
 
     private ApprovalRequest loadOwn(String requesterUserId, UUID id) {
         ApprovalRequest req = requestRepository.findById(id)
             .orElseThrow(() -> new ApprovalRequestNotFoundException(id));
-        if (!req.getRequesterUserId().equals(requesterUserId)) {
+        if (!guards.isRequester(req, requesterUserId)) {
             throw new ApprovalRequestNotFoundException(id);  // 404 — IDOR-safe
         }
         return req;

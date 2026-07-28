@@ -150,6 +150,11 @@ checklist:
       - command: "./gradlew testApprovalWorkflow"
         working_directory: "backend"
         expected_exit: 0
+      # P2-35 — sibling-contract `default: ALL` / undeclared-param family
+      # (email-outbox + scheduled-task binding-layer regressions).
+      - command: "./gradlew testAllFilterSentinel"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testTagCategorization"
         working_directory: "backend"
         expected_exit: 0

@@ -78,10 +78,28 @@ run_guard "spec_ref_guard/practices" 0 \
 run_guard "spec_ref_guard/practices-react" 0 \
     bash "$SCRIPT_DIR/spec_ref_guard.sh" --catalog practices-react
 
-# ── 3. substance_guard (practices) ───────────────────────────────────────────
+# ── 3. substance_guard (practices + practices-react) ─────────────────────────
 echo "[3] substance_guard.sh"
 run_guard "substance_guard/practices" 0 \
     bash "$SCRIPT_DIR/substance_guard.sh"
+# BACKLOG P2-37 — dialect=react-frozen-v1 (see substance_guard.sh header). Live +
+# one negative fixture per FROZEN clause + one pass fixture (non-vacuity: each
+# fixture isolates exactly one clause so neutering that clause's check flips its
+# own fixture 1->0 without touching the other three).
+run_guard "substance_guard/practices-react" 0 \
+    bash "$SCRIPT_DIR/substance_guard.sh" --catalog practices-react
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "substance_guard/fixture_fail_react_no_impact" 1 \
+        bash "$SCRIPT_DIR/substance_guard.sh" --catalog practices-react "$SCRIPT_DIR/fixtures/react-substance/fail_react_no_impact"
+    run_guard "substance_guard/fixture_fail_react_no_verification" 1 \
+        bash "$SCRIPT_DIR/substance_guard.sh" --catalog practices-react "$SCRIPT_DIR/fixtures/react-substance/fail_react_no_verification"
+    run_guard "substance_guard/fixture_fail_react_placeholder_fence" 1 \
+        bash "$SCRIPT_DIR/substance_guard.sh" --catalog practices-react "$SCRIPT_DIR/fixtures/react-substance/fail_react_placeholder_fence"
+    run_guard "substance_guard/fixture_fail_react_no_url" 1 \
+        bash "$SCRIPT_DIR/substance_guard.sh" --catalog practices-react "$SCRIPT_DIR/fixtures/react-substance/fail_react_no_url"
+    run_guard "substance_guard/fixture_pass_react_clean" 0 \
+        bash "$SCRIPT_DIR/substance_guard.sh" --catalog practices-react "$SCRIPT_DIR/fixtures/react-substance/pass_react_clean"
+fi
 
 # ── 4. time_decay_guard (practices + practices-react) ────────────────────────
 echo "[4] time_decay_guard.sh"
@@ -1096,6 +1114,20 @@ run_guard "evidence_quote_spotcheck/fixture_fail_allow_missing" 1 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --allow-missing-snapshot --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_quote_mismatch_snapshot_missing"
 run_guard "evidence_quote_spotcheck/fixture_pass_allow_missing" 0 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --allow-missing-snapshot --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/pass_only_missing_snapshot"
+# BACKLOG P2-40 — evidence_quote_spotcheck previously skipped templates/** frontmatter
+# entirely (a fabricated evidence:upstream_id quote there passed every gate). --include-templates
+# sweeps templates/**/*.{tsx,ts}; findings stay advisory unless --strict-templates is ALSO passed
+# (see the guard's --strict-templates header comment for why: the first live sweep found ~105
+# pre-existing quote<->snapshot misalignments across templates/L1/components/** unrelated to the
+# one fabricated anchor this item closed — tracked as a new backlog candidate, not silently
+# fixed or silently dropped). Live stays advisory (exit 0); fixtures prove the --strict-templates
+# blocking path is genuinely non-vacuous.
+run_guard "evidence_quote_spotcheck/templates_live_advisory" 0 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --include-templates
+run_guard "evidence_quote_spotcheck/fixture_template_fail" 1 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --include-templates --strict-templates --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_template_fabricated_anchor"
+run_guard "evidence_quote_spotcheck/fixture_template_pass" 0 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --include-templates --strict-templates --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/pass_template_correct_anchor"
 
 echo ""
 echo "[75] catalog_example_symbol_guard.sh (catalog-example/impl-drift — a rule java fence that names a class with no backing .java teaches an agent a broken shape; iterations 2-3 fixed two such drifts by hand with no mechanical backstop. Scans ONLY java fences: a seed-deny fabricated store call (idempotencyStore.computeIfAbsent) and any *StateMachine/*Store symbol must resolve to a real backend/src/main/java symbol OR be named in a catalog-example-ok annotation. Live exits 0; fixtures prove non-vacuity.)"
@@ -1359,6 +1391,50 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/locale_aware_format_guard.sh" --root "$SCRIPT_DIR/fixtures/locale-aware-format/fail_money_tofixed"
     run_guard "locale_aware_format/fixture_fail_currency_concat" 1 \
         bash "$SCRIPT_DIR/locale_aware_format_guard.sh" --root "$SCRIPT_DIR/fixtures/locale-aware-format/fail_currency_concat"
+fi
+
+echo "[92] contract_enum_parity_guard.sh (P2-33 — contract↔code enum parity, EXHAUSTIVE BY CONSTRUCTION. Every enum: block under contracts/*.yaml {58 today across 20 files} MUST be classified in practices/evals/contract-enum-map.yaml as either java_enum: <FQCN> {constant sets must match} or wire_only: <reason>; an UNCLASSIFIED block FAILS and a STALE entry {pointing at a block no longer on disk} FAILS — there is no name inference, which is what makes the gate non-heuristic. Modifiers wire_extra / wire_missing / wire_case are non-redundancy-checked, so an allowance cannot rot into a lie. Java constants are extracted by parse {no JVM} across the three shapes in this tree: plain-with-javadoc, constructor-arg {reportexport.ExportFormat:12-13}, nested-in-type {WebhookDelivery.java.skeleton:38} — pass_clean binds all three, so a regression in any shape flips it RED. vocab_scan entries cover the L4 surfaces the contract schema cannot express {P2-34: the webhook fork-copy carried a NON-ISOMORPHIC 5-value vocabulary}; matching is word-boundary so SUCCESS does not match inside SUCCEEDED. Birth census found 5 REAL drifts, all fixed contract→code: billing BillingEventType {wire promised 4 values the server cannot emit AND forbade UNHANDLED which it does emit}, payment PaymentState {FAILED reachable from CREATED via PROVIDER_DECLINE but absent from the contract}, report-export ExportJobResponse.format {lower-case on a response that serializes the enum via name()}, scheduled-task ×2 {ACTIVE/PAUSED vs the shipped ENABLED/DISABLED}, tokenized-securities securityType {EQUITY/BOND vs the shipped INVESTMENT_CONTRACT}. Zero blocks / zero java bindings / zero vocab_scans each FAIL. Live exits 0.)"
+run_guard "contract_enum_parity/live" 0 \
+    bash "$SCRIPT_DIR/contract_enum_parity_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    # pass_clean also IS the extractor fixture set: it binds one enum of each of
+    # the three real shapes, so losing any shape flips it 0→1.
+    run_guard "contract_enum_parity/fixture_pass_clean" 0 \
+        bash "$SCRIPT_DIR/contract_enum_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/contract_enum_parity_guard/pass_clean"
+    # constructor-arg enum loses a constant the contract still promises → BLOCK.
+    run_guard "contract_enum_parity/fixture_fail_drift" 1 \
+        bash "$SCRIPT_DIR/contract_enum_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/contract_enum_parity_guard/fail_drift"
+    # an enum: block exists on disk with no manifest entry → BLOCK.
+    run_guard "contract_enum_parity/fixture_fail_unmapped_enum" 1 \
+        bash "$SCRIPT_DIR/contract_enum_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/contract_enum_parity_guard/fail_unmapped_enum"
+    # the skeleton's real drift token SUCCESS restored — fails on BOTH axes
+    # (forbidden token present AND require_all missing SUCCEEDED) → BLOCK.
+    run_guard "contract_enum_parity/fixture_fail_vocab_scan" 1 \
+        bash "$SCRIPT_DIR/contract_enum_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/contract_enum_parity_guard/fail_vocab_scan"
+fi
+
+echo "[93] l2_frontmatter_deps_guard.sh (P3-66 — L2 block frontmatter dependencies: declares a real sibling template that is NOT imported while a DIFFERENT real sibling from the same directory IS. Deliberately narrow necessary-not-sufficient floor: generic UI vocabulary (button/badge) declared without a literal import is legitimate catalog-wide and is NOT flagged. Live scans 113 blocks, exits 0.)"
+run_guard "l2_frontmatter_deps/live" 0 \
+    bash "$SCRIPT_DIR/l2_frontmatter_deps_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "l2_frontmatter_deps/fixture_pass" 0 \
+        bash "$SCRIPT_DIR/l2_frontmatter_deps_guard.sh" --root "$SCRIPT_DIR/fixtures/l2_frontmatter_deps_guard/pass_clean"
+    run_guard "l2_frontmatter_deps/fixture_fail_stale" 1 \
+        bash "$SCRIPT_DIR/l2_frontmatter_deps_guard.sh" --root "$SCRIPT_DIR/fixtures/l2_frontmatter_deps_guard/fail_stale_dependency"
+fi
+
+echo "[94] l4_presentational_view_guard.sh (P2-28 — every (page, view) pair recorded in l4_presentational_view_ledger.yaml must hold on disk: the view exists, imports no data-fetching hook, and page.tsx actually imports it (catches a silent re-inline). The ledger may only GROW — shrinking below min_entries FAILS. Requires python3 + PyYAML. Live checks 4 ledgered pairs, exits 0.)"
+run_guard "l4_presentational_view/live" 0 \
+    bash "$SCRIPT_DIR/l4_presentational_view_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "l4_presentational_view/fixture_pass" 0 \
+        bash "$SCRIPT_DIR/l4_presentational_view_guard.sh" --root "$SCRIPT_DIR/fixtures/l4-presentational-view/pass_clean" --ledger "$SCRIPT_DIR/fixtures/l4-presentational-view/pass_clean/ledger.yaml"
+    run_guard "l4_presentational_view/fixture_fail_reinlined" 1 \
+        bash "$SCRIPT_DIR/l4_presentational_view_guard.sh" --root "$SCRIPT_DIR/fixtures/l4-presentational-view/fail_reinlined" --ledger "$SCRIPT_DIR/fixtures/l4-presentational-view/fail_reinlined/ledger.yaml"
+    run_guard "l4_presentational_view/fixture_fail_hook_in_view" 1 \
+        bash "$SCRIPT_DIR/l4_presentational_view_guard.sh" --root "$SCRIPT_DIR/fixtures/l4-presentational-view/fail_hook_in_view" --ledger "$SCRIPT_DIR/fixtures/l4-presentational-view/fail_hook_in_view/ledger.yaml"
+    run_guard "l4_presentational_view/fixture_fail_shrunk_ledger" 1 \
+        bash "$SCRIPT_DIR/l4_presentational_view_guard.sh" --root "$SCRIPT_DIR/fixtures/l4-presentational-view/fail_shrunk_ledger" --ledger "$SCRIPT_DIR/fixtures/l4-presentational-view/fail_shrunk_ledger/ledger.yaml"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

@@ -202,14 +202,14 @@ outbound to ITSM systems).
 | `app/providers.tsx` | `QueryClientProvider` (TanStack v5, staleTime 15s) |
 | `app/(admin)/layout.tsx` | Route-group layout: AppShell + Sidebar (Endpoints / Deliveries) |
 | `app/(admin)/webhooks/page.tsx` | **Endpoints list** — admin-gated register + delete + **one-time signing-secret reveal panel** |
-| `app/(admin)/webhooks/deliveries/page.tsx` | **Delivery monitor** — status filter, 10s background poll, replay for FAILED / DEAD_LETTER rows |
+| `app/(admin)/webhooks/deliveries/page.tsx` | **Delivery monitor** — status filter, 10s background poll, replay for `FAILED_PERMANENT` (dead-letter) rows |
 | `app/use-caller-id.ts` | Shared session hook + `useCallerRole()` for the ROLE_ADMIN gate (R47 rbac-stub-default-fail-closed) |
 | `app/parse-error.ts` | Shared RFC 9457 ProblemDetail unwrap + text/html fallback + Korean PII deny-list |
 | `next.config.ts` | API proxy + security headers |
 
 **One-time signing-secret reveal**: the entire `signingSecret` field exists in client state ONLY inside `SecretRevealPanel`. The list page never re-fetches it (the backend `EndpointResponse` does not carry it). Acknowledging the panel clears the secret from React state. This mirrors the api-key (R40) catalog pattern for plaintext-shown-once credentials.
 
-**Replay UX**: replay buttons render only on `FAILED` / `DEAD_LETTER` rows. `SUCCEEDED` / `PENDING` / `IN_FLIGHT` rows do not show the button — replaying a successful delivery would create a duplicate; replaying an in-flight one is a no-op race. The action calls `POST /api/admin/webhook-deliveries/{id}/replay` and invalidates the list query.
+**Replay UX**: replay buttons render only on `FAILED_PERMANENT` (dead-letter) rows. `SUCCEEDED` / `PENDING` / `PENDING_RETRY` rows do not show the button — replaying a successful delivery would create a duplicate, and a row still in the scheduler's retry chain would be double-sent. The action calls `POST /api/admin/webhook-deliveries/{id}/replay` and invalidates the list query.
 
 R47 catalog invariants preempted in this surface:
 - **hooks-before-conditional-return**: all `useQuery` / `useMutation` / `useState` above the role-gate's conditional return.

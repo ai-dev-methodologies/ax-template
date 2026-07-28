@@ -132,3 +132,38 @@ items:
     fixture_arg: '--catalog=practices'
     anchor: 'prov == "internal_design" and str(item.get("anchors", "")).strip() != "generic_principle_only"'
     neuter: 'False'
+
+  # ── contract_enum_parity/fail_drift: java_enum constant-set comparison ───────
+  # fixture: the constructor-arg enum (WidgetFormat) drops XLSX and gains PDF while
+  #          the contract still promises [CSV, XLSX] → both difference directions
+  #          are non-empty → exit 1.
+  # anchor:  the single condition that turns an undeclared difference into a violation.
+  # neuter:  condition-constant False → drift is never reported → exit 0.
+  - id: contract_enum_parity/fail_drift
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_drift
+    fixture_arg: '--root'
+    anchor: 'undeclared_extra or undeclared_missing'
+    neuter: 'False'
+
+  # ── contract_enum_parity/fail_unmapped_enum: exhaustiveness ─────────────────
+  # fixture: the `label` block's wire_only entry is removed from the manifest, so a
+  #          real enum: block on disk is unclassified → exit 1.
+  # anchor:  the forward-direction exhaustiveness test — the property that makes
+  #          this gate non-heuristic (no name inference, no default classification).
+  # neuter:  condition-constant False → unclassified blocks pass silently → exit 0.
+  - id: contract_enum_parity/fail_unmapped_enum
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_unmapped_enum
+    fixture_arg: '--root'
+    anchor: 'key not in claimed'
+    neuter: 'False'
+
+  # NOTE — contract_enum_parity/fail_vocab_scan is deliberately NOT registered here.
+  # That fixture restores the skeleton's real P2-34 drift token SUCCESS, which trips
+  # BOTH vocab_scan axes at once (forbidden token present AND require_all missing
+  # SUCCEEDED), so no SINGLE allowlisted neuter shape can flip it 1→0 — the
+  # condition-constant shape silences one axis and leaves the other firing. The
+  # double-axis property is the point (per the P2-33 spec), so the fixture keeps it
+  # and its non-vacuity is recorded as an observed manual 1→0 flip in the closure
+  # note instead of being weakened to fit this manifest's vocabulary.

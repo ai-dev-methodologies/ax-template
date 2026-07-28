@@ -57,7 +57,7 @@ if [[ $TOUCHES_PRACTICES -eq 1 ]]; then
 fi
 
 if [[ $TOUCHES_PRACTICES_REACT -eq 1 ]]; then
-    echo "[practices-react] commit touches practices-react/ — running 3 hard gates"
+    echo "[practices-react] commit touches practices-react/ — running 4 hard gates"
 
     # Stage 0 — AGENTS.md + SKILL.md auto-regen + auto-stage for practices-react/.
     if git diff --cached --name-only | grep -qE '^practices-react/rules/.*\.md$'; then

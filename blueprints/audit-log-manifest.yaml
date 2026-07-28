@@ -127,6 +127,18 @@ rbac:
   trace:
     AUDIT-EXPORT-002: export-authz-403
 
+  # BACKLOG P3-56(a) — LIST/GET is any-authenticated by DOCUMENTED policy, not
+  # an oversight. Fork-receivers with a stricter threat model MUST pick one of
+  # the options below instead of silently tightening the reference posture.
+  read_policy:
+    default: any-authenticated
+    rationale: "Reference posture: audit rows store masked actorIp and never expose metadataJson; broad read supports internal transparency. Fork-receivers with stricter threat models MUST pick an option below. (OWASP ASVS V7 — access to audit trails is itself access-controlled.)"
+    options:
+      - id: self-only
+        description: "MEMBER/MANAGER may list/get only rows where actorUserId == caller; ADMIN/AUDITOR unrestricted."
+      - id: auditor-role-only
+        description: "LIST/GET restricted to ROLE_ADMIN / ROLE_AUDITOR (mirrors the EXPORT surface, AuditLogExportController:35-36)."
+
 # ─── AOP wiring ──────────────────────────────────────────────────────────────
 # @Audited annotation is the entry point for triggering audit log recording.
 # Apply @Audited to service methods that perform state-changing operations.

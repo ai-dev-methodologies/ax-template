@@ -170,6 +170,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WebhookDeliveryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -395,6 +397,17 @@ components:
           type: string
 
   responses:
+    BadRequest:
+      description: |
+        Query-parameter binding failed — an unknown `status` token
+        (code `TYPE_MISMATCH`) or an absent required parameter
+        (code `MISSING_PARAMETER`). Emitted by the shared
+        GlobalProblemDetailAdvice, NOT as the servlet /error dispatch's
+        empty 403 (P2-41).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
     Unauthorized:
       description: Missing or invalid JWT
       content:

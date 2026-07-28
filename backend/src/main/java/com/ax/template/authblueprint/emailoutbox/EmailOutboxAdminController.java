@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import com.ax.template.authblueprint.emailoutbox.EmailOutboxDto.OutboxPage;
@@ -42,15 +43,26 @@ public class EmailOutboxAdminController {
         this.service = service;
     }
 
+    /**
+     * P2-35(b) — {@code status} is bound as a raw String, not as the enum. The contract
+     * declares this parameter with {@code default: ALL}, so a client that follows the
+     * contract sends {@code ?status=ALL}; bound directly to {@link EmailOutboxStatus}
+     * that raised MethodArgumentTypeMismatchException and the endpoint answered its own
+     * documented default with a 400. ALL / blank / absent → no filter, matching the
+     * family convention set by {@code NotificationController.parseStatusFilter}. An
+     * unknown token still 400s — via the same shared advice, since
+     * {@link IllegalArgumentException} is deliberately not globally mapped, so the
+     * controller-local handler below owns it.
+     */
     @GetMapping
     public ResponseEntity<OutboxPage> list(
-            @RequestParam(required = false) EmailOutboxStatus status,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         // R60 dogfood F3 closure — return Page metadata so the operator UI
         // sees totalElements / totalPages and paginates with accurate counts
         // instead of inferring queue size from a List length.
-        Page<EmailOutbox> rows = service.adminList(status, page, size);
+        Page<EmailOutbox> rows = service.adminList(parseStatusFilter(status), page, size);
         List<OutboxResponse> items = rows.getContent().stream().map(OutboxResponse::from).toList();
         OutboxPage body = new OutboxPage(items, rows.getNumber(), rows.getSize(),
             rows.getTotalElements(), rows.getTotalPages());
@@ -80,6 +92,34 @@ public class EmailOutboxAdminController {
         service.adminDelete(id);
         // RFC 9110 §9.3.5 idempotent DELETE — 204 even on absent target
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
+    /**
+     * P2-35(b) — accepts PENDING | RETRY | SENT | DLQ | ALL (case-insensitive).
+     * ALL / blank / absent → no filter. Unknown → {@link IllegalArgumentException}
+     * → 400 via {@link #handleBadRequest}. Mirrors
+     * {@code NotificationController.parseStatusFilter}, the family reference.
+     */
+    private EmailOutboxStatus parseStatusFilter(String status) {
+        if (status == null || status.isBlank() || status.equalsIgnoreCase("ALL")) {
+            return null;
+        }
+        return EmailOutboxStatus.valueOf(status.toUpperCase(Locale.ROOT));
+    }
+
+    /**
+     * Owns the 400 for an unknown {@code status} token. The shared
+     * {@code common.GlobalProblemDetailAdvice} deliberately does NOT map
+     * {@link IllegalArgumentException} (it would mask genuine programming bugs), so
+     * this controller-local handler does — same posture as NotificationController.
+     * The offending raw value is NOT echoed (response-amplification defense).
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ProblemDetail> handleBadRequest(IllegalArgumentException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+            "Parameter 'status' must be one of PENDING, RETRY, SENT, DLQ, ALL.");
+        pd.setProperty("code", "EMAIL_OUTBOX_BAD_REQUEST");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
     }
 
     @ExceptionHandler(EmailOutboxNotFoundException.class)

@@ -4,6 +4,7 @@ import {
   RateLimitBannerProvider,
   useRateLimitBanner,
   extractRetryAfterFrom429,
+  parseRetryAfter,
 } from '../../templates/L2/blocks/rate-limit-banner'
 
 // S2.OBSERVABILITY-LIMITS.FE closure (practices-react/rules/rate-limit-must-surface-to-user.md):
@@ -72,7 +73,7 @@ describe('rate-limit-banner — a 429 must reach the user (RFC 6585 §4 / RFC 91
     expect(screen.getByRole('status')).toHaveTextContent('Too many requests — retry in 45s')
   })
 
-  it('a non-429 response never triggers the banner (extractRetryAfterFrom429 short-circuits)', () => {
+  it('a non-429 response never triggers the banner (the harness\'s own 429-only gate blocks notify429 before extractRetryAfterFrom429 would even run)', () => {
     render(
       <RateLimitBannerProvider>
         <Harness res={new Response(null, { status: 200 })} />
@@ -124,5 +125,21 @@ describe('rate-limit-banner — a 429 must reach the user (RFC 6585 §4 / RFC 91
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
 
     expect(screen.queryByRole('status')).toBeNull()
+  })
+})
+
+// P3-62 closure: parseRetryAfter's HTTP-date branch and extractRetryAfterFrom429's
+// own status !== 429 short-circuit were previously untested (only the delta-seconds
+// branch and the component-level tests above, which never invoke
+// extractRetryAfterFrom429 for a non-429 response — see the harness's own gate).
+describe('parseRetryAfter / extractRetryAfterFrom429 — direct unit coverage (RFC 9110 §10.2.3)', () => {
+  it('parses the HTTP-date form of Retry-After relative to a fixed clock', () => {
+    const fixedNow = new Date('Wed, 21 Oct 2026 07:27:00 GMT')
+    const seconds = parseRetryAfter('Wed, 21 Oct 2026 07:28:00 GMT', fixedNow)
+    expect(seconds).toBe(60)
+  })
+
+  it('extractRetryAfterFrom429 returns null for a non-429 response via its own status check, independent of any caller gate', () => {
+    expect(extractRetryAfterFrom429(new Response(null, { status: 200 }))).toBeNull()
   })
 })

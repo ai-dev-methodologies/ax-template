@@ -297,3 +297,33 @@ canaries:
         against hand-built {field, defaultMessage} objects — a shape the BE never emits; it passes by
         shape-tolerance, not by parity. problem-detail-parity.vitest.ts pins the NOT_FOUND body only."
     excluded_from_backlog: true
+
+  - id: CANARY-016
+    canary: true
+    need: "A parity/golden test binding the BE ApprovalRequestStateMachine / ApprovalStepStateMachine
+      ALLOWED transition tables to the FE fallback tables that templates/L0/fork-receiver-kit/authorized-actions.ts
+      mirrors as TS literals. Wave-4 flipped S2.AUTHZ.XB to covered on a server-first allowedActions field,
+      but the FE FALLBACK path (used by older fork-receiver backends) still duplicates both transition
+      tables with nothing pinning them, so a BE transition-table change flips only the BE leg."
+    layer: XB
+    related_cell: S2.AUTHZ.XB
+    absence_proof:
+      command: 'grep -rliE "(allowed.?transition|transition.?table|state.?machine).{0,40}(parity|golden)|(parity|golden).{0,40}(allowed.?transition|transition.?table|state.?machine)" backend/src/test frontend/tests'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-28"
+      false_positive_note: "AuthorizedActionSetParityTest binds the ACTION SET via the production evaluator (which probes canTransition), and authz-action-parity.vitest.ts binds the FE selector — but neither asserts the two ALLOWED maps are the same set of edges, which is the specific duplication this canary targets."
+    excluded_from_backlog: true
+
+  - id: CANARY-017
+    canary: true
+    need: "A step-scoped authorized-action field on the wire: ApprovalStepResponse carrying allowedActions
+      so the FE approve/reject gate can be server-first instead of re-deriving via actionableStepFor.
+      PRD W6b specified it; wave-4 shipped the request-scoped field only."
+    layer: XB
+    related_cell: S2.AUTHZ.XB
+    absence_proof:
+      command: 'grep -rliE "ApprovalStepResponse.{0,80}allowedActions|allowedActions.{0,80}ApprovalStepResponse" backend/src frontend templates'
+      result: "(empty — 0 matches, exit 1)"
+      verified_at: "2026-07-28"
+      false_positive_note: "ApprovalStepResponse is a 7-field record (id, orderIndex, approverUserId, status, actedByUserId, actedAt, comment) with no action-set member — confirmed by reading the file, not only by grep."
+    excluded_from_backlog: true

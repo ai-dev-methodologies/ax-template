@@ -11,7 +11,7 @@ evidence:
     upstream_id: stripe-billing-2026-05
     section: "Webhook events"
     quote: "invoice.payment_succeeded — Invoice paid; renew subscription."
-dependencies: [currency-formatter]
+dependencies: [currency-input]
 imports_from: [L1]
 imports_forbidden: [L4, app/, lib/payment/]
 ---

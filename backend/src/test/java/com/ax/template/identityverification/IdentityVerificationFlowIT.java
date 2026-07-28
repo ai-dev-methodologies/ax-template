@@ -446,6 +446,54 @@ class IdentityVerificationFlowIT {
         assertThat(response).doesNotContain("\"di\"");
     }
 
+    /**
+     * P2-35(a) — the contract declares {@code provider} with {@code default: ALL}, so a
+     * client that FOLLOWS the contract sends {@code ?provider=ALL}. Before the fix that
+     * value reached {@code findAllByProviderName("ALL")}, matched no adapter name, and
+     * the endpoint answered its own documented default with an EMPTY page. Asserts the
+     * sentinel is honoured (unfiltered) and that a real value still filters.
+     */
+    @Test
+    @Tag("IDV-ADMIN-001")
+    @DisplayName("IDV-ADMIN-001 (P2-35a): ?provider=ALL returns the unfiltered page, not an empty one")
+    void adminList_providerAll_returnsUnfilteredPage() throws Exception {
+        String body = buildPassPayload();
+        given().contentType(ContentType.JSON)
+            .header("X-Identity-Signature", "sha256=" + computeHmacSha256(body, PASS_SECRET))
+            .body(body).when().post(PASS_CALLBACK_ENDPOINT).then().statusCode(200);
+
+        String adminToken = obtainToken("idv-admin-all@r54.test", "ADMIN");
+
+        // the contract's own default value must behave as "no filter"
+        given().header("Authorization", "Bearer " + adminToken)
+            .queryParam("provider", "ALL")
+            .when().get(ADMIN_LIST_ENDPOINT)
+            .then().statusCode(200)
+            .body("totalElements", equalTo(1))
+            .body("content[0].providerName", equalTo("pass"));
+
+        // case-insensitive, same as the notification family reference
+        given().header("Authorization", "Bearer " + adminToken)
+            .queryParam("provider", "all")
+            .when().get(ADMIN_LIST_ENDPOINT)
+            .then().statusCode(200)
+            .body("totalElements", equalTo(1));
+
+        // a REAL provider value still filters — 'kcb' has no rows seeded here
+        given().header("Authorization", "Bearer " + adminToken)
+            .queryParam("provider", "kcb")
+            .when().get(ADMIN_LIST_ENDPOINT)
+            .then().statusCode(200)
+            .body("totalElements", equalTo(0));
+
+        // and the real value that DOES have rows still matches
+        given().header("Authorization", "Bearer " + adminToken)
+            .queryParam("provider", "pass")
+            .when().get(ADMIN_LIST_ENDPOINT)
+            .then().statusCode(200)
+            .body("totalElements", equalTo(1));
+    }
+
     // ─── IDV-CONCORDANCE-001 — re-verification ci/di pair inconsistency ───
 
     private List<AuditLog> concordanceAudits() {

@@ -16,7 +16,9 @@ tooling plus one MECE map.
 |---|---|
 | `coverage-map.yaml` | The canonical 107-cell MECE map (frozen per wave). Every cell's `status` is grounded in disk truth by census — never optimistically marked. |
 | `coverage-report.sh` + `lib/coverage_report.py` | Computes the weighted coverage metric, applies **honesty downgrades** (disk truth outranks the yaml's self-report), prints per-tier scores + the top-N uncovered cells, and (with `--write`) regenerates `docs/coverage-map/COVERAGE.md` + appends to `docs/coverage-map/coverage-history.jsonl`. |
-| `coverage_map_guard.sh` + `lib/coverage_map_guard.py` + `fixtures/coverage_map_guard/` | The MECE/schema/disk-truth **guard**: closed-enum axes, exact cardinality (107 scored + masked-with-reason), D/R drift checks against `docs/IMPLEMENTATION-STATUS.md` / `recipes/_MANIFEST.yaml`, path resolution, the honesty floor (`status: covered` with empty `nonvacuity` = FAIL), the weight-tamper guard, and (P2-29) the S3 composition-behavioral nonvacuity bar — see below. |
+| `coverage_map_guard.sh` + `lib/coverage_map_guard.py` + `fixtures/coverage_map_guard/` | The MECE/schema/disk-truth **guard**: closed-enum axes, exact cardinality (107 scored + masked-with-reason), D/R drift checks against `docs/IMPLEMENTATION-STATUS.md` / `recipes/_MANIFEST.yaml`, path resolution, the honesty floor (`status: covered` with empty `nonvacuity` = FAIL), the weight-tamper guard, (P2-29/P3-58) the S3 composition-behavioral nonvacuity bar (incl. the
+fs.existsSync/readFileSync-only rename-bypass content check), and (P3-60) the S1/S2 `.md`-only
+nonvacuity floor — see below. |
 | `canary-gaps.yaml` | ≥6 planted, **verified-absent** needs (each with a stored grep/find absence-proof run at plant time) used by the wave orchestrator to test its own gap-detection reflex — falsifiability, not aspiration. |
 | `fixtures/tampered-map-for-downgrade-test.yaml` | A 4-cell tampered fixture proving `coverage-report.sh`'s honesty-downgrade logic actually fires (not just declared). |
 
@@ -110,7 +112,10 @@ response — reverting the atomic write flips that assertion RED. Any future S3 
 `covered` should point to an equivalent capstone-style test for its own recipe.
 
 **Mechanical enforcement vs. review**: `coverage_map_guard.sh` check 7 enforces criterion (1)
-only — a path-pattern match plus the explicit `*-compose.spec.*` denylist and `.md` exclusion.
+only — a path-pattern match plus the explicit `*-compose.spec.*` denylist, `.md` exclusion,
+and (P3-58) a content check that rejects any file whose only assertions trace back to
+`fs.existsSync`/`fs.readFileSync` regardless of filename (closes the rename-bypass: renaming
+a bare compose-spec off the `-compose.spec.*` convention used to silently re-qualify it).
 Criteria (2)/(3)/(4) are properties of the cited test's *content*, which a schema/path guard
 cannot verify by construction; they remain a human/adversarial-review judgment call recorded in
 the cell's `notes` field, the same posture the engine already takes for every other disk-truth
@@ -122,6 +127,21 @@ subject to downgrade on review — exactly as `S3.saas-subscription`'s
 `practices/consumer-proof/scenarios/S3.saas-subscription/` enforcement-probe (live, RED-able,
 yet only proving guard-blocking on scenario-local fixtures, not multi-domain runtime
 interaction) was rejected in wave-2 despite passing a naive liveness check.
+
+## The S1/S2 `.md`-only nonvacuity floor (P3-60 — prophylactic, stated honestly)
+
+Check 7 (above) bars a `covered` S3 cell from citing only a `.md` sealed-verdict record as
+its nonvacuity proof. S1 (CAPABILITY) and S2 (INVARIANT) never had the equivalent floor —
+check 4 only required a nonvacuity path to *resolve on disk*, so a `.md`-only nonvacuity
+list would silently qualify a S1/S2 cell for `covered` the same way a sealed-verdict `.md`
+briefly qualified 9/11 S3 cells before the P2-29 closure.
+
+**Disk truth, stated honestly**: as of this closure, **0 of the 70 currently-`covered` S1/S2
+cells are `.md`-only** — every one already cites at least one non-`.md` nonvacuity entry
+(a real `*Test.java`/`*IT.java`/`*.vitest.*` path or guard/fixture reference). Check 8
+therefore gates **zero live subjects today**. This is deliberately a *prophylactic* floor,
+not a live-bug closure: it exists so that a future S1/S2 cell cannot regress into the exact
+`.md`-only escape that S3 already had, without waiting for that regression to happen first.
 
 ## How to run
 

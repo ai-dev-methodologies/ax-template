@@ -85,7 +85,7 @@ Each of these returns a new reference even if the values are identical.
 import { useMemo } from 'react'
 
 export default function ClientList({ usernames }: { usernames: string[] }) {
-  const sorted = useMemo(() => [...usernames].sort(), [usernames])
+  const sorted = useMemo(() => usernames.slice().sort(), [usernames])
   // render
 }
 ```

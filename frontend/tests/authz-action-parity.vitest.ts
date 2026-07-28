@@ -8,109 +8,26 @@ import { describe, it, expect } from 'vitest'
 // common/AuthorizedActionSetParityTest.java both read
 // frontend/tests/_fixtures/authorized-actions.golden.json).
 //
-// HONEST SCOPE: the real BE (ApprovalRequestResponse / ApprovalStepResponse) emits NO computed
-// action-set/permissions field — see the golden fixture's _provenance and this lane's final report. The
-// selector below is this FE leg's best-effort reimplementation of the enforced guards (cited by
-// file:line in each comment), exercised against the SAME golden the BE leg (which additionally calls
-// the REAL ApprovalRequestStateMachine / ApprovalStepStateMachine for the lifecycle-transition checks)
-// asserts against. Because there is no BE-emitted contract to import a type from, the request/step
-// shapes below are declared locally rather than shared from templates/L0/fork-receiver-kit.
+// P2-38b + P2-39 changed what this test is worth:
+//   • The BE now EMITS the action set (ApprovalRequestResponse.allowedActions, computed by
+//     ApprovalActionEvaluator from the same ApprovalActionGuards predicates ApprovalService enforces),
+//     so the BE leg no longer reimplements anything — it calls the production evaluator.
+//   • The selector under test is no longer local to this file. It lives at
+//     templates/L0/fork-receiver-kit/authorized-actions.ts and is imported BY THE SHIPPED L4 PAGE too
+//     (templates/L4/approval-workflow/app/(approvals)/[id]/page.tsx). Before P2-39 this test exercised
+//     a copy that shipped to nobody while the page shipped a second, untested copy — a parity test
+//     protecting zero shipped lines. Now a RED here is a RED for the code fork-receivers actually run.
 
 import golden from './_fixtures/authorized-actions.golden.json'
-
-type RequestStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
-type StepStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
-
-interface StepFixture {
-  id: string
-  orderIndex: number
-  approverUserId: string
-  status: StepStatus
-}
-
-interface RequestFixture {
-  requesterUserId: string
-  status: RequestStatus
-  steps: StepFixture[]
-}
-
-// Mirrors backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalRequestStateMachine.java:24-32
-// (the ALLOWED-transition map — private on the BE, so this is a hand-derived copy, NOT a call into the
-// real class; a BE-side change to this map would NOT automatically flip this FE leg red).
-const REQUEST_TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
-  DRAFT: ['SUBMITTED', 'CANCELLED'],
-  SUBMITTED: ['APPROVED', 'REJECTED', 'CANCELLED'],
-  APPROVED: [],
-  REJECTED: [],
-  CANCELLED: [],
-}
-
-// Mirrors ApprovalStepStateMachine.java:23-30 — same caveat as above.
-const STEP_TRANSITIONS: Record<StepStatus, StepStatus[]> = {
-  PENDING: ['APPROVED', 'REJECTED'],
-  APPROVED: [],
-  REJECTED: [],
-}
-
-/**
- * The FE's notion of "which actions to render" for a given (request, callerId). Cites the SAME guard
- * locations as the BE leg's computeBeAuthorizedActions:
- *  - view:            ApprovalRequestRepository.java:39-42 (findVisibleTo)
- *  - submit/cancel:    ApprovalService.java:245-251 (loadOwn) + REQUEST_TRANSITIONS above
- *  - approve/reject:   ApprovalService.java:195-202 (must be SUBMITTED), :209-217 (approver match),
- *                       :219-227 (strict ordering) + STEP_TRANSITIONS above
- */
-function computeAuthorizedActions(request: RequestFixture, callerId: string): string[] {
-  const actions = new Set<string>()
-
-  const isRequester = callerId === request.requesterUserId
-  const isApproverOnSomeStep = request.steps.some((s) => s.approverUserId === callerId)
-  const visible = isRequester || (isApproverOnSomeStep && request.status === 'SUBMITTED')
-  if (visible) actions.add('view')
-
-  if (isRequester) {
-    if (REQUEST_TRANSITIONS[request.status].includes('SUBMITTED')) actions.add('submit')
-    if (REQUEST_TRANSITIONS[request.status].includes('CANCELLED')) actions.add('cancel')
-  }
-
-  if (request.status === 'SUBMITTED') {
-    for (const target of request.steps) {
-      if (target.approverUserId !== callerId) continue
-      const earlierStepsClear = request.steps
-        .filter((s) => s.orderIndex < target.orderIndex)
-        .every((s) => s.status === 'APPROVED')
-      if (!earlierStepsClear) continue
-      if (STEP_TRANSITIONS[target.status].includes('APPROVED')) actions.add('approve')
-      if (STEP_TRANSITIONS[target.status].includes('REJECTED')) actions.add('reject')
-    }
-  }
-
-  return [...actions].sort()
-}
-
-/** Deliberately DROPS the strict-ordering guard (ApprovalService.java:219-227) — used only to prove
- *  that the "second_step_approver_visible_but_out_of_order" golden row has real discriminating power:
- *  a selector that forgets the ordering check renders "approve" where the BE would 409. */
-function computeAuthorizedActionsWithoutOrderingGuard(request: RequestFixture, callerId: string): string[] {
-  const actions = new Set<string>()
-  const isRequester = callerId === request.requesterUserId
-  const isApproverOnSomeStep = request.steps.some((s) => s.approverUserId === callerId)
-  const visible = isRequester || (isApproverOnSomeStep && request.status === 'SUBMITTED')
-  if (visible) actions.add('view')
-  if (isRequester) {
-    if (REQUEST_TRANSITIONS[request.status].includes('SUBMITTED')) actions.add('submit')
-    if (REQUEST_TRANSITIONS[request.status].includes('CANCELLED')) actions.add('cancel')
-  }
-  if (request.status === 'SUBMITTED') {
-    for (const target of request.steps) {
-      if (target.approverUserId !== callerId) continue
-      // NO earlierStepsClear check here — this is the deliberate omission.
-      if (STEP_TRANSITIONS[target.status].includes('APPROVED')) actions.add('approve')
-      if (STEP_TRANSITIONS[target.status].includes('REJECTED')) actions.add('reject')
-    }
-  }
-  return [...actions].sort()
-}
+import {
+  authorizedActions,
+  deriveAuthorizedActions,
+  actionableStepFor,
+  canView,
+  isNextActionableStep,
+  type ApprovalAction,
+  type AuthorizedActionsRequest,
+} from '../../templates/L0/fork-receiver-kit/authorized-actions'
 
 function findRow(label: string) {
   const row = golden.rows.find((r) => r.label === label)
@@ -118,62 +35,130 @@ function findRow(label: string) {
   return row
 }
 
-describe('computeAuthorizedActions — parity with the BE-enforced action set (S2.AUTHZ.XB)', () => {
+/** The golden rows carry no `allowedActions` (they describe the aggregate, not a response),
+ *  so the shared selector exercises its derivation path for them — which is exactly the path
+ *  that must agree with the BE. */
+const asRequest = (row: { request: unknown }) => row.request as AuthorizedActionsRequest
+
+describe('authorizedActions — parity with the BE-enforced action set (S2.AUTHZ.XB)', () => {
   it('matches the golden expectedActions for every row', () => {
     expect(golden.rows.length).toBeGreaterThan(0)
     for (const row of golden.rows) {
-      const actual = computeAuthorizedActions(row.request as RequestFixture, row.callerId)
+      const actual = authorizedActions(asRequest(row), row.callerId)
       expect(actual, `row '${row.label}'`).toEqual([...row.expectedActions].sort())
     }
   })
 
   it('requester on a DRAFT request may view/submit/cancel but not approve/reject', () => {
     const row = findRow('requester_draft_own_request')
-    expect(computeAuthorizedActions(row.request as RequestFixture, row.callerId)).toEqual([
-      'cancel',
-      'submit',
-      'view',
-    ])
+    expect(authorizedActions(asRequest(row), row.callerId)).toEqual(['cancel', 'submit', 'view'])
   })
 
   it('the assigned first-step approver on a SUBMITTED request may approve/reject but not submit/cancel', () => {
     const row = findRow('approver_first_step_pending_submitted')
-    expect(computeAuthorizedActions(row.request as RequestFixture, row.callerId)).toEqual([
-      'approve',
-      'reject',
-      'view',
-    ])
+    expect(authorizedActions(asRequest(row), row.callerId)).toEqual(['approve', 'reject', 'view'])
   })
 
   it('a non-participant caller gets no actions at all, not even view (IDOR-safe deny-by-default)', () => {
     const row = findRow('non_participant_submitted')
-    expect(computeAuthorizedActions(row.request as RequestFixture, row.callerId)).toEqual([])
+    expect(authorizedActions(asRequest(row), row.callerId)).toEqual([])
   })
 
   it('a second-step approver is visible but NOT actionable while the first step is still pending', () => {
     const row = findRow('second_step_approver_visible_but_out_of_order')
-    expect(computeAuthorizedActions(row.request as RequestFixture, row.callerId)).toEqual(['view'])
+    expect(authorizedActions(asRequest(row), row.callerId)).toEqual(['view'])
+    // ... and the page-facing helper agrees: no action panel for them yet.
+    expect(actionableStepFor(asRequest(row), row.callerId)).toBeNull()
   })
 
-  it('an approver who already acted loses even view once the request goes terminal', () => {
-    const row = findRow('approver_loses_visibility_after_request_terminal')
-    expect(computeAuthorizedActions(row.request as RequestFixture, row.callerId)).toEqual([])
+  // ── P3-63: the distinguishing pair ────────────────────────────────────────
+
+  it('an approver who ACTED keeps view once the request goes terminal (P3-63)', () => {
+    const row = findRow('acted_approver_keeps_view_after_terminal')
+    expect(authorizedActions(asRequest(row), row.callerId)).toEqual(['view'])
+    expect(canView(asRequest(row), row.callerId)).toBe(true)
+  })
+
+  it('an assigned-but-UNACTED approver gets nothing after an upstream rejection (P3-63 narrowness)', () => {
+    const row = findRow('unacted_approver_no_view_after_terminal')
+    expect(authorizedActions(asRequest(row), row.callerId)).toEqual([])
+    expect(canView(asRequest(row), row.callerId)).toBe(false)
+  })
+
+  it('a DRAFT is not visible to its named approvers — it has not been sent to the 결재선 yet', () => {
+    const row = findRow('assigned_approver_no_view_on_draft')
+    expect(authorizedActions(asRequest(row), row.callerId)).toEqual([])
   })
 
   it('the requester keeps view-only access after the request resolves', () => {
     const row = findRow('requester_own_request_after_terminal_approval')
-    expect(computeAuthorizedActions(row.request as RequestFixture, row.callerId)).toEqual(['view'])
+    expect(authorizedActions(asRequest(row), row.callerId)).toEqual(['view'])
   })
 })
 
-describe('mutation lock — the ordering-guard omission is caught by the golden, not silently passed', () => {
-  it('a selector without the strict-ordering guard WRONGLY offers approve/reject on the out-of-order row', () => {
+describe('server-first — the BE answer wins over local derivation (P2-38b)', () => {
+  it('uses response.allowedActions verbatim when the backend supplied it', () => {
+    const row = findRow('non_participant_submitted')
+    const withServerAnswer = {
+      ...asRequest(row),
+      // A backend that (hypothetically) granted view would be believed — the client does
+      // not second-guess the only party that can actually enforce the decision.
+      allowedActions: ['view'] as string[],
+    }
+    expect(authorizedActions(withServerAnswer, row.callerId)).toEqual(['view'])
+    // ... while the derivation fallback, given the same aggregate, still says nothing.
+    expect(deriveAuthorizedActions(asRequest(row), row.callerId)).toEqual([])
+  })
+
+  it('ignores unknown action tokens the server might add later', () => {
+    const row = findRow('approver_first_step_pending_submitted')
+    const withUnknown = {
+      ...asRequest(row),
+      allowedActions: ['approve', 'teleport', 'view'] as string[],
+    }
+    expect(authorizedActions(withUnknown, row.callerId)).toEqual(['approve', 'view'])
+  })
+
+  it('falls back to derivation when the field is absent (older fork-receiver backend)', () => {
+    const row = findRow('approver_first_step_pending_submitted')
+    const request = asRequest(row)
+    expect(request.allowedActions).toBeUndefined()
+    expect(authorizedActions(request, row.callerId)).toEqual(
+      deriveAuthorizedActions(request, row.callerId),
+    )
+  })
+})
+
+describe('mutation lock — the ordering guard is load-bearing in the SHIPPED selector', () => {
+  it('the out-of-order row depends on isNextActionableStep, not merely on approver identity', () => {
     const row = findRow('second_step_approver_visible_but_out_of_order')
-    const broken = computeAuthorizedActionsWithoutOrderingGuard(row.request as RequestFixture, row.callerId)
-    // Proves the row has teeth: the naive (guard-less) selector diverges from both the golden and the
-    // guarded selector on exactly the row designed to catch this class of bug.
+    const request = asRequest(row)
+    const target = request.steps.find((s) => s.approverUserId === row.callerId)
+    if (!target) throw new Error('fixture must assign the caller a step')
+
+    // The caller IS the assigned approver of a step on a SUBMITTED request …
+    expect(target.approverUserId).toBe(row.callerId)
+    expect(request.status).toBe('SUBMITTED')
+    // … and the ONLY thing withholding approve/reject is the ordering predicate.
+    expect(isNextActionableStep(request, target)).toBe(false)
+
+    // Proof that this row has teeth: a selector that drops the ordering check offers
+    // approve/reject where the BE answers 409 STEP_OUT_OF_ORDER.
+    const withoutOrderingGuard = (req: AuthorizedActionsRequest, callerId: string) => {
+      const out = new Set<ApprovalAction>()
+      if (canView(req, callerId)) out.add('view')
+      for (const step of req.steps) {
+        if (step.approverUserId !== callerId) continue
+        if (step.status === 'PENDING') {
+          out.add('approve')
+          out.add('reject')
+        }
+      }
+      return [...out].sort()
+    }
+    const broken = withoutOrderingGuard(request, row.callerId)
     expect(broken).toEqual(['approve', 'reject', 'view'])
     expect(broken).not.toEqual([...row.expectedActions].sort())
-    expect(broken).not.toEqual(computeAuthorizedActions(row.request as RequestFixture, row.callerId))
+    expect(broken).not.toEqual(authorizedActions(request, row.callerId))
   })
 })

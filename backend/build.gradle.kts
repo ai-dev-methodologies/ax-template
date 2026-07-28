@@ -704,6 +704,15 @@ tasks.register<Test>("testCommonAdvice") {
     shouldRunAfter("test")
 }
 
+tasks.register<Test>("testAllFilterSentinel") {
+    useJUnitPlatform {
+        includeTags("ALL_FILTER_SENTINEL")
+    }
+    description = "P2-35 — sibling-contract `default: ALL` / undeclared-param family (email-outbox, scheduled-task)"
+    group = "verification"
+    shouldRunAfter("test")
+}
+
 tasks.register<Test>("testCommonPrimitives") {
     useJUnitPlatform {
         includeTags(

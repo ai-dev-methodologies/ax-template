@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -47,9 +48,47 @@ public class ScheduledTaskController {
         this.service = service;
     }
 
+    /**
+     * P2-35(c) — the contract has always declared a {@code status} query parameter on
+     * this operation (scheduled-task-openapi.yaml, operationId listScheduledTasks), but
+     * the handler took NO arguments, so Spring silently discarded it: a client filtering
+     * by status got the unfiltered list back and had no way to tell. Now bound, with the
+     * family's ALL no-filter sentinel (notification-openapi is the reference) and the
+     * shipped ScheduledTaskStatus vocabulary — the contract previously advertised
+     * ACTIVE/PAUSED, which this domain has never had (REGISTERED/ENABLED/DISABLED).
+     */
     @GetMapping
-    public List<ScheduledTaskDto.TaskResponse> list() {
-        return service.listAll().stream().map(ScheduledTaskDto.TaskResponse::from).toList();
+    public List<ScheduledTaskDto.TaskResponse> list(
+            @RequestParam(required = false) String status) {
+        ScheduledTaskStatus filter = parseStatusFilter(status);
+        return service.listAll().stream()
+            .filter(t -> filter == null || t.getStatus() == filter)
+            .map(ScheduledTaskDto.TaskResponse::from)
+            .toList();
+    }
+
+    /**
+     * Accepts REGISTERED | ENABLED | DISABLED | ALL (case-insensitive).
+     * ALL / blank / absent → no filter. Unknown → {@link IllegalArgumentException}
+     * → 400 via {@link #handleBadRequest}.
+     */
+    private ScheduledTaskStatus parseStatusFilter(String status) {
+        if (status == null || status.isBlank() || status.equalsIgnoreCase("ALL")) {
+            return null;
+        }
+        return ScheduledTaskStatus.valueOf(status.toUpperCase(Locale.ROOT));
+    }
+
+    /**
+     * Owns the 400 for an unknown {@code status} token; the shared advice deliberately
+     * does not map {@link IllegalArgumentException}. The raw value is not echoed.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ProblemDetail> handleBadRequest(IllegalArgumentException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+            "Parameter 'status' must be one of REGISTERED, ENABLED, DISABLED, ALL.");
+        pd.setProperty("code", "SCHEDULED_TASK_BAD_REQUEST");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
     }
 
     @GetMapping("/{id}")

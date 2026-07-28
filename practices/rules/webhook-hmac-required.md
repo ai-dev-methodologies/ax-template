@@ -71,6 +71,15 @@ public ResponseEntity<Void> receiveWebhook(
 
 See `templates/backend/integration/WebhookReceiver.java` for the reference implementation.
 
+**Replay dedup marking (BACKLOG P3-56(b) — fork-receiver trap, documented per `blueprints/webhook-manifest.yaml:19`'s exclusion of inbound receivers from the sender-side manifest):**
+
+```yaml
+replay_dedup_marking:
+  current_behavior: "InboundSignatureVerifier.verify() marks firstSeen at signature-verification time (ReplayDedupStore:34); no rollback/unmark path exists."
+  trap: "A fork-receiver that adds downstream processing after verify() will permanently 409 a sender's legitimate retry of the same event_id within the 300s tolerance window whenever that downstream processing fails."
+  required_pattern: "Fork-receivers adding downstream processing MUST either (a) move firstSeen marking to after downstream success, or (b) add an unmark-on-failure compensation. The reference repo keeps mark-at-verify because it has no downstream processing (trap latent by design)."
+```
+
 Reference: [GitHub Docs — Validating webhook deliveries](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries)
 
 Reference: [OWASP ASVS V13.2.6 — Webhook payload verification](https://owasp.org/www-project-application-security-verification-standard/)

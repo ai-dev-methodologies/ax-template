@@ -38,6 +38,70 @@ if [ ! -f "$FE/$CONFIG" ]; then
   echo "lint_own_blocks: FAIL — missing $FE/$CONFIG"
   exit 1
 fi
+
+# ── P3-55 (rev-4) — rule-list completeness check ────────────────────────────
+# $CONFIG must wire every ax/* rule shipped in
+# practices-react/eslint-plugin-ax/rules/, EXCEPT an explicit, reasoned
+# exclusion allowlist below. Without this, a new plugin rule can ship and
+# silently never run against the catalog's own blocks (exactly the FDW1 class
+# this guard exists to close) because nobody remembered to add it to $CONFIG.
+# Independent of node_modules/eslint — this is a text-level diff, checked even
+# when the eslint-install-required lint pass below is skipped.
+#
+# EXCLUDED (must NOT be wired here, for a documented reason):
+#   ax/no-app-local-ui-primitives — per its own rule doc
+#     (practices-react/rules/no-app-local-ui-primitives.md), this rule is
+#     scoped to files under an apps/ segment (flags an app re-implementing a
+#     catalog primitive locally). templates/L0-L4 — what THIS guard lints —
+#     ARE the shared catalog itself, not a consumer of it; applying the rule
+#     here would flag the canonical primitives (Button/Input/Card/...) as if
+#     they were local reimplementations of themselves. Category mismatch,
+#     not a coverage gap.
+EXCLUDED_RULES=("ax/no-app-local-ui-primitives")
+
+RULES_DIR="$ROOT/practices-react/eslint-plugin-ax/rules"
+if [ -d "$RULES_DIR" ]; then
+  catalog_rules=()
+  while IFS= read -r f; do
+    catalog_rules+=("ax/$(basename "$f" .js)")
+  done < <(find "$RULES_DIR" -maxdepth 1 -name '*.js' | sort)
+
+  is_excluded() {
+    local needle="$1"
+    for ex in "${EXCLUDED_RULES[@]:-}"; do
+      [ -n "$ex" ] && [ "$needle" = "$ex" ] && return 0
+    done
+    return 1
+  }
+
+  missing=()
+  for r in "${catalog_rules[@]:-}"; do
+    [ -z "$r" ] && continue
+    is_excluded "$r" && continue
+    grep -qF "'$r'" "$FE/$CONFIG" || missing+=("$r")
+  done
+
+  contradicted=()
+  for ex in "${EXCLUDED_RULES[@]:-}"; do
+    [ -z "$ex" ] && continue
+    grep -qF "'$ex'" "$FE/$CONFIG" && contradicted+=("$ex")
+  done
+
+  if [ "${#missing[@]}" -gt 0 ] || [ "${#contradicted[@]}" -gt 0 ]; then
+    echo "lint_own_blocks: FAIL — $CONFIG rule-list drift vs $RULES_DIR:"
+    for r in "${missing[@]:-}"; do
+      [ -n "$r" ] && echo "  - MISSING (shipped in the plugin, not wired in $CONFIG, not on the exclusion allowlist): $r"
+    done
+    for r in "${contradicted[@]:-}"; do
+      [ -n "$r" ] && echo "  - CONTRADICTION (on the exclusion allowlist but ALSO wired in $CONFIG): $r"
+    done
+    exit 1
+  fi
+  echo "lint_own_blocks: rule-list check PASS — ${#catalog_rules[@]} plugin rule(s), $(( ${#catalog_rules[@]} - ${#EXCLUDED_RULES[@]} )) wired, ${#EXCLUDED_RULES[@]} explicitly excluded"
+else
+  echo "lint_own_blocks: rule-list check SKIP — $RULES_DIR not found"
+fi
+
 if [ ! -d "$FE/node_modules/eslint" ]; then
   echo "lint_own_blocks: SKIP — frontend/node_modules/eslint not installed (run npm ci in frontend/)"
   exit 0

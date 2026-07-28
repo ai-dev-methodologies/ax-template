@@ -389,9 +389,13 @@ components:
 
     BillingEventType:
       type: string
-      enum: [SUBSCRIPTION_CREATED, TRIAL_END, PAYMENT_SUCCEEDED, PAYMENT_FAILED,
-             SUBSCRIPTION_RENEWED, SUBSCRIPTION_CANCELLED, PLAN_CHANGED,
-             WEBHOOK_RECEIVED, ADMIN_OVERRIDE]
+      enum: [TRIAL_END, PAYMENT_SUCCEEDED, PAYMENT_FAILED,
+             SUBSCRIPTION_CANCELLED, SUBSCRIPTION_RENEWED, UNHANDLED]
+      description: |
+        Canonical billing event taxonomy — mirrors the Java BillingEventType
+        (blueprints/billing-manifest.yaml#state_machine, BILLING-STATE-002).
+        UNHANDLED is emitted for a webhook envelope that matched no known
+        transition; a strict client MUST tolerate it.
 
     BillingEventResponse:
       type: object

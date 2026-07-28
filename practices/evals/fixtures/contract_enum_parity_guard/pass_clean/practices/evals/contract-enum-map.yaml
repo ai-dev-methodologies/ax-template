@@ -1,0 +1,36 @@
+# fixture manifest
+contract_enums:
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /paths/~1widgets/get/parameters/0/schema
+    java_enum: com.demo.WidgetStatus
+    wire_extra: [ALL]
+    reason: family no-filter sentinel
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/status
+    java_enum: com.demo.WidgetStatus
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/format
+    java_enum: com.demo.WidgetFormat
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/kind
+    java_enum: com.demo.WidgetHolder.Kind
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/label
+    wire_only: free-form label vocabulary; no java enum backs it
+
+vocab_scans:
+  - kind: vocab_scan
+    file: templates/demo/page.tsx
+    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    require_all: true
+    forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS, FAILED]
+  - kind: vocab_scan
+    file: templates/demo/Delivery.java.skeleton
+    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    require_all: true
+    forbidden: [SUCCESS, IN_FLIGHT, DEAD_LETTER]

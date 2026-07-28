@@ -5,7 +5,10 @@ impactDescription: "If a value can be computed from current props/state, compute
 tags: [rerender, derived-state, useEffect, state, you-might-not-need-an-effect]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-006"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that a value computable from current props/state is computed during render, not stored in state and synced via `useEffect` — the canonical 'You Might Not Need an Effect' anti-pattern that adds an extra render and risks drift bugs."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

@@ -5,7 +5,10 @@ impactDescription: "A combined hook reruns the entire body when any dependency c
 tags: [rerender, useMemo, useEffect, dependencies, optimization]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-010"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that independent pieces of logic combined into one hook are split when their dependencies differ (so each re-runs only on its own dependency change), while genuinely coupled logic stays combined rather than being split into noise."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

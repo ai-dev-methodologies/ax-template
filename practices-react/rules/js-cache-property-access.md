@@ -5,7 +5,10 @@ impactDescription: "Reduces deep property lookups in hot loops when the path is 
 tags: [javascript, loops, optimization, caching]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-JS-004"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks the hot loop for a stable property-access path (e.g. `obj.a.b.c`) re-read on every iteration; confirms it is cached into a local, and that profiling (not speculation) showed the lookup was a real cost."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }

@@ -5,7 +5,10 @@ impactDescription: "useState(expensive()) runs expensive() on every render even 
 tags: [react, hooks, useState, performance, initialization]
 applicable_to: [react, nextjs, vite]
 spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-RERENDER-008"
-verification: { type: review, status: manual }
+verification:
+  type: review
+  status: manual
+  notes: "Reviewer checks that an expensive initializer passed to `useState` is wrapped in a function (`useState(() => expensive())`) rather than called eagerly (`useState(expensive())`), and that the initializer is pure (StrictMode dev double-mounts may invoke it twice)."
 provenance: { pilot: true, pipeline_version: "2026-05-16", pipeline_steps: [phaseA_multi_source, phaseB_audit_4check, phaseC_codex_consensus] }
 audit:
   accuracy: { status: verified, last_verified: "2026-05-16" }
@@ -55,7 +58,7 @@ function UserProfile() {
 ```tsx
 function FilteredList({ items }: { items: Item[] }) {
   const [index, setIndex] = useState(() => buildSearchIndex(items))
-  // ...
+  return <SearchResults index={index} onRebuild={() => setIndex(buildSearchIndex(items))} />
 }
 
 function UserProfile() {
@@ -63,7 +66,7 @@ function UserProfile() {
     const stored = localStorage.getItem('settings')
     return stored ? JSON.parse(stored) : {}
   })
-  // ...
+  return <SettingsPanel value={settings} />
 }
 ```
 

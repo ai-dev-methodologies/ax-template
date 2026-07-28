@@ -118,6 +118,51 @@ removals as I1 / I2 / I5 violations.
 
 ---
 
+## FE render-testability convention: extract the render layer into a `*-view.tsx`
+
+BACKLOG P2-28 — an L4 `page.tsx` that fetches data (`useQuery`/`useSWR`) and renders it inline is
+**untestable-as-shipped**: a vitest that imports it directly from outside `frontend/` (the only way
+to unit-render a `templates/L4/...` file without a shared-config `resolve.alias`) hits a hard
+dependency-resolution boundary — the `@tanstack/react-query` (or `swr`) bare specifier does not
+resolve for a module living outside the `frontend/` project root (the same documented class of gap
+as `cmdk` in `frontend/tests/L2/search-palette-hydration.spec.ts`; see
+`frontend/tests/audit-log-redaction-render.vitest.tsx` for the reference reproduction/fix note).
+
+**Convention**: a data-rendering `page.tsx` extracts its resolved-data render layer into a
+co-located, pure `<domain>-<surface>-view.tsx`:
+
+- **Props-only** — a plain `function XxxView({ data, ...callbacks }) { return <JSX/> }`. No
+  `useQuery`/`useSWR`/`useMutation`/`useQueryClient` inside the view; the page owns all
+  data-fetching/mutation state and passes the *resolved* value (and any mutation triggers, as
+  callback props) in.
+- **No `@ax/blocks` / data-fetching-package bare specifiers.** Importing a `templates/L1/**` or
+  `templates/L2/blocks/**` component IS fine as long as that component itself has zero external-npm
+  imports (verify with `grep '^import' <file>` — React-only is safe; a package like
+  `@tanstack/react-query` is not, for the reason above).
+- Loading / error / not-found / role-gate branches **stay in `page.tsx`** — only the happy-path,
+  resolved-data render moves to the view (mirrors `(audit-log)/[id]/audit-log-detail-view.tsx`, the
+  original exemplar).
+- **Routing/redirect shells are exempt** — a `page.tsx` with no data-rendering render layer (e.g. a
+  bare `redirect()` call) has nothing to extract; note the exemption inline if it might look
+  overlooked.
+- Confirm-before-destructive-action (`window.confirm(...)`) is an interaction/presentation concern
+  and stays IN the view; only the post-confirmation trigger crosses back out as a callback prop.
+
+**Enforcement**: [`practices/evals/l4_presentational_view_guard.sh`](../../practices/evals/l4_presentational_view_guard.sh)
+checks every pair recorded in
+[`practices/evals/l4_presentational_view_ledger.yaml`](../../practices/evals/l4_presentational_view_ledger.yaml)
+against disk — the view exists, carries no data-fetching-hook import, and `page.tsx` actually
+imports it (catches a silent re-inline). The ledger is a record of **converted** pairs, not a claim
+that every L4 page is converted — right-sizing this row means exactly the ledgered set (5 exemplar
+verticals were targeted; audit-log + payment + email-outbox + crud are ledgered here, webhook and
+approval-workflow are deferred — see the ledger file's own note on the W1/W7 file-interlock — and
+the remainder (17 verticals) is a separate registered BACKLOG row). The ledger may only grow
+(`min_entries` inside the file is a floor, not a target); see
+[`docs/NEW-DOMAIN-CHECKLIST.md`](../../docs/NEW-DOMAIN-CHECKLIST.md) §7 for the step-by-step for a
+*new* domain's FE page.
+
+---
+
 ## Why this file exists
 
 Before R12 closure the three sources drifted silently. R10 mis-framed the

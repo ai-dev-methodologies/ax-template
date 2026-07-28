@@ -1,0 +1,6 @@
+min_entries: 1
+entries:
+  - domain: widget
+    surface: detail
+    page: "templates/L4/widget/app/page.tsx"
+    view: "templates/L4/widget/app/widget-detail-view.tsx"
