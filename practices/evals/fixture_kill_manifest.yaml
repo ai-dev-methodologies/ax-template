@@ -365,6 +365,62 @@ items:
     anchor: 'canon_set != wire_set'
     neuter: 'False'
 
+  # ── contract_enum_parity/fail_vocab_canonical_stale: P1 round 5 hole closure ─
+  # fixture: the producer (com.demo.DeliveryStatus) AND the contract block it serializes
+  #          both gain DELIVERING — the ordinary way a vocabulary grows, and the reason the
+  #          contract_enum entry stays green — while the two fork-copy templates are left
+  #          untouched. With the canonical vocabulary written INLINE in the manifest (the
+  #          pre-fix schema) the templates were compared to a literal that had gone stale in
+  #          the very same edit, so the guard exited 0; resolved from the producer, both
+  #          surfaces are named. The fixture's map deliberately drops `require_all` so the
+  #          EXACT SET EQUALITY axis fires ALONE — a two-axis fixture cannot be kill-proofed
+  #          (see the fail_vocab_scan note below), and the equality axis is the one the
+  #          canonical binding feeds.
+  # anchor:  the declared-vs-canonical difference test. Shared with fail_added_token's axis
+  #          by design — what differs is WHERE `canonical` comes from, which is the
+  #          fixture's content, not a separate branch.
+  # neuter:  condition-constant False → drift against the resolved vocabulary is never
+  #          reported → exit 0.
+  - id: contract_enum_parity/fail_vocab_canonical_stale
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_vocab_canonical_stale
+    fixture_arg: '--root'
+    anchor: 'unknown or absent'
+    neuter: 'False'
+
+  # ── contract_enum_parity/fail_vocab_canonical_unbound: the schema itself ────
+  # fixture: a vocab_scan with NO `canonical_from:` — exactly the shape the hole lived in.
+  #          The sibling scan keeps its source, so ZERO_VOCAB_CANONICAL_SOURCE stays quiet
+  #          and the fixture fails on ONE axis → exit 1.
+  # anchor:  the mandatory-source test. Written as two differently-spelled `if`s (the
+  #          violation, then a structural `isinstance` skip) for the same reason the
+  #          `unproduced` branch is: with the mandatory test NEUTERED the entry must degrade
+  #          to "unchecked" rather than crash, so the 1→0 flip is meaningful.
+  # neuter:  condition-constant False → a vocab_scan may omit its source and the vocabulary
+  #          reverts to being nobody's obligation → exit 0.
+  - id: contract_enum_parity/fail_vocab_canonical_unbound
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_vocab_canonical_unbound
+    fixture_arg: '--root'
+    anchor: 'not cf_declared'
+    neuter: 'False'
+
+  # ── contract_enum_parity/fail_vocab_subset_stale: the escape hatch cannot rot ─
+  # fixture: `canonical_subset: {omit: [BOUNCED]}` names a token the resolved source does
+  #          NOT declare. Same discipline as a stale wire_extra/wire_missing: an allowance
+  #          nobody exercises is a standing hole in the shape of a lie → exit 1.
+  # anchor:  the subset non-redundancy test.
+  # neuter:  condition-constant False → a subset allowance may name anything, so `omit:`
+  #          becomes an unverified free-text field and the narrowing it claims is never
+  #          checked against the producer → exit 0 (omitting a non-member is a no-op, so the
+  #          rest of the fixture passes).
+  - id: contract_enum_parity/fail_vocab_subset_stale
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_vocab_subset_stale
+    fixture_arg: '--root'
+    anchor: 'omit and not omit <= source_set'
+    neuter: 'False'
+
   # NOTE — contract_enum_parity/fail_vocab_scan is deliberately NOT registered here.
   # That fixture restores the skeleton's real P2-34 drift token SUCCESS, which trips
   # BOTH vocab_scan axes at once (forbidden token present AND require_all missing

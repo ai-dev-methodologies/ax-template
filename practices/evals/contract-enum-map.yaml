@@ -650,9 +650,24 @@ contract_enums:
 # scheduler, so a manual replay of it would double-send.
 #
 # Every entry carries a MANDATORY `declaration:` block: the guard parses the DECLARED
-# token set out of the file and asserts EXACT SET EQUALITY with `canonical`, so a
-# brand-new UNKNOWN token fails even though no `forbidden:` entry names it. The
+# token set out of the file and asserts EXACT SET EQUALITY with the canonical vocabulary,
+# so a brand-new UNKNOWN token fails even though no `forbidden:` entry names it. The
 # `forbidden:` / `require_all` pair is retained as a secondary whole-file floor.
+#
+# And every entry carries a MANDATORY `canonical_from:` block naming WHERE that canonical
+# vocabulary is resolved from — an inline `canonical:` list is REFUSED (P1 round 5,
+# cross-family review). These four surfaces used to repeat the token set inline, so the
+# vocabulary lived in FOUR independent copies (WebhookDeliveryStatus, the two contract
+# blocks above, and one list per surface) with nothing binding the fourth to the first
+# three: add a constant to the enum AND to both contract blocks — so the contract_enum
+# entries above stay green — and forget the fork-copy templates, which is precisely what
+# an ordinary contributor does, and the guard exited 0 with four templates advertising a
+# vocabulary the API no longer speaks. Two surfaces resolve from the CONTRACT block (the
+# front-end fork copies consume the wire) and two from the java ENUM (the backend skeleton
+# and the README document the producer); §4/§5 already pin those two sources to each other,
+# so a constant added anywhere in the chain now reaches every template. A surface that
+# legitimately renders only PART of the vocabulary declares `canonical_subset: {omit, reason}`
+# — non-redundancy-checked, so the allowance cannot rot into a lie. None does today.
 #
 # Declaration kinds and their honest scope:
 #   ts_union / java_enum_decl  — exhaustive over the whole declaration.
@@ -664,7 +679,10 @@ contract_enums:
 vocab_scans:
   - kind: vocab_scan
     file: templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx
-    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    canonical_from:
+      kind: contract_enum
+      contract: contracts/webhook-openapi.yaml
+      pointer: /components/schemas/WebhookDeliverySummary/properties/status
     declaration:
       kind: ts_union
       name: DeliveryStatus
@@ -672,7 +690,9 @@ vocab_scans:
     forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS, FAILED]
   - kind: vocab_scan
     file: templates/L4/webhook/backend/WebhookDelivery.java.skeleton
-    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    canonical_from:
+      kind: java_enum
+      fqcn: com.ax.template.authblueprint.webhook.WebhookDeliveryStatus
     declaration:
       kind: java_enum_decl
       name: Status
@@ -680,7 +700,10 @@ vocab_scans:
     forbidden: [SUCCESS, IN_FLIGHT, DEAD_LETTER]
   - kind: vocab_scan
     file: templates/L4/webhook/app/providers.tsx
-    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    canonical_from:
+      kind: contract_enum
+      contract: contracts/webhook-openapi.yaml
+      pointer: /paths/~1webhook-deliveries/get/parameters/1/schema
     declaration:
       kind: marker_region
       marker: vocab:delivery-status
@@ -691,7 +714,9 @@ vocab_scans:
     forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS]
   - kind: vocab_scan
     file: templates/L4/webhook/README.md
-    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    canonical_from:
+      kind: java_enum
+      fqcn: com.ax.template.authblueprint.webhook.WebhookDeliveryStatus
     declaration:
       kind: marker_region
       marker: vocab:delivery-status

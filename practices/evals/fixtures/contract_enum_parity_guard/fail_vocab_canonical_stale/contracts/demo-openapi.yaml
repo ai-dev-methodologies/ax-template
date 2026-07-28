@@ -1,0 +1,46 @@
+openapi: 3.0.3
+info: {title: fixture, version: '0.1.0'}
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [OPEN, CLOSED, ALL]
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Widget:
+      type: object
+      properties:
+        deliveryStatus:
+          type: string
+          enum: [PENDING, PENDING_RETRY, DELIVERING, SUCCEEDED, FAILED_PERMANENT]
+        status:
+          type: string
+          enum: [OPEN, CLOSED]
+        format:
+          type: string
+          enum: [CSV, XLSX]
+        kind:
+          type: string
+          enum: [ALPHA, BETA]
+        label:
+          type: string
+          enum: [freeform-a, freeform-b]
+        note:
+          type: string
+          enum: [note-a]
+        channel:
+          type: string
+          enum: [chan-x, chan-y]
+        flavor:
+          type: string
+          enum: [MILD, HOT]
+        origin:
+          type: string
+          enum: [inbound, outbound]

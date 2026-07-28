@@ -164,12 +164,23 @@
 #
 #   kind: vocab_scan      — surfaces the contract_enum schema cannot express (an L4
 #                           fork-copy's TS union, a java skeleton, a README table).
-#                             file:        <path>
-#                             canonical:   [T…]      the legal vocabulary
-#                             declaration: {…}       MANDATORY — how to extract the
+#                             file:          <path>
+#                             canonical_from: {…}    MANDATORY — WHERE the legal vocabulary
+#                                                    is resolved from (see below). An inline
+#                                                    `canonical:` list is REFUSED.
+#                             canonical_subset: {omit: [T…], reason: …}
+#                                                    OPTIONAL — this surface renders only
+#                                                    part of the vocabulary (a filter UI that
+#                                                    omits a terminal state). Non-redundancy-
+#                                                    checked like wire_missing: omitting a
+#                                                    token the source does not declare FAILS,
+#                                                    and omitting ALL of them FAILS.
+#                             declaration:   {…}     MANDATORY — how to extract the
 #                                                    DECLARED token set (see below)
 #                             require_all: true      every canonical token must appear
-#                             forbidden:   [T…]      none of these may appear
+#                             forbidden:   [T…]      none of these may appear (a forbidden
+#                                                    token that IS in the resolved vocabulary
+#                                                    is a contradiction and FAILS)
 #                           Matching for require_all / forbidden is WORD-BOUNDARY token
 #                           grep — `SUCCESS` does not match inside `SUCCEEDED`, `FAILED`
 #                           does not match inside `FAILED_PERMANENT`.
@@ -191,6 +202,35 @@
 #                             marker_region  marker: M — takes ALL-CAPS tokens between
 #                                                       the `M:start` / `M:end` marker
 #                                                       comments. For PROSE surfaces.
+#
+#                           `canonical_from:` is what stops the CANONICAL side from rotting
+#                           (P1 round 5, cross-family review). Every vocab_scan used to carry
+#                           the vocabulary as an INLINE LIST, repeated once per surface — a
+#                           fourth independent copy of a token set the java enum and the two
+#                           contract blocks already spell, and the only one nothing tied to
+#                           the others. The reviewer's reproduction is ordinary contributor
+#                           behaviour, not an attack: add a constant to WebhookDeliveryStatus
+#                           AND to both webhook contract enums (so §5 stays green) and forget
+#                           the four fork-copy templates — the guard exited 0 while every
+#                           template shipped a vocabulary the API no longer speaks. The token
+#                           set is now RESOLVED from the thing that moved:
+#                             kind: java_enum      fqcn: <FQCN>
+#                               The producer. The enum must exist AND be bound to at least one
+#                               contract enum block in this manifest — a fork-copy speaks the
+#                               WIRE vocabulary, so an internal-only enum is not a legal source.
+#                             kind: contract_enum  contract: <path>  pointer: <RFC-6901>
+#                               The block itself (already exhaustively classified by §4, so it
+#                               is in turn pinned to its java enum or its producer).
+#                           Both kinds are DOMAIN-COHERENT-checked the same way a java_enum
+#                           binding is: the source's domain must be spelled by a path segment
+#                           of the scanned file (templates/L4/webhook/… ↔ …authblueprint.webhook),
+#                           so a copy-pasted FQCN cannot silently redirect the surface at a
+#                           same-shaped vocabulary from another domain. Genuine cross-domain
+#                           reuse is allowlisted IN THE GUARD (VOCAB_CROSS_DOMAIN_SOURCES),
+#                           never asserted in the manifest. An empty resolution FAILS.
+#                           RESIDUAL, registered not chased: two enums in the SAME package with
+#                           identical constant sets could still be swapped for each other — the
+#                           same residual §2a carries, and no such pair exists today.
 #
 # HONEST SCOPE — what is exhaustive where:
 #   ts_union / java_enum_decl  → EXHAUSTIVE over the whole declaration. An unknown
@@ -214,11 +254,12 @@
 #
 # NON-VACUITY: zero discovered blocks, zero contract_enum entries, zero vocab_scan
 # entries, zero STRUCTURALLY-exhaustive declaration scans (ts_union /
-# java_enum_decl), zero EXTRACTING wire_source entries, or zero RESOLVED
-# `verified_by` runtime/bytecode bindings all FAIL — the gate cannot be emptied into
-# a silent pass, it cannot be degraded into region-markers-only, the wire_only
-# population cannot be degraded into all-`unproduced`, and the runtime-truth layer
-# cannot be quietly dropped back to source regexes.
+# java_enum_decl), zero EXTRACTING wire_source entries, zero RESOLVED
+# `verified_by` runtime/bytecode bindings, or zero producer-resolved `canonical_from`
+# vocabularies all FAIL — the gate cannot be emptied into a silent pass, it cannot be
+# degraded into region-markers-only, the wire_only population cannot be degraded into
+# all-`unproduced`, the runtime-truth layer cannot be quietly dropped back to source
+# regexes, and the L4 canonical side cannot be degraded back to inline copies.
 #
 # Exit: 0 PASS · 1 violation · 2 usage/parse error.
 #
@@ -1287,7 +1328,72 @@ def decl_marker_region(body, marker):
         return None, f"vocabulary region delimited by `{marker}` contains no ALL-CAPS token"
     return toks, None
 
+# CANONICAL SOURCE (P1 round 5) — the canonical vocabulary is RESOLVED from a producer,
+# never written inline. Four L4 surfaces each repeated the same four tokens in the
+# manifest, so the vocabulary existed in FOUR independent copies (java enum, two contract
+# blocks, four inline lists) and only the first three were mechanically tied together:
+# adding a constant to WebhookDeliveryStatus + both contract blocks and forgetting the
+# fork-copies — the ordinary contributor mistake — left the guard green. `canonical_from:`
+# resolves the token set from the enum / contract block itself, so the templates are
+# compared to the thing that moved.
+VOCAB_SOURCE_KINDS = ('java_enum', 'contract_enum')
+
+# Same discipline as CROSS_DOMAIN_BINDINGS: a vocab_scan whose PATH does not spell its
+# vocabulary's domain must be allowlisted HERE (a reviewed edit to the gate), not asserted
+# in the manifest. Empty today — every L4 surface lives under its own domain directory.
+VOCAB_CROSS_DOMAIN_SOURCES = {}   # (vocab_scan file, domain key): reason
+
+java_bound_fqcns = {e.get('java_enum') for e in entries if 'java_enum' in e}
+
+def path_domain_tokens(rel):
+    """Path segments folded the way contract_domain_key folds a contract stem."""
+    return {re.sub(r'[^a-z0-9]', '', p.lower()) for p in str(rel).split('/')}
+
+def resolve_vocab_source(rel, src):
+    """(set|None, err) — the canonical vocabulary, resolved from an INDEPENDENT producer."""
+    skind = src.get('kind')
+    if skind == 'java_enum':
+        fq = str(src.get('fqcn') or '').strip()
+        if not fq:
+            return None, "canonical_from kind java_enum requires `fqcn:`"
+        if fq not in java_enums:
+            return None, (f"canonical_from java_enum {fq} not found in backend/src/main/java "
+                          f"(renamed/moved/deleted?)")
+        if fq not in java_bound_fqcns:
+            return None, (
+                f"canonical_from java_enum {fq} is bound to NO contract enum block in this "
+                f"manifest — a fork-copy surface speaks the WIRE vocabulary, so its source "
+                f"must be an enum the contract actually serializes; bind {fq} to its block "
+                f"(kind: contract_enum) or point canonical_from at the block directly")
+        toks = set(java_enums[fq])
+        dom = (java_enum_pkgs.get(fq, '') or '').rsplit('.', 1)[-1]
+        label = f"java_enum {fq}"
+    elif skind == 'contract_enum':
+        c, p = src.get('contract'), src.get('pointer')
+        if not c or not p:
+            return None, "canonical_from kind contract_enum requires `contract:` and `pointer:`"
+        if (c, p) not in discovered:
+            return None, (f"canonical_from contract_enum {c}#{p} addresses no enum: block on "
+                          f"disk (the contract moved or was edited; re-point the entry)")
+        toks = set(discovered[(c, p)])
+        dom = contract_domain_key(c)
+        label = f"contract_enum {c}#{p}"
+    else:
+        return None, (f"canonical_from kind {skind!r} is not one of {list(VOCAB_SOURCE_KINDS)}")
+    if not toks:
+        return None, f"canonical_from {label} resolved the EMPTY set — that must never read as no-drift"
+    if dom not in path_domain_tokens(rel) and (rel, dom) not in VOCAB_CROSS_DOMAIN_SOURCES:
+        return None, (
+            f"INCOHERENT canonical_from — {label} belongs to domain {dom!r}, which no path "
+            f"segment of {rel} spells. An FQCN/pointer is otherwise an unchecked assertion: a "
+            f"same-shaped vocabulary from an unrelated domain would be compared instead and "
+            f"this surface's real source could drift unobserved. Point the entry at "
+            f"{dom!r}'s own surface, or — if this really is shared vocabulary — add the "
+            f"({rel}, {dom}) pair to VOCAB_CROSS_DOMAIN_SOURCES in the guard with a reason")
+    return toks, None
+
 structural_scans = 0
+canonical_bound_scans = 0
 for s in scans:
     kind = s.get('kind', 'vocab_scan')
     rel = s.get('file')
@@ -1300,12 +1406,71 @@ for s in scans:
         continue
     body = open(path, encoding='utf-8', errors='ignore').read()
     tokens = set(re.findall(r'[A-Za-z_][A-Za-z0-9_]*', body))
-    canonical = as_list(s.get('canonical'))
     forbidden = as_list(s.get('forbidden'))
-    if not canonical:
-        violations.append(f"vocab_scan {rel}: `canonical` must be a non-empty list")
 
-    # 6a. secondary floor — denylist + presence (whole file)
+    # 6a. the canonical vocabulary is RESOLVED, not declared
+    if 'canonical' in s:
+        violations.append(
+            f"vocab_scan {rel}: inline `canonical:` is REFUSED — the vocabulary must be "
+            f"resolved from its producer via `canonical_from:`; a fourth hand-written copy is "
+            f"exactly what goes stale when the enum and the contract move together")
+        continue
+    cf = s.get('canonical_from')
+    cf_declared = isinstance(cf, dict) and bool(cf)
+    if not cf_declared:
+        violations.append(
+            f"vocab_scan {rel}: MISSING `canonical_from:` — a vocab_scan may not carry its "
+            f"vocabulary as an inline literal (kind: {' | '.join(VOCAB_SOURCE_KINDS)}). An "
+            f"inline list is one more independent copy of a token set the java enum and the "
+            f"contract already spell, and it goes stale exactly when a constant is added "
+            f"upstream and the fork-copies are forgotten — the case this gate exists to catch")
+    # Deliberately a SECOND, differently-spelled `if` rather than an `else`, for the same
+    # reason the `unproduced` branch is written that way: with the mandatory test above
+    # NEUTERED the entry must degrade to "unchecked" rather than crash on a missing block,
+    # which is what makes that fixture's kill-proof flip (exit 1 → 0) meaningful instead of
+    # accidental — and it must not repeat the anchor string, which has to be unique.
+    if not isinstance(cf, dict) or not cf:
+        continue
+    source_set, serr = resolve_vocab_source(rel, cf)
+    if serr:
+        violations.append(f"vocab_scan {rel}: {serr}")
+        continue
+    canonical_bound_scans += 1
+    # A surface may render a SUBSET (a filter UI that omits a terminal state) — but only as
+    # an EXPLICIT, reasoned, non-redundancy-checked declaration, never as silent divergence.
+    omit = set()
+    sub = s.get('canonical_subset')
+    if sub is not None:
+        if not isinstance(sub, dict):
+            violations.append(f"vocab_scan {rel}: canonical_subset must be a mapping "
+                              f"{{omit: [T…], reason: …}}")
+            continue
+        omit = set(as_list(sub.get('omit')))
+        if not omit:
+            violations.append(f"vocab_scan {rel}: canonical_subset requires a non-empty `omit:`")
+            continue
+        if not str(sub.get('reason') or '').strip():
+            violations.append(f"vocab_scan {rel}: canonical_subset requires a `reason:` — an "
+                              f"undocumented narrowing is indistinguishable from drift")
+        if omit and not omit <= source_set:
+            violations.append(
+                f"vocab_scan {rel}: canonical_subset omits {sorted(omit - source_set)}, which "
+                f"the source does NOT declare — a stale allowance cannot rot into a lie; "
+                f"delete it")
+            continue
+        if omit == source_set:
+            violations.append(f"vocab_scan {rel}: canonical_subset omits the ENTIRE vocabulary — "
+                              f"the scan would be vacuous; delete the surface instead")
+            continue
+    canonical = sorted(source_set - omit)
+    contradiction = sorted(set(forbidden) & set(canonical))
+    if contradiction:
+        violations.append(
+            f"vocab_scan {rel}: forbidden {contradiction} are IN the canonical vocabulary "
+            f"resolved from the source — the denylist contradicts the producer; drop them from "
+            f"`forbidden:` (or declare them in canonical_subset if this surface omits them)")
+
+    # 6b. secondary floor — denylist + presence (whole file)
     hits = [t for t in forbidden if t in tokens]
     if hits:
         violations.append(
@@ -1315,9 +1480,11 @@ for s in scans:
         absent = [t for t in canonical if t not in tokens]
         if absent:
             violations.append(
-                f"vocab_scan {rel}: require_all — canonical token(s) missing: {absent}")
+                f"vocab_scan {rel}: require_all — canonical token(s) missing: {absent} "
+                f"(the canonical vocabulary is resolved from the source, so this surface is "
+                f"STALE with respect to a producer that has moved)")
 
-    # 6b. primary gate — EXACT SET EQUALITY over the declared vocabulary
+    # 6c. primary gate — EXACT SET EQUALITY over the declared vocabulary
     decl = s.get('declaration')
     if not isinstance(decl, dict) or not decl:
         violations.append(
@@ -1374,6 +1541,11 @@ if [e for e in entries if 'wire_only' in e] and not runtime_verified:
         "ZERO_RUNTIME_VERIFIED — no wire_source resolves a `verified_by:` runtime/bytecode "
         "binding; every claim would rest on source regexes again, which is the exact defect "
         "class this layer exists to backstop")
+if scans and not canonical_bound_scans:
+    violations.append(
+        "ZERO_VOCAB_CANONICAL_SOURCE — vocab_scan entries exist but NONE resolves a "
+        "`canonical_from:` producer; every L4 vocabulary would rest on a hand-written "
+        "inline copy again, which is the exact defect this binding exists to close")
 if not structural_scans:
     violations.append(
         "ZERO_EXHAUSTIVE_DECL — no vocab_scan resolves a structural declaration "
@@ -1388,7 +1560,8 @@ print(f"[contract_enum_parity] {len(discovered)} enum block(s) across "
       f"[{unproduced_canonical_bound} canonical-vocabulary-bound], "
       f"{runtime_verified} runtime/bytecode-verified); "
       f"{len(scans)} vocab_scan surface(s) ({structural_scans} structurally exhaustive, "
-      f"{len(scans) - structural_scans} region-scoped or unresolved); "
+      f"{len(scans) - structural_scans} region-scoped or unresolved; "
+      f"{canonical_bound_scans} producer-resolved canonical vocabulary); "
       f"{len(java_enums)} java enum(s) indexed")
 
 if violations:
@@ -1402,7 +1575,8 @@ print("PASS — every contract enum block is classified, every bound block match
       "FAIL-CLOSED: a producing construct holding anything but a plain literal ERRORS rather "
       "than being skipped) or carries an absence proof backed by a runtime/bytecode test R25 "
       "runs AND equals the independent canonical vocabulary it mirrors, and every vocab_scan's "
-      "declared token set equals its canonical vocabulary")
+      "declared token set equals the canonical vocabulary RESOLVED from its producer (the java "
+      "enum the contract serializes, or the contract block itself) — never an inline copy")
 PY
 rc=$?
 exit $rc

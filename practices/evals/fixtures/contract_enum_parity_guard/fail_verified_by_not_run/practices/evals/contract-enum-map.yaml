@@ -2,6 +2,10 @@
 contract_enums:
   - kind: contract_enum
     contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/deliveryStatus
+    java_enum: com.demo.DeliveryStatus
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
     pointer: /paths/~1widgets/get/parameters/0/schema
     java_enum: com.demo.WidgetStatus
     wire_extra: [ALL]
@@ -80,7 +84,10 @@ contract_enums:
 vocab_scans:
   - kind: vocab_scan
     file: templates/demo/page.tsx
-    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    canonical_from:
+      kind: contract_enum
+      contract: contracts/demo-openapi.yaml
+      pointer: /components/schemas/Widget/properties/deliveryStatus
     declaration:
       kind: ts_union
       name: S
@@ -88,7 +95,9 @@ vocab_scans:
     forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS, FAILED]
   - kind: vocab_scan
     file: templates/demo/Delivery.java.skeleton
-    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    canonical_from:
+      kind: java_enum
+      fqcn: com.demo.DeliveryStatus
     declaration:
       kind: java_enum_decl
       name: Status

@@ -17,6 +17,9 @@ components:
     Widget:
       type: object
       properties:
+        deliveryStatus:
+          type: string
+          enum: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
         status:
           type: string
           enum: [OPEN, CLOSED]
