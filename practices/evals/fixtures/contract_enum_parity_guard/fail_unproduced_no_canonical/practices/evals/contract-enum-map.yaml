@@ -1,0 +1,87 @@
+# fixture manifest
+contract_enums:
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /paths/~1widgets/get/parameters/0/schema
+    java_enum: com.demo.WidgetStatus
+    wire_extra: [ALL]
+    reason: family no-filter sentinel
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/status
+    java_enum: com.demo.WidgetStatus
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/format
+    java_enum: com.demo.WidgetFormat
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/kind
+    java_enum: com.demo.WidgetHolder.Kind
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/label
+    wire_only: free-form label vocabulary; no java enum backs it
+    wire_source:
+      kind: java_field_literals
+      file: backend/src/main/java/com/demo/WidgetLabels.java
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/note
+    wire_only: inline probe literal; no java enum backs it
+    wire_source:
+      kind: literal_pattern
+      file: backend/src/main/java/com/demo/WidgetNotes.java
+      pattern: 'Map\.of\("note", "([^"]+)"\)'
+      residue_probe: 'Map\.of\(\s*"note"\s*,'
+      producer_scope:
+        kind: method_bodies
+        methods: [note]
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/channel
+    wire_only: SPI-provided channel slugs; fork-receivers register their own
+    wire_source:
+      kind: java_method_returns
+      files: backend/src/main/java/com/demo/*Channel.java
+      method: channelName
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/flavor
+    wire_only: no aggregate in the reference workload; the copy-target skeleton declares it
+    wire_source:
+      kind: java_enum_decl
+      file: templates/demo/Flavors.java.skeleton
+      name: Flavor
+  - kind: contract_enum
+    contract: contracts/demo-openapi.yaml
+    pointer: /components/schemas/Widget/properties/origin
+    wire_only: nothing in this tree produces the block; carried by an absence proof
+    wire_source:
+      kind: unproduced
+      absence_probes:
+        - pattern: '\bWidgetOriginResolver\b'
+          globs: ['backend/src/main/java/**/*.java']
+      verified_by:
+        test: backend/src/test/java/com/demo/WidgetOriginAbsenceProofTest.java
+        tag: DEMO
+        gradle_task: testDemo
+        anchors: ['contracts/demo-openapi.yaml', 'WidgetOriginResolver']
+
+vocab_scans:
+  - kind: vocab_scan
+    file: templates/demo/page.tsx
+    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    declaration:
+      kind: ts_union
+      name: S
+    require_all: true
+    forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS, FAILED]
+  - kind: vocab_scan
+    file: templates/demo/Delivery.java.skeleton
+    canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    declaration:
+      kind: java_enum_decl
+      name: Status
+    require_all: true
+    forbidden: [SUCCESS, IN_FLIGHT, DEAD_LETTER]

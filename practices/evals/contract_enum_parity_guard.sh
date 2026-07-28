@@ -124,8 +124,24 @@
 #                          not one construct, is what must be provable.
 #     unproduced           NOTHING in this tree produces the block (the operation is
 #                          unimplemented / the SPI ships zero implementations). This is
-#                          the ONLY escape from set equality and it is NOT free. It
-#                          requires BOTH:
+#                          the ONLY escape from PRODUCER set equality and it is NOT free.
+#                          ROUND 4 (cross-family review): it used to escape vocabulary
+#                          checking ENTIRELY — the branch proved producer ABSENCE and
+#                          RETURNED, never comparing the contract's own declared tokens to
+#                          anything, so a CONTRACT-ONLY edit (`mock` -> `accidental_typo`;
+#                          a sort vocabulary -> `[accidentalTypo]`) passed with exit 0.
+#                          Absence-of-producer and vocabulary-correctness are TWO SEPARATE
+#                          obligations. It therefore requires ALL THREE:
+#                            canonical_vocabulary: {kind: yaml_list, file, pointer} — an
+#                              INDEPENDENT source that legislates the legal token set (the
+#                              blueprint manifest the contract says it mirrors); the block
+#                              must EQUAL it exactly. `file:` may not be the contract
+#                              itself, and wire_extra / wire_missing are refused here — an
+#                              allowance elsewhere is corroborated by a real producer, but
+#                              on this path there is nothing to corroborate it. If no
+#                              canonical source exists, the contract is advertising a closed
+#                              vocabulary nobody legislates and nobody enforces: DELETE the
+#                              declaration rather than exempt it.
 #                            absence_probes: [{pattern, globs}] — the guard FAILS if any
 #                              probe MATCHES, or if a probe's globs match no file at all
 #                              (a probe over an empty file set proves nothing); and
@@ -803,6 +819,88 @@ def src_unproduced(src):
                           f"(java_enum / an extracting wire_source) instead of exempted")
     return set(), None
 
+CANONICAL_VOCAB_KINDS = ('yaml_list',)
+
+def resolve_pointer(doc, ptr):
+    """RFC-6901 pointer -> (node, err). The inverse of the `esc()` used for discovery."""
+    if ptr is None or str(ptr) == '':
+        return None, "pointer is required (RFC 6901, e.g. /provider/type_allowed)"
+    ptr = str(ptr)
+    if not ptr.startswith('/'):
+        return None, f"pointer {ptr!r} must start with '/' (RFC 6901)"
+    node = doc
+    for raw in ptr.split('/')[1:]:
+        tok = raw.replace('~1', '/').replace('~0', '~')
+        if isinstance(node, dict):
+            if tok not in node:
+                return None, f"pointer {ptr!r} does not resolve — no key {tok!r}"
+            node = node[tok]
+        elif isinstance(node, list):
+            if not tok.isdigit() or int(tok) >= len(node):
+                return None, f"pointer {ptr!r} does not resolve — {tok!r} is not a valid index"
+            node = node[int(tok)]
+        else:
+            return None, f"pointer {ptr!r} does not resolve — {tok!r} indexes a scalar"
+    return node, None
+
+
+def src_canonical_vocabulary(cv, contract_rel):
+    """The INDEPENDENT legal token set an `unproduced` block must EQUAL -> (set, err).
+
+    ROUND 4 (cross-family review) — the hole this closes. `unproduced` proved the ABSENCE
+    of a producer and then RETURNED, without ever comparing the contract's own declared
+    tokens to anything. Absence-of-producer and vocabulary-correctness are two SEPARATE
+    obligations, and only the first was checked: the reviewer edited the callback slug
+    `mock` -> `accidental_typo` and the sortBy vocabulary -> `[accidentalTypo]`, both
+    CONTRACT-ONLY (no code change at all), and the guard exited 0 on both. The published
+    guarantee — that this surface mechanically blocks accidental contract drift — was
+    therefore false for exactly the entries with no producer to corroborate them.
+
+    An `unproduced` entry must now ALSO name where its vocabulary is legislated, and the
+    contract block must equal that set EXACTLY. The source must be INDEPENDENT of the
+    contract file (a block compared to itself proves nothing), which is what makes this a
+    binding rather than one more author assertion.
+    """
+    if not isinstance(cv, dict) or not cv:
+        return None, ("`canonical_vocabulary:` must be a mapping "
+                      "{kind, file, pointer} naming an INDEPENDENT source of the legal "
+                      "token set")
+    ckind = cv.get('kind')
+    if ckind not in CANONICAL_VOCAB_KINDS:
+        return None, (f"canonical_vocabulary kind {ckind!r} is not one of "
+                      f"{list(CANONICAL_VOCAB_KINDS)}")
+    rel = str(cv.get('file') or '')
+    if not rel:
+        return None, "canonical_vocabulary requires `file:`"
+    if os.path.normpath(rel) == os.path.normpath(str(contract_rel)):
+        return None, (f"canonical_vocabulary.file is THE CONTRACT ITSELF ({rel}) — comparing "
+                      f"a block to its own file is vacuous and would restore the round-4 "
+                      f"hole verbatim; name a source the contract MIRRORS (a blueprint "
+                      f"manifest, a spec) so a contract-only edit has something to fail "
+                      f"against")
+    path = os.path.join(repo, rel)
+    if not os.path.isfile(path):
+        return None, f"canonical_vocabulary.file {rel!r} does not exist on disk"
+    try:
+        doc = yaml.safe_load(open(path, encoding='utf-8'))
+    except Exception as ex:
+        return None, f"canonical_vocabulary.file {rel!r} is not parseable YAML: {ex}"
+    ptr = cv.get('pointer')
+    node, err = resolve_pointer(doc, ptr)
+    if err:
+        return None, f"canonical_vocabulary {rel}: {err}"
+    if not isinstance(node, list) or not node:
+        return None, (f"canonical_vocabulary {rel}#{ptr} is not a NON-EMPTY list — an empty "
+                      f"vocabulary would make the comparison vacuous")
+    toks = set()
+    for i, member in enumerate(node):
+        if member is None or isinstance(member, (dict, list)):
+            return None, (f"canonical_vocabulary {rel}#{ptr}[{i}] is not a scalar — the "
+                          f"canonical vocabulary must be a flat list of tokens")
+        toks.add(str(member))
+    return toks, None
+
+
 def check_verified_by(vb):
     """Validate a runtime/bytecode proof binding -> (ok, err).
 
@@ -944,6 +1042,7 @@ def compare_sets(where, wire_set, code_set, e, label):
 
 wire_source_extracted = 0
 wire_source_unproduced = 0
+unproduced_canonical_bound = 0
 runtime_verified = 0
 
 for key in sorted(claimed):
@@ -1001,8 +1100,12 @@ for key in sorted(claimed):
             for mod in ('wire_extra', 'wire_missing'):
                 if mod in e:
                     violations.append(
-                        f"{where}: {mod} is meaningless on an `unproduced` wire_source "
-                        f"(no set is extracted to allow a difference against)")
+                        f"{where}: {mod} is NOT available on an `unproduced` wire_source — the "
+                        f"block must equal its canonical_vocabulary EXACTLY. On every other "
+                        f"kind an allowance is corroborated by a producer that really emits "
+                        f"(or really cannot emit) the token; here there is no producer, so an "
+                        f"allowance would be a pure author assertion on the one path that has "
+                        f"nothing to check it against")
             if not vb_declared:
                 violations.append(
                     f"{where}: `unproduced` requires `verified_by:` — absence_probes are a "
@@ -1011,6 +1114,50 @@ for key in sorted(claimed):
                     f"parameterisation, a @Bean factory) are exactly the ordinary ways the "
                     f"producer would actually appear. Bind the claim to a runtime/bytecode "
                     f"test {{test, tag, gradle_task, anchors}} that R25 runs")
+            # ROUND 4 — the SECOND obligation. Proving nothing produces the block says
+            # nothing about whether the block declares the RIGHT tokens, and the absence
+            # branch used to return without ever asking. A contract-only edit
+            # (`mock` -> `accidental_typo`) therefore passed. The vocabulary must be
+            # legislated somewhere INDEPENDENT of the contract, and the block must equal it.
+            cv = src.get('canonical_vocabulary') if isinstance(src, dict) else None
+            cv_declared = isinstance(cv, dict) and bool(cv)
+            if not cv_declared:
+                violations.append(
+                    f"{where}: `unproduced` requires `canonical_vocabulary:` "
+                    f"{{kind, file, pointer}} — absence_probes and verified_by prove only "
+                    f"that NOTHING PRODUCES this block; they say nothing about whether the "
+                    f"block declares the RIGHT tokens, so without an independent canonical "
+                    f"source the contract's own vocabulary can be edited freely and nothing "
+                    f"notices. If no such source exists, this parameter/field is advertising "
+                    f"a closed vocabulary nobody legislates and nobody enforces — remove it "
+                    f"from the contract instead of exempting it")
+            # Deliberately a SECOND `if` rather than an `else`: with the mandatory test above
+            # NEUTERED the entry must degrade to "unchecked" (the pre-round-4 behaviour)
+            # rather than crash on a missing block — same rationale as the tolerant extractor
+            # lookup below, and what makes that fixture's kill-proof flip (1 → 0) meaningful.
+            if cv_declared:
+                canon_set, cerr = src_canonical_vocabulary(cv, key[0])
+                if cerr:
+                    violations.append(
+                        f"{where}: wire_source (unproduced) canonical_vocabulary — {cerr}")
+                else:
+                    wire_set = set(discovered[key])
+                    if canon_set != wire_set:
+                        violations.append(
+                            f"{where}: CONTRACT VOCABULARY DRIFT vs canonical "
+                            f"{cv.get('file')}#{cv.get('pointer')} — the contract declares "
+                            f"{sorted(wire_set)} but the canonical vocabulary is "
+                            f"{sorted(canon_set)}"
+                            + (f"; contract-only token(s) {sorted(wire_set - canon_set)}"
+                               if wire_set - canon_set else "")
+                            + (f"; canonical token(s) the contract omits "
+                               f"{sorted(canon_set - wire_set)}"
+                               if canon_set - wire_set else "")
+                            + " — an `unproduced` block has no producer to corroborate it, so "
+                              "it must MIRROR its canonical source exactly; fix whichever side "
+                              "is wrong")
+                    else:
+                        unproduced_canonical_bound += 1
             _, err = src_unproduced(src)
             if err:
                 violations.append(f"{where}: wire_source (unproduced) — {err}")
@@ -1237,7 +1384,8 @@ print(f"[contract_enum_parity] {len(discovered)} enum block(s) across "
       f"{len({k[0] for k in discovered})} contract file(s); "
       f"{len([e for e in entries if 'java_enum' in e])} java-bound, "
       f"{len([e for e in entries if 'wire_only' in e])} wire-only "
-      f"({wire_source_extracted} producer-bound, {wire_source_unproduced} absence-proven, "
+      f"({wire_source_extracted} producer-bound, {wire_source_unproduced} absence-proven "
+      f"[{unproduced_canonical_bound} canonical-vocabulary-bound], "
       f"{runtime_verified} runtime/bytecode-verified); "
       f"{len(scans)} vocab_scan surface(s) ({structural_scans} structurally exhaustive, "
       f"{len(scans) - structural_scans} region-scoped or unresolved); "
@@ -1253,7 +1401,8 @@ print("PASS — every contract enum block is classified, every bound block match
       "every wire_only block matches the literal set of its declared producer (extracted "
       "FAIL-CLOSED: a producing construct holding anything but a plain literal ERRORS rather "
       "than being skipped) or carries an absence proof backed by a runtime/bytecode test R25 "
-      "runs, and every vocab_scan's declared token set equals its canonical vocabulary")
+      "runs AND equals the independent canonical vocabulary it mirrors, and every vocab_scan's "
+      "declared token set equals its canonical vocabulary")
 PY
 rc=$?
 exit $rc

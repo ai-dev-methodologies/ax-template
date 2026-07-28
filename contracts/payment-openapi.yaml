@@ -106,13 +106,15 @@ paths:
             maximum: 100
             default: 20
           description: Number of items per page.
-        - in: query
-          name: sortBy
-          schema:
-            type: string
-            enum: [createdAt, updatedAt, amount]
-            default: createdAt
-          description: Field to sort by, descending.
+        # NO `sortBy` parameter. The listing is ordered `createdAt DESC` by the server and
+        # the order is not client-selectable. A `sortBy: [createdAt, updatedAt, amount]`
+        # query parameter was advertised here until a cross-family review found that
+        # NOTHING binds it: PaymentController#list declares only page/size, so a client
+        # sending `sortBy=amount` received createdAt ordering with a 200 and no signal.
+        # An advertised parameter no handler consumes is a promise the server does not
+        # keep, so it was deleted rather than exempted; PaymentContractAbsenceProofTest
+        # asserts against the RUNNING handler mapping that every query parameter this
+        # operation still declares IS bound, so it cannot come back unimplemented.
       responses:
         '200':
           description: Paginated list of caller-owned payments.

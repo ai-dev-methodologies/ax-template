@@ -15,11 +15,19 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.MethodParameter;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.yaml.snakeyaml.Yaml;
 
+import java.io.IOException;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -67,20 +75,33 @@ import java.util.TreeSet;
  * exactly the intent — the block must then be bound to that verifier's
  * {@code providerName()} instead of exempted.
  *
- * <h2>Claim 2 — the advertised {@code sortBy} query parameter is unbound</h2>
- * Contract block: {@code /paths/~1payments/get/parameters/2/schema} declares
- * {@code sortBy: [createdAt, updatedAt, amount]}, but {@code PaymentController#list} binds
- * only {@code page}/{@code size} and hard-codes its sort order, so no producer consumes
- * those tokens. Asserted against the RUNNING handler mapping: every {@code @RequestParam}
- * binding of every mapped controller method is enumerated from the live bean graph, so a
- * {@code sortBy} wired under any spelling — an alias on the annotation, a differently
- * named java parameter, a handler registered from configuration — flips it RED. That is
- * strictly more than the source grep can see, and the grep is retained beside it as a
- * cheap secondary floor.
+ * <h2>Claim 2 — {@code GET /payments} advertises no query parameter it does not bind</h2>
+ * This claim used to be narrower: {@code /paths/~1payments/get/parameters/2/schema}
+ * declared {@code sortBy: [createdAt, updatedAt, amount]} while {@code PaymentController
+ * #list} bound only {@code page}/{@code size} and hard-coded {@code Sort.by(DESC,
+ * "createdAt")}, so the test asserted that ONE name stayed unbound and the parity guard
+ * carried the block as {@code unproduced}.
  *
- * <p>Both claims are absence claims, so the assertions are deliberately phrased to fail
- * with the OFFENDING NAME rather than a bare boolean: when one of them goes red the fix is
- * to bind the contract block to the new producer, not to widen the exemption.
+ * <p>Round 4 of the same review showed that disposal was wrong. An {@code unproduced}
+ * block escaped vocabulary checking entirely, so the parameter's tokens could be edited to
+ * anything with no code change and nothing noticed — it was a closed vocabulary nobody
+ * legislated and nobody enforced, on top of a parameter a client could send and silently
+ * have ignored (200, {@code createdAt} ordering, no signal). The parameter was therefore
+ * DELETED from the contract rather than exempted.
+ *
+ * <p>What is asserted here now is the general invariant that makes the deletion stick, and
+ * it is strictly stronger than the old one: EVERY {@code in: query} parameter the contract
+ * still declares for this operation — read from {@code contracts/payment-openapi.yaml} on
+ * disk, not hard-coded here — MUST be bound by the RUNNING handler. The handler's
+ * {@code @RequestParam} bindings are enumerated from the live {@link
+ * RequestMappingHandlerMapping}, so a parameter wired under any spelling (an alias on the
+ * annotation, a differently named java parameter) counts, and re-adding an advertised but
+ * unimplemented parameter flips it RED regardless of what it is called.
+ *
+ * <p>Both claims fail with the OFFENDING NAME rather than a bare boolean: when claim 1
+ * goes red the fix is to bind the contract block to the new producer rather than widen the
+ * exemption, and when claim 2 goes red the fix is to implement the parameter or delete it
+ * from the contract.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 // R22 ContextCache lever — see BillingFlowIT / RateLimitComplianceTest for the eviction
@@ -95,10 +116,15 @@ class PaymentContractAbsenceProofTest {
         .importPackages("com.ax.template.authblueprint");
 
     /**
-     * The query parameter {@code contracts/payment-openapi.yaml} advertises on
-     * {@code GET /payments} and that nothing in the tree binds.
+     * The contract this test reads its claims out of. Parsing the contract from disk rather
+     * than restating it here is what keeps the assertion honest when the contract changes;
+     * precedent in this tree: {@code RateLimitPingWireVocabularyTest},
+     * {@code PageEnvelopeCatalogSweepTest}.
      */
-    private static final String UNBOUND_QUERY_PARAM = "sortBy";
+    private static final Path CONTRACT = Path.of("..", "contracts", "payment-openapi.yaml");
+
+    /** The runtime path of the operation the contract spells {@code /payments} (servers: /api). */
+    private static final String LIST_PAYMENTS_PATH = "/api/payments";
 
     @Autowired
     PaymentCallbackVerifierRegistry callbackVerifierRegistry;
@@ -143,10 +169,69 @@ class PaymentContractAbsenceProofTest {
     @Test
     @Tag("PAYMENT")
     @Tag("PAYMENT-SORT-ABSENCE-001")
-    void noControllerBindsTheAdvertisedSortByQueryParameter() {
+    void everyAdvertisedListQueryParameterIsBoundByTheRunningHandler() {
+        Set<String> advertised = contractQueryParametersOfListPayments();
+        Set<String> bound = boundQueryParametersOf(LIST_PAYMENTS_PATH, RequestMethod.GET);
+
+        assertThat(advertised)
+            .as("contracts/payment-openapi.yaml must still declare query parameters for "
+                + "GET /payments — an empty set would make the comparison below vacuous")
+            .isNotEmpty();
+        assertThat(bound)
+            .as("the running handler for %s must expose its @RequestParam bindings — an "
+                + "empty set would make the comparison below vacuous", LIST_PAYMENTS_PATH)
+            .isNotEmpty();
+        assertThat(bound)
+            .as("every query parameter contracts/payment-openapi.yaml advertises on "
+                + "GET /payments MUST be bound by the running handler. An advertised "
+                + "parameter nothing consumes is a promise the server does not keep: the "
+                + "client sends it, gets 200, and is silently ignored — which is exactly "
+                + "what the deleted `sortBy` parameter did (PaymentController#list binds "
+                + "page/size and hard-codes Sort.by(DESC, createdAt)). Implement the "
+                + "parameter or delete it from the contract")
+            .containsAll(advertised);
+    }
+
+    /** The `in: query` parameter names the contract declares for GET /payments, from disk. */
+    @SuppressWarnings("unchecked")
+    private static Set<String> contractQueryParametersOfListPayments() {
+        Map<String, Object> doc;
+        try (Reader reader = Files.newBufferedReader(CONTRACT, StandardCharsets.UTF_8)) {
+            doc = new Yaml().load(reader);
+        } catch (IOException ex) {
+            throw new IllegalStateException("cannot read " + CONTRACT.toAbsolutePath(), ex);
+        }
+        Map<String, Object> paths = (Map<String, Object>) doc.get("paths");
+        Map<String, Object> payments = (Map<String, Object>) paths.get("/payments");
+        Map<String, Object> get = (Map<String, Object>) payments.get("get");
+        Object parameters = get.get("parameters");
+        Set<String> names = new TreeSet<>();
+        if (parameters instanceof List<?> list) {
+            for (Object raw : list) {
+                Map<String, Object> parameter = (Map<String, Object>) raw;
+                if ("query".equals(parameter.get("in"))) {
+                    names.add(String.valueOf(parameter.get("name")));
+                }
+            }
+        }
+        return names;
+    }
+
+    /**
+     * The @RequestParam names the RUNNING handler for {@code path} + {@code method} binds.
+     *
+     * <p>Read from the live {@link RequestMappingHandlerMapping} rather than from source, so
+     * an alias on the annotation or a differently named java parameter still counts.
+     */
+    private Set<String> boundQueryParametersOf(String path, RequestMethod method) {
         Set<String> bound = new TreeSet<>();
         for (Map.Entry<RequestMappingInfo, HandlerMethod> entry
                 : handlerMapping.getHandlerMethods().entrySet()) {
+            RequestMappingInfo info = entry.getKey();
+            if (!info.getPatternValues().contains(path)
+                || !info.getMethodsCondition().getMethods().contains(method)) {
+                continue;
+            }
             for (MethodParameter parameter : entry.getValue().getMethodParameters()) {
                 RequestParam annotation = parameter.getParameterAnnotation(RequestParam.class);
                 if (annotation == null) {
@@ -165,18 +250,6 @@ class PaymentContractAbsenceProofTest {
                 }
             }
         }
-
-        assertThat(bound)
-            .as("this sweep must see the real query-parameter surface for its absence claim "
-                + "to mean anything (empty would make the assertion below vacuous)")
-            .isNotEmpty();
-        assertThat(bound)
-            .as("contracts/payment-openapi.yaml advertises a `%s` query parameter on "
-                + "GET /payments whose enum block is classified `unproduced` — nothing in "
-                + "the tree consumes those tokens. A controller binding `%s` makes the "
-                + "block PRODUCED, so it must be bound to that producer's accepted set "
-                + "instead of carrying an absence proof",
-                UNBOUND_QUERY_PARAM, UNBOUND_QUERY_PARAM)
-            .doesNotContain(UNBOUND_QUERY_PARAM);
+        return bound;
     }
 }

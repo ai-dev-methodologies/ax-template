@@ -36,9 +36,21 @@
 #                         bodies), or {kind: file_wide, reason: …} for a producer with no
 #                         brace-delimited method (REFUSED for .java)
 #   unproduced            NOTHING in this tree produces the block. The ONLY escape from
-#                         set equality, and it is checked twice: `absence_probes:
-#                         [{pattern, globs}]` must match ZERO files over a NON-EMPTY file
-#                         set, AND `verified_by:` must bind a runtime/bytecode test.
+#                         PRODUCER set equality, and it is checked three ways:
+#                         `absence_probes: [{pattern, globs}]` must match ZERO files over a
+#                         NON-EMPTY file set; `verified_by:` must bind a runtime/bytecode
+#                         test; and (P0-2 round 4) `canonical_vocabulary: {kind: yaml_list,
+#                         file, pointer}` must name an INDEPENDENT source of the legal token
+#                         set, which the block must EQUAL exactly. The first two prove only
+#                         that nothing PRODUCES the block — the branch used to return right
+#                         there, so a CONTRACT-ONLY edit (`mock` -> `accidental_typo`) was
+#                         invisible. `file:` may not be the contract itself, and
+#                         wire_extra / wire_missing are refused here: elsewhere an allowance
+#                         is corroborated by a real producer, and on this path nothing is.
+#                         No canonical source ⇒ the contract is advertising a closed
+#                         vocabulary nobody legislates and nobody enforces: DELETE the
+#                         declaration instead of exempting it (that is what happened to
+#                         GET /payments' unbound `sortBy` parameter).
 # An extraction that yields the EMPTY set FAILS — a pattern that matches nothing must
 # never read as "no drift".
 #
@@ -439,33 +451,16 @@ contract_enums:
     java_enum: com.ax.template.authblueprint.notification.NotificationStatus
 
   # ── payment ───────────────────────────────────────────────────────────────
-  - kind: contract_enum
-    contract: contracts/payment-openapi.yaml
-    pointer: /paths/~1payments/get/parameters/2/schema
-    wire_only: >-
-      Sort field names (property paths), not a domain vocabulary — AND, as of P0-2's
-      producer census, NOTHING consumes them: PaymentController.list declares only
-      page/size and hard-codes Sort.by(DESC, "createdAt"), so the advertised `sortBy`
-      parameter is UNBOUND (registered as a drift finding). There is therefore no
-      producer to bind; the exemption is carried by an absence proof that self-destructs
-      the moment the parameter is wired up.
-    wire_source:
-      kind: unproduced
-      absence_probes:
-        - pattern: '\bsortBy\b'
-          globs: ['backend/src/main/java/**/*.java']
-      # Runtime truth: the absence is asserted against the RUNNING handler mapping — every
-      # @RequestParam binding of every mapped controller method is enumerated from the live
-      # Spring bean graph, so a `sortBy` wired under any spelling the source grep would miss
-      # (an alias on the annotation, a parameter object, a handler registered from
-      # configuration) still flips it RED.
-      verified_by:
-        test: backend/src/test/java/com/ax/template/authblueprint/payment/PaymentContractAbsenceProofTest.java
-        tag: PAYMENT
-        gradle_task: testPayment
-        anchors:
-          - contracts/payment-openapi.yaml
-          - sortBy
+  # NOTE — there is deliberately NO entry for a `sortBy` query parameter on
+  # GET /payments. P0-2's producer census found it advertised but UNBOUND (PaymentController
+  # .list declares only page/size and hard-codes Sort.by(DESC, "createdAt")) and classified
+  # it `unproduced`. Round 4 of the same review showed why that was the wrong disposal: an
+  # `unproduced` block escaped vocabulary checking entirely, so the parameter's tokens could
+  # be edited to anything and nothing noticed — a closed vocabulary that nobody legislated
+  # and nobody enforced. `unproduced` now requires a canonical_vocabulary, and there is no
+  # canonical source for a sort vocabulary the server does not implement. The parameter was
+  # therefore DELETED from contracts/payment-openapi.yaml. Re-adding it means implementing
+  # it and binding its accepted set to the producer.
   - kind: contract_enum
     contract: contracts/payment-openapi.yaml
     pointer: /paths/~1payments~1callback~1{provider}/post/parameters/0/schema
@@ -485,6 +480,18 @@ contract_enums:
       asserted by the test bound below. The probe is retained as a cheap secondary floor.
     wire_source:
       kind: unproduced
+      # ROUND 4: absence of a producer is NOT the same claim as correctness of the
+      # vocabulary, and this branch used to check only the first — so `mock` could be
+      # edited to `accidental_typo` in the contract alone and the guard exited 0. The
+      # contract's own prose already names the source of truth ("MIRROR of
+      # blueprints/payment-manifest.yaml#provider.type_allowed"); that mirror is now
+      # MECHANICAL in both directions. payment_provider_type_enum_guard.sh reads the same
+      # manifest but only checks provider.type ∈ type_allowed — it never looks at the
+      # contract, so it is not a backstop for this.
+      canonical_vocabulary:
+        kind: yaml_list
+        file: blueprints/payment-manifest.yaml
+        pointer: /provider/type_allowed
       absence_probes:
         - pattern: '(implements|extends|new)\s+PaymentCallbackVerifier\b'
           globs: ['backend/src/main/java/**/*.java']

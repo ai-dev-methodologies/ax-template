@@ -1,0 +1,9 @@
+# fixture blueprint — the INDEPENDENT source that legislates the `origin` vocabulary.
+# The real-tree analogue is blueprints/payment-manifest.yaml#provider.type_allowed, which
+# contracts/payment-openapi.yaml declares itself a MIRROR of. An `unproduced` block has no
+# producer to corroborate it, so this is the only thing a contract-only edit can fail
+# against (P0-2 round 4).
+origin:
+  allowed:
+    - inbound
+    - outbound

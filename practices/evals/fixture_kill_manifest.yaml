@@ -321,6 +321,50 @@ items:
     anchor: 'bool(mapped_methods - set(seen))'
     neuter: 'False'
 
+  # ── contract_enum_parity/fail_unproduced_no_canonical: P0-2 round 4 ─────────
+  # fixture: the `origin` entry is `unproduced` with absence_probes + verified_by and NO
+  #          canonical_vocabulary — the pre-round-4 shape. Both existing obligations are
+  #          fully satisfied; what is missing is the SECOND obligation, which did not
+  #          exist: nothing ever compared the contract's own declared tokens to anything,
+  #          so the reviewer's CONTRACT-ONLY edits (mock -> accidental_typo; a sort
+  #          vocabulary -> [accidentalTypo]) both exited 0. Absence-of-producer and
+  #          vocabulary-correctness are two separate claims → exit 1.
+  #          The blueprint file the entry ought to name IS present in the fixture, so the
+  #          failure is about the missing DECLARATION, not a missing file.
+  # anchor:  the mandatory-canonical test on the absence kind.
+  # neuter:  condition-constant False → the entry declares no canonical source, the
+  #          equality branch is skipped (it is guarded by the same flag), and the
+  #          vocabulary is unchecked exactly as before round 4 → exit 0.
+  - id: contract_enum_parity/fail_unproduced_no_canonical
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_unproduced_no_canonical
+    fixture_arg: '--root'
+    anchor: 'not cv_declared'
+    neuter: 'False'
+
+  # ── contract_enum_parity/fail_unproduced_contract_vocab_drift: round 4 ──────
+  # fixture: a CONTRACT-ONLY token edit — `outbound` -> `accidental_typo` in
+  #          contracts/demo-openapi.yaml and NOTHING else (the java sources, the producers,
+  #          the blueprint and the manifest are byte-identical to pass_clean). This is the
+  #          reviewer's `mock` -> `accidental_typo` on the payment callback slug in
+  #          miniature: the absence proof still holds perfectly, the runtime binding still
+  #          resolves, and only the advertised vocabulary moved — which is precisely the
+  #          thing nothing was looking at. The block must MIRROR its canonical source → exit 1.
+  # anchor:  the exact-equality test against the canonical vocabulary. Deliberately NOT
+  #          routed through compare_sets: on this path there is no producer, so the
+  #          wire_extra / wire_missing allowances that helper implements would be pure
+  #          author assertion. A distinct anchor also pins THIS path rather than sharing a
+  #          neuter with the java_enum and producer drift fixtures.
+  # neuter:  condition-constant False → contract-side drift is never reported, the entry
+  #          counts as canonical-bound, and the guard exits 0 on a vocabulary the canonical
+  #          source contradicts.
+  - id: contract_enum_parity/fail_unproduced_contract_vocab_drift
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_unproduced_contract_vocab_drift
+    fixture_arg: '--root'
+    anchor: 'canon_set != wire_set'
+    neuter: 'False'
+
   # NOTE — contract_enum_parity/fail_vocab_scan is deliberately NOT registered here.
   # That fixture restores the skeleton's real P2-34 drift token SUCCESS, which trips
   # BOTH vocab_scan axes at once (forbidden token present AND require_all missing

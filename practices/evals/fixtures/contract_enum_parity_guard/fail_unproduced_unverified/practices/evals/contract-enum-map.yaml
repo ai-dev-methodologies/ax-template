@@ -64,6 +64,10 @@ contract_enums:
     wire_only: nothing in this tree produces the block; carried by an absence proof
     wire_source:
       kind: unproduced
+      canonical_vocabulary:
+        kind: yaml_list
+        file: blueprints/demo-manifest.yaml
+        pointer: /origin/allowed
       absence_probes:
         - pattern: '\bWidgetOriginResolver\b'
           globs: ['backend/src/main/java/**/*.java']
