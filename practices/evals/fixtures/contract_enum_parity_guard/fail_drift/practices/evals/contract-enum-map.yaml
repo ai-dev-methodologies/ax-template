@@ -25,6 +25,11 @@ contract_enums:
     wire_source:
       kind: java_field_literals
       file: backend/src/main/java/com/demo/WidgetLabels.java
+      verified_by:
+        test: backend/src/test/java/com/demo/WidgetOriginAbsenceProofTest.java
+        tag: DEMO
+        gradle_task: testDemo
+        anchors: ['contracts/demo-openapi.yaml', 'WidgetLabels']
 
 vocab_scans:
   - kind: vocab_scan

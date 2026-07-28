@@ -33,6 +33,7 @@ contract_enums:
       kind: literal_pattern
       file: backend/src/main/java/com/demo/WidgetNotes.java
       pattern: 'Map\.of\("note", "([^"]+)"\)'
+      residue_probe: 'Map\.of\(\s*"note"\s*,'
   - kind: contract_enum
     contract: contracts/demo-openapi.yaml
     pointer: /components/schemas/Widget/properties/channel
@@ -58,6 +59,11 @@ contract_enums:
       absence_probes:
         - pattern: '\bWidgetOriginResolver\b'
           globs: ['backend/src/main/java/**/*.java']
+      verified_by:
+        test: backend/src/test/java/com/demo/WidgetOriginAbsenceProofTest.java
+        tag: DEMO
+        gradle_task: testDemo
+        anchors: ['contracts/demo-openapi.yaml', 'WidgetOriginResolver']
 
 vocab_scans:
   - kind: vocab_scan

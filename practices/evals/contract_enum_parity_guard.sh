@@ -52,6 +52,11 @@
 #                          initializer (`Set.of("KRW","USD")` → {KRW, USD}).
 #                          Without: the value of every `static final String` constant
 #                          declared in the file — exhaustive over the constant block.
+#                          FAIL-CLOSED: the initializer (resp. every constant) must be
+#                          built from plain string literals and collection syntax ONLY.
+#                          A value-bearing identifier (`Set.of("KRW", OTHER)`) ERRORS —
+#                          the guard will not report the literals it recognised as if
+#                          they were the whole set.
 #     java_enum_decl       file: X.java  name: E
 #                          `enum E { A, B }` → {A, B}. For a producer that lives in a
 #                          templates/ skeleton (the fork-receiver's copy target) rather
@@ -61,21 +66,56 @@
 #                          files — the SPI shape (each adapter's providerName()).
 #                          An abstract declaration (`String m();`) has no body and is
 #                          skipped, so the interface never contributes.
+#                          FAIL-CLOSED: EVERY return in a matched body must be a plain
+#                          literal. An adapter that computes its slug ERRORS rather than
+#                          being skipped while the other adapters' slugs are reported as
+#                          the complete set.
 #     literal_pattern      file:|files: <path|glob>  pattern: <regex with ONE group>
+#                          residue_probe: <regex>
 #                          Every capture of the regex across the matched files. The
 #                          escape hatch for a literal produced inline (a probe payload,
 #                          an `equals("json")` chain). Comments are stripped first for
 #                          .java/.ts/.tsx, so a javadoc example cannot fake a producer.
+#                          FAIL-CLOSED (P0-2 round 2): a regex over java source is NOT a
+#                          parser, so `pattern` can silently SKIP a producing expression
+#                          it does not recognise and still return a non-empty set scraped
+#                          from somewhere else in the file — reporting PASS on literals
+#                          that are not the ones on the wire. `residue_probe:` is
+#                          therefore MANDATORY: it names the PRODUCING CONSTRUCT (not the
+#                          literal), and the guard requires
+#                            (a) residue_probe matches the source at least ONCE  — a probe
+#                                that matches nothing is vacuous and FAILS; and
+#                            (b) residue_probe matches ZERO times AFTER every `pattern`
+#                                match is deleted from the source.
+#                          Together those mean EVERY occurrence of the producing construct
+#                          was consumed by a plain-literal capture. The moment one of them
+#                          holds a non-literal expression (a constant, a concatenation, a
+#                          method call) the residue survives and the guard ERRORS with
+#                          "cannot prove the literal set" instead of guessing. Blocking is
+#                          acceptable; silently extracting the wrong literals is not.
 #     unproduced           NOTHING in this tree produces the block (the operation is
 #                          unimplemented / the SPI ships zero implementations). This is
-#                          the ONLY escape from set equality and it is NOT free: it
-#                          requires `absence_probes:` — [{pattern, globs}] — and the
-#                          guard FAILS if any probe MATCHES, or if a probe's globs match
-#                          no file at all (a probe over an empty file set proves
-#                          nothing). The exemption therefore SELF-DESTRUCTS the moment a
-#                          producer appears, forcing a real binding then.
+#                          the ONLY escape from set equality and it is NOT free. It
+#                          requires BOTH:
+#                            absence_probes: [{pattern, globs}] — the guard FAILS if any
+#                              probe MATCHES, or if a probe's globs match no file at all
+#                              (a probe over an empty file set proves nothing); and
+#                            verified_by: {test, tag, gradle_task, anchors} — a RUNTIME or
+#                              BYTECODE proof of the same absence, because a source regex
+#                              cannot see the shapes that actually defeat it (a class that
+#                              implements the SPI alongside another interface, a nested or
+#                              anonymous class, a generic parameterisation, a @Bean factory
+#                              method). The guard checks the named test EXISTS, carries the
+#                              named @Tag, contains every declared `anchors:` substring, and
+#                              that the tag is wired into the named per-domain gradle task —
+#                              so the proof is something R25 actually RUNS, not a citation.
+#                          The exemption therefore SELF-DESTRUCTS the moment a producer
+#                          appears, forcing a real binding then.
 #   An extraction that yields the EMPTY set FAILS: a pattern that matches nothing, or a
 #   symbol/method/glob that resolves to nothing, must never read as "no drift".
+#
+#   verified_by: is ALSO accepted (and validated identically) on an EXTRACTING wire_source,
+#   where it pins the static extraction to a live-HTTP assertion of the same vocabulary.
 #
 #   kind: vocab_scan      — surfaces the contract_enum schema cannot express (an L4
 #                           fork-copy's TS union, a java skeleton, a README table).
@@ -129,9 +169,11 @@
 #
 # NON-VACUITY: zero discovered blocks, zero contract_enum entries, zero vocab_scan
 # entries, zero STRUCTURALLY-exhaustive declaration scans (ts_union /
-# java_enum_decl), or zero EXTRACTING wire_source entries all FAIL — the gate cannot
-# be emptied into a silent pass, it cannot be degraded into region-markers-only, and
-# the wire_only population cannot be degraded into all-`unproduced` either.
+# java_enum_decl), zero EXTRACTING wire_source entries, or zero RESOLVED
+# `verified_by` runtime/bytecode bindings all FAIL — the gate cannot be emptied into
+# a silent pass, it cannot be degraded into region-markers-only, the wire_only
+# population cannot be degraded into all-`unproduced`, and the runtime-truth layer
+# cannot be quietly dropped back to source regexes.
 #
 # Exit: 0 PASS · 1 violation · 2 usage/parse error.
 #
@@ -297,12 +339,44 @@ def resolve_files(spec, single):
         return None, f"{spec!r} matches {len(hits)} files; `file:` must address exactly one"
     return hits, None
 
+# Identifiers an expression may mention and still be a PROVABLE literal set: collection
+# factory syntax only, never a value-bearing name. Anything else means the expression
+# composes its members from something the guard cannot see, so the extraction is refused.
+_STRUCTURAL_IDENTS = {
+    'Set', 'List', 'Map', 'Arrays', 'Collections', 'EnumSet', 'HashSet', 'LinkedHashSet',
+    'TreeSet', 'ArrayList', 'of', 'copyOf', 'asList', 'unmodifiableSet', 'unmodifiableList',
+    'new', 'String', 'java', 'util',
+}
+
+
+def literals_only(expr):
+    """(True, None) if `expr` is built ONLY from string literals + collection syntax.
+
+    The fail-closed core (P0-2 round 2). Every value-extracting kind removes the quoted
+    literals it captured and then asks: is anything VALUE-BEARING left? A surviving
+    identifier means the real member set is partly computed — from a constant, a call, a
+    concatenation — and a regex that reported only the literals it happened to recognise
+    would be reporting the WRONG set as if it were complete.
+    """
+    stripped = re.sub(r'"(?:[^"\\]|\\.)*"', ' ', expr)
+    for ident in re.findall(r'[A-Za-z_$][\w$]*', stripped):
+        if ident not in _STRUCTURAL_IDENTS:
+            return False, ident
+    return True, None
+
+
 def src_java_field_literals(src):
-    """String literals of a named field's initializer, or of every String constant."""
+    """String literals of a named field's initializer, or of every String constant.
+
+    FAIL-CLOSED both ways: the addressed initializer must be literals-only, and in the
+    whole-file form EVERY `static final String` declaration must be a plain literal — a
+    computed one would otherwise be silently dropped from the set.
+    """
     files, err = resolve_files(src.get('file'), True)
     if err:
         return None, err
     body = read_source(files[0])
+    rel = os.path.relpath(files[0], repo)
     symbol = src.get('symbol')
     if symbol:
         m = re.search(r'\b' + re.escape(str(symbol)) + r'\s*=', body)
@@ -312,11 +386,26 @@ def src_java_field_literals(src):
         if j < 0:
             return None, f"initializer of {symbol!r} is unterminated"
         init = body[m.end():j]
+        ok, offender = literals_only(init)
+        if not ok:
+            return None, (f"CANNOT PROVE THE LITERAL SET — the initializer of {symbol!r} in "
+                          f"{rel} mentions {offender!r}, so its members are not all plain "
+                          f"string literals; the extracted set would silently omit whatever "
+                          f"{offender!r} contributes")
         toks = set(re.findall(r'"([^"]*)"', init))
         if not toks:
             return None, f"initializer of {symbol!r} holds no string literal"
         return toks, None
-    toks = set(re.findall(r'static\s+final\s+String\s+\w+\s*=\s*"([^"]*)"\s*;', body))
+    decls = re.findall(r'static\s+final\s+String\s+(\w+)\s*=\s*([^;]*);', body)
+    toks = set()
+    for name, init in decls:
+        ok, offender = literals_only(init)
+        if not ok:
+            return None, (f"CANNOT PROVE THE LITERAL SET — `static final String {name}` in "
+                          f"{rel} is initialised from {offender!r} rather than a plain string "
+                          f"literal, so the constant block is not exhaustively extractable; "
+                          f"address a single collection field with `symbol:` instead")
+        toks |= set(re.findall(r'"([^"]*)"', init))
     if not toks:
         return None, (f"{src.get('file')} declares no `static final String … = \"…\";` "
                       f"constant; declare `symbol:` to address a collection field instead")
@@ -360,7 +449,18 @@ def src_java_method_returns(src):
                     if depth == 0:
                         break
             bodies += 1
-            toks |= set(re.findall(r'\breturn\s+"([^"]*)"\s*;', body[i:j]))
+            region = body[i:j]
+            # FAIL-CLOSED: every return in the body must be a plain literal. An adapter
+            # that computes its slug (`return SLUG;`, `return prefix + "pg";`) is not
+            # statically provable, and skipping it would report the OTHER adapters' slugs
+            # as if they were the complete set.
+            for expr in re.findall(r'\breturn\s+([^;]*);', region):
+                if not re.fullmatch(r'\s*"(?:[^"\\]|\\.)*"\s*', expr):
+                    return None, (f"CANNOT PROVE THE LITERAL SET — `{method}()` in "
+                                  f"{os.path.relpath(f, repo)} returns `{expr.strip()}`, which "
+                                  f"is not a plain string literal; the extracted set would "
+                                  f"silently omit whatever it evaluates to")
+            toks |= set(re.findall(r'\breturn\s+"([^"]*)"\s*;', region))
     if bodies == 0:
         return None, (f"no `{method}()` body in the {len(files)} matched file(s) — an "
                       f"abstract declaration alone produces nothing")
@@ -369,6 +469,16 @@ def src_java_method_returns(src):
     return toks, None
 
 def src_literal_pattern(src):
+    """One-capture regex over the producer file(s), FAIL-CLOSED via `residue_probe`.
+
+    A regex is not a parser: `pattern` can silently skip a producing expression it does
+    not recognise while still scraping a non-empty set from elsewhere in the file, and
+    the guard would report PASS on literals nothing puts on the wire. `residue_probe`
+    names the PRODUCING CONSTRUCT; the guard requires it to match at least once in the
+    source (else the probe is vacuous) and ZERO times once every `pattern` match is
+    deleted — i.e. every occurrence of the construct was consumed by a plain-literal
+    capture. Anything else ERRORS ("cannot prove the literal set") instead of guessing.
+    """
     files, err = resolve_files(src.get('files') or src.get('file'), 'files' not in src)
     if err:
         return None, err
@@ -381,9 +491,38 @@ def src_literal_pattern(src):
         return None, f"pattern is not a valid regex: {ex}"
     if rx.groups != 1:
         return None, f"pattern must have EXACTLY one capture group (has {rx.groups})"
+    probe = src.get('residue_probe')
+    if not probe:
+        return None, ("literal_pattern requires `residue_probe:` — a regex matching the "
+                      "PRODUCING CONSTRUCT (not the literal). Without it a `pattern:` that "
+                      "silently skips a non-literal producer still returns literals scraped "
+                      "from elsewhere in the file, and the guard reports PASS on a vocabulary "
+                      "nothing emits")
+    try:
+        prx = re.compile(str(probe))
+    except re.error as ex:
+        return None, f"residue_probe is not a valid regex: {ex}"
     toks = set()
+    pre_hits = 0
+    residue_hits = []
     for f in files:
-        toks |= set(rx.findall(read_source(f)))
+        body = read_source(f)
+        toks |= set(rx.findall(body))
+        pre_hits += len(prx.findall(body))
+        residue = rx.sub('', body)
+        for m in prx.finditer(residue):
+            line = residue.count('\n', 0, m.start()) + 1
+            residue_hits.append(f"{os.path.relpath(f, repo)}:~{line} {m.group(0)!r}")
+    if pre_hits == 0:
+        return None, (f"residue_probe {probe!r} matches NOTHING in the {len(files)} matched "
+                      f"file(s) — a probe that never fires cannot prove the pattern consumed "
+                      f"every producer; point it at the producing construct")
+    if len(residue_hits) > 0:
+        return None, (f"CANNOT PROVE THE LITERAL SET — residue_probe {probe!r} still matches "
+                      f"{residue_hits[:4]} after removing every `pattern` capture: that "
+                      f"occurrence of the producing construct does NOT hold a plain string "
+                      f"literal, so the extracted set is not the set on the wire. Make the "
+                      f"producer a plain literal, or bind this block to a java_enum")
     if not toks:
         return None, (f"pattern {pat!r} matched nothing in the {len(files)} matched "
                       f"file(s) — an unmatched pattern proves no producer")
@@ -425,6 +564,69 @@ def src_unproduced(src):
                           f"producer now exists, so this block must be bound to it "
                           f"(java_enum / an extracting wire_source) instead of exempted")
     return set(), None
+
+def check_verified_by(vb):
+    """Validate a runtime/bytecode proof binding -> (ok, err).
+
+    Static source scanning cannot see the shapes that actually defeat it — a class that
+    implements an SPI alongside another interface, a nested or anonymous class, a generic
+    parameterisation, a @Bean factory method, a value produced by composition rather than
+    by a literal. `verified_by:` binds the claim to a test that observes the RUNNING
+    system (live HTTP / the Spring bean graph) or its BYTECODE (ArchUnit), and this
+    checker makes that binding load-bearing rather than decorative:
+
+      test:         the file must exist on disk;
+      tag:          the file must carry `@Tag("<tag>")`;
+      gradle_task:  backend/build.gradle.kts must register a Test task by that name whose
+                    useJUnitPlatform block includes that tag — so R25 actually RUNS it;
+      anchors:      every declared substring must appear in the test, so the binding
+                    cannot point at an unrelated test that happens to share the tag.
+    """
+    if not isinstance(vb, dict) or not vb:
+        return False, ("`verified_by:` must be a mapping {test, tag, gradle_task, anchors} "
+                       "— a runtime/bytecode proof of the same claim")
+    test = vb.get('test')
+    tag = vb.get('tag')
+    task = vb.get('gradle_task')
+    anchors = vb.get('anchors')
+    for field, val in (('test', test), ('tag', tag), ('gradle_task', task)):
+        if not str(val or '').strip():
+            return False, f"`verified_by.{field}:` is required and must be non-empty"
+    if not isinstance(anchors, list) or not anchors:
+        return False, ("`verified_by.anchors:` must be a non-empty list of substrings the "
+                       "test must contain (the contract path it reads, the SPI it probes) "
+                       "— without it the binding could name any test carrying the tag")
+    tpath = os.path.join(repo, str(test))
+    if not os.path.isfile(tpath):
+        return False, f"verified_by.test {test!r} does not exist on disk"
+    tbody = open(tpath, encoding='utf-8', errors='ignore').read()
+    if f'@Tag("{tag}")' not in tbody:
+        return False, (f"verified_by.test {test!r} does not carry `@Tag(\"{tag}\")` — the "
+                       f"named per-domain task would not run it")
+    for a in anchors:
+        if str(a) not in tbody:
+            return False, (f"verified_by.anchors: {a!r} does not appear in {test!r} — the "
+                           f"binding names a test that does not reference this surface")
+    gradle = os.path.join(repo, 'backend', 'build.gradle.kts')
+    if not os.path.isfile(gradle):
+        return False, ("backend/build.gradle.kts not found — the gradle_task binding cannot "
+                       "be verified, so the proof is not known to run")
+    gbody = open(gradle, encoding='utf-8', errors='ignore').read()
+    registered = re.search(r'tasks\.register<Test>\(\s*"' + re.escape(str(task)) + r'"\s*\)', gbody)
+    if not registered:
+        return False, (f"backend/build.gradle.kts registers no `tasks.register<Test>"
+                       f"(\"{task}\")` — the proof is not wired into a per-domain task")
+    # The `else gbody` fallback is unreachable in normal operation (the test above already
+    # returned). It exists so that a build with that test NEUTERED degrades to "unchecked"
+    # rather than crashing, which is what makes the kill-proof flip (exit 1 → 0) meaningful
+    # instead of accidental — same rationale as the tolerant extractor lookup below.
+    window = gbody[registered.end():registered.end() + 600] if registered else gbody
+    inc = re.search(r'includeTags\(([^)]*)\)', window)
+    if not inc or f'"{tag}"' not in inc.group(1):
+        return False, (f"gradle task {task!r} does not includeTags(\"{tag}\") — the tagged "
+                       f"proof would not be selected by the task that is supposed to run it")
+    return True, None
+
 
 WIRE_SOURCE_EXTRACTORS = {
     'java_field_literals': src_java_field_literals,
@@ -504,6 +706,7 @@ def compare_sets(where, wire_set, code_set, e, label):
 
 wire_source_extracted = 0
 wire_source_unproduced = 0
+runtime_verified = 0
 
 for key in sorted(claimed):
     if key not in discovered:
@@ -541,12 +744,35 @@ for key in sorted(claimed):
                     f"literals are produced (kind: {' | '.join(WIRE_SOURCE_KINDS)}); a `wire_only:` "
                     f"reason alone is CLASSIFICATION-ONLY and lets the vocabulary drift freely")
             continue
+        # A runtime/bytecode proof is MANDATORY on `unproduced` (an absence claim has no
+        # producer region a static extractor could be made to fail closed over) and
+        # OPTIONAL — but validated when present — on an extracting kind.
+        # isinstance-guarded for the same reason as the tolerant extractor lookup below:
+        # with the wire_source-kind membership test NEUTERED, `src` may be absent entirely,
+        # and this line must degrade to "unchecked" rather than crash — otherwise that
+        # fixture's kill-proof would flip on a traceback instead of on the logic.
+        vb_declared = isinstance(src, dict) and 'verified_by' in src
+        if vb_declared:
+            ok, err = check_verified_by(src.get('verified_by'))
+            if not ok:
+                violations.append(f"{where}: wire_source ({skind}) verified_by — {err}")
+            else:
+                runtime_verified += 1
+
         if skind == 'unproduced':
             for mod in ('wire_extra', 'wire_missing'):
                 if mod in e:
                     violations.append(
                         f"{where}: {mod} is meaningless on an `unproduced` wire_source "
                         f"(no set is extracted to allow a difference against)")
+            if not vb_declared:
+                violations.append(
+                    f"{where}: `unproduced` requires `verified_by:` — absence_probes are a "
+                    f"SOURCE REGEX, and the shapes that defeat one (an SPI implemented "
+                    f"alongside another interface, a nested/anonymous class, a generic "
+                    f"parameterisation, a @Bean factory) are exactly the ordinary ways the "
+                    f"producer would actually appear. Bind the claim to a runtime/bytecode "
+                    f"test {{test, tag, gradle_task, anchors}} that R25 runs")
             _, err = src_unproduced(src)
             if err:
                 violations.append(f"{where}: wire_source (unproduced) — {err}")
@@ -732,6 +958,11 @@ if [e for e in entries if 'wire_only' in e] and not wire_source_extracted:
         "ZERO_WIRE_SOURCE_EXTRACTION — wire_only entries exist but NONE resolves an "
         "extracting wire_source (all degraded to `unproduced`); the wire_only population "
         "would be exempt from set equality again")
+if [e for e in entries if 'wire_only' in e] and not runtime_verified:
+    violations.append(
+        "ZERO_RUNTIME_VERIFIED — no wire_source resolves a `verified_by:` runtime/bytecode "
+        "binding; every claim would rest on source regexes again, which is the exact defect "
+        "class this layer exists to backstop")
 if not structural_scans:
     violations.append(
         "ZERO_EXHAUSTIVE_DECL — no vocab_scan resolves a structural declaration "
@@ -742,7 +973,8 @@ print(f"[contract_enum_parity] {len(discovered)} enum block(s) across "
       f"{len({k[0] for k in discovered})} contract file(s); "
       f"{len([e for e in entries if 'java_enum' in e])} java-bound, "
       f"{len([e for e in entries if 'wire_only' in e])} wire-only "
-      f"({wire_source_extracted} producer-bound, {wire_source_unproduced} absence-proven); "
+      f"({wire_source_extracted} producer-bound, {wire_source_unproduced} absence-proven, "
+      f"{runtime_verified} runtime/bytecode-verified); "
       f"{len(scans)} vocab_scan surface(s) ({structural_scans} structurally exhaustive, "
       f"{len(scans) - structural_scans} region-scoped or unresolved); "
       f"{len(java_enums)} java enum(s) indexed")
@@ -754,9 +986,10 @@ if violations:
     sys.exit(1)
 
 print("PASS — every contract enum block is classified, every bound block matches its Java enum, "
-      "every wire_only block matches the literal set of its declared producer (or carries a "
-      "verified absence proof), and every vocab_scan's declared token set equals its canonical "
-      "vocabulary")
+      "every wire_only block matches the literal set of its declared producer (extracted "
+      "FAIL-CLOSED: a producing construct holding anything but a plain literal ERRORS rather "
+      "than being skipped) or carries an absence proof backed by a runtime/bytecode test R25 "
+      "runs, and every vocab_scan's declared token set equals its canonical vocabulary")
 PY
 rc=$?
 exit $rc

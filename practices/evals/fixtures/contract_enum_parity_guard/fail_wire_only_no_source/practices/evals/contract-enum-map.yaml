@@ -59,6 +59,11 @@ contract_enums:
       absence_probes:
         - pattern: '\bWidgetOriginResolver\b'
           globs: ['backend/src/main/java/**/*.java']
+      verified_by:
+        test: backend/src/test/java/com/demo/WidgetOriginAbsenceProofTest.java
+        tag: DEMO
+        gradle_task: testDemo
+        anchors: ['contracts/demo-openapi.yaml', 'WidgetOriginResolver']
 
 vocab_scans:
   - kind: vocab_scan

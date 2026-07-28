@@ -206,6 +206,61 @@ items:
     anchor: 'len(probe_hits) > 0'
     neuter: 'False'
 
+  # ── contract_enum_parity/fail_literal_pattern_residue: P0-2 round 2, ESCAPE 1 ─
+  # fixture: WidgetNotes.note() — the method the contract block describes — emits
+  #          `Map.of("note", "note-healthy".toString())`. That is NOT a plain literal, so
+  #          the entry's `pattern:` skips it entirely and captures "note-a" from the
+  #          UNRELATED altNote(); set equality then HELD against a contract the running
+  #          method contradicts. This is the reviewer's ratelimit reproduction in
+  #          miniature ("ok" kept in the sibling probe, "healthy".toString() in the one
+  #          under test). `residue_probe` survives the pattern deletion → exit 1.
+  # anchor:  the residue test — the single condition that turns "the producing construct
+  #          held something other than a literal" into "cannot prove the literal set"
+  #          instead of a silent skip.
+  # neuter:  condition-constant False → residue is ignored, the wrong literals are
+  #          reported as the whole set, and they happen to equal the contract → exit 0.
+  - id: contract_enum_parity/fail_literal_pattern_residue
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_literal_pattern_residue
+    fixture_arg: '--root'
+    anchor: 'len(residue_hits) > 0'
+    neuter: 'False'
+
+  # ── contract_enum_parity/fail_unproduced_unverified: P0-2 round 2, ESCAPE 2 ──
+  # fixture: the `origin` entry claims `unproduced` with source absence_probes ONLY. The
+  #          real-tree analogue is the PaymentCallbackVerifier probe, which the reviewer
+  #          defeated with an entirely ordinary declaration — `implements
+  #          java.io.Serializable, PaymentCallbackVerifier` — because the regex requires
+  #          the interface name immediately after `implements`. Tightening the regex only
+  #          moves the hole (generic, nested, anonymous, @Bean factory), so an absence
+  #          claim must be bound to a runtime/bytecode test → exit 1.
+  #          The sibling `label` entry keeps a resolvable verified_by, so the
+  #          ZERO_RUNTIME_VERIFIED floor stays quiet and the fixture fails on ONE axis.
+  # anchor:  the mandatory-binding test on the absence kind.
+  # neuter:  condition-constant False → the absence claim rests on the source regex again
+  #          (the shape the reviewer defeated) and the entry passes → exit 0.
+  - id: contract_enum_parity/fail_unproduced_unverified
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_unproduced_unverified
+    fixture_arg: '--root'
+    anchor: 'not vb_declared'
+    neuter: 'False'
+
+  # ── contract_enum_parity/fail_verified_by_not_run: the binding must be load-bearing ─
+  # fixture: the `origin` entry declares a verified_by naming `gradle_task: testGhost`,
+  #          which backend/build.gradle.kts does not register — a "runtime proof" that no
+  #          per-domain task selects is a citation, not a gate → exit 1.
+  # anchor:  the task-registration test inside check_verified_by.
+  # neuter:  condition-constant False → the missing task is ignored; the tolerant
+  #          `if registered else gbody` fallback then scans the whole build file, finds
+  #          the tag under some other task, and the binding is accepted → exit 0.
+  - id: contract_enum_parity/fail_verified_by_not_run
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_verified_by_not_run
+    fixture_arg: '--root'
+    anchor: 'not registered'
+    neuter: 'False'
+
   # NOTE — contract_enum_parity/fail_vocab_scan is deliberately NOT registered here.
   # That fixture restores the skeleton's real P2-34 drift token SUCCESS, which trips
   # BOTH vocab_scan axes at once (forbidden token present AND require_all missing

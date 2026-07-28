@@ -21,14 +21,51 @@
 #                         that lives in a templates/ copy-target skeleton
 #   java_method_returns   files: <glob>  method: m      every `return "…";` in m()'s body
 #                         across the glob (the SPI shape; an abstract decl adds nothing)
-#   literal_pattern       file:|files:  pattern: <regex with ONE group>   inline literals;
-#                         comments are stripped first for .java/.ts/.tsx
+#   literal_pattern       file:|files:  pattern: <regex with ONE group>
+#                         residue_probe: <regex>   inline literals; comments are stripped
+#                         first for .java/.ts/.tsx
 #   unproduced            NOTHING in this tree produces the block. The ONLY escape from
-#                         set equality, and it is checked: `absence_probes: [{pattern,
-#                         globs}]` must match ZERO files over a NON-EMPTY file set, so the
-#                         exemption self-destructs as soon as a producer appears.
+#                         set equality, and it is checked twice: `absence_probes:
+#                         [{pattern, globs}]` must match ZERO files over a NON-EMPTY file
+#                         set, AND `verified_by:` must bind a runtime/bytecode test.
 # An extraction that yields the EMPTY set FAILS — a pattern that matches nothing must
 # never read as "no drift".
+#
+# FAIL-CLOSED EXTRACTION (P0-2 round 2 — cross-family review). A regex over java source
+# is not a parser: it can silently SKIP a producing expression it does not recognise and
+# still return a non-empty set scraped from elsewhere, i.e. report PASS on literals that
+# are NOT the ones on the wire. Silently extracting the wrong set is the defect; blocking
+# is acceptable, guessing is not. So every VALUE-extracting kind now refuses to guess:
+#   java_field_literals   the addressed initializer (resp. every `static final String`)
+#                         must be built from plain literals + collection syntax ONLY; a
+#                         value-bearing identifier ERRORS.
+#   java_method_returns   EVERY return in a matched body must be a plain literal; a
+#                         computed slug ERRORS instead of being skipped.
+#   literal_pattern       `residue_probe:` is MANDATORY. It matches the PRODUCING
+#                         CONSTRUCT (not the literal); the guard requires it to fire at
+#                         least once in the source AND zero times after every `pattern`
+#                         capture is deleted — so every occurrence of the construct was
+#                         consumed by a plain literal. The reviewer's reproduction
+#                         (`return Map.of("status", "healthy".toString());` in one method
+#                         while a sibling method still returns the contract's literal)
+#                         leaves residue and now ERRORS.
+#   java_enum_decl        already structural — the declaration is parsed, not scraped.
+#
+# RUNTIME / BYTECODE TRUTH — `verified_by:` (MANDATORY on `unproduced`, optional and
+# validated elsewhere):
+#   verified_by:
+#     test:        backend/src/test/java/…/XTest.java   must exist
+#     tag:         PAYMENT                              must appear as @Tag("…") in it
+#     gradle_task: testPayment                          must includeTags that tag in
+#                                                       backend/build.gradle.kts
+#     anchors:     [substring, …]                       must appear in the test, so the
+#                                                       binding cannot name an unrelated
+#                                                       test that shares the tag
+# An absence claim has no producer region a static extractor could be made fail-closed
+# over, and the shapes that defeat an absence regex (an SPI implemented ALONGSIDE another
+# interface, a nested/anonymous class, a generic parameterisation, a @Bean factory) are
+# exactly the ordinary ways a producer appears — so `unproduced` must be backed by a test
+# that reads the RUNNING bean graph or the BYTECODE, and that R25 actually runs.
 #
 # Modifiers (java_enum or an EXTRACTING wire_source; each requires `reason:`):
 #   wire_extra:   [T…]   tokens on the wire that are not Java constants (filter sentinels)
@@ -201,6 +238,10 @@ contract_enums:
       kind: literal_pattern
       file: frontend/src/mocks/handlers.ts
       pattern: "provider: '([a-z]+)'"
+      # Fail-closed: every `provider:` key in the handler must carry a plain literal.
+      # `provider: someVar` (or a spread) survives the deletion and ERRORS rather than
+      # letting the remaining literal read as the whole vocabulary.
+      residue_probe: '\bprovider:\s*'
 
   # ── auth-ui ───────────────────────────────────────────────────────────────
   - kind: contract_enum
@@ -258,6 +299,12 @@ contract_enums:
       kind: literal_pattern
       file: backend/src/main/java/com/ax/template/authblueprint/dsr/DsrService.java
       pattern: 'fmt\.equals\("([a-z]+)"\)'
+      # Fail-closed: every `fmt.equals(…)` in the file must compare against a plain
+      # literal. `fmt.equals(DEFAULT_FORMAT)` survives the deletion and ERRORS. And if the
+      # chain is replaced wholesale by another construct the probe stops firing at all,
+      # which also FAILS (a vacuous probe proves nothing) — so the extraction cannot
+      # quietly degrade in either direction.
+      residue_probe: '\bfmt\s*\.\s*equals\s*\('
   - kind: contract_enum
     contract: contracts/data-subject-rights-openapi.yaml
     pointer: /components/schemas/DsrRequestResponse/properties/type
@@ -366,6 +413,18 @@ contract_enums:
       absence_probes:
         - pattern: '\bsortBy\b'
           globs: ['backend/src/main/java/**/*.java']
+      # Runtime truth: the absence is asserted against the RUNNING handler mapping — every
+      # @RequestParam binding of every mapped controller method is enumerated from the live
+      # Spring bean graph, so a `sortBy` wired under any spelling the source grep would miss
+      # (an alias on the annotation, a parameter object, a handler registered from
+      # configuration) still flips it RED.
+      verified_by:
+        test: backend/src/test/java/com/ax/template/authblueprint/payment/PaymentContractAbsenceProofTest.java
+        tag: PAYMENT
+        gradle_task: testPayment
+        anchors:
+          - contracts/payment-openapi.yaml
+          - sortBy
   - kind: contract_enum
     contract: contracts/payment-openapi.yaml
     pointer: /paths/~1payments~1callback~1{provider}/post/parameters/0/schema
@@ -377,11 +436,29 @@ contract_enums:
       cannot collide with one. So no main-source producer emits this slug — the exemption
       is an absence proof, and registering a verifier flips this entry RED until it is
       bound to that verifier's providerName().
+      P0-2 ROUND 2: the absence_probe below requires the interface name IMMEDIATELY after
+      `implements`, so the reviewer defeated it with an ORDINARY declaration —
+      `implements java.io.Serializable, PaymentCallbackVerifier` — that Spring registers
+      normally. No regex closes that class of shape (multi-interface, generic, nested,
+      anonymous, @Bean factory); bytecode and the running bean graph do, and both are now
+      asserted by the test bound below. The probe is retained as a cheap secondary floor.
     wire_source:
       kind: unproduced
       absence_probes:
         - pattern: '(implements|extends|new)\s+PaymentCallbackVerifier\b'
           globs: ['backend/src/main/java/**/*.java']
+      # Runtime + bytecode truth: ArchUnit reads the compiled main sources (so it sees a
+      # class assignable to the SPI however it is declared), and the autowired registry is
+      # asserted EMPTY (so it sees a bean contributed by a @Bean factory or a nested class
+      # that never names the interface in a source position a regex could anchor on).
+      verified_by:
+        test: backend/src/test/java/com/ax/template/authblueprint/payment/PaymentContractAbsenceProofTest.java
+        tag: PAYMENT
+        gradle_task: testPayment
+        anchors:
+          - contracts/payment-openapi.yaml
+          - PaymentCallbackVerifier
+          - PaymentCallbackVerifierRegistry
   - kind: contract_enum
     contract: contracts/payment-openapi.yaml
     pointer: /components/schemas/Currency
@@ -413,10 +490,31 @@ contract_enums:
       RateLimitPingController (both the authenticated and the anonymous probe), so the
       literal itself is the producer — this is the block the P0-2 reviewer mutated
       ("ok" → "healthy") to show that a classification-only wire_only entry drifts freely.
+      P0-2 ROUND 2: the reviewer then showed the literal_pattern REWRITE still passed that
+      mutation, because `"healthy".toString()` is not a plain literal so the regex skipped
+      ping() entirely and scraped "ok" out of the UNRELATED anonPing(). Both halves are now
+      closed — `residue_probe` makes the static extraction refuse to guess, and
+      `verified_by` asserts the values the RUNNING endpoints actually emit.
     wire_source:
       kind: literal_pattern
       file: backend/src/main/java/com/ax/template/authblueprint/ratelimit/RateLimitPingController.java
       pattern: 'Map\.of\("status",\s*"([^"]+)"\)'
+      # Fail-closed: every `Map.of("status", …)` in the controller must hold a plain
+      # literal. The reviewer's `Map.of("status", "healthy".toString())` is NOT matched by
+      # `pattern`, so it survives the deletion, the probe fires on the residue and the
+      # guard ERRORS instead of reporting the sibling method's "ok" as the wire vocabulary.
+      residue_probe: 'Map\.of\(\s*"status"\s*,'
+      # Runtime truth (the primary proof — a regex cannot know what an endpoint emits):
+      # both probes are driven over live HTTP and the observed value set is compared to
+      # THIS block, parsed from the contract on disk by the same JSON pointer.
+      verified_by:
+        test: backend/src/test/java/com/ax/template/authblueprint/ratelimit/RateLimitPingWireVocabularyTest.java
+        tag: RATELIMIT
+        gradle_task: testRateLimit
+        anchors:
+          - contracts/ratelimit-openapi.yaml
+          - /api/ratelimit/ping
+          - /api/ratelimit/anon/ping
 
   # ── report-export ─────────────────────────────────────────────────────────
   - kind: contract_enum
