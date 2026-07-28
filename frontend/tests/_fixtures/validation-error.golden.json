@@ -1,0 +1,30 @@
+{
+  "detail" : "One or more fields failed validation.",
+  "instance" : "/api/items",
+  "status" : 400,
+  "title" : "Validation Failed",
+  "type" : "https://errors.example.com/validation",
+  "code" : "VALIDATION_FAILED",
+  "errors" : [ {
+    "detail" : "must not be blank",
+    "field" : "email",
+    "message" : "must not be blank",
+    "code" : "NotBlank",
+    "pointer" : "/email",
+    "name" : "email"
+  }, {
+    "detail" : "must be greater than or equal to 0",
+    "field" : "profile.age",
+    "message" : "must be greater than or equal to 0",
+    "code" : "Min",
+    "pointer" : "/profile/age",
+    "name" : "profile.age"
+  }, {
+    "detail" : "password and confirmation must match",
+    "field" : "createItemRequest",
+    "message" : "password and confirmation must match",
+    "code" : "PasswordsMatch",
+    "pointer" : "/createItemRequest",
+    "name" : "createItemRequest"
+  } ]
+}

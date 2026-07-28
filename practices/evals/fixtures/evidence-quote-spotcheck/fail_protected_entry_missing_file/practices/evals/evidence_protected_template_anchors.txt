@@ -1,0 +1,3 @@
+# Ledger references a template file that does not exist (stale/typo path).
+# min_entries: 1
+templates/L1/components/no-such-widget.tsx::sample-src

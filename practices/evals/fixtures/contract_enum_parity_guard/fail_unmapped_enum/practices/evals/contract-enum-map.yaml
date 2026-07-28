@@ -23,10 +23,16 @@ vocab_scans:
   - kind: vocab_scan
     file: templates/demo/page.tsx
     canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    declaration:
+      kind: ts_union
+      name: S
     require_all: true
     forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS, FAILED]
   - kind: vocab_scan
     file: templates/demo/Delivery.java.skeleton
     canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    declaration:
+      kind: java_enum_decl
+      name: Status
     require_all: true
     forbidden: [SUCCESS, IN_FLIGHT, DEAD_LETTER]

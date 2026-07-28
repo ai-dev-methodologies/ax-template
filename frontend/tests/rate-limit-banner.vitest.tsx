@@ -140,6 +140,11 @@ describe('parseRetryAfter / extractRetryAfterFrom429 — direct unit coverage (R
   })
 
   it('extractRetryAfterFrom429 returns null for a non-429 response via its own status check, independent of any caller gate', () => {
-    expect(extractRetryAfterFrom429(new Response(null, { status: 200 }))).toBeNull()
+    // Retry-After is deliberately set on this 200 response: if the `res.status !== 429`
+    // branch were ever deleted, extractRetryAfterFrom429 would fall through to
+    // parseRetryAfter('120') and return 120 instead of null, so this assertion would
+    // catch the regression. A 200 with no Retry-After header would pass either way.
+    const res = new Response(null, { status: 200, headers: { 'Retry-After': '120' } })
+    expect(extractRetryAfterFrom429(res)).toBeNull()
   })
 })

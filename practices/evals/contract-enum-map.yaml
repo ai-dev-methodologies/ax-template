@@ -385,24 +385,56 @@ contract_enums:
 #   (new)       ← PENDING_RETRY, which the fork-copy had no word for
 # Replay gates on FAILED_PERMANENT only: PENDING_RETRY is auto-retried by the
 # scheduler, so a manual replay of it would double-send.
+#
+# Every entry carries a MANDATORY `declaration:` block: the guard parses the DECLARED
+# token set out of the file and asserts EXACT SET EQUALITY with `canonical`, so a
+# brand-new UNKNOWN token fails even though no `forbidden:` entry names it. The
+# `forbidden:` / `require_all` pair is retained as a secondary whole-file floor.
+#
+# Declaration kinds and their honest scope:
+#   ts_union / java_enum_decl  — exhaustive over the whole declaration.
+#   marker_region              — exhaustive ONLY between the `<marker>:start` /
+#                                `<marker>:end` comments. Prose surfaces carry dozens of
+#                                unrelated ALL-CAPS acronyms (this README has 76), so
+#                                whole-file set equality is unsound and is NOT claimed;
+#                                outside the region the floor is the denylist only.
 vocab_scans:
   - kind: vocab_scan
     file: templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx
     canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    declaration:
+      kind: ts_union
+      name: DeliveryStatus
     require_all: true
     forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS, FAILED]
   - kind: vocab_scan
     file: templates/L4/webhook/backend/WebhookDelivery.java.skeleton
     canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    declaration:
+      kind: java_enum_decl
+      name: Status
     require_all: true
     forbidden: [SUCCESS, IN_FLIGHT, DEAD_LETTER]
   - kind: vocab_scan
     file: templates/L4/webhook/app/providers.tsx
     canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    declaration:
+      kind: marker_region
+      marker: vocab:delivery-status
+      scope_note: >-
+        prose (a JSDoc block). Exhaustive inside the delimited region only; the rest of
+        the file is denylist-only.
     require_all: true
     forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS]
   - kind: vocab_scan
     file: templates/L4/webhook/README.md
     canonical: [PENDING, PENDING_RETRY, SUCCEEDED, FAILED_PERMANENT]
+    declaration:
+      kind: marker_region
+      marker: vocab:delivery-status
+      scope_note: >-
+        prose. Exhaustive inside the "Delivery status vocabulary" table only; the rest of
+        the README is denylist-only (76 unrelated ALL-CAPS tokens make whole-file set
+        equality unsound).
     require_all: true
     forbidden: [IN_FLIGHT, DEAD_LETTER, SUCCESS]

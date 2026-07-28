@@ -37,11 +37,45 @@
 #                           fork-copy's TS union, a java skeleton, a README table).
 #                             file:        <path>
 #                             canonical:   [T…]      the legal vocabulary
+#                             declaration: {…}       MANDATORY — how to extract the
+#                                                    DECLARED token set (see below)
 #                             require_all: true      every canonical token must appear
 #                             forbidden:   [T…]      none of these may appear
-#                           Matching is WORD-BOUNDARY token grep — `SUCCESS` does not
-#                           match inside `SUCCEEDED`, `FAILED` does not match inside
-#                           `FAILED_PERMANENT`.
+#                           Matching for require_all / forbidden is WORD-BOUNDARY token
+#                           grep — `SUCCESS` does not match inside `SUCCEEDED`, `FAILED`
+#                           does not match inside `FAILED_PERMANENT`.
+#
+#                           `declaration:` is what makes a vocab_scan EXHAUSTIVE rather
+#                           than a denylist: the declared set is parsed out of the file
+#                           and compared to `canonical` by EXACT SET EQUALITY, so a
+#                           brand-new UNKNOWN token FAILS even though no `forbidden:`
+#                           entry names it. A vocab_scan with no `declaration:` FAILS —
+#                           no surface can silently escape the exhaustive path.
+#                           Three declaration kinds:
+#                             ts_union       name: X  — parses `type X = 'A' | 'B' | …`
+#                                                       and takes the quoted members. A
+#                                                       non-literal member (`| string`)
+#                                                       FAILS: it is not checkable.
+#                             java_enum_decl name: X  — parses `enum X { A, B, … }`
+#                                                       (comment-stripped, constructor
+#                                                       args tolerated).
+#                             marker_region  marker: M — takes ALL-CAPS tokens between
+#                                                       the `M:start` / `M:end` marker
+#                                                       comments. For PROSE surfaces.
+#
+# HONEST SCOPE — what is exhaustive where:
+#   ts_union / java_enum_decl  → EXHAUSTIVE over the whole declaration. An unknown
+#                                token anywhere in the union/enum body FAILS.
+#   marker_region              → EXHAUSTIVE ONLY INSIDE THE DELIMITED REGION. Prose
+#                                surfaces (a doc comment, a README) carry dozens of
+#                                unrelated ALL-CAPS acronyms (`HTTP`, `UUID`, `POST`,
+#                                spec IDs…), so whole-file set equality is NOT sound and
+#                                is NOT claimed. Outside the region the only floor is
+#                                the `forbidden:` DENYLIST — a status word invented in
+#                                prose outside the region is NOT caught. That is a known,
+#                                accepted limit, not an oversight: the region is where
+#                                the vocabulary is enumerated, and the enumeration is
+#                                what a fork-receiver copies.
 #
 # EXHAUSTIVENESS (the property that makes this non-heuristic): every `enum:` block
 # found under `contracts/*.yaml` MUST appear in the manifest. An unclassified block
@@ -49,8 +83,10 @@
 # reverse also FAILS: a manifest entry addressing a block that no longer exists is a
 # stale entry.
 #
-# NON-VACUITY: zero discovered blocks, zero contract_enum entries, or zero
-# vocab_scan entries all FAIL — the gate cannot be emptied into a silent pass.
+# NON-VACUITY: zero discovered blocks, zero contract_enum entries, zero vocab_scan
+# entries, or zero STRUCTURALLY-exhaustive declaration scans (ts_union /
+# java_enum_decl) all FAIL — the gate cannot be emptied into a silent pass, and it
+# cannot be degraded into region-markers-only either.
 #
 # Exit: 0 PASS · 1 violation · 2 usage/parse error.
 #
@@ -300,6 +336,61 @@ for key in sorted(claimed):
             " — fix the contract, fix the enum, or declare wire_extra/wire_missing + reason")
 
 # ── 6. vocab_scan ────────────────────────────────────────────────────────────
+# EXHAUSTIVE path: parse the DECLARED token set out of the file and compare it to
+# `canonical` by exact set equality. A denylist can only catch tokens someone
+# already thought of; set equality catches the ones nobody did.
+STRUCTURAL_DECL_KINDS = ('ts_union', 'java_enum_decl')
+DECL_KINDS = STRUCTURAL_DECL_KINDS + ('marker_region',)
+
+def decl_ts_union(body, name):
+    """Parse `type <name> = 'A' | 'B' | …` -> (set, err)."""
+    m = re.search(r'\btype\s+' + re.escape(str(name)) + r'\s*=\s*([^\n;]*(?:\n\s*\|[^\n;]*)*)', body)
+    if not m:
+        return None, f"no `type {name} = …` union declaration found"
+    rhs = m.group(1).strip().rstrip(';').strip()
+    members = [p.strip() for p in rhs.split('|')]
+    members = [p for p in members if p]
+    if not members:
+        return None, f"`type {name}` has an empty right-hand side"
+    toks = set()
+    for p in members:
+        mm = re.fullmatch(r"'([^']*)'|\"([^\"]*)\"", p)
+        if not mm:
+            return None, (f"member {p!r} of `type {name}` is not a quoted string literal — "
+                          f"the union is not exhaustively checkable; narrow the type or "
+                          f"move this surface to a marker_region declaration")
+        toks.add(mm.group(1) if mm.group(1) is not None else mm.group(2))
+    return toks, None
+
+def decl_java_enum(body, name):
+    """Parse `enum <name> { A, B, … }` -> (set, err)."""
+    found = [c for (n, c) in enums_in_source(body) if n == str(name)]
+    if not found:
+        return None, f"no `enum {name} {{ … }}` declaration found"
+    if len(found) > 1:
+        return None, f"more than one `enum {name}` declaration found — ambiguous"
+    return set(found[0]), None
+
+def decl_marker_region(body, marker):
+    """ALL-CAPS tokens between `<marker>:start` and `<marker>:end` -> (set, err)."""
+    marker = str(marker)
+    start, end = f"{marker}:start", f"{marker}:end"
+    ns, ne = body.count(start), body.count(end)
+    if ns != 1 or ne != 1:
+        return None, (f"expected exactly one `{start}` and one `{end}` marker "
+                      f"(found {ns} / {ne})")
+    i = body.index(start) + len(start)
+    j = body.index(end)
+    if j <= i:
+        return None, f"`{end}` marker appears before `{start}`"
+    region = body[i:j]
+    toks = {t for t in re.findall(r'[A-Za-z_][A-Za-z0-9_]*', region)
+            if re.fullmatch(r'[A-Z][A-Z0-9_]*', t)}
+    if not toks:
+        return None, f"vocabulary region delimited by `{marker}` contains no ALL-CAPS token"
+    return toks, None
+
+structural_scans = 0
 for s in scans:
     kind = s.get('kind', 'vocab_scan')
     rel = s.get('file')
@@ -316,6 +407,8 @@ for s in scans:
     forbidden = as_list(s.get('forbidden'))
     if not canonical:
         violations.append(f"vocab_scan {rel}: `canonical` must be a non-empty list")
+
+    # 6a. secondary floor — denylist + presence (whole file)
     hits = [t for t in forbidden if t in tokens]
     if hits:
         violations.append(
@@ -327,6 +420,46 @@ for s in scans:
             violations.append(
                 f"vocab_scan {rel}: require_all — canonical token(s) missing: {absent}")
 
+    # 6b. primary gate — EXACT SET EQUALITY over the declared vocabulary
+    decl = s.get('declaration')
+    if not isinstance(decl, dict) or not decl:
+        violations.append(
+            f"vocab_scan {rel}: MISSING `declaration:` block — every vocab_scan must say how "
+            f"its declared token set is extracted (kind: {' | '.join(DECL_KINDS)}), because a "
+            f"`forbidden:` denylist alone lets an UNKNOWN token pass")
+        continue
+    dkind = decl.get('kind')
+    if dkind not in DECL_KINDS:
+        violations.append(
+            f"vocab_scan {rel}: declaration kind {dkind!r} is not one of {list(DECL_KINDS)}")
+        continue
+    if dkind == 'ts_union':
+        declared, err = decl_ts_union(body, decl.get('name'))
+    elif dkind == 'java_enum_decl':
+        declared, err = decl_java_enum(body, decl.get('name'))
+    else:
+        declared, err = decl_marker_region(body, decl.get('marker'))
+    if err:
+        violations.append(f"vocab_scan {rel}: declaration ({dkind}) not extractable — {err}")
+        continue
+    if dkind in STRUCTURAL_DECL_KINDS:
+        structural_scans += 1
+    canon_set = set(canonical)
+    unknown = sorted(declared - canon_set)
+    absent = sorted(canon_set - declared)
+    if unknown or absent:
+        parts = []
+        if unknown:
+            parts.append(f"declares UNKNOWN token(s) {unknown} that are not in the canonical "
+                         f"vocabulary")
+        if absent:
+            parts.append(f"omits canonical token(s) {absent}")
+        scope = ("inside the delimited vocabulary region" if dkind == 'marker_region'
+                 else f"in the {dkind} declaration")
+        violations.append(
+            f"vocab_scan {rel}: VOCABULARY DRIFT {scope} — " + "; ".join(parts) +
+            f" — the declared set must EQUAL {sorted(canon_set)}")
+
 # ── 7. non-vacuity ───────────────────────────────────────────────────────────
 if not discovered:
     violations.append("ZERO_SCAN — no enum: block found under contracts/*.yaml; the gate would be vacuous")
@@ -334,12 +467,18 @@ if not [e for e in entries if 'java_enum' in e]:
     violations.append("ZERO_BINDING — no contract_enum entry binds a java_enum; the gate would be vacuous")
 if not scans:
     violations.append("ZERO_VOCAB_SCAN — no vocab_scan entry; the L4 vocabulary axis would be unguarded")
+if not structural_scans:
+    violations.append(
+        "ZERO_EXHAUSTIVE_DECL — no vocab_scan resolves a structural declaration "
+        "(ts_union / java_enum_decl); every surface would be prose-region or denylist "
+        "only, so an unknown token in a real type declaration could not be caught")
 
 print(f"[contract_enum_parity] {len(discovered)} enum block(s) across "
       f"{len({k[0] for k in discovered})} contract file(s); "
       f"{len([e for e in entries if 'java_enum' in e])} java-bound, "
       f"{len([e for e in entries if 'wire_only' in e])} wire-only; "
-      f"{len(scans)} vocab_scan surface(s); "
+      f"{len(scans)} vocab_scan surface(s) ({structural_scans} structurally exhaustive, "
+      f"{len(scans) - structural_scans} region-scoped or unresolved); "
       f"{len(java_enums)} java enum(s) indexed")
 
 if violations:
@@ -348,7 +487,8 @@ if violations:
         print(f"  {v}")
     sys.exit(1)
 
-print("PASS — every contract enum block is classified and every bound block matches its Java enum")
+print("PASS — every contract enum block is classified, every bound block matches its Java enum, "
+      "and every vocab_scan's declared token set equals its canonical vocabulary")
 PY
 rc=$?
 exit $rc

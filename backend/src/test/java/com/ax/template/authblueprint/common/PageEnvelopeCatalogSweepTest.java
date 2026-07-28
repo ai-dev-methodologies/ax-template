@@ -10,9 +10,20 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.annotation.DirtiesContext;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,7 +73,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  * reproduce). GREEN is confirmed by the wave's R25 run, not asserted here.
  * The remaining 12 are FULLY partitioned across the three pinned sets below:
  * NOT_REACHABLE (2) + REACHABLE_BUT_PREEXISTING_DRIFT (2) +
- * DECLARING_NOT_IN_SCOPE (8). 8 + 2 + 2 + 8 == 20, asserted mechanically.
+ * DECLARING_NOT_IN_SCOPE (8).
+ *
+ * <p><b>How "fully partitioned" is proven (2026-07-28 correction).</b> The
+ * original assertion summed one int and three set sizes — arithmetic only. It
+ * could not see a SWAP: moving one domain from one allowlist into another
+ * keeps every size (and therefore the sum) identical while one domain silently
+ * vanishes from the universe and another is double-counted. The partition is
+ * now asserted SET-WISE against the declaring universe DERIVED FROM DISK:
+ * pairwise disjointness of the four sets, then union == universe. Every member
+ * of every set is a CONTRACT STEM (the `contracts/<stem>-openapi.yaml`
+ * basename), so the comparison is against real filenames, not prose labels.
  *
  * <h2>Allowlist A — NOT reachable (no live-HTTP test-support fixture exists
  * for the domain today; a full sweep needs per-domain auth+seed, the
@@ -125,12 +146,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("PAGE-OFFSET-001")
 class PageEnvelopeCatalogSweepTest {
 
+    /**
+     * Domains actually swept by this class — one entry per endpoint-owning
+     * contract stem in the class javadoc's binding table (9 endpoints, 8
+     * contracts: the two approval endpoints share
+     * {@code approval-workflow-openapi.yaml}).
+     */
+    static final Set<String> SWEPT = Set.of(
+            "audit-log", "notification", "session-management", "favorites-bookmarks",
+            "activity-feed", "api-key", "approval-workflow", "identity-verification");
+
     /** Allowlist A — see class javadoc. */
     static final Set<String> NOT_REACHABLE = Set.of("email-outbox", "scheduled-task");
 
-    /** Allowlist B — see class javadoc. */
+    /**
+     * Allowlist B — see class javadoc. Keyed by CONTRACT STEM (the drift lives
+     * in {@code webhook-openapi.yaml} / {@code feature-flags-openapi.yaml}), not
+     * by endpoint path, so that the partition below compares like with like.
+     */
     static final Set<String> REACHABLE_BUT_PREEXISTING_DRIFT =
-            Set.of("webhook-deliveries", "feature-flags");
+            Set.of("webhook", "feature-flags");
 
     /**
      * Allowlist C — declaring contracts this wave did not sweep. Reachable in
@@ -141,23 +176,85 @@ class PageEnvelopeCatalogSweepTest {
             "billing", "comment-thread", "crud", "file-storage",
             "payment", "report-export", "tag-categorization", "tokenized-securities");
 
-    /** Domains actually swept by this class (see the class javadoc table). */
-    static final int SWEPT_DOMAINS = 8;
-
     /** Disk truth: contracts/*.yaml files declaring totalElements|totalPages. */
     static final int DECLARING_CONTRACTS = 20;
 
+    /**
+     * The declaring universe, DERIVED FROM DISK — the Java equivalent of
+     * {@code grep -lE '^ *(totalElements|totalPages):' contracts/*.yaml},
+     * reduced to contract stems. Derived rather than pinned so a new list
+     * contract cannot join the catalog without landing in exactly one of the
+     * four sets below.
+     *
+     * <p>Path convention follows the existing precedent in this test tree
+     * ({@code WebhookIdempotentTest}: {@code Path.of("..", "templates", …)}) —
+     * gradle runs tests with {@code user.dir} == {@code backend/}.
+     */
+    static Set<String> declaringUniverseFromDisk() throws IOException {
+        Path contracts = Path.of("..", "contracts");
+        assertThat(Files.isDirectory(contracts))
+                .as("contracts/ must be reachable from the backend module (user.dir=%s)",
+                        System.getProperty("user.dir"))
+                .isTrue();
+        Pattern declares = Pattern.compile("(?m)^ *(totalElements|totalPages):");
+        try (Stream<Path> yamls = Files.list(contracts)) {
+            return yamls
+                    .filter(p -> p.getFileName().toString().endsWith("-openapi.yaml"))
+                    .filter(p -> {
+                        try {
+                            return declares.matcher(Files.readString(p)).find();
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    })
+                    .map(p -> p.getFileName().toString().replace("-openapi.yaml", ""))
+                    .collect(Collectors.toUnmodifiableSet());
+        }
+    }
+
+    /**
+     * The partition is a SET property, not an arithmetic one. Sizes alone are
+     * blind to a swap between two allowlists (constant sum, one domain lost and
+     * another double-counted), which is exactly the escape a cross-family
+     * reviewer demonstrated against the previous sum-only assertion.
+     */
     @Test
-    void allowlistsArePinnedAtTheDocumentedCounts() {
+    void declaringUniverseIsExactlyPartitionedAcrossTheFourSets() throws IOException {
+        Set<String> universe = declaringUniverseFromDisk();
+        assertThat(universe)
+                .as("disk truth: contracts declaring a page/list envelope")
+                .hasSize(DECLARING_CONTRACTS);
+
+        Map<String, Set<String>> parts = new LinkedHashMap<>();
+        parts.put("SWEPT", SWEPT);
+        parts.put("NOT_REACHABLE", NOT_REACHABLE);
+        parts.put("REACHABLE_BUT_PREEXISTING_DRIFT", REACHABLE_BUT_PREEXISTING_DRIFT);
+        parts.put("DECLARING_NOT_IN_SCOPE", DECLARING_NOT_IN_SCOPE);
+
+        // (1) pairwise disjoint — no domain may be claimed by two sets.
+        List<String> names = new ArrayList<>(parts.keySet());
+        for (int i = 0; i < names.size(); i++) {
+            for (int j = i + 1; j < names.size(); j++) {
+                Set<String> overlap = new TreeSet<>(parts.get(names.get(i)));
+                overlap.retainAll(parts.get(names.get(j)));
+                assertThat(overlap)
+                        .as("%s and %s must be disjoint", names.get(i), names.get(j))
+                        .isEmpty();
+            }
+        }
+
+        // (2) union EQUALS the universe — nothing lost, nothing invented.
+        Set<String> union = new TreeSet<>();
+        parts.values().forEach(union::addAll);
+        assertThat(union)
+                .as("the four sets must exactly cover the declaring universe")
+                .isEqualTo(new TreeSet<>(universe));
+
+        // (3) the documented counts stay pinned (a shrunk lane is a visible edit).
+        assertThat(SWEPT).hasSize(8);
         assertThat(NOT_REACHABLE).hasSize(2);
         assertThat(REACHABLE_BUT_PREEXISTING_DRIFT).hasSize(2);
         assertThat(DECLARING_NOT_IN_SCOPE).hasSize(8);
-        assertThat(SWEPT_DOMAINS
-                + NOT_REACHABLE.size()
-                + REACHABLE_BUT_PREEXISTING_DRIFT.size()
-                + DECLARING_NOT_IN_SCOPE.size())
-                .as("the declaring universe must be fully partitioned")
-                .isEqualTo(DECLARING_CONTRACTS);
     }
 
     @LocalServerPort

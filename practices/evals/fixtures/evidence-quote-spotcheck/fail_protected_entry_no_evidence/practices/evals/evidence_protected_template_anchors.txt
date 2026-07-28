@@ -1,0 +1,3 @@
+# Ledger protects a file that carries ZERO upstream_id evidence — verifies nothing.
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::sample-src

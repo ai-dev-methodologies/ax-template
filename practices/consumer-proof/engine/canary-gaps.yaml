@@ -302,8 +302,9 @@ canaries:
     canary: true
     need: "A parity/golden test binding the BE ApprovalRequestStateMachine / ApprovalStepStateMachine
       ALLOWED transition tables to the FE fallback tables that templates/L0/fork-receiver-kit/authorized-actions.ts
-      mirrors as TS literals. Wave-4 flipped S2.AUTHZ.XB to covered on a server-first allowedActions field,
-      but the FE FALLBACK path (used by older fork-receiver backends) still duplicates both transition
+      mirrors as TS literals. Wave-4 shipped a request-scoped server-first allowedActions field (it briefly
+      flipped S2.AUTHZ.XB to covered on that basis; the flip was reverted to partial the same day), but the
+      FE FALLBACK path (used by older fork-receiver backends) still duplicates both transition
       tables with nothing pinning them, so a BE transition-table change flips only the BE leg."
     layer: XB
     related_cell: S2.AUTHZ.XB

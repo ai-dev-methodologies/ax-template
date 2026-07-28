@@ -65,6 +65,11 @@ describe('parse-field-errors — shape-tolerant ProblemDetail field extraction',
     expect(extractFieldErrors(body)).toEqual({ price: 'must be positive' })
   })
 
+  // LEGACY-SHAPE TOLERANCE ONLY (BACKLOG P2-36). `{field, defaultMessage}` is the
+  // raw Spring BindingResult shape — this repo's GlobalProblemDetailAdvice does NOT
+  // emit it (it emits {field,name,pointer,code,message,detail}). Kept because
+  // fork-receivers on an older/plainer advice still send it. The real BE<->FE parity
+  // is pinned by tests/field-errors-parity.vitest.ts against the committed golden.
   it('reads Spring "errors" ({ field, defaultMessage })', () => {
     const body = { errors: [{ field: 'title', defaultMessage: 'must not be blank' }] }
     expect(extractFieldErrors(body)).toEqual({ title: 'must not be blank' })

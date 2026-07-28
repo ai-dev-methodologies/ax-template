@@ -1,0 +1,2 @@
+# Ledger with an anchor but NO `# min_entries:` directive — unshrinkable floor absent.
+templates/L1/components/sample-widget.tsx::sample-src

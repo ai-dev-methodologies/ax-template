@@ -31,9 +31,12 @@ interface ProvidersProps {
  *
  * Webhook QueryClient settings:
  *   - staleTime: 15s for endpoints (mostly static after registration)
- *   - refetchInterval: deliveries page sets its own 10s poll since
- *     delivery status (PENDING / PENDING_RETRY / SUCCEEDED / FAILED_PERMANENT)
- *     transitions during retry windows
+ *   - refetchInterval: deliveries page sets its own 10s poll since delivery
+ *     status transitions during retry windows. Canonical delivery-status
+ *     vocabulary (exhaustively gated by contract_enum_parity_guard):
+ *     vocab:delivery-status:start
+ *     PENDING / PENDING_RETRY / SUCCEEDED / FAILED_PERMANENT
+ *     vocab:delivery-status:end
  *   - retry: 1
  */
 export function Providers({ children }: ProvidersProps) {

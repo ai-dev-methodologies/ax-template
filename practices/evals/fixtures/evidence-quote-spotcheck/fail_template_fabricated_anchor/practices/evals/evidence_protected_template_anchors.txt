@@ -1,0 +1,4 @@
+# Protected-anchor ledger (fixture). Sole anchor quote is absent from the snapshot ⇒
+# the protected sweep must exit 1 (this is the fatal path the advisory sweep lacked).
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::sample-src

@@ -1128,6 +1128,35 @@ run_guard "evidence_quote_spotcheck/fixture_template_fail" 1 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --include-templates --strict-templates --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_template_fabricated_anchor"
 run_guard "evidence_quote_spotcheck/fixture_template_pass" 0 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --include-templates --strict-templates --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/pass_template_correct_anchor"
+# P2-40 follow-up (2026-07-28 review) — the advisory registration above does NOT block:
+# restoring the fabricated currency-input.tsx anchor only WARNed and templates_live_advisory
+# still exited 0, so the required RED-on-revert did not hold. The full templates sweep stays
+# ADVISORY for a real reason (the ~105 pre-existing quote<->snapshot misalignments across
+# templates/L1/components/**, a separate backlog item — making them fatal would freeze the
+# gate on out-of-scope work), so the fatal claim is earned on an explicitly listed subset
+# instead: evidence_protected_template_anchors.txt. Those anchors ARE fatal here, and the
+# ledger cannot be emptied into a silent pass (missing/empty/no-min_entries/shrunk/dangling
+# path/no-upstream_id-evidence/uncited-anchor each exit 2 — fixtures below prove all seven).
+run_guard "evidence_quote_spotcheck/templates_protected_live" 0 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected
+run_guard "evidence_quote_spotcheck/fixture_protected_fail_quote" 1 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_template_fabricated_anchor"
+run_guard "evidence_quote_spotcheck/fixture_protected_pass_quote" 0 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/pass_template_correct_anchor"
+run_guard "evidence_quote_spotcheck/fixture_protected_ledger_missing" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_ledger_missing"
+run_guard "evidence_quote_spotcheck/fixture_protected_ledger_empty" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_ledger_empty"
+run_guard "evidence_quote_spotcheck/fixture_protected_ledger_no_min" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_ledger_no_min"
+run_guard "evidence_quote_spotcheck/fixture_protected_ledger_shrunk" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_ledger_shrunk"
+run_guard "evidence_quote_spotcheck/fixture_protected_entry_missing_file" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_entry_missing_file"
+run_guard "evidence_quote_spotcheck/fixture_protected_entry_no_evidence" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_entry_no_evidence"
+run_guard "evidence_quote_spotcheck/fixture_protected_anchor_absent" 2 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --strict-templates --templates-only-protected --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_protected_anchor_absent"
 
 echo ""
 echo "[75] catalog_example_symbol_guard.sh (catalog-example/impl-drift — a rule java fence that names a class with no backing .java teaches an agent a broken shape; iterations 2-3 fixed two such drifts by hand with no mechanical backstop. Scans ONLY java fences: a seed-deny fabricated store call (idempotencyStore.computeIfAbsent) and any *StateMachine/*Store symbol must resolve to a real backend/src/main/java symbol OR be named in a catalog-example-ok annotation. Live exits 0; fixtures prove non-vacuity.)"
@@ -1393,7 +1422,7 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/locale_aware_format_guard.sh" --root "$SCRIPT_DIR/fixtures/locale-aware-format/fail_currency_concat"
 fi
 
-echo "[92] contract_enum_parity_guard.sh (P2-33 — contract↔code enum parity, EXHAUSTIVE BY CONSTRUCTION. Every enum: block under contracts/*.yaml {58 today across 20 files} MUST be classified in practices/evals/contract-enum-map.yaml as either java_enum: <FQCN> {constant sets must match} or wire_only: <reason>; an UNCLASSIFIED block FAILS and a STALE entry {pointing at a block no longer on disk} FAILS — there is no name inference, which is what makes the gate non-heuristic. Modifiers wire_extra / wire_missing / wire_case are non-redundancy-checked, so an allowance cannot rot into a lie. Java constants are extracted by parse {no JVM} across the three shapes in this tree: plain-with-javadoc, constructor-arg {reportexport.ExportFormat:12-13}, nested-in-type {WebhookDelivery.java.skeleton:38} — pass_clean binds all three, so a regression in any shape flips it RED. vocab_scan entries cover the L4 surfaces the contract schema cannot express {P2-34: the webhook fork-copy carried a NON-ISOMORPHIC 5-value vocabulary}; matching is word-boundary so SUCCESS does not match inside SUCCEEDED. Birth census found 5 REAL drifts, all fixed contract→code: billing BillingEventType {wire promised 4 values the server cannot emit AND forbade UNHANDLED which it does emit}, payment PaymentState {FAILED reachable from CREATED via PROVIDER_DECLINE but absent from the contract}, report-export ExportJobResponse.format {lower-case on a response that serializes the enum via name()}, scheduled-task ×2 {ACTIVE/PAUSED vs the shipped ENABLED/DISABLED}, tokenized-securities securityType {EQUITY/BOND vs the shipped INVESTMENT_CONTRACT}. Zero blocks / zero java bindings / zero vocab_scans each FAIL. Live exits 0.)"
+echo "[92] contract_enum_parity_guard.sh (P2-33 — contract↔code enum parity, EXHAUSTIVE BY CONSTRUCTION. Every enum: block under contracts/*.yaml {58 today across 20 files} MUST be classified in practices/evals/contract-enum-map.yaml as either java_enum: <FQCN> {constant sets must match} or wire_only: <reason>; an UNCLASSIFIED block FAILS and a STALE entry {pointing at a block no longer on disk} FAILS — there is no name inference, which is what makes the gate non-heuristic. Modifiers wire_extra / wire_missing / wire_case are non-redundancy-checked, so an allowance cannot rot into a lie. Java constants are extracted by parse {no JVM} across the three shapes in this tree: plain-with-javadoc, constructor-arg {reportexport.ExportFormat:12-13}, nested-in-type {WebhookDelivery.java.skeleton:38} — pass_clean binds all three, so a regression in any shape flips it RED. vocab_scan entries cover the L4 surfaces the contract schema cannot express {P2-34: the webhook fork-copy carried a NON-ISOMORPHIC 5-value vocabulary}; matching is word-boundary so SUCCESS does not match inside SUCCEEDED. Every vocab_scan carries a MANDATORY declaration: block {ts_union | java_enum_decl | marker_region} and the DECLARED token set is compared to canonical by EXACT SET EQUALITY — an added UNKNOWN token FAILS even though no forbidden: entry names it {reviewer finding: the old scan was a finite denylist, so appending | 'BOUNCED' to the TS union passed; fixture_fail_added_token now pins that RED}. A vocab_scan with no declaration: FAILS, so no surface can escape the exhaustive path. HONEST SCOPE: ts_union / java_enum_decl are exhaustive over the whole declaration; the two PROSE surfaces {providers.tsx JSDoc, README.md} are exhaustive ONLY inside the vocab:delivery-status:start/end region — whole-file set equality is unsound there {the README carries 76 unrelated ALL-CAPS tokens} and is NOT claimed; outside the region the floor is the denylist only. Birth census found 5 REAL drifts, all fixed contract→code: billing BillingEventType {wire promised 4 values the server cannot emit AND forbade UNHANDLED which it does emit}, payment PaymentState {FAILED reachable from CREATED via PROVIDER_DECLINE but absent from the contract}, report-export ExportJobResponse.format {lower-case on a response that serializes the enum via name()}, scheduled-task ×2 {ACTIVE/PAUSED vs the shipped ENABLED/DISABLED}, tokenized-securities securityType {EQUITY/BOND vs the shipped INVESTMENT_CONTRACT}. Zero blocks / zero java bindings / zero vocab_scans / zero structurally-exhaustive declarations each FAIL. Live exits 0.)"
 run_guard "contract_enum_parity/live" 0 \
     bash "$SCRIPT_DIR/contract_enum_parity_guard.sh"
 if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
@@ -1411,6 +1440,15 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     # (forbidden token present AND require_all missing SUCCEEDED) → BLOCK.
     run_guard "contract_enum_parity/fixture_fail_vocab_scan" 1 \
         bash "$SCRIPT_DIR/contract_enum_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/contract_enum_parity_guard/fail_vocab_scan"
+    # a BRAND-NEW token nobody deny-listed ('BOUNCED' appended to the TS union) —
+    # the denylist sees nothing; exact set equality against `canonical` → BLOCK.
+    # This is the fixture for the reviewer finding that vocab_scan was a denylist.
+    run_guard "contract_enum_parity/fixture_fail_added_token" 1 \
+        bash "$SCRIPT_DIR/contract_enum_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/contract_enum_parity_guard/fail_added_token"
+    # a vocab_scan with no `declaration:` block — no surface may opt out of the
+    # exhaustive path and fall back to denylist-only → BLOCK.
+    run_guard "contract_enum_parity/fixture_fail_missing_declaration" 1 \
+        bash "$SCRIPT_DIR/contract_enum_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/contract_enum_parity_guard/fail_missing_declaration"
 fi
 
 echo "[93] l2_frontmatter_deps_guard.sh (P3-66 — L2 block frontmatter dependencies: declares a real sibling template that is NOT imported while a DIFFERENT real sibling from the same directory IS. Deliberately narrow necessary-not-sufficient floor: generic UI vocabulary (button/badge) declared without a literal import is legitimate catalog-wide and is NOT flagged. Live scans 113 blocks, exits 0.)"

@@ -100,6 +100,24 @@ Spec Trio anchors:
    ax.webhook.circuit.failure-threshold=0.90
    ```
 
+## Delivery status vocabulary
+
+The canonical delivery-status vocabulary. This enumeration is what a fork-receiver
+copies, so it is gated by exact set equality inside the delimited region below
+(`practices/evals/contract_enum_parity_guard.sh`): inventing a status word here — or
+dropping one — fails the guard, whether or not anyone thought to deny-list it.
+
+<!-- vocab:delivery-status:start -->
+
+| Status | Meaning |
+|---|---|
+| `PENDING` | Enqueued; the first attempt has not been made yet |
+| `PENDING_RETRY` | An attempt failed; the scheduler owns the next attempt |
+| `SUCCEEDED` | The receiver acknowledged with a 2xx response |
+| `FAILED_PERMANENT` | Attempts exhausted; terminal, admin replay only |
+
+<!-- vocab:delivery-status:end -->
+
 ## Domain-specific spec requirements
 
 | Spec ID | Requirement | Implementation hint |

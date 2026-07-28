@@ -64,6 +64,33 @@
 #                closure that added this scan surface — tracked as a new backlog candidate
 #                instead of silently fixed or silently dropped. Without --strict-templates
 #                the flag is inert (findings are advisory regardless of --strict).
+#   --templates-only-protected
+#                P2-40 follow-up (2026-07-28 reviewer finding). --include-templates alone,
+#                as registered live, is ADVISORY — so restoring the fabricated
+#                templates/L1/components/currency-input.tsx anchor only WARNed and the
+#                registered live invocation still exited 0: the required RED-on-revert did
+#                NOT hold and the "fabricated anchor is blocked" claim was unearned. This
+#                flag restricts the templates/** sweep to exactly the anchors listed in the
+#                committed ledger
+#                    practices/evals/evidence_protected_template_anchors.txt
+#                (implies --include-templates), so those anchors CAN be fatal under
+#                --strict --strict-templates while the ~105 pre-existing misalignments in
+#                the unlisted remainder stay out of scope. The ledger is anchor-scoped
+#                (`<path>::<upstream_id>` per line), not file-scoped, because
+#                currency-formatter.tsx carries TWO upstream anchors of which only the
+#                stripe-billing one is disk-clean — protecting the file wholesale would
+#                have meant either an unearned pass or rewriting an unrelated quote to
+#                make the gate green. Honest under-claiming: the protected set is exactly
+#                what is verified, and what is excluded is named in the ledger.
+#
+#                Fail-closed non-vacuity (each ⇒ exit 2, so the gate cannot be emptied
+#                into a silent pass): ledger absent · ledger with no entries · ledger with
+#                no `# min_entries:` directive · fewer entries than that directive · a
+#                declared min_entries below the guard-pinned live floor
+#                (LIVE_MIN_PROTECTED_ENTRIES, applies when scanning the real repo root,
+#                i.e. no --root) · an entry whose file does not exist · an entry whose file
+#                carries zero upstream_id evidence · an entry whose declared upstream_id is
+#                not actually cited by that file · zero anchors scanned overall.
 #
 # Usage:
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh
@@ -72,6 +99,7 @@
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh --strict --root evals/fixtures/...
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh --include-templates
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh --include-templates --strict --strict-templates --root evals/fixtures/...
+#   bash practices/evals/evidence_quote_spotcheck_guard.sh --strict --strict-templates --templates-only-protected
 set -uo pipefail
 
 STRICT=0
@@ -79,6 +107,7 @@ ALLOW_MISSING=0
 ROOT_OVERRIDE=""
 INCLUDE_TEMPLATES=0
 STRICT_TEMPLATES=0
+TEMPLATES_ONLY_PROTECTED=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --strict) STRICT=1; shift ;;
@@ -87,15 +116,21 @@ while [ $# -gt 0 ]; do
         --root=*) ROOT_OVERRIDE="${1#--root=}"; shift ;;
         --include-templates) INCLUDE_TEMPLATES=1; shift ;;
         --strict-templates) STRICT_TEMPLATES=1; shift ;;
+        # implies --include-templates so the flag can never be a silent no-op
+        --templates-only-protected) TEMPLATES_ONLY_PROTECTED=1; INCLUDE_TEMPLATES=1; shift ;;
         *) echo "evidence_quote_spotcheck_guard: unknown arg: $1" >&2; exit 2 ;;
     esac
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+# LIVE_ROOT=1 ⇔ scanning the real repo tree (no --root fixture override). The guard-pinned
+# protected-ledger floor applies only there; fixture roots declare their own min_entries.
+LIVE_ROOT=0; [ -z "$ROOT_OVERRIDE" ] && LIVE_ROOT=1
 
 STRICT="$STRICT" ALLOW_MISSING="$ALLOW_MISSING" INCLUDE_TEMPLATES="$INCLUDE_TEMPLATES" \
-STRICT_TEMPLATES="$STRICT_TEMPLATES" python3 - "$REPO_ROOT" << 'PY'
+STRICT_TEMPLATES="$STRICT_TEMPLATES" TEMPLATES_ONLY_PROTECTED="$TEMPLATES_ONLY_PROTECTED" \
+LIVE_ROOT="$LIVE_ROOT" python3 - "$REPO_ROOT" << 'PY'
 import glob, html, os, re, sys
 
 root = sys.argv[1]
@@ -103,6 +138,20 @@ strict = os.environ.get("STRICT") == "1"
 allow_missing = os.environ.get("ALLOW_MISSING") == "1"
 include_templates = os.environ.get("INCLUDE_TEMPLATES") == "1"
 strict_templates = os.environ.get("STRICT_TEMPLATES") == "1"
+protected_only = os.environ.get("TEMPLATES_ONLY_PROTECTED") == "1"
+live_root = os.environ.get("LIVE_ROOT") == "1"
+
+# Committed protected-anchor ledger + the floor its declared min_entries may never drop
+# below on the real repo tree. BOTH numbers are deliberately duplicated (ledger directive +
+# guard constant) so emptying the gate requires two coordinated edits instead of one silent
+# deletion. LIVE_MIN_PROTECTED_ENTRIES MAY NOT BE REDUCED.
+PROTECTED_LEDGER_REL = os.path.join("practices", "evals",
+                                    "evidence_protected_template_anchors.txt")
+LIVE_MIN_PROTECTED_ENTRIES = 2
+
+def die_structural(msg):
+    print(f"evidence_quote_spotcheck_guard: {msg}", file=sys.stderr)
+    sys.exit(2)
 
 def normalize(s):
     s = html.unescape(s)
@@ -182,37 +231,118 @@ for catalog in ("practices", "practices-react"):
 template_quotes = 0
 template_scanned = 0
 template_misses = []
-if include_templates:
+
+def parse_template_frontmatter(path):
+    """Leading `/*\\n---\\n<yaml>\\n---\\n*/` block as a dict, or None. Shared by the full
+    sweep and the protected-ledger sweep so the two can never drift apart."""
+    text = open(path, errors="replace").read()
+    m = re.match(r'/\*\n---\n(.*?)\n---\n\*/', text, re.S)
+    if not m:
+        return None
+    try:
+        fm = yaml.safe_load(m.group(1))
+    except Exception:
+        return None
+    return fm if isinstance(fm, dict) else None
+
+def upstream_evidence_entries(fm):
+    return [e for e in (fm.get("evidence") or [])
+            if isinstance(e, dict) and "upstream_id" in e]
+
+def check_template_anchor(rel, uid, quote):
+    """Records a finding for one (file, upstream_id) citation. Returns nothing."""
+    found_catalog, snap_text = resolve_snapshot_any_catalog(uid)
+    if found_catalog is None:
+        template_misses.append((rel, uid, "TEMPLATE_SNAPSHOT_FILE_MISSING", ""))
+    elif normalize(quote) not in snap_text:
+        template_misses.append((rel, uid, "TEMPLATE_QUOTE_NOT_IN_SNAPSHOT", quote[:90]))
+
+def load_protected_ledger():
+    """Parses the committed protected-anchor ledger. EVERY degenerate shape exits 2 rather
+    than yielding an empty (vacuously passing) protected set — see the --templates-only-protected
+    header block for the enumeration."""
+    path = os.path.join(root, PROTECTED_LEDGER_REL)
+    if not os.path.isfile(path):
+        die_structural(f"PROTECTED_LEDGER_MISSING — {PROTECTED_LEDGER_REL} not found under {root}")
+    declared_min = None
+    entries = []
+    for raw in open(path, errors="replace").read().splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            m = re.match(r'#\s*min_entries:\s*(\d+)\s*$', line)
+            if m:
+                if declared_min is not None:
+                    die_structural("PROTECTED_LEDGER_DUPLICATE_MIN_ENTRIES — exactly one "
+                                   "`# min_entries: N` directive is allowed")
+                declared_min = int(m.group(1))
+            continue
+        if "::" not in line:
+            die_structural(f"PROTECTED_LEDGER_MALFORMED_ENTRY — {line!r} "
+                           "(expected <path>::<upstream_id>)")
+        rel, uid = (part.strip() for part in line.split("::", 1))
+        if not rel or not uid:
+            die_structural(f"PROTECTED_LEDGER_MALFORMED_ENTRY — {line!r} "
+                           "(expected <path>::<upstream_id>)")
+        entries.append((rel, uid))
+    if declared_min is None:
+        die_structural(f"PROTECTED_LEDGER_NO_MIN_ENTRIES — {PROTECTED_LEDGER_REL} must declare "
+                       "`# min_entries: N` (the count that may not be reduced)")
+    if not entries:
+        die_structural(f"PROTECTED_LEDGER_EMPTY — {PROTECTED_LEDGER_REL} declares no anchors; "
+                       "an emptied ledger is a silenced gate, not a clean tree")
+    if len(entries) < declared_min:
+        die_structural(f"PROTECTED_LEDGER_SHRUNK — {len(entries)} anchor(s) < declared "
+                       f"min_entries={declared_min}")
+    if live_root and declared_min < LIVE_MIN_PROTECTED_ENTRIES:
+        die_structural(f"PROTECTED_LEDGER_FLOOR — declared min_entries={declared_min} is below the "
+                       f"guard-pinned live floor {LIVE_MIN_PROTECTED_ENTRIES} "
+                       "(LIVE_MIN_PROTECTED_ENTRIES may not be reduced)")
+    return entries
+
+if protected_only:
+    # Restricted sweep: exactly the ledger's anchors, and they ARE fatal under
+    # --strict --strict-templates (unlike the advisory full sweep below).
+    for rel, uid in load_protected_ledger():
+        path = os.path.join(root, rel)
+        if not os.path.isfile(path):
+            die_structural(f"PROTECTED_LEDGER_FILE_MISSING — {rel} is listed in "
+                           f"{PROTECTED_LEDGER_REL} but does not exist")
+        fm = parse_template_frontmatter(path)
+        if fm is None:
+            die_structural(f"PROTECTED_LEDGER_NO_FRONTMATTER — {rel} has no parsable leading "
+                           "evidence frontmatter block")
+        cited = upstream_evidence_entries(fm)
+        if not cited:
+            die_structural(f"PROTECTED_LEDGER_NO_EVIDENCE — {rel} carries zero upstream_id "
+                           "evidence entries; protecting it would verify nothing")
+        matching = [e for e in cited if str(e["upstream_id"]) == uid]
+        if not matching:
+            die_structural(f"PROTECTED_LEDGER_ANCHOR_ABSENT — {rel} does not cite "
+                           f"upstream_id={uid} (ledger is stale or the anchor was renamed)")
+        template_scanned += 1
+        for entry in matching:
+            template_quotes += 1
+            check_template_anchor(rel, uid, str(entry.get("quote", "")))
+    if template_quotes == 0:
+        die_structural("ZERO_SCAN — protected ledger resolved but no upstream_id anchor was "
+                       "actually checked")
+elif include_templates:
     templates_dir = os.path.join(root, "templates")
     tmpl_paths = []
     if os.path.isdir(templates_dir):
         for ext in ("*.tsx", "*.ts"):
             tmpl_paths += glob.glob(os.path.join(templates_dir, "**", ext), recursive=True)
     for path in sorted(set(tmpl_paths)):
-        text = open(path, errors="replace").read()
-        m = re.match(r'/\*\n---\n(.*?)\n---\n\*/', text, re.S)
-        if not m:
-            continue
-        try:
-            fm = yaml.safe_load(m.group(1))
-        except Exception:
-            continue
-        if not isinstance(fm, dict):
+        fm = parse_template_frontmatter(path)
+        if fm is None:
             continue
         template_scanned += 1
-        for entry in (fm.get("evidence") or []):
-            if not isinstance(entry, dict) or "upstream_id" not in entry:
-                continue
+        for entry in upstream_evidence_entries(fm):
             template_quotes += 1
-            uid = str(entry["upstream_id"])
-            quote = str(entry.get("quote", ""))
-            rel = os.path.relpath(path, root)
-            found_catalog, snap_text = resolve_snapshot_any_catalog(uid)
-            if found_catalog is None:
-                template_misses.append((rel, uid, "TEMPLATE_SNAPSHOT_FILE_MISSING", ""))
-                continue
-            if normalize(quote) not in snap_text:
-                template_misses.append((rel, uid, "TEMPLATE_QUOTE_NOT_IN_SNAPSHOT", quote[:90]))
+            check_template_anchor(os.path.relpath(path, root),
+                                  str(entry["upstream_id"]), str(entry.get("quote", "")))
 
     # Zero-scan guard: template files with a frontmatter block were found but none carried
     # an upstream_id evidence entry — for the real repo that is a broken invocation; for a
@@ -239,7 +369,11 @@ quote_misses = [m for m in misses if m[2] == "QUOTE_NOT_IN_SNAPSHOT"]
 missing_misses = [m for m in misses if m[2] == "SNAPSHOT_FILE_MISSING"]
 verdict = f"{len(misses)} of {quotes} upstream quote(s) do not match their snapshot body"
 
-if include_templates:
+if protected_only:
+    print(f"evidence_quote_spotcheck_guard: PROTECTED templates anchors ({PROTECTED_LEDGER_REL}) — "
+          f"{template_scanned} file(s), {template_quotes} anchor(s), {len(template_misses)} finding(s)"
+          + ("" if strict_templates else " (advisory — pass --strict --strict-templates to promote)"))
+elif include_templates:
     print(f"evidence_quote_spotcheck_guard: templates/**/*.{{tsx,ts}} — {template_scanned} file(s) with "
           f"evidence frontmatter, {template_quotes} upstream_id quote(s), {len(template_misses)} "
           f"finding(s)" + ("" if strict_templates else " (advisory — pass --strict-templates to promote)"))

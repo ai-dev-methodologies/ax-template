@@ -1,0 +1,61 @@
+# evidence_protected_template_anchors.txt — the templates/** evidence anchors that are
+# STRICTLY ENFORCED (fatal), consumed by
+#   evidence_quote_spotcheck_guard.sh --strict --strict-templates --templates-only-protected
+# which run-all-guards.sh registers live at expected exit 0.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# BACKLOG P2-40 corrected a FABRICATED evidence anchor in
+# templates/L1/components/currency-input.tsx (it cited a Stripe section + quote that the
+# committed snapshot never contained). The gate registered alongside that fix
+# (`--include-templates`, no --strict-templates) was ADVISORY, so restoring the fabricated
+# quote produced a WARN and exit 0 — the "fabricated template anchors are blocked" claim
+# was unearned. This ledger is the earned, non-vacuous half: the anchors listed here are
+# verified against the on-disk snapshot bodies on every run-all-guards run and BLOCK.
+#
+# WHY IT IS A LEDGER AND NOT THE WHOLE TREE
+# -----------------------------------------
+# The first live full templates sweep (2026-07-28) found ~105 pre-existing quote↔snapshot
+# misalignments across templates/L1/components/** — overwhelmingly quotes verified against
+# the LIVE vendor page while the committed snapshot is a partial digest of it. Those are a
+# real, separate backlog item; flipping the whole sweep to fatal would freeze the gate on
+# work that is out of scope here. So the full sweep stays ADVISORY (still registered, still
+# printed) and this explicitly-listed subset is FATAL. Grow the list as anchors are
+# verified; the list may not shrink (see min_entries below).
+#
+# FORMAT
+# ------
+#   <repo-relative path>::<upstream_id>
+# Anchor-scoped, not file-scoped, on purpose: currency-formatter.tsx cites TWO upstream
+# snapshots and only one of them is disk-clean (see the exclusion note below). Protecting
+# the file wholesale would have forced a choice between an unearned pass and rewriting an
+# unrelated quote purely to make a gate green. Listing the anchor is the honest unit.
+#
+# NON-VACUITY (enforced by the guard, exit 2 on each)
+# ---------------------------------------------------
+# missing file · zero entries · missing `min_entries` directive · fewer entries than
+# min_entries · min_entries below the guard-pinned live floor · an entry whose file does
+# not exist · an entry whose file carries no upstream_id evidence · an entry whose declared
+# upstream_id is not actually cited by that file · zero anchors scanned.
+#
+# min_entries — the protected set MAY NOT BE REDUCED below this count. The guard
+# additionally pins LIVE_MIN_PROTECTED_ENTRIES=2 in evidence_quote_spotcheck_guard.sh for
+# the real repo tree, so lowering the directive here does not silently shrink the gate.
+# min_entries: 2
+
+# The anchor P2-40 found fabricated and re-anchored. This is the RED-on-revert subject:
+# restoring the pre-P2-40 quote makes the registered live guard exit 1.
+templates/L1/components/currency-input.tsx::stripe-billing-2026-05
+
+# Positive control — an anchor that was already correct, so the gate is proven to pass for
+# an honest citation rather than merely failing for a dishonest one.
+templates/L1/components/currency-formatter.tsx::stripe-billing-2026-05
+
+# DELIBERATELY NOT PROTECTED (disclosed, not hidden):
+#   templates/L1/components/currency-formatter.tsx::next-intl-2026-05
+# Its quote compacts a two-line snapshot code block ("...format(1234);" + a following
+# "// → '₩1,234'" comment line) into one line, so it is not a substring of the snapshot
+# body. That is one instance of the ~105-item pre-existing misalignment backlog above, not
+# a fabrication — the cited section and figures do exist in the snapshot. Re-anchoring it
+# belongs to that backlog item; it is excluded here rather than being fixed under this
+# guard's banner or silently swept into a passing claim.

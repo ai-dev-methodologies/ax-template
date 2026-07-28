@@ -1,0 +1,2 @@
+# Ledger with a valid directive but ZERO anchors — an emptied gate.
+# min_entries: 1

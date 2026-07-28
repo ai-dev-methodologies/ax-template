@@ -1,0 +1,3 @@
+# Ledger declares an upstream_id the protected file does not actually cite.
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::renamed-src

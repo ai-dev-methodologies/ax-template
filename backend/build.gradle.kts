@@ -702,6 +702,11 @@ tasks.register<Test>("testCommonAdvice") {
     description = "Run shared RFC 9457 fallback advice tests (IMW1-B: common.GlobalProblemDetailAdvice — @Valid/415/405/malformed → problem+json)"
     group = "verification"
     shouldRunAfter("test")
+    // BACKLOG P2-36 — explicit, opt-in pass-through for the validation-errors
+    // golden REGENERATION command (ValidationErrorsContractParityTest). Absent
+    // the flag nothing is forwarded, so the regeneration test stays disabled and
+    // the assertion path can never write the fixture it compares against.
+    System.getProperty("golden.regenerate")?.let { systemProperty("golden.regenerate", it) }
 }
 
 tasks.register<Test>("testAllFilterSentinel") {

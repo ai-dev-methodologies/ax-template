@@ -1,0 +1,3 @@
+# Declares 2 protected anchors but lists 1 — the ledger was shrunk.
+# min_entries: 2
+templates/L1/components/sample-widget.tsx::sample-src
