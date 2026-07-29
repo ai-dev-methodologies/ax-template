@@ -32,7 +32,10 @@ const FICTIONAL = [
   'verification' + 'State',
   'provider' + 'Links',
 ]
-const ROLES_ARRAY = 'roles' + '[' + ']'
+// property-ACCESS shapes too, not just the literal type annotation: `data.roles?.[0]`,
+// `x.roles[0]`, `.roles.map(...)` — the final gate proved a role-only reintroduction
+// evaded the literal-only token. Verified zero legitimate `.roles` uses in either tree.
+const ROLES_RE = new RegExp('\\.' + 'roles' + '\\b|' + 'roles' + '\\[' + '\\]')
 
 function* walk(dir: string): Generator<string> {
   for (const name of readdirSync(dir)) {
@@ -59,7 +62,7 @@ describe('P1-73 canonical /auth/me shape lock (templates/ + frontend/, .ts/.tsx)
       for (const m of text.match(fictionalRe) ?? []) {
         hits.push(`${file.split(REPO_ROOT + sep)[1] ?? file}: ${m}`)
       }
-      if (text.indexOf(ROLES_ARRAY) !== -1) {
+      if (ROLES_RE.test(text)) {
         rolesHits.push(file.split(REPO_ROOT + sep)[1] ?? file)
       }
     }
@@ -71,14 +74,18 @@ describe('P1-73 canonical /auth/me shape lock (templates/ + frontend/, .ts/.tsx)
   })
 
   it('no source file references the fictional roles array shape', () => {
-    expect(rolesHits, 'the canonical shape has a single `role` string — a roles ' +
-      'array is the pre-P1-73 fiction').toEqual([])
+    expect(rolesHits, 'the canonical shape has a single `role` string — any roles-' +
+      'array access or annotation is the pre-P1-73 fiction').toEqual([])
   })
 
   it('the scan itself is non-vacuous (it actually visited both trees)', () => {
     // silence-is-not-success: an empty walk would vacuously pass the locks above
-    let visited = 0
-    for (const root of SCAN_ROOTS) for (const _ of walk(root)) visited++
-    expect(visited).toBeGreaterThan(100)
+    // per-tree floors (the gate showed a single aggregate floor lets one whole
+    // tree vanish): current counts are ~401 (templates) and ~432 (frontend)
+    for (const root of SCAN_ROOTS) {
+      let visited = 0
+      for (const _ of walk(root)) visited++
+      expect(visited, `scan tree vanished: ${root}`).toBeGreaterThan(100)
+    }
   })
 })
