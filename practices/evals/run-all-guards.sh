@@ -1626,7 +1626,7 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/pyyaml_preflight_coverage_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/pyyaml-preflight-coverage/fail_open_guard"
 fi
 
-echo "[96] resume_provenance_guard.sh (a BLOCKED R25 run may not launder itself green. P0-30 made an incomplete result ledger exit 2, but the step verdict was still 'no failure ⇒ PASS' and verdicts publish incrementally — so a step whose commands never executed was written to .ax-verify/last_run.jsonl as PASS, and the next --resume skipped it and exited 0 with full_run=true, which the recency guard accepts. Runs the REAL verify-completion.sh in a throwaway sandbox against a two-step harness (step 1 wipes the run's own temp dir, step 2 is \`false\`) and asserts the resume run cannot claim green, that a clean run's --resume still works, and that SHORT_CIRCUITED cannot be inherited from the environment. 2026-07-29 extension — a SKIPPED command produces a row too: an absent working_directory used to record SKIP, so \`mv frontend frontend.off; verify-completion.sh --step frontend-lint\` exited 0 with \`npm run lint\` never invoked and the next --resume inherited that PASS. A second harness (a command whose directory is moved away, beside one that really runs) asserts the absent directory BLOCKS, that a step is publishable only when every required command actually executed, and that advisory commands stay advisory. Both harnesses carry their own neuter matrix (A/B and C/D). Live exits 0.)"
+echo "[96] resume_provenance_guard.sh (a BLOCKED R25 run may not launder itself green. P0-30 made an incomplete result ledger exit 2, but the step verdict was still 'no failure ⇒ PASS' and verdicts publish incrementally — so a step whose commands never executed was written to .ax-verify/last_run.jsonl as PASS, and the next --resume skipped it and exited 0 with full_run=true, which the recency guard accepts. Runs the REAL verify-completion.sh in a throwaway sandbox against a two-step harness (step 1 wipes the run's own temp dir, step 2 is \`false\`) and asserts the resume run cannot claim green, that a clean run's --resume still works, and that SHORT_CIRCUITED cannot be inherited from the environment. 2026-07-29 extension — a SKIPPED command produces a row too: an absent working_directory used to record SKIP, so \`mv frontend frontend.off; verify-completion.sh --step frontend-lint\` exited 0 with \`npm run lint\` never invoked and the next --resume inherited that PASS. A second harness (a command whose directory is moved away, beside one that really runs) asserts the absent directory BLOCKS, that a step is publishable only when every required command actually executed, and that advisory commands stay advisory. Both harnesses carry their own neuter matrix (A/B and C/D). 2026-07-29 cross-family review added two more axes: (E) resume evidence was bound to head_sha, not to the tree that ran — R25 runs on dirty trees, so an uncommitted edit that makes a step pass, then reverted at the same head, left a record \`--resume\` still consumed (a git-backed harness whose COMMITTED state fails the step reproduces it, and each record now carries a working-tree fingerprint the preloader must match); (F) a SELECTED step declaring \`commands: []\` emitted no plan row, so it vanished from STEP_ORDER and from every accounting check while the run published green — now a parse-time BLOCK. Live exits 0.)"
 run_guard "resume_provenance/live" 0 \
     bash "$SCRIPT_DIR/resume_provenance_guard.sh"
 if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
@@ -1643,6 +1643,18 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     # inherited that PASS. Must FAIL, otherwise the workdir assertions prove nothing.
     run_guard "resume_provenance/fixture_fail_unfixed_workdir" 1 \
         bash "$SCRIPT_DIR/resume_provenance_guard.sh" --fixture-root "$SCRIPT_DIR/fixtures/resume-provenance/fail_unfixed_workdir"
+    # Layer E neutered — resume records bound to head_sha ALONE. The reviewer's 2026-07-29
+    # path: at head H an uncommitted edit makes the step pass, the edit is reverted (head
+    # still H, failure back), and `--resume` skips the step on that record, publishing
+    # exit=0/full_run=true for a tree that fails. Must FAIL, or the tree-binding assertion
+    # would pass on the unfixed script.
+    run_guard "resume_provenance/fixture_fail_unfixed_fingerprint" 1 \
+        bash "$SCRIPT_DIR/resume_provenance_guard.sh" --fixture-root "$SCRIPT_DIR/fixtures/resume-provenance/fail_unfixed_fingerprint"
+    # Layer F neutered — a SELECTED checklist step with zero commands emits no plan row, so
+    # it never enters STEP_ORDER and no accounting check can see it: the run publishes green
+    # with a required step never verified. Must FAIL, or the empty-step assertion is vacuous.
+    run_guard "resume_provenance/fixture_fail_unfixed_emptystep" 1 \
+        bash "$SCRIPT_DIR/resume_provenance_guard.sh" --fixture-root "$SCRIPT_DIR/fixtures/resume-provenance/fail_unfixed_emptystep"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

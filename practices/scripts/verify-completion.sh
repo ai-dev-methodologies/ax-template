@@ -48,7 +48,11 @@
 #     watchdog with SIGTERM → 30s grace → SIGKILL. Race-free: watchdog killed
 #     atomically once the command exits.
 #   • `--resume` reads .ax-verify/last_run.jsonl and skips steps whose
-#     {step_id, head_sha} matches and were PASS. HEAD drift wipes resume.
+#     {step_id, head_sha, tree_fingerprint} matches and were PASS. HEAD drift wipes
+#     resume, and so does WORKING-TREE drift at the same HEAD: a record produced by a
+#     tree with an uncommitted change is not consumable once that change is reverted
+#     (the reviewer's "lint passes only while the edit is present" path). A refused
+#     record is announced and RE-VERIFIED, never silently skipped.
 #     PASS is provenance-bearing: a step that produced no observed command
 #     outcome is recorded UNRUN and never skipped, and a run that ends in a
 #     ledger BLOCK discards its resume record entirely rather than publishing
@@ -67,6 +71,10 @@
 #   • A step may be recorded PASS only when EVERY planned non-advisory command of
 #     that step actually executed with an acceptable outcome (layer D). Otherwise
 #     it is UNRUN, which `--resume` never skips.
+#   • A CHECKLIST STEP WITH NO COMMANDS IS A MALFORMED CONTRACT, not a pass. It would
+#     emit no plan row, disappear from STEP_ORDER, and thus be invisible to the very
+#     accounting checks below — so a full run could publish green with that step never
+#     verified. Selected steps are required to be non-empty at parse time (exit 2).
 #   • RESUME-SKIP is `resumed`, not `executed`: it is publishable only because the
 #     record it consumed was itself published by a run at the SAME head_sha that
 #     executed the step. By induction every PASS at head H roots in an execution
@@ -154,6 +162,86 @@ mkdir -p "$AUDIT_DIR"
 
 CURRENT_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
 
+# ── Working-tree fingerprint — what a resume record is actually bound to ─────
+# head_sha alone does NOT identify the code that ran. R25 is routinely invoked on a DIRTY
+# tree, so at one head H the tree can differ arbitrarily between two invocations:
+#   1. at H, an UNCOMMITTED edit makes `--step frontend-lint` pass → PASS record published
+#   2. the edit is reverted/stashed — head is still H, the lint failure is back
+#   3. `--resume` skips frontend-lint on that record and publishes full_run=true for H,
+#      which completion_checklist_recency_guard accepts. The failing tree was never linted.
+# So each record additionally carries a fingerprint of the tree that produced it, and the
+# preloader refuses any record whose fingerprint differs from the tree in front of it.
+# Refusal is loud and means RE-VERIFY (the step simply runs again) — never a silent skip.
+#
+# The fingerprint hashes, deterministically: `git status --porcelain -z -uall` (the set and
+# state of dirty/untracked paths), `git diff HEAD --binary` (the CONTENT of every tracked
+# modification, staged or not), and the bytes of every untracked non-ignored file (invisible
+# to `git diff HEAD`). Ignored paths are excluded by git itself, so build/, node_modules/
+# and .ax-verify/ churn does not invalidate a record — measured cost on this repo: ~60ms.
+#
+# HONEST LIMIT: in a NON-git working tree there is no cheap tree identity, and the value
+# degrades to the constant "nogit" — head_sha is "unknown" there too, so such a run can
+# never serve as push evidence anyway (the recency guard is a git hook matching real SHAs).
+# Chosen over "require a clean worktree to publish/consume": that would be sound but would
+# delete resume for its actual use case (a long full run on a work-in-progress tree), and
+# a fingerprint gives the same guarantee — a record is consumable only by the tree that
+# produced it — without forbidding the workflow.
+compute_tree_fingerprint() {
+    python3 - "$REPO_ROOT" <<'PYEOF'
+import hashlib, os, subprocess, sys
+
+repo = sys.argv[1]
+
+def git(*args):
+    p = subprocess.run(["git", "-C", repo, *args],
+                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    if p.returncode != 0:
+        raise RuntimeError("git " + " ".join(args))
+    return p.stdout
+
+try:
+    status = git("status", "--porcelain", "-z", "-uall")
+    diff = git("diff", "HEAD", "--binary")
+except Exception:
+    # Not a git working tree (or git unavailable): no cheap tree identity — see the
+    # HONEST LIMIT note above. Constant value ⇒ head-only binding, as before.
+    print("nogit")
+    sys.exit(0)
+
+h = hashlib.sha256()
+h.update(b"status\0"); h.update(status)
+h.update(b"\0diff\0"); h.update(diff)
+
+# Untracked (non-ignored) files: `git diff HEAD` cannot see them, so hash their bytes.
+entries = status.split(b"\0")
+untracked = []
+i = 0
+while i < len(entries):
+    entry = entries[i]
+    i += 1
+    if len(entry) < 4:
+        continue
+    xy, path = entry[:2], entry[3:]
+    if xy[:1] in (b"R", b"C"):
+        i += 1  # a rename/copy record is followed by its origin path as a separate entry
+    if xy == b"??":
+        untracked.append(path)
+
+for path in sorted(untracked):
+    h.update(b"untracked\0"); h.update(path); h.update(b"\0")
+    try:
+        with open(os.path.join(os.fsencode(repo), path), "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 16), b""):
+                h.update(chunk)
+    except OSError:
+        h.update(b"<unreadable>")
+
+print(h.hexdigest())
+PYEOF
+}
+CURRENT_TREE_FP="$(compute_tree_fingerprint 2>/dev/null)"
+[ -n "$CURRENT_TREE_FP" ] || CURRENT_TREE_FP="unknown"
+
 # ── 1. Parse the checklist into a flat command plan via python3 ───────────────
 # Output schema (one line per command, tab-separated):
 #   <step_id>\t<step_title>\t<command>\t<working_directory>\t<expected_exit>\t<advisory>\t<timeout_seconds>
@@ -208,7 +296,21 @@ for step in doc.get("checklist") or []:
     title = step.get("title", sid)
     step_timeout = int(step.get("timeout_seconds", default_timeout))
     (playbook_out / f"{sid}.txt").write_text(step.get("fix_playbook", ""))
-    for cmd_entry in step.get("commands") or []:
+    # A SELECTED step with zero commands is a malformed contract, not a pass. It emits no
+    # plan row, so it vanishes from STEP_ORDER — and every downstream accounting check
+    # iterates STEP_ORDER, so the step is never accounted for by anything. A full run with
+    # one other (green) step would satisfy the non-empty-plan check and publish
+    # full_run=true while a required step of the checklist was never verified.
+    # Exit 3 (distinct from the parse errors above) so the caller can name this cause.
+    # Only SELECTED steps are checked: --step filtering already `continue`d above, so a
+    # backend-only partial run is not blocked by an empty step it was never going to run.
+    step_commands = step.get("commands") or []
+    if not step_commands:
+        print(f"verify-completion: R25 BLOCK: checklist step '{sid}' declares no commands "
+              f"(`commands:` is empty or absent). A step with nothing to run cannot be "
+              f"verified, and it would disappear from the plan silently.", file=sys.stderr)
+        sys.exit(3)
+    for cmd_entry in step_commands:
         cmd = cmd_entry.get("command", "")
         wd = cmd_entry.get("working_directory", default_wd)
         expected_exit = cmd_entry.get("expected_exit", 0)
@@ -226,6 +328,13 @@ pathlib.Path(plan_path + ".failfast").write_text("\n".join(fail_fast_sids) + ("\
 PYEOF
 
 PLAN_EXIT=$?
+if [ "$PLAN_EXIT" -eq 3 ]; then
+    echo "verify-completion: R25 BLOCK: the checklist is malformed — a step selected for this run" \
+         "declares no commands (named above). Such a step contributes no plan row, so it is absent" \
+         "from the executed plan AND from every accounting check, and the run would report green" \
+         "with that step never verified. Give the step a command, or delete the step." >&2
+    exit 2
+fi
 if [ "$PLAN_EXIT" -ne 0 ]; then
     echo "verify-completion: failed to parse checklist" >&2
     exit 2
@@ -315,10 +424,11 @@ declare_resume_pass() {
     grep -F "$1" "$RESUME_TMP" >/dev/null 2>&1
 }
 if [ "$RESUME" -eq 1 ] && [ -f "$RESUME_LOG" ]; then
-    python3 - "$RESUME_LOG" "$CURRENT_HEAD" "$RESUME_TMP" <<'PYEOF'
+    python3 - "$RESUME_LOG" "$CURRENT_HEAD" "$RESUME_TMP" "$CURRENT_TREE_FP" <<'PYEOF'
 import sys, pathlib, json
-resume_path, head, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
+resume_path, head, out_path, tree_fp = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 keep = []
+stale = []
 for line in pathlib.Path(resume_path).read_text().splitlines():
     line = line.strip()
     if not line:
@@ -336,9 +446,29 @@ for line in pathlib.Path(resume_path).read_text().splitlines():
     # masks the loss of layer A, hollowing out resume_provenance_guard's non-vacuity
     # matrix ("A+B neutered must still REPRODUCE the defect"). Provenance is enforced
     # where it is produced (emit_step_verdict), not where it is consumed.
+    #
+    # The TREE FINGERPRINT is different in kind, and IS an admission gate: it is the only
+    # thing that ties the record to the code that ran. head_sha is satisfied by any tree at
+    # that head, including one whose uncommitted change has since been reverted. A record
+    # without the field predates this binding and is likewise refused — fail closed.
+    rec_fp = rec.get("tree_fingerprint")
+    if rec_fp != tree_fp:
+        stale.append((rec.get("step_id") or "?", rec_fp or "(absent)"))
+        continue
     sid = rec.get("step_id")
     if sid:
         keep.append(sid)
+if stale:
+    steps = ", ".join(sorted({s for s, _ in stale}))
+    seen = sorted({f for _, f in stale})
+    sys.stderr.write(
+        "verify-completion: resume record was produced against a DIFFERENT tree — re-verifying.\n"
+        f"  head_sha matches ({head}) but the working tree does not:\n"
+        f"    record tree : {', '.join(seen)}\n"
+        f"    current tree: {tree_fp}\n"
+        f"  affected step(s): {steps}\n"
+        "  A step verified against other file contents is not evidence for these ones, so the\n"
+        "  record is NOT consumed. Those steps run again (this is a re-verify, not a failure).\n")
 pathlib.Path(out_path).write_text("\n".join(sorted(set(keep))) + ("\n" if keep else ""))
 PYEOF
 fi
@@ -379,8 +509,10 @@ emit_resume() {
     local sid="$1" status="$2" provenance="${3:-none}"
     local ts
     ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '{"step_id":"%s","status":"%s","ts":"%s","head_sha":"%s","provenance":"%s"}\n' \
-        "$sid" "$status" "$ts" "$CURRENT_HEAD" "$provenance" >> "$RESUME_NEW"
+    # tree_fingerprint pins the record to the working tree that produced it — head_sha alone
+    # is satisfied by any tree at that head (see compute_tree_fingerprint).
+    printf '{"step_id":"%s","status":"%s","ts":"%s","head_sha":"%s","provenance":"%s","tree_fingerprint":"%s"}\n' \
+        "$sid" "$status" "$ts" "$CURRENT_HEAD" "$provenance" "$CURRENT_TREE_FP" >> "$RESUME_NEW"
     # Atomic publish: copy to a sibling tmp then rename. mv on same filesystem
     # is atomic per POSIX. Crash mid-rename ⇒ caller sees either old or new.
     cp "$RESUME_NEW" "$RESUME_LOG.tmp.$$"

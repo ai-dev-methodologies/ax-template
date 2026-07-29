@@ -42,6 +42,31 @@
 #   (D) required-command coverage — a step is PASS only when EVERY planned non-advisory
 #       command actually executed. This is what makes "the step has a row" insufficient on
 #       its own, and it holds even where (C) does not apply.
+#   (E) tree binding — a resume record is consumable only by the WORKING TREE that produced
+#       it, not merely by the same head_sha. See THE THIRD DEFECT below.
+#   (F) non-empty step contract — a SELECTED checklist step with zero commands is a parse-
+#       time BLOCK. See THE FOURTH DEFECT below.
+#
+# THE THIRD DEFECT — resume evidence was bound to HEAD, not to the tree that ran (2026-07-29):
+#   R25 is routinely invoked on a dirty tree, so one head_sha covers arbitrarily many trees.
+#   The preloader checked only {head_sha, status}, so the reviewer's path laundered a failing
+#   tree green with no ledger damage and no missing directory at all:
+#     1. at head H, an UNCOMMITTED edit makes `frontend-lint` pass → PASS record published
+#     2. the edit is reverted — head is still H and the lint failure is back
+#     3. `--resume` skips frontend-lint on that record: `npm run lint` never runs
+#     4. the run publishes exit=0 / full_run=true for H, which the recency guard accepts
+#   Measured on the pre-fix script in a throwaway git copy of this repo whose COMMITTED state
+#   fails lint: run1 exit 0 (dirty tree) → revert → run2 --resume exit 0, "SKIP (resume)",
+#   `npm run lint` never invoked, {"exit":0,...,"full_run":true} published at that head.
+#   Post-fix the same path exits 1 with the record refused out loud and the lint re-run.
+#
+# THE FOURTH DEFECT — a step with no commands disappeared from verification (2026-07-29):
+#   The plan is a flat list of COMMANDS, so a step declaring `commands: []` emitted no row,
+#   never entered STEP_ORDER, and was therefore invisible to every downstream accounting
+#   check (all of which iterate STEP_ORDER). The non-empty-plan check was satisfied by any
+#   other step. Measured on the pre-fix script with a two-step checklist (one empty, one
+#   green): step_order=['green'], exit 0, "PASS — all steps green" — a required step of the
+#   contract was silently dropped. Post-fix the parse BLOCKS (exit 2) naming the step.
 #
 # ALSO PINNED: SHORT_CIRCUITED must be initialised internally, never inherited. It gates
 # the "every planned step has an outcome" accounting check, so an exported SHORT_CIRCUITED=1
@@ -60,6 +85,12 @@
 #       command and exits 1. Both layers are kept: (B) refuses to certify anything from a
 #       run whose accounting is unknown, (A) fixes the verdict rule itself and so does not
 #       depend on the accounting check's fail_fast exemption staying correct.
+#   (E) and (F) each carry their own single-layer matrix: with the layer neutered in a copy
+#   of the live script its harness must REPRODUCE the defect, and the live script must hold.
+#   The (E) harness needs a real git working tree (that is what a tree fingerprint is
+#   computed from), so its sandbox is `git init`ed and committed; the other harnesses stay
+#   non-git, where the fingerprint degrades to a constant and resume behaves exactly as
+#   before — which is also what keeps assertion 2 (legitimate resume) meaningful there.
 #   The (C)/(D) matrix runs against a step with TWO non-advisory commands — one in an absent
 #   directory, one that really runs — because that is the shape that separates them: with (C)
 #   neutered the skipped command coexists with a genuine row, so only (D) can catch it.
@@ -124,7 +155,7 @@ if [ -n "$FIXTURE_ROOT" ]; then
         echo "resume_provenance_guard: fixture is missing its neuter-mode file: $FIXTURE_ROOT/neuter-mode" >&2; exit 2; }
     SUBJECT_MODE="$(tr -d ' \t\n' < "$FIXTURE_ROOT/neuter-mode")"
     case "$SUBJECT_MODE" in
-        none|a|b|ab|c|d|cd) ;;
+        none|a|b|ab|c|d|cd|e|f) ;;
         *) echo "resume_provenance_guard: unknown neuter-mode '$SUBJECT_MODE' in $FIXTURE_ROOT" >&2; exit 2 ;;
     esac
 fi
@@ -151,20 +182,32 @@ NEUTER_C_ANCHOR='dir_missing_blocks=1'
 NEUTER_C_VALUE='dir_missing_blocks=0'
 NEUTER_D_ANCHOR='elif [ "$req_planned" -gt 0 ] && [ "$req_executed" -lt "$req_planned" ]; then'
 NEUTER_D_VALUE='elif false; then'
+# Layer (E): the resume preloader stops comparing the record's tree fingerprint with the
+# tree in front of it — i.e. back to "same head_sha is good enough". Layer (F): the parser
+# stops rejecting a selected step that declares no commands, so the step silently vanishes.
+NEUTER_E_ANCHOR='if rec_fp != tree_fp:'
+NEUTER_E_VALUE='if False:'
+NEUTER_F_ANCHOR='if not step_commands:'
+NEUTER_F_VALUE='if False:'
 
-# make_vc <dest> <subset of abcd | none> — write a (possibly neutered) verify-completion.sh.
+# make_vc <dest> <subset of abcdef | none> — write a (possibly neutered) verify-completion.sh.
 make_vc() {
     local dest="$1" mode="$2"
     python3 - "$REAL_VC" "$dest" "$mode" \
         "$NEUTER_A_ANCHOR" "$NEUTER_A_VALUE" "$NEUTER_B_ANCHOR" "$NEUTER_B_VALUE" \
-        "$NEUTER_C_ANCHOR" "$NEUTER_C_VALUE" "$NEUTER_D_ANCHOR" "$NEUTER_D_VALUE" <<'PY'
+        "$NEUTER_C_ANCHOR" "$NEUTER_C_VALUE" "$NEUTER_D_ANCHOR" "$NEUTER_D_VALUE" \
+        "$NEUTER_E_ANCHOR" "$NEUTER_E_VALUE" "$NEUTER_F_ANCHOR" "$NEUTER_F_VALUE" <<'PY'
 import sys
 src, dest, mode = sys.argv[1:4]
-pairs = sys.argv[4:12]
+pairs = sys.argv[4:16]
 text = open(src, encoding="utf-8").read()
-layers = zip("abcd", pairs[0::2], pairs[1::2])
+# The mode is a SET of layer letters, not a substring to search. "none" must select
+# nothing — and it literally contains 'e'/'n'/'o', so `letter in mode` would silently
+# neuter layer (e) on the unmutated subject and make the live assertion self-defeating.
+selected = set() if mode in ("", "none") else set(mode)
+layers = zip("abcdef", pairs[0::2], pairs[1::2])
 for want, anchor, value in layers:
-    if want not in mode:
+    if want not in selected:
         continue
     n = text.count(anchor)
     if n != 1:
@@ -260,6 +303,38 @@ checklist:
       - command: '"'"'true'"'"'
         expected_exit: 0'
 
+# The tree-binding harness (layer E). `gate.txt` is COMMITTED holding "fail", so the step
+# passes only while an uncommitted edit is present — the reviewer'"'"'s frontend-lint shape
+# reduced to one grep. .ax-verify is gitignored exactly as in the real repo, so the run'"'"'s
+# own audit writes do not perturb the fingerprint.
+TREE_CHECKLIST='version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: tree-gated
+    title: "passes only while the uncommitted edit is present"
+    commands:
+      - command: '"'"'grep -q pass gate.txt'"'"'
+        expected_exit: 0'
+
+# The empty-step harness (layer F). A required step declaring NO commands beside a green one:
+# pre-fix the empty step emitted no plan row, never entered STEP_ORDER, and the run published
+# green with it unverified.
+EMPTY_STEP_CHECKLIST='version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-but-empty
+    title: "a required step that declares NO commands"
+    commands: []
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: '"'"'true'"'"'
+        expected_exit: 0'
+
 WD_ADVISORY_CHECKLIST='version: 1
 defaults:
   working_directory: "."
@@ -343,6 +418,57 @@ workdir_launders() {
     WW_DESC="run1=$rc1 run2=$rc2 command_ever_executed=$ran record=${record:-(none)}"
     # Laundered ⟺ a green run was published although the command never executed.
     [ "$rc2" -eq 0 ] && [ "$ran" -eq 0 ]
+}
+
+# ── The tree-binding harness (layer E) ───────────────────────────────────────
+# Reproduces the reviewer's path exactly, in a throwaway git repo whose COMMITTED state
+# FAILS the step: (1) an uncommitted edit makes it pass and a full run publishes the record,
+# (2) the edit is reverted — head unchanged, failure back, (3) --resume. Returns 0 =
+# LAUNDERED (a green run was published at that head although the step, against THIS tree,
+# fails and never ran), 1 = held. Sets TW_DESC to a one-line witness.
+# git is a baseline R25 prerequisite; if it is unavailable the harness cannot run at all.
+TW_DESC=""
+tree_launders() {
+    local vc="$1" tag="$2"
+    local sb="$WORK/tree-$tag"
+    build_sandbox "$sb" "$vc" "$TREE_CHECKLIST"
+    printf 'fail\n' > "$sb/repo/gate.txt"
+    printf '.ax-verify/\n' > "$sb/repo/.gitignore"
+    ( cd "$sb/repo" && git init -q . && git add -A \
+        && git -c user.email=ax@example.invalid -c user.name=ax commit -q -m harness ) >/dev/null 2>&1 || {
+        echo "resume_provenance_guard: could not create the git harness (git required)" >&2; return 2; }
+    VC_ENV=""
+    # (1) uncommitted edit ⇒ the step passes; the record is published for this dirty tree.
+    printf 'pass\n' > "$sb/repo/gate.txt"
+    vc_run "$sb" "$sb/run1.log"; local trc1=$?
+    # (2) revert it — head_sha is unchanged, the failure is back.
+    ( cd "$sb/repo" && git checkout -q -- gate.txt )
+    # (3) --resume: consuming the record here skips a step that this tree fails.
+    vc_run "$sb" "$sb/run2.log" --resume; local trc2=$?
+    local tskip=0
+    grep -q 'SKIP (resume)' "$sb/run2.log" 2>/dev/null && tskip=1
+    TW_DESC="run1=$trc1 run2=$trc2 resume_skip_in_run2=$tskip gate=$(tr -d '\n' < "$sb/repo/gate.txt")"
+    # Laundered ⟺ the resume run claimed green AND it did so by skipping, i.e. without ever
+    # re-running the step against the tree actually in front of it.
+    [ "$trc2" -eq 0 ] && [ "$tskip" -eq 1 ]
+}
+
+# ── The empty-step harness (layer F) ─────────────────────────────────────────
+# A required step with `commands: []` beside a green one. Returns 0 = LAUNDERED (the run
+# published green while that step never appeared in the executed plan), 1 = held.
+# Sets EW_DESC to a one-line witness.
+EW_DESC=""
+empty_step_launders() {
+    local vc="$1" tag="$2"
+    local sb="$WORK/emptystep-$tag"
+    build_sandbox "$sb" "$vc" "$EMPTY_STEP_CHECKLIST"
+    VC_ENV=""
+    vc_run "$sb" "$sb/run.log"; local erc=$?
+    local eseen=0
+    grep -q '^── \[required-but-empty\]' "$sb/run.log" 2>/dev/null && eseen=1
+    EW_DESC="exit=$erc empty_step_in_executed_plan=$eseen"
+    # Laundered ⟺ a green verdict was published AND the empty step never entered the plan.
+    [ "$erc" -eq 0 ] && [ "$eseen" -eq 0 ]
 }
 
 echo "── [resume provenance] laundering harness: step 1 wipes the run's temp dir, step 2 is \`false\`"
@@ -433,7 +559,66 @@ fi
 # then correctly report that fixture as vacuous w.r.t. its registered anchor — the fixture
 # would still go red with assertion 1's logic neutered. One detection, one axis.
 
-# ── Assertion 6 (non-vacuity + layer matrix) — LIVE mode only ────────────────
+# ── Assertion 6: a resume record may not outlive the tree that produced it ───
+echo "── [tree binding] harness: same head_sha, but the uncommitted change that made the step pass is reverted"
+tree_launders "$VC_SUBJECT" subject; TREE_LAUNDERED=$?
+if [ "$TREE_LAUNDERED" -eq 2 ]; then
+    echo "resume_provenance_guard: git harness unavailable" >&2; exit 2
+fi
+echo "  subject          : $TW_DESC"
+if [ "$TREE_LAUNDERED" -eq 0 ]; then
+    violation "a resume record produced by a DIFFERENT working tree at the same head_sha was" \
+              "consumed: the step was skipped although the tree in front of the run fails it." \
+              "head_sha does not identify the code that ran — a dirty tree makes one head cover many."
+fi
+
+# ── Assertion 7: tree binding must not break resume on an UNCHANGED tree ─────
+# Over-correction check. Same git sandbox shape, but nothing is touched between the runs:
+# the second run must still resume-skip. (The dirty-but-identical case is the common one —
+# R25 is normally run on a work-in-progress tree — so it is what is asserted here.)
+SB_TREE_STABLE="$WORK/tree-stable"
+build_sandbox "$SB_TREE_STABLE" "$VC_SUBJECT" "$TREE_CHECKLIST"
+printf 'pass\n' > "$SB_TREE_STABLE/repo/gate.txt"
+printf '.ax-verify/\n' > "$SB_TREE_STABLE/repo/.gitignore"
+( cd "$SB_TREE_STABLE/repo" && git init -q . && git add -A \
+    && git -c user.email=ax@example.invalid -c user.name=ax commit -q -m harness ) >/dev/null 2>&1
+printf 'pass\n# work in progress\n' > "$SB_TREE_STABLE/repo/gate.txt"   # dirty, and left dirty
+VC_ENV=""
+vc_run "$SB_TREE_STABLE" "$SB_TREE_STABLE/run1.log"; TS_RC1=$?
+vc_run "$SB_TREE_STABLE" "$SB_TREE_STABLE/run2.log" --resume; TS_RC2=$?
+TS_SKIPS=$(grep -c 'SKIP (resume)' "$SB_TREE_STABLE/run2.log" 2>/dev/null || echo 0)
+echo "  unchanged tree   : run1=$TS_RC1 run2=$TS_RC2 resume_skips=$TS_SKIPS (want 0/0/1)"
+if [ "$TS_RC1" -ne 0 ] || [ "$TS_RC2" -ne 0 ] || [ "${TS_SKIPS:-0}" -lt 1 ]; then
+    violation "resume stopped working on an UNCHANGED (dirty) working tree (run1=$TS_RC1" \
+              "run2=$TS_RC2 skips=$TS_SKIPS, expected 0/0/1). The tree binding must refuse a" \
+              "record from a DIFFERENT tree, not refuse every record."
+fi
+
+# ── Assertion 8: a selected step with no commands is a BLOCK, not a silent drop ──
+echo "── [empty step] harness: a required step declaring \`commands: []\` beside a green step"
+empty_step_launders "$VC_SUBJECT" subject; EMPTY_LAUNDERED=$?
+echo "  subject          : $EW_DESC"
+if [ "$EMPTY_LAUNDERED" -eq 0 ]; then
+    violation "a checklist step with zero commands vanished from the plan and the run still" \
+              "published green. A step that emits no command row is absent from STEP_ORDER and" \
+              "therefore from every accounting check — the contract was not verified."
+fi
+
+# ── Assertion 9: the empty-step BLOCK must respect --step selection ──────────
+# Only steps SELECTED for the run need to be non-empty; a partial run that never selected the
+# empty step must still work, or the fix would break every backend-only invocation.
+SB_EMPTY_SEL="$WORK/emptystep-selection"
+build_sandbox "$SB_EMPTY_SEL" "$VC_SUBJECT" "$EMPTY_STEP_CHECKLIST"
+VC_ENV=""
+vc_run "$SB_EMPTY_SEL" "$SB_EMPTY_SEL/run.log" --step green; SEL_RC=$?
+echo "  --step green     : exit $SEL_RC (want 0 — the empty step was not selected)"
+if [ "$SEL_RC" -ne 0 ]; then
+    violation "--step selection of a non-empty step was BLOCKED by an empty step elsewhere in" \
+              "the checklist (exit $SEL_RC). The non-empty requirement applies to the RESOLVED" \
+              "step set only; over-blocking here would break every partial run."
+fi
+
+# ── Assertion 10 (non-vacuity + layer matrix) — LIVE mode only ───────────────
 # A fixture subject IS already neutered, so re-neutering it would prove nothing.
 if [ -z "$FIXTURE_ROOT" ]; then
     echo "── [mutation matrix] each layer neutered in a copy of the real script"
@@ -487,6 +672,38 @@ if [ -z "$FIXTURE_ROOT" ]; then
                       "the remaining layer does not hold the invariant on its own."
         fi
     done
+
+    # Layers (E) and (F) are each a single load-bearing check, so their matrix is one row
+    # apiece: neutered ⇒ the harness must REPRODUCE the defect, otherwise the assertion above
+    # would pass on the unfixed script and prove nothing.
+    echo "── [mutation matrix] tree binding (E) and non-empty step contract (F)"
+    VC_MUT_E="$WORK/vc-e.sh"
+    if make_vc "$VC_MUT_E" "e"; then
+        tree_launders "$VC_MUT_E" e; E_LAUNDERED=$?
+        echo "  E neutered   (must REPRODUCE the defect): $TW_DESC"
+        if [ "$E_LAUNDERED" -ne 0 ]; then
+            violation "with the tree-fingerprint admission check neutered the harness did NOT" \
+                      "reproduce the stale-tree resume. Assertion 6 therefore proves nothing —" \
+                      "it would pass on the unfixed script too. Fix the harness, not the guard."
+        fi
+    else
+        violation "could not neuter layer 'e' — the anchor no longer appears exactly once in" \
+                  "verify-completion.sh, so this guard's mutation proof is stale."
+    fi
+
+    VC_MUT_F="$WORK/vc-f.sh"
+    if make_vc "$VC_MUT_F" "f"; then
+        empty_step_launders "$VC_MUT_F" f; F_LAUNDERED=$?
+        echo "  F neutered   (must REPRODUCE the defect): $EW_DESC"
+        if [ "$F_LAUNDERED" -ne 0 ]; then
+            violation "with the empty-step check neutered the harness did NOT reproduce the" \
+                      "silently-dropped step. Assertion 8 therefore proves nothing — it would" \
+                      "pass on the unfixed script too. Fix the harness, not the guard."
+        fi
+    else
+        violation "could not neuter layer 'f' — the anchor no longer appears exactly once in" \
+                  "verify-completion.sh, so this guard's mutation proof is stale."
+    fi
 fi
 
 echo ""
@@ -494,5 +711,5 @@ if [ "$VIOLATIONS" -gt 0 ]; then
     echo "resume_provenance_guard: FAIL — $VIOLATIONS violation(s): a blocked R25 run can seed a false-green resume" >&2
     exit 1
 fi
-echo "resume_provenance_guard: PASS — an unobserved step is never certified, a command whose working directory is absent blocks instead of skipping, every required command must actually execute before a step is publishable, a blocked run publishes no resume record, SHORT_CIRCUITED is not inheritable, advisory stays advisory, and legitimate resume still works"
+echo "resume_provenance_guard: PASS — an unobserved step is never certified, a command whose working directory is absent blocks instead of skipping, every required command must actually execute before a step is publishable, a resume record is consumable only by the tree that produced it, a selected step with no commands BLOCKS the parse, a blocked run publishes no resume record, SHORT_CIRCUITED is not inheritable, advisory stays advisory, and legitimate resume still works"
 exit 0

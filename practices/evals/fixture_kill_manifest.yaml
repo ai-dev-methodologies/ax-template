@@ -508,3 +508,36 @@ items:
     fixture_arg: '--fixture-root'
     anchor: '[ "$rc2" -eq 0 ] && [ "$ran" -eq 0 ]'
     neuter: 'false'
+
+  # ── resume_provenance/fail_unfixed_fingerprint: stale-tree resume laundering [96] ──
+  # fixture: neuter-mode `e` — a copy of the LIVE verify-completion.sh whose resume preloader
+  #          no longer compares the record's working-tree fingerprint, i.e. binds evidence to
+  #          head_sha alone. In a git harness whose COMMITTED state fails the step, an
+  #          uncommitted edit makes it pass, the edit is reverted at the SAME head, and
+  #          `--resume` skips the step against a tree that fails it → exit 1.
+  # anchor:  the single verdict that turns "the resume run claimed green by skipping, without
+  #          ever re-running the step against the tree in front of it" into a finding.
+  # neuter:  condition-constant false → that laundering is never recognised; the unchanged-tree
+  #          (no over-correction) assertion still holds on this fixture → exit 0.
+  - id: resume_provenance/fail_unfixed_fingerprint
+    guard: practices/evals/resume_provenance_guard.sh
+    fixture: practices/evals/fixtures/resume-provenance/fail_unfixed_fingerprint
+    fixture_arg: '--fixture-root'
+    anchor: '[ "$trc2" -eq 0 ] && [ "$tskip" -eq 1 ]'
+    neuter: 'false'
+
+  # ── resume_provenance/fail_unfixed_emptystep: silently-dropped checklist step [96] ──
+  # fixture: neuter-mode `f` — a copy of the LIVE verify-completion.sh that no longer rejects
+  #          a SELECTED step declaring `commands: []`. Such a step emits no plan row, never
+  #          enters STEP_ORDER, and is therefore invisible to every accounting check, so the
+  #          run publishes green with a required step never verified → exit 1.
+  # anchor:  the single verdict that turns "a green verdict was published although the step
+  #          never entered the executed plan" into a finding.
+  # neuter:  condition-constant false → the dropped step is never recognised; the --step
+  #          selection (no over-blocking) assertion still holds on this fixture → exit 0.
+  - id: resume_provenance/fail_unfixed_emptystep
+    guard: practices/evals/resume_provenance_guard.sh
+    fixture: practices/evals/fixtures/resume-provenance/fail_unfixed_emptystep
+    fixture_arg: '--fixture-root'
+    anchor: '[ "$erc" -eq 0 ] && [ "$eseen" -eq 0 ]'
+    neuter: 'false'
