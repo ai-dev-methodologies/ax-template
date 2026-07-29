@@ -25,7 +25,7 @@ A starter / transformation skill for projects that want AI agents (Claude Code e
 | **Frontend Spec Trio** (`specs/<domain>-frontend-l0.yaml` + `contracts/<domain>-ui.yaml` + `blueprints/<domain>-ui-manifest.yaml`) | Mirrors backend Spec Trio for UI routes. Anchors frontend AI output to external specs. |
 | **`practices-react/` catalog** (102 rules, 9 families) | Evidence-anchored rules for React 19 / Next.js 16. Mirrors Java catalog discipline. |
 | **`templates/` layer library** (L1 primitives, L2 feature blocks, L3 page templates, L4 domain workloads) | Composition kit layers. Each artifact carries `evidence:` frontmatter. |
-| **3-tier skill topology** | 3 Tier-1 commands, 8 Tier-2 path-triggered skills, 6 Tier-3 core evidence gates (within the 100-guard suite). Agents navigate via skill invocation graph. |
+| **3-tier skill topology** | 3 Tier-1 commands, 8 Tier-2 path-triggered skills, 6 Tier-3 core evidence gates (within the 101-guard suite). Agents navigate via skill invocation graph. |
 
 **This skill does NOT impose:**
 - Git workflow (branch protection, PR policy, merge strategy) — fork받은 팀이 정함
@@ -83,7 +83,7 @@ Copy this checklist and check off as you progress:
 - [ ] Step 4: Create Spec Trio for the new domain (backend spec + contract + blueprint; frontend if applicable)
 - [ ] Step 5: Write TDD anchor test (RED) before any implementation
 - [ ] Step 6: Implement to GREEN — `./gradlew test{Domain}` exits 0
-- [ ] Step 7: Run the guard suite (100 hard guards — 6 core evidence gates + domain/meta guards) — `bash practices/evals/run-all-guards.sh` exits 0
+- [ ] Step 7: Run the guard suite (101 hard guards — 6 core evidence gates + domain/meta guards) — `bash practices/evals/run-all-guards.sh` exits 0
 - [ ] Step 8: Invoke `/ax-verify` — Tier-1 recursive check exits 0
 - [ ] **Step 9 (MANDATORY — R25)**: `bash practices/scripts/verify-completion.sh` exits 0
 
@@ -105,7 +105,7 @@ The anchor test must exist and fail (RED) before any implementation file is touc
 in the current SP. See `METHODOLOGY.md` §5 for the pattern.
 
 ### Step 7: Guard suite
-Script: `practices/evals/run-all-guards.sh` — chains all 100 hard guards. The 6
+Script: `practices/evals/run-all-guards.sh` — chains all 101 hard guards. The 6
 evidence-anchoring core gates are:
 `spec_ref_guard.sh`, `substance_guard.sh`, `time_decay_guard.sh`,
 `evidence_guard.sh`, `trio_integrity_guard.sh`, `cross_trio_guard.sh`.

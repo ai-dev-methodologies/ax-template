@@ -77,6 +77,13 @@
 #       observes an exit code, and the row is recorded origin=executed: a genuine PASS by
 #       every provenance rule in this file, with nothing run. (probe: shell exit 0)
 #     commands: [{command: "   "}]                     → identical shape. (probe: shell exit 0)
+#     commands: [{command: "true"}] / ":" / "exit 0"   → the canonical "switch this step off"
+#       idioms. A fixed exit status, no program of the contract run, and — when that status is
+#       the step's expected_exit — an EXECUTED PASS. Rejected by a FINITE denylist of those
+#       idioms (chains like `true; :` included), NOT by any attempt to decide whether an
+#       arbitrary command does useful work, which is undecidable. The boundary is asserted
+#       from both sides: `touch x` stays admitted, and `false` under expected_exit 0 stays an
+#       honest FAIL (it certifies nothing, so blocking it would be over-correction).
 #     id: "" (or absent/whitespace)                    → STEP_ORDER is iterated with
 #       `for sid in $STEP_ORDER`, which word-splits: the step gets ZERO shell iterations, so
 #       none of its commands run at all and the counters stay green. (probe: 0 iterations)
@@ -106,9 +113,10 @@
 #   (E) carries its own single-layer matrix: with the layer neutered in a copy of the live
 #   script its harness must REPRODUCE the defect, and the live script must hold. (F)/(G) carry
 #   a per-shape matrix instead, because their coverage genuinely differs by shape: F+G
-#   neutered must reproduce ALL four shapes; F alone must reproduce exactly the two inert-
-#   command shapes and still BLOCK the two vanishing ones (that is what proves G load-bearing);
-#   G alone must block all four (F catches them earlier).
+#   neutered must reproduce EVERY shape; F alone must reproduce exactly the inert-command
+#   shapes (comment-only, whitespace-only, and the no-op placeholders) and still BLOCK the two
+#   vanishing ones (that is what proves G load-bearing); G alone must block them all (F catches
+#   them earlier).
 #   The (E) harness needs a real git working tree (that is what a tree fingerprint is
 #   computed from), so its sandbox is `git init`ed and committed; the other harnesses stay
 #   non-git, where the fingerprint degrades to a constant and resume behaves exactly as
@@ -299,12 +307,12 @@ checklist:
   - id: alpha
     title: "trivially green step"
     commands:
-      - command: '"'"'true'"'"'
+      - command: '"'"'touch step-ran'"'"'
         expected_exit: 0
   - id: beta
     title: "second trivially green step"
     commands:
-      - command: '"'"'true'"'"'
+      - command: '"'"'touch step-ran'"'"'
         expected_exit: 0'
 
 # The absent-working-directory harness. Step `mixed` deliberately pairs a command whose
@@ -322,12 +330,12 @@ checklist:
       - command: '"'"'touch ../workdir-cmd-ran'"'"'
         working_directory: "subdir"
         expected_exit: 0
-      - command: '"'"'true'"'"'
+      - command: '"'"'touch step-ran'"'"'
         expected_exit: 0
   - id: green
     title: "trivially green second step"
     commands:
-      - command: '"'"'true'"'"'
+      - command: '"'"'touch step-ran'"'"'
         expected_exit: 0'
 
 # The tree-binding harness (layer E). `gate.txt` is COMMITTED holding "fail", so the step
@@ -364,7 +372,7 @@ checklist:
   - id: green
     title: "trivially green step"
     commands:
-      - command: 'true'
+      - command: 'touch step-ran'
         expected_exit: 0
 YAML
       ;;
@@ -382,7 +390,7 @@ checklist:
   - id: green
     title: "trivially green step"
     commands:
-      - command: 'true'
+      - command: 'touch step-ran'
         expected_exit: 0
 YAML
       ;;
@@ -400,7 +408,7 @@ checklist:
   - id: green
     title: "trivially green step"
     commands:
-      - command: 'true'
+      - command: 'touch step-ran'
         expected_exit: 0
 YAML
       ;;
@@ -418,7 +426,115 @@ checklist:
   - id: green
     title: "trivially green step"
     commands:
+      - command: 'touch step-ran'
+        expected_exit: 0
+YAML
+      ;;
+      nooptrue) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-but-noop
+    title: "a required step switched off with the canonical no-op: true"
+    commands:
       - command: 'true'
+        expected_exit: 0
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'touch step-ran'
+        expected_exit: 0
+YAML
+      ;;
+      noopcolon) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-but-noop-colon
+    title: "a required step switched off with the shell null command"
+    commands:
+      - command: ':'
+        expected_exit: 0
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'touch step-ran'
+        expected_exit: 0
+YAML
+      ;;
+      noopexit0) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-but-exit0
+    title: "a required step switched off by exiting success before doing anything"
+    commands:
+      - command: 'exit 0'
+        expected_exit: 0
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'touch step-ran'
+        expected_exit: 0
+YAML
+      ;;
+      noopchain) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-but-noop-chain
+    title: "the same, written as a chain so a single-token check would miss it"
+    commands:
+      - command: 'true; :'
+        expected_exit: 0
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'touch step-ran'
+        expected_exit: 0
+YAML
+      ;;
+      realwork) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-and-real
+    title: "ANTI-OVER-CORRECTION: a real command must stay admitted"
+    commands:
+      - command: 'touch malformed-cmd-ran'
+        expected_exit: 0
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'touch step-ran'
+        expected_exit: 0
+YAML
+      ;;
+      expectedfail) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-and-red
+    title: "ANTI-OVER-CORRECTION: `false` under expected_exit 0 is an honest FAIL, not a placeholder pass"
+    commands:
+      - command: 'false'
+        expected_exit: 0
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'touch step-ran'
         expected_exit: 0
 YAML
       ;;
@@ -435,7 +551,7 @@ checklist:
   - id: green
     title: "trivially green step"
     commands:
-      - command: 'true'
+      - command: 'touch step-ran'
         expected_exit: 0
 YAML
       ;;
@@ -455,7 +571,7 @@ checklist:
         working_directory: "subdir"
         expected_exit: 0
         advisory: true
-      - command: '"'"'true'"'"'
+      - command: '"'"'touch step-ran'"'"'
         expected_exit: 0'
 
 WD_ALL_ADVISORY_CHECKLIST='version: 1
@@ -473,7 +589,7 @@ checklist:
   - id: green
     title: "trivially green second step"
     commands:
-      - command: '"'"'true'"'"'
+      - command: '"'"'touch step-ran'"'"'
         expected_exit: 0'
 
 # ── Assertion 1: the laundering harness ──────────────────────────────────────
@@ -567,6 +683,8 @@ tree_launders() {
 # The verdict is a single expression on purpose: one detection, one axis (see the note under
 # assertion 5) so fixture_kill_proof [87] can prove each fixture non-vacuous by neutering it.
 EW_DESC=""
+EW_EXIT=""
+EW_RAN=""
 malformed_step_launders() {
     local vc="$1" tag="$2" shape="$3"
     local sb="$WORK/malformed-$shape-$tag"
@@ -575,6 +693,10 @@ malformed_step_launders() {
     vc_run "$sb" "$sb/run.log"; local erc=$?
     local mran=0
     [ -f "$sb/repo/malformed-cmd-ran" ] && mran=1
+    # Exposed for the anti-over-correction assertion, which asks a different question than
+    # "did this launder": whether an ADMITTED shape kept its normal PASS/FAIL outcome.
+    EW_EXIT="$erc"
+    EW_RAN="$mran"
     EW_DESC="shape=$shape exit=$erc malformed_step_command_ever_ran=$mran"
     [ "$erc" -eq 0 ] && [ "$mran" -eq 0 ]
 }
@@ -706,7 +828,7 @@ fi
 # Four shapes, each of which used to publish green with the step having run nothing. The
 # fifth (a non-mapping command entry) is asserted too: it has no `command:` key at all.
 echo "── [malformed step] harness: a required step that cannot be run, or cannot be identified"
-MALFORMED_SHAPES="emptycommands commentonly whitespaceonly blankid notmapping"
+MALFORMED_SHAPES="emptycommands commentonly whitespaceonly blankid notmapping nooptrue noopcolon noopexit0 noopchain"
 for shape in $MALFORMED_SHAPES; do
     malformed_step_launders "$VC_SUBJECT" subject "$shape"; SHAPE_LAUNDERED=$?
     echo "  subject          : $EW_DESC"
@@ -718,6 +840,30 @@ for shape in $MALFORMED_SHAPES; do
                   "id gets zero iterations. None of them verified the contract."
     fi
 done
+
+# ── Assertion 8b: the placeholder denylist must not swallow real steps ───────
+# The no-op check is a FINITE denylist, and its whole claim rests on being one. Two shapes
+# pin the boundary from the other side:
+#   realwork     — a command that actually runs (`touch`) must stay admitted and PASS
+#   expectedfail — `false` under the default `expected_exit: 0` is an honest FAIL, not a
+#                  placeholder pass: it certifies nothing, so blocking it at parse time would
+#                  be over-correction (and would break every harness that forces a RED).
+echo "── [placeholder boundary] a real command, and a no-op that does NOT certify, stay admitted"
+malformed_step_launders "$VC_SUBJECT" subject realwork >/dev/null 2>&1
+echo "  realwork         : exit=$EW_EXIT command_ever_ran=$EW_RAN (want 0/1)"
+if [ "$EW_EXIT" != "0" ] || [ "$EW_RAN" != "1" ]; then
+    violation "a step whose command really runs (touch) was not admitted+executed normally" \
+              "(exit=$EW_EXIT ran=$EW_RAN). The placeholder check is a finite denylist of" \
+              "disable-idioms; treating anything else as inert would make R25 unusable."
+fi
+malformed_step_launders "$VC_SUBJECT" subject expectedfail >/dev/null 2>&1
+echo "  expectedfail     : exit=$EW_EXIT (want 1 — an honest FAIL, NOT a parse BLOCK)"
+if [ "$EW_EXIT" != "1" ]; then
+    violation "\`command: false\` with the default expected_exit 0 did not produce an ordinary" \
+              "FAIL (exit=$EW_EXIT). It exits 1 where 0 was expected, so it certifies nothing" \
+              "and must stay admitted — the denylist rejects a placeholder only when its fixed" \
+              "status MATCHES expected_exit, i.e. only when it would certify the step."
+fi
 
 # ── Assertion 9: the malformed-step BLOCK must respect --step selection ──────
 # Only steps SELECTED for the run are held to the contract; a partial run that never selected
@@ -811,7 +957,7 @@ if [ -z "$FIXTURE_ROOT" ]; then
     #   fg  — every shape must REPRODUCE (else assertion 8 proves nothing)
     #   f   — only the INERT-COMMAND shapes may reproduce; the VANISHING shapes must still be
     #         blocked, which is what makes (G) load-bearing rather than decorative
-    #   g   — nothing may reproduce: (F) rejects all four earlier, at parse time
+    #   g   — nothing may reproduce: (F) rejects every shape earlier, at parse time
     # `notmapping` is deliberately absent from the matrix: with (F) neutered the emitter hits
     # the missing `command:` key and the run dies as a parse error, so that shape blocks either
     # way and cannot witness a layer. It is asserted (assertion 8), never used as proof.
@@ -823,10 +969,11 @@ if [ -z "$FIXTURE_ROOT" ]; then
                       "once in verify-completion.sh, so this guard's mutation proof is stale."
             continue
         fi
-        for shape in emptycommands commentonly whitespaceonly blankid; do
+        for shape in emptycommands commentonly whitespaceonly blankid nooptrue noopcolon noopexit0 noopchain; do
             case "$mode:$shape" in
                 fg:*)                          want_launder=0 ;;
                 f:commentonly|f:whitespaceonly) want_launder=0 ;;
+                f:nooptrue|f:noopcolon|f:noopexit0|f:noopchain) want_launder=0 ;;
                 *)                             want_launder=1 ;;
             esac
             malformed_step_launders "$VC_MUT" "$mode" "$shape"; MUT_LAUNDERED=$?
@@ -853,5 +1000,5 @@ if [ "$VIOLATIONS" -gt 0 ]; then
     echo "resume_provenance_guard: FAIL — $VIOLATIONS violation(s): a blocked R25 run can seed a false-green resume" >&2
     exit 1
 fi
-echo "resume_provenance_guard: PASS — an unobserved step is never certified, a command whose working directory is absent blocks instead of skipping, every required command must actually execute before a step is publishable, a resume record is consumable only by the tree that produced it, a malformed step (no commands / inert command text / no usable id / duplicate id / non-mapping entry) BLOCKS the parse and every declared step must have emitted a plan row, a blocked run publishes no resume record, SHORT_CIRCUITED is not inheritable, advisory stays advisory, and legitimate resume still works"
+echo "resume_provenance_guard: PASS — an unobserved step is never certified, a command whose working directory is absent blocks instead of skipping, every required command must actually execute before a step is publishable, a resume record is consumable only by the tree that produced it, a malformed step (no commands / inert command text — blank, comment-only, or a canonical no-op placeholder such as `true`, `:`, `exit 0` whose fixed status would certify the step / no usable id / duplicate id / non-mapping entry) BLOCKS the parse, while a real command and a `false` that produces an honest FAIL stay admitted and every declared step must have emitted a plan row, a blocked run publishes no resume record, SHORT_CIRCUITED is not inheritable, advisory stays advisory, and legitimate resume still works"
 exit 0

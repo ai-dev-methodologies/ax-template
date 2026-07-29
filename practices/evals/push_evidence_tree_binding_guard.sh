@@ -121,10 +121,14 @@ GIT_ID=(-c user.email=ax@example.invalid -c user.name=ax)
 # ── Neuter helpers ───────────────────────────────────────────────────────────
 # (P) the producer stops telling the truth about the tree it ran on: every run claims the
 #     committed tree. (C) the consumer stops requiring it.
-NEUTER_P_ANCHOR='CURRENT_TREE_CLEAN=false'
-NEUTER_P_VALUE='CURRENT_TREE_CLEAN=true'
-NEUTER_C_ANCHOR='latest.get("tree_clean") is not True'
-NEUTER_C_VALUE='False'
+# The producer decides cleanliness in exactly ONE place (observe_tree_clean) and every
+# sample point calls it, so this single anchor makes EVERY recorded cleanliness value — the
+# opening snapshot and the closing one — claim the committed tree.
+NEUTER_P_ANCHOR='    local clean=false'
+NEUTER_P_VALUE='    local clean=true'
+# Likewise the consumer's cleanliness requirement is one predicate over both endpoints.
+NEUTER_C_ANCHOR='if not tree_clean_both:'
+NEUTER_C_VALUE='if False:'
 
 # neuter_copy <src> <dest> <anchor> <value> <apply:0|1>
 neuter_copy() {

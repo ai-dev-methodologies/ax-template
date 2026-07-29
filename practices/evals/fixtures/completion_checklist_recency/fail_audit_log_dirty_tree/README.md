@@ -7,8 +7,9 @@ FAIL shape (cross-family review P1, 2026-07-29 — needs no `--resume`):
 - `.ax-verify/runs.jsonl` latest line matches `expected_head.txt`, `exit` is 0,
   `hard_fail` is 0, `full_run` is `true`, and it carries a `tree_fingerprint` —
   i.e. it satisfies every pre-existing check.
-- BUT `tree_clean` is `false`: the run that produced it was performed on a DIRTY
-  working tree, so it certifies a tree that differs from the commit being pushed.
+- BUT `tree_clean` (and `tree_clean_end`) is `false`: the run that produced it was
+  performed on a DIRTY working tree from start to finish, so it certifies a tree that
+  differs from the commit being pushed.
 
 The reproduction it stands for:
 

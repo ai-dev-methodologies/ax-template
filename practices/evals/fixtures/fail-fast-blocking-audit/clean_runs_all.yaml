@@ -1,5 +1,5 @@
 # VACUITY COUNTER-FIXTURE — proves fail-fast does NOT fire on a clean run.
-# `pregate` is `fail_fast: true` but PASSES (`true`), so the run MUST
+# `pregate` is `fail_fast: true` but PASSES (it runs a real `touch`), so the run MUST
 #   (a) NOT print "⛔ fail-fast",
 #   (b) RUN the downstream step, and
 #   (c) write a CLEAN audit line (exit=0, hard_fail=0).
@@ -11,13 +11,13 @@ checklist:
     fail_fast: true
     timeout_seconds: 5
     commands:
-      - command: "true"
+      - command: "touch pregate-ran"
         working_directory: "."
         expected_exit: 0
   - id: downstream
     title: "downstream (MUST run on a clean pre-gate)"
     timeout_seconds: 5
     commands:
-      - command: "true"
+      - command: "touch downstream-ran"
         working_directory: "."
         expected_exit: 0

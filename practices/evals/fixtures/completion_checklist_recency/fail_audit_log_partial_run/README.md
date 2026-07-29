@@ -11,4 +11,10 @@ FAIL shape (dogfood-confirmed P2, 2026-07-10):
 A partial run must NOT satisfy the completion contract, otherwise `--step`
 functions as an undocumented skip flag.
 
+- Every OTHER axis is deliberately green — including the across-the-run tree
+  sampling fields (`tree_clean_end`, `tree_stable`, `tree_samples`, matching
+  endpoints) — so this fixture isolates exactly the one defect it is named for.
+  fixture_kill_proof [87] depends on that: neuter the targeted check and this
+  fixture must PASS, which it cannot do if a second check also fires.
+
 Expected guard exit: 1 (`AUDIT_PARTIAL_RUN`).

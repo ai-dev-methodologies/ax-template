@@ -15,4 +15,10 @@ FAIL shape (cross-family review P1, 2026-07-29):
 show that the code being pushed is the code that passed. Fail closed — re-running
 the contract at the pushed commit is always available.
 
+- Every OTHER axis is deliberately green — including the across-the-run tree
+  sampling fields (`tree_clean_end`, `tree_stable`, `tree_samples`, matching
+  endpoints) — so this fixture isolates exactly the one defect it is named for.
+  fixture_kill_proof [87] depends on that: neuter the targeted check and this
+  fixture must PASS, which it cannot do if a second check also fires.
+
 Expected guard exit: 1 (`AUDIT_TREE_UNIDENTIFIED`).

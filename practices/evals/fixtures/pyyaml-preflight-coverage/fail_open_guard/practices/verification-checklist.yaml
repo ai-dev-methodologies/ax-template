@@ -22,7 +22,7 @@ checklist:
   - id: plain-shell
     title: "Plain shell step (no script reference at all)"
     commands:
-      - command: "true"
+      - command: "touch plain-shell-ran"
         expected_exit: 0
     fix_playbook: |
       fixture only - never executed.

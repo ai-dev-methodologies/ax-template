@@ -74,7 +74,9 @@
 #   • A MALFORMED CHECKLIST STEP IS A CONTRACT ERROR, not a pass. Two families, both of
 #     which certify that nothing happened: a step that cannot be RUN (`commands: []`, or
 #     command text that is blank/whitespace/comment-only — `bash -c '# off'` exits 0 and
-#     is recorded as an EXECUTED PASS), and a step that cannot be IDENTIFIED (blank id,
+#     is recorded as an EXECUTED PASS — or a canonical no-op placeholder such as `true`,
+#     `:` or `exit 0` whose fixed status is the expected one; finite denylist, see
+#     NOOP_PLACEHOLDER_EXIT for what that check does NOT claim), and one that cannot be IDENTIFIED (blank id,
 #     non-slug id, duplicate id — STEP_ORDER is iterated unquoted, so a blank id produces
 #     ZERO iterations and nothing of that step runs). Selected steps must be a unique slug
 #     id + at least one command that actually runs something, enforced at parse time
@@ -88,7 +90,8 @@
 #
 # Side effect: writes an audit log line to .ax-verify/runs.jsonl with
 #   {ts, head_sha, exit, pass, warn_advisory, hard_fail, skip, full_run,
-#    tree_fingerprint, tree_clean}
+#    tree_fingerprint, tree_clean, head_sha_end, tree_fingerprint_end, tree_clean_end,
+#    tree_stable, tree_samples}
 # so that completion_checklist_recency_guard.sh can audit recency AND provenance.
 # tree_fingerprint/tree_clean exist because head_sha alone does not identify the code that
 # was verified: R25 runs on dirty trees, so one head covers arbitrarily many trees. PUSH
@@ -96,6 +99,11 @@
 # (tree_clean=true) — an uncommitted fix that makes the run pass, then stashed, no longer
 # certifies the commit that ships. LOCAL iteration is untouched: dirty-tree runs stay
 # perfectly usable, including for --resume.
+# The *_end / tree_stable / tree_samples fields exist because a RUN IS NOT AN INSTANT: the
+# start values are measured before the first step and the line is written after the last one,
+# tens of minutes later. They report the same three facts at the closing endpoint plus whether
+# every sample taken at the step boundaries in between agreed, so push eligibility can require
+# start == end == clean instead of trusting one boolean captured before any step ran.
 #
 # Iron Law: this script is the SOLE source of truth for "is the task done".
 # Do NOT bypass with --skip flags. There is no opt-out.
@@ -251,6 +259,14 @@ for path in sorted(untracked):
 print(h.hexdigest())
 PYEOF
 }
+compute_tree_fingerprint_checked() {
+    local fp
+    fp="$(compute_tree_fingerprint 2>/dev/null)"
+    if [ -z "$fp" ]; then
+        fp="unverifiable-$$-$(date -u +%s)"
+    fi
+    printf '%s' "$fp"
+}
 CURRENT_TREE_FP="$(compute_tree_fingerprint 2>/dev/null)"
 if [ -z "$CURRENT_TREE_FP" ]; then
     # The helper failed unexpectedly (it prints "nogit" for the KNOWN non-git case, so an
@@ -274,11 +290,68 @@ fi
 # HONEST LIMIT: git-ignored paths are excluded, because git cannot pin them and the run
 # genuinely depends on some of them (node_modules/, build/). "Clean" therefore means
 # "identical to the commit in every path git tracks or would track".
-CURRENT_TREE_CLEAN=false
-if git -C "$REPO_ROOT" rev-parse --verify HEAD >/dev/null 2>&1 \
-    && [ -z "$(git -C "$REPO_ROOT" status --porcelain -uall 2>/dev/null)" ]; then
-    CURRENT_TREE_CLEAN=true
-fi
+#
+# SINGLE DECIDER: every cleanliness answer in this script comes from here, at every sample
+# point. Two independent copies of the test would let a mutation neuter one and leave the
+# other honest, which would make the push-evidence mutation matrix [97] report a layer as
+# load-bearing when it is not.
+observe_tree_clean() {
+    local clean=false
+    if git -C "$REPO_ROOT" rev-parse --verify HEAD >/dev/null 2>&1 \
+        && [ -z "$(git -C "$REPO_ROOT" status --porcelain -uall 2>/dev/null)" ]; then
+        clean=true
+    fi
+    printf '%s' "$clean"
+}
+CURRENT_TREE_CLEAN="$(observe_tree_clean)"
+
+# ── The run is not an instant: sample the tree ACROSS it ─────────────────────
+# The three facts above (head, fingerprint, cleanliness) were captured BEFORE the first step
+# and the audit line is written AFTER the last one. A full run takes tens of minutes, and
+# every one of those minutes sits inside that window:
+#   1. start clean at a HEAD whose committed state FAILS a later step
+#   2. while an early long step runs, make the uncommitted fix that step needs
+#   3. the later step passes — because of an edit no commit contains
+#   4. revert it; the run ends, the audit line still says tree_clean=true
+#   5. push. The consumer trusted one boolean captured before any of this happened.
+# So the endpoints are re-measured after execution AND the tree is re-sampled at every step
+# boundary, and the audit records both endpoints plus whether every sample agreed. The
+# consumer then VERIFIES a relation (start == end, and stable across the run) instead of
+# trusting a single value.
+#
+# HONEST LIMIT — sampling granularity: observations happen at step boundaries and at the end
+# of the run. A change made AND undone entirely inside one step's execution is not observed;
+# this narrows the window from "the whole run" to "one step", it does not eliminate it.
+# Closing it completely would need the tree to be immutable for the duration (a read-only
+# snapshot / container), which is a fork-receiver infrastructure decision, not a shell check.
+START_TREE_FP="$CURRENT_TREE_FP"
+START_TREE_CLEAN="$CURRENT_TREE_CLEAN"
+TREE_SAMPLES=1
+TREE_STABLE=true
+
+# observe_tree <where> — take a sample, bind subsequent resume records to it, and record any
+# drift from the start sample. Costs one `git status` + one `git diff HEAD` (~60ms here).
+observe_tree() {
+    local where="$1" fp clean head
+    fp="$(compute_tree_fingerprint_checked)"
+    clean="$(observe_tree_clean)"
+    head="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
+    TREE_SAMPLES=$((TREE_SAMPLES + 1))
+    if [ "$fp" != "$START_TREE_FP" ] || [ "$head" != "$CURRENT_HEAD" ]; then
+        if [ "$TREE_STABLE" = true ]; then
+            echo "  ⚠ the working tree CHANGED during this run (observed $where)." >&2
+            echo "    start: head=${CURRENT_HEAD:0:12} tree=${START_TREE_FP:0:12}" >&2
+            echo "    now  : head=${head:0:12} tree=${fp:0:12}" >&2
+            echo "    The run stays usable locally, but it can no longer certify a push: the steps" >&2
+            echo "    before and after this point verified DIFFERENT code. Re-run on a settled tree." >&2
+        fi
+        TREE_STABLE=false
+    fi
+    # Resume records published from here on are bound to the tree that actually produced
+    # them, not to the one this run started with.
+    CURRENT_TREE_FP="$fp"
+    CURRENT_TREE_CLEAN="$clean"
+}
 
 # ── 1. Parse the checklist into a flat command plan via python3 ───────────────
 # Output schema (one line per command, tab-separated):
@@ -337,6 +410,10 @@ default_timeout = int(defaults.get("timeout_seconds", 900))
 #   command: "# disabled" — `bash -c '# disabled'` exits 0. The runner observes an exit
 #   command: "   "          code, records origin=executed, and the step is a genuine PASS
 #                           by every provenance rule we have. Nothing ran.
+#   command: "true" / ":"  — identical outcome via the canonical "switch this step off"
+#   command: "exit 0"       idioms: a fixed exit status matching expected_exit, no program of
+#                           the contract run. Rejected by a FINITE denylist only — see the
+#                           NOOP_PLACEHOLDER_EXIT comment for the boundary this does NOT claim.
 #   id: "" / id: absent   — STEP_ORDER is iterated with `for sid in $STEP_ORDER`, which
 #                           word-splits: a blank id yields ZERO shell iterations, so none
 #                           of the step's commands execute, and the counters stay green.
@@ -353,15 +430,75 @@ default_timeout = int(defaults.get("timeout_seconds", 900))
 # declared step that emitted no plan row, or that has no usable id, blocks there too).
 SLUG_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 
+# ── The no-op PLACEHOLDER denylist — a finite list, and deliberately nothing more ──
+# A step disabled by hand is normally disabled with one of a handful of canonical idioms.
+# Each has a FIXED exit status and runs no program of the contract, so when that status is
+# the step's expected_exit the runner observes an exit code, records origin=executed, and
+# certifies the step — with nothing verified. That is the same certification the blank /
+# comment-only shapes produce.
+#
+# BOUNDARY, stated once here and repeated in every message this produces: deciding whether
+# an ARBITRARY shell command performs meaningful work is undecidable, and this check does not
+# attempt it. It recognises the placeholder idioms below and nothing else. `curl -s x >
+# /dev/null`, a script whose body is empty, a gradle task with no tests — all stay admitted.
+# What this buys is narrow and real: a required step cannot be switched off by writing the
+# canonical "do nothing, exit success" token into it.
+#
+# The map is TOKEN → the exit status it always produces. A placeholder is a contract error
+# only when that status MATCHES the step's expected_exit, i.e. only when it would CERTIFY the
+# step. `command: false` under the default `expected_exit: 0` is not a placeholder pass — it
+# is an honest FAIL, and several catalog harnesses legitimately use exactly that to force a
+# RED. Blocking it would be over-correction: it certifies nothing.
+NOOP_PLACEHOLDER_EXIT = {
+    ":": 0, "true": 0, "/bin/true": 0, "/usr/bin/true": 0, "exit": 0, "exit 0": 0,
+    "false": 1, "/bin/false": 1, "/usr/bin/false": 1, "exit 1": 1,
+}
+# `;`, `&&`, `||` and newlines separate the fragments a chain of placeholders is written as
+# (`true; true`, `: && true`). Splitting is only ever used to REQUIRE that EVERY fragment is
+# a placeholder — a chain containing one real command has a non-placeholder fragment and is
+# admitted, so the split can never widen the denylist.
+NOOP_SEPARATOR_RE = re.compile(r";|&&|\|\|")
+NOOP_TRAILING_COMMENT_RE = re.compile(r"\s+#.*\Z")
 
-def command_runs_nothing(text):
-    """True when the shell would execute NOTHING: blank, whitespace, or only comments."""
+
+def command_runs_nothing(text, expected_exit=0):
+    """Reason label when the shell would run NOTHING for this step, else None.
+
+    Two families, both of which certify that nothing happened:
+      • blank / whitespace / comment-only text — `bash -c '# off'` exits 0 with no program run
+      • a canonical no-op PLACEHOLDER (see NOOP_PLACEHOLDER_EXIT) whose fixed exit status is
+        the one the step expects, so it is recorded as an EXECUTED PASS
+    """
+    effective = []
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        return False
-    return True
+        effective.append(stripped)
+    if not effective:
+        return "blank" if not text.strip() else "comment-only"
+
+    # A trailing comment is stripped for THIS test only (`true  # disabled for now` is the
+    # same placeholder). Stripping is safe even where it is wrong — e.g. `grep '#' f` becomes
+    # `grep '` — because the result is then matched against the denylist, and anything that is
+    # not literally one of those tokens is admitted.
+    fragments = [NOOP_TRAILING_COMMENT_RE.sub("", f).strip()
+                 for line in effective for f in NOOP_SEPARATOR_RE.split(line)]
+    fragments = [f for f in fragments if f]
+    if not fragments or any(f not in NOOP_PLACEHOLDER_EXIT for f in fragments):
+        return None
+    # Exit status of the whole thing = the last fragment's (shell `;` semantics; the &&/||
+    # chains that survive the all-placeholders test degenerate to the same answer).
+    # expected_exit is compared as an int because the runner compares it with `[ -eq ]`,
+    # which treats `expected_exit: "0"` and `expected_exit: 0` identically; an unparsable
+    # value is left to the runner to reject rather than silently treated as 0.
+    try:
+        expected = int(expected_exit)
+    except (TypeError, ValueError):
+        return None
+    if NOOP_PLACEHOLDER_EXIT[fragments[-1]] != expected:
+        return None
+    return "a no-op placeholder"
 
 
 def malformed_reason(step, sid, seen_ids):
@@ -386,10 +523,17 @@ def malformed_reason(step, sid, seen_ids):
         text = entry.get("command")
         if not isinstance(text, str):
             return (f"command #{pos} has no `command:` string (got {type(text).__name__})")
-        if command_runs_nothing(text):
-            shape = "blank" if not text.strip() else "comment-only"
-            return (f"command #{pos} is {shape} ({text.strip()[:48]!r}) — `bash -c` exits 0 "
-                    f"without running anything, so it would be recorded as an EXECUTED PASS")
+        expected_exit = entry.get("expected_exit", 0)
+        shape = command_runs_nothing(text, expected_exit)
+        if shape:
+            idioms = ", ".join(repr(k) for k in sorted(NOOP_PLACEHOLDER_EXIT))
+            return (f"command #{pos} is {shape} ({text.strip()[:48]!r}) — it exits "
+                    f"{expected_exit} without running anything, so it would be recorded as an "
+                    f"EXECUTED PASS. BOUNDARY: this rejects blank/comment-only text plus a "
+                    f"FINITE denylist of placeholder idioms ({idioms}), and only when the "
+                    f"idiom's fixed exit status matches this command's expected_exit — i.e. "
+                    f"only when it would CERTIFY the step. It does NOT, and cannot, prove that "
+                    f"any other command does useful work")
     return None
 
 
@@ -451,9 +595,12 @@ if [ "$PLAN_EXIT" -eq 3 ]; then
     echo "verify-completion: R25 BLOCK: the checklist is MALFORMED — the offending step is named" \
          "above. A step selected for this run must be identifiable (a unique slug id) and must" \
          "actually run something. A step that emits no plan row disappears from the executed plan" \
-         "AND from every accounting check; a step whose command text is blank or comment-only" \
-         "exits 0 without running anything and is recorded as an EXECUTED PASS. Either way the run" \
-         "would report green with that step never verified. Fix the step, or delete it." >&2
+         "AND from every accounting check; a step whose command text is blank, comment-only, or a" \
+         "canonical no-op placeholder (':', 'true', '/bin/true', 'exit 0' …) exits with the" \
+         "expected status without running anything and is recorded as an EXECUTED PASS. Either way" \
+         "the run would report green with that step never verified. Fix the step, or delete it." \
+         "BOUNDARY: the placeholder check is a finite denylist of those idioms — it cannot prove" \
+         "that an arbitrary command does useful work, and does not claim to." >&2
     exit 2
 fi
 if [ "$PLAN_EXIT" -ne 0 ]; then
@@ -786,6 +933,10 @@ for sid in $STEP_ORDER; do
     title=$(awk -F'\t' -v s="$sid" '$1==s { print $2; exit }' "$PLAN_FILE")
     echo "── [$sid] $title ──────────────────────────────────────────────"
 
+    # Sample the tree BEFORE the step: this is the code the step is about to verify, and the
+    # tree any resume record it publishes will be bound to.
+    observe_tree "before step [$sid]"
+
     # Resume short-circuit.
     if [ "$RESUME" -eq 1 ] && [ -s "$RESUME_TMP" ] && grep -Fxq "$sid" "$RESUME_TMP"; then
         echo "  SKIP (resume): step PASS for head $CURRENT_HEAD already recorded"
@@ -977,6 +1128,14 @@ for sid in $STEP_ORDER; do
     fi
 done
 
+# ── Closing endpoint: what was the tree when the last step finished? ─────────
+# Paired with the start snapshot this is what the push gate compares. Both endpoints go into
+# the audit line so the consumer can check start == end itself rather than trust one flag.
+observe_tree "end of run"
+END_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
+END_TREE_FP="$CURRENT_TREE_FP"
+END_TREE_CLEAN="$CURRENT_TREE_CLEAN"
+
 # Fault injection for the check below (same spirit as AX_PREFLIGHT_FAKE_MISSING):
 #   AX_FAKE_LEDGER_LOSS=missing  — the ledger disappears entirely mid-run
 #   AX_FAKE_LEDGER_LOSS=partial  — the ledger survives but an earlier step's records are gone
@@ -1117,9 +1276,14 @@ FULL_RUN=true
 # tree_fingerprint / tree_clean make the line say WHICH TREE was verified, not just at which
 # head. Without them the audit line is satisfied by any tree at that head — including one whose
 # uncommitted fix has since been stashed — and the push gate cannot tell the difference.
-printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_fail":%d,"skip":%d,"full_run":%s,"tree_fingerprint":"%s","tree_clean":%s}\n' \
+# The *_end fields and tree_stable/tree_samples say WHEN it was that tree: the head/fingerprint/
+# cleanliness measured after the last step, plus whether every sample taken across the run
+# agreed with the start. A consumer that only reads the start values is trusting a measurement
+# taken before any step ran (a real full run here is ~37 minutes wide).
+printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_fail":%d,"skip":%d,"full_run":%s,"tree_fingerprint":"%s","tree_clean":%s,"head_sha_end":"%s","tree_fingerprint_end":"%s","tree_clean_end":%s,"tree_stable":%s,"tree_samples":%d}\n' \
     "$TS" "$CURRENT_HEAD" "$EXIT_CODE" "$PASS_COUNT" "$ADVISORY_FAIL" "$HARD_FAIL" "$SKIP_COUNT" "$FULL_RUN" \
-    "$CURRENT_TREE_FP" "$CURRENT_TREE_CLEAN" \
+    "$START_TREE_FP" "$START_TREE_CLEAN" \
+    "$END_HEAD" "$END_TREE_FP" "$END_TREE_CLEAN" "$TREE_STABLE" "$TREE_SAMPLES" \
     >> "$AUDIT_LOG"
 
 # ── ax-ledger capture — every verify run leaves a per-project usage trace (progress / violation),

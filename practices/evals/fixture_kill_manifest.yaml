@@ -114,15 +114,32 @@ items:
   # ── completion_checklist_recency/fail_audit_log_dirty_tree: push-evidence gate ─
   # fixture: runs.jsonl latest line is green on every pre-existing axis (head match,
   #          exit=0, hard_fail=0, full_run=true, tree_fingerprint present) but carries
-  #          tree_clean=false — evidence produced on a dirty tree, which certifies a
-  #          tree that differs from the commit being pushed → exit 1.
-  # anchor:  the tree_clean check condition (check #7 in the guard).
+  #          tree_clean=false (at both endpoints) — evidence produced on a dirty tree,
+  #          which certifies a tree that differs from the commit being pushed → exit 1.
+  # anchor:  the clean-ENDPOINTS check condition (check #7 in the guard). Both endpoints
+  #          are one predicate on purpose: a start-only test is the defect [98] closed.
   # neuter:  condition-constant False → dirty-tree evidence accepted again → exit 0.
   - id: completion_checklist_recency/fail_audit_log_dirty_tree
     guard: practices/evals/completion_checklist_recency_guard.sh
     fixture: practices/evals/fixtures/completion_checklist_recency/fail_audit_log_dirty_tree
     fixture_arg: '--root'
-    anchor: 'latest.get("tree_clean") is not True'
+    anchor: 'not tree_clean_both'
+    neuter: 'False'
+
+  # ── completion_checklist_recency/fail_audit_log_tree_mutated_midrun ───────────
+  # fixture: runs.jsonl latest line is green on EVERY endpoint axis — head match, exit=0,
+  #          hard_fail=0, full_run=true, usable tree_fingerprint, tree_clean AND
+  #          tree_clean_end both true, head_sha_end / tree_fingerprint_end identical to the
+  #          opening values — but tree_stable=false: the samples verify-completion took at
+  #          the step boundaries in between did not agree. That is the TOCTOU shape (edit
+  #          made after the run started, reverted before it ended) → exit 1.
+  # anchor:  the settled-tree check condition (check #8 in the guard).
+  # neuter:  condition-constant False → a tree mutated mid-run certifies a push again → exit 0.
+  - id: completion_checklist_recency/fail_audit_log_tree_mutated_midrun
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_audit_log_tree_mutated_midrun
+    fixture_arg: '--root'
+    anchor: 'not tree_settled'
     neuter: 'False'
 
   # ── completion_checklist_recency/fail_audit_log_no_tree_fingerprint ───────────

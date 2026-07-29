@@ -14,8 +14,21 @@
 #      must NOT satisfy the completion contract — closes the dogfood-confirmed
 #      P2 where a single trivial step was indistinguishable from a full PASS)
 #   5. identifies the TREE it verified (tree_fingerprint present and not a
-#      degraded placeholder), and
-#   6. that tree was CLEAN — i.e. it was the committed tree of head_sha.
+#      degraded placeholder),
+#   6. that tree was CLEAN at BOTH endpoints — i.e. it was the committed tree of
+#      head_sha when the run started AND when its last step finished, and
+#   7. it was the SAME tree throughout (tree_stable, with the two endpoints
+#      recorded so this guard verifies start == end instead of trusting a flag).
+#
+# Why 7 (cross-family review P1, 2026-07-29 — the run is not an instant):
+#   head/fingerprint/cleanliness used to be captured ONCE before the first step, and the
+#   audit line written after the last one — a measured 2,225-second window on a real full
+#   run. Start clean at a HEAD that fails a later step, make the uncommitted fix while an
+#   early step runs, let the later step pass on it, revert after the run: every recorded
+#   value still says "clean tree at H". verify-completion now samples at every step boundary
+#   and at the end; this guard requires all of it to agree.
+#   HONEST LIMIT: sampling is at step boundaries, so a change made AND undone inside one
+#   step is unobserved. The exposure is one step wide, not zero.
 #
 # Why 5+6 (cross-family review P1, 2026-07-29 — this needs no --resume at all):
 #   head_sha does not identify the code that was verified. R25 is routinely run on a
@@ -246,7 +259,12 @@ if not tree_fp_usable:
 # 7. That tree must have been the COMMITTED tree of head_sha. This is the push-evidence
 #    rule: a commit is what ships, so evidence gathered from a working tree that differs
 #    from the commit is evidence about code the receiver will never get.
-if latest.get("tree_clean") is not True:
+#    BOTH endpoints are required, not just the opening one: the start value is measured
+#    before the first step and the line is written after the last, so a tree that was clean
+#    at the start says nothing about the tree the later steps actually verified.
+tree_clean_both = (latest.get("tree_clean") is True
+                   and latest.get("tree_clean_end") is True)
+if not tree_clean_both:
     hint = ""
     try:
         dirty = subprocess.check_output(
@@ -262,11 +280,50 @@ if latest.get("tree_clean") is not True:
     emit_fail(
         "AUDIT_DIRTY_TREE_EVIDENCE",
         f'the latest verify-completion.sh run was performed on a DIRTY working tree '
-        f'(tree_clean={latest.get("tree_clean")!r}), so it certifies a tree that differs '
-        f'from the commit being pushed — an uncommitted change that makes the run pass does '
-        f'not travel with the push. Commit (or stash, or .gitignore) everything, then re-run '
-        f'`bash practices/scripts/verify-completion.sh` at the commit you are pushing. '
+        f'(tree_clean={latest.get("tree_clean")!r} at the start, '
+        f'tree_clean_end={latest.get("tree_clean_end")!r} when the last step finished), so it '
+        f'certifies a tree that differs from the commit being pushed — an uncommitted change '
+        f'that makes the run pass does not travel with the push. BOTH endpoints must be clean: '
+        f'the start value is measured before the first step, so on its own it says nothing '
+        f'about the tree the later steps verified (a legacy line without tree_clean_end is '
+        f'refused for exactly that reason). Commit (or stash, or .gitignore) everything, then '
+        f're-run `bash practices/scripts/verify-completion.sh` at the commit you are pushing. '
         f'Local iteration is unaffected: only push eligibility requires a clean tree.{hint}'
+    )
+
+# 8. The tree must have been the SAME tree throughout. Checks 6+7 are endpoints, and a run is
+#    not an instant — a full run here is tens of minutes wide. An edit made after the start
+#    snapshot and undone before the closing one leaves both endpoints identical and perfectly
+#    clean while the steps in between verified code no commit contains. verify-completion
+#    therefore samples the tree at every step boundary and reports whether they all agreed;
+#    the endpoints are recorded too so this check VERIFIES the relation (start == end) rather
+#    than trusting tree_stable alone. Fail closed on absent fields (a pre-sampling producer).
+#    HONEST LIMIT (inherited from the producer): sampling is at step boundaries, so a change
+#    made and undone WITHIN one step is still unobserved. The window is one step, not zero.
+head_end = latest.get("head_sha_end")
+fp_end = latest.get("tree_fingerprint_end")
+samples = latest.get("tree_samples")
+#    The fingerprint comparison deliberately does NOT re-check that fp_end is a string:
+#    check 6 already guarantees tree_fp is a usable one, so equality carries the type. Written
+#    this way so that neutering check 6 (fixture_kill_proof [87] does exactly that) fails its
+#    fixture through check 6's ABSENCE rather than through this check firing on the side —
+#    otherwise that fixture would look vacuous while the real coverage question is hidden.
+endpoints_agree = (head_end == latest["head_sha"] and head_end == expected_head
+                   and fp_end == tree_fp)
+tree_settled = (latest.get("tree_stable") is True and endpoints_agree
+                and isinstance(samples, int) and samples >= 2)
+if not tree_settled:
+    emit_fail(
+        "AUDIT_TREE_MUTATED_MIDRUN",
+        f'the audit line does not show a settled tree for the WHOLE run '
+        f'(tree_stable={latest.get("tree_stable")!r}, samples={samples!r}, '
+        f'head_sha={latest["head_sha"][:12]} → head_sha_end={str(head_end)[:12]}, '
+        f'tree={str(tree_fp)[:12]} → tree_end={str(fp_end)[:12]}). A run spans tens of '
+        f'minutes: an uncommitted edit made after it started and reverted before it finished '
+        f'leaves both endpoints looking pristine while the steps in between verified code the '
+        f'commit does not contain. Re-run `bash practices/scripts/verify-completion.sh` at the '
+        f'commit you are pushing and leave the tree alone until it finishes. (Missing fields '
+        f'mean the line came from a producer that did not sample across the run — re-run.)'
     )
 
 # All conditions satisfied.
