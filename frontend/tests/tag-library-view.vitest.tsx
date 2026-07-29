@@ -66,15 +66,17 @@ describe('TagLibraryView — pure render of the tag taxonomy library (P2-42)', (
     })
     fireEvent.click(screen.getByRole('button', { name: 'Create tag' }))
 
-    await waitFor(() => expect(onCreateTag).toHaveBeenCalledWith({
-      name: 'gift-idea',
-      parentTagId: null,
-      color: null,
-    }))
-    // draft cleared: placeholder input goes back to empty
-    await waitFor(() =>
-      expect(screen.getByPlaceholderText('e.g. high-priority, 긴급')).toHaveValue(''),
-    )
+    // both settle after the same submit — one waitFor, no sequential await waterfall
+    // (ax/react-async-parallel)
+    await waitFor(() => {
+      expect(onCreateTag).toHaveBeenCalledWith({
+        name: 'gift-idea',
+        parentTagId: null,
+        color: null,
+      })
+      // draft cleared: placeholder input goes back to empty
+      expect(screen.getByPlaceholderText('e.g. high-priority, 긴급')).toHaveValue('')
+    })
   })
 
   it('clicking Delete then confirming calls onDeleteTag with the tag id', () => {
