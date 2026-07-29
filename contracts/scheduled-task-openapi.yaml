@@ -40,11 +40,17 @@ paths:
             maximum: 100
       responses:
         '200':
-          description: Paginated list of scheduled tasks
+          description: |
+            List of scheduled tasks — bare array, not paginated (ScheduledTaskController.list
+            returns List<ScheduledTaskDto.TaskResponse>; page/size query params exist for the
+            family shape but are not yet bound by the handler, so there is no envelope with
+            totalElements/totalPages on the wire).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ScheduledTaskPage'
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScheduledTaskSummary'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -130,11 +136,16 @@ paths:
             maximum: 100
       responses:
         '200':
-          description: Paginated job history
+          description: |
+            Job history — bare array, not paginated (ScheduledTaskController.history
+            returns List<ScheduledTaskDto.HistoryResponse>; page/size slice the query
+            server-side but there is no envelope with totalElements/totalPages on the wire).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JobHistoryPage'
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobHistorySummary'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -183,33 +194,21 @@ components:
               type: string
               format: date-time
 
-    ScheduledTaskPage:
-      type: object
-      properties:
-        content:
-          type: array
-          items:
-            $ref: '#/components/schemas/ScheduledTaskSummary'
-        totalElements:
-          type: integer
-        totalPages:
-          type: integer
-        page:
-          type: integer
-        size:
-          type: integer
-
     TriggerResponse:
       type: object
       properties:
-        taskId:
-          type: string
-          format: uuid
-        triggered:
+        executed:
           type: boolean
           description: true if lock acquired and task started; false if lock was held
-        message:
+        history:
+          allOf:
+            - $ref: '#/components/schemas/JobHistorySummary'
+          nullable: true
+          description: The run's history row, present only when executed is true.
+        reason:
           type: string
+          nullable: true
+          description: Populated only when executed is false (e.g. "lock-held").
 
     JobHistorySummary:
       type: object
@@ -240,22 +239,6 @@ components:
         errorMessage:
           type: string
           nullable: true
-
-    JobHistoryPage:
-      type: object
-      properties:
-        content:
-          type: array
-          items:
-            $ref: '#/components/schemas/JobHistorySummary'
-        totalElements:
-          type: integer
-        totalPages:
-          type: integer
-        page:
-          type: integer
-        size:
-          type: integer
 
   responses:
     Unauthorized:

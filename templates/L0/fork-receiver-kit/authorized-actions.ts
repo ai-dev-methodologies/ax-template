@@ -99,10 +99,6 @@ function sameId(a: string | null | undefined, b: string | null | undefined): boo
   return na === nb
 }
 
-function isKnownAction(value: string): value is ApprovalAction {
-  return (ACTION_ORDER as string[]).includes(value)
-}
-
 /** Requester arm — mirrors ApprovalActionGuards.isRequester. */
 export function isRequester(
   request: AuthorizedActionsRequest,
@@ -225,5 +221,3 @@ export function can(
 ): boolean {
   return authorizedActions(request, callerId).includes(action)
 }
-
-export { isKnownAction }

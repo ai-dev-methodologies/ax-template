@@ -11,7 +11,7 @@ evidence:
   - source_type: external
     citation: "WCAG 2.2 — 1.3.1 Info and Relationships: lists must use appropriate list markup for assistive technology"
     url: "https://www.w3.org/TR/WCAG22/#info-and-relationships"
-dependencies: [@tanstack/react-query, @tanstack/react-virtual]
+dependencies: ["@tanstack/react-query", "@tanstack/react-virtual"]
 imports_from: [L1, L2]
 imports_forbidden: [L4, app/, lib/auth/, lib/payment/]
 ---

@@ -603,3 +603,95 @@ items:
     fixture_arg: '--fixture-root'
     anchor: '[ "$erc" -eq 0 ] && [ "$mran" -eq 0 ]'
     neuter: 'false'
+
+  # ── template-evidence/*: BACKLOG P2-43 — the §4.10 templates/ walk in evidence_guard ──
+  # Until 2026-07-29 the walk COUNTED templates/** and printed "evidence check passed"
+  # without reading a byte of it. It now verifies evidence structure across the three shapes
+  # in this tree (leading frontmatter · @ax-template-meta javadoc · DECISIONS.md ADR blocks).
+  # Each fixture below carries a CLEAN same-shape sibling, so the targeted clause is the ONLY
+  # thing standing between the fixture and exit 0 — the ZERO_VERIFIED backstop does not fire
+  # and cannot mask a neutered clause.
+
+  # fixture: sample-widget.tsx cites upstream_id 'sample-src-2026-99', which the fixture
+  #          manifest does not register. This is the literal defect P2-43 names.
+  # anchor:  the condition that turns "this id resolves nowhere" into a violation.
+  # neuter:  condition-constant False → an unregistered id is accepted again → exit 0.
+  - id: template_evidence/fail_unresolved_upstream_id
+    guard: practices/evals/evidence_guard.sh
+    fixture: practices/evals/fixtures/template-evidence/fail_unresolved_upstream_id
+    fixture_arg: '--templates-root'
+    anchor: 'uid not in ids'
+    neuter: 'False'
+
+  # fixture: sample-widget.tsx has an unquoted @scoped dependency, so its whole frontmatter
+  #          is invalid YAML — the live shape found in notification-bell/notification-list/
+  #          virtualized-table, which made those files invisible to every consumer including
+  #          evidence_quote_spotcheck (whose parser does `except: continue`).
+  # anchor:  the condition that turns a frontmatter parse failure into a violation.
+  # neuter:  condition-constant False → the file is silently skipped again → exit 0.
+  - id: template_evidence/fail_frontmatter_unparseable
+    guard: practices/evals/evidence_guard.sh
+    fixture: practices/evals/fixtures/template-evidence/fail_frontmatter_unparseable
+    fixture_arg: '--templates-root'
+    anchor: 'parse_error != ""'
+    neuter: 'False'
+
+  # fixture: sample-widget.tsx declares template_id with the evidence block deleted — the
+  #          escape a presence-blind check would leave open (delete what is verified).
+  # anchor:  the condition that requires evidence of a file claiming to be a template.
+  # neuter:  condition-constant False → an evidence-free template passes again → exit 0.
+  - id: template_evidence/fail_missing_evidence
+    guard: practices/evals/evidence_guard.sh
+    fixture: practices/evals/fixtures/template-evidence/fail_missing_evidence
+    fixture_arg: '--templates-root'
+    anchor: '"template_id" in fm'
+    neuter: 'False'
+
+  # fixture: shape B — SampleService.java's second evidence entry is source_type: external
+  #          with the url line removed (its first entry stays valid, so the shape is covered).
+  # anchor:  the required-field check for an external entry's url (distinct from the
+  #          source_refs[].url check, which addresses `ref`, not `ent`).
+  # neuter:  condition-constant False → an external citation with no url passes → exit 0.
+  - id: template_evidence/fail_java_external_no_url
+    guard: practices/evals/evidence_guard.sh
+    fixture: practices/evals/fixtures/template-evidence/fail_java_external_no_url
+    fixture_arg: '--templates-root'
+    anchor: 'not str(ent.get("url", "")).strip()'
+    neuter: 'False'
+
+  # fixture: shape C — an ADR whose evidence mapping is neither upstream_id nor a known
+  #          source_type, i.e. an entry no clause would otherwise look at.
+  # anchor:  the condition that refuses an unrecognised entry shape instead of ignoring it.
+  # neuter:  condition-constant False → the entry falls through every clause unexamined and
+  #          is counted as verified → exit 0 (the vacuous-scan shape, reproduced exactly).
+  - id: template_evidence/fail_adr_unknown_shape
+    guard: practices/evals/evidence_guard.sh
+    fixture: practices/evals/fixtures/template-evidence/fail_adr_unknown_shape
+    fixture_arg: '--templates-root'
+    anchor: 'kind is None'
+    neuter: 'False'
+
+  # fixture: a templates/backend/import-export/ImportException.java that DOES carry
+  #          evidence while being listed in JAVA_NO_EVIDENCE_EXEMPT — the non-redundancy
+  #          axis, without which the exemption list is a place to hide a file.
+  # anchor:  the condition that reports an exemption the tree has outgrown.
+  # neuter:  condition-constant False → a stale exemption is accepted again → exit 0.
+  - id: template_evidence/fail_stale_exemption
+    guard: practices/evals/evidence_guard.sh
+    fixture: practices/evals/fixtures/template-evidence/fail_stale_exemption
+    fixture_arg: '--templates-root'
+    anchor: 'sub is not None and rel in JAVA_NO_EVIDENCE_EXEMPT'
+    neuter: 'False'
+
+  # fixture: shape B — SampleService.java has an @ax-template-meta block with no `evidence:`
+  #          at all, and is NOT one of the three disclosed exemptions. A clean sibling keeps
+  #          the shape covered so this clause is the only finding.
+  # anchor:  the condition that requires evidence of a non-exempt meta block.
+  # neuter:  condition-constant False → every meta block becomes implicitly exempt and an
+  #          evidence-free java template passes again → exit 0.
+  - id: template_evidence/fail_java_missing_evidence
+    guard: practices/evals/evidence_guard.sh
+    fixture: practices/evals/fixtures/template-evidence/fail_java_missing_evidence
+    fixture_arg: '--templates-root'
+    anchor: 'rel not in JAVA_NO_EVIDENCE_EXEMPT'
+    neuter: 'False'

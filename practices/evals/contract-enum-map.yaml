@@ -229,63 +229,27 @@ contract_enums:
     java_enum: com.ax.template.authblueprint.auth.OAuthProvider
     wire_case: lower
     reason: Same lower-case provider segment as the authorize endpoint.
-  # P0-2 RECLASSIFIED (was wire_only): the SHAPE drift (AuthState vs the shipped
-  # UserProfileResponse) is real and stays a registered finding, but the VOCABULARY of
-  # this block is the domain's own role enum spelled lower-case — so it binds, and a new
-  # Java role now forces a decision here instead of drifting silently.
+  # P3-74 CLOSED the AuthState-vs-UserProfileResponse shape drift this section used to
+  # track (was wire_case:lower + wire_missing:[AUDITOR] because the schema promised a
+  # `roles[]`/`verificationState`/`providerLinks[]` shape no shipped operation ever
+  # emitted). AuthState now mirrors UserProfileResponse field-for-field, so its role
+  # vocabulary binds exactly — no case-fold, no omission.
   - kind: contract_enum
     contract: contracts/auth-openapi.yaml
     pointer: /components/schemas/UserRole
     java_enum: com.ax.template.authblueprint.user.UserRole
-    wire_case: lower
-    wire_missing: [AUDITOR]
     reason: >-
-      The schema lower-cases the role vocabulary for the UI-state contract. AUDITOR
-      (R14 audit-log export role) postdates this schema and is absent from it; the
-      block is not served by any shipped operation today — GET /api/auth/me returns
-      UserProfileResponse with a single upper-case `role` (AuthSessionController:29) —
-      so no client is affected. The AuthState-vs-UserProfileResponse shape drift
-      remains a registered finding; when it is closed, AUDITOR must be added here or
-      the omission re-justified.
+      GET /api/auth/me (AuthSessionController.me, UserProfileResponse.role) emits
+      UserRole.name() verbatim — exact upper-case set, AUDITOR included.
   - kind: contract_enum
     contract: contracts/auth-openapi.yaml
-    pointer: /components/schemas/VerificationState
-    java_enum: com.ax.template.authblueprint.user.VerificationState
-    wire_case: lower
+    pointer: /components/schemas/AuthState/properties/linkedProviders/items
+    java_enum: com.ax.template.authblueprint.auth.OAuthProvider
     reason: >-
-      Exact vocabulary of user.VerificationState spelled lower-case for the UI-state
-      contract. (The shipped /api/auth/me carries a boolean `emailVerified` instead —
-      the same registered shape drift as UserRole — but the tri-state vocabulary this
-      block promises IS that enum's, so it is bound rather than exempted.)
-  - kind: contract_enum
-    contract: contracts/auth-openapi.yaml
-    pointer: /components/schemas/ProviderLink/properties/provider
-    wire_only: >-
-      Same AuthState UI-state schema. The shipped response exposes
-      `linkedProviders: string[]` from OAuthService.getLinkedProviders; the ProviderLink
-      entity's provider column is an OAuthProvider, which cannot be `email`. The only
-      producer of THIS block's vocabulary in the tree is the MSW reference handler that
-      implements the AuthState contract for the frontend.
-    wire_source:
-      kind: literal_pattern
-      file: frontend/src/mocks/handlers.ts
-      pattern: "provider: '([a-z]+)'"
-      # Fail-closed: every `provider:` key in the handler must carry a plain literal.
-      # `provider: someVar` (or a spread) survives the deletion and ERRORS rather than
-      # letting the remaining literal read as the whole vocabulary.
-      residue_probe: '\bprovider:\s*'
-      producer_scope:
-        kind: file_wide
-        reason: >-
-          The producer is an object-literal property inside an MSW handler, not a java
-          method body — there is no brace-delimited producing METHOD the guard can scope
-          to, and TS/JS shapes (arrow handlers, spreads, factories) are not statically
-          delimitable by the same declaration scan. The construct class is instead proven
-          over the WHOLE file: every `provider:` key in handlers.ts must carry a plain
-          literal. Honest scope — a mock that emitted the value without a `provider:` key
-          at all (a spread of a helper's result) would not be seen; this is a reference
-          mock for a block no shipped operation serves, so the residual is accepted rather
-          than papered over. `file_wide` is REFUSED for any .java producer.
+      UserProfileResponse.linkedProviders is OAuthService.getLinkedProviders(userId),
+      which maps each link to ProviderLink.getProvider().name() — exact upper-case
+      OAuthProvider constant set, no case-fold (unlike the OAuth path-segment blocks
+      below, which are deliberately lower-case).
 
   # ── auth-ui ───────────────────────────────────────────────────────────────
   - kind: contract_enum

@@ -203,8 +203,6 @@ components:
             $ref: '#/components/schemas/FeatureFlagResponse'
         totalElements:
           type: integer
-        totalPages:
-          type: integer
         page:
           type: integer
         size:

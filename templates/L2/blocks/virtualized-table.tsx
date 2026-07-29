@@ -12,7 +12,7 @@ evidence:
     upstream_id: tanstack-virtual-2026-05
     section: "Rendering virtual items"
     quote: "Only getVirtualItems().length DOM nodes are rendered at any time (proportional to viewport height / item height), regardless of total count."
-dependencies: [@tanstack/react-virtual]
+dependencies: ["@tanstack/react-virtual"]
 imports_from: [L1, L2]
 imports_forbidden: [L4, app/, lib/auth/, lib/payment/]
 ---

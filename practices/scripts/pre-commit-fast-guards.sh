@@ -26,7 +26,7 @@
 #   7. registry_backfill_completeness_guard   — 49th (commit-5 backfill)
 #
 # Excluded from fast subset (slow / require deep file scans):
-#   • evidence_guard          (505 files scanned, ~3-5s)
+#   • evidence_guard          (rules + 558 templates/ files structurally verified, P2-43)
 #   • substance_guard         (cross-rule consistency)
 #   • time_decay_guard        (date arithmetic across snapshots)
 #   • trio_integrity_guard    (cross-file Spec Trio consistency)

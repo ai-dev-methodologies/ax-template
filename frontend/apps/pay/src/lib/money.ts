@@ -24,70 +24,15 @@
  *   - major values are handed straight to Intl (no math),
  *   - minor->major conversion uses integer string surgery, not `/ 100`,
  * so a value like 2999 never round-trips through a binary float.
- */
-
-/** ISO 4217 currencies with 0 minor-unit decimal places (no fractional unit). */
-const ZERO_DECIMAL_CURRENCIES: ReadonlySet<string> = new Set([
-  'BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW',
-  'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
-]);
-
-/**
- * ISO 4217 currencies with 3 minor-unit decimal places (1 dinar = 1000 fils).
- * Fallback only — {@link fractionDigitsFor} asks Intl/ICU first.
- */
-const THREE_DECIMAL_CURRENCIES: ReadonlySet<string> = new Set([
-  'BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND',
-]);
-
-/** Memo for the Intl probe — `fractionDigitsFor` is called per render/keystroke. */
-const FRACTION_DIGITS_CACHE = new Map<string, number>();
-
-/**
- * fractionDigitsFor — the ISO 4217 minor-unit width for a currency code, read from
- * ICU (`Intl.NumberFormat(...).resolvedOptions().maximumFractionDigits`, which carries
- * the full ISO 4217 table) rather than a hand-maintained list. The previous 5-entry
- * table (KRW/USD/EUR/JPY/GBP, default 2) carried exactly the gap this app's payment
- * screens have never exercised: every 3-decimal dinar currency (BHD/KWD/OMR/JOD/TND)
- * fell through to the `?? 2` default and would render 10x too large the day a fork
- * adds one. The explicit fallback sets below are for runtimes built without currency
- * data (and for codes ICU does not know, which default to 2 — the ISO default).
  *
- * This mirrors templates/L0/fork-receiver-kit/money.ts#fractionDigitsFor exactly, but
- * is NOT imported from it: apps/pay is a real Next.js build (unlike the templates/
- * tree, which is copy-target source never bundled or type-checked by any app here),
- * and Next.js rejects module resolution outside the project root unless
- * `experimental.externalDir` is set (apps/pay's next.config.ts does not set it — see
- * frontend/next.config.ts's own `@templates` webpack-alias comment, which documents
- * that this repo already treats that boundary as needing explicit config). Keep this
- * block in sync with the L0 kit's copy if either changes.
+ * `fractionDigitsFor` (the ISO 4217 minor-unit width lookup) is imported from
+ * `@ax/core` rather than hand-copied here (BACKLOG P3-72) — @ax/core has no
+ * cross-project-root resolution problem the templates/L0 kit has for this app
+ * (see @ax/core's money.ts for the full history: apps/pay used to carry its
+ * own copy because it could not import templates/L0/fork-receiver-kit/money.ts
+ * directly).
  */
-function fractionDigitsFor(currency: string): number {
-  const code = currency.trim().toUpperCase();
-  const cached = FRACTION_DIGITS_CACHE.get(code);
-  if (cached !== undefined) return cached;
-
-  let digits: number | undefined;
-  try {
-    const resolved = new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: code,
-    }).resolvedOptions().maximumFractionDigits;
-    if (Number.isInteger(resolved) && resolved >= 0) digits = resolved;
-  } catch {
-    // Invalid/unsupported code, or a runtime without currency data — fall back.
-  }
-  if (digits === undefined) {
-    digits = ZERO_DECIMAL_CURRENCIES.has(code)
-      ? 0
-      : THREE_DECIMAL_CURRENCIES.has(code)
-        ? 3
-        : 2;
-  }
-
-  FRACTION_DIGITS_CACHE.set(code, digits);
-  return digits;
-}
+import { fractionDigitsFor } from '@ax/core';
 
 /** Build a grouping/decimal formatter for a currency, in Korean locale. */
 function formatter(currency: string): Intl.NumberFormat {

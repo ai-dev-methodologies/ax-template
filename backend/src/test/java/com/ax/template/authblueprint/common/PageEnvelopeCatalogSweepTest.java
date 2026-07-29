@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * BACKLOG P3-54 — page-envelope parity beyond scenario-local.
  * <p>
  * {@link PageEnvelopeContractParityTest} pins ONE hand-built envelope's wire
- * shape (S2.QUERY-BOUNDS.XB). It says nothing about the OTHER 21 real list
+ * shape (S2.QUERY-BOUNDS.XB). It says nothing about the OTHER 20 real list
  * endpoints across the catalog whose contracts also declare a page/list
  * envelope. This test closes that scenario-local gap for the subset of those
  * endpoints that are actually LIVE-HTTP reachable today (an existing
@@ -80,10 +80,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       identity-verification-openapi.yaml — testIdentityVerification</li>
  *   <li>POST {@code /search} — search-openapi.yaml — testSearch</li>
  * </ul>
- * 9 domains / 10 endpoints swept out of the 21 contracts that declare a
- * page/list envelope on disk (ratio 9/21). GREEN is confirmed by the wave's
- * R25 run, not asserted here. The remaining 12 are FULLY partitioned across
- * the three pinned sets below: NOT_REACHABLE (2) +
+ * 9 domains / 10 endpoints swept out of the 20 contracts that declare a
+ * page/list envelope on disk (ratio 9/20). GREEN is confirmed by the wave's
+ * R25 run, not asserted here. The remaining 11 are FULLY partitioned across
+ * the three pinned sets below: NOT_REACHABLE (1) +
  * REACHABLE_BUT_PREEXISTING_DRIFT (2) + DECLARING_NOT_IN_SCOPE (8).
  *
  * <h2>The 21st declaring contract (2026-07-28 correction)</h2>
@@ -127,52 +127,70 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <h2>Allowlist A — NOT reachable (no live-HTTP test-support fixture exists
  * for the domain today; a full sweep needs per-domain auth+seed, the
  * artifact class this PRD wave defers)</h2>
- * {@code email-outbox} (EmailOutboxPage — contracts/email-outbox-openapi.yaml:189)
- * and {@code scheduled-task} (ScheduledTaskPage —
- * contracts/scheduled-task-openapi.yaml:183): every existing test class in
- * both domains is a plain Mockito unit test with no
- * {@code @SpringBootTest}/RestAssured harness — see
- * {@code EmailOutboxComplianceTest} / {@code ScheduledTaskRegisterTest} et
- * al. Pinned count: {@link #NOT_REACHABLE}.size() == 2.
+ * {@code email-outbox} (EmailOutboxPage — contracts/email-outbox-openapi.yaml:189):
+ * every existing test class in the domain is a plain Mockito unit test with
+ * no {@code @SpringBootTest}/RestAssured harness — see
+ * {@code EmailOutboxComplianceTest} et al. Pinned count:
+ * {@link #NOT_REACHABLE}.size() == 1.
+ * <p>
+ * {@code scheduled-task} was here too until its P3-75 closure (2026-07-29):
+ * {@code contracts/scheduled-task-openapi.yaml} declared {@code ScheduledTaskPage}/
+ * {@code JobHistoryPage} envelopes that {@code ScheduledTaskController#list}/
+ * {@code #history} never delivered (both return a bare {@code List<...>}) — the
+ * SAME class of finding as the webhook/feature-flags rows below, but for a
+ * domain with no live-HTTP harness to prove which side agreed. Fixed by
+ * reconciling the contract to the code (bare array, matching
+ * {@code ScheduledTaskSummary}/{@code JobHistorySummary}) and renaming
+ * {@code TriggerResponse}'s fields ({@code taskId/triggered/message} ->
+ * {@code executed/history/reason}) to the shape
+ * {@code ScheduledTaskDto.TriggerResponse} actually emits. The contract no
+ * longer declares any {@code total*} member, so {@code scheduled-task} drops
+ * out of {@link #declaringUniverseFromDisk()} entirely rather than moving to
+ * another allowlist — {@link #DECLARING_CONTRACTS} is 20, not 21.
  *
- * <h2>Allowlist B — reachable, but the sweep found a REAL pre-existing
- * contract/implementation drift the item does not fix (out of this test's
- * file-ownership lane; registered for a follow-up closure, not papered
- * over)</h2>
+ * <h2>Allowlist B — reachable; the sweep found a pre-existing
+ * contract/implementation drift for the stem (registered as (P3-67)/(P3-68),
+ * both CLOSED 2026-07-29 — kept in this allowlist rather than moved to
+ * {@link #SWEPT} because closing the drift did not add a live-HTTP binding
+ * for either endpoint here)</h2>
  * <ul>
  *   <li><b>{@code GET /api/admin/webhook-deliveries}</b> — the contract
- *       declares {@code WebhookDeliveryPage} (content/totalElements/
- *       totalPages/page/size — contracts/webhook-openapi.yaml:355-369), but
+ *       declared {@code WebhookDeliveryPage} (content/totalElements/
+ *       totalPages/page/size) but
  *       {@code WebhookAdminController#listDeliveries}
  *       (backend/src/main/.../webhook/WebhookAdminController.java:93) returns
- *       a bare {@code List<WebhookDto.DeliveryResponse>}. The RUNNING system
- *       is self-consistent — {@code WebhookAdminListStatusTest}'s own
- *       assertions type-check the root as an array, and the FE client
- *       ({@code webhookClient.ts:72}, {@code rawFetch<WebhookDelivery[]>})
- *       already expects a bare array, not an envelope. Per the SAME
- *       precedent already recorded for THIS controller/contract pair
- *       (P2-30's "reconcile the contract to the code" decision, this file's
- *       {@code WebhookAdminListStatusTest} javadoc), the contract's
- *       {@code WebhookDeliveryPage} response schema is the stale side, not
- *       the running code — but changing {@code contracts/*.yaml} is outside
- *       this lane's file ownership.</li>
+ *       a bare {@code List<WebhookDto.DeliveryResponse>}; the FE client
+ *       ({@code webhookClient.ts}, {@code rawFetch<WebhookDelivery[]>})
+ *       already expected a bare array too. (P3-67) reconciled the contract to
+ *       the code (bare array of {@code WebhookDeliverySummary}), per the SAME
+ *       precedent already recorded for THIS controller/contract pair (P2-30's
+ *       "reconcile the contract to the code" decision, this file's
+ *       {@code WebhookAdminListStatusTest} javadoc). {@code webhook} stays in
+ *       this allowlist: the SAME contract's {@code GET /webhook-endpoints}
+ *       still declares an unused {@code WebhookEndpointPage} envelope against
+ *       {@code WebhookAdminController#listEndpoints}'s bare
+ *       {@code List<WebhookDto.EndpointResponse>} (contracts/webhook-openapi.yaml,
+ *       {@code WebhookEndpointPage} schema) — same class of finding,
+ *       different endpoint, discovered by this closure and NOT yet
+ *       registered/fixed.</li>
  *   <li><b>{@code GET /api/v1/admin/feature-flags}</b> — the contract
- *       declares {@code FeatureFlagPage} with FIVE members including
- *       {@code totalPages} (contracts/feature-flags-openapi.yaml:197-210),
- *       but BOTH sides of the running system agree on four:
- *       {@code FeatureFlagDto.FlagPage}
+ *       declared {@code FeatureFlagPage} with FIVE members including
+ *       {@code totalPages}, but BOTH sides of the running system agreed on
+ *       four: {@code FeatureFlagDto.FlagPage}
  *       (backend/src/main/.../featureflags/FeatureFlagDto.java:76-81) and the
  *       FE's own {@code FeatureFlagPage} interface
  *       (frontend/apps/enterprise/.../featureFlagClient.ts:16-20) both omit
- *       {@code totalPages}. Same class of finding as the webhook row above —
- *       the contract over-declares a member neither producer nor consumer
- *       implements.</li>
+ *       {@code totalPages}. (P3-68) removed {@code totalPages} from the
+ *       contract, so the contract now matches both producer and consumer
+ *       exactly. Left in this allowlist rather than {@link #SWEPT} because no
+ *       {@link EnvelopeBinding} exists here to drive it live and re-derive the
+ *       member set from the (now-corrected) contract — a labelling-only move,
+ *       deferred rather than done speculatively without a gradle run to
+ *       confirm the live response.</li>
  * </ul>
- * Both are genuine disk-verified findings surfaced BY this sweep — contract
- * fidelity gaps, not live functional breaks (both running sides already
- * agree with each other) — reported for BACKLOG registration + a follow-up
- * contract fix rather than asserted-and-red or silently dropped. Pinned
- * count: {@link #REACHABLE_BUT_PREEXISTING_DRIFT}.size() == 2.
+ * Pinned count: {@link #REACHABLE_BUT_PREEXISTING_DRIFT}.size() == 2 (stem
+ * count, not open-finding count — both stems' originally-reported drifts are
+ * closed).
  *
  * <p>Escape hatch stated in the PRD (reachable set &lt; 8 domains ⇒
  * decision-record fallback, precedent P3-41/42) does NOT apply here: the
@@ -234,7 +252,7 @@ class PageEnvelopeCatalogSweepTest {
             .collect(Collectors.toUnmodifiableSet());
 
     /** Allowlist A — see class javadoc. */
-    static final Set<String> NOT_REACHABLE = Set.of("email-outbox", "scheduled-task");
+    static final Set<String> NOT_REACHABLE = Set.of("email-outbox");
 
     /**
      * Allowlist B — see class javadoc. Keyed by CONTRACT STEM (the drift lives
@@ -254,7 +272,7 @@ class PageEnvelopeCatalogSweepTest {
             "payment", "report-export", "tag-categorization", "tokenized-securities");
 
     /** Disk truth: contracts/*.yaml files declaring a {@code total*} count member. */
-    static final int DECLARING_CONTRACTS = 21;
+    static final int DECLARING_CONTRACTS = 20;
 
     /**
      * The declaring universe, DERIVED FROM DISK — the Java equivalent of
@@ -445,7 +463,7 @@ class PageEnvelopeCatalogSweepTest {
 
         // (3) the documented counts stay pinned (a shrunk lane is a visible edit).
         assertThat(SWEPT).hasSize(9);
-        assertThat(NOT_REACHABLE).hasSize(2);
+        assertThat(NOT_REACHABLE).hasSize(1);
         assertThat(REACHABLE_BUT_PREEXISTING_DRIFT).hasSize(2);
         assertThat(DECLARING_NOT_IN_SCOPE).hasSize(8);
     }

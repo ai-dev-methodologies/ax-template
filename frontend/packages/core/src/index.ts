@@ -30,3 +30,5 @@ export { apiFetch, apiDownload } from './api/authedFetch';
 export type { ApiError, ProblemDetail, RequestOptions } from './api/authedFetch';
 
 export { getQueryClient } from './query-client';
+
+export { fractionDigitsFor } from './money';

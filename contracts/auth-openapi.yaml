@@ -378,31 +378,24 @@ components:
       bearerFormat: JWT
 
   schemas:
+    # P3-74 — matches com.ax.template.authblueprint.user.UserRole exactly
+    # (upper-case, includes AUDITOR): the wire value is UserRole.name().
     UserRole:
       type: string
-      enum: [admin, manager, member]
+      enum: [ADMIN, MANAGER, MEMBER, AUDITOR]
 
-    VerificationState:
-      type: string
-      enum: [verified, unverified, expired]
-
-    ProviderLink:
-      type: object
-      required: [provider, connectedAt]
-      properties:
-        provider:
-          type: string
-          enum: [email]
-        connectedAt:
-          type: string
-          format: date-time
-        providerUserId:
-          type: string
-          description: External provider user identifier
-
+    # P3-74 — rewritten to match the shipped response byte-for-byte:
+    # AuthSessionController.me() (operationId getAuthState) returns
+    # UserProfileResponse{userId, email, role, emailVerified, linkedProviders}
+    # (backend/src/main/java/.../auth/{AuthSessionController,UserProfileResponse}.java).
+    # The previous shape (roles[]/verificationState/providerLinks[]) matched no
+    # field this operation ever emits; a client built from THIS schema now reads
+    # exactly what the endpoint sends. The former ProviderLink object schema is
+    # removed with it — linkedProviders is a flat array of provider names
+    # (OAuthService.getLinkedProviders → OAuthProvider.name()), never objects.
     AuthState:
       type: object
-      required: [userId, email, roles, verificationState, providerLinks]
+      required: [userId, email, role, emailVerified, linkedProviders]
       properties:
         userId:
           type: string
@@ -410,16 +403,15 @@ components:
         email:
           type: string
           format: email
-        roles:
+        role:
+          $ref: '#/components/schemas/UserRole'
+        emailVerified:
+          type: boolean
+        linkedProviders:
           type: array
           items:
-            $ref: '#/components/schemas/UserRole'
-        verificationState:
-          $ref: '#/components/schemas/VerificationState'
-        providerLinks:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProviderLink'
+            type: string
+            enum: [GOOGLE, NAVER, KAKAO]
 
     ErrorResponse:
       type: object

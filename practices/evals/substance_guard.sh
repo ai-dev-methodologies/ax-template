@@ -278,13 +278,54 @@ else
     fi
 fi
 
-# ── templates/ walk extension (§4.10) ────────────────────────────────────────
+# ── templates/ walk extension (§4.10) — REACHABILITY ONLY, NOT A SUBSTANCE CHECK ─────────
 # Walk templates/**/*.{md,tsx,ts,yaml,java}.
 # Zero-scan guard: if templates/ exists but produces zero matching files → FAIL ZERO_SCAN.
+#
+# BACKLOG P2-43 — WHAT THIS WALK DOES AND DOES NOT DO. It counts reachable template files
+# and fails if the tree became unreachable (ZERO_SCAN). It applies NO substance clause to
+# any of them, and the summary line below now says so out loud instead of leaving the §4.10
+# banner to imply a check that was never written.
+#
+# WHY THE CLAIM IS NARROWED RATHER THAN PROMOTED (the sibling walk in evidence_guard.sh WAS
+# promoted to real structural verification, because its evidence contract does port). Both
+# dialects above score a RULE DOCUMENT: an Incorrect example, a Correct example, a Reference
+# URL, a non-empty impactDescription. A template is source code, not a rule document, and a
+# census of every candidate porting of that contract found each one needs an allowlist to
+# survive first contact — i.e. it would encode exceptions, not an invariant:
+#   • "body has >= 3 substantive lines" → 5 DELIBERATE re-export shells fail
+#     (templates/L2/blocks/conditional-field.tsx and 3 siblings are deprecated back-compat
+#     re-exports; templates/L4/search/.../results/page.tsx re-exports its L3 page by design).
+#   • "no TODO/FIXME/placeholder token" → 58 files match, overwhelmingly the React
+#     `placeholder` prop and shadcn's own "shows a placeholder while content is loading".
+#   • "evidence payload is not trivially short" → the shortest live payloads are real,
+#     correctly-cited Korean-language quotes (17-18 chars).
+#   • "frontmatter declares a non-empty provenance_class" → 6 live files declare none.
+# Inventing any of those here would add a new contract to 500+ files under a gate whose
+# stated job is scoring rule bodies. The honest posture is: this walk asserts reachability,
+# evidence_guard.sh's §4.10 walk asserts evidence structure, and neither pretends to the
+# other's coverage. If a template substance contract is ever wanted it belongs in its own
+# guard with its own census — not smuggled into a summary line here.
 
-SCRIPT_DIR_ABS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT_ABS="$(cd "$SCRIPT_DIR_ABS/../.." && pwd)"
-TEMPLATES_DIR="$REPO_ROOT_ABS/templates"
+# BACKLOG P3-73 — the templates root is resolved from $REPO_ROOT, which is captured at
+# the TOP of this script (before any `cd`), NOT re-derived from ${BASH_SOURCE[0]} here.
+# The old code re-derived it at this point, i.e. AFTER the Java dialect's
+# `cd "$CATALOG_DIR"`, so under a RELATIVE invocation — `bash practices/evals/substance_guard.sh`,
+# which is exactly how .githooks/pre-commit calls it — the re-`cd` failed
+# ("cd: practices/evals: No such file or directory"), the command substitution collapsed
+# to "", TEMPLATES_DIR became "/templates", the `-d` test failed and the ENTIRE ZERO_SCAN
+# subgate silently no-opped while the guard still exited 0. Whether the catalog is checked
+# must never depend on how the caller spelled the path. Fail closed (exit 2, "cannot
+# verify") if the root is unusable, and say so out loud if templates/ is absent — a skip
+# that is indistinguishable from a pass is the failure class this catalog exists to prevent.
+if [[ -z "$REPO_ROOT" || "$REPO_ROOT" == "/" || ! -d "$REPO_ROOT" ]]; then
+    echo "substance_guard: BLOCK — cannot verify: repo root unresolved (REPO_ROOT='${REPO_ROOT}') — the templates/ walk would scan nothing" >&2
+    exit 2
+fi
+TEMPLATES_DIR="$REPO_ROOT/templates"
+if [[ ! -d "$TEMPLATES_DIR" ]]; then
+    echo "substance_guard: templates/ walk SKIPPED — no templates/ directory at $TEMPLATES_DIR"
+fi
 if [[ -d "$TEMPLATES_DIR" ]]; then
     templates_count=0
     while IFS= read -r f; do
@@ -296,7 +337,7 @@ if [[ -d "$TEMPLATES_DIR" ]]; then
         echo "substance_guard: ZERO_SCAN — templates/ exists but no scannable files found — merge BLOCKED" >&2
         exit 1
     fi
-    echo "substance_guard: templates/ walk found ${templates_count} file(s)"
+    echo "substance_guard: templates/ walk found ${templates_count} file(s) — reachability only; NO substance clause is applied to templates/** here (see P2-43 note above; evidence structure is gated by evidence_guard.sh's §4.10 walk)"
 fi
 
 echo "substance_guard: all rules pass"

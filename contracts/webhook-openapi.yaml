@@ -165,11 +165,16 @@ paths:
             maximum: 100
       responses:
         '200':
-          description: Paginated delivery history
+          description: |
+            Delivery history — bare array, not paginated (WebhookAdminController.listDeliveries
+            returns List<WebhookDto.DeliveryResponse>; page/size are query-side slicing only,
+            there is no envelope with totalElements/totalPages on the wire).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WebhookDeliveryPage'
+                type: array
+                items:
+                  $ref: '#/components/schemas/WebhookDeliverySummary'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -353,22 +358,6 @@ components:
             lastError:
               type: string
               nullable: true
-
-    WebhookDeliveryPage:
-      type: object
-      properties:
-        content:
-          type: array
-          items:
-            $ref: '#/components/schemas/WebhookDeliverySummary'
-        totalElements:
-          type: integer
-        totalPages:
-          type: integer
-        page:
-          type: integer
-        size:
-          type: integer
 
     WebhookReplayResponse:
       type: object

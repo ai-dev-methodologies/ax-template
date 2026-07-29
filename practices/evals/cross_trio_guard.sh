@@ -7,6 +7,31 @@
 #
 # Zero-scan guard: if no L4 domain directory was walked, FAIL with ZERO_SCAN.
 #
+# BACKLOG P2-45 — a templates/L4/<domain>/ holding no .tsx is SKIPPED here, and the skip
+# used to be SILENT: the summary line counted only the walked domains, so an empty or
+# .gitkeep-only fork-copy vertical vanished from the report entirely. Judgement recorded
+# (do not re-open without re-checking these three facts on disk):
+#
+#   Promoting the skip to FAIL was assessed and REJECTED as a duplicate that would also
+#   be wrong. The "a declared-frontend vertical must ship a real .tsx" axis is ALREADY
+#   owned, non-vacuously, by two other guards:
+#     - full_trio_artifact_completeness_guard.sh [89] — a spec on `domain_mode: full_trio`
+#       whose templates/L4/<stem>/ has no NON-EMPTY .tsx exits 1 (verified: emptying
+#       templates/L4/comment-thread/ to a bare .gitkeep makes [89] BLOCK).
+#     - domain_spec_trio_guard.sh — an L4 dir with no compliance spec at all exits 1
+#       ("<d>: no specs/<d>-*.yaml"), so a spec-less ghost vertical cannot hide either.
+#   And an UNSCOPED failure here would be a false positive: 4 live verticals
+#   (i18n-policy, multi-tenant, ratelimit, realtime-policy) are legitimately
+#   `domain_mode: backend_only` and ship zero .tsx by design.
+#   Re-implementing the [89] scoping inside this guard would fork one invariant across two
+#   sources of truth — the drift risk exceeds the (zero) coverage gain.
+#
+#   What WAS wrong is the silence. This guard's own mandate is import-evidence anchoring,
+#   and a directory with no .tsx has no imports to anchor — a legitimate "nothing to check
+#   here", which must be REPORTED as such rather than looking like it was checked. Skips
+#   are now printed with the dir, the reason, and the guard that owns the axis, and the
+#   summary line carries the skip count.
+#
 # Usage:
 #   bash practices/evals/cross_trio_guard.sh [--root <repo_root>]
 #   bash practices/evals/cross_trio_guard.sh --root practices/evals/fixtures/cross_trio/pass
@@ -32,6 +57,7 @@ l4_root = repo_root / "templates" / "L4"
 violations = []
 l4_dirs_walked = 0
 tsx_files_walked = 0
+l4_dirs_skipped = []  # P2-45 — reported, never silent
 
 # Pattern to match TypeScript/TSX import statements
 IMPORT_RE = re.compile(r'''from\s+['"]([^'"]+)['"]''')
@@ -102,9 +128,16 @@ templates_root = repo_root / "templates"
 for domain_dir in sorted(l4_root.iterdir()):
     if not domain_dir.is_dir():
         continue
-    # Skip .gitkeep-only dirs
+    # P2-45 — a dir with no .tsx has no imports to evidence-anchor, so it is skipped;
+    # the skip is REPORTED (never silent) and the completeness axis is owned elsewhere
+    # (see the header). An empty / .gitkeep-only fork-copy vertical must be visible here.
     tsx_in_domain = list(domain_dir.rglob("*.tsx"))
     if not tsx_in_domain:
+        l4_dirs_skipped.append(domain_dir.name)
+        print(f"SKIP: templates/L4/{domain_dir.name}/ — no .tsx, nothing to import-check "
+              f"(frontend-artifact completeness for a full_trio spec is enforced by "
+              f"full_trio_artifact_completeness_guard; a spec-less L4 dir by "
+              f"domain_spec_trio_guard)")
         continue
 
     l4_dirs_walked += 1
@@ -135,6 +168,11 @@ if violations:
     print(f"cross_trio_guard: {len(violations)} violation(s) — merge BLOCKED", file=sys.stderr)
     sys.exit(1)
 
-print(f"cross_trio_guard: all imports evidence-anchored ({l4_dirs_walked} domains, {tsx_files_walked} files)")
+skipped_note = ""
+if l4_dirs_skipped:
+    skipped_note = (f", {len(l4_dirs_skipped)} skipped without .tsx: "
+                    f"{', '.join(sorted(l4_dirs_skipped))}")
+print(f"cross_trio_guard: all imports evidence-anchored ({l4_dirs_walked} domains, "
+      f"{tsx_files_walked} files{skipped_note})")
 sys.exit(0)
 PY

@@ -6,21 +6,19 @@ import { describe, it, expect } from 'vitest'
 // 3-decimal dinar currency (BHD/KWD/OMR/JOD/TND) would fall through to the `?? 2`
 // default and render 10x too large.
 //
-// Fix: money.ts's private `fractionDigitsFor` now derives the exponent from ICU
-// (Intl.NumberFormat resolvedOptions().maximumFractionDigits) with the same explicit
-// fallback sets as the L0 kit, mirroring it exactly. It is NOT imported from the L0
-// kit — apps/pay is a real Next.js build (unlike templates/, which is copy-target
-// source never bundled by any app here), and Next.js rejects module resolution
-// outside the project root unless `experimental.externalDir` is set, which apps/pay's
-// next.config.ts does not set (see frontend/next.config.ts's own `@templates`
-// webpack-alias comment, which documents this repo already treats that boundary as
-// needing explicit config — and no app in this repo successfully imports the L0 kit's
-// bare `templates/L0/...` specifier at runtime; only tests do, via a vitest-only
-// alias). See the task report for the full finding.
+// Fix: `fractionDigitsFor` derives the exponent from ICU (Intl.NumberFormat
+// resolvedOptions().maximumFractionDigits) with the same explicit fallback sets
+// as the L0 kit. BACKLOG P3-72 single-sourced this into `@ax/core`
+// (frontend/packages/core/src/money.ts) — apps/pay's money.ts now imports it
+// from there instead of hand-copying it, since @ax/core (unlike templates/,
+// which sits outside the frontend/ project root and is copy-target source
+// no app here bundles) is an ordinary transpiled workspace package. See
+// frontend/tests/money-source-parity.vitest.ts for the parity/import guard.
 //
-// `fractionDigitsFor` is not exported, so this suite exercises it through the public
-// API (`formatMinor`), the same surface real callers use (checkout-screen.tsx,
-// transactions-screen.tsx, subscriptions-screen.tsx, overview-screen.tsx).
+// `fractionDigitsFor` is not re-exported by apps/pay's money.ts, so this suite
+// exercises it through the public API (`formatMinor`), the same surface real
+// callers use (checkout-screen.tsx, transactions-screen.tsx,
+// subscriptions-screen.tsx, overview-screen.tsx).
 import { formatMajor, formatMinor, formatMajorCompact } from '../apps/pay/src/lib/money'
 
 describe('money.ts (apps/pay) — fractionDigitsFor gap closed for 3-decimal currencies', () => {

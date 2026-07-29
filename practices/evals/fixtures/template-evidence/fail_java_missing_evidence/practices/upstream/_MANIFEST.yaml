@@ -1,0 +1,10 @@
+# Fixture manifest for practices/evals/fixtures/template-evidence/**.
+# Only the `id` field is read by evidence_guard's §4.10 templates walk (upstream_id
+# resolution is manifest MEMBERSHIP — snapshot bodies are evidence_quote_spotcheck's
+# surface, deliberately not required here; see the guard header).
+snapshots:
+  - id: sample-src-2026-05
+    tier: 3
+    source: https://example.invalid/sample-docs
+    via: fixture
+    fetched_at: '2026-07-29T00:00:00Z'

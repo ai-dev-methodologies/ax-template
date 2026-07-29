@@ -70,6 +70,43 @@ run_guard "evidence_guard/fixture_missing_caveat" 1 \
     bash "$SCRIPT_DIR/evidence_guard.sh" "$SCRIPT_DIR/fixtures/evidence-caveat/fail_missing_caveat"
 run_guard "evidence_guard/fixture_caveat_present" 0 \
     bash "$SCRIPT_DIR/evidence_guard.sh" "$SCRIPT_DIR/fixtures/evidence-caveat/pass_caveat_present"
+# BACKLOG P2-43 — the §4.10 templates/ walk announced a scan it never performed: it globbed
+# templates/**, COUNTED the files and printed "evidence check passed", reading none of them.
+# An upstream_id no manifest registers, an external entry with no url, a template_id file
+# with the evidence block deleted, and a frontmatter that is not YAML at all (which ALSO
+# makes the file invisible to evidence_quote_spotcheck, whose parser skips unparseable
+# frontmatter) all passed. The walk now verifies evidence STRUCTURE across the three shapes
+# in this tree — leading frontmatter, @ax-template-meta javadoc, DECISIONS.md ADR blocks —
+# and the live runs above cover it (558 files walked, 998 entries verified). Promoting the
+# walk found 3 live defects: notification-bell / notification-list / virtualized-table each
+# carried an unquoted @scoped dependency, so their whole frontmatter — 6 evidence entries —
+# was silently unparseable and skipped by every consumer. Fixtures pin one defect class each
+# (--templates-root isolates the walk so a fixture root does not have to carry a rules
+# catalog); pass_clean is the positive control that all three shapes still PASS honestly.
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "evidence_guard/fixture_templates_pass_clean" 0 \
+        bash "$SCRIPT_DIR/evidence_guard.sh" --templates-root "$SCRIPT_DIR/fixtures/template-evidence/pass_clean"
+    run_guard "evidence_guard/fixture_templates_unresolved_upstream_id" 1 \
+        bash "$SCRIPT_DIR/evidence_guard.sh" --templates-root "$SCRIPT_DIR/fixtures/template-evidence/fail_unresolved_upstream_id"
+    run_guard "evidence_guard/fixture_templates_frontmatter_unparseable" 1 \
+        bash "$SCRIPT_DIR/evidence_guard.sh" --templates-root "$SCRIPT_DIR/fixtures/template-evidence/fail_frontmatter_unparseable"
+    run_guard "evidence_guard/fixture_templates_missing_evidence" 1 \
+        bash "$SCRIPT_DIR/evidence_guard.sh" --templates-root "$SCRIPT_DIR/fixtures/template-evidence/fail_missing_evidence"
+    run_guard "evidence_guard/fixture_templates_java_external_no_url" 1 \
+        bash "$SCRIPT_DIR/evidence_guard.sh" --templates-root "$SCRIPT_DIR/fixtures/template-evidence/fail_java_external_no_url"
+    run_guard "evidence_guard/fixture_templates_adr_unknown_shape" 1 \
+        bash "$SCRIPT_DIR/evidence_guard.sh" --templates-root "$SCRIPT_DIR/fixtures/template-evidence/fail_adr_unknown_shape"
+    # Non-redundancy of JAVA_NO_EVIDENCE_EXEMPT: an exemption for a file that DOES carry
+    # evidence must FAIL, so the list cannot rot into a place to hide a file.
+    run_guard "evidence_guard/fixture_templates_java_missing_evidence" 1 \
+        bash "$SCRIPT_DIR/evidence_guard.sh" --templates-root "$SCRIPT_DIR/fixtures/template-evidence/fail_java_missing_evidence"
+    run_guard "evidence_guard/fixture_templates_stale_exemption" 1 \
+        bash "$SCRIPT_DIR/evidence_guard.sh" --templates-root "$SCRIPT_DIR/fixtures/template-evidence/fail_stale_exemption"
+    # Fail-closed: --templates-only against a root with no templates/ verified nothing and
+    # must not share an exit code with a pass.
+    run_guard "evidence_guard/fixture_templates_absent_tree" 2 \
+        bash "$SCRIPT_DIR/evidence_guard.sh" --templates-root "$SCRIPT_DIR/fixtures/evidence-caveat"
+fi
 
 # ── 2. spec_ref_guard (practices + practices-react) ──────────────────────────
 echo "[2] spec_ref_guard.sh"
@@ -99,6 +136,20 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/substance_guard.sh" --catalog practices-react "$SCRIPT_DIR/fixtures/react-substance/fail_react_no_url"
     run_guard "substance_guard/fixture_pass_react_clean" 0 \
         bash "$SCRIPT_DIR/substance_guard.sh" --catalog practices-react "$SCRIPT_DIR/fixtures/react-substance/pass_react_clean"
+    # BACKLOG P3-73 — the templates/ walk (ZERO_SCAN subgate) had NO fixture, and it was
+    # silently no-op under a RELATIVE invocation: the templates root was re-derived from
+    # ${BASH_SOURCE[0]} after the Java dialect's `cd`, so `bash practices/evals/substance_guard.sh`
+    # (how .githooks/pre-commit calls it) resolved it to "/templates", skipped the walk and
+    # still exited 0. These three scenarios pin it. The templates root is intentionally NOT
+    # CLI-parameterizable (it must track the guard's own location so the live catalog cannot
+    # be swapped from the command line), so the scenarios build a throwaway repo skeleton and
+    # copy the LIVE guard into it — see the harness header.
+    run_guard "substance_guard/fixture_fail_templates_zero_scan" 1 \
+        bash "$SCRIPT_DIR/fixtures/substance-templates-walk/substance_templates_walk_run.sh" fail_zero_scan
+    run_guard "substance_guard/fixture_pass_templates_present" 0 \
+        bash "$SCRIPT_DIR/fixtures/substance-templates-walk/substance_templates_walk_run.sh" pass_templates_present
+    run_guard "substance_guard/fixture_pass_relative_invocation" 0 \
+        bash "$SCRIPT_DIR/fixtures/substance-templates-walk/substance_templates_walk_run.sh" pass_relative_invocation
 fi
 
 # ── 4. time_decay_guard (practices + practices-react) ────────────────────────
@@ -183,6 +234,17 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     echo "[cross_trio] fail_zero_scan/"
     run_guard "cross_trio/fail_zero_scan" 1 \
         bash "$SCRIPT_DIR/cross_trio_guard.sh" --root "$FIXTURES_CROSS/fail_zero_scan"
+
+    # BACKLOG P2-45 — a tsx-less templates/L4/<dir>/ is skipped here (correctly: it has no
+    # imports to evidence-anchor, and the "declared frontend vertical must ship a real .tsx"
+    # axis is owned by full_trio_artifact_completeness_guard — failing on it here would
+    # duplicate that guard AND false-positive on the 4 live backend_only verticals). What was
+    # wrong is that the skip was SILENT. Since the deliverable is output, not an exit code,
+    # an exit-code fixture cannot prove it — this harness asserts the SKIP line + count, so
+    # deleting the reporting flips it 0 -> 1.
+    echo "[cross_trio] pass_skip_reported/ (P2-45 skip visibility)"
+    run_guard "cross_trio/pass_skip_reported" 0 \
+        bash "$FIXTURES_CROSS/cross_trio_skip_report_run.sh"
 
     # ── 7. recipe_governance_guard (SP37) ────────────────────────────────────
     echo ""
@@ -1586,7 +1648,7 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/contract_enum_parity_guard.sh" --root "$SCRIPT_DIR/fixtures/contract_enum_parity_guard/fail_vocab_subset_stale"
 fi
 
-echo "[93] l2_frontmatter_deps_guard.sh (P3-66 — L2 block frontmatter dependencies: declares a real sibling template that is NOT imported while a DIFFERENT real sibling from the same directory IS. Deliberately narrow necessary-not-sufficient floor: generic UI vocabulary (button/badge) declared without a literal import is legitimate catalog-wide and is NOT flagged. Live scans 113 blocks, exits 0.)"
+echo "[93] l2_frontmatter_deps_guard.sh (P3-66 — L2 block frontmatter dependencies: declares a real sibling template that is NOT imported while a DIFFERENT real sibling from the same directory IS. Deliberately narrow necessary-not-sufficient floor: generic UI vocabulary (button/badge) declared without a literal import is legitimate catalog-wide and is NOT flagged. P3-71: the check only fires when \`dependencies:\` has EXACTLY ONE entry — with 2+ entries the guard cannot mechanically tell a swapped/stale reference apart from ordinary vocabulary declared alongside one real functional import, and firing anyway was a live false positive (any block importing one real L1/L2 sibling flagged EVERY OTHER real-named vocabulary entry, e.g. adding \`button\` to invoice-list.tsx's deps tripped exit 1 even though \`button\` was never claimed to be imported). Live scans 113 blocks, exits 0.)"
 run_guard "l2_frontmatter_deps/live" 0 \
     bash "$SCRIPT_DIR/l2_frontmatter_deps_guard.sh"
 if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
@@ -1594,6 +1656,11 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/l2_frontmatter_deps_guard.sh" --root "$SCRIPT_DIR/fixtures/l2_frontmatter_deps_guard/pass_clean"
     run_guard "l2_frontmatter_deps/fixture_fail_stale" 1 \
         bash "$SCRIPT_DIR/l2_frontmatter_deps_guard.sh" --root "$SCRIPT_DIR/fixtures/l2_frontmatter_deps_guard/fail_stale_dependency"
+    # P3-71 — regression pin: a block that imports one real L1 sibling AND
+    # declares a DIFFERENT real-L1-named entry purely as doc-only vocabulary
+    # (never imported, e.g. `button`) must PASS, not be flagged as stale.
+    run_guard "l2_frontmatter_deps/fixture_pass_vocab_plus_import" 0 \
+        bash "$SCRIPT_DIR/l2_frontmatter_deps_guard.sh" --root "$SCRIPT_DIR/fixtures/l2_frontmatter_deps_guard/pass_vocab_plus_import"
 fi
 
 echo "[94] l4_presentational_view_guard.sh (P2-28 — every (page, view) pair recorded in l4_presentational_view_ledger.yaml must hold on disk: the view exists, imports no data-fetching hook, and page.tsx actually imports it (catches a silent re-inline). The ledger may only GROW — shrinking below min_entries FAILS. Requires python3 + PyYAML. Live checks 4 ledgered pairs, exits 0.)"

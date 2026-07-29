@@ -96,15 +96,23 @@ public class EmailOutboxAdminController {
 
     /**
      * P2-35(b) — accepts PENDING | RETRY | SENT | DLQ | ALL (case-insensitive).
-     * ALL / blank / absent → no filter. Unknown → {@link IllegalArgumentException}
+     * ALL / blank / absent → no filter. Unknown → {@link InvalidStatusFilterException}
      * → 400 via {@link #handleBadRequest}. Mirrors
      * {@code NotificationController.parseStatusFilter}, the family reference.
+     * P3-78 — wraps {@link EmailOutboxStatus#valueOf} in its own exception type
+     * rather than letting a bare {@link IllegalArgumentException} escape, so
+     * {@link #handleBadRequest} cannot be reached by (and misreport) an unrelated
+     * IAE raised elsewhere in this controller.
      */
     private EmailOutboxStatus parseStatusFilter(String status) {
         if (status == null || status.isBlank() || status.equalsIgnoreCase("ALL")) {
             return null;
         }
-        return EmailOutboxStatus.valueOf(status.toUpperCase(Locale.ROOT));
+        try {
+            return EmailOutboxStatus.valueOf(status.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidStatusFilterException();
+        }
     }
 
     /**
@@ -112,10 +120,14 @@ public class EmailOutboxAdminController {
      * {@code common.GlobalProblemDetailAdvice} deliberately does NOT map
      * {@link IllegalArgumentException} (it would mask genuine programming bugs), so
      * this controller-local handler does — same posture as NotificationController.
+     * P3-78 — bound to {@link InvalidStatusFilterException} (not the broader
+     * {@link IllegalArgumentException}) so this handler owns exactly the one cause
+     * its hardcoded detail describes; any other IAE from this controller now
+     * propagates unmapped instead of being misreported as a bad {@code status}.
      * The offending raw value is NOT echoed (response-amplification defense).
      */
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ProblemDetail> handleBadRequest(IllegalArgumentException ex) {
+    @ExceptionHandler(InvalidStatusFilterException.class)
+    public ResponseEntity<ProblemDetail> handleBadRequest(InvalidStatusFilterException ex) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
             "Parameter 'status' must be one of PENDING, RETRY, SENT, DLQ, ALL.");
         pd.setProperty("code", "EMAIL_OUTBOX_BAD_REQUEST");

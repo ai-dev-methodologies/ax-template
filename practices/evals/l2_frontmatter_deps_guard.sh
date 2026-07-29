@@ -30,6 +30,26 @@
 # sibling co-existing with an actually-imported different sibling) — it will
 # not (and is not meant to) catch a merely-omitted or doc-only dependency.
 #
+# NOTE 2 (P3-71) — why this ALSO only fires when `dependencies:` has EXACTLY
+# ONE entry: the "some OTHER real sibling IS imported instead" heuristic above
+# is not actually scoped to the declared dep D specifically — it fires the
+# moment the file imports ANY real L1/L2 sibling at all. So a block that
+# legitimately mixes doc-only vocabulary (declares `button`, never imported —
+# exactly the case NOTE above says is fine) WITH one real functional import
+# (e.g. `currency-input`, which IS imported) got `button` flagged as stale the
+# instant the functional import existed — a false positive on the guard's own
+# stated invariant, reproduced live: templates/L2/blocks/invoice-list.tsx
+# imports currency-input; adding `button` to its `dependencies:` list flips
+# this guard to exit 1 even though `button` was never claimed to be imported.
+# The two REAL P3-66 bugs this guard exists to catch (invoice-list.tsx,
+# pricing-table.tsx) both declared a SINGLE dependency that was wholly wrong —
+# with only one entry, "some other real sibling is imported instead" is the
+# strong rename/swap signal the top-of-file comment describes. With two or
+# more declared entries the guard cannot mechanically tell a swapped reference
+# apart from ordinary vocabulary-plus-one-real-import, so it stands down rather
+# than risk another false positive. See fixtures/l2_frontmatter_deps_guard/
+# pass_vocab_plus_import for the pinned regression.
+#
 # Exit codes:
 #   0 — no stale-sibling-dependency mismatch found
 #   1 — at least one violation
@@ -137,6 +157,12 @@ for name in sorted(os.listdir(l2_dir)):
 
     declared = parse_deps(text)
     if not declared:
+        continue
+    if len(declared) != 1:
+        # P3-71 — with 2+ declared entries we cannot mechanically tell a
+        # swapped/stale reference apart from ordinary vocabulary declared
+        # alongside one real functional import (see NOTE 2 above). Only a
+        # SOLE declared dependency gives strong enough signal.
         continue
 
     imported_l1 = set()

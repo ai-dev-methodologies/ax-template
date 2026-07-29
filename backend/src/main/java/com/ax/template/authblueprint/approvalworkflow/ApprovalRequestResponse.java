@@ -38,15 +38,6 @@ public record ApprovalRequestResponse(
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-    /**
-     * Caller-agnostic projection — {@code allowedActions} is empty. Retained so internal
-     * callers that have no principal keep compiling; every HTTP path uses the
-     * caller-aware overload below.
-     */
-    public static ApprovalRequestResponse from(ApprovalRequest r, ObjectMapper objectMapper) {
-        return from(r, objectMapper, null, null);
-    }
-
     public static ApprovalRequestResponse from(ApprovalRequest r, ObjectMapper objectMapper,
                                                ApprovalActionEvaluator evaluator, String callerUserId) {
         Map<String, Object> payload = parse(r.getPayloadJson(), objectMapper);

@@ -527,7 +527,7 @@ fork-receiver의 활성화는 opt-in이다.
 
 ### 핵심 설명
 
-- **가드 파일은 100개다** (practices/evals 98 + practices-react/evals 2). 그중 `run-all-guards.sh`가 **live로 94개**를 실행하며, 이는 R25 완료 선언 시 수동 호출된다(커밋마다 자동 실행되지 않는다). 나머지 6개는 다른 진입점에서 돈다 — pre-commit 4 hard gates(`spec_ref`·`substance`·`evidence`·`time_decay`) + pre-push 전용 `completion_checklist_recency` 1 + `fail_fast_blocking_audit` 1.
+- **가드 파일은 101개다** (practices/evals 99 + practices-react/evals 2). 그중 `run-all-guards.sh`가 **live로 95개**를 실행하며, 이는 R25 완료 선언 시 수동 호출된다(커밋마다 자동 실행되지 않는다). 나머지 6개는 다른 진입점에서 돈다 — pre-commit 4 hard gates(`spec_ref`·`substance`·`evidence`·`time_decay`) + pre-push 전용 `completion_checklist_recency` 1 + `fail_fast_blocking_audit` 1.
   R25 완료 선언 전에 `verify-completion.sh`를 실행하면 이 guard들이 모두 돌아간다.
 - **pre-commit / pre-push hook은 opt-in이다.** `install-hooks.sh`를 실행한 클론에서만 활성화된다.
   ax-template 자체 HEAD에서는 활성화되어 있다; fork-receiver가 활성화 여부를 결정한다.

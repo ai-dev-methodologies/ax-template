@@ -10,7 +10,7 @@ evidence:
   - source_type: external
     citation: "WCAG 2.2 — 4.1.3 Status Messages: status messages must be programmatically determinable via role or property"
     url: "https://www.w3.org/TR/WCAG22/#status-messages"
-dependencies: [@tanstack/react-query]
+dependencies: ["@tanstack/react-query"]
 imports_from: [L1]
 imports_forbidden: [L4, app/, lib/auth/, lib/payment/]
 ---
