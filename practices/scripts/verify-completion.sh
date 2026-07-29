@@ -54,6 +54,25 @@
 #     ledger BLOCK discards its resume record entirely rather than publishing
 #     one a later --resume could consume. Pinned by resume_provenance_guard [96].
 #
+# Provenance rules (what a PASS is allowed to mean) — [96] layers A–D:
+#   • Every result-ledger row carries an ORIGIN column: `executed` (a command
+#     actually ran and its exit code was observed), `resumed` (inherited from a
+#     PASS record for the SAME head_sha), or `unrun` (a row that exists although
+#     nothing ran — an absent working directory). Only `executed`/`resumed` rows
+#     are evidence; `unrun` rows are accounting placeholders and can never carry
+#     a step to PASS.
+#   • An ABSENT working directory is a BLOCK for a non-advisory command (layer C),
+#     not a skip. A step whose directory does not exist was not verified, and
+#     "silence is not success". Advisory commands stay advisory (WARN).
+#   • A step may be recorded PASS only when EVERY planned non-advisory command of
+#     that step actually executed with an acceptable outcome (layer D). Otherwise
+#     it is UNRUN, which `--resume` never skips.
+#   • RESUME-SKIP is `resumed`, not `executed`: it is publishable only because the
+#     record it consumed was itself published by a run at the SAME head_sha that
+#     executed the step. By induction every PASS at head H roots in an execution
+#     at head H. The resume record carries a "provenance" field so that chain is
+#     auditable; it is deliberately NOT a gate (see the preloader comment).
+#
 # Side effect: writes an audit log line to .ax-verify/runs.jsonl with
 #   {ts, head_sha, exit, advisory_fail_count, hard_fail_count}
 # so that completion_checklist_recency_guard.sh can audit recency.
@@ -312,6 +331,11 @@ for line in pathlib.Path(resume_path).read_text().splitlines():
         continue
     if rec.get("status") != "PASS":
         continue
+    # NOTE: the "provenance" field is audit metadata, NOT an admission gate. Making the
+    # preloader reject non-executed provenance would add a third blocking layer that
+    # masks the loss of layer A, hollowing out resume_provenance_guard's non-vacuity
+    # matrix ("A+B neutered must still REPRODUCE the defect"). Provenance is enforced
+    # where it is produced (emit_step_verdict), not where it is consumed.
     sid = rec.get("step_id")
     if sid:
         keep.append(sid)
@@ -352,11 +376,11 @@ RESUME_NEW=$(mktemp)
 : > "$RESUME_NEW"
 
 emit_resume() {
-    local sid="$1" status="$2"
+    local sid="$1" status="$2" provenance="${3:-none}"
     local ts
     ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '{"step_id":"%s","status":"%s","ts":"%s","head_sha":"%s"}\n' \
-        "$sid" "$status" "$ts" "$CURRENT_HEAD" >> "$RESUME_NEW"
+    printf '{"step_id":"%s","status":"%s","ts":"%s","head_sha":"%s","provenance":"%s"}\n' \
+        "$sid" "$status" "$ts" "$CURRENT_HEAD" "$provenance" >> "$RESUME_NEW"
     # Atomic publish: copy to a sibling tmp then rename. mv on same filesystem
     # is atomic per POSIX. Crash mid-rename ⇒ caller sees either old or new.
     cp "$RESUME_NEW" "$RESUME_LOG.tmp.$$"
@@ -373,21 +397,41 @@ emit_resume() {
 # script correctly BLOCKS can seed a green resume on the next invocation.
 # UNRUN is deliberately a distinct, non-PASS status: the resume preloader keeps
 # only status == "PASS", so an UNRUN step is always re-executed.
+#
+# A ROW IS NOT AN EXECUTION (layer D). "the step has a row" was the second half of
+# the same unsoundness: a row can exist because the command was skipped (absent
+# working directory) rather than run, and such a row used to satisfy both this
+# verdict and the accounting check below. So PASS additionally requires that EVERY
+# planned non-advisory command of the step actually executed:
+#   req_planned  — non-advisory commands the plan scheduled for this step
+#   req_executed — of those, how many reached the runner and produced an exit code
+# A step with no required commands at all (every command advisory) still needs one
+# executed/resumed row; otherwise nothing was verified and PASS would be a fiction.
 # Echoes nothing; returns 1 = FAIL, 2 = UNRUN, 0 = PASS.
 emit_step_verdict() {
-    local sid="$1" hard_before="$2" recorded
+    local sid="$1" hard_before="$2" req_planned="${3:-0}" req_executed="${4:-0}"
+    local recorded verified reason=""
     if [ "$HARD_FAIL" -gt "$hard_before" ]; then
-        emit_resume "$sid" "FAIL"
+        emit_resume "$sid" "FAIL" "executed"
         return 1
     fi
     recorded=$(awk -F'\t' -v s="$sid" '$1==s { c++ } END { print c+0 }' "$RESULTS_FILE" 2>/dev/null || echo 0)
+    verified=$(awk -F'\t' -v s="$sid" '$1==s && ($6=="executed" || $6=="resumed") { c++ } END { print c+0 }' \
+        "$RESULTS_FILE" 2>/dev/null || echo 0)
     if [ "${recorded:-0}" -eq 0 ]; then
-        echo "  UNRUN — step [$sid] recorded NO command outcome (plan or ledger lost mid-run)." >&2
+        reason="recorded NO command outcome (plan or ledger lost mid-run)"
+    elif [ "$req_planned" -gt 0 ] && [ "$req_executed" -lt "$req_planned" ]; then
+        reason="only $req_executed of $req_planned required command(s) actually executed"
+    elif [ "${verified:-0}" -eq 0 ]; then
+        reason="produced no executed outcome at all (every command was skipped)"
+    fi
+    if [ -n "$reason" ]; then
+        echo "  UNRUN — step [$sid] $reason." >&2
         echo "          Recording UNRUN, not PASS: an unobserved step must never be resume-skipped." >&2
         emit_resume "$sid" "UNRUN"
         return 2
     fi
-    emit_resume "$sid" "PASS"
+    emit_resume "$sid" "PASS" "executed"
     return 0
 }
 
@@ -492,9 +536,11 @@ for sid in $STEP_ORDER; do
     # Resume short-circuit.
     if [ "$RESUME" -eq 1 ] && [ -s "$RESUME_TMP" ] && grep -Fxq "$sid" "$RESUME_TMP"; then
         echo "  SKIP (resume): step PASS for head $CURRENT_HEAD already recorded"
-        echo -e "$sid\tRESUME-SKIP\tPASS\t0\tfalse" >> "$RESULTS_FILE"
+        # origin=resumed, NOT executed: this row is evidence only because the record it
+        # consumed was published by a run at the SAME head_sha that executed the step.
+        echo -e "$sid\tRESUME-SKIP\tPASS\t0\tfalse\tresumed" >> "$RESULTS_FILE"
         SKIP_RESUME_COUNT=$((SKIP_RESUME_COUNT + 1))
-        emit_resume "$sid" "PASS"
+        emit_resume "$sid" "PASS" "resumed"
         continue
     fi
 
@@ -505,6 +551,9 @@ for sid in $STEP_ORDER; do
     fi
 
     STEP_HARD_FAIL_BEFORE=$HARD_FAIL
+    # Required-command coverage for this step (layer D). PLAN_FILE col 6 = advisory.
+    STEP_REQ_PLANNED=$(awk -F'\t' -v s="$sid" '$1==s && $6!="true" { c++ } END { print c+0 }' "$PLAN_FILE")
+    STEP_REQ_EXECUTED=0
 
     if [ -s "$COLLAPSED_PLAN" ]; then
         # ── Collapsed path: one warm gradle daemon for all non-advisory tasks ─
@@ -535,11 +584,16 @@ for sid in $STEP_ORDER; do
 
             if [ "$actual_exit" -eq 0 ]; then
                 echo "  PASS (collapsed) — exit 0"
-                echo -e "$sid\t$exec_cmd\tPASS\t0\tfalse" >> "$RESULTS_FILE"
+                echo -e "$sid\t$exec_cmd\tPASS\t0\tfalse\texecuted" >> "$RESULTS_FILE"
+                # The collapsed invocation IS every non-advisory command of this step
+                # (_collapse_plan.py collapses all of them or emits nothing) and runs with
+                # --continue, so a clean exit means each one ran. On a non-zero exit the
+                # step is a HARD_FAIL anyway and coverage is deliberately left at 0.
+                STEP_REQ_EXECUTED=$STEP_REQ_PLANNED
             else
                 HARD_FAIL=$((HARD_FAIL + 1))
                 echo "  FAIL (collapsed) — exit $actual_exit"
-                echo -e "$sid\t$exec_cmd\tFAIL\t$actual_exit\tfalse" >> "$RESULTS_FILE"
+                echo -e "$sid\t$exec_cmd\tFAIL\t$actual_exit\tfalse\texecuted" >> "$RESULTS_FILE"
             fi
         fi
 
@@ -557,12 +611,12 @@ for sid in $STEP_ORDER; do
             adv_exit=$?
             if [ "$adv_exit" -eq 0 ]; then
                 echo "  PASS (advisory)  — exit 0"
-                echo -e "$sid\t$exec_cmd_adv\tPASS\t0\ttrue" >> "$RESULTS_FILE"
+                echo -e "$sid\t$exec_cmd_adv\tPASS\t0\ttrue\texecuted" >> "$RESULTS_FILE"
             else
                 # advisory FAIL is a WARN; do NOT bump HARD_FAIL. We can't
                 # mutate ADVISORY_FAIL from subshell, so log a sentinel line.
                 echo "  WARN (advisory)  — exit $adv_exit (advisory, continuing)"
-                echo -e "$sid\t$exec_cmd_adv\tWARN\t$adv_exit\ttrue" >> "$RESULTS_FILE"
+                echo -e "$sid\t$exec_cmd_adv\tWARN\t$adv_exit\ttrue\texecuted" >> "$RESULTS_FILE"
             fi
         done
 
@@ -572,7 +626,7 @@ for sid in $STEP_ORDER; do
         ADVISORY_FAIL=$(awk -F'\t' '$3=="WARN" { c++ } END { print c+0 }' "$RESULTS_FILE")
 
         # Determine PASS/FAIL/UNRUN of step (PASS requires an observed outcome).
-        emit_step_verdict "$sid" "$STEP_HARD_FAIL_BEFORE"
+        emit_step_verdict "$sid" "$STEP_HARD_FAIL_BEFORE" "$STEP_REQ_PLANNED" "$STEP_REQ_EXECUTED"
         if [ $? -eq 1 ] && [ -s "$PLAYBOOK_DIR/$sid.txt" ]; then
             echo ""
             echo "  ▼ fix_playbook for step [$sid]:"
@@ -590,9 +644,35 @@ for sid in $STEP_ORDER; do
                 exec_wd="$REPO_ROOT/$wd"
             fi
 
+            # ── Layer C: an ABSENT working directory is a BLOCK, never a silent skip ──
+            # A command whose directory does not exist did not run, so nothing about it was
+            # verified. Recording SKIP and carrying on used to leave a row that satisfied
+            # both the step verdict and the accounting check — so `mv frontend frontend.off;
+            # verify-completion.sh --step frontend-lint` exited 0 with `npm run lint` never
+            # invoked, and a later --resume skipped the step on that record. Advisory
+            # commands stay advisory (WARN): they are non-blocking by construction.
             if [ ! -d "$exec_wd" ]; then
-                echo "  SKIP \$ ( cd $wd && $cmd ) — working dir does not exist"
-                echo -e "$sid\t$cmd\tSKIP\tdir-missing\t$advisory" >> "$RESULTS_FILE"
+                dir_missing_blocks=1
+                [ "$advisory" = "true" ] && dir_missing_blocks=0
+                if [ "$dir_missing_blocks" -eq 1 ]; then
+                    HARD_FAIL=$((HARD_FAIL + 1))
+                    echo "  FAIL \$ ( cd $wd && $cmd ) — working dir does not exist ($exec_wd);" \
+                         "the command never ran, so this step cannot be certified"
+                    echo -e "$sid\t$cmd\tFAIL\tdir-missing\t$advisory\tunrun" >> "$RESULTS_FILE"
+                    if [ -z "$STEP_FAILED_ALREADY" ]; then
+                        STEP_FAILED_ALREADY="1"
+                        if [ -s "$PLAYBOOK_DIR/$sid.txt" ]; then
+                            echo ""
+                            echo "  ▼ fix_playbook for step [$sid]:"
+                            sed 's/^/      /' "$PLAYBOOK_DIR/$sid.txt"
+                            echo ""
+                        fi
+                    fi
+                else
+                    ADVISORY_FAIL=$((ADVISORY_FAIL + 1))
+                    echo "  WARN \$ ( cd $wd && $cmd ) — working dir does not exist (ADVISORY, not run)"
+                    echo -e "$sid\t$cmd\tWARN\tdir-missing\t$advisory\tunrun" >> "$RESULTS_FILE"
+                fi
                 continue
             fi
 
@@ -600,19 +680,22 @@ for sid in $STEP_ORDER; do
             echo "  RUN  \$ ( cd $wd && $cmd )  (timeout ${timeout_s}s)"
             run_with_timeout "$exec_wd" "$exec_cmd" "$timeout_s"
             actual_exit=$?
+            # The command reached the runner and produced an exit code — that, and only
+            # that, is what "executed" means for the layer-D coverage count.
+            [ "$advisory" = "true" ] || STEP_REQ_EXECUTED=$((STEP_REQ_EXECUTED + 1))
 
             if [ "$actual_exit" -eq "$expected" ]; then
                 echo "  PASS \$ ( cd $wd && $cmd ) — exit $actual_exit"
-                echo -e "$sid\t$cmd\tPASS\t$actual_exit\t$advisory" >> "$RESULTS_FILE"
+                echo -e "$sid\t$cmd\tPASS\t$actual_exit\t$advisory\texecuted" >> "$RESULTS_FILE"
             else
                 if [ "$advisory" = "true" ]; then
                     ADVISORY_FAIL=$((ADVISORY_FAIL + 1))
                     echo "  WARN \$ ( cd $wd && $cmd ) — exit $actual_exit (expected $expected, ADVISORY)"
-                    echo -e "$sid\t$cmd\tWARN\t$actual_exit\t$advisory" >> "$RESULTS_FILE"
+                    echo -e "$sid\t$cmd\tWARN\t$actual_exit\t$advisory\texecuted" >> "$RESULTS_FILE"
                 else
                     HARD_FAIL=$((HARD_FAIL + 1))
                     echo "  FAIL \$ ( cd $wd && $cmd ) — exit $actual_exit (expected $expected)"
-                    echo -e "$sid\t$cmd\tFAIL\t$actual_exit\t$advisory" >> "$RESULTS_FILE"
+                    echo -e "$sid\t$cmd\tFAIL\t$actual_exit\t$advisory\texecuted" >> "$RESULTS_FILE"
                     if [ -z "$STEP_FAILED_ALREADY" ]; then
                         STEP_FAILED_ALREADY="1"
                         if [ -s "$PLAYBOOK_DIR/$sid.txt" ]; then
@@ -626,7 +709,7 @@ for sid in $STEP_ORDER; do
             fi
         done < "$PLAN_FILE"
 
-        emit_step_verdict "$sid" "$STEP_HARD_FAIL_BEFORE"
+        emit_step_verdict "$sid" "$STEP_HARD_FAIL_BEFORE" "$STEP_REQ_PLANNED" "$STEP_REQ_EXECUTED"
     fi
 
     rm -f "$COLLAPSED_PLAN"
@@ -667,11 +750,34 @@ if [ ! -r "$RESULTS_FILE" ]; then
          "something deleted the temp file mid-run." >&2
     LEDGER_BROKEN=1
 fi
+# A row is not an execution: only `executed` (a command ran) and `resumed` (inherited from
+# a PASS at this same head_sha) rows count as an outcome here. An `unrun` row — written when
+# a command's working directory was absent — is an accounting placeholder, and letting it
+# satisfy "every planned step has an outcome" is what allowed a step that never executed to
+# ride through as a synthetic PASS. Steps whose commands are ALL advisory are exempt: they
+# cannot block by construction, so demanding an execution from them would over-block.
 _ax_unrecorded=""
 while IFS= read -r _ax_sid; do
     [ -n "$_ax_sid" ] || continue
-    awk -F'\t' -v s="$_ax_sid" '$1==s { found=1 } END { exit !found }' "$RESULTS_FILE" \
-        || _ax_unrecorded="$_ax_unrecorded $_ax_sid"
+    # `$3=="FAIL"` also counts as an outcome: the run is already exiting 1 with an honest
+    # per-command message, and re-reporting it here as a corrupt ledger (exit 2) would
+    # misdiagnose it. Every FAIL row bumps HARD_FAIL, so this can never mask a green claim.
+    awk -F'\t' -v s="$_ax_sid" \
+        '$1==s && ($6=="executed" || $6=="resumed" || $3=="FAIL") { found=1 } END { exit !found }' \
+        "$RESULTS_FILE" && continue
+    # All-advisory step with nothing executed → WARN, not BLOCK (already counted advisory).
+    # FAIL CLOSED: the exemption is claimable only from a READABLE plan. If the plan itself
+    # vanished mid-run (the P0-30 TMPDIR-wipe shape) we cannot tell whether the step had
+    # required commands, and "cannot tell" must never buy an exemption from the gate.
+    _ax_req=1
+    if [ -r "$PLAN_FILE" ]; then
+        _ax_req=$(awk -F'\t' -v s="$_ax_sid" '$1==s && $6!="true" { c++ } END { print c+0 }' "$PLAN_FILE")
+    fi
+    if [ "${_ax_req:-1}" -eq 0 ]; then
+        echo "verify-completion: WARN: step [$_ax_sid] is all-advisory and none of its commands ran." >&2
+        continue
+    fi
+    _ax_unrecorded="$_ax_unrecorded $_ax_sid"
 done <<EOF_STEPS
 $STEP_ORDER
 EOF_STEPS
@@ -679,8 +785,9 @@ EOF_STEPS
 # unrecorded — that is the designed behaviour, not a corrupted ledger. Only a run that
 # went the distance may be held to "every planned step has an outcome".
 if [ -n "$_ax_unrecorded" ] && [ "$SHORT_CIRCUITED" -eq 0 ]; then
-    echo "verify-completion: R25 BLOCK: no recorded outcome for step(s):$_ax_unrecorded" \
-         "— the result ledger is incomplete, so a PASS cannot be claimed." >&2
+    echo "verify-completion: R25 BLOCK: no EXECUTED outcome recorded for step(s):$_ax_unrecorded" \
+         "— either the result ledger is incomplete, or the step's commands never ran (a row" \
+         "that exists because a command was skipped is not evidence). A PASS cannot be claimed." >&2
     LEDGER_BROKEN=1
 fi
 

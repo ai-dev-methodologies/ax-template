@@ -18,13 +18,30 @@
 #     run 1 → exit 2 (BLOCK)  but  last_run.jsonl: {"step_id":"must-fail","status":"PASS"}
 #     run 2 → exit 0, "PASS — all steps green", RESUME-SKIP 2, `false` never executed.
 #
-# THE TWO LAYERS THIS GUARD PINS (each asserted to block the harness on its own):
+# THE SECOND DEFECT — same unsoundness, different entry point (cross-family review, 2026-07-29):
+#   Layer (A) asks "did the step produce a ROW?", and a SKIPPED command produces one too.
+#   verify-completion.sh recorded SKIP (not a failure) when a command's working directory was
+#   absent, so the reviewer's harness laundered a step that never executed:
+#     mv frontend frontend.off
+#     verify-completion.sh --step frontend-lint   → exit 0, `npm run lint` NEVER RAN, PASS recorded
+#     mv frontend.off frontend
+#     verify-completion.sh --resume               → frontend-lint RESUME-SKIPped, exit 0, full_run=true
+#   Measured on the pre-fix script: run1 exit 0 / {"step_id":"frontend-lint","status":"PASS"} /
+#   marker file absent; run2 exit 0 "PASS — all steps green" with the command still never run.
+#
+# THE FOUR LAYERS THIS GUARD PINS (each asserted to block its harness on its own):
 #   (A) provenance — a step may be recorded PASS only if at least one of its commands
 #       produced an observed row in the result ledger; otherwise it is recorded UNRUN,
 #       which the resume preloader (status == "PASS" only) never skips.
 #   (B) publication — a run ending in LEDGER_BROKEN discards the resume record entirely
 #       instead of publishing it. Suppressing the final mv is not sufficient: verdicts are
 #       published incrementally, so the partial record must be actively removed.
+#   (C) absent working directory BLOCKS a non-advisory command instead of skipping it.
+#       Advisory commands stay advisory (WARN) — the fix must not turn a knowingly-advisory
+#       item into a blocker.
+#   (D) required-command coverage — a step is PASS only when EVERY planned non-advisory
+#       command actually executed. This is what makes "the step has a row" insufficient on
+#       its own, and it holds even where (C) does not apply.
 #
 # ALSO PINNED: SHORT_CIRCUITED must be initialised internally, never inherited. It gates
 # the "every planned step has an outcome" accounting check, so an exported SHORT_CIRCUITED=1
@@ -32,8 +49,9 @@
 #
 # NON-VACUITY (this is the part that makes the assertions worth anything):
 #   The guard does not merely assert the fixed script behaves. It also runs the SAME
-#   assertions against copies of verify-completion.sh with layer (A), layer (B), and both
-#   neutered, and requires that:
+#   assertions against copies of verify-completion.sh with each layer and each pair
+#   neutered — (A)/(B)/(A+B) against the ledger-loss harness, (C)/(D)/(C+D) against the
+#   absent-working-directory harness — and requires that:
 #     • both-neutered REPRODUCES the laundering (a second --resume run exits 0). If it does
 #       not, the harness no longer exercises the defect and the whole guard is hollow ⇒ BLOCK.
 #     • either layer alone still blocks it. Measured, not assumed — with (A) neutered the
@@ -42,6 +60,11 @@
 #       command and exits 1. Both layers are kept: (B) refuses to certify anything from a
 #       run whose accounting is unknown, (A) fixes the verdict rule itself and so does not
 #       depend on the accounting check's fail_fast exemption staying correct.
+#   The (C)/(D) matrix runs against a step with TWO non-advisory commands — one in an absent
+#   directory, one that really runs — because that is the shape that separates them: with (C)
+#   neutered the skipped command coexists with a genuine row, so only (D) can catch it.
+#   Measured: C+D neutered → run2 exits 0 with the command never executed (defect reproduced);
+#   (C) alone → run1 exits 1; (D) alone → the step is recorded UNRUN and re-executed.
 #
 # HARNESS ISOLATION (why a mktemp shim exists):
 #   The reproduction needs a step that wipes the RUN'S OWN temp dir. macOS BSD `mktemp`
@@ -101,7 +124,7 @@ if [ -n "$FIXTURE_ROOT" ]; then
         echo "resume_provenance_guard: fixture is missing its neuter-mode file: $FIXTURE_ROOT/neuter-mode" >&2; exit 2; }
     SUBJECT_MODE="$(tr -d ' \t\n' < "$FIXTURE_ROOT/neuter-mode")"
     case "$SUBJECT_MODE" in
-        none|a|b|ab) ;;
+        none|a|b|ab|c|d|cd) ;;
         *) echo "resume_provenance_guard: unknown neuter-mode '$SUBJECT_MODE' in $FIXTURE_ROOT" >&2; exit 2 ;;
     esac
 fi
@@ -118,20 +141,29 @@ violation() { echo "  VIOLATION: $*" >&2; VIOLATIONS=$((VIOLATIONS + 1)); }
 # ── Neuter helpers ───────────────────────────────────────────────────────────
 # Layer (A): the UNRUN verdict is downgraded back to the pre-fix "absence of failure
 # means PASS". Layer (B): a blocked run publishes its partial resume record again.
+# Layer (C): an absent working directory stops blocking and degrades to the pre-fix
+# silent skip. Layer (D): the required-command coverage test is short-circuited off.
 NEUTER_A_ANCHOR='emit_resume "$sid" "UNRUN"'
 NEUTER_A_VALUE='emit_resume "$sid" "PASS"'
 NEUTER_B_ANCHOR='rm -f "$RESUME_LOG" "$RESUME_LOG.tmp.$$"'
 NEUTER_B_VALUE='mv -f "$RESUME_NEW" "$RESUME_LOG"'
+NEUTER_C_ANCHOR='dir_missing_blocks=1'
+NEUTER_C_VALUE='dir_missing_blocks=0'
+NEUTER_D_ANCHOR='elif [ "$req_planned" -gt 0 ] && [ "$req_executed" -lt "$req_planned" ]; then'
+NEUTER_D_VALUE='elif false; then'
 
-# make_vc <dest> <a|b|ab|none> — write a (possibly neutered) verify-completion.sh.
+# make_vc <dest> <subset of abcd | none> — write a (possibly neutered) verify-completion.sh.
 make_vc() {
     local dest="$1" mode="$2"
     python3 - "$REAL_VC" "$dest" "$mode" \
-        "$NEUTER_A_ANCHOR" "$NEUTER_A_VALUE" "$NEUTER_B_ANCHOR" "$NEUTER_B_VALUE" <<'PY'
+        "$NEUTER_A_ANCHOR" "$NEUTER_A_VALUE" "$NEUTER_B_ANCHOR" "$NEUTER_B_VALUE" \
+        "$NEUTER_C_ANCHOR" "$NEUTER_C_VALUE" "$NEUTER_D_ANCHOR" "$NEUTER_D_VALUE" <<'PY'
 import sys
-src, dest, mode, a_anchor, a_value, b_anchor, b_value = sys.argv[1:8]
+src, dest, mode = sys.argv[1:4]
+pairs = sys.argv[4:12]
 text = open(src, encoding="utf-8").read()
-for want, anchor, value in (("a", a_anchor, a_value), ("b", b_anchor, b_value)):
+layers = zip("abcd", pairs[0::2], pairs[1::2])
+for want, anchor, value in layers:
     if want not in mode:
         continue
     n = text.count(anchor)
@@ -205,6 +237,62 @@ checklist:
       - command: '"'"'true'"'"'
         expected_exit: 0'
 
+# The absent-working-directory harness. Step `mixed` deliberately pairs a command whose
+# working_directory is moved away with one that really runs, so a skipped command coexists
+# with a genuine ledger row — the shape that separates layer (C) from layer (D). The marker
+# file is the ground truth: it exists if and only if the command actually executed.
+WORKDIR_CHECKLIST='version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: mixed
+    title: "one command in a directory that is absent + one that really runs"
+    commands:
+      - command: '"'"'touch ../workdir-cmd-ran'"'"'
+        working_directory: "subdir"
+        expected_exit: 0
+      - command: '"'"'true'"'"'
+        expected_exit: 0
+  - id: green
+    title: "trivially green second step"
+    commands:
+      - command: '"'"'true'"'"'
+        expected_exit: 0'
+
+WD_ADVISORY_CHECKLIST='version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: advisory-absent
+    title: "an ADVISORY command whose directory is absent must stay advisory"
+    commands:
+      - command: '"'"'touch ../workdir-cmd-ran'"'"'
+        working_directory: "subdir"
+        expected_exit: 0
+        advisory: true
+      - command: '"'"'true'"'"'
+        expected_exit: 0'
+
+WD_ALL_ADVISORY_CHECKLIST='version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: all-advisory
+    title: "every command advisory, directory absent — must WARN, not BLOCK"
+    commands:
+      - command: '"'"'touch ../workdir-cmd-ran'"'"'
+        working_directory: "subdir"
+        expected_exit: 0
+        advisory: true
+  - id: green
+    title: "trivially green second step"
+    commands:
+      - command: '"'"'true'"'"'
+        expected_exit: 0'
+
 # ── Assertion 1: the laundering harness ──────────────────────────────────────
 # Runs the two-step harness twice (plain, then --resume) and decides ONE question: did the
 # blocked run launder itself green? Two facts witness the same defect and are perfectly
@@ -230,6 +318,31 @@ launders() {
     printf '%s' "$record" | grep -q '"step_id":"must-fail","status":"PASS"' && certified=1
     LW_DESC="run1=$rc1 run2=$rc2 resume_skip_in_run2=$skipped certified_unobserved_step=$certified record=$record"
     [ "$rc2" -eq 0 ] || [ "$certified" -eq 1 ]
+}
+
+# ── The absent-working-directory harness ─────────────────────────────────────
+# Mirrors the reviewer's `mv frontend frontend.off` reproduction: run once with the directory
+# gone, restore it, then --resume. Returns 0 = LAUNDERED (the resume run claimed green while
+# the command never executed), 1 = held. Sets WW_DESC to a one-line witness.
+WW_DESC=""
+workdir_launders() {
+    local vc="$1" tag="$2"
+    local sb="$WORK/workdir-$tag"
+    build_sandbox "$sb" "$vc" "$WORKDIR_CHECKLIST"
+    mkdir -p "$sb/repo/subdir"
+    VC_ENV=""
+    mv "$sb/repo/subdir" "$sb/repo/subdir.off"
+    vc_run "$sb" "$sb/run1.log"; local rc1=$?
+    local record="(absent)"
+    [ -f "$sb/repo/.ax-verify/last_run.jsonl" ] && \
+        record="$(grep -o '"step_id":"mixed","status":"[A-Z]*"' "$sb/repo/.ax-verify/last_run.jsonl" | tail -1)"
+    mv "$sb/repo/subdir.off" "$sb/repo/subdir"
+    vc_run "$sb" "$sb/run2.log" --resume; local rc2=$?
+    local ran=0
+    [ -f "$sb/repo/workdir-cmd-ran" ] && ran=1
+    WW_DESC="run1=$rc1 run2=$rc2 command_ever_executed=$ran record=${record:-(none)}"
+    # Laundered ⟺ a green run was published although the command never executed.
+    [ "$rc2" -eq 0 ] && [ "$ran" -eq 0 ]
 }
 
 echo "── [resume provenance] laundering harness: step 1 wipes the run's temp dir, step 2 is \`false\`"
@@ -275,7 +388,52 @@ if [ "$ENV_RC" -ne 2 ]; then
               "expected 2). The flag gates a fail-closed gate and must be initialised internally."
 fi
 
-# ── Assertion 4 (non-vacuity + layer matrix) — LIVE mode only ────────────────
+# ── Assertion 4: an absent working directory may not become resumable PASS evidence ──
+echo "── [workdir provenance] harness: a non-advisory command whose directory was moved away"
+workdir_launders "$VC_SUBJECT" subject; WD_LAUNDERED=$?
+echo "  subject          : $WW_DESC"
+if [ "$WD_LAUNDERED" -eq 0 ]; then
+    violation "a command whose working directory was ABSENT was recorded as passing evidence:" \
+              "the run claimed green and a later --resume skipped the step, so the command never" \
+              "executed at all. A missing directory means unverified, not verified-OK."
+fi
+
+# ── Assertion 5: advisory commands must STAY advisory ────────────────────────
+# The fix must block on absent directories without promoting a knowingly-advisory item into
+# a blocker. Two shapes: an advisory command beside a required one (run must stay green), and
+# a step whose commands are ALL advisory (must WARN, never BLOCK the whole checklist).
+SB_ADV="$WORK/workdir-advisory"
+build_sandbox "$SB_ADV" "$VC_SUBJECT" "$WD_ADVISORY_CHECKLIST"
+VC_ENV=""
+vc_run "$SB_ADV" "$SB_ADV/run.log"; ADV_RC=$?
+ADV_WARN=$(grep -c 'WARN' "$SB_ADV/run.log" 2>/dev/null || echo 0)
+echo "  advisory absent  : exit $ADV_RC (want 0) warn_lines=$ADV_WARN (want >0)"
+if [ "$ADV_RC" -ne 0 ] || [ "${ADV_WARN:-0}" -lt 1 ]; then
+    violation "an ADVISORY command with an absent working directory changed the run's verdict" \
+              "(exit $ADV_RC, warn lines $ADV_WARN). Advisory items must warn, never block."
+fi
+
+SB_ALLADV="$WORK/workdir-all-advisory"
+build_sandbox "$SB_ALLADV" "$VC_SUBJECT" "$WD_ALL_ADVISORY_CHECKLIST"
+VC_ENV=""
+vc_run "$SB_ALLADV" "$SB_ALLADV/run.log"; ALLADV_RC=$?
+vc_run "$SB_ALLADV" "$SB_ALLADV/run2.log" --resume; ALLADV_RC2=$?
+ALLADV_SKIPPED=0
+grep -q 'all-advisory' "$SB_ALLADV/run2.log" && \
+    grep -A1 'all-advisory' "$SB_ALLADV/run2.log" | grep -q 'SKIP (resume)' && ALLADV_SKIPPED=1
+echo "  all-advisory step: exit $ALLADV_RC (want 0, not a BLOCK) resume_skipped=$ALLADV_SKIPPED (want 0)"
+if [ "$ALLADV_RC" -ne 0 ]; then
+    violation "a step whose commands are ALL advisory BLOCKED the run (exit $ALLADV_RC) because" \
+              "its directory was absent. That is over-blocking: advisory items cannot fail a run."
+fi
+# resume_skipped is REPORTED, not asserted — deliberately. An all-advisory step that never
+# executed becomes publishable only if the UNRUN verdict itself is broken, i.e. exactly the
+# layer (A) defect assertion 1 already detects through its own harness. Asserting it here too
+# would give the `ab` fixture a SECOND detection axis, and fixture_kill_proof_guard [87] would
+# then correctly report that fixture as vacuous w.r.t. its registered anchor — the fixture
+# would still go red with assertion 1's logic neutered. One detection, one axis.
+
+# ── Assertion 6 (non-vacuity + layer matrix) — LIVE mode only ────────────────
 # A fixture subject IS already neutered, so re-neutering it would prove nothing.
 if [ -z "$FIXTURE_ROOT" ]; then
     echo "── [mutation matrix] each layer neutered in a copy of the real script"
@@ -303,6 +461,32 @@ if [ -z "$FIXTURE_ROOT" ]; then
                       "the remaining layer does not hold the invariant on its own."
         fi
     done
+
+    echo "── [mutation matrix] absent-working-directory layers (C = block, D = required coverage)"
+    for mode in cd c d; do
+        VC_MUT="$WORK/vc-$mode.sh"
+        if ! make_vc "$VC_MUT" "$mode"; then
+            violation "could not neuter layer(s) '$mode' — the anchor no longer appears exactly" \
+                      "once in verify-completion.sh, so this guard's mutation proof is stale."
+            continue
+        fi
+        workdir_launders "$VC_MUT" "$mode"; MUT_LAUNDERED=$?; MW="$WW_DESC"
+        case "$mode" in
+            cd) want_launder=0; label="C+D neutered (must REPRODUCE the defect)" ;;
+            c)  want_launder=1; label="C neutered   (D alone must still block)" ;;
+            d)  want_launder=1; label="D neutered   (C alone must still block)" ;;
+        esac
+        echo "  $label: $MW"
+        if [ "$want_launder" -eq 0 ] && [ "$MUT_LAUNDERED" -ne 0 ]; then
+            violation "with BOTH absent-directory layers neutered the harness did NOT reproduce" \
+                      "the laundering. The assertions above therefore prove nothing — they would" \
+                      "pass on the unfixed script too. Fix the harness, not the guard."
+        fi
+        if [ "$want_launder" -eq 1 ] && [ "$MUT_LAUNDERED" -eq 0 ]; then
+            violation "with layer '$mode' neutered a command that never ran was still certified —" \
+                      "the remaining layer does not hold the invariant on its own."
+        fi
+    done
 fi
 
 echo ""
@@ -310,5 +494,5 @@ if [ "$VIOLATIONS" -gt 0 ]; then
     echo "resume_provenance_guard: FAIL — $VIOLATIONS violation(s): a blocked R25 run can seed a false-green resume" >&2
     exit 1
 fi
-echo "resume_provenance_guard: PASS — an unobserved step is never certified, a blocked run publishes no resume record, SHORT_CIRCUITED is not inheritable, and legitimate resume still works"
+echo "resume_provenance_guard: PASS — an unobserved step is never certified, a command whose working directory is absent blocks instead of skipping, every required command must actually execute before a step is publishable, a blocked run publishes no resume record, SHORT_CIRCUITED is not inheritable, advisory stays advisory, and legitimate resume still works"
 exit 0

@@ -1626,7 +1626,7 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/pyyaml_preflight_coverage_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/pyyaml-preflight-coverage/fail_open_guard"
 fi
 
-echo "[96] resume_provenance_guard.sh (a BLOCKED R25 run may not launder itself green. P0-30 made an incomplete result ledger exit 2, but the step verdict was still 'no failure ⇒ PASS' and verdicts publish incrementally — so a step whose commands never executed was written to .ax-verify/last_run.jsonl as PASS, and the next --resume skipped it and exited 0 with full_run=true, which the recency guard accepts. Runs the REAL verify-completion.sh in a throwaway sandbox against a two-step harness (step 1 wipes the run's own temp dir, step 2 is \`false\`) and asserts the resume run cannot claim green, that a clean run's --resume still works, and that SHORT_CIRCUITED cannot be inherited from the environment. Live exits 0.)"
+echo "[96] resume_provenance_guard.sh (a BLOCKED R25 run may not launder itself green. P0-30 made an incomplete result ledger exit 2, but the step verdict was still 'no failure ⇒ PASS' and verdicts publish incrementally — so a step whose commands never executed was written to .ax-verify/last_run.jsonl as PASS, and the next --resume skipped it and exited 0 with full_run=true, which the recency guard accepts. Runs the REAL verify-completion.sh in a throwaway sandbox against a two-step harness (step 1 wipes the run's own temp dir, step 2 is \`false\`) and asserts the resume run cannot claim green, that a clean run's --resume still works, and that SHORT_CIRCUITED cannot be inherited from the environment. 2026-07-29 extension — a SKIPPED command produces a row too: an absent working_directory used to record SKIP, so \`mv frontend frontend.off; verify-completion.sh --step frontend-lint\` exited 0 with \`npm run lint\` never invoked and the next --resume inherited that PASS. A second harness (a command whose directory is moved away, beside one that really runs) asserts the absent directory BLOCKS, that a step is publishable only when every required command actually executed, and that advisory commands stay advisory. Both harnesses carry their own neuter matrix (A/B and C/D). Live exits 0.)"
 run_guard "resume_provenance/live" 0 \
     bash "$SCRIPT_DIR/resume_provenance_guard.sh"
 if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
@@ -1637,6 +1637,12 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     # nothing — this entry is what makes the live PASS above meaningful.
     run_guard "resume_provenance/fixture_fail_unfixed" 1 \
         bash "$SCRIPT_DIR/resume_provenance_guard.sh" --fixture-root "$SCRIPT_DIR/fixtures/resume-provenance/fail_unfixed"
+    # The absent-working-directory pair (layers C+D) neutered — the shape a cross-family
+    # reviewer used on 2026-07-29: `mv frontend frontend.off; verify-completion.sh --step
+    # frontend-lint` exited 0 with `npm run lint` never invoked, and the next --resume
+    # inherited that PASS. Must FAIL, otherwise the workdir assertions prove nothing.
+    run_guard "resume_provenance/fixture_fail_unfixed_workdir" 1 \
+        bash "$SCRIPT_DIR/resume_provenance_guard.sh" --fixture-root "$SCRIPT_DIR/fixtures/resume-provenance/fail_unfixed_workdir"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

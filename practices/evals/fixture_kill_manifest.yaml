@@ -492,3 +492,19 @@ items:
     fixture_arg: '--fixture-root'
     anchor: '[ "$rc2" -eq 0 ] || [ "$certified" -eq 1 ]'
     neuter: 'false'
+
+  # ── resume_provenance/fail_unfixed_workdir: absent-working-directory laundering [96] ──
+  # fixture: neuter-mode `cd` — a copy of the LIVE verify-completion.sh with both
+  #          absent-directory layers removed, i.e. the pre-2026-07-29 script. A command
+  #          whose working_directory was moved away is recorded as a skip, the step is
+  #          certified, and the next --resume inherits it → the command never runs → exit 1.
+  # anchor:  the single verdict that turns "a green run was published although the command
+  #          never executed" into a finding.
+  # neuter:  condition-constant false → that laundering is never recognised; the advisory
+  #          and over-blocking assertions still hold on this fixture → exit 0.
+  - id: resume_provenance/fail_unfixed_workdir
+    guard: practices/evals/resume_provenance_guard.sh
+    fixture: practices/evals/fixtures/resume-provenance/fail_unfixed_workdir
+    fixture_arg: '--fixture-root'
+    anchor: '[ "$rc2" -eq 0 ] && [ "$ran" -eq 0 ]'
+    neuter: 'false'

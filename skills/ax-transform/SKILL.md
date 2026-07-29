@@ -25,7 +25,7 @@ A starter / transformation skill for projects that want AI agents (Claude Code e
 | **Frontend Spec Trio** (`specs/<domain>-frontend-l0.yaml` + `contracts/<domain>-ui.yaml` + `blueprints/<domain>-ui-manifest.yaml`) | Mirrors backend Spec Trio for UI routes. Anchors frontend AI output to external specs. |
 | **`practices-react/` catalog** (102 rules, 9 families) | Evidence-anchored rules for React 19 / Next.js 16. Mirrors Java catalog discipline. |
 | **`templates/` layer library** (L1 primitives, L2 feature blocks, L3 page templates, L4 domain workloads) | Composition kit layers. Each artifact carries `evidence:` frontmatter. |
-| **3-tier skill topology** | 3 Tier-1 commands, 8 Tier-2 path-triggered skills, 6 Tier-3 core evidence gates (within the 92-guard suite). Agents navigate via skill invocation graph. |
+| **3-tier skill topology** | 3 Tier-1 commands, 8 Tier-2 path-triggered skills, 6 Tier-3 core evidence gates (within the 99-guard suite). Agents navigate via skill invocation graph. |
 
 **This skill does NOT impose:**
 - Git workflow (branch protection, PR policy, merge strategy) — fork받은 팀이 정함
