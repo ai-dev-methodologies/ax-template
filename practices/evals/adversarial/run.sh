@@ -19,6 +19,15 @@ if [[ -z "$CASE" ]]; then
     exit 2
 fi
 
+# ── Fail closed: the cases below parse yaml through PyYAML ───────────────────
+# Without the parser a case cannot be adjudicated, so exit 2 ("cannot verify") — NEVER 0.
+# Pinned mechanically by practices/evals/pyyaml_preflight_coverage_guard.sh [95] (static
+# assertion: this runner mutates practices/rules/ while running, so [95] does not execute it).
+if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    echo "adversarial/run.sh: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
+fi
+
 CASE_DIR="evals/adversarial/cases/$CASE"
 CASE_RULE="$CASE_DIR/rule.md"
 # time_decay is a manifest-level case; it does not require a rule.md fixture.

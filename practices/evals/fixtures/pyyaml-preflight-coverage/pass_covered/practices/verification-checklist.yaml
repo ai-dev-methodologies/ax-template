@@ -1,0 +1,28 @@
+# PASS fixture — the covered shape.
+#
+# Step `catalog-guard` runs a PyYAML-dependent guard from under practices/evals/, which is
+# exactly what verify-completion.sh's preflight recognises → it BLOCKS without PyYAML.
+# Step `plain-shell` runs no script at all → it must stay runnable without PyYAML, proving
+# the gating is step-scoped rather than blanket.
+version: 1
+
+defaults:
+  working_directory: "."
+  timeout_seconds: 60
+
+checklist:
+  - id: catalog-guard
+    title: "Catalog guard step (reaches a PyYAML-dependent guard under evals/)"
+    commands:
+      - command: "bash practices/evals/mini_yaml_guard.sh"
+        expected_exit: 0
+    fix_playbook: |
+      fixture only — never executed (the guard runs verify-completion.sh with --dry-run).
+
+  - id: plain-shell
+    title: "Plain shell step (no script reference at all)"
+    commands:
+      - command: "true"
+        expected_exit: 0
+    fix_playbook: |
+      fixture only — never executed.

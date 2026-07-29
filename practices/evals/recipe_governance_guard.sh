@@ -35,6 +35,16 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# ── Fail closed: this guard verifies through PyYAML ──────────────────────────
+# Without the parser there is nothing to report, so exit 2 ("cannot verify") — NEVER 0.
+# A skip that shares its exit code with a pass is a green gate that checked nothing,
+# which is the failure class this catalog exists to prevent. Pinned mechanically by
+# practices/evals/pyyaml_preflight_coverage_guard.sh [95].
+if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    echo "recipe_governance_guard: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
+fi
+
 violations=0
 
 # ── Helper: check applied_recipe: presence in a README file ──────────────────
@@ -83,43 +93,18 @@ try:
     import yaml
     data = yaml.safe_load(recipe_path.read_text()) or {}
 except ImportError:
-    # Fallback: minimal line-by-line parser for spec_ref:/rule_ref:
-    data = {}
-    lines = recipe_path.read_text().splitlines()
-    invariants = []
-    current = None
-    in_invariants = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("business_invariants:"):
-            in_invariants = True
-            continue
-        if in_invariants:
-            if stripped.startswith("- id:"):
-                if current is not None:
-                    invariants.append(current)
-                current = {"id": stripped[len("- id:"):].strip().strip("\"'")}
-            elif current is not None and stripped.startswith("spec_ref:"):
-                current["spec_ref"] = stripped[len("spec_ref:"):].strip().strip("\"'")
-            elif current is not None and stripped.startswith("rule_ref:"):
-                current["rule_ref"] = stripped[len("rule_ref:"):].strip().strip("\"'")
-            elif current is not None and stripped.startswith("co-shipped-rule:"):
-                current["co-shipped-rule"] = stripped[len("co-shipped-rule:"):].strip().strip("\"'")
-            elif current is not None and stripped.startswith("invariant_test:"):
-                current["invariant_test"] = stripped[len("invariant_test:"):].strip().strip("\"'")
-            elif stripped and not stripped.startswith("#") and not stripped.startswith("-"):
-                # Check ORIGINAL line indentation (stripped has whitespace removed).
-                # Inside the invariants list, lines like `statement:`, `description:`,
-                # `binding:` are indented under each `- id:` item — leave in_invariants True.
-                # A top-level (un-indented) key like `business_observability:` ends the block.
-                if not line[:1].isspace():
-                    in_invariants = False
-    if current is not None:
-        invariants.append(current)
-    data["business_invariants"] = invariants
+    # There used to be a hand-rolled line-by-line fallback parser here. It made the guard
+    # print "recipe_governance_guard: all checks PASS" on a PyYAML-less machine while the
+    # real validation had not run — an affirmative green that verified nothing. A guard
+    # that cannot parse must say so and BLOCK.
+    print("recipe_governance_guard: BLOCK — cannot verify: PyYAML required "
+          "(python3 -m pip install pyyaml)", file=sys.stderr)
+    sys.exit(2)
 except Exception as e:
-    print(f"recipe_governance_guard: could not parse {recipe_path}: {e}", file=sys.stderr)
-    sys.exit(0)
+    # Unparseable recipe ⇒ cannot verify ⇒ BLOCK. This previously exited 0, so a
+    # malformed recipe silently passed governance.
+    print(f"recipe_governance_guard: BLOCK — cannot parse {recipe_path}: {e}", file=sys.stderr)
+    sys.exit(2)
 
 invariants = data.get("business_invariants") or []
 fail_count = 0

@@ -62,6 +62,16 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# ── Fail closed: this guard verifies through PyYAML ──────────────────────────
+# Without the parser there is nothing to report, so exit 2 ("cannot verify") — NEVER 0.
+# A skip that shares its exit code with a pass is a green gate that checked nothing,
+# which is the failure class this catalog exists to prevent. Pinned mechanically by
+# practices/evals/pyyaml_preflight_coverage_guard.sh [95].
+if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    echo "manifest_yaml_strict_parse_guard: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
+fi
+
 BLUEPRINTS_DIR="$REPO_ROOT/blueprints"
 if [ ! -d "$BLUEPRINTS_DIR" ]; then
     echo "manifest_yaml_strict_parse_guard: missing blueprints/ dir" >&2
@@ -78,12 +88,10 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
-    if [ "$STRICT_MODE" -eq 1 ]; then
-        echo "manifest_yaml_strict_parse_guard: FAIL — PyYAML not installed (--strict)" >&2
-        exit 2
-    fi
-    echo "manifest_yaml_strict_parse_guard: SKIP — PyYAML not installed (pip install pyyaml)"
-    exit 0
+    # No parser ⇒ nothing was verified. Exit 2 regardless of --strict: the old
+    # non-strict path exited 0, which any caller reads as PASS.
+    echo "manifest_yaml_strict_parse_guard: BLOCK — cannot verify: PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
 fi
 
 # Run strict parse via inline python3. Output:

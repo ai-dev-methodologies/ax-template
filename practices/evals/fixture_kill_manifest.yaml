@@ -446,3 +446,33 @@ items:
     fixture_arg: '--root'
     anchor: 'not has_nonempty_tsx'
     neuter: 'False'
+
+  # ── pyyaml_preflight_coverage/fail_hidden_dependency: R25 preflight coverage [95] ──
+  # fixture: a checklist whose `wrapper-gate` step reaches a PyYAML-dependent script through
+  #          a wrapper OUTSIDE evals/, so verify-completion.sh's path heuristic does not
+  #          require PyYAML for it. A sibling `catalog-guard` step keeps the tree otherwise
+  #          covered, so the per-step check is the only finding → exit 1.
+  # anchor:  the condition that turns "this step needs PyYAML but the preflight let it run"
+  #          into a reported violation.
+  # neuter:  condition-constant False → the uncovered step is never reported; the remaining
+  #          assertions (full-run blocks, bare step unblocked) still hold → exit 0.
+  - id: pyyaml_preflight_coverage/fail_hidden_dependency
+    guard: practices/evals/pyyaml_preflight_coverage_guard.sh
+    fixture: practices/evals/fixtures/pyyaml-preflight-coverage/fail_hidden_dependency
+    fixture_arg: '--repo-root'
+    anchor: 'needs_pyyaml and not blocked'
+    neuter: 'False'
+
+  # ── pyyaml_preflight_coverage/fail_open_guard: guard-level fail-closed axis [95] ──
+  # fixture: the checklist step IS preflight-covered (its guard lives under evals/), but the
+  #          guard skips with exit 0 when PyYAML is missing — the "green that verified
+  #          nothing" shape. Only the fail-closed probe fires → exit 1.
+  # anchor:  the single condition that turns "this guard did not fail closed" into a violation.
+  # neuter:  condition-constant False → a fail-open guard is accepted again; the coverage
+  #          assertions still hold for this fixture → exit 0.
+  - id: pyyaml_preflight_coverage/fail_open_guard
+    guard: practices/evals/pyyaml_preflight_coverage_guard.sh
+    fixture: practices/evals/fixtures/pyyaml-preflight-coverage/fail_open_guard
+    fixture_arg: '--repo-root'
+    anchor: 'p.returncode != 2'
+    neuter: 'False'

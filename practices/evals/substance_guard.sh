@@ -60,6 +60,16 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# ── Fail closed: this guard verifies through PyYAML ──────────────────────────
+# Without the parser there is nothing to report, so exit 2 ("cannot verify") — NEVER 0.
+# A skip that shares its exit code with a pass is a green gate that checked nothing,
+# which is the failure class this catalog exists to prevent. Pinned mechanically by
+# practices/evals/pyyaml_preflight_coverage_guard.sh [95].
+if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    echo "substance_guard: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
+fi
+
 CATALOG_DIR="${CATALOG_DIR_OVERRIDE:-$REPO_ROOT/$CATALOG}"
 
 if [[ "$CATALOG" == "practices-react" ]]; then

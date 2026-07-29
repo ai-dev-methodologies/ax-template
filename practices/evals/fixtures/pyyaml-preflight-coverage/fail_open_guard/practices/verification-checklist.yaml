@@ -1,0 +1,28 @@
+# FAIL fixture - the fail-OPEN shape.
+#
+# The checklist itself is correctly covered: `catalog-guard` runs a guard under evals/, so
+# verify-completion.sh's preflight does require PyYAML for it. The defect is one level down -
+# the guard skips with exit 0 when PyYAML is missing, so anyone invoking it directly (a
+# fork-receiver, CI, a single-guard run) gets a green that verified nothing.
+version: 1
+
+defaults:
+  working_directory: "."
+  timeout_seconds: 60
+
+checklist:
+  - id: catalog-guard
+    title: "Covered step whose guard fails OPEN on a missing parser"
+    commands:
+      - command: "bash practices/evals/skipper_guard.sh"
+        expected_exit: 0
+    fix_playbook: |
+      fixture only - the checklist is never executed.
+
+  - id: plain-shell
+    title: "Plain shell step (no script reference at all)"
+    commands:
+      - command: "true"
+        expected_exit: 0
+    fix_playbook: |
+      fixture only - never executed.

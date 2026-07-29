@@ -10,7 +10,9 @@
 # the script fail-closes with exit 2 + a one-line reason when a REQUIRED toolchain
 # for the RESOLVED step set is missing:
 #   (i)   no yaml parser  — neither PyYAML (python3 -c 'import yaml') nor yq. Always
-#         required (the checklist is yaml). Blocks unconditionally.
+#         required (the checklist is yaml). Blocks unconditionally. EITHER parser
+#         is genuinely sufficient HERE: the checklist parser below falls back to
+#         `yq -o=json` when PyYAML is absent.
 #   (ii)  no JDK 21       — only when a backend/gradle step is scheduled. Resolves
 #         java via JAVA_HOME then PATH; requires major == 21 (build.gradle.kts
 #         toolchain = JavaLanguageVersion.of(21)). The macOS /usr/bin/java stub
@@ -19,11 +21,19 @@
 #         fork-receiver running backend-only steps (e.g. --step backend-build) is
 #         NOT blocked by missing node — the preflight respects --step filtering by
 #         inspecting the already-filtered command plan.
-# Full prerequisite list: JDK 21, PyYAML or yq, node+npm (frontend steps only),
-# bash, git. See CLAUDE.md "R25 toolchain prerequisites".
+#   (iv)  no PyYAML       — only when a catalog-guard step is scheduled (any command
+#         invoking a script under an `evals/` directory). Unlike (i), yq is NOT a
+#         substitute here: the guards themselves embed `python3 ... import yaml`
+#         with no yq path, and several of them SILENTLY SKIP (exit 0) when PyYAML
+#         is absent — i.e. without this check a yq-only machine would report a
+#         PASSING R25 while whole guards never ran. Step-gated exactly like (iii):
+#         a backend-only run (--step backend-build) is NOT blocked.
+# Full prerequisite list: JDK 21, PyYAML or yq (checklist parse) + PyYAML
+# specifically (catalog-guard steps), node+npm (frontend steps only), bash, git.
+# See CLAUDE.md "R25 toolchain prerequisites".
 #
 # Test seam (honest, documented): AX_PREFLIGHT_FAKE_MISSING is a pipe/comma list of
-# yaml|jdk|node that forces a tool to appear missing, so the block matrix is
+# yaml|pyyaml|jdk|node that forces a tool to appear missing, so the block matrix is
 # testable without uninstalling toolchains. It ONLY forces-missing; it never
 # forces-present. Unset in normal operation.
 #
@@ -101,8 +111,8 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 # ── Toolchain preflight seam ─────────────────────────────────────────────────
-# AX_PREFLIGHT_FAKE_MISSING forces a tool (yaml|jdk|node) to appear missing so the
-# BLOCK matrix is testable without uninstalling toolchains (see header).
+# AX_PREFLIGHT_FAKE_MISSING forces a tool (yaml|pyyaml|jdk|node) to appear missing so
+# the BLOCK matrix is testable without uninstalling toolchains (see header).
 AX_PREFLIGHT_FAKE_MISSING="${AX_PREFLIGHT_FAKE_MISSING:-}"
 preflight_faked() {
     case "|${AX_PREFLIGHT_FAKE_MISSING//,/|}|" in
@@ -212,11 +222,23 @@ fi
 # node check and vice-versa. Columns: 1=step_id 3=command 4=working_directory.
 NEEDS_JDK=0
 NEEDS_NODE=0
+NEEDS_PYYAML=0
 if awk -F'\t' '$3 ~ /gradlew/ || $4 == "backend" { found=1 } END { exit !found }' "$PLAN_FILE"; then
     NEEDS_JDK=1
 fi
 if awk -F'\t' '$1 == "frontend-lint" || $4 == "frontend" || $3 ~ /npm[ ]/ { found=1 } END { exit !found }' "$PLAN_FILE"; then
     NEEDS_NODE=1
+fi
+# Catalog guards live under practices/evals/ + practices-react/evals/ and are composed
+# freely (run-all-guards.sh alone fans out to ~97 of them). Rather than enumerate which
+# individual guard needs PyYAML — a list that rots the moment a guard is added — any
+# command invoking a script under an `evals/` directory requires the parser. Deliberately
+# conservative in that direction; the step-gating that matters (a backend/gradle-only or
+# frontend-only run needs no PyYAML) is preserved. pyyaml_preflight_coverage_guard.sh [95]
+# mechanically re-derives the PyYAML-dependent guard set and FAILS if this heuristic
+# stops covering it.
+if awk -F'\t' '$3 ~ /evals\// { found=1 } END { exit !found }' "$PLAN_FILE"; then
+    NEEDS_PYYAML=1
 fi
 
 if [ "$NEEDS_JDK" -eq 1 ]; then
@@ -247,6 +269,16 @@ if [ "$NEEDS_NODE" -eq 1 ]; then
     if preflight_faked node || ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
         echo "verify-completion: R25 BLOCK: node + npm required for the frontend-lint step" \
              "(resolved step set includes it). Install Node.js, or run backend-only steps with --step." >&2
+        exit 2
+    fi
+fi
+
+if [ "$NEEDS_PYYAML" -eq 1 ]; then
+    if preflight_faked pyyaml || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+        echo "verify-completion: R25 BLOCK: PyYAML (python3 -c 'import yaml') required for the catalog guard steps" \
+             "(resolved step set runs scripts under evals/). yq is NOT a substitute here — the guards embed" \
+             "'import yaml' with no yq path and several SKIP silently without it, which would report a PASS" \
+             "for guards that never ran. Install with: python3 -m pip install pyyaml" >&2
         exit 2
     fi
 fi

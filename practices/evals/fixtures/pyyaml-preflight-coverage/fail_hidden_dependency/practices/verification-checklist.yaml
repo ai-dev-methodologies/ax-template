@@ -1,0 +1,42 @@
+# FAIL fixture — the uncovered shape (the regression this guard exists to catch).
+#
+# Step `wrapper-gate` reaches a PyYAML-dependent script, but through a wrapper that lives
+# OUTSIDE any evals/ directory. verify-completion.sh's preflight heuristic keys on the
+# evals/ path, so it does NOT require PyYAML for this step — the step would run with the
+# parser missing and its yaml-dependent logic would break or silently skip.
+# The coverage guard's transitive reachability sees through the wrapper → exit 1.
+#
+# The `catalog-guard` step below is the realistic surrounding context: the tree is mostly
+# covered, so the FULL-step-set assertion still holds and the ONLY finding is the uncovered
+# wrapper step. That isolation is what makes this fixture killable by a single neuter of the
+# per-step coverage check ([87] fixture_kill_manifest.yaml).
+version: 1
+
+defaults:
+  working_directory: "."
+  timeout_seconds: 60
+
+checklist:
+  - id: catalog-guard
+    title: "Covered step (reaches a PyYAML-dependent guard under evals/)"
+    commands:
+      - command: "bash practices/evals/mini_yaml_guard.sh"
+        expected_exit: 0
+    fix_playbook: |
+      fixture only — never executed.
+
+  - id: wrapper-gate
+    title: "Wrapper step (reaches a PyYAML-dependent script outside evals/)"
+    commands:
+      - command: "bash practices/scripts/wrapper_gate.sh"
+        expected_exit: 0
+    fix_playbook: |
+      fixture only — never executed (the guard runs verify-completion.sh with --dry-run).
+
+  - id: plain-shell
+    title: "Plain shell step (no script reference at all)"
+    commands:
+      - command: "true"
+        expected_exit: 0
+    fix_playbook: |
+      fixture only — never executed.

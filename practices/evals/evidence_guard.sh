@@ -31,6 +31,16 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# ── Fail closed: this guard verifies through PyYAML ──────────────────────────
+# Without the parser there is nothing to report, so exit 2 ("cannot verify") — NEVER 0.
+# A skip that shares its exit code with a pass is a green gate that checked nothing,
+# which is the failure class this catalog exists to prevent. Pinned mechanically by
+# practices/evals/pyyaml_preflight_coverage_guard.sh [95].
+if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    echo "evidence_guard: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CATALOG_DIR="${CATALOG_DIR_OVERRIDE:-$REPO_ROOT/$CATALOG}"
@@ -54,6 +64,13 @@ d = yaml.safe_load(pathlib.Path("upstream/_MANIFEST.yaml").read_text()) or {}
 print("\n".join(s.get("id","") for s in d.get("snapshots", [])))
 PY
     )
+    # Same distinction as the per-rule loop below: an unparseable manifest yields an
+    # EMPTY id set, under which every upstream_id looks unregistered — a parse failure
+    # masquerading as a catalog-wide evidence violation. Cannot parse ⇒ BLOCK.
+    if [[ $? -ne 0 ]]; then
+        echo "evidence_guard: BLOCK — cannot parse upstream/_MANIFEST.yaml (tooling/parse failure, NOT an evidence violation)" >&2
+        exit 2
+    fi
 fi
 
 for rule in rules/*.md; do
@@ -131,7 +148,19 @@ if errors:
     sys.exit(1)
 sys.exit(0)
 PY
-    [[ $? -ne 0 ]] && violations=$((violations + 1))
+    # Distinguish "this rule violates the contract" from "the checker could not run".
+    # exit 1 is the checker's own violation signal; ANY other non-zero (ImportError,
+    # traceback, killed interpreter) means we did not actually verify this rule, and
+    # counting it as a violation produces a false diagnosis — historically 233 phantom
+    # "lack auditable evidence" findings when PyYAML was merely absent, sending a
+    # contributor after a problem that did not exist. Cannot-verify ⇒ BLOCK (exit 2).
+    rule_rc=$?
+    if [[ $rule_rc -eq 1 ]]; then
+        violations=$((violations + 1))
+    elif [[ $rule_rc -ne 0 ]]; then
+        echo "evidence_guard: BLOCK — cannot verify $rule: checker exited $rule_rc (tooling/parse failure, NOT an evidence violation)" >&2
+        exit 2
+    fi
 done
 
 if [[ $violations -gt 0 ]]; then

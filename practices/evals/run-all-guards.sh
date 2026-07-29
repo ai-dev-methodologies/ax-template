@@ -1610,6 +1610,22 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/l4_presentational_view_guard.sh" --root "$SCRIPT_DIR/fixtures/l4-presentational-view/fail_shrunk_ledger" --ledger "$SCRIPT_DIR/fixtures/l4-presentational-view/fail_shrunk_ledger/ledger.yaml"
 fi
 
+echo "[95] pyyaml_preflight_coverage_guard.sh (R25 preflight ⊇ PyYAML-dependent guards. ~15 catalog guards embed 'import yaml' with no yq fallback and several SKIP SILENTLY (exit 0) without PyYAML — so a yq-only machine used to pass the 'PyYAML or yq' preflight and then report a PASS for guards that never ran. Enumerates the dependent set mechanically, computes per-step transitive reachability, and asserts the REAL verify-completion.sh blocks each step that needs the parser while leaving script-free steps (backend-only runs) unblocked. Live exits 0.)"
+run_guard "pyyaml_preflight_coverage/live" 0 \
+    bash "$SCRIPT_DIR/pyyaml_preflight_coverage_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "pyyaml_preflight_coverage/fixture_pass_covered" 0 \
+        bash "$SCRIPT_DIR/pyyaml_preflight_coverage_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/pyyaml-preflight-coverage/pass_covered"
+    # The uncovered shape: a PyYAML-dependent gate reached through a wrapper OUTSIDE evals/,
+    # which the preflight's path heuristic misses → the guard must FAIL.
+    run_guard "pyyaml_preflight_coverage/fixture_fail_hidden_dependency" 1 \
+        bash "$SCRIPT_DIR/pyyaml_preflight_coverage_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/pyyaml-preflight-coverage/fail_hidden_dependency"
+    # The fail-OPEN shape: the step IS preflight-covered, but the guard it runs skips with
+    # exit 0 when the parser is missing — a green that verified nothing → the guard must FAIL.
+    run_guard "pyyaml_preflight_coverage/fixture_fail_open_guard" 1 \
+        bash "$SCRIPT_DIR/pyyaml_preflight_coverage_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/pyyaml-preflight-coverage/fail_open_guard"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
